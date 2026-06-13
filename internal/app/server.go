@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"time"
 
@@ -12,30 +14,34 @@ import (
 
 type queryMetrics interface {
 	QueryDashboard(ctx context.Context, filters dashboard.Filters) (dashboard.Patch, error)
+	QueryTable(ctx context.Context, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
 	DataDir() string
 }
 
 type Server struct {
 	metrics queryMetrics
+	broker  *broker
 }
 
 func New(metrics queryMetrics) *Server {
-	return &Server{metrics: metrics}
+	return &Server{metrics: metrics, broker: newBroker()}
 }
 
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.home)
 	mux.HandleFunc("GET /updates", s.updates)
+	mux.HandleFunc("POST /commands/table-window", s.tableWindow)
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	return mux
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
+	clientID := ensureClientID(w, r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.Page(s.metrics.DataDir()).Render(w); err != nil {
+	if err := ui.Page(s.metrics.DataDir(), clientID).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -47,8 +53,13 @@ func (s *Server) updates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	filters := signals.Filters.WithDefaults()
+	clientID := clientIDFromRequest(r, signals)
+	tableRequest := dashboard.DefaultTableRequest()
 
 	sse := datastar.NewSSE(w, r)
+	updates, unsubscribe := s.broker.subscribe(clientID)
+	defer unsubscribe()
+
 	_ = sse.MarshalAndPatchSignals(map[string]any{
 		"status": map[string]any{
 			"loading":       true,
@@ -65,6 +76,9 @@ func (s *Server) updates(w http.ResponseWriter, r *http.Request) {
 	if err := sse.MarshalAndPatchSignals(patch); err != nil {
 		return
 	}
+	if err := sse.MarshalAndPatchSignals(tablePatch(tableRequest.Table, s.queryTable(r.Context(), filters, tableRequest))); err != nil {
+		return
+	}
 
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
@@ -73,6 +87,10 @@ func (s *Server) updates(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
+		case patch := <-updates:
+			if err := sse.MarshalAndPatchSignals(patch); err != nil {
+				return
+			}
 		case <-ticker.C:
 			patch, err := s.metrics.QueryDashboard(r.Context(), filters)
 			if err != nil {
@@ -81,6 +99,90 @@ func (s *Server) updates(w http.ResponseWriter, r *http.Request) {
 			if err := sse.MarshalAndPatchSignals(patch); err != nil {
 				return
 			}
+			if err := sse.MarshalAndPatchSignals(tablePatch(tableRequest.Table, s.queryTable(r.Context(), filters, tableRequest))); err != nil {
+				return
+			}
 		}
 	}
+}
+
+func (s *Server) tableWindow(w http.ResponseWriter, r *http.Request) {
+	signals := dashboard.Signals{}
+	if err := datastar.ReadSignals(r, &signals); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	filters := signals.Filters.WithDefaults()
+	request := signals.TableCommand.WithDefaults()
+	clientID := clientIDFromRequest(r, signals)
+
+	s.broker.publish(clientID, tableLoadingPatch(request))
+	s.broker.publish(clientID, tablePatch(request.Table, s.queryTable(r.Context(), filters, request)))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) queryTable(ctx context.Context, filters dashboard.Filters, request dashboard.TableRequest) dashboard.Table {
+	table, err := s.metrics.QueryTable(ctx, filters, request)
+	if err != nil {
+		return dashboard.EmptyTable(request, err)
+	}
+	return table
+}
+
+func tablePatch(name string, table dashboard.Table) signalPatch {
+	return signalPatch{
+		"tables": map[string]dashboard.Table{
+			name: table,
+		},
+	}
+}
+
+func tableLoadingPatch(request dashboard.TableRequest) signalPatch {
+	request = request.WithDefaults()
+	return signalPatch{
+		"tables": map[string]any{
+			request.Table: map[string]any{
+				"loading": true,
+				"error":   "",
+				"window": dashboard.TableWindow{
+					Offset: request.Offset,
+					Limit:  request.Limit,
+				},
+				"sort": request.Sort,
+			},
+		},
+	}
+}
+
+func ensureClientID(w http.ResponseWriter, r *http.Request) string {
+	if cookie, err := r.Cookie("ld_client_id"); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+	clientID := newClientID()
+	http.SetCookie(w, &http.Cookie{
+		Name:     "ld_client_id",
+		Value:    clientID,
+		Path:     "/",
+		SameSite: http.SameSiteLaxMode,
+	})
+	return clientID
+}
+
+func clientIDFromRequest(r *http.Request, signals dashboard.Signals) string {
+	if signals.Runtime.ClientID != "" {
+		return signals.Runtime.ClientID
+	}
+	cookie, err := r.Cookie("ld_client_id")
+	if err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+	return "default"
+}
+
+func newClientID() string {
+	var bytes [16]byte
+	if _, err := rand.Read(bytes[:]); err != nil {
+		return hex.EncodeToString([]byte(time.Now().Format(time.RFC3339Nano)))
+	}
+	return hex.EncodeToString(bytes[:])
 }

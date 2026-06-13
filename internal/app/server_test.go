@@ -32,6 +32,22 @@ func (fakeMetrics) QueryDashboard(_ context.Context, filters dashboard.Filters) 
 	}, nil
 }
 
+func (fakeMetrics) QueryTable(_ context.Context, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+	request = request.WithDefaults()
+	return dashboard.Table{
+		Title: "Orders",
+		Columns: []dashboard.TableColumn{
+			{Key: "order_id", Label: "Order"},
+		},
+		Rows: []map[string]any{
+			{"order_id": "o1"},
+		},
+		TotalRows: 1,
+		Window:    dashboard.TableWindow{Offset: request.Offset, Limit: request.Limit},
+		Sort:      request.Sort,
+	}, nil
+}
+
 func TestUpdatesStreamsDatastarPatchSignals(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
@@ -51,5 +67,18 @@ func TestUpdatesStreamsDatastarPatchSignals(t *testing.T) {
 	}
 	if !strings.Contains(body, `"state":"SP"`) {
 		t.Fatalf("body does not include decoded filter state:\n%s", body)
+	}
+}
+
+func TestTableWindowCommandAcceptsDatastarSignals(t *testing.T) {
+	body := strings.NewReader(`{"filters":{"state":"SP"},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","offset":10,"limit":25,"sort":{"key":"revenue","direction":"desc"}}}`)
+	req := httptest.NewRequest(http.MethodPost, "/commands/table-window", body)
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
 	}
 }

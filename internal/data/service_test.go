@@ -88,6 +88,25 @@ relogios_presentes,watches_gifts
 	if got := patch.Charts["categories"].Data[0].Label; got != "health_beauty" {
 		t.Fatalf("top category = %q, want health_beauty", got)
 	}
+
+	table, err := metrics.QueryTable(context.Background(), dashboard.Filters{}, dashboard.TableRequest{
+		Table:  "orders",
+		Offset: 0,
+		Limit:  1,
+		Sort:   dashboard.TableSort{Key: "revenue", Direction: "asc"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if table.TotalRows != 2 {
+		t.Fatalf("table total rows = %d, want 2", table.TotalRows)
+	}
+	if len(table.Rows) != 1 {
+		t.Fatalf("table rows = %d, want 1", len(table.Rows))
+	}
+	if got := table.Rows[0]["order_id"]; got != "o2" {
+		t.Fatalf("first table order = %v, want o2", got)
+	}
 }
 
 func writeFixture(t *testing.T, dir, name, content string) {

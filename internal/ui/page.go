@@ -9,7 +9,7 @@ import (
 
 const updateAction = "@get('/updates', {openWhenHidden: true})"
 
-func Page(dataDir string) g.Node {
+func Page(dataDir, clientID string) g.Node {
 	return c.HTML5(c.HTML5Props{
 		Title:    "LibreDash",
 		Language: "en",
@@ -25,13 +25,14 @@ func Page(dataDir string) g.Node {
 			h.Script(h.Src("https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4")),
 			h.Link(h.Rel("stylesheet"), h.Href("/static/app.css")),
 			h.Script(h.Type("module"), h.Src("/static/charts.js")),
+			h.Script(h.Type("module"), h.Src("/static/table.js")),
 			h.Script(h.Type("module"), h.Src("/static/datastar-inspector.js")),
 			h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 		},
 		Body: []g.Node{
 			h.Main(
 				h.ID("dashboard"),
-				ds.Signals(initialSignals(dataDir)),
+				ds.Signals(initialSignals(dataDir, clientID)),
 				ds.Init(updateAction),
 				h.Section(h.Class("mx-auto w-[min(1460px,calc(100vw-32px))] px-0 py-7 max-sm:w-[min(100vw-20px,560px)] max-sm:py-3"),
 					header(),
@@ -46,6 +47,7 @@ func Page(dataDir string) g.Node {
 						chartPanel(false, "ld-bar-chart", "charts.delivery"),
 						chartPanel(true, "ld-bar-chart", "charts.categories"),
 					),
+					tablePanel(),
 					debugPanel(),
 				),
 				g.El("datastar-inspector"),
@@ -54,12 +56,51 @@ func Page(dataDir string) g.Node {
 	})
 }
 
-func initialSignals(dataDir string) map[string]any {
+func initialSignals(dataDir, clientID string) map[string]any {
 	return map[string]any{
+		"runtime": map[string]any{
+			"clientId": clientID,
+		},
 		"filters": map[string]any{
 			"dateRange": "all",
 			"state":     "all",
 			"category":  "",
+		},
+		"tableCommand": map[string]any{
+			"table":  "orders",
+			"offset": 0,
+			"limit":  120,
+			"sort": map[string]any{
+				"key":       "purchase_date",
+				"direction": "desc",
+			},
+		},
+		"tables": map[string]any{
+			"orders": map[string]any{
+				"title": "Orders",
+				"columns": []map[string]any{
+					{"key": "order_id", "label": "Order"},
+					{"key": "purchase_date", "label": "Purchased"},
+					{"key": "status", "label": "Status"},
+					{"key": "state", "label": "State"},
+					{"key": "category", "label": "Category"},
+					{"key": "revenue", "label": "Revenue", "align": "right"},
+					{"key": "review_score", "label": "Review", "align": "right"},
+					{"key": "delivery_days", "label": "Delivery", "align": "right"},
+				},
+				"rows":      []any{},
+				"totalRows": 0,
+				"window": map[string]any{
+					"offset": 0,
+					"limit":  120,
+				},
+				"sort": map[string]any{
+					"key":       "purchase_date",
+					"direction": "desc",
+				},
+				"loading": false,
+				"error":   "",
+			},
 		},
 		"charts": map[string]any{
 			"revenue":    map[string]any{"title": "Revenue by month", "unit": "R$", "data": []any{}},
@@ -167,6 +208,15 @@ func chartPanel(wide bool, tag, signal string) g.Node {
 			g.Attr("data-attr:data", "$"+signal+".data"),
 			g.Attr("data-attr:chart-title", "$"+signal+".title"),
 			g.Attr("data-attr:unit", "$"+signal+".unit"),
+		),
+	)
+}
+
+func tablePanel() g.Node {
+	return h.Section(h.Class("mt-4 border border-[var(--borderColor-emphasis)] bg-[var(--bgColor-default)] shadow-[var(--shadow-resting-medium)]"),
+		g.El("ld-data-table",
+			g.Attr("data-attr:table", "$tables.orders"),
+			g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; @post('/commands/table-window')"),
 		),
 	)
 }

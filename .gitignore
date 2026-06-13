@@ -1,6 +1,7 @@
 .DS_Store
 .playwright-cli/
 .data/
+.venv/
 node_modules/
 bin/
 coverage.out

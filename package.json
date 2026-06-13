@@ -4,14 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:css && npm run build:inspector",
+    "build": "npm run build:css && npm run build:inspector && npm run build:table",
     "build:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css",
     "build:inspector": "esbuild web/components/datastar-inspector/index.ts --bundle --format=esm --outfile=static/datastar-inspector.js",
+    "build:table": "esbuild web/components/data-table.js --bundle --format=esm --outfile=static/table.js",
     "watch:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css --watch"
   },
   "devDependencies": {
     "@primer/primitives": "11.9.0",
     "@tailwindcss/cli": "4.3.1",
+    "@tanstack/lit-table": "^8.21.3",
+    "@tanstack/lit-virtual": "^3.13.29",
     "esbuild": "^0.28.1",
     "lit": "^3.3.1",
     "tailwindcss": "4.3.1"

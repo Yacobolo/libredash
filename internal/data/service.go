@@ -109,6 +109,37 @@ func (m *DuckDBMetrics) QueryDashboard(ctx context.Context, filters dashboard.Fi
 	return patch, nil
 }
 
+func (m *DuckDBMetrics) QueryTable(ctx context.Context, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+	filters = filters.WithDefaults()
+	request = request.WithDefaults()
+	if !m.ready {
+		return dashboard.EmptyTable(request, m.missing), nil
+	}
+	if request.Table != "orders" {
+		return dashboard.EmptyTable(request, fmt.Errorf("unknown table %q", request.Table)), nil
+	}
+
+	totalRows, err := m.countOrders(ctx, filters)
+	if err != nil {
+		return dashboard.EmptyTable(request, err), nil
+	}
+	rows, err := m.orderRows(ctx, filters, request)
+	if err != nil {
+		return dashboard.EmptyTable(request, err), nil
+	}
+
+	return dashboard.Table{
+		Title:     "Orders",
+		Columns:   dashboard.OrdersTableColumns(),
+		Rows:      rows,
+		TotalRows: totalRows,
+		Window:    dashboard.TableWindow{Offset: request.Offset, Limit: request.Limit},
+		Sort:      request.Sort,
+		Loading:   false,
+		Error:     "",
+	}, nil
+}
+
 func (m *DuckDBMetrics) validateFiles() error {
 	var missing []string
 	for _, file := range requiredFiles {
@@ -291,6 +322,129 @@ func (m *DuckDBMetrics) queryPoints(ctx context.Context, query string, args ...a
 		points = append(points, dashboard.Point{Label: label, Value: round(value)})
 	}
 	return points, rows.Err()
+}
+
+func (m *DuckDBMetrics) countOrders(ctx context.Context, filters dashboard.Filters) (int, error) {
+	where, args := filterWhere("o", filters)
+	query := fmt.Sprintf(`
+SELECT COUNT(DISTINCT o.order_id)
+FROM orders o
+JOIN customers c ON c.customer_id = o.customer_id
+WHERE %s`, where)
+
+	var total int
+	if err := m.db.QueryRowContext(ctx, query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (m *DuckDBMetrics) orderRows(ctx context.Context, filters dashboard.Filters, request dashboard.TableRequest) ([]map[string]any, error) {
+	where, args := filterWhere("o", filters)
+	sortExpr := orderTableSortExpr(request.Sort.Key)
+	direction := "DESC"
+	if request.Sort.Direction == "asc" {
+		direction = "ASC"
+	}
+
+	query := fmt.Sprintf(`
+WITH revenue AS (
+	SELECT order_id, SUM(try_cast(payment_value AS DOUBLE)) AS revenue
+	FROM payments
+	GROUP BY order_id
+),
+review AS (
+	SELECT order_id, AVG(try_cast(review_score AS DOUBLE)) AS review_score
+	FROM reviews
+	GROUP BY order_id
+),
+category AS (
+	SELECT
+		oi.order_id,
+		MIN(COALESCE(t.product_category_name_english, p.product_category_name, 'uncategorized')) AS category
+	FROM order_items oi
+	LEFT JOIN products p ON p.product_id = oi.product_id
+	LEFT JOIN translations t ON t.product_category_name = p.product_category_name
+	GROUP BY oi.order_id
+)
+SELECT
+	o.order_id,
+	strftime(CAST(o.order_purchase_timestamp AS TIMESTAMP), '%%Y-%%m-%%d') AS purchase_date,
+	o.order_status,
+	c.customer_state,
+	COALESCE(category.category, 'uncategorized') AS category,
+	round(COALESCE(revenue.revenue, 0), 2) AS revenue,
+	round(COALESCE(review.review_score, 0), 2) AS review_score,
+	CASE
+		WHEN o.order_delivered_customer_date IS NULL THEN NULL
+		ELSE datediff('day', CAST(o.order_purchase_timestamp AS TIMESTAMP), CAST(o.order_delivered_customer_date AS TIMESTAMP))
+	END AS delivery_days
+FROM orders o
+JOIN customers c ON c.customer_id = o.customer_id
+LEFT JOIN revenue ON revenue.order_id = o.order_id
+LEFT JOIN review ON review.order_id = o.order_id
+LEFT JOIN category ON category.order_id = o.order_id
+WHERE %s
+ORDER BY %s %s, o.order_id ASC
+LIMIT ? OFFSET ?`, where, sortExpr, direction)
+
+	args = append(args, request.Limit, request.Offset)
+	rows, err := m.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := []map[string]any{}
+	for rows.Next() {
+		var orderID, purchaseDate, status, state, category string
+		var revenue, review float64
+		var delivery sql.NullInt64
+		if err := rows.Scan(&orderID, &purchaseDate, &status, &state, &category, &revenue, &review, &delivery); err != nil {
+			return nil, err
+		}
+		row := map[string]any{
+			"order_id":      orderID,
+			"purchase_date": purchaseDate,
+			"status":        status,
+			"state":         state,
+			"category":      category,
+			"revenue":       round(revenue),
+			"review_score":  round(review),
+			"delivery_days": nil,
+		}
+		if delivery.Valid {
+			row["delivery_days"] = delivery.Int64
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func orderTableSortExpr(key string) string {
+	switch key {
+	case "order_id":
+		return "o.order_id"
+	case "purchase_date":
+		return "CAST(o.order_purchase_timestamp AS TIMESTAMP)"
+	case "status":
+		return "o.order_status"
+	case "state":
+		return "c.customer_state"
+	case "category":
+		return "COALESCE(category.category, 'uncategorized')"
+	case "revenue":
+		return "COALESCE(revenue.revenue, 0)"
+	case "review_score":
+		return "COALESCE(review.review_score, 0)"
+	case "delivery_days":
+		return `CASE
+			WHEN o.order_delivered_customer_date IS NULL THEN NULL
+			ELSE datediff('day', CAST(o.order_purchase_timestamp AS TIMESTAMP), CAST(o.order_delivered_customer_date AS TIMESTAMP))
+		END`
+	default:
+		return "CAST(o.order_purchase_timestamp AS TIMESTAMP)"
+	}
 }
 
 func filterWhere(orderAlias string, filters dashboard.Filters) (string, []any) {
