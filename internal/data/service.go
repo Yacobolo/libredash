@@ -311,6 +311,9 @@ func (m *DuckDBMetrics) charts(ctx context.Context, filters dashboard.Filters) (
 			return nil, err
 		}
 		charts[key] = dashboard.Chart{
+			Version:   1,
+			ID:        key,
+			Type:      chartType(visual),
 			Title:     visual.Title,
 			Unit:      visual.Unit,
 			Field:     visualField(visual),
@@ -583,6 +586,13 @@ func visualField(visual semantic.Visual) string {
 		return visual.Label
 	}
 	return "label"
+}
+
+func chartType(visual semantic.Visual) string {
+	if visual.Type != "" {
+		return visual.Type
+	}
+	return "bar"
 }
 
 func selectedValues(filters dashboard.Filters, visualID string) []string {

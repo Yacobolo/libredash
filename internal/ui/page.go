@@ -190,10 +190,10 @@ func initialSignals(dataDir, clientID string) map[string]any {
 			},
 		},
 		"charts": map[string]any{
-			"revenue":    map[string]any{"title": "Revenue by month", "unit": "R$", "field": "purchase_month", "selection": []any{}, "data": []any{}},
-			"orders":     map[string]any{"title": "Orders by status", "unit": "orders", "field": "status", "selection": []any{}, "data": []any{}},
-			"categories": map[string]any{"title": "Top product categories", "unit": "R$", "field": "category", "selection": []any{}, "data": []any{}},
-			"delivery":   map[string]any{"title": "Delivery speed", "unit": "orders", "field": "delivery_bucket", "selection": []any{}, "data": []any{}},
+			"revenue":    chartSignal("revenue", "area", "Revenue by month", "R$", "purchase_month"),
+			"orders":     chartSignal("orders", "donut", "Orders by status", "orders", "status"),
+			"categories": chartSignal("categories", "bar", "Top product categories", "R$", "category"),
+			"delivery":   chartSignal("delivery", "bar", "Delivery speed", "orders", "delivery_bucket"),
 		},
 		"kpis": []any{},
 		"status": map[string]any{
@@ -203,6 +203,19 @@ func initialSignals(dataDir, clientID string) map[string]any {
 			"dataDirectory": dataDir,
 			"setupRequired": false,
 		},
+	}
+}
+
+func chartSignal(id, chartType, title, unit, field string) map[string]any {
+	return map[string]any{
+		"version":   1,
+		"id":        id,
+		"type":      chartType,
+		"title":     title,
+		"unit":      unit,
+		"field":     field,
+		"selection": []any{},
+		"data":      []any{},
 	}
 }
 
@@ -365,22 +378,15 @@ func renderPageVisual(visual dashboard.PageVisual) g.Node {
 				g.El("ld-kpi-strip", g.Attr("data-attr:items", "$kpis")),
 			),
 		)
-	case "line_chart", "bar_chart":
+	case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart":
 		return canvasVisual(visual.X, visual.Y, visual.Width, visual.Height,
-			chartPanel(chartTag(visual.Kind), visual.Visual),
+			chartPanel(visual.Visual),
 		)
 	case "table":
 		return canvasVisual(visual.X, visual.Y, visual.Width, visual.Height, tablePanel(visual.Table))
 	default:
 		return nil
 	}
-}
-
-func chartTag(kind string) string {
-	if kind == "line_chart" {
-		return "ld-line-chart"
-	}
-	return "ld-bar-chart"
 }
 
 func reportHeader(visual dashboard.PageVisual) g.Node {
@@ -481,16 +487,12 @@ func option(value, label string) g.Node {
 	return h.Option(h.Value(value), g.Text(label))
 }
 
-func chartPanel(tag, visualID string) g.Node {
+func chartPanel(visualID string) g.Node {
 	signal := "charts." + visualID
 	return h.Article(h.Class("visual-card"),
-		g.El(tag,
+		g.El("ld-echart",
 			g.Attr("visual-id", visualID),
-			g.Attr("data-attr:data", "$"+signal+".data"),
-			g.Attr("data-attr:chart-title", "$"+signal+".title"),
-			g.Attr("data-attr:unit", "$"+signal+".unit"),
-			g.Attr("data-attr:field", "$"+signal+".field"),
-			g.Attr("data-attr:selection", "$"+signal+".selection"),
+			g.Attr("data-attr:chart", "$"+signal),
 			g.Attr("data-on:ld-chart-select", "$chartCommand = evt.detail; @post('/commands/chart-select')"),
 		),
 	)

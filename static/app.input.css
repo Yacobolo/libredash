@@ -1,6 +1,6 @@
 @import '@primer/primitives/dist/css/functional/themes/dark.css';
 @import '@primer/primitives/dist/css/functional/themes/light.css';
-@import 'tailwindcss';
+@import 'tailwindcss' source(none);
 
 @theme {
   --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -20,7 +20,7 @@
 
 @source '../internal/**/*.go';
 @source '../web/components/**/*.ts';
-@source './charts.js';
+@source not '../web/components/charts.ts';
 
 @custom-variant dark (&:where([data-color-mode="dark"], [data-color-mode="dark"] *));
 

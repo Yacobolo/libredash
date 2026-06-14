@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:css && npm run build:inspector && npm run build:table && npm run build:canvas && npm run build:model",
+    "build": "npm run build:css && npm run build:inspector && npm run build:table && npm run build:canvas && npm run build:charts && npm run build:model",
     "build:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css",
     "build:inspector": "esbuild web/components/datastar-inspector/index.ts --bundle --format=esm --outfile=static/datastar-inspector.js",
     "build:table": "esbuild web/components/data-table.ts --bundle --format=esm --outfile=static/table.js",
     "build:canvas": "esbuild web/components/report-canvas.ts --bundle --format=esm --outfile=static/report-canvas.js",
+    "build:charts": "esbuild web/components/charts.ts --bundle --format=esm --outfile=static/charts.js",
     "build:model": "esbuild web/components/model-graph.ts --bundle --format=esm --outfile=static/model-graph.js",
     "watch:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css --watch"
   },
@@ -20,6 +21,7 @@
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@xyflow/react": "^12.11.0",
+    "echarts": "^6.1.0",
     "esbuild": "^0.28.1",
     "lit": "^3.3.1",
     "react": "^19.2.7",

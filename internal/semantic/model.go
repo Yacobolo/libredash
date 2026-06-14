@@ -47,6 +47,7 @@ type Metric struct {
 
 type Visual struct {
 	Title     string `yaml:"title"`
+	Type      string `yaml:"type"`
 	Unit      string `yaml:"unit"`
 	Source    string `yaml:"source"`
 	Label     string `yaml:"label"`
@@ -152,7 +153,7 @@ func (m *Model) Validate() error {
 			}
 			switch visual.Kind {
 			case "header", "kpi_strip":
-			case "line_chart", "bar_chart":
+			case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart":
 				if visual.Visual == "" {
 					return fmt.Errorf("page %q visual %q requires visual", page.ID, visual.ID)
 				}

@@ -238,6 +238,9 @@ type KPI struct {
 }
 
 type Chart struct {
+	Version   int      `json:"version"`
+	ID        string   `json:"id"`
+	Type      string   `json:"type"`
 	Title     string   `json:"title"`
 	Unit      string   `json:"unit"`
 	Field     string   `json:"field"`
@@ -369,10 +372,10 @@ func EmptyPatch(filters Filters, dataDir string, err error) Patch {
 			{Label: "Review", Value: "-", Note: "Waiting for CSVs", Tone: "neutral"},
 		},
 		Charts: map[string]Chart{
-			"revenue":    {Title: "Revenue by month", Unit: "R$", Field: "purchase_month", Selection: []string{}, Data: []Point{}},
-			"orders":     {Title: "Orders by status", Unit: "orders", Field: "status", Selection: []string{}, Data: []Point{}},
-			"categories": {Title: "Top product categories", Unit: "R$", Field: "category", Selection: []string{}, Data: []Point{}},
-			"delivery":   {Title: "Delivery delay", Unit: "orders", Field: "delivery_bucket", Selection: []string{}, Data: []Point{}},
+			"revenue":    {Version: 1, ID: "revenue", Type: "area", Title: "Revenue by month", Unit: "R$", Field: "purchase_month", Selection: []string{}, Data: []Point{}},
+			"orders":     {Version: 1, ID: "orders", Type: "donut", Title: "Orders by status", Unit: "orders", Field: "status", Selection: []string{}, Data: []Point{}},
+			"categories": {Version: 1, ID: "categories", Type: "bar", Title: "Top product categories", Unit: "R$", Field: "category", Selection: []string{}, Data: []Point{}},
+			"delivery":   {Version: 1, ID: "delivery", Type: "bar", Title: "Delivery speed", Unit: "orders", Field: "delivery_bucket", Selection: []string{}, Data: []Point{}},
 		},
 	}
 }

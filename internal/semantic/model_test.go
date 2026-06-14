@@ -20,6 +20,9 @@ func TestLoadOlistModel(t *testing.T) {
 	if model.Visuals["revenue"].Source != "orders_enriched" {
 		t.Fatalf("revenue visual source = %q, want orders_enriched", model.Visuals["revenue"].Source)
 	}
+	if got := model.Visuals["orders"].Type; got != "donut" {
+		t.Fatalf("orders visual type = %q, want donut", got)
+	}
 	if got := model.Tables["orders"].DefaultSort.Key; got != "purchase_date" {
 		t.Fatalf("orders table default sort = %q, want purchase_date", got)
 	}

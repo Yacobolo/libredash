@@ -88,6 +88,12 @@ relogios_presentes,watches_gifts
 	if len(patch.Charts["revenue"].Data) != 1 {
 		t.Fatalf("revenue points = %d, want 1", len(patch.Charts["revenue"].Data))
 	}
+	if got := patch.Charts["revenue"].Type; got != "area" {
+		t.Fatalf("revenue chart type = %q, want area", got)
+	}
+	if got := patch.Charts["orders"].Type; got != "donut" {
+		t.Fatalf("orders chart type = %q, want donut", got)
+	}
 	if got := patch.Charts["categories"].Data[0].Label; got != "health_beauty" {
 		t.Fatalf("top category = %q, want health_beauty", got)
 	}
