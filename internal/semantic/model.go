@@ -10,14 +10,15 @@ import (
 )
 
 type Model struct {
-	Name    string                 `yaml:"name"`
-	Title   string                 `yaml:"title"`
-	Sources map[string]Source      `yaml:"sources"`
-	Cache   Cache                  `yaml:"cache"`
-	Metrics map[string]Metric      `yaml:"metrics"`
-	Visuals map[string]Visual      `yaml:"visuals"`
-	Tables  map[string]TableVisual `yaml:"tables"`
-	Pages   []dashboard.Page       `yaml:"pages"`
+	Name          string                 `yaml:"name"`
+	Title         string                 `yaml:"title"`
+	Sources       map[string]Source      `yaml:"sources"`
+	Cache         Cache                  `yaml:"cache"`
+	Metrics       map[string]Metric      `yaml:"metrics"`
+	Visuals       map[string]Visual      `yaml:"visuals"`
+	Tables        map[string]TableVisual `yaml:"tables"`
+	Relationships []Relationship         `yaml:"relationships"`
+	Pages         []dashboard.Page       `yaml:"pages"`
 }
 
 type Source struct {
@@ -63,6 +64,14 @@ type TableVisual struct {
 	Source      string                  `yaml:"source"`
 	DefaultSort dashboard.TableSort     `yaml:"default_sort"`
 	Columns     []dashboard.TableColumn `yaml:"columns"`
+}
+
+type Relationship struct {
+	ID          string `yaml:"id"`
+	From        string `yaml:"from"`
+	To          string `yaml:"to"`
+	Cardinality string `yaml:"cardinality"`
+	Active      bool   `yaml:"active"`
 }
 
 func Load(path string) (*Model, error) {
@@ -117,6 +126,16 @@ func (m *Model) Validate() error {
 		if table.Title == "" || table.Source == "" || len(table.Columns) == 0 {
 			return fmt.Errorf("table %q requires title, source, and columns", name)
 		}
+	}
+	seenRelationships := map[string]struct{}{}
+	for index, relationship := range m.Relationships {
+		if relationship.ID == "" || relationship.From == "" || relationship.To == "" {
+			return fmt.Errorf("relationship %d requires id, from, and to", index)
+		}
+		if _, exists := seenRelationships[relationship.ID]; exists {
+			return fmt.Errorf("duplicate relationship id %q", relationship.ID)
+		}
+		seenRelationships[relationship.ID] = struct{}{}
 	}
 	seenPages := map[string]struct{}{}
 	for index, page := range m.Pages {

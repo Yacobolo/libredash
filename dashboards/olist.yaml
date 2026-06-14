@@ -70,6 +70,38 @@ cache:
         LEFT JOIN review ON review.order_id = o.order_id
         LEFT JOIN category ON category.order_id = o.order_id
 
+relationships:
+  - id: orders_customers
+    from: raw.orders.customer_id
+    to: raw.customers.customer_id
+    cardinality: many_to_one
+    active: true
+  - id: order_items_orders
+    from: raw.order_items.order_id
+    to: raw.orders.order_id
+    cardinality: many_to_one
+    active: true
+  - id: payments_orders
+    from: raw.payments.order_id
+    to: raw.orders.order_id
+    cardinality: many_to_one
+    active: true
+  - id: reviews_orders
+    from: raw.reviews.order_id
+    to: raw.orders.order_id
+    cardinality: many_to_one
+    active: true
+  - id: order_items_products
+    from: raw.order_items.product_id
+    to: raw.products.product_id
+    cardinality: many_to_one
+    active: true
+  - id: products_translations
+    from: raw.products.product_category_name
+    to: raw.translations.product_category_name
+    cardinality: many_to_one
+    active: true
+
 metrics:
   total_orders:
     title: Orders

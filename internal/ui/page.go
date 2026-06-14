@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"strconv"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
@@ -44,15 +45,57 @@ func Page(dataDir, clientID string, pages []dashboard.Page, activePage dashboard
 				h.Class("report-app"),
 				ds.Signals(initialSignals(dataDir, clientID)),
 				ds.Init(updateAction),
-				appBar(),
+				appBar("report", true),
 				h.Div(h.Class("report-workspace"),
-					navRail(),
+					navRail("report"),
 					h.Section(h.Class("report-canvas-shell"), h.Aria("label", "LibreDash report canvas"),
 						pageTabs(pages, activePage.ID),
 						renderPageCanvas(activePage),
 					),
 				),
 				g.El("datastar-inspector"),
+			),
+		},
+	})
+}
+
+func ModelPage(model dashboard.ModelGraph) g.Node {
+	return c.HTML5(c.HTML5Props{
+		Title:    "LibreDash Model",
+		Language: "en",
+		HTMLAttrs: []g.Node{
+			g.Attr("data-color-mode", "auto"),
+			g.Attr("data-light-theme", "light"),
+			g.Attr("data-dark-theme", "dark"),
+		},
+		Head: []g.Node{
+			h.Meta(h.Name("viewport"), h.Content("width=device-width, initial-scale=1")),
+			h.Link(h.Rel("preconnect"), h.Href("https://cdn.jsdelivr.net")),
+			h.Link(h.Href("https://cdn.jsdelivr.net/npm/daisyui@5"), h.Rel("stylesheet"), h.Type("text/css")),
+			h.Script(h.Src("https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4")),
+			h.Link(h.Rel("stylesheet"), h.Href("/static/app.css")),
+			h.Link(h.Rel("stylesheet"), h.Href("/static/model-graph.css")),
+			h.Script(h.Type("module"), h.Src("/static/theme.js")),
+			h.Script(h.Type("module"), h.Src("/static/model-graph.js")),
+		},
+		Body: []g.Node{
+			h.Main(
+				h.ID("model"),
+				h.Class("report-app"),
+				appBar("model", false),
+				h.Div(h.Class("report-workspace"),
+					navRail("model"),
+					h.Section(h.Class("model-shell"), h.Aria("label", "LibreDash semantic model"),
+						h.Header(h.Class("model-header"),
+							h.Div(
+								h.P(h.Class("report-eyebrow"), g.Text("Semantic model")),
+								h.H1(h.Class("report-title"), g.Text(model.Title)),
+							),
+							modelStats(model.Stats),
+						),
+						g.El("ld-model-graph", g.Attr("data-model", modelGraphJSON(model))),
+					),
+				),
 			),
 		},
 	})
@@ -65,6 +108,31 @@ func defaultPage() dashboard.Page {
 		Width:  1366,
 		Height: 940,
 	}
+}
+
+func modelStats(stats dashboard.ModelStats) g.Node {
+	return h.Div(h.Class("model-stats"),
+		modelStat("Sources", stats.Sources),
+		modelStat("Cache", stats.CacheTables),
+		modelStat("Metrics", stats.Metrics),
+		modelStat("Visuals", stats.Visuals),
+		modelStat("Relations", stats.Relationships),
+	)
+}
+
+func modelStat(label string, value int) g.Node {
+	return h.Div(h.Class("model-stat"),
+		h.Strong(g.Text(strconv.Itoa(value))),
+		h.Span(g.Text(label)),
+	)
+}
+
+func modelGraphJSON(model dashboard.ModelGraph) string {
+	bytes, err := json.Marshal(model)
+	if err != nil {
+		return "{}"
+	}
+	return string(bytes)
 }
 
 func initialSignals(dataDir, clientID string) map[string]any {
@@ -138,30 +206,34 @@ func initialSignals(dataDir, clientID string) map[string]any {
 	}
 }
 
-func appBar() g.Node {
+func appBar(active string, dataActions bool) g.Node {
 	return h.Header(h.Class("app-bar"),
 		h.Div(h.Class("app-brand"),
 			h.Span(h.Class("brand-mark"), lucide.ChartColumnIncreasing(iconAttrs())),
 			h.Span(g.Text("LibreDash")),
 		),
 		h.Nav(h.Class("command-bar"), h.Aria("label", "Report commands"),
-			h.Button(h.Type("button"), h.Class("command-button active"), lucide.LayoutDashboard(iconAttrs()), h.Span(g.Text("Report"))),
-			h.Button(h.Type("button"), h.Class("command-button"), lucide.ChartColumnIncreasing(iconAttrs()), h.Span(g.Text("Analyze"))),
-			h.Button(h.Type("button"), h.Class("command-button"), lucide.Database(iconAttrs()), h.Span(g.Text("Model"))),
+			commandLink("/", "Report", active == "report", lucide.LayoutDashboard(iconAttrs())),
+			commandLink("/", "Analyze", false, lucide.ChartColumnIncreasing(iconAttrs())),
+			commandLink("/model", "Model", active == "model", lucide.Database(iconAttrs())),
 		),
 		h.Div(h.Class("app-actions"),
-			h.Button(
-				h.Type("button"),
-				h.Class("cache-refresh-button"),
-				ds.On("click", "@post('/commands/refresh-cache')"),
-				ds.Attr("disabled", "$status.loading"),
-				h.Title("Re-import DuckDB cache"),
-				lucide.RefreshCw(iconAttrs()),
-				h.Span(g.Text("Re-import")),
+			g.If(dataActions,
+				h.Button(
+					h.Type("button"),
+					h.Class("cache-refresh-button"),
+					ds.On("click", "@post('/commands/refresh-cache')"),
+					ds.Attr("disabled", "$status.loading"),
+					h.Title("Re-import DuckDB cache"),
+					lucide.RefreshCw(iconAttrs()),
+					h.Span(g.Text("Re-import")),
+				),
 			),
-			h.Div(h.Class("stream-chip"),
-				h.Span(h.Class("pulse"), g.Attr("data-class", "{'is-active': $status.loading}")),
-				h.Span(ds.Text("$status.loading ? 'Refreshing' : ($status.lastUpdated ? `Updated ${$status.lastUpdated}` : 'Live')")),
+			g.If(dataActions,
+				h.Div(h.Class("stream-chip"),
+					h.Span(h.Class("pulse"), g.Attr("data-class", "{'is-active': $status.loading}")),
+					h.Span(ds.Text("$status.loading ? 'Refreshing' : ($status.lastUpdated ? `Updated ${$status.lastUpdated}` : 'Live')")),
+				),
 			),
 			h.Div(h.Class("theme-switch"), h.Aria("label", "Color mode"),
 				h.Button(
@@ -187,6 +259,24 @@ func appBar() g.Node {
 	)
 }
 
+func commandLink(href, label string, active bool, icon g.Node) g.Node {
+	class := "command-button"
+	if active {
+		class += " active"
+	}
+	return h.A(h.Class(class), h.Href(href), g.Attr("aria-current", ariaCurrent(active)),
+		icon,
+		h.Span(g.Text(label)),
+	)
+}
+
+func ariaCurrent(active bool) string {
+	if active {
+		return "page"
+	}
+	return "false"
+}
+
 func iconAttrs() g.Node {
 	return g.Attr("aria-hidden", "true")
 }
@@ -203,12 +293,12 @@ func canvasVisual(x, y, width, height int, children ...g.Node) g.Node {
 	return h.Div(nodes...)
 }
 
-func navRail() g.Node {
+func navRail(active string) g.Node {
 	return h.Aside(h.Class("nav-rail"), h.Aria("label", "Workspace navigation"),
-		railItem(lucide.LayoutDashboard(iconAttrs()), "Report", true),
-		railItem(lucide.Table2(iconAttrs()), "Data", false),
-		railItem(lucide.Database(iconAttrs()), "Model", false),
-		railItem(lucide.Activity(iconAttrs()), "Signals", false),
+		railItem("/", lucide.LayoutDashboard(iconAttrs()), "Report", active == "report"),
+		railItem("/", lucide.Table2(iconAttrs()), "Data", false),
+		railItem("/model", lucide.Database(iconAttrs()), "Model", active == "model"),
+		railItem("", lucide.Activity(iconAttrs()), "Signals", false),
 	)
 }
 
@@ -235,12 +325,18 @@ func pageTab(page dashboard.Page, activeID string) g.Node {
 	return h.A(h.Class(class), h.Href(href), g.Text(page.Title))
 }
 
-func railItem(icon g.Node, label string, active bool) g.Node {
+func railItem(href string, icon g.Node, label string, active bool) g.Node {
 	class := "rail-item"
 	if active {
 		class += " active"
 	}
-	return h.Button(h.Type("button"), h.Class(class), h.Title(label),
+	if href == "" {
+		return h.Button(h.Type("button"), h.Class(class), h.Title(label),
+			icon,
+			h.Span(h.Class("sr-only"), g.Text(label)),
+		)
+	}
+	return h.A(h.Class(class), h.Href(href), h.Title(label), g.Attr("aria-current", ariaCurrent(active)),
 		icon,
 		h.Span(h.Class("sr-only"), g.Text(label)),
 	)

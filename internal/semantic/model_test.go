@@ -29,4 +29,7 @@ func TestLoadOlistModel(t *testing.T) {
 	if got := model.Pages[1].ID; got != "operations" {
 		t.Fatalf("second page id = %q, want operations", got)
 	}
+	if len(model.Relationships) != 6 {
+		t.Fatalf("relationship count = %d, want 6", len(model.Relationships))
+	}
 }

@@ -37,6 +37,21 @@ func (fakeMetrics) Pages() []dashboard.Page {
 	}
 }
 
+func (fakeMetrics) ModelGraph() dashboard.ModelGraph {
+	return dashboard.ModelGraph{
+		Name:  "test",
+		Title: "Test Model",
+		Stats: dashboard.ModelStats{Sources: 1, CacheTables: 1, Relationships: 1},
+		Nodes: []dashboard.ModelNode{
+			{ID: "source:orders", Label: "orders", Kind: "source"},
+			{ID: "cache:orders_enriched", Label: "orders_enriched", Kind: "cache"},
+		},
+		Edges: []dashboard.ModelEdge{
+			{ID: "orders_cache", Source: "source:orders", Target: "cache:orders_enriched", Kind: "materialization"},
+		},
+	}
+}
+
 func (fakeMetrics) QueryDashboard(_ context.Context, filters dashboard.Filters) (dashboard.Patch, error) {
 	return dashboard.Patch{
 		Filters: filters.WithDefaults(),
@@ -75,6 +90,24 @@ func TestUnknownPageRouteReturnsNotFound(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestModelRouteRendersSemanticModelGraph(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/model", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `<ld-model-graph`) {
+		t.Fatalf("body does not render model graph component:\n%s", body)
+	}
+	if !strings.Contains(body, `Test Model`) {
+		t.Fatalf("body does not include model title:\n%s", body)
 	}
 }
 

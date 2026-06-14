@@ -18,6 +18,7 @@ type queryMetrics interface {
 	RefreshCache(ctx context.Context) error
 	DataDir() string
 	Pages() []dashboard.Page
+	ModelGraph() dashboard.ModelGraph
 }
 
 type Server struct {
@@ -33,6 +34,7 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", s.home)
 	mux.HandleFunc("GET /pages/{page}", s.page)
+	mux.HandleFunc("GET /model", s.model)
 	mux.HandleFunc("GET /updates", s.updates)
 	mux.HandleFunc("POST /commands/table-window", s.tableWindow)
 	mux.HandleFunc("POST /commands/chart-select", s.chartSelect)
@@ -49,6 +51,14 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	s.renderPage(w, r, r.PathValue("page"))
+}
+
+func (s *Server) model(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if err := ui.ModelPage(s.metrics.ModelGraph()).Render(w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, pageID string) {

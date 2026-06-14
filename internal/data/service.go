@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -107,6 +108,10 @@ func (m *DuckDBMetrics) Pages() []dashboard.Page {
 		pages[i] = page.WithDefaults()
 	}
 	return pages
+}
+
+func (m *DuckDBMetrics) ModelGraph() dashboard.ModelGraph {
+	return modelGraph(m.model)
 }
 
 func (m *DuckDBMetrics) QueryDashboard(ctx context.Context, filters dashboard.Filters) (dashboard.Patch, error) {
@@ -660,6 +665,196 @@ func duckDBPath(dataDir string) string {
 
 func sqlString(path string) string {
 	return strings.ReplaceAll(filepath.ToSlash(path), "'", "''")
+}
+
+func modelGraph(model *semantic.Model) dashboard.ModelGraph {
+	graph := dashboard.ModelGraph{
+		Name:  model.Name,
+		Title: model.Title,
+		Stats: dashboard.ModelStats{
+			Sources:       len(model.Sources),
+			CacheTables:   len(model.Cache.Tables),
+			Metrics:       len(model.Metrics),
+			Visuals:       len(model.Visuals),
+			ReportTables:  len(model.Tables),
+			Relationships: len(model.Relationships),
+		},
+	}
+
+	for _, name := range sortedKeys(model.Sources) {
+		source := model.Sources[name]
+		graph.Nodes = append(graph.Nodes, dashboard.ModelNode{
+			ID:     nodeID("source", name),
+			Label:  name,
+			Kind:   "source",
+			Schema: "raw",
+			Fields: []dashboard.ModelField{{Name: source.File, Role: "csv"}},
+			Meta: []dashboard.ModelMeta{
+				{Label: "File", Value: source.File},
+				{Label: "Schema", Value: "raw"},
+			},
+		})
+	}
+
+	for _, name := range sortedKeys(model.Cache.Tables) {
+		table := model.Cache.Tables[name]
+		graph.Nodes = append(graph.Nodes, dashboard.ModelNode{
+			ID:          nodeID("cache", name),
+			Label:       name,
+			Kind:        "cache",
+			Schema:      "cache",
+			Description: table.Description,
+			Fields:      cacheFields(),
+			Meta: []dashboard.ModelMeta{
+				{Label: "Mode", Value: "DuckDB import"},
+				{Label: "Schema", Value: "cache"},
+			},
+		})
+		for _, sourceName := range sortedKeys(model.Sources) {
+			graph.Edges = append(graph.Edges, dashboard.ModelEdge{
+				ID:     "source_" + sourceName + "_to_cache_" + name,
+				Source: nodeID("source", sourceName),
+				Target: nodeID("cache", name),
+				Label:  "materializes",
+				Kind:   "materialization",
+			})
+		}
+	}
+
+	for _, relationship := range model.Relationships {
+		fromTable, fromField := modelEndpoint(relationship.From)
+		toTable, toField := modelEndpoint(relationship.To)
+		graph.Edges = append(graph.Edges, dashboard.ModelEdge{
+			ID:          relationship.ID,
+			Source:      nodeID("source", fromTable),
+			Target:      nodeID("source", toTable),
+			Label:       fromField + " -> " + toField,
+			Kind:        "relationship",
+			SourceField: fromField,
+			TargetField: toField,
+			Cardinality: relationship.Cardinality,
+		})
+	}
+
+	for _, name := range sortedKeys(model.Metrics) {
+		metric := model.Metrics[name]
+		graph.Nodes = append(graph.Nodes, dashboard.ModelNode{
+			ID:          nodeID("metric", name),
+			Label:       metric.Title,
+			Kind:        "metric",
+			Description: metric.Note,
+			Fields: []dashboard.ModelField{
+				{Name: metric.Source, Role: "source"},
+				{Name: metricAggregateLabel(metric.Aggregate, metric.Column), Role: "measure"},
+			},
+			Meta: []dashboard.ModelMeta{
+				{Label: "Format", Value: metric.Format},
+				{Label: "Aggregate", Value: metric.Aggregate},
+			},
+		})
+		graph.Edges = append(graph.Edges, semanticEdge("metric", name, metric.Source, "measure"))
+	}
+
+	for _, name := range sortedKeys(model.Visuals) {
+		visual := model.Visuals[name]
+		graph.Nodes = append(graph.Nodes, dashboard.ModelNode{
+			ID:    nodeID("visual", name),
+			Label: visual.Title,
+			Kind:  "visual",
+			Fields: []dashboard.ModelField{
+				{Name: visualField(visual), Role: "axis"},
+				{Name: metricAggregateLabel(visual.Aggregate, visual.Value), Role: "value"},
+			},
+			Meta: []dashboard.ModelMeta{
+				{Label: "Unit", Value: visual.Unit},
+				{Label: "Limit", Value: intLabel(visual.Limit)},
+			},
+		})
+		graph.Edges = append(graph.Edges, semanticEdge("visual", name, visual.Source, "visual"))
+	}
+
+	for _, name := range sortedKeys(model.Tables) {
+		table := model.Tables[name]
+		fields := make([]dashboard.ModelField, 0, len(table.Columns))
+		for _, column := range table.Columns {
+			role := "column"
+			if column.Align == "right" {
+				role = "measure"
+			}
+			fields = append(fields, dashboard.ModelField{Name: column.Key, Role: role})
+		}
+		graph.Nodes = append(graph.Nodes, dashboard.ModelNode{
+			ID:     nodeID("table", name),
+			Label:  table.Title,
+			Kind:   "report_table",
+			Fields: fields,
+			Meta: []dashboard.ModelMeta{
+				{Label: "Default sort", Value: table.DefaultSort.Key + " " + table.DefaultSort.Direction},
+				{Label: "Columns", Value: strconv.Itoa(len(table.Columns))},
+			},
+		})
+		graph.Edges = append(graph.Edges, semanticEdge("table", name, table.Source, "table"))
+	}
+
+	return graph
+}
+
+func sortedKeys[T any](items map[string]T) []string {
+	keys := make([]string, 0, len(items))
+	for key := range items {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func nodeID(kind, name string) string {
+	return kind + ":" + name
+}
+
+func semanticEdge(kind, name, source, label string) dashboard.ModelEdge {
+	return dashboard.ModelEdge{
+		ID:     kind + "_" + name + "_from_" + source,
+		Source: nodeID("cache", source),
+		Target: nodeID(kind, name),
+		Label:  label,
+		Kind:   "semantic",
+	}
+}
+
+func modelEndpoint(path string) (string, string) {
+	parts := strings.Split(path, ".")
+	if len(parts) < 3 {
+		return path, ""
+	}
+	return parts[len(parts)-2], parts[len(parts)-1]
+}
+
+func cacheFields() []dashboard.ModelField {
+	return []dashboard.ModelField{
+		{Name: "order_id", Role: "key"},
+		{Name: "purchase_month", Role: "time"},
+		{Name: "status", Role: "dimension"},
+		{Name: "state", Role: "dimension"},
+		{Name: "category", Role: "dimension"},
+		{Name: "revenue", Role: "measure"},
+		{Name: "review_score", Role: "measure"},
+		{Name: "delivery_days", Role: "measure"},
+	}
+}
+
+func metricAggregateLabel(aggregate, column string) string {
+	if column == "" {
+		return aggregate
+	}
+	return aggregate + "(" + column + ")"
+}
+
+func intLabel(value int) string {
+	if value == 0 {
+		return "all"
+	}
+	return strconv.Itoa(value)
 }
 
 func (m *DuckDBMetrics) refreshLabel() string {

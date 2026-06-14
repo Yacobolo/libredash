@@ -41,6 +41,54 @@ type PageVisual struct {
 	Badges   []string `json:"badges,omitempty" yaml:"badges"`
 }
 
+type ModelGraph struct {
+	Name  string      `json:"name"`
+	Title string      `json:"title"`
+	Stats ModelStats  `json:"stats"`
+	Nodes []ModelNode `json:"nodes"`
+	Edges []ModelEdge `json:"edges"`
+}
+
+type ModelStats struct {
+	Sources       int `json:"sources"`
+	CacheTables   int `json:"cacheTables"`
+	Metrics       int `json:"metrics"`
+	Visuals       int `json:"visuals"`
+	ReportTables  int `json:"reportTables"`
+	Relationships int `json:"relationships"`
+}
+
+type ModelNode struct {
+	ID          string       `json:"id"`
+	Label       string       `json:"label"`
+	Kind        string       `json:"kind"`
+	Schema      string       `json:"schema,omitempty"`
+	Description string       `json:"description,omitempty"`
+	Fields      []ModelField `json:"fields,omitempty"`
+	Meta        []ModelMeta  `json:"meta,omitempty"`
+}
+
+type ModelField struct {
+	Name string `json:"name"`
+	Role string `json:"role,omitempty"`
+}
+
+type ModelMeta struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+type ModelEdge struct {
+	ID          string `json:"id"`
+	Source      string `json:"source"`
+	Target      string `json:"target"`
+	Label       string `json:"label,omitempty"`
+	Kind        string `json:"kind"`
+	SourceField string `json:"sourceField,omitempty"`
+	TargetField string `json:"targetField,omitempty"`
+	Cardinality string `json:"cardinality,omitempty"`
+}
+
 type Filters struct {
 	DateRange        string            `json:"dateRange"`
 	State            string            `json:"state"`
