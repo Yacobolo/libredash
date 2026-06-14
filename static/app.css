@@ -4319,7 +4319,7 @@
     z-index: 30;
     display: grid;
     min-height: 48px;
-    grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(180px, 240px) minmax(0, 1fr) auto;
     align-items: center;
     border-bottom: 1px solid var(--borderColor-default);
     background: var(--bgColor-emphasis);
@@ -4383,7 +4383,6 @@
     display: inline-grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 2px;
-    margin-right: 12px;
     border: 1px solid var(--fgColor-onEmphasis);
     @supports (color: color-mix(in lab, red, red)) {
       border: 1px solid color-mix(in srgb, var(--fgColor-onEmphasis), transparent 78%);
@@ -4420,11 +4419,55 @@
     background: var(--ld-accent);
     color: var(--ld-accent-fg);
   }
+  .app-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: end;
+    gap: 8px;
+    min-width: 0;
+    padding-right: 12px;
+  }
+  .cache-refresh-button {
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 1px solid var(--fgColor-onEmphasis);
+    @supports (color: color-mix(in lab, red, red)) {
+      border: 1px solid color-mix(in srgb, var(--fgColor-onEmphasis), transparent 78%);
+    }
+    border-radius: 4px;
+    background: var(--fgColor-onEmphasis);
+    @supports (color: color-mix(in lab, red, red)) {
+      background: color-mix(in srgb, var(--fgColor-onEmphasis), transparent 94%);
+    }
+    color: var(--fgColor-onEmphasis);
+    cursor: pointer;
+    padding: 0 10px;
+    white-space: nowrap;
+    font-size: 0.76rem;
+    font-weight: 850;
+  }
+  .cache-refresh-button:hover, .cache-refresh-button:focus-visible {
+    border-color: var(--ld-accent);
+    @supports (color: color-mix(in lab, red, red)) {
+      border-color: color-mix(in srgb, var(--ld-accent), var(--fgColor-onEmphasis) 18%);
+    }
+    background: var(--ld-accent);
+    @supports (color: color-mix(in lab, red, red)) {
+      background: color-mix(in srgb, var(--ld-accent), transparent 82%);
+    }
+    outline: 0;
+  }
+  .cache-refresh-button:disabled {
+    cursor: wait;
+    opacity: 0.68;
+  }
   .stream-chip {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    margin-right: 12px;
     border: 1px solid var(--fgColor-onEmphasis);
     @supports (color: color-mix(in lab, red, red)) {
       border: 1px solid color-mix(in srgb, var(--fgColor-onEmphasis), transparent 78%);
@@ -4437,7 +4480,7 @@
   }
   .report-workspace {
     display: grid;
-    grid-template-columns: 52px minmax(0, 1fr) 276px;
+    grid-template-columns: 52px minmax(0, 1fr);
     min-height: calc(100svh - 48px);
   }
   .nav-rail {
@@ -4542,11 +4585,9 @@
     font-weight: 800;
   }
   .filters-pane {
-    position: sticky;
-    top: 48px;
-    height: calc(100svh - 48px);
+    height: 100%;
+    box-sizing: border-box;
     overflow: auto;
-    border-left: 1px solid var(--borderColor-default);
     background: var(--bgColor-default);
     padding: 14px;
   }
@@ -4642,45 +4683,6 @@
     cursor: wait;
     opacity: 0.68;
   }
-  .status-band.has-error {
-    border-color: var(--borderColor-danger-emphasis);
-    background: var(--bgColor-danger-muted);
-  }
-  .status-band {
-    display: flex;
-    min-height: 44px;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    margin-bottom: 12px;
-    border: 1px solid var(--borderColor-default);
-    border-radius: 6px;
-    background: var(--bgColor-success-muted);
-    @supports (color: color-mix(in lab, red, red)) {
-      background: color-mix(in srgb, var(--bgColor-success-muted), var(--bgColor-default) 54%);
-    }
-    padding: 9px 12px;
-  }
-  .status-band strong {
-    display: block;
-    color: var(--fgColor-default);
-    font-size: 0.82rem;
-  }
-  .status-band p {
-    margin: 1px 0 0;
-    color: var(--fgColor-muted);
-    font-size: 0.78rem;
-  }
-  .status-band code {
-    border: 1px solid var(--borderColor-default);
-    border-radius: 4px;
-    background: var(--bgColor-default);
-    padding: 6px 8px;
-    color: var(--fgColor-default);
-    font-family: var(--font-sans);
-    font-size: 0.76rem;
-    font-weight: 750;
-  }
   .kpi-band {
     margin-bottom: 12px;
   }
@@ -4701,30 +4703,6 @@
   }
   .table-card {
     margin-top: 0;
-  }
-  .signals-panel {
-    margin-top: 12px;
-    border: 1px solid var(--borderColor-default);
-    border-radius: 6px;
-    background: var(--report-panel);
-    color: var(--fgColor-muted);
-  }
-  .signals-panel summary {
-    cursor: pointer;
-    padding: 10px 12px;
-    font-size: 0.82rem;
-    font-weight: 850;
-  }
-  .signals-panel pre {
-    max-height: 18rem;
-    overflow: auto;
-    margin: 0;
-    border-top: 1px solid var(--borderColor-default);
-    background: var(--bgColor-emphasis);
-    padding: 12px;
-    color: var(--fgColor-onEmphasis);
-    font-family: var(--font-sans);
-    font-size: 0.8rem;
   }
   .pulse {
     width: 10px;
@@ -4758,27 +4736,14 @@
       }
     }
   }
-  @media (max-width: 1180px) {
-    .report-workspace {
-      grid-template-columns: 52px minmax(0, 1fr);
-    }
-    .filters-pane {
-      position: static;
-      grid-column: 2;
-      height: auto;
-      border-top: 1px solid var(--borderColor-default);
-      border-left: 0;
-    }
-    .filter-form {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      align-items: end;
-    }
-  }
   @media (max-width: 860px) {
     .app-bar {
-      grid-template-columns: 1fr auto auto;
+      grid-template-columns: 1fr auto;
     }
     .command-bar {
+      display: none;
+    }
+    .cache-refresh-button span, .stream-chip span:last-child {
       display: none;
     }
     .report-workspace {
@@ -4787,11 +4752,11 @@
     .nav-rail {
       display: none;
     }
-    .report-canvas-shell, .filters-pane {
+    .report-canvas-shell {
       grid-column: 1;
       padding: 12px;
     }
-    .report-header, .status-band {
+    .report-header {
       align-items: stretch;
       flex-direction: column;
     }

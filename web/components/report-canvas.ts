@@ -9,8 +9,11 @@ class ReportCanvas extends LitElement {
   @property({ type: Number }) width = 1366
   @property({ type: Number }) height = 768
   @state() private scale = 1
+  @state() private filtersOpen = true
 
   private resizeObserver?: ResizeObserver
+  private readonly filtersWidth = 286
+  private readonly collapsedFiltersWidth = 44
 
   static styles = css`
     :host {
@@ -19,6 +22,14 @@ class ReportCanvas extends LitElement {
       max-width: 100%;
       min-width: 0;
       box-sizing: border-box;
+    }
+
+    .surface {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) var(--filters-pane-width);
+      width: 100%;
+      min-width: 0;
+      background: var(--bgColor-default);
     }
 
     .viewport {
@@ -46,6 +57,59 @@ class ReportCanvas extends LitElement {
       width: calc(var(--report-canvas-width) * var(--report-canvas-scale) * 1px);
       height: calc(var(--report-canvas-height) * var(--report-canvas-scale) * 1px);
       min-width: 100%;
+    }
+
+    .filters-sidebar {
+      display: flex;
+      height: calc(var(--report-canvas-height) * var(--report-canvas-scale) * 1px);
+      min-width: 0;
+      border-left: 1px solid var(--borderColor-default);
+      background: var(--bgColor-default);
+      overflow: hidden;
+    }
+
+    .filters-rail {
+      display: flex;
+      width: 44px;
+      flex: 0 0 44px;
+      align-items: start;
+      justify-content: center;
+      border-right: 1px solid var(--borderColor-default);
+      background: var(--bgColor-muted);
+      padding-top: 8px;
+    }
+
+    .filters-toggle {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 1px solid var(--borderColor-default);
+      border-radius: 4px;
+      background: var(--bgColor-default);
+      color: var(--fgColor-default);
+      cursor: pointer;
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .filters-toggle:hover,
+    .filters-toggle:focus-visible {
+      border-color: var(--borderColor-accent-emphasis);
+      color: var(--fgColor-accent);
+      outline: 0;
+    }
+
+    .filters-body {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: auto;
+    }
+
+    .filters-sidebar.collapsed .filters-body {
+      display: none;
     }
 
     ::slotted(.canvas-visual) {
@@ -79,7 +143,8 @@ class ReportCanvas extends LitElement {
   }
 
   private updateScale(): void {
-    const availableWidth = this.getBoundingClientRect().width
+    const sidebarWidth = this.filtersOpen ? this.filtersWidth : this.collapsedFiltersWidth
+    const availableWidth = Math.max(0, this.getBoundingClientRect().width - sidebarWidth)
     if (!availableWidth || !this.width) return
     const nextScale = Math.min(1, Math.max(0.42, availableWidth / this.width))
     if (Math.abs(nextScale - this.scale) > 0.001) {
@@ -88,7 +153,7 @@ class ReportCanvas extends LitElement {
   }
 
   private positionVisuals(): void {
-    const slot = this.shadowRoot?.querySelector('slot') as HTMLSlotElement | null
+    const slot = this.shadowRoot?.querySelector('slot:not([name])') as HTMLSlotElement | null
     const assigned = slot?.assignedElements({ flatten: true }) ?? []
     for (const element of assigned) {
       if (!(element instanceof HTMLElement)) continue
@@ -107,20 +172,46 @@ class ReportCanvas extends LitElement {
     element.style.height = `${height}px`
   }
 
+  private toggleFilters(): void {
+    this.filtersOpen = !this.filtersOpen
+    this.updateComplete.then(() => this.updateScale())
+  }
+
   render() {
+    const sidebarWidth = this.filtersOpen ? this.filtersWidth : this.collapsedFiltersWidth
     const style = [
       `--report-canvas-width:${this.width}`,
       `--report-canvas-height:${this.height}`,
       `--report-canvas-scale:${this.scale}`,
+      `--filters-pane-width:${sidebarWidth}px`,
     ].join(';')
 
     return html`
-      <div class="viewport" style=${style}>
-        <div class="sizer">
-          <div class="frame">
-            <slot @slotchange=${this.positionVisuals}></slot>
+      <div class="surface" style=${style}>
+        <div class="viewport">
+          <div class="sizer">
+            <div class="frame">
+              <slot @slotchange=${this.positionVisuals}></slot>
+            </div>
           </div>
         </div>
+        <aside class=${`filters-sidebar ${this.filtersOpen ? '' : 'collapsed'}`} aria-label="Filters">
+          <div class="filters-rail">
+            <button
+              class="filters-toggle"
+              type="button"
+              title=${this.filtersOpen ? 'Collapse filters' : 'Open filters'}
+              aria-label=${this.filtersOpen ? 'Collapse filters' : 'Open filters'}
+              aria-expanded=${this.filtersOpen ? 'true' : 'false'}
+              @click=${() => this.toggleFilters()}
+            >
+              ${this.filtersOpen ? '›' : '‹'}
+            </button>
+          </div>
+          <div class="filters-body">
+            <slot name="filters"></slot>
+          </div>
+        </aside>
       </div>
     `
   }

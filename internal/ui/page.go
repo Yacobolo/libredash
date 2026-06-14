@@ -48,33 +48,29 @@ func Page(dataDir, clientID string) g.Node {
 							canvasVisual(16, 16, 1334, 86,
 								reportHeader(),
 							),
-							canvasVisual(16, 116, 1334, 54,
-								statusBar(),
-							),
-							canvasVisual(16, 186, 1334, 116,
+							canvasVisual(16, 118, 1334, 116,
 								h.Div(h.Class("kpi-band"),
 									g.El("ld-kpi-strip", g.Attr("data-attr:items", "$kpis")),
 								),
 							),
-							canvasVisual(16, 318, 650, 286,
+							canvasVisual(16, 250, 650, 300,
 								chartPanel("ld-line-chart", "revenue", "charts.revenue"),
 							),
-							canvasVisual(682, 318, 326, 286,
+							canvasVisual(682, 250, 326, 300,
 								chartPanel("ld-bar-chart", "orders", "charts.orders"),
 							),
-							canvasVisual(1024, 318, 326, 286,
+							canvasVisual(1024, 250, 326, 300,
 								chartPanel("ld-bar-chart", "delivery", "charts.delivery"),
 							),
-							canvasVisual(16, 620, 650, 300,
+							canvasVisual(16, 566, 650, 354,
 								chartPanel("ld-bar-chart", "categories", "charts.categories"),
 							),
-							canvasVisual(682, 620, 668, 300,
+							canvasVisual(682, 566, 668, 354,
 								tablePanel(),
 							),
+							filtersPane(),
 						),
-						debugPanel(),
 					),
-					filtersPane(),
 				),
 				g.El("datastar-inspector"),
 			),
@@ -163,37 +159,40 @@ func appBar() g.Node {
 			h.Button(h.Type("button"), h.Class("command-button active"), lucide.LayoutDashboard(iconAttrs()), h.Span(g.Text("Report"))),
 			h.Button(h.Type("button"), h.Class("command-button"), lucide.ChartColumnIncreasing(iconAttrs()), h.Span(g.Text("Analyze"))),
 			h.Button(h.Type("button"), h.Class("command-button"), lucide.Database(iconAttrs()), h.Span(g.Text("Model"))),
+		),
+		h.Div(h.Class("app-actions"),
 			h.Button(
 				h.Type("button"),
-				h.Class("command-button"),
+				h.Class("cache-refresh-button"),
 				ds.On("click", "@post('/commands/refresh-cache')"),
 				ds.Attr("disabled", "$status.loading"),
+				h.Title("Re-import DuckDB cache"),
 				lucide.RefreshCw(iconAttrs()),
-				h.Span(g.Text("Refresh cache")),
+				h.Span(g.Text("Re-import")),
 			),
-		),
-		h.Div(h.Class("stream-chip"),
-			h.Span(h.Class("pulse"), g.Attr("data-class", "{'is-active': $status.loading}")),
-			h.Span(ds.Text("$status.loading ? 'Refreshing' : ($status.lastUpdated ? `Updated ${$status.lastUpdated}` : 'Live')")),
-		),
-		h.Div(h.Class("theme-switch"), h.Aria("label", "Color mode"),
-			h.Button(
-				h.Type("button"),
-				h.Class("theme-button"),
-				g.Attr("data-theme-value", "light"),
-				g.Attr("aria-pressed", "false"),
-				h.Title("Light mode"),
-				lucide.Sun(iconAttrs()),
-				h.Span(h.Class("sr-only"), g.Text("Light mode")),
+			h.Div(h.Class("stream-chip"),
+				h.Span(h.Class("pulse"), g.Attr("data-class", "{'is-active': $status.loading}")),
+				h.Span(ds.Text("$status.loading ? 'Refreshing' : ($status.lastUpdated ? `Updated ${$status.lastUpdated}` : 'Live')")),
 			),
-			h.Button(
-				h.Type("button"),
-				h.Class("theme-button"),
-				g.Attr("data-theme-value", "dark"),
-				g.Attr("aria-pressed", "false"),
-				h.Title("Dark mode"),
-				lucide.Moon(iconAttrs()),
-				h.Span(h.Class("sr-only"), g.Text("Dark mode")),
+			h.Div(h.Class("theme-switch"), h.Aria("label", "Color mode"),
+				h.Button(
+					h.Type("button"),
+					h.Class("theme-button"),
+					g.Attr("data-theme-value", "light"),
+					g.Attr("aria-pressed", "false"),
+					h.Title("Light mode"),
+					lucide.Sun(iconAttrs()),
+					h.Span(h.Class("sr-only"), g.Text("Light mode")),
+				),
+				h.Button(
+					h.Type("button"),
+					h.Class("theme-button"),
+					g.Attr("data-theme-value", "dark"),
+					g.Attr("aria-pressed", "false"),
+					h.Title("Dark mode"),
+					lucide.Moon(iconAttrs()),
+					h.Span(h.Class("sr-only"), g.Text("Dark mode")),
+				),
 			),
 		),
 	)
@@ -250,7 +249,7 @@ func reportHeader() g.Node {
 }
 
 func filtersPane() g.Node {
-	return h.Aside(h.Class("filters-pane"), h.Aria("label", "Report filters"),
+	return h.Aside(g.Attr("slot", "filters"), h.Class("filters-pane"), h.Aria("label", "Report filters"),
 		h.Div(h.Class("pane-header"),
 			h.P(h.Class("pane-eyebrow"), g.Text("Controls")),
 			h.H2(h.Class("pane-title"), g.Text("Filters")),
@@ -328,17 +327,6 @@ func option(value, label string) g.Node {
 	return h.Option(h.Value(value), g.Text(label))
 }
 
-func statusBar() g.Node {
-	return h.Section(h.Class("status-band"),
-		g.Attr("data-class", "{'has-error': $status.error}"),
-		h.Div(
-			h.Strong(ds.Text("$status.error ? 'Setup needed' : 'Signal stream'")),
-			h.P(ds.Text("$status.error || `Reading ${$status.dataDirectory}`")),
-		),
-		h.Code(ds.Text("$status.setupRequired ? 'python3 scripts/bootstrap_olist.py' : '/updates'")),
-	)
-}
-
 func chartPanel(tag, visualID, signal string) g.Node {
 	return h.Article(h.Class("visual-card"),
 		g.El(tag,
@@ -359,12 +347,5 @@ func tablePanel() g.Node {
 			g.Attr("data-attr:table", "$tables.orders"),
 			g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; @post('/commands/table-window')"),
 		),
-	)
-}
-
-func debugPanel() g.Node {
-	return h.Details(h.Class("signals-panel"),
-		h.Summary(g.Text("Signals")),
-		h.Pre(ds.JSONSignals(ds.Filter{}, ds.ModifierTerse)),
 	)
 }

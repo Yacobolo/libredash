@@ -31,7 +31,6 @@ const chartStyles = css`
     gap: 16px;
     align-items: baseline;
     min-height: 42px;
-    border-bottom: 1px solid var(--borderColor-default);
     padding: 10px 12px 8px;
   }
 

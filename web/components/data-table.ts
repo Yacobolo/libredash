@@ -160,7 +160,6 @@ class DataTable extends LitElement {
     }
 
     .visual-actions,
-    .meta,
     .footer {
       display: flex;
       align-items: center;
@@ -190,35 +189,6 @@ class DataTable extends LitElement {
       background: var(--bgColor-muted);
       color: var(--fgColor-default);
       outline: 0;
-    }
-
-    .meta {
-      justify-content: space-between;
-      gap: 8px;
-      border-bottom: 1px solid var(--borderColor-default);
-      background: var(--bgColor-muted);
-      padding: 7px 10px;
-      color: var(--fgColor-muted);
-      font-size: 0.74rem;
-      font-weight: 750;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border: 1px solid var(--borderColor-default);
-      border-radius: 999px;
-      background: var(--bgColor-default);
-      padding: 4px 8px;
-      white-space: nowrap;
-    }
-
-    .dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 999px;
-      background: var(--fgColor-success);
     }
 
     .error {
@@ -431,7 +401,6 @@ class DataTable extends LitElement {
       }
 
       .toolbar,
-      .meta,
       .footer {
         align-items: stretch;
         flex-direction: column;
@@ -558,14 +527,13 @@ class DataTable extends LitElement {
     const totalSize = virtualizer.getTotalSize()
     const first = (this.table?.window?.offset ?? 0) + 1
     const last = Math.min((this.table?.window?.offset ?? 0) + rows.length, this.table?.totalRows ?? 0)
-    const sortedColumn = this.columns.find((column) => column.key === this.table?.sort?.key)
+    const rowRange = this.table?.totalRows ? `${first.toLocaleString()}-${last.toLocaleString()} of ${this.table.totalRows.toLocaleString()}` : 'No rows'
     const selectedText = this.selectedRowId ? '1 row selected' : 'No selection'
 
     return html`
       <section class="shell" style=${`--ld-table-columns:${this.gridTemplate}`}>
         <div class="toolbar">
           <div>
-            <p class="eyebrow">Table visual</p>
             <h2>${this.table?.title ?? 'Orders'}</h2>
           </div>
           <div class="visual-actions" aria-label="Visual header actions">
@@ -573,10 +541,6 @@ class DataTable extends LitElement {
             <button class="visual-action" type="button" title="Focus mode" aria-label="Focus mode">□</button>
             <button class="visual-action" type="button" title="More options" aria-label="More options">⋯</button>
           </div>
-        </div>
-        <div class="meta">
-          <span class="pill"><span class="dot" aria-hidden="true"></span>${this.table?.totalRows ? `${first.toLocaleString()}-${last.toLocaleString()} of ${this.table.totalRows.toLocaleString()}` : 'No rows'}</span>
-          <span class="pill">Sorted by ${sortedColumn?.label ?? this.table?.sort?.key ?? 'purchase date'} ${this.table?.sort?.direction ?? 'desc'}</span>
         </div>
         ${this.table?.error ? html`<div class="error">${this.table.error}</div>` : nothing}
         <div class="head" role="row">
@@ -637,7 +601,7 @@ class DataTable extends LitElement {
           `}
         </div>
         <div class="footer">
-          <span><strong>${rows.length.toLocaleString()}</strong> rows loaded in current server window</span>
+          <span><strong>${rowRange}</strong></span>
           <span>${selectedText}</span>
         </div>
       </section>
