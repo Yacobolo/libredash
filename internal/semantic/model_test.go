@@ -2,9 +2,12 @@ package semantic
 
 import (
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Yacobolo/libredash/internal/dashboard"
 )
 
 func TestLoadWorkspaceCatalog(t *testing.T) {
@@ -115,6 +118,9 @@ func TestLoadOlistDashboard(t *testing.T) {
 	if got := report.Visuals["orders_by_month_status"].ShapeOrDefault(); got != "category_series_value" {
 		t.Fatalf("multi-series visual shape = %q, want category_series_value", got)
 	}
+	if got := report.Visuals["orders_by_month_status"].Options["stacked"]; got != true {
+		t.Fatalf("multi-series visual options.stacked = %v, want true", got)
+	}
 	if got := report.Visuals["revenue"].RendererOrDefault(); got != "echarts" {
 		t.Fatalf("revenue visual renderer = %q, want echarts", got)
 	}
@@ -170,10 +176,57 @@ func TestDashboardValidateRejectsInvalidVisualShape(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
 	visual := report.Visuals["revenue"]
-	visual.Shape = "matrix"
+	visual.Shape = "missing_shape"
 	report.Visuals["revenue"] = visual
 
 	assertDashboardValidateError(t, report, model, "unsupported shape")
+}
+
+func TestLoadDashboardRejectsLegacyTopLevelStacked(t *testing.T) {
+	model := loadOlistModel(t)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dashboard.yaml")
+	content := strings.ReplaceAll(`id: executive-sales
+title: Executive Sales Dashboard
+semantic_model: olist
+filters: {}
+kpis:
+  total_orders:
+    title: Orders
+    dataset: orders
+    measure: order_count
+visuals:
+  revenue:
+    title: Revenue
+    type: area
+    stacked: true
+    dataset: orders
+    query:
+      dimensions: [purchase_month]
+      measures: [revenue]
+tables:
+  orders:
+    title: Orders
+    dataset: orders
+    columns:
+      - key: order_id
+        label: Order
+pages:
+  - id: overview
+    title: Overview
+    visuals:
+      - id: revenue
+        kind: area_chart
+        visual: revenue
+        placement: { col: 1, row: 1, col_span: 1, row_span: 1 }
+`, "\t", "  ")
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadDashboard(path, model)
+	if err == nil || !strings.Contains(err.Error(), "legacy top-level stacked") {
+		t.Fatalf("LoadDashboard error = %v, want legacy stacked rejection", err)
+	}
 }
 
 func TestDashboardValidateRejectsInvalidVisualKind(t *testing.T) {
@@ -206,15 +259,67 @@ func TestDashboardValidateRejectsShapeQueryMismatch(t *testing.T) {
 	assertDashboardValidateError(t, report, model, "requires query series")
 }
 
+func TestDashboardValidateAcceptsAdvancedVisualShapes(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+
+	cases := map[string]Visual{
+		"heatmap": {
+			Title:    "Heatmap",
+			Shape:    "matrix",
+			Renderer: "echarts",
+			Type:     "heatmap",
+			Dataset:  "orders",
+			Query:    VisualQuery{Dimensions: []string{"state", "status"}, Measures: []string{"order_count"}},
+		},
+		"sankey": {
+			Title:    "Flow",
+			Shape:    "graph",
+			Renderer: "echarts",
+			Type:     "sankey",
+			Dataset:  "orders",
+			Query:    VisualQuery{Dimensions: []string{"status", "delivery_bucket"}, Measures: []string{"order_count"}},
+		},
+		"geo": {
+			Title:    "Map",
+			Shape:    "geo",
+			Renderer: "echarts",
+			Type:     "map",
+			Dataset:  "orders",
+			Options:  map[string]any{"map": "brazil_states"},
+			Query:    VisualQuery{Dimensions: []string{"state"}, Measures: []string{"order_count"}},
+		},
+		"boxplot": {
+			Title:    "Distribution",
+			Shape:    "distribution",
+			Renderer: "echarts",
+			Type:     "boxplot",
+			Dataset:  "orders",
+			Query:    VisualQuery{Dimensions: []string{"delivery_bucket"}, Measures: []string{"delivery_days"}},
+		},
+	}
+	for name, visual := range cases {
+		report.Visuals = map[string]Visual{name: visual}
+		report.Pages = []dashboard.Page{{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{{ID: name, Kind: visual.Type + "_chart", Visual: name, Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 1, RowSpan: 1}}}}}
+		if visual.Type == "map" {
+			report.Pages[0].Visuals[0].Kind = "map_chart"
+		}
+		if err := report.Validate(model); err != nil {
+			t.Fatalf("validate advanced shape %s: %v", name, err)
+		}
+	}
+}
+
 func TestDashboardValidateRejectsRendererTypeMismatch(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
 	visual := report.Visuals["revenue"]
 	visual.Renderer = "echarts"
+	visual.Shape = "category_value"
 	visual.Type = "sankey"
 	report.Visuals["revenue"] = visual
 
-	assertDashboardValidateError(t, report, model, "does not support type")
+	assertDashboardValidateError(t, report, model, "does not support shape")
 }
 
 func TestDashboardValidateRejectsUnsafeRendererOptions(t *testing.T) {
@@ -274,6 +379,7 @@ func TestDashboardValidateRejectsSeriesOnUnsupportedChart(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
 	visual := report.Visuals["orders"]
+	visual.Shape = "category_value"
 	visual.Query.Series = "status"
 	report.Visuals["orders"] = visual
 

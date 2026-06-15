@@ -457,31 +457,37 @@ func chartSignals(report semantic.Dashboard, model *semantic.Model) map[string]a
 				unit = dataset.Measures[measureName].Unit
 			}
 		}
-		charts[id] = chartSignal(id, visual.Type, visual.Title, unit, visual.Interaction.Field, visual.Query.Dimensions, measureName, visual.Query.Series, visual.Stacked)
+		charts[id] = chartSignal(id, visual, unit, measureName)
 	}
 	return charts
 }
 
-func chartSignal(id, chartType, title, unit, field string, dimensions []string, measure, series string, stacked bool) map[string]any {
+func chartSignal(id string, visual semantic.Visual, unit, measure string) map[string]any {
 	seriesList := []string{}
-	if series != "" {
-		seriesList = append(seriesList, series)
+	if visual.Query.Series != "" {
+		seriesList = append(seriesList, visual.Query.Series)
 	}
 	signal := map[string]any{
-		"version":    2,
-		"id":         id,
-		"type":       chartType,
-		"title":      title,
-		"unit":       unit,
-		"field":      field,
-		"dimensions": dimensions,
-		"measure":    measure,
-		"series":     seriesList,
-		"selection":  []any{},
-		"data":       []any{},
+		"version":         3,
+		"id":              id,
+		"kind":            visual.KindOrDefault(),
+		"shape":           visual.ShapeOrDefault(),
+		"renderer":        visual.RendererOrDefault(),
+		"type":            visual.Type,
+		"title":           visual.Title,
+		"unit":            unit,
+		"field":           visual.Interaction.Field,
+		"dimensions":      visual.Query.Dimensions,
+		"measure":         measure,
+		"measures":        visual.Query.Measures,
+		"series":          seriesList,
+		"options":         visual.CoreOptions(),
+		"rendererOptions": map[string]any{},
+		"selection":       []any{},
+		"data":            []any{},
 	}
-	if stacked {
-		signal["stacked"] = true
+	if len(visual.RendererOptions) > 0 {
+		signal["rendererOptions"] = visual.RendererOptions
 	}
 	return signal
 }
@@ -565,7 +571,7 @@ func renderPageVisual(visual dashboard.PageVisual, report semantic.Dashboard, fi
 		return canvasFilterVisual(visual.X, visual.Y, visual.Width, visual.Height,
 			filterCard(visual.Filter, report, filters, action),
 		)
-	case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart":
+	case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart", "heatmap_chart", "sankey_chart", "graph_chart", "map_chart", "candlestick_chart", "boxplot_chart":
 		return canvasVisual(visual.X, visual.Y, visual.Width, visual.Height,
 			chartPanel(visual.Visual),
 		)

@@ -165,7 +165,7 @@ func supportsVisualKind(kind string) bool {
 
 func supportsVisualShape(shape string) bool {
 	switch shape {
-	case "category_value", "category_series_value", "single_value":
+	case "category_value", "category_series_value", "single_value", "matrix", "graph", "geo", "ohlc", "distribution":
 		return true
 	default:
 		return false
@@ -181,7 +181,7 @@ func rendererSupportsType(renderer, chartType string) bool {
 		return false
 	}
 	switch chartType {
-	case "line", "area", "bar", "column", "pie", "donut", "scatter", "funnel", "treemap", "gauge":
+	case "line", "area", "bar", "column", "pie", "donut", "scatter", "funnel", "treemap", "gauge", "heatmap", "sankey", "graph", "map", "candlestick", "boxplot":
 		return true
 	default:
 		return false
@@ -190,6 +190,34 @@ func rendererSupportsType(renderer, chartType string) bool {
 
 func supportsSeries(shape string) bool {
 	return shape == "category_series_value"
+}
+
+func rendererSupportsShapeType(renderer, shape, chartType string) bool {
+	if renderer != "echarts" {
+		return false
+	}
+	switch shape {
+	case "category_value":
+		switch chartType {
+		case "line", "area", "bar", "column", "pie", "donut", "scatter", "funnel", "treemap":
+			return true
+		}
+	case "category_series_value":
+		return rendererTypeSupportsSeries(renderer, chartType)
+	case "single_value":
+		return chartType == "gauge"
+	case "matrix":
+		return chartType == "heatmap"
+	case "graph":
+		return chartType == "sankey" || chartType == "graph"
+	case "geo":
+		return chartType == "map"
+	case "ohlc":
+		return chartType == "candlestick"
+	case "distribution":
+		return chartType == "boxplot"
+	}
+	return false
 }
 
 func rendererTypeSupportsSeries(renderer, chartType string) bool {

@@ -171,7 +171,7 @@ relogios_presentes,watches_gifts
 	if got := patch.Charts["orders_by_month_status"].Options["stacked"]; got != true {
 		t.Fatalf("multi-series chart stacked option = %v, want true", got)
 	}
-	if got := patch.Charts["categories"].Data[0].Label; got != "health_beauty" {
+	if got := datumString(patch.Charts["categories"].Data[0], "label"); got != "health_beauty" {
 		t.Fatalf("top category = %q, want health_beauty", got)
 	}
 	if got := len(patch.FilterOptions["state"]); got != 2 {
@@ -195,13 +195,13 @@ relogios_presentes,watches_gifts
 	if !pointSelected(selectedPatch.Charts["orders"].Data, "delivered") {
 		t.Fatalf("orders chart did not mark delivered as selected: %#v", selectedPatch.Charts["orders"].Data)
 	}
-	if got := selectedPatch.Charts["categories"].Data[0].Label; got != "health_beauty" {
+	if got := datumString(selectedPatch.Charts["categories"].Data[0], "label"); got != "health_beauty" {
 		t.Fatalf("category chart under status selection = %q, want health_beauty", got)
 	}
-	if got := selectedPatch.Charts["revenue"].Data[0].Series; got != "" {
+	if got := datumString(selectedPatch.Charts["revenue"].Data[0], "series"); got != "" {
 		t.Fatalf("single-series chart row series = %q, want empty", got)
 	}
-	if got := selectedPatch.Charts["orders_by_month_status"].Data[0].Series; got == "" {
+	if got := datumString(selectedPatch.Charts["orders_by_month_status"].Data[0], "series"); got == "" {
 		t.Fatal("multi-series chart row series is empty")
 	}
 	if len(selectedPatch.Charts["orders_by_month_status"].Data) != 2 {
@@ -353,13 +353,22 @@ relogios_presentes,watches_gifts
 	}
 }
 
-func pointSelected(points []dashboard.Point, label string) bool {
+func pointSelected(points []dashboard.Datum, label string) bool {
 	for _, point := range points {
-		if point.Label == label {
-			return point.Selected
+		if datumString(point, "label") == label {
+			selected, _ := point["selected"].(bool)
+			return selected
 		}
 	}
 	return false
+}
+
+func datumString(row dashboard.Datum, key string) string {
+	value, ok := row[key]
+	if !ok || value == nil {
+		return ""
+	}
+	return fmt.Sprint(value)
 }
 
 func writeFixture(t *testing.T, dir, name, content string) {

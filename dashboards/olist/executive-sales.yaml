@@ -109,8 +109,11 @@ visuals:
         tables: [orders]
   orders_by_month_status:
     title: Orders by month and status
+    shape: category_series_value
+    renderer: echarts
     type: column
-    stacked: true
+    options:
+      stacked: true
     dataset: orders
     query:
       dimensions: [purchase_month]
@@ -156,6 +159,46 @@ visuals:
       targets:
         visuals: [revenue, orders, categories]
         tables: [orders]
+  state_status_heatmap:
+    title: State by order status
+    shape: matrix
+    renderer: echarts
+    type: heatmap
+    dataset: orders
+    query:
+      dimensions: [state, status]
+      measures: [order_count]
+      sort:
+        - field: state
+          direction: asc
+        - field: status
+          direction: asc
+      limit: 120
+  status_delivery_flow:
+    title: Status to delivery speed
+    shape: graph
+    renderer: echarts
+    type: sankey
+    dataset: orders
+    query:
+      dimensions: [status, delivery_bucket]
+      measures: [order_count]
+      sort:
+        - field: value
+          direction: desc
+      limit: 40
+  delivery_distribution:
+    title: Delivery day distribution
+    shape: distribution
+    renderer: echarts
+    type: boxplot
+    dataset: orders
+    query:
+      dimensions: [delivery_bucket]
+      measures: [delivery_days]
+      sort:
+        - field: delivery_bucket
+          direction: asc
 
 tables:
   orders:
@@ -234,7 +277,7 @@ pages:
     description: Fulfillment and order detail
     canvas:
       width: 1366
-      height: 838
+      height: 1158
     grid:
       columns: 12
       row_height: 48
@@ -247,12 +290,24 @@ pages:
       - id: delivery
         kind: bar_chart
         visual: delivery
-        placement: { col: 1, row: 3, col_span: 6, row_span: 5 }
+        placement: { col: 1, row: 3, col_span: 4, row_span: 5 }
       - id: orders
         kind: column_chart
         visual: orders_by_month_status
-        placement: { col: 7, row: 3, col_span: 6, row_span: 5 }
+        placement: { col: 5, row: 3, col_span: 4, row_span: 5 }
+      - id: state-status
+        kind: heatmap_chart
+        visual: state_status_heatmap
+        placement: { col: 9, row: 3, col_span: 4, row_span: 5 }
+      - id: status-flow
+        kind: sankey_chart
+        visual: status_delivery_flow
+        placement: { col: 1, row: 8, col_span: 6, row_span: 5 }
+      - id: delivery-distribution
+        kind: boxplot_chart
+        visual: delivery_distribution
+        placement: { col: 7, row: 8, col_span: 6, row_span: 5 }
       - id: orders-table
         kind: table
         table: orders
-        placement: { col: 1, row: 8, col_span: 12, row_span: 6 }
+        placement: { col: 1, row: 13, col_span: 12, row_span: 6 }

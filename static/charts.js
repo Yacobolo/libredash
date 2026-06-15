@@ -83022,6 +83022,602 @@ function iconSvg(content) {
   return w`<svg viewBox="0 0 24 24" aria-hidden="true">${content}</svg>`;
 }
 
+// web/components/chart/registry.ts
+var chartRenderers = {};
+function registerChartRenderer(name, renderer) {
+  chartRenderers[name] = renderer;
+}
+function chartRenderer(name) {
+  return chartRenderers[name || "echarts"];
+}
+
+// web/components/chart/utils.ts
+function stylesFor(element) {
+  const styles = getComputedStyle(element);
+  const value = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+  return {
+    text: value("--fgColor-default", "#1f2328"),
+    muted: value("--fgColor-muted", "#59636e"),
+    border: value("--borderColor-default", "#d0d7de"),
+    grid: value("--ld-chart-grid", value("--borderColor-muted", "#d8dee4")),
+    surface: value("--report-chart-surface", value("--card-bgColor", value("--bgColor-default", "#ffffff"))),
+    fill: value("--ld-chart-1-muted", "rgba(84, 174, 255, .35)"),
+    dimmed: value("--borderColor-muted", "#d8dee4"),
+    palette: [
+      value("--ld-chart-1", "#0969da"),
+      value("--ld-chart-2", "#1a7f37"),
+      value("--ld-chart-3", "#8250df"),
+      value("--ld-chart-4", "#cf222e"),
+      value("--ld-chart-5", "#116329"),
+      value("--ld-chart-6", "#bf3989")
+    ]
+  };
+}
+function normalizeType(type) {
+  switch (type) {
+    case "line_chart":
+      return "line";
+    case "area_chart":
+      return "area";
+    case "bar_chart":
+      return "bar";
+    case "column_chart":
+      return "column";
+    case "pie_chart":
+      return "pie";
+    case "donut_chart":
+      return "donut";
+    case "scatter_chart":
+      return "scatter";
+    case "funnel_chart":
+      return "funnel";
+    case "treemap_chart":
+      return "treemap";
+    case "gauge_chart":
+      return "gauge";
+    case "heatmap_chart":
+      return "heatmap";
+    case "sankey_chart":
+      return "sankey";
+    case "graph_chart":
+      return "graph";
+    case "map_chart":
+      return "map";
+    case "candlestick_chart":
+      return "candlestick";
+    case "boxplot_chart":
+      return "boxplot";
+    case "line":
+    case "area":
+    case "bar":
+    case "column":
+    case "pie":
+    case "donut":
+    case "scatter":
+    case "funnel":
+    case "treemap":
+    case "gauge":
+    case "heatmap":
+    case "sankey":
+    case "graph":
+    case "map":
+    case "candlestick":
+    case "boxplot":
+      return type;
+    default:
+      return "bar";
+  }
+}
+function normalizeShape(shape, type, hasSeries) {
+  switch (shape) {
+    case "category_series_value":
+    case "single_value":
+    case "category_value":
+    case "matrix":
+    case "graph":
+    case "geo":
+    case "ohlc":
+    case "distribution":
+      return shape;
+  }
+  switch (normalizeType(type)) {
+    case "gauge":
+      return "single_value";
+    case "heatmap":
+      return "matrix";
+    case "sankey":
+    case "graph":
+      return "graph";
+    case "map":
+      return "geo";
+    case "candlestick":
+      return "ohlc";
+    case "boxplot":
+      return "distribution";
+    default:
+      return hasSeries ? "category_series_value" : "category_value";
+  }
+}
+function unique(values) {
+  return [...new Set(values)];
+}
+function stringValue(row, key2) {
+  const value = row?.[key2];
+  if (value === void 0 || value === null) return "";
+  return String(value);
+}
+function numberValue(row, key2) {
+  const value = row?.[key2];
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function booleanValue(row, key2) {
+  return row?.[key2] === true;
+}
+function colorWithAlpha(color3, alpha) {
+  if (color3.startsWith("#") && color3.length === 7) {
+    const r5 = Number.parseInt(color3.slice(1, 3), 16);
+    const g2 = Number.parseInt(color3.slice(3, 5), 16);
+    const b3 = Number.parseInt(color3.slice(5, 7), 16);
+    return `rgba(${r5}, ${g2}, ${b3}, ${alpha})`;
+  }
+  return color3;
+}
+function formatValue(value, unit) {
+  if (!Number.isFinite(value)) return "-";
+  const formatted = formatCompact(value);
+  if (unit === "R$") return `R$ ${formatted}`;
+  return formatted;
+}
+function formatCompact(value) {
+  if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(1)}m`;
+  if (Math.abs(value) >= 1e3) return `${(value / 1e3).toFixed(1)}k`;
+  return value.toLocaleString(void 0, { maximumFractionDigits: 0 });
+}
+function deepMerge(base2, override) {
+  if (!isPlainObject(base2) || !isPlainObject(override)) {
+    return override === void 0 ? base2 : override;
+  }
+  const result = { ...base2 };
+  for (const [key2, value] of Object.entries(override)) {
+    if (Array.isArray(value)) {
+      result[key2] = value;
+      continue;
+    }
+    result[key2] = deepMerge(result[key2], value);
+  }
+  return result;
+}
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function chartColumns(payload) {
+  switch (normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length))) {
+    case "matrix":
+      return [
+        { key: "row", label: "Row" },
+        { key: "column", label: "Column" },
+        { key: "value", label: "Value", align: "right" }
+      ];
+    case "graph":
+      return [
+        { key: "source", label: "Source" },
+        { key: "target", label: "Target" },
+        { key: "value", label: "Value", align: "right" }
+      ];
+    case "geo":
+      return [
+        { key: "name", label: "Name" },
+        { key: "value", label: "Value", align: "right" }
+      ];
+    case "ohlc":
+      return ["label", "open", "close", "low", "high"].map((key2) => ({ key: key2, label: titleCase(key2), align: key2 === "label" ? void 0 : "right" }));
+    case "distribution":
+      return ["label", "min", "q1", "median", "q3", "max"].map((key2) => ({ key: key2, label: titleCase(key2), align: key2 === "label" ? void 0 : "right" }));
+    default:
+      return [
+        { key: "label", label: "Label" },
+        { key: "series", label: "Series" },
+        { key: "value", label: "Value", align: "right" }
+      ];
+  }
+}
+function chartRows(payload) {
+  return (payload.data ?? []).map((row) => ({ ...row }));
+}
+function selectedValues(payload, key2 = "label") {
+  const rows = payload.data ?? [];
+  const selected = /* @__PURE__ */ new Set([
+    ...payload.selection ?? [],
+    ...rows.filter((row) => booleanValue(row, "selected")).map((row) => stringValue(row, key2))
+  ]);
+  return { selected, hasSelection: selected.size > 0 };
+}
+function titleCase(value) {
+  return value.slice(0, 1).toUpperCase() + value.slice(1).replaceAll("_", " ");
+}
+
+// web/components/chart/echarts-adapters.ts
+function buildEChartsOption(payload, tokens2) {
+  switch (normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length))) {
+    case "single_value":
+      return singleValueAdapter(payload, tokens2);
+    case "matrix":
+      return matrixAdapter(payload, tokens2);
+    case "graph":
+      return graphAdapter(payload, tokens2);
+    case "geo":
+      return geoAdapter(payload, tokens2);
+    case "ohlc":
+      return ohlcAdapter(payload, tokens2);
+    case "distribution":
+      return distributionAdapter(payload, tokens2);
+    case "category_series_value":
+    case "category_value":
+    default:
+      if (isPartToWholeType(normalizeType(payload.type))) return partToWholeAdapter(payload, tokens2);
+      return categoryAdapter(payload, tokens2);
+  }
+}
+function baseOption(payload, tokens2) {
+  const type = normalizeType(payload.type);
+  return {
+    backgroundColor: "transparent",
+    color: tokens2.palette,
+    aria: { show: true },
+    animationDuration: 220,
+    animationDurationUpdate: 260,
+    tooltip: {
+      trigger: ["line", "area", "bar", "column", "scatter", "heatmap", "candlestick", "boxplot"].includes(type) ? "axis" : "item",
+      valueFormatter: (value) => formatValue(Number(value), payload.unit),
+      borderColor: tokens2.border,
+      backgroundColor: tokens2.surface,
+      textStyle: { color: tokens2.text }
+    },
+    grid: {
+      top: 16,
+      right: 20,
+      bottom: 32,
+      left: 44,
+      containLabel: true
+    }
+  };
+}
+function itemDataFor(payload, tokens2) {
+  const { selected, hasSelection } = selectedValues(payload);
+  return (payload.data ?? []).map((row, index) => {
+    const label = stringValue(row, "label");
+    return {
+      name: label,
+      value: numberValue(row, "value"),
+      selected: selected.has(label),
+      itemStyle: {
+        color: tokens2.palette[index % tokens2.palette.length],
+        opacity: hasSelection && !selected.has(label) ? 0.35 : 1
+      }
+    };
+  });
+}
+function partToWholeAdapter(payload, tokens2) {
+  const type = normalizeType(payload.type);
+  const itemData = itemDataFor(payload, tokens2);
+  const base2 = baseOption(payload, tokens2);
+  if (type === "pie" || type === "donut") {
+    return {
+      ...base2,
+      series: [
+        {
+          id: payload.id || "chart",
+          name: payload.title,
+          type: "pie",
+          radius: type === "donut" ? ["48%", "72%"] : ["0%", "72%"],
+          center: ["50%", "52%"],
+          data: itemData,
+          selectedMode: "multiple",
+          label: { color: tokens2.muted, fontSize: 10, fontWeight: 700 },
+          universalTransition: true
+        }
+      ]
+    };
+  }
+  if (type === "funnel") {
+    return {
+      ...base2,
+      series: [
+        {
+          id: payload.id || "chart",
+          name: payload.title,
+          type: "funnel",
+          left: "8%",
+          top: 18,
+          width: "84%",
+          bottom: 18,
+          sort: "descending",
+          data: itemData,
+          label: { color: tokens2.text, fontSize: 10, fontWeight: 700 }
+        }
+      ]
+    };
+  }
+  if (type === "treemap") {
+    return {
+      ...base2,
+      series: [
+        {
+          id: payload.id || "chart",
+          name: payload.title,
+          type: "treemap",
+          roam: false,
+          nodeClick: false,
+          breadcrumb: { show: false },
+          data: itemData,
+          label: { color: tokens2.text, fontSize: 10, fontWeight: 800 },
+          upperLabel: { show: false }
+        }
+      ]
+    };
+  }
+  return categoryAdapter(payload, tokens2);
+}
+function singleValueAdapter(payload, tokens2) {
+  const point = payload.data?.[0];
+  const value = numberValue(point, "value");
+  return {
+    ...baseOption(payload, tokens2),
+    series: [
+      {
+        id: payload.id || "chart",
+        name: payload.title,
+        type: "gauge",
+        min: 0,
+        max: Math.max(100, Math.ceil(value * 1.2)),
+        progress: { show: true, width: 12 },
+        axisLine: { lineStyle: { width: 12, color: [[1, tokens2.grid]] } },
+        axisTick: { show: false },
+        splitLine: { length: 8, lineStyle: { color: tokens2.border } },
+        axisLabel: { color: tokens2.muted, fontSize: 10, fontWeight: 700 },
+        pointer: { width: 4 },
+        anchor: { show: true, size: 6, itemStyle: { color: tokens2.palette[0] } },
+        detail: {
+          valueAnimation: true,
+          color: tokens2.text,
+          fontSize: 24,
+          fontWeight: 850,
+          formatter: (next) => formatValue(next, payload.unit)
+        },
+        data: [{ name: stringValue(point, "label") || payload.title, value, itemStyle: { color: tokens2.palette[0] } }]
+      }
+    ]
+  };
+}
+function categoryAdapter(payload, tokens2) {
+  const type = normalizeType(payload.type);
+  const data = payload.data ?? [];
+  const { selected, hasSelection } = selectedValues(payload);
+  const stacked = Boolean(payload.options?.stacked);
+  const horizontal = type === "bar";
+  const seriesType2 = type === "area" ? "line" : type === "column" ? "bar" : type;
+  const labels = unique(data.map((row) => stringValue(row, "label")));
+  const seriesNames = unique(data.map((row) => stringValue(row, "series") || payload.title || "Value"));
+  const multiSeries = seriesNames.length > 1 || data.some((row) => stringValue(row, "series"));
+  return {
+    ...baseOption(payload, tokens2),
+    yAxis: horizontal ? {
+      ...axis("category", tokens2),
+      data: labels,
+      inverse: true,
+      axisLabel: { color: tokens2.text, fontWeight: 750, fontSize: 10 }
+    } : axis("value", tokens2),
+    xAxis: horizontal ? axis("value", tokens2) : {
+      ...axis("category", tokens2),
+      data: labels,
+      axisLabel: {
+        color: tokens2.muted,
+        fontWeight: 700,
+        fontSize: 10,
+        interval: Math.ceil(labels.length / 6)
+      }
+    },
+    series: seriesNames.map((seriesName, seriesIndex) => ({
+      id: `${payload.id || "chart"}:${seriesName}`,
+      name: multiSeries ? seriesName : payload.title,
+      type: seriesType2,
+      stack: stacked ? payload.id || "chart" : void 0,
+      smooth: type === "line" || type === "area",
+      areaStyle: type === "area" ? { color: colorWithAlpha(tokens2.palette[seriesIndex % tokens2.palette.length], 0.24) } : void 0,
+      symbolSize: type === "scatter" ? 9 : 7,
+      barMaxWidth: 18,
+      data: labels.map((label, labelIndex) => {
+        const point = data.find((candidate) => stringValue(candidate, "label") === label && (stringValue(candidate, "series") || payload.title || "Value") === seriesName);
+        const isSelected = selected.has(label);
+        return {
+          name: label,
+          value: numberValue(point, "value"),
+          itemStyle: {
+            color: hasSelection && !isSelected ? tokens2.dimmed : tokens2.palette[(multiSeries ? seriesIndex : labelIndex) % tokens2.palette.length],
+            opacity: hasSelection && !isSelected ? 0.35 : 1
+          }
+        };
+      }),
+      lineStyle: { color: tokens2.palette[seriesIndex % tokens2.palette.length], width: 2.5 },
+      universalTransition: true
+    }))
+  };
+}
+function matrixAdapter(payload, tokens2) {
+  const data = payload.data ?? [];
+  const rows = unique(data.map((row) => stringValue(row, "row")));
+  const columns = unique(data.map((row) => stringValue(row, "column")));
+  const values = data.map((row) => numberValue(row, "value"));
+  const maxValue = Math.max(1, ...values);
+  const { selected, hasSelection } = selectedValues(payload, "row");
+  return {
+    ...baseOption(payload, tokens2),
+    tooltip: { trigger: "item", borderColor: tokens2.border, backgroundColor: tokens2.surface, textStyle: { color: tokens2.text } },
+    grid: { top: 18, right: 18, bottom: 48, left: 56, containLabel: true },
+    xAxis: { ...axis("category", tokens2), data: columns, axisLabel: { color: tokens2.muted, fontSize: 10, fontWeight: 700 } },
+    yAxis: { ...axis("category", tokens2), data: rows, axisLabel: { color: tokens2.text, fontSize: 10, fontWeight: 750 } },
+    visualMap: {
+      min: 0,
+      max: maxValue,
+      calculable: false,
+      orient: "horizontal",
+      left: "center",
+      bottom: 6,
+      inRange: { color: [colorWithAlpha(tokens2.palette[0], 0.16), tokens2.palette[0]] },
+      textStyle: { color: tokens2.muted, fontSize: 10, fontWeight: 700 }
+    },
+    series: [
+      {
+        id: payload.id || "chart",
+        name: payload.title,
+        type: "heatmap",
+        data: data.map((row) => {
+          const rowName = stringValue(row, "row");
+          const isSelected = selected.has(rowName);
+          return {
+            name: rowName,
+            value: [columns.indexOf(stringValue(row, "column")), rows.indexOf(rowName), numberValue(row, "value")],
+            itemStyle: { opacity: hasSelection && !isSelected ? 0.35 : 1 }
+          };
+        }),
+        label: { show: false },
+        emphasis: { itemStyle: { borderColor: tokens2.text, borderWidth: 1 } }
+      }
+    ]
+  };
+}
+function graphAdapter(payload, tokens2) {
+  const type = normalizeType(payload.type);
+  const data = payload.data ?? [];
+  const nodeNames = unique(data.flatMap((row) => [stringValue(row, "source"), stringValue(row, "target")]).filter(Boolean));
+  if (type === "graph") {
+    return {
+      ...baseOption(payload, tokens2),
+      tooltip: { trigger: "item", borderColor: tokens2.border, backgroundColor: tokens2.surface, textStyle: { color: tokens2.text } },
+      series: [
+        {
+          id: payload.id || "chart",
+          name: payload.title,
+          type: "graph",
+          layout: "force",
+          roam: true,
+          label: { show: true, color: tokens2.text, fontSize: 10, fontWeight: 700 },
+          force: { repulsion: 80, edgeLength: 80 },
+          data: nodeNames.map((name, index) => ({ name, itemStyle: { color: tokens2.palette[index % tokens2.palette.length] } })),
+          links: data.map((row) => ({ source: stringValue(row, "source"), target: stringValue(row, "target"), value: numberValue(row, "value") })),
+          lineStyle: { color: tokens2.border, curveness: 0.18 }
+        }
+      ]
+    };
+  }
+  return {
+    ...baseOption(payload, tokens2),
+    tooltip: { trigger: "item", borderColor: tokens2.border, backgroundColor: tokens2.surface, textStyle: { color: tokens2.text } },
+    series: [
+      {
+        id: payload.id || "chart",
+        name: payload.title,
+        type: "sankey",
+        left: 12,
+        right: 18,
+        top: 12,
+        bottom: 12,
+        nodeGap: 8,
+        data: nodeNames.map((name) => ({ name })),
+        links: data.map((row) => ({ source: stringValue(row, "source"), target: stringValue(row, "target"), value: numberValue(row, "value") })),
+        label: { color: tokens2.text, fontSize: 10, fontWeight: 700 },
+        lineStyle: { color: "gradient", curveness: 0.5 },
+        emphasis: { focus: "adjacency" }
+      }
+    ]
+  };
+}
+function geoAdapter(payload, tokens2) {
+  return {
+    ...baseOption(payload, tokens2),
+    tooltip: { trigger: "item", borderColor: tokens2.border, backgroundColor: tokens2.surface, textStyle: { color: tokens2.text } },
+    visualMap: {
+      min: 0,
+      max: Math.max(1, ...(payload.data ?? []).map((row) => numberValue(row, "value"))),
+      left: 8,
+      bottom: 8,
+      textStyle: { color: tokens2.muted, fontSize: 10, fontWeight: 700 },
+      inRange: { color: [colorWithAlpha(tokens2.palette[0], 0.18), tokens2.palette[0]] }
+    },
+    series: [
+      {
+        id: payload.id || "chart",
+        name: payload.title,
+        type: "map",
+        map: String(payload.options?.map || "world"),
+        roam: true,
+        data: (payload.data ?? []).map((row) => ({ name: stringValue(row, "name"), value: numberValue(row, "value"), selected: booleanValue(row, "selected") })),
+        label: { color: tokens2.text, fontSize: 9, fontWeight: 700 },
+        itemStyle: { borderColor: tokens2.border }
+      }
+    ]
+  };
+}
+function ohlcAdapter(payload, tokens2) {
+  const data = payload.data ?? [];
+  const labels = data.map((row) => stringValue(row, "label"));
+  return {
+    ...baseOption(payload, tokens2),
+    xAxis: { ...axis("category", tokens2), data: labels, axisLabel: { color: tokens2.muted, fontSize: 10, fontWeight: 700 } },
+    yAxis: axis("value", tokens2),
+    series: [
+      {
+        id: payload.id || "chart",
+        name: payload.title,
+        type: "candlestick",
+        data: data.map((row) => [numberValue(row, "open"), numberValue(row, "close"), numberValue(row, "low"), numberValue(row, "high")]),
+        itemStyle: { color: tokens2.palette[1], color0: tokens2.palette[3], borderColor: tokens2.palette[1], borderColor0: tokens2.palette[3] }
+      }
+    ]
+  };
+}
+function distributionAdapter(payload, tokens2) {
+  const data = payload.data ?? [];
+  const labels = data.map((row) => stringValue(row, "label"));
+  return {
+    ...baseOption(payload, tokens2),
+    xAxis: { ...axis("category", tokens2), data: labels, axisLabel: { color: tokens2.muted, fontSize: 10, fontWeight: 700 } },
+    yAxis: axis("value", tokens2),
+    series: [
+      {
+        id: payload.id || "chart",
+        name: payload.title,
+        type: "boxplot",
+        data: data.map((row) => [numberValue(row, "min"), numberValue(row, "q1"), numberValue(row, "median"), numberValue(row, "q3"), numberValue(row, "max")]),
+        itemStyle: { color: colorWithAlpha(tokens2.palette[0], 0.28), borderColor: tokens2.palette[0] }
+      }
+    ]
+  };
+}
+function axis(type, tokens2) {
+  return {
+    type,
+    axisLine: { lineStyle: { color: tokens2.border } },
+    axisTick: { show: false },
+    axisLabel: { color: tokens2.muted, fontWeight: 700, fontSize: 10 },
+    splitLine: { lineStyle: { color: tokens2.grid } }
+  };
+}
+function isPartToWholeType(type) {
+  return type === "pie" || type === "donut" || type === "funnel" || type === "treemap";
+}
+
+// web/components/chart/echarts-renderer.ts
+registerChartRenderer("echarts", {
+  buildOption(payload, tokens2) {
+    const generated = buildEChartsOption(payload, tokens2);
+    const override = payload.rendererOptions?.echarts ?? {};
+    return deepMerge(generated, override);
+  }
+});
+
 // web/components/charts.ts
 var chartStyles = i`
   :host {
@@ -83224,7 +83820,7 @@ var EChartVisual = class extends i4 {
     if (!canvas) return;
     this.instance = init2(canvas, null, { renderer: "canvas" });
     this.instance.on("click", (event) => {
-      const label = String(event.name || event.data?.name || "");
+      const label = selectionValueForEvent(this.payload, event);
       if (label) this.selectLabel(label);
     });
     this.observer?.observe(this);
@@ -83274,7 +83870,7 @@ var EChartVisual = class extends i4 {
       this.instance.clear();
       return;
     }
-    const renderer = chartRenderers[payload.renderer ?? "echarts"];
+    const renderer = chartRenderer(payload.renderer);
     if (!renderer) {
       this.instance.clear();
       return;
@@ -83284,13 +83880,14 @@ var EChartVisual = class extends i4 {
   }
   get payload() {
     const chart = this.chart ?? {};
+    const type = normalizeType(chart.type || this.type);
     return {
       version: chart.version ?? 3,
       id: chart.id || this.visualId,
       kind: chart.kind || "chart",
-      shape: normalizeShape(chart.shape || (chart.series?.length ? "category_series_value" : "category_value")),
+      shape: normalizeShape(chart.shape, type, Boolean(chart.series?.length)),
       renderer: chart.renderer || "echarts",
-      type: normalizeType(chart.type || this.type),
+      type,
       title: chart.title || this.chartTitle,
       unit: chart.unit ?? this.unit,
       field: chart.field || this.field,
@@ -83298,7 +83895,6 @@ var EChartVisual = class extends i4 {
       measure: chart.measure ?? "",
       measures: chart.measures ?? (chart.measure ? [chart.measure] : []),
       series: chart.series ?? [],
-      stacked: chart.stacked ?? Boolean(chart.options?.stacked),
       selection: chart.selection ?? this.selection ?? [],
       data: chart.data ?? this.data ?? [],
       options: chart.options ?? {},
@@ -83334,7 +83930,7 @@ var EChartVisual = class extends i4 {
           visualType: "chart",
           visualId: payload.id || this.visualId,
           title: payload.title || "Chart",
-          columns: chartColumns(),
+          columns: chartColumns(payload),
           rows: chartRows(payload),
           selection: payload.selection ?? [],
           chart: payload
@@ -83346,7 +83942,7 @@ var EChartVisual = class extends i4 {
     }
   }
   hasSelection(payload) {
-    return Boolean(payload.selection?.length || payload.data?.some((point) => point.selected));
+    return Boolean(payload.selection?.length || payload.data?.some((row) => row.selected));
   }
 };
 __decorateClass([
@@ -83373,19 +83969,13 @@ __decorateClass([
 __decorateClass([
   n4({ type: Array })
 ], EChartVisual.prototype, "selection", 2);
-function chartColumns() {
-  return [
-    { key: "label", label: "Label" },
-    { key: "series", label: "Series" },
-    { key: "value", label: "Value", align: "right" }
-  ];
-}
-function chartRows(payload) {
-  return (payload.data ?? []).map((point) => ({
-    label: point.label,
-    series: point.series ?? "",
-    value: point.value
-  }));
+function selectionValueForEvent(payload, event) {
+  const shape = normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length));
+  const data = event.data ?? {};
+  if (shape === "matrix") return String(data.name || event.name || "");
+  if (shape === "geo") return String(data.name || event.name || "");
+  if (shape === "graph") return String(event.name || data.source || "");
+  return String(event.name || data.name || "");
 }
 var KPIStrip = class extends i4 {
   constructor() {
@@ -83494,341 +84084,6 @@ var KPIStrip = class extends i4 {
 __decorateClass([
   n4({ type: Array })
 ], KPIStrip.prototype, "items", 2);
-var chartRenderers = {
-  echarts: {
-    buildOption(payload, tokens2) {
-      const generated = buildEChartsOption(payload, tokens2);
-      const override = payload.rendererOptions?.echarts ?? {};
-      return deepMerge(generated, override);
-    }
-  }
-};
-function buildEChartsOption(payload, tokens2) {
-  switch (normalizeShape(payload.shape)) {
-    case "single_value":
-      return singleValueAdapter(payload, tokens2);
-    case "category_series_value":
-    case "category_value":
-    default:
-      if (isPartToWholeType(normalizeType(payload.type))) return partToWholeAdapter(payload, tokens2);
-      return categoryAdapter(payload, tokens2);
-  }
-}
-function baseOption(payload, tokens2) {
-  const type = normalizeType(payload.type);
-  return {
-    backgroundColor: "transparent",
-    color: tokens2.palette,
-    aria: { show: true },
-    animationDuration: 220,
-    animationDurationUpdate: 260,
-    tooltip: {
-      trigger: type === "line" || type === "area" || type === "bar" || type === "column" || type === "scatter" ? "axis" : "item",
-      valueFormatter: (value) => formatValue(Number(value), payload.unit),
-      borderColor: tokens2.border,
-      backgroundColor: tokens2.surface,
-      textStyle: { color: tokens2.text }
-    },
-    grid: {
-      top: 16,
-      right: 20,
-      bottom: 32,
-      left: 44,
-      containLabel: true
-    }
-  };
-}
-function pointSelection(payload) {
-  const data = payload.data ?? [];
-  const selected = /* @__PURE__ */ new Set([...payload.selection ?? [], ...data.filter((point) => point.selected).map((point) => point.label)]);
-  return { selected, hasSelection: selected.size > 0 };
-}
-function itemDataFor(payload, tokens2) {
-  const { selected, hasSelection } = pointSelection(payload);
-  return (payload.data ?? []).map((point, index) => ({
-    name: point.label,
-    value: point.value,
-    selected: selected.has(point.label),
-    itemStyle: {
-      color: tokens2.palette[index % tokens2.palette.length],
-      opacity: hasSelection && !selected.has(point.label) ? 0.35 : 1
-    }
-  }));
-}
-function partToWholeAdapter(payload, tokens2) {
-  const type = normalizeType(payload.type);
-  const itemData = itemDataFor(payload, tokens2);
-  const base2 = baseOption(payload, tokens2);
-  if (type === "pie" || type === "donut") {
-    return {
-      ...base2,
-      series: [
-        {
-          id: payload.id || "chart",
-          name: payload.title,
-          type: "pie",
-          radius: type === "donut" ? ["48%", "72%"] : ["0%", "72%"],
-          center: ["50%", "52%"],
-          data: itemData,
-          selectedMode: "multiple",
-          label: { color: tokens2.muted, fontSize: 10, fontWeight: 700 },
-          universalTransition: true
-        }
-      ]
-    };
-  }
-  if (type === "funnel") {
-    return {
-      ...base2,
-      series: [
-        {
-          id: payload.id || "chart",
-          name: payload.title,
-          type: "funnel",
-          left: "8%",
-          top: 18,
-          width: "84%",
-          bottom: 18,
-          sort: "descending",
-          data: itemData,
-          label: { color: tokens2.text, fontSize: 10, fontWeight: 700 }
-        }
-      ]
-    };
-  }
-  if (type === "treemap") {
-    return {
-      ...base2,
-      series: [
-        {
-          id: payload.id || "chart",
-          name: payload.title,
-          type: "treemap",
-          roam: false,
-          nodeClick: false,
-          breadcrumb: { show: false },
-          data: itemData,
-          label: { color: tokens2.text, fontSize: 10, fontWeight: 800 },
-          upperLabel: { show: false }
-        }
-      ]
-    };
-  }
-  return categoryAdapter(payload, tokens2);
-}
-function singleValueAdapter(payload, tokens2) {
-  const point = payload.data?.[0];
-  return {
-    ...baseOption(payload, tokens2),
-    series: [
-      {
-        id: payload.id || "chart",
-        name: payload.title,
-        type: "gauge",
-        min: 0,
-        max: Math.max(100, Math.ceil((point?.value ?? 0) * 1.2)),
-        progress: { show: true, width: 12 },
-        axisLine: { lineStyle: { width: 12, color: [[1, tokens2.grid]] } },
-        axisTick: { show: false },
-        splitLine: { length: 8, lineStyle: { color: tokens2.border } },
-        axisLabel: { color: tokens2.muted, fontSize: 10, fontWeight: 700 },
-        pointer: { width: 4 },
-        anchor: { show: true, size: 6, itemStyle: { color: tokens2.palette[0] } },
-        detail: {
-          valueAnimation: true,
-          color: tokens2.text,
-          fontSize: 24,
-          fontWeight: 850,
-          formatter: (value) => formatValue(value, payload.unit)
-        },
-        data: [
-          {
-            name: point?.label ?? payload.title,
-            value: point?.value ?? 0,
-            itemStyle: { color: tokens2.palette[0] }
-          }
-        ]
-      }
-    ]
-  };
-}
-function categoryAdapter(payload, tokens2) {
-  const type = normalizeType(payload.type);
-  const data = payload.data ?? [];
-  const { selected, hasSelection } = pointSelection(payload);
-  const stacked = Boolean(payload.options?.stacked ?? payload.stacked);
-  const horizontal = type === "bar";
-  const seriesType2 = type === "area" ? "line" : type === "column" ? "bar" : type;
-  const labels = unique(data.map((point) => point.label));
-  const seriesNames = unique(data.map((point) => point.series || payload.title || "Value"));
-  const multiSeries = seriesNames.length > 1 || data.some((point) => point.series);
-  return {
-    ...baseOption(payload, tokens2),
-    yAxis: horizontal ? {
-      ...axis("category", tokens2),
-      data: labels,
-      inverse: true,
-      axisLabel: { color: tokens2.text, fontWeight: 750, fontSize: 10 }
-    } : {
-      ...axis("value", tokens2)
-    },
-    xAxis: horizontal ? axis("value", tokens2) : {
-      ...axis("category", tokens2),
-      data: labels,
-      axisLabel: {
-        color: tokens2.muted,
-        fontWeight: 700,
-        fontSize: 10,
-        interval: Math.ceil(labels.length / 6)
-      }
-    },
-    series: seriesNames.map((seriesName, seriesIndex) => ({
-      id: `${payload.id || "chart"}:${seriesName}`,
-      name: multiSeries ? seriesName : payload.title,
-      type: seriesType2,
-      stack: stacked ? payload.id || "chart" : void 0,
-      smooth: type === "line" || type === "area",
-      areaStyle: type === "area" ? { color: colorWithAlpha(tokens2.palette[seriesIndex % tokens2.palette.length], 0.24) } : void 0,
-      symbolSize: type === "scatter" ? 9 : 7,
-      barMaxWidth: 18,
-      data: labels.map((label, labelIndex) => {
-        const point = data.find((candidate) => candidate.label === label && (candidate.series || payload.title || "Value") === seriesName);
-        const isSelected = selected.has(label);
-        return {
-          name: label,
-          value: point?.value ?? 0,
-          itemStyle: {
-            color: hasSelection && !isSelected ? tokens2.dimmed : tokens2.palette[(multiSeries ? seriesIndex : labelIndex) % tokens2.palette.length],
-            opacity: hasSelection && !isSelected ? 0.35 : 1
-          }
-        };
-      }),
-      lineStyle: { color: tokens2.palette[seriesIndex % tokens2.palette.length], width: 2.5 },
-      universalTransition: true
-    }))
-  };
-}
-function axis(type, tokens2) {
-  return {
-    type,
-    axisLine: { lineStyle: { color: tokens2.border } },
-    axisTick: { show: false },
-    axisLabel: { color: tokens2.muted, fontWeight: 700, fontSize: 10 },
-    splitLine: { lineStyle: { color: tokens2.grid } }
-  };
-}
-function stylesFor(element) {
-  const styles = getComputedStyle(element);
-  const value = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
-  return {
-    text: value("--fgColor-default", "#1f2328"),
-    muted: value("--fgColor-muted", "#59636e"),
-    border: value("--borderColor-default", "#d0d7de"),
-    grid: value("--ld-chart-grid", value("--borderColor-muted", "#d8dee4")),
-    surface: value("--report-chart-surface", value("--card-bgColor", value("--bgColor-default", "#ffffff"))),
-    fill: value("--ld-chart-1-muted", "rgba(84, 174, 255, .35)"),
-    dimmed: value("--borderColor-muted", "#d8dee4"),
-    palette: [
-      value("--ld-chart-1", "#0969da"),
-      value("--ld-chart-2", "#1a7f37"),
-      value("--ld-chart-3", "#8250df"),
-      value("--ld-chart-4", "#cf222e"),
-      value("--ld-chart-5", "#116329"),
-      value("--ld-chart-6", "#bf3989")
-    ]
-  };
-}
-function unique(values) {
-  return [...new Set(values)];
-}
-function colorWithAlpha(color3, alpha) {
-  if (color3.startsWith("#") && color3.length === 7) {
-    const r5 = Number.parseInt(color3.slice(1, 3), 16);
-    const g2 = Number.parseInt(color3.slice(3, 5), 16);
-    const b3 = Number.parseInt(color3.slice(5, 7), 16);
-    return `rgba(${r5}, ${g2}, ${b3}, ${alpha})`;
-  }
-  return color3;
-}
-function normalizeType(type) {
-  switch (type) {
-    case "line_chart":
-      return "line";
-    case "area_chart":
-      return "area";
-    case "bar_chart":
-      return "bar";
-    case "column_chart":
-      return "column";
-    case "pie_chart":
-      return "pie";
-    case "donut_chart":
-      return "donut";
-    case "scatter_chart":
-      return "scatter";
-    case "funnel_chart":
-      return "funnel";
-    case "treemap_chart":
-      return "treemap";
-    case "gauge_chart":
-      return "gauge";
-    case "line":
-    case "area":
-    case "bar":
-    case "column":
-    case "pie":
-    case "donut":
-    case "scatter":
-    case "funnel":
-    case "treemap":
-    case "gauge":
-      return type;
-    default:
-      return "bar";
-  }
-}
-function normalizeShape(shape) {
-  switch (shape) {
-    case "category_series_value":
-      return "category_series_value";
-    case "single_value":
-      return "single_value";
-    case "category_value":
-    default:
-      return "category_value";
-  }
-}
-function isPartToWholeType(type) {
-  return type === "pie" || type === "donut" || type === "funnel" || type === "treemap";
-}
-function deepMerge(base2, override) {
-  if (!isPlainObject(base2) || !isPlainObject(override)) {
-    return override === void 0 ? base2 : override;
-  }
-  const result = { ...base2 };
-  for (const [key2, value] of Object.entries(override)) {
-    if (Array.isArray(value)) {
-      result[key2] = value;
-      continue;
-    }
-    result[key2] = deepMerge(result[key2], value);
-  }
-  return result;
-}
-function isPlainObject(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-function formatValue(value, unit) {
-  if (!Number.isFinite(value)) return "-";
-  const formatted = formatCompact(value);
-  if (unit === "R$") return `R$ ${formatted}`;
-  return formatted;
-}
-function formatCompact(value) {
-  if (Math.abs(value) >= 1e6) return `${(value / 1e6).toFixed(1)}m`;
-  if (Math.abs(value) >= 1e3) return `${(value / 1e3).toFixed(1)}k`;
-  return value.toLocaleString(void 0, { maximumFractionDigits: 0 });
-}
 var LegacyLineChart = class extends EChartVisual {
 };
 var LegacyBarChart = class extends EChartVisual {

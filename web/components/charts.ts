@@ -1,45 +1,12 @@
 import { LitElement, css, html } from 'lit'
 import { property } from 'lit/decorators.js'
 import * as echarts from 'echarts'
-import type { ECharts, EChartsOption } from 'echarts'
+import type { ECharts } from 'echarts'
 import { visualMenuIcon } from './visual-menu-icons'
-
-type ChartType = 'line' | 'area' | 'bar' | 'column' | 'pie' | 'donut' | 'scatter' | 'funnel' | 'treemap' | 'gauge'
-type ChartShape = 'category_value' | 'category_series_value' | 'single_value'
-
-type ChartPoint = {
-  label: string
-  series?: string
-  value: number
-  selected?: boolean
-}
-
-type ChartPayload = {
-  version?: number
-  id?: string
-  kind?: string
-  shape?: ChartShape | string
-  renderer?: string
-  type?: ChartType | string
-  title?: string
-  unit?: string
-  field?: string
-  dimensions?: string[]
-  measure?: string
-  measures?: string[]
-  series?: string[]
-  stacked?: boolean
-  selection?: string[]
-  data?: ChartPoint[]
-  options?: Record<string, unknown>
-  rendererOptions?: Record<string, Record<string, unknown>>
-}
-
-type VisualAction = 'focus' | 'show-data' | 'copy-data' | 'export-csv' | 'clear-selection'
-
-type ChartRenderer = {
-  buildOption(payload: ChartPayload, tokens: ChartTokens): EChartsOption
-}
+import './chart/echarts-renderer'
+import { chartRenderer } from './chart/registry'
+import type { ChartDatum, ChartPayload, ChartType, VisualAction } from './chart/types'
+import { chartColumns, chartRows, normalizeShape, normalizeType, stylesFor } from './chart/utils'
 
 const chartStyles = css`
   :host {
@@ -210,7 +177,7 @@ const chartStyles = css`
 
 class EChartVisual extends LitElement {
   @property({ type: Object }) chart: ChartPayload | null = null
-  @property({ type: Array }) data: ChartPoint[] = []
+  @property({ type: Array }) data: ChartDatum[] = []
   @property({ type: String, attribute: 'chart-title' }) chartTitle = 'Chart'
   @property({ type: String }) unit = ''
   @property({ type: String, attribute: 'visual-id' }) visualId = ''
@@ -244,7 +211,7 @@ class EChartVisual extends LitElement {
     if (!canvas) return
     this.instance = echarts.init(canvas, null, { renderer: 'canvas' })
     this.instance.on('click', (event) => {
-      const label = String(event.name || event.data?.name || '')
+      const label = selectionValueForEvent(this.payload, event)
       if (label) this.selectLabel(label)
     })
     this.observer?.observe(this)
@@ -298,7 +265,7 @@ class EChartVisual extends LitElement {
       this.instance.clear()
       return
     }
-    const renderer = chartRenderers[payload.renderer ?? 'echarts']
+    const renderer = chartRenderer(payload.renderer)
     if (!renderer) {
       this.instance.clear()
       return
@@ -309,13 +276,14 @@ class EChartVisual extends LitElement {
 
   private get payload(): ChartPayload {
     const chart = this.chart ?? {}
+    const type = normalizeType(chart.type || this.type)
     return {
       version: chart.version ?? 3,
       id: chart.id || this.visualId,
       kind: chart.kind || 'chart',
-      shape: normalizeShape(chart.shape || (chart.series?.length ? 'category_series_value' : 'category_value')),
+      shape: normalizeShape(chart.shape, type, Boolean(chart.series?.length)),
       renderer: chart.renderer || 'echarts',
-      type: normalizeType(chart.type || this.type),
+      type,
       title: chart.title || this.chartTitle,
       unit: chart.unit ?? this.unit,
       field: chart.field || this.field,
@@ -323,7 +291,6 @@ class EChartVisual extends LitElement {
       measure: chart.measure ?? '',
       measures: chart.measures ?? (chart.measure ? [chart.measure] : []),
       series: chart.series ?? [],
-      stacked: chart.stacked ?? Boolean(chart.options?.stacked),
       selection: chart.selection ?? this.selection ?? [],
       data: chart.data ?? this.data ?? [],
       options: chart.options ?? {},
@@ -361,7 +328,7 @@ class EChartVisual extends LitElement {
           visualType: 'chart',
           visualId: payload.id || this.visualId,
           title: payload.title || 'Chart',
-          columns: chartColumns(),
+          columns: chartColumns(payload),
           rows: chartRows(payload),
           selection: payload.selection ?? [],
           chart: payload,
@@ -374,24 +341,17 @@ class EChartVisual extends LitElement {
   }
 
   private hasSelection(payload: ChartPayload): boolean {
-    return Boolean(payload.selection?.length || payload.data?.some((point) => point.selected))
+    return Boolean(payload.selection?.length || payload.data?.some((row) => row.selected))
   }
 }
 
-function chartColumns() {
-  return [
-    { key: 'label', label: 'Label' },
-    { key: 'series', label: 'Series' },
-    { key: 'value', label: 'Value', align: 'right' },
-  ]
-}
-
-function chartRows(payload: ChartPayload) {
-  return (payload.data ?? []).map((point) => ({
-    label: point.label,
-    series: point.series ?? '',
-    value: point.value,
-  }))
+function selectionValueForEvent(payload: ChartPayload, event: echarts.ECElementEvent): string {
+  const shape = normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length))
+  const data = (event.data ?? {}) as Record<string, unknown>
+  if (shape === 'matrix') return String(data.name || event.name || '')
+  if (shape === 'geo') return String(data.name || event.name || '')
+  if (shape === 'graph') return String(event.name || data.source || '')
+  return String(event.name || data.name || '')
 }
 
 class KPIStrip extends LitElement {
@@ -494,381 +454,6 @@ class KPIStrip extends LitElement {
       </section>
     `
   }
-}
-
-const chartRenderers: Record<string, ChartRenderer> = {
-  echarts: {
-    buildOption(payload, tokens) {
-      const generated = buildEChartsOption(payload, tokens)
-      const override = payload.rendererOptions?.echarts ?? {}
-      return deepMerge(generated, override) as EChartsOption
-    },
-  },
-}
-
-function buildEChartsOption(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
-  switch (normalizeShape(payload.shape)) {
-    case 'single_value':
-      return singleValueAdapter(payload, tokens)
-    case 'category_series_value':
-    case 'category_value':
-    default:
-      if (isPartToWholeType(normalizeType(payload.type))) return partToWholeAdapter(payload, tokens)
-      return categoryAdapter(payload, tokens)
-  }
-}
-
-function baseOption(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
-  const type = normalizeType(payload.type)
-  return {
-    backgroundColor: 'transparent',
-    color: tokens.palette,
-    aria: { show: true },
-    animationDuration: 220,
-    animationDurationUpdate: 260,
-    tooltip: {
-      trigger: type === 'line' || type === 'area' || type === 'bar' || type === 'column' || type === 'scatter' ? 'axis' : 'item',
-      valueFormatter: (value) => formatValue(Number(value), payload.unit),
-      borderColor: tokens.border,
-      backgroundColor: tokens.surface,
-      textStyle: { color: tokens.text },
-    },
-    grid: {
-      top: 16,
-      right: 20,
-      bottom: 32,
-      left: 44,
-      containLabel: true,
-    },
-  }
-}
-
-function pointSelection(payload: ChartPayload) {
-  const data = payload.data ?? []
-  const selected = new Set([...(payload.selection ?? []), ...data.filter((point) => point.selected).map((point) => point.label)])
-  return { selected, hasSelection: selected.size > 0 }
-}
-
-function itemDataFor(payload: ChartPayload, tokens: ChartTokens) {
-  const { selected, hasSelection } = pointSelection(payload)
-  return (payload.data ?? []).map((point, index) => ({
-    name: point.label,
-    value: point.value,
-    selected: selected.has(point.label),
-    itemStyle: {
-      color: tokens.palette[index % tokens.palette.length],
-      opacity: hasSelection && !selected.has(point.label) ? 0.35 : 1,
-    },
-  }))
-}
-
-function partToWholeAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
-  const type = normalizeType(payload.type)
-  const itemData = itemDataFor(payload, tokens)
-  const base = baseOption(payload, tokens)
-
-  if (type === 'pie' || type === 'donut') {
-    return {
-      ...base,
-      series: [
-        {
-          id: payload.id || 'chart',
-          name: payload.title,
-          type: 'pie',
-          radius: type === 'donut' ? ['48%', '72%'] : ['0%', '72%'],
-          center: ['50%', '52%'],
-          data: itemData,
-          selectedMode: 'multiple',
-          label: { color: tokens.muted, fontSize: 10, fontWeight: 700 },
-          universalTransition: true,
-        },
-      ],
-    }
-  }
-
-  if (type === 'funnel') {
-    return {
-      ...base,
-      series: [
-        {
-          id: payload.id || 'chart',
-          name: payload.title,
-          type: 'funnel',
-          left: '8%',
-          top: 18,
-          width: '84%',
-          bottom: 18,
-          sort: 'descending',
-          data: itemData,
-          label: { color: tokens.text, fontSize: 10, fontWeight: 700 },
-        },
-      ],
-    }
-  }
-
-  if (type === 'treemap') {
-    return {
-      ...base,
-      series: [
-        {
-          id: payload.id || 'chart',
-          name: payload.title,
-          type: 'treemap',
-          roam: false,
-          nodeClick: false,
-          breadcrumb: { show: false },
-          data: itemData,
-          label: { color: tokens.text, fontSize: 10, fontWeight: 800 },
-          upperLabel: { show: false },
-        },
-      ],
-    }
-  }
-  return categoryAdapter(payload, tokens)
-}
-
-function singleValueAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
-  const point = payload.data?.[0]
-  return {
-    ...baseOption(payload, tokens),
-    series: [
-      {
-        id: payload.id || 'chart',
-        name: payload.title,
-        type: 'gauge',
-        min: 0,
-        max: Math.max(100, Math.ceil((point?.value ?? 0) * 1.2)),
-        progress: { show: true, width: 12 },
-        axisLine: { lineStyle: { width: 12, color: [[1, tokens.grid]] } },
-        axisTick: { show: false },
-        splitLine: { length: 8, lineStyle: { color: tokens.border } },
-        axisLabel: { color: tokens.muted, fontSize: 10, fontWeight: 700 },
-        pointer: { width: 4 },
-        anchor: { show: true, size: 6, itemStyle: { color: tokens.palette[0] } },
-        detail: {
-          valueAnimation: true,
-          color: tokens.text,
-          fontSize: 24,
-          fontWeight: 850,
-          formatter: (value: number) => formatValue(value, payload.unit),
-        },
-        data: [
-          {
-            name: point?.label ?? payload.title,
-            value: point?.value ?? 0,
-            itemStyle: { color: tokens.palette[0] },
-          },
-        ],
-      },
-    ],
-  }
-}
-
-function categoryAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
-  const type = normalizeType(payload.type)
-  const data = payload.data ?? []
-  const { selected, hasSelection } = pointSelection(payload)
-  const stacked = Boolean(payload.options?.stacked ?? payload.stacked)
-  const horizontal = type === 'bar'
-  const seriesType = type === 'area' ? 'line' : type === 'column' ? 'bar' : type
-  const labels = unique(data.map((point) => point.label))
-  const seriesNames = unique(data.map((point) => point.series || payload.title || 'Value'))
-  const multiSeries = seriesNames.length > 1 || data.some((point) => point.series)
-  return {
-    ...baseOption(payload, tokens),
-    yAxis: horizontal
-      ? {
-          ...axis('category', tokens),
-          data: labels,
-          inverse: true,
-          axisLabel: { color: tokens.text, fontWeight: 750, fontSize: 10 },
-        }
-      : {
-          ...axis('value', tokens),
-        },
-    xAxis: horizontal
-      ? axis('value', tokens)
-      : {
-          ...axis('category', tokens),
-          data: labels,
-          axisLabel: {
-            color: tokens.muted,
-            fontWeight: 700,
-            fontSize: 10,
-            interval: Math.ceil(labels.length / 6),
-          },
-        },
-    series: seriesNames.map((seriesName, seriesIndex) => ({
-      id: `${payload.id || 'chart'}:${seriesName}`,
-      name: multiSeries ? seriesName : payload.title,
-      type: seriesType,
-      stack: stacked ? payload.id || 'chart' : undefined,
-      smooth: type === 'line' || type === 'area',
-      areaStyle: type === 'area' ? { color: colorWithAlpha(tokens.palette[seriesIndex % tokens.palette.length], 0.24) } : undefined,
-      symbolSize: type === 'scatter' ? 9 : 7,
-      barMaxWidth: 18,
-      data: labels.map((label, labelIndex) => {
-        const point = data.find((candidate) => candidate.label === label && (candidate.series || payload.title || 'Value') === seriesName)
-        const isSelected = selected.has(label)
-        return {
-          name: label,
-          value: point?.value ?? 0,
-          itemStyle: {
-            color:
-              hasSelection && !isSelected
-                ? tokens.dimmed
-                : tokens.palette[(multiSeries ? seriesIndex : labelIndex) % tokens.palette.length],
-            opacity: hasSelection && !isSelected ? 0.35 : 1,
-          },
-        }
-      }),
-      lineStyle: { color: tokens.palette[seriesIndex % tokens.palette.length], width: 2.5 },
-      universalTransition: true,
-    })),
-  }
-}
-
-function axis(type: 'category' | 'value', tokens: ChartTokens) {
-  return {
-    type,
-    axisLine: { lineStyle: { color: tokens.border } },
-    axisTick: { show: false },
-    axisLabel: { color: tokens.muted, fontWeight: 700, fontSize: 10 },
-    splitLine: { lineStyle: { color: tokens.grid } },
-  }
-}
-
-type ChartTokens = {
-  text: string
-  muted: string
-  border: string
-  grid: string
-  surface: string
-  fill: string
-  dimmed: string
-  palette: string[]
-}
-
-function stylesFor(element: HTMLElement): ChartTokens {
-  const styles = getComputedStyle(element)
-  const value = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback
-  return {
-    text: value('--fgColor-default', '#1f2328'),
-    muted: value('--fgColor-muted', '#59636e'),
-    border: value('--borderColor-default', '#d0d7de'),
-    grid: value('--ld-chart-grid', value('--borderColor-muted', '#d8dee4')),
-    surface: value('--report-chart-surface', value('--card-bgColor', value('--bgColor-default', '#ffffff'))),
-    fill: value('--ld-chart-1-muted', 'rgba(84, 174, 255, .35)'),
-    dimmed: value('--borderColor-muted', '#d8dee4'),
-    palette: [
-      value('--ld-chart-1', '#0969da'),
-      value('--ld-chart-2', '#1a7f37'),
-      value('--ld-chart-3', '#8250df'),
-      value('--ld-chart-4', '#cf222e'),
-      value('--ld-chart-5', '#116329'),
-      value('--ld-chart-6', '#bf3989'),
-    ],
-  }
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values)]
-}
-
-function colorWithAlpha(color: string, alpha: number): string {
-  if (color.startsWith('#') && color.length === 7) {
-    const r = Number.parseInt(color.slice(1, 3), 16)
-    const g = Number.parseInt(color.slice(3, 5), 16)
-    const b = Number.parseInt(color.slice(5, 7), 16)
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`
-  }
-  return color
-}
-
-function normalizeType(type: string | undefined): ChartType {
-  switch (type) {
-    case 'line_chart':
-      return 'line'
-    case 'area_chart':
-      return 'area'
-    case 'bar_chart':
-      return 'bar'
-    case 'column_chart':
-      return 'column'
-    case 'pie_chart':
-      return 'pie'
-    case 'donut_chart':
-      return 'donut'
-    case 'scatter_chart':
-      return 'scatter'
-    case 'funnel_chart':
-      return 'funnel'
-    case 'treemap_chart':
-      return 'treemap'
-    case 'gauge_chart':
-      return 'gauge'
-    case 'line':
-    case 'area':
-    case 'bar':
-    case 'column':
-    case 'pie':
-    case 'donut':
-    case 'scatter':
-    case 'funnel':
-    case 'treemap':
-    case 'gauge':
-      return type
-    default:
-      return 'bar'
-  }
-}
-
-function normalizeShape(shape: string | undefined): ChartShape {
-  switch (shape) {
-    case 'category_series_value':
-      return 'category_series_value'
-    case 'single_value':
-      return 'single_value'
-    case 'category_value':
-    default:
-      return 'category_value'
-  }
-}
-
-function isPartToWholeType(type: ChartType): boolean {
-  return type === 'pie' || type === 'donut' || type === 'funnel' || type === 'treemap'
-}
-
-function deepMerge(base: unknown, override: unknown): unknown {
-  if (!isPlainObject(base) || !isPlainObject(override)) {
-    return override === undefined ? base : override
-  }
-  const result: Record<string, unknown> = { ...base }
-  for (const [key, value] of Object.entries(override)) {
-    if (Array.isArray(value)) {
-      result[key] = value
-      continue
-    }
-    result[key] = deepMerge(result[key], value)
-  }
-  return result
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-function formatValue(value: number, unit?: string): string {
-  if (!Number.isFinite(value)) return '-'
-  const formatted = formatCompact(value)
-  if (unit === 'R$') return `R$ ${formatted}`
-  return formatted
-}
-
-function formatCompact(value: number): string {
-  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}m`
-  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}k`
-  return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
 }
 
 class LegacyLineChart extends EChartVisual {}

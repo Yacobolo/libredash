@@ -1,0 +1,222 @@
+import type { ChartDatum, ChartPayload, ChartShape, ChartTokens, ChartType } from './types'
+
+export function stylesFor(element: HTMLElement): ChartTokens {
+  const styles = getComputedStyle(element)
+  const value = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback
+  return {
+    text: value('--fgColor-default', '#1f2328'),
+    muted: value('--fgColor-muted', '#59636e'),
+    border: value('--borderColor-default', '#d0d7de'),
+    grid: value('--ld-chart-grid', value('--borderColor-muted', '#d8dee4')),
+    surface: value('--report-chart-surface', value('--card-bgColor', value('--bgColor-default', '#ffffff'))),
+    fill: value('--ld-chart-1-muted', 'rgba(84, 174, 255, .35)'),
+    dimmed: value('--borderColor-muted', '#d8dee4'),
+    palette: [
+      value('--ld-chart-1', '#0969da'),
+      value('--ld-chart-2', '#1a7f37'),
+      value('--ld-chart-3', '#8250df'),
+      value('--ld-chart-4', '#cf222e'),
+      value('--ld-chart-5', '#116329'),
+      value('--ld-chart-6', '#bf3989'),
+    ],
+  }
+}
+
+export function normalizeType(type: string | undefined): ChartType {
+  switch (type) {
+    case 'line_chart':
+      return 'line'
+    case 'area_chart':
+      return 'area'
+    case 'bar_chart':
+      return 'bar'
+    case 'column_chart':
+      return 'column'
+    case 'pie_chart':
+      return 'pie'
+    case 'donut_chart':
+      return 'donut'
+    case 'scatter_chart':
+      return 'scatter'
+    case 'funnel_chart':
+      return 'funnel'
+    case 'treemap_chart':
+      return 'treemap'
+    case 'gauge_chart':
+      return 'gauge'
+    case 'heatmap_chart':
+      return 'heatmap'
+    case 'sankey_chart':
+      return 'sankey'
+    case 'graph_chart':
+      return 'graph'
+    case 'map_chart':
+      return 'map'
+    case 'candlestick_chart':
+      return 'candlestick'
+    case 'boxplot_chart':
+      return 'boxplot'
+    case 'line':
+    case 'area':
+    case 'bar':
+    case 'column':
+    case 'pie':
+    case 'donut':
+    case 'scatter':
+    case 'funnel':
+    case 'treemap':
+    case 'gauge':
+    case 'heatmap':
+    case 'sankey':
+    case 'graph':
+    case 'map':
+    case 'candlestick':
+    case 'boxplot':
+      return type
+    default:
+      return 'bar'
+  }
+}
+
+export function normalizeShape(shape: string | undefined, type?: string, hasSeries?: boolean): ChartShape {
+  switch (shape) {
+    case 'category_series_value':
+    case 'single_value':
+    case 'category_value':
+    case 'matrix':
+    case 'graph':
+    case 'geo':
+    case 'ohlc':
+    case 'distribution':
+      return shape
+  }
+  switch (normalizeType(type)) {
+    case 'gauge':
+      return 'single_value'
+    case 'heatmap':
+      return 'matrix'
+    case 'sankey':
+    case 'graph':
+      return 'graph'
+    case 'map':
+      return 'geo'
+    case 'candlestick':
+      return 'ohlc'
+    case 'boxplot':
+      return 'distribution'
+    default:
+      return hasSeries ? 'category_series_value' : 'category_value'
+  }
+}
+
+export function unique(values: string[]): string[] {
+  return [...new Set(values)]
+}
+
+export function stringValue(row: ChartDatum | undefined, key: string): string {
+  const value = row?.[key]
+  if (value === undefined || value === null) return ''
+  return String(value)
+}
+
+export function numberValue(row: ChartDatum | undefined, key: string): number {
+  const value = row?.[key]
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+export function booleanValue(row: ChartDatum | undefined, key: string): boolean {
+  return row?.[key] === true
+}
+
+export function colorWithAlpha(color: string, alpha: number): string {
+  if (color.startsWith('#') && color.length === 7) {
+    const r = Number.parseInt(color.slice(1, 3), 16)
+    const g = Number.parseInt(color.slice(3, 5), 16)
+    const b = Number.parseInt(color.slice(5, 7), 16)
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`
+  }
+  return color
+}
+
+export function formatValue(value: number, unit?: string): string {
+  if (!Number.isFinite(value)) return '-'
+  const formatted = formatCompact(value)
+  if (unit === 'R$') return `R$ ${formatted}`
+  return formatted
+}
+
+function formatCompact(value: number): string {
+  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}m`
+  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}k`
+  return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
+}
+
+export function deepMerge(base: unknown, override: unknown): unknown {
+  if (!isPlainObject(base) || !isPlainObject(override)) {
+    return override === undefined ? base : override
+  }
+  const result: Record<string, unknown> = { ...base }
+  for (const [key, value] of Object.entries(override)) {
+    if (Array.isArray(value)) {
+      result[key] = value
+      continue
+    }
+    result[key] = deepMerge(result[key], value)
+  }
+  return result
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function chartColumns(payload: ChartPayload) {
+  switch (normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length))) {
+    case 'matrix':
+      return [
+        { key: 'row', label: 'Row' },
+        { key: 'column', label: 'Column' },
+        { key: 'value', label: 'Value', align: 'right' },
+      ]
+    case 'graph':
+      return [
+        { key: 'source', label: 'Source' },
+        { key: 'target', label: 'Target' },
+        { key: 'value', label: 'Value', align: 'right' },
+      ]
+    case 'geo':
+      return [
+        { key: 'name', label: 'Name' },
+        { key: 'value', label: 'Value', align: 'right' },
+      ]
+    case 'ohlc':
+      return ['label', 'open', 'close', 'low', 'high'].map((key) => ({ key, label: titleCase(key), align: key === 'label' ? undefined : 'right' }))
+    case 'distribution':
+      return ['label', 'min', 'q1', 'median', 'q3', 'max'].map((key) => ({ key, label: titleCase(key), align: key === 'label' ? undefined : 'right' }))
+    default:
+      return [
+        { key: 'label', label: 'Label' },
+        { key: 'series', label: 'Series' },
+        { key: 'value', label: 'Value', align: 'right' },
+      ]
+  }
+}
+
+export function chartRows(payload: ChartPayload) {
+  return (payload.data ?? []).map((row) => ({ ...row }))
+}
+
+export function selectedValues(payload: ChartPayload, key = 'label') {
+  const rows = payload.data ?? []
+  const selected = new Set([
+    ...(payload.selection ?? []),
+    ...rows.filter((row) => booleanValue(row, 'selected')).map((row) => stringValue(row, key)),
+  ])
+  return { selected, hasSelection: selected.size > 0 }
+}
+
+export function titleCase(value: string): string {
+  return value.slice(0, 1).toUpperCase() + value.slice(1).replaceAll('_', ' ')
+}

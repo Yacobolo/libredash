@@ -83,7 +83,6 @@ type Visual struct {
 	Shape           string         `yaml:"shape"`
 	Renderer        string         `yaml:"renderer"`
 	Type            string         `yaml:"type"`
-	Stacked         bool           `yaml:"stacked"`
 	Dataset         string         `yaml:"dataset"`
 	Query           VisualQuery    `yaml:"query"`
 	Options         map[string]any `yaml:"options"`
@@ -133,6 +132,20 @@ func (v Visual) ShapeOrDefault() string {
 	if v.Shape != "" {
 		return v.Shape
 	}
+	switch v.Type {
+	case "heatmap":
+		return "matrix"
+	case "sankey", "graph":
+		return "graph"
+	case "map":
+		return "geo"
+	case "candlestick":
+		return "ohlc"
+	case "boxplot":
+		return "distribution"
+	case "gauge":
+		return "single_value"
+	}
 	if v.Type == "gauge" {
 		return "single_value"
 	}
@@ -150,11 +163,7 @@ func (v Visual) RendererOrDefault() string {
 }
 
 func (v Visual) CoreOptions() map[string]any {
-	options := copyMap(v.Options)
-	if v.Stacked {
-		options["stacked"] = true
-	}
-	return options
+	return copyMap(v.Options)
 }
 
 func copyMap(source map[string]any) map[string]any {
@@ -177,10 +186,61 @@ func LoadDashboard(path string, model *Model) (*Dashboard, error) {
 	if err := yaml.Unmarshal(bytes, &report); err != nil {
 		return nil, err
 	}
+	if err := rejectLegacyVisualStacked(bytes); err != nil {
+		return nil, err
+	}
 	if err := report.Validate(model); err != nil {
 		return nil, err
 	}
 	return &report, nil
+}
+
+func rejectLegacyVisualStacked(bytes []byte) error {
+	var node yaml.Node
+	if err := yaml.Unmarshal(bytes, &node); err != nil {
+		return err
+	}
+	root := mappingNode(&node)
+	if root == nil {
+		return nil
+	}
+	visuals := mappingValue(root, "visuals")
+	if visuals == nil || visuals.Kind != yaml.MappingNode {
+		return nil
+	}
+	for index := 0; index+1 < len(visuals.Content); index += 2 {
+		name := visuals.Content[index].Value
+		visualNode := visuals.Content[index+1]
+		if visualNode.Kind != yaml.MappingNode {
+			continue
+		}
+		if mappingValue(visualNode, "stacked") != nil {
+			return fmt.Errorf("visual %q uses legacy top-level stacked; use options.stacked", name)
+		}
+	}
+	return nil
+}
+
+func mappingNode(node *yaml.Node) *yaml.Node {
+	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
+		return node.Content[0]
+	}
+	if node.Kind == yaml.MappingNode {
+		return node
+	}
+	return nil
+}
+
+func mappingValue(node *yaml.Node, key string) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		if node.Content[index].Value == key {
+			return node.Content[index+1]
+		}
+	}
+	return nil
 }
 
 func (d *Dashboard) Validate(model *Model) error {
@@ -307,6 +367,9 @@ func (d *Dashboard) Validate(model *Model) error {
 		if !rendererSupportsType(renderer, visual.Type) {
 			return fmt.Errorf("visual %q renderer %q does not support type %q", name, renderer, visual.Type)
 		}
+		if !rendererSupportsShapeType(renderer, shape, visual.Type) {
+			return fmt.Errorf("visual %q renderer %q type %q does not support shape %q", name, renderer, visual.Type, shape)
+		}
 		if err := validateVisualQueryShape(name, visual); err != nil {
 			return err
 		}
@@ -332,6 +395,14 @@ func (d *Dashboard) Validate(model *Model) error {
 		for _, measure := range visual.Query.Measures {
 			if _, ok := dataset.Measures[measure]; !ok {
 				return fmt.Errorf("visual %q references unknown measure %q", name, measure)
+			}
+		}
+		if shape == "distribution" && dataset.Measures[visual.Query.Measures[0]].Column == "" {
+			return fmt.Errorf("visual %q shape distribution requires a column-backed measure", name)
+		}
+		if shape == "geo" {
+			if mapName, ok := visual.Options["map"].(string); !ok || strings.TrimSpace(mapName) == "" {
+				return fmt.Errorf("visual %q shape geo requires options.map", name)
 			}
 		}
 		for _, sort := range visual.Query.Sort {
@@ -398,7 +469,7 @@ func (d *Dashboard) Validate(model *Model) error {
 				if _, ok := d.Filters[visual.Filter]; !ok {
 					return fmt.Errorf("page %q references unknown filter %q", page.ID, visual.Filter)
 				}
-			case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart":
+			case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart", "heatmap_chart", "sankey_chart", "graph_chart", "map_chart", "candlestick_chart", "boxplot_chart":
 				if visual.Visual == "" {
 					return fmt.Errorf("page %q visual %q requires visual", page.ID, visual.ID)
 				}
@@ -435,10 +506,15 @@ func validatePlacement(page dashboard.Page, visual dashboard.PageVisual) error {
 }
 
 func validateVisualQueryShape(name string, visual Visual) error {
-	if len(visual.Query.Measures) != 1 {
+	shape := visual.ShapeOrDefault()
+	if shape == "ohlc" {
+		if len(visual.Query.Measures) != 4 {
+			return fmt.Errorf("visual %q shape ohlc requires exactly four query measures", name)
+		}
+	} else if len(visual.Query.Measures) != 1 {
 		return fmt.Errorf("visual %q requires exactly one query measure", name)
 	}
-	switch visual.ShapeOrDefault() {
+	switch shape {
 	case "category_value":
 		if len(visual.Query.Dimensions) != 1 {
 			return fmt.Errorf("visual %q shape category_value requires exactly one query dimension", name)
@@ -459,6 +535,41 @@ func validateVisualQueryShape(name string, visual Visual) error {
 		}
 		if visual.Query.Series != "" {
 			return fmt.Errorf("visual %q shape single_value does not support series", name)
+		}
+	case "matrix":
+		if len(visual.Query.Dimensions) != 2 {
+			return fmt.Errorf("visual %q shape matrix requires exactly two query dimensions", name)
+		}
+		if visual.Query.Series != "" {
+			return fmt.Errorf("visual %q shape matrix does not support series", name)
+		}
+	case "graph":
+		if len(visual.Query.Dimensions) != 2 {
+			return fmt.Errorf("visual %q shape graph requires exactly two query dimensions", name)
+		}
+		if visual.Query.Series != "" {
+			return fmt.Errorf("visual %q shape graph does not support series", name)
+		}
+	case "geo":
+		if len(visual.Query.Dimensions) != 1 {
+			return fmt.Errorf("visual %q shape geo requires exactly one query dimension", name)
+		}
+		if visual.Query.Series != "" {
+			return fmt.Errorf("visual %q shape geo does not support series", name)
+		}
+	case "ohlc":
+		if len(visual.Query.Dimensions) != 1 {
+			return fmt.Errorf("visual %q shape ohlc requires exactly one query dimension", name)
+		}
+		if visual.Query.Series != "" {
+			return fmt.Errorf("visual %q shape ohlc does not support series", name)
+		}
+	case "distribution":
+		if len(visual.Query.Dimensions) != 1 {
+			return fmt.Errorf("visual %q shape distribution requires exactly one query dimension", name)
+		}
+		if visual.Query.Series != "" {
+			return fmt.Errorf("visual %q shape distribution does not support series", name)
 		}
 	}
 	return nil

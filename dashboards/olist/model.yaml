@@ -122,6 +122,11 @@ datasets:
         aggregate: avg
         column: review_score
         format: decimal
+      delivery_days:
+        label: Delivery days
+        aggregate: avg
+        column: delivery_days
+        format: decimal
 
 relationships:
   - id: orders_customers

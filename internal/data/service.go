@@ -595,7 +595,7 @@ func (m *DuckDBMetrics) charts(ctx context.Context, runtime *modelRuntime, repor
 	sort.Strings(keys)
 	for _, key := range keys {
 		visual := report.Visuals[key]
-		points, err := m.visualPoints(ctx, runtime, report, key, visual, filters)
+		data, err := m.visualData(ctx, runtime, report, key, visual, filters)
 		if err != nil {
 			return nil, err
 		}
@@ -626,17 +626,35 @@ func (m *DuckDBMetrics) charts(ctx context.Context, runtime *modelRuntime, repor
 			Measure:         measureName,
 			Measures:        append([]string{}, visual.Query.Measures...),
 			Series:          series,
-			Stacked:         visual.Stacked,
 			Options:         visual.CoreOptions(),
 			RendererOptions: rendererOptions,
 			Selection:       selectedValues(filters, key),
-			Data:            points,
+			Data:            data,
 		}
 	}
 	return charts, nil
 }
 
-func (m *DuckDBMetrics) visualPoints(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Point, error) {
+func (m *DuckDBMetrics) visualData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	switch visual.ShapeOrDefault() {
+	case "single_value":
+		return m.singleValueData(ctx, runtime, report, visualID, visual, filters)
+	case "matrix":
+		return m.matrixData(ctx, runtime, report, visualID, visual, filters)
+	case "graph":
+		return m.graphData(ctx, runtime, report, visualID, visual, filters)
+	case "geo":
+		return m.geoData(ctx, runtime, report, visualID, visual, filters)
+	case "ohlc":
+		return m.ohlcData(ctx, runtime, report, visualID, visual, filters)
+	case "distribution":
+		return m.distributionData(ctx, runtime, report, visualID, visual, filters)
+	default:
+		return m.categoryData(ctx, runtime, report, visualID, visual, filters)
+	}
+}
+
+func (m *DuckDBMetrics) categoryData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
 	source, err := datasetSource(runtime.model, visual.Dataset)
 	if err != nil {
 		return nil, err
@@ -677,32 +695,221 @@ ORDER BY %s`, labelExpr, seriesExpr, valueExpr, source, where, strings.Join(grou
 		query += fmt.Sprintf("\nLIMIT %d", visual.Query.Limit)
 	}
 
-	points, err := m.queryPoints(ctx, runtime, query, args...)
+	data, err := m.queryDatums(ctx, runtime, query, []string{"label", "series", "value"}, args...)
 	if err != nil {
 		return nil, err
 	}
-	markSelected(points, selectedValues(filters, visualID))
-	return points, nil
+	markSelected(data, "label", selectedValues(filters, visualID))
+	return data, nil
 }
 
-func (m *DuckDBMetrics) queryPoints(ctx context.Context, runtime *modelRuntime, query string, args ...any) ([]dashboard.Point, error) {
+func (m *DuckDBMetrics) singleValueData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	source, err := datasetSource(runtime.model, visual.Dataset)
+	if err != nil {
+		return nil, err
+	}
+	dataset := runtime.model.Datasets[visual.Dataset]
+	measureName := visual.Query.Measures[0]
+	valueExpr, err := measureAggregateExpr(dataset.Measures[measureName])
+	if err != nil {
+		return nil, err
+	}
+	labelExpr := "'" + strings.ReplaceAll(visual.Title, "'", "''") + "'"
+	groupBy := ""
+	if len(visual.Query.Dimensions) == 1 {
+		labelExpr = dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
+		groupBy = " GROUP BY label"
+	}
+	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
+	query := fmt.Sprintf("SELECT %s AS label, '' AS series, %s AS value FROM %s e WHERE %s%s ORDER BY %s", labelExpr, valueExpr, source, where, groupBy, m.visualOrderBy(runtime.model, visual))
+	if visual.Query.Limit > 0 {
+		query += fmt.Sprintf("\nLIMIT %d", visual.Query.Limit)
+	}
+	data, err := m.queryDatums(ctx, runtime, query, []string{"label", "series", "value"}, args...)
+	if err != nil {
+		return nil, err
+	}
+	markSelected(data, "label", selectedValues(filters, visualID))
+	return data, nil
+}
+
+func (m *DuckDBMetrics) matrixData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	return m.dimensionPairData(ctx, runtime, report, visualID, visual, filters, "row", "column")
+}
+
+func (m *DuckDBMetrics) graphData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	return m.dimensionPairData(ctx, runtime, report, visualID, visual, filters, "source", "target")
+}
+
+func (m *DuckDBMetrics) dimensionPairData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters, leftAlias, rightAlias string) ([]dashboard.Datum, error) {
+	source, err := datasetSource(runtime.model, visual.Dataset)
+	if err != nil {
+		return nil, err
+	}
+	dataset := runtime.model.Datasets[visual.Dataset]
+	leftExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
+	rightExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[1]], "e")
+	rightSQLAlias := rightAlias
+	if rightAlias == "column" {
+		rightSQLAlias = "chart_column"
+	}
+	valueExpr, err := measureAggregateExpr(dataset.Measures[visual.Query.Measures[0]])
+	if err != nil {
+		return nil, err
+	}
+	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
+	query := fmt.Sprintf(`
+SELECT %s AS %s, %s AS %s, %s AS value
+FROM %s e
+WHERE %s
+GROUP BY %s, %s
+ORDER BY %s`, leftExpr, leftAlias, rightExpr, rightSQLAlias, valueExpr, source, where, leftAlias, rightSQLAlias, m.visualOrderBy(runtime.model, visual))
+	if visual.Query.Limit > 0 {
+		query += fmt.Sprintf("\nLIMIT %d", visual.Query.Limit)
+	}
+	data, err := m.queryDatums(ctx, runtime, query, []string{leftAlias, rightAlias, "value"}, args...)
+	if err != nil {
+		return nil, err
+	}
+	if leftAlias == "row" {
+		markSelected(data, "row", selectedValues(filters, visualID))
+	}
+	return data, nil
+}
+
+func (m *DuckDBMetrics) geoData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	source, err := datasetSource(runtime.model, visual.Dataset)
+	if err != nil {
+		return nil, err
+	}
+	dataset := runtime.model.Datasets[visual.Dataset]
+	nameExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
+	valueExpr, err := measureAggregateExpr(dataset.Measures[visual.Query.Measures[0]])
+	if err != nil {
+		return nil, err
+	}
+	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
+	query := fmt.Sprintf(`
+SELECT %s AS name, %s AS value
+FROM %s e
+WHERE %s
+GROUP BY name
+ORDER BY %s`, nameExpr, valueExpr, source, where, m.visualOrderBy(runtime.model, visual))
+	if visual.Query.Limit > 0 {
+		query += fmt.Sprintf("\nLIMIT %d", visual.Query.Limit)
+	}
+	data, err := m.queryDatums(ctx, runtime, query, []string{"name", "value"}, args...)
+	if err != nil {
+		return nil, err
+	}
+	markSelected(data, "name", selectedValues(filters, visualID))
+	return data, nil
+}
+
+func (m *DuckDBMetrics) ohlcData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	source, err := datasetSource(runtime.model, visual.Dataset)
+	if err != nil {
+		return nil, err
+	}
+	dataset := runtime.model.Datasets[visual.Dataset]
+	labelExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
+	measureExprs := make([]string, 0, 4)
+	for _, measureName := range visual.Query.Measures {
+		expr, err := measureAggregateExpr(dataset.Measures[measureName])
+		if err != nil {
+			return nil, err
+		}
+		measureExprs = append(measureExprs, expr)
+	}
+	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
+	query := fmt.Sprintf(`
+SELECT %s AS label, %s AS open, %s AS close, %s AS low, %s AS high
+FROM %s e
+WHERE %s
+GROUP BY label
+ORDER BY %s`, labelExpr, measureExprs[0], measureExprs[1], measureExprs[2], measureExprs[3], source, where, m.visualOrderBy(runtime.model, visual))
+	if visual.Query.Limit > 0 {
+		query += fmt.Sprintf("\nLIMIT %d", visual.Query.Limit)
+	}
+	return m.queryDatums(ctx, runtime, query, []string{"label", "open", "close", "low", "high"}, args...)
+}
+
+func (m *DuckDBMetrics) distributionData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	source, err := datasetSource(runtime.model, visual.Dataset)
+	if err != nil {
+		return nil, err
+	}
+	dataset := runtime.model.Datasets[visual.Dataset]
+	labelExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
+	measure := dataset.Measures[visual.Query.Measures[0]]
+	if err := validateIdentifier(measure.Column); err != nil {
+		return nil, err
+	}
+	columnExpr := "e." + measure.Column
+	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
+	query := fmt.Sprintf(`
+SELECT %s AS label,
+       MIN(%s) AS min,
+       quantile_cont(%s, 0.25) AS q1,
+       median(%s) AS median,
+       quantile_cont(%s, 0.75) AS q3,
+       MAX(%s) AS max
+FROM %s e
+WHERE %s AND %s IS NOT NULL
+GROUP BY label
+ORDER BY %s`, labelExpr, columnExpr, columnExpr, columnExpr, columnExpr, columnExpr, source, where, columnExpr, m.visualOrderBy(runtime.model, visual))
+	if visual.Query.Limit > 0 {
+		query += fmt.Sprintf("\nLIMIT %d", visual.Query.Limit)
+	}
+	return m.queryDatums(ctx, runtime, query, []string{"label", "min", "q1", "median", "q3", "max"}, args...)
+}
+
+func (m *DuckDBMetrics) visualWhere(runtime *modelRuntime, report *semantic.Dashboard, visual semantic.Visual, filters dashboard.Filters, visualID string) (string, []any) {
+	dataset := runtime.model.Datasets[visual.Dataset]
+	where, args := m.filterWhere("e", runtime, report, visual.Dataset, filters, "visual", visualID)
+	for _, dimensionName := range visualQueryDimensions(visual) {
+		if dimensionName == "" {
+			continue
+		}
+		if dimension := dataset.Dimensions[dimensionName]; dimension.Where != "" {
+			where = fmt.Sprintf("(%s) AND (%s)", where, dimensionWhere(dimension, "e"))
+		}
+	}
+	return where, args
+}
+
+func visualQueryDimensions(visual semantic.Visual) []string {
+	dimensions := append([]string{}, visual.Query.Dimensions...)
+	if visual.Query.Series != "" {
+		dimensions = append(dimensions, visual.Query.Series)
+	}
+	return dimensions
+}
+
+func (m *DuckDBMetrics) queryDatums(ctx context.Context, runtime *modelRuntime, query string, columns []string, args ...any) ([]dashboard.Datum, error) {
 	rows, err := runtime.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	points := []dashboard.Point{}
+	values := make([]any, len(columns))
+	scans := make([]any, len(columns))
+	for index := range values {
+		scans[index] = &values[index]
+	}
+	data := []dashboard.Datum{}
 	for rows.Next() {
-		var label string
-		var series string
-		var value float64
-		if err := rows.Scan(&label, &series, &value); err != nil {
+		if err := rows.Scan(scans...); err != nil {
 			return nil, err
 		}
-		points = append(points, dashboard.Point{Label: label, Series: series, Value: round(value)})
+		row := dashboard.Datum{}
+		for index, column := range columns {
+			row[column] = normalizeDatumValue(values[index])
+		}
+		data = append(data, row)
 	}
-	return points, rows.Err()
+	return data, rows.Err()
 }
 
 func (m *DuckDBMetrics) countRows(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, datasetName string, filters dashboard.Filters, targetKind, targetID string) (int, error) {
@@ -913,7 +1120,7 @@ func (m *DuckDBMetrics) visualOrderBy(model *semantic.Model, visual semantic.Vis
 
 func (m *DuckDBMetrics) sortExpression(dataset semantic.Dataset, visual semantic.Visual, field string) string {
 	if field == "" {
-		return "label"
+		return defaultSortColumn(visual)
 	}
 	if field == "value" || field == visual.Query.Measures[0] {
 		return "value"
@@ -925,12 +1132,46 @@ func (m *DuckDBMetrics) sortExpression(dataset semantic.Dataset, visual semantic
 		if dimension.OrderExpr != "" {
 			return dimension.OrderExpr
 		}
-		if field == visual.Query.Dimensions[0] {
-			return "label"
+		for index, dimensionName := range visual.Query.Dimensions {
+			if field == dimensionName {
+				return dimensionSortColumn(visual.ShapeOrDefault(), index)
+			}
 		}
 		return dimensionExpression(dimension, "e")
 	}
 	return ""
+}
+
+func defaultSortColumn(visual semantic.Visual) string {
+	switch visual.ShapeOrDefault() {
+	case "matrix":
+		return "row"
+	case "graph":
+		return "source"
+	case "geo":
+		return "name"
+	default:
+		return "label"
+	}
+}
+
+func dimensionSortColumn(shape string, index int) string {
+	switch shape {
+	case "matrix":
+		if index == 1 {
+			return "chart_column"
+		}
+		return "row"
+	case "graph":
+		if index == 1 {
+			return "target"
+		}
+		return "source"
+	case "geo":
+		return "name"
+	default:
+		return "label"
+	}
 }
 
 func (m *DuckDBMetrics) filterWhere(alias string, runtime *modelRuntime, report *semantic.Dashboard, datasetName string, filters dashboard.Filters, targetKind, targetID string) (string, []any) {
@@ -1111,7 +1352,7 @@ func selectedValues(filters dashboard.Filters, visualID string) []string {
 	return []string{}
 }
 
-func markSelected(points []dashboard.Point, values []string) {
+func markSelected(data []dashboard.Datum, key string, values []string) {
 	if len(values) == 0 {
 		return
 	}
@@ -1119,10 +1360,25 @@ func markSelected(points []dashboard.Point, values []string) {
 	for _, value := range values {
 		selected[value] = struct{}{}
 	}
-	for i := range points {
-		if _, ok := selected[points[i].Label]; ok {
-			points[i].Selected = true
+	for _, row := range data {
+		value, ok := row[key]
+		if !ok {
+			continue
 		}
+		if _, ok := selected[fmt.Sprint(value)]; ok {
+			row["selected"] = true
+		}
+	}
+}
+
+func normalizeDatumValue(value any) any {
+	switch typed := normalizeDBValue(value).(type) {
+	case float64:
+		return round(typed)
+	case float32:
+		return round(float64(typed))
+	default:
+		return typed
 	}
 }
 

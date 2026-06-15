@@ -141,7 +141,7 @@ func (fakeMetrics) QueryDashboard(_ context.Context, _ string, filters dashboard
 		},
 		KPIs: []dashboard.KPI{{Label: "Orders", Value: "1", Note: "test", Tone: "ink"}},
 		Charts: map[string]dashboard.Chart{
-			"orders": {Title: "Orders", Unit: "orders", Data: []dashboard.Point{{Label: "delivered", Value: 1}}},
+			"orders": {Title: "Orders", Unit: "orders", Data: []dashboard.Datum{{"label": "delivered", "value": 1}}},
 		},
 	}, nil
 }

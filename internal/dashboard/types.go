@@ -366,19 +366,13 @@ type Chart struct {
 	Measure         string                    `json:"measure"`
 	Measures        []string                  `json:"measures"`
 	Series          []string                  `json:"series"`
-	Stacked         bool                      `json:"stacked,omitempty"`
 	Options         map[string]any            `json:"options"`
 	RendererOptions map[string]map[string]any `json:"rendererOptions"`
 	Selection       []string                  `json:"selection"`
-	Data            []Point                   `json:"data"`
+	Data            []Datum                   `json:"data"`
 }
 
-type Point struct {
-	Label    string  `json:"label"`
-	Series   string  `json:"series,omitempty"`
-	Value    float64 `json:"value"`
-	Selected bool    `json:"selected,omitempty"`
-}
+type Datum map[string]any
 
 type TableRequest struct {
 	Table        string    `json:"table"`
@@ -576,6 +570,6 @@ func emptyChart(id, chartType, title, unit, dimension, measure string) Chart {
 		Options:         map[string]any{},
 		RendererOptions: map[string]map[string]any{},
 		Selection:       []string{},
-		Data:            []Point{},
+		Data:            []Datum{},
 	}
 }
