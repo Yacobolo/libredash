@@ -189,80 +189,62 @@ pages:
   - id: overview
     title: Overview
     description: Executive sales summary
-    width: 1366
-    height: 838
+    canvas:
+      width: 1366
+      height: 838
+    grid:
+      columns: 12
+      row_height: 48
+      gap: 16
+      padding: 16
     visuals:
       - id: kpis
         kind: kpi_strip
-        x: 16
-        y: 16
-        width: 1334
-        height: 116
+        placement: { col: 1, row: 1, col_span: 12, row_span: 2 }
       - id: revenue
         kind: line_chart
         visual: revenue
-        x: 16
-        y: 148
-        width: 650
-        height: 300
+        placement: { col: 1, row: 3, col_span: 6, row_span: 5 }
       - id: orders
         kind: bar_chart
         visual: orders
-        x: 682
-        y: 148
-        width: 326
-        height: 300
+        placement: { col: 7, row: 3, col_span: 3, row_span: 5 }
       - id: delivery
         kind: bar_chart
         visual: delivery
-        x: 1024
-        y: 148
-        width: 326
-        height: 300
+        placement: { col: 10, row: 3, col_span: 3, row_span: 5 }
       - id: categories
         kind: bar_chart
         visual: categories
-        x: 16
-        y: 464
-        width: 650
-        height: 354
+        placement: { col: 1, row: 8, col_span: 6, row_span: 6 }
       - id: orders-table
         kind: table
         table: orders
-        x: 682
-        y: 464
-        width: 668
-        height: 354
+        placement: { col: 7, row: 8, col_span: 6, row_span: 6 }
   - id: operations
     title: Operations
     description: Fulfillment and order detail
-    width: 1366
-    height: 838
+    canvas:
+      width: 1366
+      height: 838
+    grid:
+      columns: 12
+      row_height: 48
+      gap: 16
+      padding: 16
     visuals:
       - id: kpis
         kind: kpi_strip
-        x: 16
-        y: 16
-        width: 1334
-        height: 116
+        placement: { col: 1, row: 1, col_span: 12, row_span: 2 }
       - id: delivery
         kind: bar_chart
         visual: delivery
-        x: 16
-        y: 148
-        width: 650
-        height: 300
+        placement: { col: 1, row: 3, col_span: 6, row_span: 5 }
       - id: orders
         kind: column_chart
         visual: orders_by_month_status
-        x: 682
-        y: 148
-        width: 668
-        height: 300
+        placement: { col: 7, row: 3, col_span: 6, row_span: 5 }
       - id: orders-table
         kind: table
         table: orders
-        x: 16
-        y: 464
-        width: 1334
-        height: 354
+        placement: { col: 1, row: 8, col_span: 12, row_span: 6 }

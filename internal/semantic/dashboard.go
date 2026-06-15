@@ -311,6 +311,7 @@ func (d *Dashboard) Validate(model *Model) error {
 		if page.ID == "" || page.Title == "" {
 			return fmt.Errorf("page %d requires id and title", index)
 		}
+		page = page.WithDefaults()
 		if _, exists := seenPages[page.ID]; exists {
 			return fmt.Errorf("duplicate page id %q", page.ID)
 		}
@@ -318,6 +319,9 @@ func (d *Dashboard) Validate(model *Model) error {
 		for _, visual := range page.Visuals {
 			if visual.ID == "" || visual.Kind == "" {
 				return fmt.Errorf("page %q has a visual missing id or kind", page.ID)
+			}
+			if err := validatePlacement(page, visual); err != nil {
+				return err
 			}
 			switch visual.Kind {
 			case "header", "kpi_strip":
@@ -339,6 +343,20 @@ func (d *Dashboard) Validate(model *Model) error {
 				return fmt.Errorf("page %q visual %q has unsupported kind %q", page.ID, visual.ID, visual.Kind)
 			}
 		}
+	}
+	return nil
+}
+
+func validatePlacement(page dashboard.Page, visual dashboard.PageVisual) error {
+	placement := visual.Placement
+	if placement.IsZero() {
+		return fmt.Errorf("page %q visual %q requires placement", page.ID, visual.ID)
+	}
+	if placement.Col <= 0 || placement.Row <= 0 || placement.ColSpan <= 0 || placement.RowSpan <= 0 {
+		return fmt.Errorf("page %q visual %q has invalid placement", page.ID, visual.ID)
+	}
+	if placement.Col+placement.ColSpan-1 > page.Grid.Columns {
+		return fmt.Errorf("page %q visual %q placement exceeds %d grid columns", page.ID, visual.ID, page.Grid.Columns)
 	}
 	return nil
 }

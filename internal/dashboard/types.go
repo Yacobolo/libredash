@@ -32,34 +32,110 @@ type Page struct {
 	ID          string       `json:"id" yaml:"id"`
 	Title       string       `json:"title" yaml:"title"`
 	Description string       `json:"description,omitempty" yaml:"description"`
-	Width       int          `json:"width" yaml:"width"`
-	Height      int          `json:"height" yaml:"height"`
+	Canvas      PageCanvas   `json:"canvas" yaml:"canvas"`
+	Grid        PageGrid     `json:"grid" yaml:"grid"`
 	Visuals     []PageVisual `json:"visuals" yaml:"visuals"`
+	Width       int          `json:"width,omitempty" yaml:"-"`
+	Height      int          `json:"height,omitempty" yaml:"-"`
+}
+
+type PageCanvas struct {
+	Width  int `json:"width" yaml:"width"`
+	Height int `json:"height" yaml:"height"`
+}
+
+type PageGrid struct {
+	Columns   int `json:"columns" yaml:"columns"`
+	RowHeight int `json:"rowHeight" yaml:"row_height"`
+	Gap       int `json:"gap" yaml:"gap"`
+	Padding   int `json:"padding" yaml:"padding"`
+}
+
+type PagePlacement struct {
+	Col     int `json:"col" yaml:"col"`
+	Row     int `json:"row" yaml:"row"`
+	ColSpan int `json:"colSpan" yaml:"col_span"`
+	RowSpan int `json:"rowSpan" yaml:"row_span"`
 }
 
 func (p Page) WithDefaults() Page {
-	if p.Width <= 0 {
-		p.Width = 1366
+	if p.Canvas.Width <= 0 {
+		if p.Width > 0 {
+			p.Canvas.Width = p.Width
+		} else {
+			p.Canvas.Width = 1366
+		}
 	}
-	if p.Height <= 0 {
-		p.Height = 940
+	if p.Canvas.Height <= 0 {
+		if p.Height > 0 {
+			p.Canvas.Height = p.Height
+		} else {
+			p.Canvas.Height = 940
+		}
 	}
+	if p.Grid.Columns <= 0 {
+		p.Grid.Columns = 12
+	}
+	if p.Grid.RowHeight <= 0 {
+		p.Grid.RowHeight = 48
+	}
+	if p.Grid.Gap < 0 {
+		p.Grid.Gap = 0
+	}
+	if p.Grid.Gap == 0 {
+		p.Grid.Gap = 16
+	}
+	if p.Grid.Padding < 0 {
+		p.Grid.Padding = 0
+	}
+	p.Width = p.Canvas.Width
+	p.Height = p.Canvas.Height
 	return p
 }
 
+func (p Page) PlacedVisuals() []PageVisual {
+	p = p.WithDefaults()
+	visuals := make([]PageVisual, 0, len(p.Visuals))
+	for _, visual := range p.Visuals {
+		if visual.Placement.IsZero() {
+			visuals = append(visuals, visual)
+			continue
+		}
+		visual.X, visual.Y, visual.Width, visual.Height = p.Grid.Rect(p.Canvas, visual.Placement)
+		visuals = append(visuals, visual)
+	}
+	return visuals
+}
+
+func (g PageGrid) Rect(canvas PageCanvas, placement PagePlacement) (float64, float64, float64, float64) {
+	g = Page{Canvas: canvas, Grid: g}.WithDefaults().Grid
+	availableWidth := float64(canvas.Width - (g.Padding * 2) - (g.Gap * (g.Columns - 1)))
+	colWidth := availableWidth / float64(g.Columns)
+	x := float64(g.Padding) + float64(placement.Col-1)*(colWidth+float64(g.Gap))
+	y := float64(g.Padding) + float64(placement.Row-1)*float64(g.RowHeight+g.Gap)
+	width := float64(placement.ColSpan)*colWidth + float64(placement.ColSpan-1)*float64(g.Gap)
+	height := float64(placement.RowSpan*g.RowHeight) + float64((placement.RowSpan-1)*g.Gap)
+	return x, y, width, height
+}
+
+func (p PagePlacement) IsZero() bool {
+	return p.Col == 0 && p.Row == 0 && p.ColSpan == 0 && p.RowSpan == 0
+}
+
 type PageVisual struct {
-	ID       string   `json:"id" yaml:"id"`
-	Kind     string   `json:"kind" yaml:"kind"`
-	Visual   string   `json:"visual,omitempty" yaml:"visual"`
-	Table    string   `json:"table,omitempty" yaml:"table"`
-	X        int      `json:"x" yaml:"x"`
-	Y        int      `json:"y" yaml:"y"`
-	Width    int      `json:"width" yaml:"width"`
-	Height   int      `json:"height" yaml:"height"`
-	Eyebrow  string   `json:"eyebrow,omitempty" yaml:"eyebrow"`
-	Title    string   `json:"title,omitempty" yaml:"title"`
-	Subtitle string   `json:"subtitle,omitempty" yaml:"subtitle"`
-	Badges   []string `json:"badges,omitempty" yaml:"badges"`
+	ID        string        `json:"id" yaml:"id"`
+	Kind      string        `json:"kind" yaml:"kind"`
+	Visual    string        `json:"visual,omitempty" yaml:"visual"`
+	Table     string        `json:"table,omitempty" yaml:"table"`
+	Placement PagePlacement `json:"placement" yaml:"placement"`
+	X         float64       `json:"x" yaml:"-"`
+	Y         float64       `json:"y" yaml:"-"`
+	Width     float64       `json:"width" yaml:"-"`
+	Height    float64       `json:"height" yaml:"-"`
+	Eyebrow   string        `json:"eyebrow,omitempty" yaml:"eyebrow"`
+	Title     string        `json:"title,omitempty" yaml:"title"`
+	Subtitle  string        `json:"subtitle,omitempty" yaml:"subtitle"`
+	Badges    []string      `json:"badges,omitempty" yaml:"badges"`
 }
 
 type ModelGraph struct {

@@ -119,8 +119,8 @@ func activePage(pages []dashboard.Page, pageID string) (dashboard.Page, bool) {
 		return dashboard.Page{
 			ID:     "overview",
 			Title:  "Overview",
-			Width:  1366,
-			Height: 940,
+			Canvas: dashboard.PageCanvas{Width: 1366, Height: 940},
+			Grid:   dashboard.PageGrid{Columns: 12, RowHeight: 48, Gap: 16, Padding: 16},
 		}, true
 	}
 	if pageID != "" {

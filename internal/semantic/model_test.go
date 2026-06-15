@@ -115,6 +115,14 @@ func TestLoadOlistDashboard(t *testing.T) {
 	if got := report.Pages[1].ID; got != "operations" {
 		t.Fatalf("second page id = %q, want operations", got)
 	}
+	page := report.Pages[0].WithDefaults()
+	if page.Grid.Columns != 12 || page.Grid.RowHeight != 48 {
+		t.Fatalf("overview grid = %#v, want 12 columns and 48 row height", page.Grid)
+	}
+	visuals := page.PlacedVisuals()
+	if got := visuals[0].Width; got != 1334 {
+		t.Fatalf("kpi compiled width = %v, want 1334", got)
+	}
 	if got := report.Filters["purchase_date"].URLParam; got != "period" {
 		t.Fatalf("purchase_date url param = %q, want period", got)
 	}
@@ -187,6 +195,15 @@ func TestDashboardValidateRejectsInvalidDatePreset(t *testing.T) {
 	report.Filters["purchase_date"] = filter
 
 	assertDashboardValidateError(t, report, model, "requires both from and to")
+}
+
+func TestDashboardValidateRejectsInvalidPagePlacement(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	report.Pages[0].Visuals[0].Placement.Col = 12
+	report.Pages[0].Visuals[0].Placement.ColSpan = 2
+
+	assertDashboardValidateError(t, report, model, "placement exceeds")
 }
 
 func TestDashboardValidateRejectsDuplicateFilterURLParam(t *testing.T) {

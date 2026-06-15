@@ -195,8 +195,8 @@ func defaultPage() dashboard.Page {
 	return dashboard.Page{
 		ID:     "overview",
 		Title:  "Overview",
-		Width:  1366,
-		Height: 940,
+		Canvas: dashboard.PageCanvas{Width: 1366, Height: 940},
+		Grid:   dashboard.PageGrid{Columns: 12, RowHeight: 48, Gap: 16, Padding: 16},
 	}
 }
 
@@ -471,13 +471,13 @@ func iconAttrs() g.Node {
 	return g.Attr("aria-hidden", "true")
 }
 
-func canvasVisual(x, y, width, height int, children ...g.Node) g.Node {
+func canvasVisual(x, y, width, height float64, children ...g.Node) g.Node {
 	nodes := []g.Node{
 		h.Class("canvas-visual"),
-		g.Attr("data-x", strconv.Itoa(x)),
-		g.Attr("data-y", strconv.Itoa(y)),
-		g.Attr("data-w", strconv.Itoa(width)),
-		g.Attr("data-h", strconv.Itoa(height)),
+		g.Attr("data-x", formatCanvasNumber(x)),
+		g.Attr("data-y", formatCanvasNumber(y)),
+		g.Attr("data-w", formatCanvasNumber(width)),
+		g.Attr("data-h", formatCanvasNumber(height)),
 	}
 	nodes = append(nodes, children...)
 	return h.Div(nodes...)
@@ -506,13 +506,17 @@ func pageTab(dashboardID string, page dashboard.Page, activeID string) g.Node {
 func renderPageCanvas(page dashboard.Page) g.Node {
 	page = page.WithDefaults()
 	nodes := []g.Node{
-		g.Attr("width", strconv.Itoa(page.Width)),
-		g.Attr("height", strconv.Itoa(page.Height)),
+		g.Attr("width", strconv.Itoa(page.Canvas.Width)),
+		g.Attr("height", strconv.Itoa(page.Canvas.Height)),
 	}
-	for _, visual := range page.Visuals {
+	for _, visual := range page.PlacedVisuals() {
 		nodes = append(nodes, renderPageVisual(visual))
 	}
 	return g.El("ld-report-canvas", nodes...)
+}
+
+func formatCanvasNumber(value float64) string {
+	return strconv.FormatFloat(value, 'f', -1, 64)
 }
 
 func renderPageVisual(visual dashboard.PageVisual) g.Node {
