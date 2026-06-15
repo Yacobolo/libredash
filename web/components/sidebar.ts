@@ -122,7 +122,6 @@ class LibreDashSidebar extends LitElement {
       display: grid;
       gap: 10px;
       padding: 12px 12px 11px;
-      border-bottom: 1px solid var(--borderColor-muted);
     }
 
     .brand-row {

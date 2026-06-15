@@ -72,7 +72,6 @@ class ReportSidebar extends LitElement {
     header {
       display: grid;
       min-width: 0;
-      border-bottom: 1px solid var(--borderColor-muted);
       padding: 10px 8px;
     }
 
