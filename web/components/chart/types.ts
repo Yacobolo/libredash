@@ -17,16 +17,26 @@ export type ChartType =
   | 'map'
   | 'candlestick'
   | 'boxplot'
+  | 'combo'
+  | 'waterfall'
+  | 'histogram'
+  | 'radar'
+  | 'tree'
+  | 'sunburst'
 
 export type ChartShape =
   | 'category_value'
   | 'category_series_value'
+  | 'category_multi_measure'
+  | 'category_delta'
   | 'single_value'
   | 'matrix'
   | 'graph'
   | 'geo'
   | 'ohlc'
   | 'distribution'
+  | 'binned_measure'
+  | 'hierarchy'
 
 export type ChartDatum = Record<string, unknown>
 

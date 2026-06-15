@@ -571,7 +571,7 @@ func renderPageVisual(visual dashboard.PageVisual, report semantic.Dashboard, fi
 		return canvasFilterVisual(visual.X, visual.Y, visual.Width, visual.Height,
 			filterCard(visual.Filter, report, filters, action),
 		)
-	case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart", "heatmap_chart", "sankey_chart", "graph_chart", "map_chart", "candlestick_chart", "boxplot_chart":
+	case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart", "heatmap_chart", "sankey_chart", "graph_chart", "map_chart", "candlestick_chart", "boxplot_chart", "combo_chart", "waterfall_chart", "histogram_chart", "radar_chart", "tree_chart", "sunburst_chart":
 		return canvasVisual(visual.X, visual.Y, visual.Width, visual.Height,
 			chartPanel(visual.Visual),
 		)

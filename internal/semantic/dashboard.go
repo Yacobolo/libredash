@@ -133,6 +133,14 @@ func (v Visual) ShapeOrDefault() string {
 		return v.Shape
 	}
 	switch v.Type {
+	case "combo":
+		return "category_multi_measure"
+	case "waterfall":
+		return "category_delta"
+	case "histogram":
+		return "binned_measure"
+	case "tree", "sunburst":
+		return "hierarchy"
 	case "heatmap":
 		return "matrix"
 	case "sankey", "graph":
@@ -397,8 +405,8 @@ func (d *Dashboard) Validate(model *Model) error {
 				return fmt.Errorf("visual %q references unknown measure %q", name, measure)
 			}
 		}
-		if shape == "distribution" && dataset.Measures[visual.Query.Measures[0]].Column == "" {
-			return fmt.Errorf("visual %q shape distribution requires a column-backed measure", name)
+		if (shape == "distribution" || shape == "binned_measure") && dataset.Measures[visual.Query.Measures[0]].Column == "" {
+			return fmt.Errorf("visual %q shape %s requires a column-backed measure", name, shape)
 		}
 		if shape == "geo" {
 			if mapName, ok := visual.Options["map"].(string); !ok || strings.TrimSpace(mapName) == "" {
@@ -469,7 +477,7 @@ func (d *Dashboard) Validate(model *Model) error {
 				if _, ok := d.Filters[visual.Filter]; !ok {
 					return fmt.Errorf("page %q references unknown filter %q", page.ID, visual.Filter)
 				}
-			case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart", "heatmap_chart", "sankey_chart", "graph_chart", "map_chart", "candlestick_chart", "boxplot_chart":
+			case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart", "heatmap_chart", "sankey_chart", "graph_chart", "map_chart", "candlestick_chart", "boxplot_chart", "combo_chart", "waterfall_chart", "histogram_chart", "radar_chart", "tree_chart", "sunburst_chart":
 				if visual.Visual == "" {
 					return fmt.Errorf("page %q visual %q requires visual", page.ID, visual.ID)
 				}
@@ -507,11 +515,21 @@ func validatePlacement(page dashboard.Page, visual dashboard.PageVisual) error {
 
 func validateVisualQueryShape(name string, visual Visual) error {
 	shape := visual.ShapeOrDefault()
-	if shape == "ohlc" {
+	switch shape {
+	case "ohlc":
 		if len(visual.Query.Measures) != 4 {
 			return fmt.Errorf("visual %q shape ohlc requires exactly four query measures", name)
 		}
-	} else if len(visual.Query.Measures) != 1 {
+	case "category_multi_measure":
+		if len(visual.Query.Measures) < 2 {
+			return fmt.Errorf("visual %q shape category_multi_measure requires at least two query measures", name)
+		}
+	default:
+		if len(visual.Query.Measures) != 1 {
+			return fmt.Errorf("visual %q requires exactly one query measure", name)
+		}
+	}
+	if len(visual.Query.Measures) == 0 {
 		return fmt.Errorf("visual %q requires exactly one query measure", name)
 	}
 	switch shape {
@@ -528,6 +546,34 @@ func validateVisualQueryShape(name string, visual Visual) error {
 		}
 		if visual.Query.Series == "" {
 			return fmt.Errorf("visual %q shape category_series_value requires query series", name)
+		}
+	case "category_multi_measure":
+		if len(visual.Query.Dimensions) != 1 {
+			return fmt.Errorf("visual %q shape category_multi_measure requires exactly one query dimension", name)
+		}
+		if visual.Query.Series != "" {
+			return fmt.Errorf("visual %q shape category_multi_measure does not support series", name)
+		}
+	case "category_delta":
+		if len(visual.Query.Dimensions) != 1 {
+			return fmt.Errorf("visual %q shape category_delta requires exactly one query dimension", name)
+		}
+		if visual.Query.Series != "" {
+			return fmt.Errorf("visual %q shape category_delta does not support series", name)
+		}
+	case "binned_measure":
+		if len(visual.Query.Dimensions) != 0 {
+			return fmt.Errorf("visual %q shape binned_measure does not support query dimensions", name)
+		}
+		if visual.Query.Series != "" {
+			return fmt.Errorf("visual %q shape binned_measure does not support series", name)
+		}
+	case "hierarchy":
+		if len(visual.Query.Dimensions) == 0 {
+			return fmt.Errorf("visual %q shape hierarchy requires at least one query dimension", name)
+		}
+		if visual.Query.Series != "" {
+			return fmt.Errorf("visual %q shape hierarchy does not support series", name)
 		}
 	case "single_value":
 		if len(visual.Query.Dimensions) > 1 {

@@ -199,6 +199,113 @@ visuals:
       sort:
         - field: delivery_bucket
           direction: asc
+  state_order_map:
+    title: Orders by state
+    shape: geo
+    renderer: echarts
+    type: map
+    options:
+      map: brazil_states
+    dataset: orders
+    query:
+      dimensions: [state]
+      measures: [order_count]
+      sort:
+        - field: value
+          direction: desc
+      limit: 27
+  status_delivery_graph:
+    title: Status and delivery network
+    shape: graph
+    renderer: echarts
+    type: graph
+    dataset: orders
+    query:
+      dimensions: [status, delivery_bucket]
+      measures: [order_count]
+      sort:
+        - field: value
+          direction: desc
+      limit: 40
+  revenue_orders_combo:
+    title: Revenue and orders by month
+    shape: category_multi_measure
+    renderer: echarts
+    type: combo
+    options:
+      series_types:
+        Revenue: line
+        Orders: column
+    dataset: orders
+    query:
+      dimensions: [purchase_month]
+      measures: [revenue, order_count]
+      sort:
+        - field: purchase_month
+          direction: asc
+      limit: 30
+  revenue_waterfall:
+    title: Monthly revenue contribution
+    shape: category_delta
+    renderer: echarts
+    type: waterfall
+    dataset: orders
+    query:
+      dimensions: [purchase_month]
+      measures: [revenue]
+      sort:
+        - field: purchase_month
+          direction: asc
+      limit: 18
+  delivery_histogram:
+    title: Delivery days histogram
+    shape: binned_measure
+    renderer: echarts
+    type: histogram
+    options:
+      bin_count: 16
+    dataset: orders
+    query:
+      measures: [delivery_days]
+  status_radar:
+    title: Order status radar
+    shape: category_value
+    renderer: echarts
+    type: radar
+    dataset: orders
+    query:
+      dimensions: [status]
+      measures: [order_count]
+      sort:
+        - field: value
+          direction: desc
+      limit: 8
+  category_status_sunburst:
+    title: Category and status hierarchy
+    shape: hierarchy
+    renderer: echarts
+    type: sunburst
+    dataset: orders
+    query:
+      dimensions: [category, status]
+      measures: [order_count]
+      sort:
+        - field: value
+          direction: desc
+      limit: 80
+  state_status_tree:
+    title: State and status tree
+    shape: hierarchy
+    renderer: echarts
+    type: tree
+    dataset: orders
+    query:
+      dimensions: [state, status]
+      measures: [order_count]
+      sort:
+        - field: value
+          direction: desc
+      limit: 80
 
 tables:
   orders:
@@ -277,7 +384,7 @@ pages:
     description: Fulfillment and order detail
     canvas:
       width: 1366
-      height: 1158
+      height: 1850
     grid:
       columns: 12
       row_height: 48
@@ -290,24 +397,56 @@ pages:
       - id: delivery
         kind: bar_chart
         visual: delivery
-        placement: { col: 1, row: 3, col_span: 4, row_span: 5 }
+        placement: { col: 1, row: 3, col_span: 3, row_span: 5 }
       - id: orders
         kind: column_chart
         visual: orders_by_month_status
-        placement: { col: 5, row: 3, col_span: 4, row_span: 5 }
+        placement: { col: 4, row: 3, col_span: 3, row_span: 5 }
       - id: state-status
         kind: heatmap_chart
         visual: state_status_heatmap
-        placement: { col: 9, row: 3, col_span: 4, row_span: 5 }
+        placement: { col: 7, row: 3, col_span: 3, row_span: 5 }
+      - id: state-map
+        kind: map_chart
+        visual: state_order_map
+        placement: { col: 10, row: 3, col_span: 3, row_span: 5 }
       - id: status-flow
         kind: sankey_chart
         visual: status_delivery_flow
-        placement: { col: 1, row: 8, col_span: 6, row_span: 5 }
+        placement: { col: 1, row: 8, col_span: 4, row_span: 5 }
+      - id: status-graph
+        kind: graph_chart
+        visual: status_delivery_graph
+        placement: { col: 5, row: 8, col_span: 4, row_span: 5 }
       - id: delivery-distribution
         kind: boxplot_chart
         visual: delivery_distribution
-        placement: { col: 7, row: 8, col_span: 6, row_span: 5 }
+        placement: { col: 9, row: 8, col_span: 4, row_span: 5 }
+      - id: revenue-orders-combo
+        kind: combo_chart
+        visual: revenue_orders_combo
+        placement: { col: 1, row: 13, col_span: 6, row_span: 5 }
+      - id: revenue-waterfall
+        kind: waterfall_chart
+        visual: revenue_waterfall
+        placement: { col: 7, row: 13, col_span: 6, row_span: 5 }
+      - id: delivery-histogram
+        kind: histogram_chart
+        visual: delivery_histogram
+        placement: { col: 1, row: 18, col_span: 4, row_span: 5 }
+      - id: status-radar
+        kind: radar_chart
+        visual: status_radar
+        placement: { col: 5, row: 18, col_span: 4, row_span: 5 }
+      - id: category-sunburst
+        kind: sunburst_chart
+        visual: category_status_sunburst
+        placement: { col: 9, row: 18, col_span: 4, row_span: 5 }
+      - id: state-tree
+        kind: tree_chart
+        visual: state_status_tree
+        placement: { col: 1, row: 23, col_span: 5, row_span: 6 }
       - id: orders-table
         kind: table
         table: orders
-        placement: { col: 1, row: 13, col_span: 12, row_span: 6 }
+        placement: { col: 6, row: 23, col_span: 7, row_span: 6 }

@@ -56,6 +56,18 @@ export function normalizeType(type: string | undefined): ChartType {
       return 'candlestick'
     case 'boxplot_chart':
       return 'boxplot'
+    case 'combo_chart':
+      return 'combo'
+    case 'waterfall_chart':
+      return 'waterfall'
+    case 'histogram_chart':
+      return 'histogram'
+    case 'radar_chart':
+      return 'radar'
+    case 'tree_chart':
+      return 'tree'
+    case 'sunburst_chart':
+      return 'sunburst'
     case 'line':
     case 'area':
     case 'bar':
@@ -72,6 +84,12 @@ export function normalizeType(type: string | undefined): ChartType {
     case 'map':
     case 'candlestick':
     case 'boxplot':
+    case 'combo':
+    case 'waterfall':
+    case 'histogram':
+    case 'radar':
+    case 'tree':
+    case 'sunburst':
       return type
     default:
       return 'bar'
@@ -81,6 +99,8 @@ export function normalizeType(type: string | undefined): ChartType {
 export function normalizeShape(shape: string | undefined, type?: string, hasSeries?: boolean): ChartShape {
   switch (shape) {
     case 'category_series_value':
+    case 'category_multi_measure':
+    case 'category_delta':
     case 'single_value':
     case 'category_value':
     case 'matrix':
@@ -88,9 +108,20 @@ export function normalizeShape(shape: string | undefined, type?: string, hasSeri
     case 'geo':
     case 'ohlc':
     case 'distribution':
+    case 'binned_measure':
+    case 'hierarchy':
       return shape
   }
   switch (normalizeType(type)) {
+    case 'combo':
+      return 'category_multi_measure'
+    case 'waterfall':
+      return 'category_delta'
+    case 'histogram':
+      return 'binned_measure'
+    case 'tree':
+    case 'sunburst':
+      return 'hierarchy'
     case 'gauge':
       return 'single_value'
     case 'heatmap':
@@ -195,6 +226,25 @@ export function chartColumns(payload: ChartPayload) {
       return ['label', 'open', 'close', 'low', 'high'].map((key) => ({ key, label: titleCase(key), align: key === 'label' ? undefined : 'right' }))
     case 'distribution':
       return ['label', 'min', 'q1', 'median', 'q3', 'max'].map((key) => ({ key, label: titleCase(key), align: key === 'label' ? undefined : 'right' }))
+    case 'category_delta':
+      return [
+        { key: 'label', label: 'Label' },
+        { key: 'value', label: 'Delta', align: 'right' },
+        { key: 'start', label: 'Start', align: 'right' },
+        { key: 'end', label: 'End', align: 'right' },
+      ]
+    case 'binned_measure':
+      return [
+        { key: 'label', label: 'Bin' },
+        { key: 'binStart', label: 'From', align: 'right' },
+        { key: 'binEnd', label: 'To', align: 'right' },
+        { key: 'value', label: 'Rows', align: 'right' },
+      ]
+    case 'hierarchy':
+      return [
+        { key: 'path', label: 'Path' },
+        { key: 'value', label: 'Value', align: 'right' },
+      ]
     default:
       return [
         { key: 'label', label: 'Label' },
@@ -205,7 +255,13 @@ export function chartColumns(payload: ChartPayload) {
 }
 
 export function chartRows(payload: ChartPayload) {
-  return (payload.data ?? []).map((row) => ({ ...row }))
+  const shape = normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length))
+  return (payload.data ?? []).map((row) => {
+    if (shape === 'hierarchy' && Array.isArray(row.path)) {
+      return { ...row, path: row.path.join(' / ') }
+    }
+    return { ...row }
+  })
 }
 
 export function selectedValues(payload: ChartPayload, key = 'label') {

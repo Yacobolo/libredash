@@ -121,6 +121,15 @@ func TestLoadOlistDashboard(t *testing.T) {
 	if got := report.Visuals["orders_by_month_status"].Options["stacked"]; got != true {
 		t.Fatalf("multi-series visual options.stacked = %v, want true", got)
 	}
+	if got := report.Visuals["revenue_orders_combo"].ShapeOrDefault(); got != "category_multi_measure" {
+		t.Fatalf("combo visual shape = %q, want category_multi_measure", got)
+	}
+	if got := report.Visuals["delivery_histogram"].ShapeOrDefault(); got != "binned_measure" {
+		t.Fatalf("histogram visual shape = %q, want binned_measure", got)
+	}
+	if got := report.Visuals["category_status_sunburst"].ShapeOrDefault(); got != "hierarchy" {
+		t.Fatalf("hierarchy visual shape = %q, want hierarchy", got)
+	}
 	if got := report.Visuals["revenue"].RendererOrDefault(); got != "echarts" {
 		t.Fatalf("revenue visual renderer = %q, want echarts", got)
 	}
@@ -297,17 +306,78 @@ func TestDashboardValidateAcceptsAdvancedVisualShapes(t *testing.T) {
 			Dataset:  "orders",
 			Query:    VisualQuery{Dimensions: []string{"delivery_bucket"}, Measures: []string{"delivery_days"}},
 		},
+		"combo": {
+			Title:    "Combo",
+			Shape:    "category_multi_measure",
+			Renderer: "echarts",
+			Type:     "combo",
+			Dataset:  "orders",
+			Query:    VisualQuery{Dimensions: []string{"purchase_month"}, Measures: []string{"revenue", "order_count"}},
+		},
+		"waterfall": {
+			Title:    "Waterfall",
+			Shape:    "category_delta",
+			Renderer: "echarts",
+			Type:     "waterfall",
+			Dataset:  "orders",
+			Query:    VisualQuery{Dimensions: []string{"purchase_month"}, Measures: []string{"revenue"}},
+		},
+		"histogram": {
+			Title:    "Histogram",
+			Shape:    "binned_measure",
+			Renderer: "echarts",
+			Type:     "histogram",
+			Dataset:  "orders",
+			Query:    VisualQuery{Measures: []string{"delivery_days"}},
+		},
+		"radar": {
+			Title:    "Radar",
+			Shape:    "category_value",
+			Renderer: "echarts",
+			Type:     "radar",
+			Dataset:  "orders",
+			Query:    VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}},
+		},
+		"tree": {
+			Title:    "Tree",
+			Shape:    "hierarchy",
+			Renderer: "echarts",
+			Type:     "tree",
+			Dataset:  "orders",
+			Query:    VisualQuery{Dimensions: []string{"state", "status"}, Measures: []string{"order_count"}},
+		},
+		"sunburst": {
+			Title:    "Sunburst",
+			Shape:    "hierarchy",
+			Renderer: "echarts",
+			Type:     "sunburst",
+			Dataset:  "orders",
+			Query:    VisualQuery{Dimensions: []string{"category", "status"}, Measures: []string{"order_count"}},
+		},
 	}
 	for name, visual := range cases {
 		report.Visuals = map[string]Visual{name: visual}
 		report.Pages = []dashboard.Page{{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{{ID: name, Kind: visual.Type + "_chart", Visual: name, Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 1, RowSpan: 1}}}}}
-		if visual.Type == "map" {
-			report.Pages[0].Visuals[0].Kind = "map_chart"
-		}
 		if err := report.Validate(model); err != nil {
 			t.Fatalf("validate advanced shape %s: %v", name, err)
 		}
 	}
+}
+
+func TestDashboardValidateRejectsAdvancedShapeMismatch(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+
+	visual := report.Visuals["revenue_orders_combo"]
+	visual.Query.Measures = []string{"revenue"}
+	report.Visuals["revenue_orders_combo"] = visual
+	assertDashboardValidateError(t, report, model, "at least two query measures")
+
+	report = loadOlistDashboard(t, model)
+	visual = report.Visuals["delivery_histogram"]
+	visual.Query.Dimensions = []string{"status"}
+	report.Visuals["delivery_histogram"] = visual
+	assertDashboardValidateError(t, report, model, "does not support query dimensions")
 }
 
 func TestDashboardValidateRejectsRendererTypeMismatch(t *testing.T) {

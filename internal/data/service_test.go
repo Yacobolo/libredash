@@ -207,6 +207,42 @@ relogios_presentes,watches_gifts
 	if len(selectedPatch.Charts["orders_by_month_status"].Data) != 2 {
 		t.Fatalf("non-target multi-series chart points under status selection = %d, want 2", len(selectedPatch.Charts["orders_by_month_status"].Data))
 	}
+	if got := selectedPatch.Charts["revenue_orders_combo"].Shape; got != "category_multi_measure" {
+		t.Fatalf("combo chart shape = %q, want category_multi_measure", got)
+	}
+	if !hasDatumValue(selectedPatch.Charts["revenue_orders_combo"].Data, "series", "Revenue") || !hasDatumValue(selectedPatch.Charts["revenue_orders_combo"].Data, "series", "Orders") {
+		t.Fatalf("combo chart rows missing expected measure series: %#v", selectedPatch.Charts["revenue_orders_combo"].Data)
+	}
+	if got := selectedPatch.Charts["revenue_waterfall"].Shape; got != "category_delta" {
+		t.Fatalf("waterfall chart shape = %q, want category_delta", got)
+	}
+	if _, ok := selectedPatch.Charts["revenue_waterfall"].Data[0]["start"]; !ok {
+		t.Fatalf("waterfall row missing start/end: %#v", selectedPatch.Charts["revenue_waterfall"].Data[0])
+	}
+	if got := selectedPatch.Charts["delivery_histogram"].Shape; got != "binned_measure" {
+		t.Fatalf("histogram chart shape = %q, want binned_measure", got)
+	}
+	if _, ok := selectedPatch.Charts["delivery_histogram"].Data[0]["binStart"]; !ok {
+		t.Fatalf("histogram row missing bin metadata: %#v", selectedPatch.Charts["delivery_histogram"].Data[0])
+	}
+	if got := selectedPatch.Charts["state_order_map"].Shape; got != "geo" {
+		t.Fatalf("map chart shape = %q, want geo", got)
+	}
+	if !hasDatumValue(selectedPatch.Charts["state_order_map"].Data, "name", "SP") {
+		t.Fatalf("map chart rows missing SP: %#v", selectedPatch.Charts["state_order_map"].Data)
+	}
+	if got := selectedPatch.Charts["status_delivery_graph"].Type; got != "graph" {
+		t.Fatalf("graph visual type = %q, want graph", got)
+	}
+	if !hasDatumValue(selectedPatch.Charts["status_delivery_graph"].Data, "source", "delivered") {
+		t.Fatalf("graph rows missing delivered source: %#v", selectedPatch.Charts["status_delivery_graph"].Data)
+	}
+	if got := selectedPatch.Charts["category_status_sunburst"].Shape; got != "hierarchy" {
+		t.Fatalf("hierarchy chart shape = %q, want hierarchy", got)
+	}
+	if !hasHierarchyPathValue(selectedPatch.Charts["category_status_sunburst"].Data, "health_beauty") {
+		t.Fatalf("hierarchy rows missing health_beauty path: %#v", selectedPatch.Charts["category_status_sunburst"].Data)
+	}
 
 	table, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table:      "orders",
@@ -358,6 +394,24 @@ func pointSelected(points []dashboard.Datum, label string) bool {
 		if datumString(point, "label") == label {
 			selected, _ := point["selected"].(bool)
 			return selected
+		}
+	}
+	return false
+}
+
+func hasDatumValue(rows []dashboard.Datum, key string, value string) bool {
+	for _, row := range rows {
+		if datumString(row, key) == value {
+			return true
+		}
+	}
+	return false
+}
+
+func hasHierarchyPathValue(rows []dashboard.Datum, value string) bool {
+	for _, row := range rows {
+		if strings.Contains(fmt.Sprint(row["path"]), value) {
+			return true
 		}
 	}
 	return false

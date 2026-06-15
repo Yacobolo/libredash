@@ -6,6 +6,14 @@ export function buildEChartsOption(payload: ChartPayload, tokens: ChartTokens): 
   switch (normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length))) {
     case 'single_value':
       return singleValueAdapter(payload, tokens)
+    case 'category_multi_measure':
+      return comboAdapter(payload, tokens)
+    case 'category_delta':
+      return waterfallAdapter(payload, tokens)
+    case 'binned_measure':
+      return histogramAdapter(payload, tokens)
+    case 'hierarchy':
+      return hierarchyAdapter(payload, tokens)
     case 'matrix':
       return matrixAdapter(payload, tokens)
     case 'graph':
@@ -19,6 +27,7 @@ export function buildEChartsOption(payload: ChartPayload, tokens: ChartTokens): 
     case 'category_series_value':
     case 'category_value':
     default:
+      if (normalizeType(payload.type) === 'radar') return radarAdapter(payload, tokens)
       if (isPartToWholeType(normalizeType(payload.type))) return partToWholeAdapter(payload, tokens)
       return categoryAdapter(payload, tokens)
   }
@@ -224,6 +233,123 @@ function categoryAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOpt
   }
 }
 
+function comboAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+  const data = payload.data ?? []
+  const labels = unique(data.map((row) => stringValue(row, 'label')))
+  const seriesNames = unique(data.map((row) => stringValue(row, 'series') || 'Value'))
+  const seriesTypes = seriesTypeMap(payload)
+  return {
+    ...baseOption(payload, tokens),
+    legend: { show: true, top: 0, right: 8, textStyle: { color: tokens.muted, fontSize: 10, fontWeight: 700 } },
+    grid: { top: 28, right: 24, bottom: 32, left: 48, containLabel: true },
+    xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontWeight: 700, fontSize: 10, interval: Math.ceil(labels.length / 6) } },
+    yAxis: axis('value', tokens),
+    series: seriesNames.map((seriesName, seriesIndex) => {
+      const configuredType = seriesTypes[seriesName] ?? seriesTypes[measureKeyForSeries(payload, seriesName)] ?? (seriesIndex === 0 ? 'bar' : 'line')
+      const echartsType = configuredType === 'column' ? 'bar' : configuredType
+      return {
+        id: `${payload.id || 'chart'}:${seriesName}`,
+        name: seriesName,
+        type: echartsType,
+        smooth: echartsType === 'line',
+        barMaxWidth: 18,
+        symbolSize: 7,
+        areaStyle: configuredType === 'area' ? { color: colorWithAlpha(tokens.palette[seriesIndex % tokens.palette.length], 0.18) } : undefined,
+        data: labels.map((label) => {
+          const point = data.find((candidate) => stringValue(candidate, 'label') === label && stringValue(candidate, 'series') === seriesName)
+          return numberValue(point, 'value')
+        }),
+      }
+    }),
+  }
+}
+
+function waterfallAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+  const data = payload.data ?? []
+  const labels = data.map((row) => stringValue(row, 'label'))
+  return {
+    ...baseOption(payload, tokens),
+    xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontWeight: 700, fontSize: 10, interval: Math.ceil(labels.length / 6) } },
+    yAxis: axis('value', tokens),
+    series: [
+      {
+        id: `${payload.id || 'chart'}:base`,
+        type: 'bar',
+        stack: payload.id || 'waterfall',
+        silent: true,
+        itemStyle: { color: 'transparent' },
+        emphasis: { itemStyle: { color: 'transparent' } },
+        data: data.map((row) => numberValue(row, 'start')),
+      },
+      {
+        id: `${payload.id || 'chart'}:delta`,
+        name: payload.title,
+        type: 'bar',
+        stack: payload.id || 'waterfall',
+        barMaxWidth: 22,
+        data: data.map((row) => {
+          const value = numberValue(row, 'value')
+          return {
+            name: stringValue(row, 'label'),
+            value: Math.abs(value),
+            itemStyle: { color: value >= 0 ? tokens.palette[1] : tokens.palette[3] },
+          }
+        }),
+      },
+    ],
+  }
+}
+
+function histogramAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+  const data = payload.data ?? []
+  const labels = data.map((row) => stringValue(row, 'label'))
+  return {
+    ...baseOption(payload, tokens),
+    xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontWeight: 700, fontSize: 10, interval: Math.ceil(labels.length / 8) } },
+    yAxis: axis('value', tokens),
+    series: [
+      {
+        id: payload.id || 'chart',
+        name: payload.title,
+        type: 'bar',
+        barGap: 0,
+        barCategoryGap: '4%',
+        data: data.map((row, index) => ({
+          name: stringValue(row, 'label'),
+          value: numberValue(row, 'value'),
+          itemStyle: { color: tokens.palette[index % tokens.palette.length] },
+        })),
+      },
+    ],
+  }
+}
+
+function radarAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+  const data = payload.data ?? []
+  const maxValue = Math.max(1, ...data.map((row) => numberValue(row, 'value')))
+  return {
+    ...baseOption(payload, tokens),
+    tooltip: { trigger: 'item', borderColor: tokens.border, backgroundColor: tokens.surface, textStyle: { color: tokens.text } },
+    radar: {
+      indicator: data.map((row) => ({ name: stringValue(row, 'label'), max: maxValue * 1.15 })),
+      axisName: { color: tokens.muted, fontSize: 10, fontWeight: 700 },
+      splitLine: { lineStyle: { color: tokens.grid } },
+      splitArea: { areaStyle: { color: ['transparent', colorWithAlpha(tokens.palette[0], 0.04)] } },
+      axisLine: { lineStyle: { color: tokens.border } },
+    },
+    series: [
+      {
+        id: payload.id || 'chart',
+        name: payload.title,
+        type: 'radar',
+        areaStyle: { color: colorWithAlpha(tokens.palette[0], 0.24) },
+        lineStyle: { color: tokens.palette[0], width: 2 },
+        data: [{ value: data.map((row) => numberValue(row, 'value')), name: payload.title }],
+      },
+    ],
+  }
+}
+
 function matrixAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
   const data = payload.data ?? []
   const rows = unique(data.map((row) => stringValue(row, 'row')))
@@ -380,6 +506,51 @@ function distributionAdapter(payload: ChartPayload, tokens: ChartTokens): EChart
   }
 }
 
+function hierarchyAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+  const type = normalizeType(payload.type)
+  const data = buildHierarchy(payload.data ?? [])
+  if (type === 'tree') {
+    return {
+      ...baseOption(payload, tokens),
+      tooltip: { trigger: 'item', borderColor: tokens.border, backgroundColor: tokens.surface, textStyle: { color: tokens.text } },
+      series: [
+        {
+          id: payload.id || 'chart',
+          name: payload.title,
+          type: 'tree',
+          data,
+          top: 12,
+          left: 16,
+          bottom: 12,
+          right: 90,
+          roam: true,
+          symbolSize: 7,
+          label: { color: tokens.text, fontSize: 10, fontWeight: 700 },
+          leaves: { label: { color: tokens.muted, fontSize: 10, fontWeight: 700 } },
+          lineStyle: { color: tokens.border },
+          emphasis: { focus: 'descendant' },
+        },
+      ],
+    }
+  }
+  return {
+    ...baseOption(payload, tokens),
+    tooltip: { trigger: 'item', borderColor: tokens.border, backgroundColor: tokens.surface, textStyle: { color: tokens.text } },
+    series: [
+      {
+        id: payload.id || 'chart',
+        name: payload.title,
+        type: 'sunburst',
+        radius: [0, '86%'],
+        data: data[0]?.children ?? data,
+        sort: undefined,
+        label: { color: tokens.text, fontSize: 10, fontWeight: 700, rotate: 'radial' },
+        itemStyle: { borderColor: tokens.surface, borderWidth: 1 },
+      },
+    ],
+  }
+}
+
 function axis(type: 'category' | 'value', tokens: ChartTokens) {
   return {
     type,
@@ -392,4 +563,45 @@ function axis(type: 'category' | 'value', tokens: ChartTokens) {
 
 function isPartToWholeType(type: ChartType): boolean {
   return type === 'pie' || type === 'donut' || type === 'funnel' || type === 'treemap'
+}
+
+function seriesTypeMap(payload: ChartPayload): Record<string, string> {
+  const configured = payload.options?.series_types
+  if (!configured || typeof configured !== 'object' || Array.isArray(configured)) return {}
+  return configured as Record<string, string>
+}
+
+function measureKeyForSeries(payload: ChartPayload, seriesName: string): string {
+  const index = payload.data?.findIndex((row) => stringValue(row, 'series') === seriesName) ?? -1
+  return payload.measures?.[Math.max(0, index)] ?? seriesName
+}
+
+function buildHierarchy(rows: ChartDatum[]) {
+  const root = { name: 'All', value: 0, children: [] as Array<Record<string, unknown>> }
+  for (const row of rows) {
+    const path = Array.isArray(row.path) ? row.path.map(String).filter(Boolean) : String(row.path ?? '').split('/').map((item) => item.trim()).filter(Boolean)
+    if (path.length === 0) continue
+    const value = numberValue(row, 'value')
+    root.value += value
+    let parent = root
+    for (const part of path) {
+      let child = parent.children.find((candidate) => candidate.name === part) as typeof root | undefined
+      if (!child) {
+        child = { name: part, value: 0, children: [] }
+        parent.children.push(child)
+      }
+      child.value = numberValue(child as ChartDatum, 'value') + value
+      parent = child
+    }
+  }
+  return [pruneEmptyChildren(root)]
+}
+
+function pruneEmptyChildren(node: Record<string, unknown>): Record<string, unknown> {
+  const children = Array.isArray(node.children) ? node.children.map((child) => pruneEmptyChildren(child as Record<string, unknown>)) : []
+  if (children.length === 0) {
+    const { children: _children, ...leaf } = node
+    return leaf
+  }
+  return { ...node, children }
 }

@@ -602,6 +602,10 @@ func (m *DuckDBMetrics) charts(ctx context.Context, runtime *modelRuntime, repor
 		dataset := runtime.model.Datasets[visual.Dataset]
 		measureName := visual.Query.Measures[0]
 		measure := dataset.Measures[measureName]
+		unit := measure.Unit
+		if len(visual.Query.Measures) > 1 {
+			unit = ""
+		}
 		series := []string{}
 		if visual.Query.Series != "" {
 			series = append(series, visual.Query.Series)
@@ -620,7 +624,7 @@ func (m *DuckDBMetrics) charts(ctx context.Context, runtime *modelRuntime, repor
 			Renderer:        visual.RendererOrDefault(),
 			Type:            visual.Type,
 			Title:           visual.Title,
-			Unit:            measure.Unit,
+			Unit:            unit,
 			Field:           visual.Interaction.Field,
 			Dimensions:      append([]string{}, visual.Query.Dimensions...),
 			Measure:         measureName,
@@ -639,6 +643,14 @@ func (m *DuckDBMetrics) visualData(ctx context.Context, runtime *modelRuntime, r
 	switch visual.ShapeOrDefault() {
 	case "single_value":
 		return m.singleValueData(ctx, runtime, report, visualID, visual, filters)
+	case "category_multi_measure":
+		return m.categoryMultiMeasureData(ctx, runtime, report, visualID, visual, filters)
+	case "category_delta":
+		return m.categoryDeltaData(ctx, runtime, report, visualID, visual, filters)
+	case "binned_measure":
+		return m.binnedMeasureData(ctx, runtime, report, visualID, visual, filters)
+	case "hierarchy":
+		return m.hierarchyData(ctx, runtime, report, visualID, visual, filters)
 	case "matrix":
 		return m.matrixData(ctx, runtime, report, visualID, visual, filters)
 	case "graph":
@@ -701,6 +713,190 @@ ORDER BY %s`, labelExpr, seriesExpr, valueExpr, source, where, strings.Join(grou
 	}
 	markSelected(data, "label", selectedValues(filters, visualID))
 	return data, nil
+}
+
+func (m *DuckDBMetrics) categoryMultiMeasureData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	source, err := datasetSource(runtime.model, visual.Dataset)
+	if err != nil {
+		return nil, err
+	}
+	dataset := runtime.model.Datasets[visual.Dataset]
+	labelExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
+	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
+	orderBy := m.visualOrderBy(runtime.model, visual)
+	data := []dashboard.Datum{}
+
+	for _, measureName := range visual.Query.Measures {
+		measure := dataset.Measures[measureName]
+		valueExpr, err := measureAggregateExpr(measure)
+		if err != nil {
+			return nil, err
+		}
+		query := fmt.Sprintf(`
+SELECT %s AS label, ? AS series, %s AS value
+FROM %s e
+WHERE %s
+GROUP BY label
+ORDER BY %s`, labelExpr, valueExpr, source, where, orderBy)
+		if visual.Query.Limit > 0 {
+			query += fmt.Sprintf("\nLIMIT %d", visual.Query.Limit)
+		}
+		measureArgs := append([]any{measureLabel(measureName, measure)}, args...)
+		rows, err := m.queryDatums(ctx, runtime, query, []string{"label", "series", "value"}, measureArgs...)
+		if err != nil {
+			return nil, err
+		}
+		data = append(data, rows...)
+	}
+	markSelected(data, "label", selectedValues(filters, visualID))
+	return data, nil
+}
+
+func (m *DuckDBMetrics) categoryDeltaData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	rows, err := m.categoryData(ctx, runtime, report, visualID, visual, filters)
+	if err != nil {
+		return nil, err
+	}
+	cumulative := 0.0
+	for _, row := range rows {
+		value := datumFloat(row["value"])
+		start := cumulative
+		cumulative += value
+		row["start"] = round(start)
+		row["end"] = round(cumulative)
+		row["positive"] = value >= 0
+	}
+	return rows, nil
+}
+
+func (m *DuckDBMetrics) binnedMeasureData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	source, err := datasetSource(runtime.model, visual.Dataset)
+	if err != nil {
+		return nil, err
+	}
+	dataset := runtime.model.Datasets[visual.Dataset]
+	measure := dataset.Measures[visual.Query.Measures[0]]
+	if err := validateIdentifier(measure.Column); err != nil {
+		return nil, err
+	}
+	columnExpr := "CAST(e." + measure.Column + " AS DOUBLE)"
+	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
+	binCount := optionInt(visual.Options, "bin_count", 20, 5, 60)
+
+	var minValue, maxValue sql.NullFloat64
+	boundsQuery := fmt.Sprintf("SELECT MIN(%s), MAX(%s) FROM %s e WHERE %s AND e.%s IS NOT NULL", columnExpr, columnExpr, source, where, measure.Column)
+	if err := runtime.db.QueryRowContext(ctx, boundsQuery, args...).Scan(&minValue, &maxValue); err != nil {
+		return nil, err
+	}
+	if !minValue.Valid || !maxValue.Valid {
+		return []dashboard.Datum{}, nil
+	}
+	if minValue.Float64 == maxValue.Float64 {
+		var count int
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s e WHERE %s AND e.%s IS NOT NULL", source, where, measure.Column)
+		if err := runtime.db.QueryRowContext(ctx, countQuery, args...).Scan(&count); err != nil {
+			return nil, err
+		}
+		return []dashboard.Datum{{
+			"label":    formatBinLabel(minValue.Float64, maxValue.Float64),
+			"binStart": round(minValue.Float64),
+			"binEnd":   round(maxValue.Float64),
+			"value":    count,
+		}}, nil
+	}
+
+	bucketExpr := fmt.Sprintf("LEAST(%d, CAST(FLOOR(((%s - ?) / NULLIF(? - ?, 0)) * ?) AS INTEGER))", binCount-1, columnExpr)
+	query := fmt.Sprintf(`
+SELECT %s AS bucket, COUNT(*) AS value
+FROM %s e
+WHERE %s AND e.%s IS NOT NULL
+GROUP BY bucket
+ORDER BY bucket ASC`, bucketExpr, source, where, measure.Column)
+	queryArgs := append([]any{minValue.Float64, maxValue.Float64, minValue.Float64, binCount}, args...)
+	rows, err := runtime.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	width := (maxValue.Float64 - minValue.Float64) / float64(binCount)
+	data := []dashboard.Datum{}
+	for rows.Next() {
+		var bucket int
+		var count int
+		if err := rows.Scan(&bucket, &count); err != nil {
+			return nil, err
+		}
+		start := minValue.Float64 + float64(bucket)*width
+		end := start + width
+		data = append(data, dashboard.Datum{
+			"label":    formatBinLabel(start, end),
+			"binStart": round(start),
+			"binEnd":   round(end),
+			"value":    count,
+		})
+	}
+	return data, rows.Err()
+}
+
+func (m *DuckDBMetrics) hierarchyData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	source, err := datasetSource(runtime.model, visual.Dataset)
+	if err != nil {
+		return nil, err
+	}
+	dataset := runtime.model.Datasets[visual.Dataset]
+	levelExprs := make([]string, 0, len(visual.Query.Dimensions))
+	levelAliases := make([]string, 0, len(visual.Query.Dimensions))
+	for index, dimensionName := range visual.Query.Dimensions {
+		levelExprs = append(levelExprs, fmt.Sprintf("%s AS level_%d", dimensionExpression(dataset.Dimensions[dimensionName], "e"), index))
+		levelAliases = append(levelAliases, fmt.Sprintf("level_%d", index))
+	}
+	valueExpr, err := measureAggregateExpr(dataset.Measures[visual.Query.Measures[0]])
+	if err != nil {
+		return nil, err
+	}
+	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
+	orderBy := m.visualOrderBy(runtime.model, visual)
+	query := fmt.Sprintf(`
+SELECT %s, %s AS value
+FROM %s e
+WHERE %s
+GROUP BY %s
+ORDER BY %s`, strings.Join(levelExprs, ", "), valueExpr, source, where, strings.Join(levelAliases, ", "), orderBy)
+	if visual.Query.Limit > 0 {
+		query += fmt.Sprintf("\nLIMIT %d", visual.Query.Limit)
+	}
+
+	rows, err := runtime.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	values := make([]any, len(levelAliases)+1)
+	scans := make([]any, len(values))
+	for index := range values {
+		scans[index] = &values[index]
+	}
+	data := []dashboard.Datum{}
+	for rows.Next() {
+		if err := rows.Scan(scans...); err != nil {
+			return nil, err
+		}
+		path := make([]string, 0, len(levelAliases))
+		for index := range levelAliases {
+			item := normalizeDatumValue(values[index])
+			if item == nil || fmt.Sprint(item) == "" {
+				continue
+			}
+			path = append(path, fmt.Sprint(item))
+		}
+		data = append(data, dashboard.Datum{
+			"path":  path,
+			"value": normalizeDatumValue(values[len(values)-1]),
+		})
+	}
+	return data, rows.Err()
 }
 
 func (m *DuckDBMetrics) singleValueData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
@@ -1080,6 +1276,68 @@ func measureAggregateExpr(measure semantic.Measure) (string, error) {
 	}
 }
 
+func measureLabel(name string, measure semantic.Measure) string {
+	if strings.TrimSpace(measure.Label) != "" {
+		return measure.Label
+	}
+	return name
+}
+
+func optionInt(options map[string]any, key string, fallback, minValue, maxValue int) int {
+	if options == nil {
+		return fallback
+	}
+	var value int
+	switch typed := options[key].(type) {
+	case int:
+		value = typed
+	case int64:
+		value = int(typed)
+	case float64:
+		value = int(typed)
+	case string:
+		parsed, err := strconv.Atoi(typed)
+		if err != nil {
+			return fallback
+		}
+		value = parsed
+	default:
+		return fallback
+	}
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
+func datumFloat(value any) float64 {
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	case string:
+		parsed, _ := strconv.ParseFloat(typed, 64)
+		return parsed
+	default:
+		return 0
+	}
+}
+
+func formatBinLabel(start, end float64) string {
+	if math.Abs(start-end) < 0.000001 {
+		return strconv.FormatFloat(round(start), 'f', -1, 64)
+	}
+	return fmt.Sprintf("%s-%s", strconv.FormatFloat(round(start), 'f', -1, 64), strconv.FormatFloat(round(end), 'f', -1, 64))
+}
+
 func tableSortExpr(table semantic.TableVisual, key string) string {
 	if key == "" {
 		key = table.DefaultSort.Key
@@ -1150,6 +1408,8 @@ func defaultSortColumn(visual semantic.Visual) string {
 		return "source"
 	case "geo":
 		return "name"
+	case "hierarchy":
+		return "value"
 	default:
 		return "label"
 	}
@@ -1169,6 +1429,8 @@ func dimensionSortColumn(shape string, index int) string {
 		return "source"
 	case "geo":
 		return "name"
+	case "hierarchy":
+		return fmt.Sprintf("level_%d", index)
 	default:
 		return "label"
 	}

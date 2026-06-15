@@ -47613,8 +47613,8 @@ var Tree = (
       var tree = new Tree2(hostModel);
       var listData = [];
       var dimMax = 1;
-      buildHierarchy(dataRoot);
-      function buildHierarchy(dataNode, parentNode2) {
+      buildHierarchy2(dataRoot);
+      function buildHierarchy2(dataNode, parentNode2) {
         var value = dataNode.value;
         dimMax = Math.max(dimMax, isArray(value) ? value.length : 1);
         listData.push(dataNode);
@@ -47624,7 +47624,7 @@ var Tree = (
         var children = dataNode.children;
         if (children) {
           for (var i6 = 0; i6 < children.length; i6++) {
-            buildHierarchy(children[i6], node);
+            buildHierarchy2(children[i6], node);
           }
         }
       }
@@ -83087,6 +83087,18 @@ function normalizeType(type) {
       return "candlestick";
     case "boxplot_chart":
       return "boxplot";
+    case "combo_chart":
+      return "combo";
+    case "waterfall_chart":
+      return "waterfall";
+    case "histogram_chart":
+      return "histogram";
+    case "radar_chart":
+      return "radar";
+    case "tree_chart":
+      return "tree";
+    case "sunburst_chart":
+      return "sunburst";
     case "line":
     case "area":
     case "bar":
@@ -83103,6 +83115,12 @@ function normalizeType(type) {
     case "map":
     case "candlestick":
     case "boxplot":
+    case "combo":
+    case "waterfall":
+    case "histogram":
+    case "radar":
+    case "tree":
+    case "sunburst":
       return type;
     default:
       return "bar";
@@ -83111,6 +83129,8 @@ function normalizeType(type) {
 function normalizeShape(shape, type, hasSeries) {
   switch (shape) {
     case "category_series_value":
+    case "category_multi_measure":
+    case "category_delta":
     case "single_value":
     case "category_value":
     case "matrix":
@@ -83118,9 +83138,20 @@ function normalizeShape(shape, type, hasSeries) {
     case "geo":
     case "ohlc":
     case "distribution":
+    case "binned_measure":
+    case "hierarchy":
       return shape;
   }
   switch (normalizeType(type)) {
+    case "combo":
+      return "category_multi_measure";
+    case "waterfall":
+      return "category_delta";
+    case "histogram":
+      return "binned_measure";
+    case "tree":
+    case "sunburst":
+      return "hierarchy";
     case "gauge":
       return "single_value";
     case "heatmap":
@@ -83215,6 +83246,25 @@ function chartColumns(payload) {
       return ["label", "open", "close", "low", "high"].map((key2) => ({ key: key2, label: titleCase(key2), align: key2 === "label" ? void 0 : "right" }));
     case "distribution":
       return ["label", "min", "q1", "median", "q3", "max"].map((key2) => ({ key: key2, label: titleCase(key2), align: key2 === "label" ? void 0 : "right" }));
+    case "category_delta":
+      return [
+        { key: "label", label: "Label" },
+        { key: "value", label: "Delta", align: "right" },
+        { key: "start", label: "Start", align: "right" },
+        { key: "end", label: "End", align: "right" }
+      ];
+    case "binned_measure":
+      return [
+        { key: "label", label: "Bin" },
+        { key: "binStart", label: "From", align: "right" },
+        { key: "binEnd", label: "To", align: "right" },
+        { key: "value", label: "Rows", align: "right" }
+      ];
+    case "hierarchy":
+      return [
+        { key: "path", label: "Path" },
+        { key: "value", label: "Value", align: "right" }
+      ];
     default:
       return [
         { key: "label", label: "Label" },
@@ -83224,7 +83274,13 @@ function chartColumns(payload) {
   }
 }
 function chartRows(payload) {
-  return (payload.data ?? []).map((row) => ({ ...row }));
+  const shape = normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length));
+  return (payload.data ?? []).map((row) => {
+    if (shape === "hierarchy" && Array.isArray(row.path)) {
+      return { ...row, path: row.path.join(" / ") };
+    }
+    return { ...row };
+  });
 }
 function selectedValues(payload, key2 = "label") {
   const rows = payload.data ?? [];
@@ -83243,6 +83299,14 @@ function buildEChartsOption(payload, tokens2) {
   switch (normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length))) {
     case "single_value":
       return singleValueAdapter(payload, tokens2);
+    case "category_multi_measure":
+      return comboAdapter(payload, tokens2);
+    case "category_delta":
+      return waterfallAdapter(payload, tokens2);
+    case "binned_measure":
+      return histogramAdapter(payload, tokens2);
+    case "hierarchy":
+      return hierarchyAdapter(payload, tokens2);
     case "matrix":
       return matrixAdapter(payload, tokens2);
     case "graph":
@@ -83256,6 +83320,7 @@ function buildEChartsOption(payload, tokens2) {
     case "category_series_value":
     case "category_value":
     default:
+      if (normalizeType(payload.type) === "radar") return radarAdapter(payload, tokens2);
       if (isPartToWholeType(normalizeType(payload.type))) return partToWholeAdapter(payload, tokens2);
       return categoryAdapter(payload, tokens2);
   }
@@ -83445,6 +83510,119 @@ function categoryAdapter(payload, tokens2) {
     }))
   };
 }
+function comboAdapter(payload, tokens2) {
+  const data = payload.data ?? [];
+  const labels = unique(data.map((row) => stringValue(row, "label")));
+  const seriesNames = unique(data.map((row) => stringValue(row, "series") || "Value"));
+  const seriesTypes = seriesTypeMap(payload);
+  return {
+    ...baseOption(payload, tokens2),
+    legend: { show: true, top: 0, right: 8, textStyle: { color: tokens2.muted, fontSize: 10, fontWeight: 700 } },
+    grid: { top: 28, right: 24, bottom: 32, left: 48, containLabel: true },
+    xAxis: { ...axis("category", tokens2), data: labels, axisLabel: { color: tokens2.muted, fontWeight: 700, fontSize: 10, interval: Math.ceil(labels.length / 6) } },
+    yAxis: axis("value", tokens2),
+    series: seriesNames.map((seriesName, seriesIndex) => {
+      const configuredType = seriesTypes[seriesName] ?? seriesTypes[measureKeyForSeries(payload, seriesName)] ?? (seriesIndex === 0 ? "bar" : "line");
+      const echartsType = configuredType === "column" ? "bar" : configuredType;
+      return {
+        id: `${payload.id || "chart"}:${seriesName}`,
+        name: seriesName,
+        type: echartsType,
+        smooth: echartsType === "line",
+        barMaxWidth: 18,
+        symbolSize: 7,
+        areaStyle: configuredType === "area" ? { color: colorWithAlpha(tokens2.palette[seriesIndex % tokens2.palette.length], 0.18) } : void 0,
+        data: labels.map((label) => {
+          const point = data.find((candidate) => stringValue(candidate, "label") === label && stringValue(candidate, "series") === seriesName);
+          return numberValue(point, "value");
+        })
+      };
+    })
+  };
+}
+function waterfallAdapter(payload, tokens2) {
+  const data = payload.data ?? [];
+  const labels = data.map((row) => stringValue(row, "label"));
+  return {
+    ...baseOption(payload, tokens2),
+    xAxis: { ...axis("category", tokens2), data: labels, axisLabel: { color: tokens2.muted, fontWeight: 700, fontSize: 10, interval: Math.ceil(labels.length / 6) } },
+    yAxis: axis("value", tokens2),
+    series: [
+      {
+        id: `${payload.id || "chart"}:base`,
+        type: "bar",
+        stack: payload.id || "waterfall",
+        silent: true,
+        itemStyle: { color: "transparent" },
+        emphasis: { itemStyle: { color: "transparent" } },
+        data: data.map((row) => numberValue(row, "start"))
+      },
+      {
+        id: `${payload.id || "chart"}:delta`,
+        name: payload.title,
+        type: "bar",
+        stack: payload.id || "waterfall",
+        barMaxWidth: 22,
+        data: data.map((row) => {
+          const value = numberValue(row, "value");
+          return {
+            name: stringValue(row, "label"),
+            value: Math.abs(value),
+            itemStyle: { color: value >= 0 ? tokens2.palette[1] : tokens2.palette[3] }
+          };
+        })
+      }
+    ]
+  };
+}
+function histogramAdapter(payload, tokens2) {
+  const data = payload.data ?? [];
+  const labels = data.map((row) => stringValue(row, "label"));
+  return {
+    ...baseOption(payload, tokens2),
+    xAxis: { ...axis("category", tokens2), data: labels, axisLabel: { color: tokens2.muted, fontWeight: 700, fontSize: 10, interval: Math.ceil(labels.length / 8) } },
+    yAxis: axis("value", tokens2),
+    series: [
+      {
+        id: payload.id || "chart",
+        name: payload.title,
+        type: "bar",
+        barGap: 0,
+        barCategoryGap: "4%",
+        data: data.map((row, index) => ({
+          name: stringValue(row, "label"),
+          value: numberValue(row, "value"),
+          itemStyle: { color: tokens2.palette[index % tokens2.palette.length] }
+        }))
+      }
+    ]
+  };
+}
+function radarAdapter(payload, tokens2) {
+  const data = payload.data ?? [];
+  const maxValue = Math.max(1, ...data.map((row) => numberValue(row, "value")));
+  return {
+    ...baseOption(payload, tokens2),
+    tooltip: { trigger: "item", borderColor: tokens2.border, backgroundColor: tokens2.surface, textStyle: { color: tokens2.text } },
+    radar: {
+      indicator: data.map((row) => ({ name: stringValue(row, "label"), max: maxValue * 1.15 })),
+      axisName: { color: tokens2.muted, fontSize: 10, fontWeight: 700 },
+      splitLine: { lineStyle: { color: tokens2.grid } },
+      splitArea: { areaStyle: { color: ["transparent", colorWithAlpha(tokens2.palette[0], 0.04)] } },
+      axisLine: { lineStyle: { color: tokens2.border } }
+    },
+    series: [
+      {
+        id: payload.id || "chart",
+        name: payload.title,
+        type: "radar",
+        areaStyle: { color: colorWithAlpha(tokens2.palette[0], 0.24) },
+        lineStyle: { color: tokens2.palette[0], width: 2 },
+        data: [{ value: data.map((row) => numberValue(row, "value")), name: payload.title }]
+      }
+    ]
+  };
+}
 function matrixAdapter(payload, tokens2) {
   const data = payload.data ?? [];
   const rows = unique(data.map((row) => stringValue(row, "row")));
@@ -83596,6 +83774,50 @@ function distributionAdapter(payload, tokens2) {
     ]
   };
 }
+function hierarchyAdapter(payload, tokens2) {
+  const type = normalizeType(payload.type);
+  const data = buildHierarchy(payload.data ?? []);
+  if (type === "tree") {
+    return {
+      ...baseOption(payload, tokens2),
+      tooltip: { trigger: "item", borderColor: tokens2.border, backgroundColor: tokens2.surface, textStyle: { color: tokens2.text } },
+      series: [
+        {
+          id: payload.id || "chart",
+          name: payload.title,
+          type: "tree",
+          data,
+          top: 12,
+          left: 16,
+          bottom: 12,
+          right: 90,
+          roam: true,
+          symbolSize: 7,
+          label: { color: tokens2.text, fontSize: 10, fontWeight: 700 },
+          leaves: { label: { color: tokens2.muted, fontSize: 10, fontWeight: 700 } },
+          lineStyle: { color: tokens2.border },
+          emphasis: { focus: "descendant" }
+        }
+      ]
+    };
+  }
+  return {
+    ...baseOption(payload, tokens2),
+    tooltip: { trigger: "item", borderColor: tokens2.border, backgroundColor: tokens2.surface, textStyle: { color: tokens2.text } },
+    series: [
+      {
+        id: payload.id || "chart",
+        name: payload.title,
+        type: "sunburst",
+        radius: [0, "86%"],
+        data: data[0]?.children ?? data,
+        sort: void 0,
+        label: { color: tokens2.text, fontSize: 10, fontWeight: 700, rotate: "radial" },
+        itemStyle: { borderColor: tokens2.surface, borderWidth: 1 }
+      }
+    ]
+  };
+}
 function axis(type, tokens2) {
   return {
     type,
@@ -83608,8 +83830,99 @@ function axis(type, tokens2) {
 function isPartToWholeType(type) {
   return type === "pie" || type === "donut" || type === "funnel" || type === "treemap";
 }
+function seriesTypeMap(payload) {
+  const configured = payload.options?.series_types;
+  if (!configured || typeof configured !== "object" || Array.isArray(configured)) return {};
+  return configured;
+}
+function measureKeyForSeries(payload, seriesName) {
+  const index = payload.data?.findIndex((row) => stringValue(row, "series") === seriesName) ?? -1;
+  return payload.measures?.[Math.max(0, index)] ?? seriesName;
+}
+function buildHierarchy(rows) {
+  const root = { name: "All", value: 0, children: [] };
+  for (const row of rows) {
+    const path = Array.isArray(row.path) ? row.path.map(String).filter(Boolean) : String(row.path ?? "").split("/").map((item) => item.trim()).filter(Boolean);
+    if (path.length === 0) continue;
+    const value = numberValue(row, "value");
+    root.value += value;
+    let parent = root;
+    for (const part of path) {
+      let child = parent.children.find((candidate) => candidate.name === part);
+      if (!child) {
+        child = { name: part, value: 0, children: [] };
+        parent.children.push(child);
+      }
+      child.value = numberValue(child, "value") + value;
+      parent = child;
+    }
+  }
+  return [pruneEmptyChildren(root)];
+}
+function pruneEmptyChildren(node) {
+  const children = Array.isArray(node.children) ? node.children.map((child) => pruneEmptyChildren(child)) : [];
+  if (children.length === 0) {
+    const { children: _children, ...leaf } = node;
+    return leaf;
+  }
+  return { ...node, children };
+}
+
+// web/components/chart/maps.ts
+var stateBoxes = [
+  ["RR", -64, 1, -58, 5],
+  ["AP", -53, -1, -49, 3],
+  ["AM", -73, -9, -58, 1],
+  ["PA", -58, -9, -46, 1],
+  ["AC", -73, -11, -66, -7],
+  ["RO", -66, -13, -60, -9],
+  ["MT", -60, -18, -50, -9],
+  ["TO", -50, -14, -46, -7],
+  ["MA", -46, -8, -42, -2],
+  ["PI", -42, -10, -39, -3],
+  ["CE", -39, -7, -36, -3],
+  ["RN", -36, -7, -34, -5],
+  ["PB", -38, -8, -34, -6],
+  ["PE", -41, -10, -34, -7],
+  ["AL", -38, -11, -35, -9],
+  ["SE", -38, -12, -36, -10],
+  ["BA", -46, -18, -37, -10],
+  ["GO", -52, -19, -46, -14],
+  ["DF", -48.5, -16.5, -47, -15],
+  ["MS", -58, -24, -51, -18],
+  ["MG", -51, -22, -40, -15],
+  ["ES", -41, -21, -39, -18],
+  ["RJ", -44, -23.5, -40, -21],
+  ["SP", -53, -25, -44, -20],
+  ["PR", -54, -27, -48, -23],
+  ["SC", -54, -29, -48, -26],
+  ["RS", -58, -34, -49, -29]
+];
+function boxFeature([name, minX, minY, maxX, maxY]) {
+  return {
+    type: "Feature",
+    properties: { name },
+    geometry: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [minX, minY],
+          [maxX, minY],
+          [maxX, maxY],
+          [minX, maxY],
+          [minX, minY]
+        ]
+      ]
+    }
+  };
+}
+var brazilStatesGeoJSON = {
+  type: "FeatureCollection",
+  features: stateBoxes.map(boxFeature)
+};
 
 // web/components/chart/echarts-renderer.ts
+registerMap("brazil_states", brazilStatesGeoJSON);
 registerChartRenderer("echarts", {
   buildOption(payload, tokens2) {
     const generated = buildEChartsOption(payload, tokens2);
