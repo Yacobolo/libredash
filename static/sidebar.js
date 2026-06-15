@@ -897,7 +897,6 @@ var LibreDashSidebar = class extends i4 {
       justify-content: end;
     }
 
-    .refresh,
     .theme-button {
       display: inline-flex;
       width: 32px;
@@ -916,19 +915,12 @@ var LibreDashSidebar = class extends i4 {
       font-weight: 820;
     }
 
-    .refresh:hover,
-    .refresh:focus-visible,
     .theme-button:hover,
     .theme-button:focus-visible {
       border-color: var(--borderColor-muted);
       background: var(--bgColor-muted);
       color: var(--fgColor-default);
       outline: 0;
-    }
-
-    .refresh:disabled {
-      cursor: wait;
-      opacity: 0.62;
     }
 
     .theme-button {
@@ -999,7 +991,6 @@ var LibreDashSidebar = class extends i4 {
       justify-items: center;
     }
 
-    :host([data-collapsed]) .refresh,
     :host([data-collapsed]) .theme-button {
       width: 34px;
       min-height: 34px;
@@ -1088,12 +1079,6 @@ var LibreDashSidebar = class extends i4 {
       composed: true
     }));
   }
-  refreshCache() {
-    this.dispatchEvent(new CustomEvent("ld-sidebar-refresh", {
-      bubbles: true,
-      composed: true
-    }));
-  }
   render() {
     const collapsed = this.effectiveCollapsed;
     return b2`
@@ -1132,11 +1117,6 @@ var LibreDashSidebar = class extends i4 {
             </span>
           </div>
           <div class="actions">
-            ${this.config.refresh ? b2`
-              <button class="refresh" type="button" ?disabled=${this.status.loading} @click=${this.refreshCache} title="Re-import DuckDB cache">
-                ${icon("refresh")}
-              </button>
-            ` : A}
             <button class="theme-button" type="button" aria-label=${this.themeLabel()} title=${this.themeTitle()} @click=${() => this.changeTheme(this.nextTheme())}>
               ${icon(this.themeIcon())}
             </button>
@@ -1220,8 +1200,6 @@ function icon(name) {
       return iconSvg(w`<path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3h.1a1.7 1.7 0 0 0 .9-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 .9 1.5h.1a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9v.1a1.7 1.7 0 0 0 1.5.9H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5.9Z"></path>`);
     case "system":
       return iconSvg(w`<rect x="3" y="4" width="18" height="13" rx="2"></rect><path d="M8 21h8"></path><path d="M12 17v4"></path><path d="M8 8h8"></path><path d="M8 12h5"></path>`);
-    case "refresh":
-      return iconSvg(w`<path d="M21 12a9 9 0 0 1-15.4 6.4"></path><path d="M3 12a9 9 0 0 1 15.4-6.4"></path><path d="M3 16v5h5"></path><path d="M21 8V3h-5"></path>`);
     case "sun":
       return iconSvg(w`<circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.9 4.9 1.4 1.4"></path><path d="m17.7 17.7 1.4 1.4"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.3 17.7-1.4 1.4"></path><path d="m19.1 4.9-1.4 1.4"></path>`);
     case "moon":

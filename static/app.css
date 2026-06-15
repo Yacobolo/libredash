@@ -4403,6 +4403,39 @@
     min-width: 0;
     justify-self: end;
   }
+  .report-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: end;
+    gap: 6px;
+  }
+  .report-action-button {
+    display: inline-flex;
+    width: 32px;
+    height: 30px;
+    min-height: 30px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--borderColor-default);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--fgColor-default);
+    cursor: pointer;
+    padding: 0;
+  }
+  .report-action-button svg {
+    width: 15px;
+    height: 15px;
+  }
+  .report-action-button:hover, .report-action-button:focus-visible {
+    border-color: var(--borderColor-muted);
+    background: var(--bgColor-muted);
+    outline: 0;
+  }
+  .report-action-button:disabled {
+    cursor: wait;
+    opacity: 0.62;
+  }
   .report-workspace {
     display: grid;
     grid-template-columns: 52px minmax(0, 1fr);

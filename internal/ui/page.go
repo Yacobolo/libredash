@@ -63,14 +63,14 @@ func Page(dataDir, clientID string, catalog dashboard.Catalog, report semantic.D
 				ds.Init(initAction),
 				g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+tableReset+action),
 				h.Div(h.Class("app-shell report-shell"),
-					sidebar(sidebarConfigForReport(catalog, report, model, activePage), true, "@post('/commands/refresh-cache?model="+model.Name+"&dashboard="+report.ID+"')"),
+					sidebar(sidebarConfigForReport(catalog, report, model, activePage)),
 					reportSidebar(reportSidebarConfig(report, model, pages, activePage)),
 					h.Section(h.Class("app-main report-main"), h.Aria("label", "LibreDash report canvas"),
 						workspaceHeader(
 							"",
 							report.Title,
 							activePage.Title,
-							nil,
+							reportActions(model.Name, report.ID),
 						),
 						h.Div(h.Class("report-dashboard-shell"),
 							h.Div(h.Class("report-canvas-shell"),
@@ -112,7 +112,7 @@ func CatalogPage(catalog dashboard.Catalog) g.Node {
 		Body: []g.Node{
 			h.Main(h.Class("report-app"),
 				h.Div(h.Class("app-shell"),
-					sidebar(sidebarConfigForCatalog(catalog), false, ""),
+					sidebar(sidebarConfigForCatalog(catalog)),
 					h.Section(h.Class("app-main catalog-main"), h.Aria("label", "LibreDash dashboard catalog"),
 						workspaceHeader(
 							"",
@@ -151,7 +151,7 @@ func ModelsPage(catalog dashboard.Catalog) g.Node {
 		Body: []g.Node{
 			h.Main(h.Class("report-app"),
 				h.Div(h.Class("app-shell"),
-					sidebar(sidebarConfigForModels(catalog), false, ""),
+					sidebar(sidebarConfigForModels(catalog)),
 					h.Section(h.Class("app-main catalog-main"), h.Aria("label", "LibreDash semantic model catalog"),
 						workspaceHeader(
 							"",
@@ -233,7 +233,7 @@ func ModelPage(catalog dashboard.Catalog, model dashboard.ModelGraph) g.Node {
 				h.ID("model"),
 				h.Class("report-app"),
 				h.Div(h.Class("app-shell"),
-					sidebar(sidebarConfigForModel(catalog, model), false, ""),
+					sidebar(sidebarConfigForModel(catalog, model)),
 					h.Section(h.Class("app-main model-main"), h.Aria("label", "LibreDash semantic model"),
 						workspaceHeader(
 							"Semantic model",
@@ -285,17 +285,8 @@ func modelGraphJSON(model dashboard.ModelGraph) string {
 	return string(bytes)
 }
 
-func sidebar(config map[string]any, dynamicStatus bool, refreshAction string) g.Node {
-	attrs := []g.Node{
-		g.Attr("config", jsonString(config)),
-	}
-	if dynamicStatus {
-		attrs = append(attrs,
-			g.Attr("data-attr:status", "$status"),
-			g.Attr("data-on:ld-sidebar-refresh", refreshAction),
-		)
-	}
-	return g.El("ld-sidebar", attrs...)
+func sidebar(config map[string]any) g.Node {
+	return g.El("ld-sidebar", g.Attr("config", jsonString(config)))
 }
 
 func sidebarConfigForCatalog(catalog dashboard.Catalog) map[string]any {
@@ -306,22 +297,22 @@ func sidebarConfigForCatalog(catalog dashboard.Catalog) map[string]any {
 		modelID = report.SemanticModel
 		modelTitle = report.ModelTitle
 	}
-	return sidebarConfig(catalog, "dashboards", "", workspaceDisplayTitle(catalog), "Dashboards", "Discovery", modelID, modelTitle, false, false)
+	return sidebarConfig(catalog, "dashboards", "", workspaceDisplayTitle(catalog), "Dashboards", "Discovery", modelID, modelTitle, false)
 }
 
 func sidebarConfigForModels(catalog dashboard.Catalog) map[string]any {
-	return sidebarConfig(catalog, "models", "", workspaceDisplayTitle(catalog), "Semantic Models", "Catalog", "", "", false, false)
+	return sidebarConfig(catalog, "models", "", workspaceDisplayTitle(catalog), "Semantic Models", "Catalog", "", "", false)
 }
 
 func sidebarConfigForReport(catalog dashboard.Catalog, report semantic.Dashboard, model *semantic.Model, activePage dashboard.Page) map[string]any {
-	return sidebarConfig(catalog, "dashboards", report.ID, workspaceDisplayTitle(catalog), report.Title, activePage.Title, model.Name, model.Title, true, true)
+	return sidebarConfig(catalog, "dashboards", report.ID, workspaceDisplayTitle(catalog), report.Title, activePage.Title, model.Name, model.Title, true)
 }
 
 func sidebarConfigForModel(catalog dashboard.Catalog, model dashboard.ModelGraph) map[string]any {
-	return sidebarConfig(catalog, "models", "", workspaceDisplayTitle(catalog), "Semantic model", model.Title, model.Name, model.Title, false, false)
+	return sidebarConfig(catalog, "models", "", workspaceDisplayTitle(catalog), "Semantic model", model.Title, model.Name, model.Title, false)
 }
 
-func sidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitle, dashboardTitle, pageTitle, modelID, modelTitle string, refresh, compact bool) map[string]any {
+func sidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitle, dashboardTitle, pageTitle, modelID, modelTitle string, compact bool) map[string]any {
 	return map[string]any{
 		"workspaceTitle": workspaceTitle,
 		"active":         active,
@@ -330,7 +321,6 @@ func sidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitl
 		"pageTitle":      pageTitle,
 		"modelId":        modelID,
 		"modelTitle":     modelTitle,
-		"refresh":        refresh,
 		"compact":        compact,
 		"groups":         sidebarGroups(catalog),
 	}
@@ -411,6 +401,20 @@ func workspaceHeader(eyebrow, title, detail string, actions g.Node) g.Node {
 			g.If(detail != "", h.P(h.Class("workspace-detail"), g.Text(detail))),
 		),
 		h.Div(h.Class("workspace-actions"), actions),
+	)
+}
+
+func reportActions(modelID, dashboardID string) g.Node {
+	return h.Div(h.Class("report-actions"),
+		h.Button(
+			h.Class("report-action-button"),
+			h.Type("button"),
+			h.Title("Re-import DuckDB cache"),
+			h.Aria("label", "Re-import DuckDB cache"),
+			g.Attr("data-attr:disabled", "$status.loading"),
+			g.Attr("data-on:click", "@post('/commands/refresh-cache?model="+modelID+"&dashboard="+dashboardID+"')"),
+			lucide.RefreshCw(iconAttrs()),
+		),
 	)
 }
 
