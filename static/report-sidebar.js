@@ -596,7 +596,6 @@ function r5(r6) {
 
 // web/components/report-sidebar.ts
 var defaultConfig = {
-  dashboardTitle: "Dashboard",
   pageTitle: "Page",
   pages: []
 };
@@ -629,7 +628,7 @@ var ReportSidebar = class extends i4 {
   static {
     this.styles = i`
     :host {
-      --ld-report-sidebar-width: 176px;
+      --ld-report-sidebar-width: 144px;
       display: block;
       width: var(--ld-report-sidebar-width);
       min-height: 100svh;
@@ -639,7 +638,7 @@ var ReportSidebar = class extends i4 {
     }
 
     :host([data-collapsed]) {
-      --ld-report-sidebar-width: 44px;
+      --ld-report-sidebar-width: 38px;
     }
 
     aside {
@@ -649,45 +648,44 @@ var ReportSidebar = class extends i4 {
       width: var(--ld-report-sidebar-width);
       min-height: 100svh;
       grid-template-rows: auto minmax(0, 1fr) auto;
-      border-right: 1px solid var(--borderColor-default);
-      background: color-mix(in srgb, var(--bgColor-muted), var(--bgColor-default) 42%);
+      border-right: 1px solid color-mix(in srgb, var(--borderColor-muted), transparent 36%);
+      background: color-mix(in srgb, var(--bgColor-muted), var(--bgColor-default) 56%);
       transition: width 180ms var(--ld-ease-out);
     }
 
     header {
       display: grid;
-      gap: 6px;
       min-width: 0;
       border-bottom: 1px solid var(--borderColor-muted);
-      padding: 11px 8px 10px;
+      padding: 10px 8px;
     }
 
     .top-row {
       display: flex;
       min-width: 0;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      justify-content: space-between;
     }
 
-    .glyph,
-    .page-initial {
+    .page-initial,
+    .model-glyph {
       display: grid;
-      width: 26px;
-      height: 26px;
+      width: 24px;
+      height: 24px;
       flex: 0 0 auto;
       place-items: center;
-      border-radius: 6px;
+      border-radius: 7px;
       background: transparent;
       color: var(--fgColor-muted);
-      font-size: 0.65rem;
+      font-size: 0.62rem;
       font-weight: 900;
     }
 
-    .glyph svg,
-    .model-link svg,
+    .model-glyph svg,
     .collapse svg {
-      width: 15px;
-      height: 15px;
+      width: 14px;
+      height: 14px;
       fill: none;
       stroke: currentColor;
       stroke-linecap: round;
@@ -695,13 +693,7 @@ var ReportSidebar = class extends i4 {
       stroke-width: 2;
     }
 
-    .titles {
-      display: grid;
-      gap: 2px;
-      min-width: 0;
-    }
-
-    .eyebrow,
+    .section-title,
     .model-label {
       overflow: hidden;
       color: var(--fgColor-muted);
@@ -713,29 +705,15 @@ var ReportSidebar = class extends i4 {
       text-transform: uppercase;
     }
 
-    .dashboard-title,
-    .page-title {
-      overflow: hidden;
+    .section-title {
       color: var(--fgColor-default);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-weight: 850;
-      letter-spacing: 0;
-    }
-
-    .dashboard-title {
-      font-size: 0.75rem;
-    }
-
-    .page-title {
-      font-size: 0.68rem;
-      color: var(--fgColor-muted);
+      font-size: 0.64rem;
     }
 
     .collapse {
       display: grid;
-      width: 26px;
-      height: 26px;
+      width: 24px;
+      height: 24px;
       flex: 0 0 auto;
       place-items: center;
       margin-left: auto;
@@ -758,11 +736,11 @@ var ReportSidebar = class extends i4 {
     nav {
       display: grid;
       align-content: start;
-      gap: 5px;
+      gap: 2px;
       min-width: 0;
       min-height: 0;
       overflow: auto;
-      padding: 9px 5px;
+      padding: 7px 5px;
     }
 
     a {
@@ -773,15 +751,14 @@ var ReportSidebar = class extends i4 {
     .model-link {
       position: relative;
       display: grid;
-      grid-template-columns: 26px minmax(0, 1fr);
-      min-height: 32px;
+      grid-template-columns: minmax(0, 1fr);
+      min-height: 30px;
       align-items: center;
-      gap: 8px;
       border: 1px solid transparent;
-      border-radius: 7px;
+      border-radius: 6px;
       color: var(--fgColor-muted);
-      padding: 0 8px;
-      font-size: 0.72rem;
+      padding: 0 9px;
+      font-size: 0.7rem;
       font-weight: 800;
     }
 
@@ -796,7 +773,7 @@ var ReportSidebar = class extends i4 {
 
     .page-link[aria-current='page'] {
       border-color: transparent;
-      background: color-mix(in srgb, var(--bgColor-muted), var(--bgColor-default) 34%);
+      background: color-mix(in srgb, var(--bgColor-muted), var(--bgColor-default) 30%);
       color: var(--fgColor-default);
     }
 
@@ -810,6 +787,10 @@ var ReportSidebar = class extends i4 {
       background: var(--ld-accent);
     }
 
+    .page-initial {
+      display: none;
+    }
+
     .link-text {
       overflow: hidden;
       min-width: 0;
@@ -819,16 +800,26 @@ var ReportSidebar = class extends i4 {
 
     footer {
       display: grid;
-      gap: 6px;
+      gap: 4px;
       border-top: 1px solid var(--borderColor-muted);
-      padding: 7px 5px 8px;
+      padding: 6px 5px 7px;
+    }
+
+    .model-link {
+      min-height: 28px;
+      font-size: 0.66rem;
+      font-weight: 750;
+    }
+
+    .model-glyph {
+      display: none;
     }
 
     :host([data-collapsed]) header {
-      padding-inline: 6px;
+      padding: 8px 5px 6px;
     }
 
-    :host([data-collapsed]) .titles,
+    :host([data-collapsed]) .section-title,
     :host([data-collapsed]) .link-text,
     :host([data-collapsed]) .model-label {
       display: none;
@@ -845,13 +836,40 @@ var ReportSidebar = class extends i4 {
 
     :host([data-collapsed]) .page-link,
     :host([data-collapsed]) .model-link {
-      grid-template-columns: 26px;
+      grid-template-columns: 24px;
       justify-content: center;
       padding-inline: 0;
     }
 
+    :host([data-collapsed]) .page-initial,
+    :host([data-collapsed]) .model-glyph {
+      display: grid;
+    }
+
+    :host([data-collapsed]) .page-link {
+      min-height: 28px;
+    }
+
     :host([data-collapsed]) .page-link[aria-current='page']::before {
       content: none;
+    }
+
+    .rail-label {
+      display: none;
+    }
+
+    :host([data-collapsed]) .rail-label {
+      display: block;
+      margin: 8px auto 10px;
+      color: var(--fgColor-muted);
+      font-size: 0.56rem;
+      font-weight: 950;
+      letter-spacing: 0;
+      line-height: 1;
+      text-orientation: mixed;
+      text-transform: uppercase;
+      transform: rotate(180deg);
+      writing-mode: vertical-rl;
     }
   `;
   }
@@ -864,12 +882,7 @@ var ReportSidebar = class extends i4 {
       <aside aria-label="Report pages">
         <header>
           <div class="top-row">
-            <span class="glyph">${icon("report")}</span>
-            <div class="titles">
-              <span class="eyebrow">Report</span>
-              <strong class="dashboard-title" title=${this.config.dashboardTitle || ""}>${this.config.dashboardTitle || "Dashboard"}</strong>
-              <span class="page-title" title=${this.config.pageTitle || ""}>${this.config.pageTitle || ""}</span>
-            </div>
+            <strong class="section-title">Pages</strong>
             <button
               class="collapse"
               type="button"
@@ -878,20 +891,21 @@ var ReportSidebar = class extends i4 {
               title=${this.collapsed ? "Expand report pages" : "Collapse report pages"}
               @click=${this.toggleCollapsed}
             >
-              ${icon(this.collapsed ? "expand" : "collapse")}
+              ${icon(this.collapsed ? "chevron-right" : "chevron-left")}
             </button>
           </div>
         </header>
 
         <nav aria-label="Report pages">
+          <span class="rail-label" aria-hidden="true">Pages</span>
           ${pages.map((page) => this.renderPageLink(page))}
         </nav>
 
         <footer>
-          <span class="model-label">Semantic model</span>
+          <span class="model-label">Model</span>
           ${this.config.modelHref ? b2`
             <a class="model-link" href=${this.config.modelHref} title=${this.config.modelTitle || "Semantic model"}>
-              <span class="glyph">${icon("model")}</span>
+              <span class="model-glyph">${icon("model")}</span>
               <span class="link-text">${this.config.modelTitle || this.config.modelId || "Model"}</span>
             </a>
           ` : A}
@@ -931,14 +945,12 @@ function storedCollapsed() {
 }
 function icon(name) {
   switch (name) {
-    case "report":
-      return iconSvg(w`<path d="M3 3v18h18"></path><path d="M8 17V9"></path><path d="M13 17V5"></path><path d="M18 17v-6"></path>`);
     case "model":
       return iconSvg(w`<ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"></path><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"></path>`);
-    case "collapse":
-      return iconSvg(w`<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m16 10-2 2 2 2"></path>`);
-    case "expand":
-      return iconSvg(w`<rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M9 4v16"></path><path d="m14 10 2 2-2 2"></path>`);
+    case "chevron-left":
+      return iconSvg(w`<path d="m15 18-6-6 6-6"></path>`);
+    case "chevron-right":
+      return iconSvg(w`<path d="m9 18 6-6-6-6"></path>`);
   }
 }
 function iconSvg(content) {
