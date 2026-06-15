@@ -177,10 +177,10 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
-    gap: 20px;
+    gap: 16px;
     min-width: 0;
     border-bottom: 1px solid var(--borderColor-muted);
-    padding: 16px 24px 14px;
+    padding: 10px 24px;
     view-transition-name: workspace-header;
   }
 
@@ -190,11 +190,11 @@
 
   .workspace-title {
     overflow: hidden;
-    margin: 2px 0 0;
+    margin: 0;
     color: var(--fgColor-default);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 1.18rem;
+    font-size: 1rem;
     line-height: 1.08;
     font-weight: 850;
     letter-spacing: 0;
@@ -788,7 +788,6 @@
     letter-spacing: 0.04em;
     line-height: 1;
     text-transform: uppercase;
-    transform: rotate(90deg);
     transform-origin: center;
     white-space: nowrap;
     writing-mode: vertical-rl;

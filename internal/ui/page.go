@@ -39,6 +39,7 @@ func Page(dataDir, clientID string, catalog dashboard.Catalog, report semantic.D
 			h.Link(h.Rel("stylesheet"), h.Href("/static/app.css")),
 			h.Script(h.Type("module"), h.Src("/static/theme.js")),
 			h.Script(h.Type("module"), h.Src("/static/sidebar.js")),
+			h.Script(h.Type("module"), h.Src("/static/filter-dock.js")),
 			h.Script(h.Type("module"), h.Src("/static/report-canvas.js")),
 			h.Script(h.Type("module"), h.Src("/static/report-footer.js")),
 			h.Script(h.Type("module"), h.Src("/static/charts.js")),
@@ -56,9 +57,9 @@ func Page(dataDir, clientID string, catalog dashboard.Catalog, report semantic.D
 					sidebar(sidebarConfigForReport(catalog, report, model, activePage), true, "@post('/commands/refresh-cache?model="+model.Name+"&dashboard="+report.ID+"')"),
 					h.Section(h.Class("app-main report-main"), h.Aria("label", "LibreDash report canvas"),
 						workspaceHeader(
-							"Olist report",
+							"",
 							report.Title,
-							activePage.Title,
+							"",
 							pageTabs(report.ID, pages, activePage.ID),
 						),
 						h.Div(h.Class("report-dashboard-shell"),
@@ -67,8 +68,9 @@ func Page(dataDir, clientID string, catalog dashboard.Catalog, report semantic.D
 							),
 							filtersDock(action),
 						),
-						g.El("ld-report-footer", h.Aria("label", "Report view controls"),
-							g.El("ld-report-zoom"),
+						g.El("ld-report-footer",
+							h.Aria("label", "Report view controls"),
+							g.Attr("data-attr:status", "$status"),
 						),
 					),
 				),
@@ -322,9 +324,9 @@ func modelItems(models []dashboard.CatalogModel) []map[string]any {
 func workspaceHeader(eyebrow, title, detail string, actions g.Node) g.Node {
 	return h.Header(h.Class("workspace-header"),
 		h.Div(h.Class("workspace-title-block"),
-			h.P(h.Class("report-eyebrow"), g.Text(eyebrow)),
+			g.If(eyebrow != "", h.P(h.Class("report-eyebrow"), g.Text(eyebrow))),
 			h.H1(h.Class("workspace-title"), g.Text(title)),
-			h.P(h.Class("workspace-detail"), g.Text(detail)),
+			g.If(detail != "", h.P(h.Class("workspace-detail"), g.Text(detail))),
 		),
 		h.Div(h.Class("workspace-actions"), actions),
 	)
@@ -551,7 +553,7 @@ func reportHeader(visual dashboard.PageVisual) g.Node {
 }
 
 func filtersDock(action string) g.Node {
-	return h.Details(h.Class("filters-dock"), h.Open(), h.Aria("label", "Report filters"),
+	return h.Details(h.Class("filters-dock"), h.Aria("label", "Report filters"),
 		h.Summary(h.Class("filters-dock-rail"), h.Title("Toggle filters"),
 			lucide.SlidersHorizontal(iconAttrs()),
 			h.Span(h.Class("filters-rail-label"), g.Text("Filters")),

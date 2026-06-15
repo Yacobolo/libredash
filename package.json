@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:css && npm run build:sidebar && npm run build:inspector && npm run build:table && npm run build:canvas && npm run build:footer && npm run build:charts && npm run build:model",
+    "build": "npm run build:css && npm run build:sidebar && npm run build:filters && npm run build:inspector && npm run build:table && npm run build:canvas && npm run build:footer && npm run build:charts && npm run build:model",
     "build:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css",
     "build:sidebar": "esbuild web/components/sidebar.ts --bundle --format=esm --outfile=static/sidebar.js",
+    "build:filters": "esbuild web/components/filter-dock.ts --bundle --format=esm --outfile=static/filter-dock.js",
     "build:inspector": "esbuild web/components/datastar-inspector/index.ts --bundle --format=esm --outfile=static/datastar-inspector.js",
     "build:table": "esbuild web/components/data-table.ts --bundle --format=esm --outfile=static/table.js",
     "build:canvas": "esbuild web/components/report-canvas.ts --bundle --format=esm --outfile=static/report-canvas.js",
