@@ -3,8 +3,15 @@ version: '3'
 tasks:
   dev:
     desc: Start the managed LibreDash dev server for this worktree
+    deps:
+      - bootstrap
     cmds:
       - ./scripts/dev-server.sh start
+
+  bootstrap:
+    desc: Download/sync Olist CSVs if missing
+    cmds:
+      - python3 scripts/bootstrap_olist.py
 
   dev:stop:
     desc: Stop the managed LibreDash dev server for this worktree

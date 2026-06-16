@@ -44,10 +44,9 @@ The current product goal is to feel like a small Power BI-style workspace: dashb
 ## Useful Commands
 
 - `task dev`
+- `task bootstrap`
+- `task test`
+- `task build`
 - `task dev:stop`
 - `task dev:status`
 - `task dev:logs`
-- `go test ./...`
-- `npm run build`
-- `go run ./cmd/libredash`
-- `python3 scripts/bootstrap_olist.py`
