@@ -99,6 +99,49 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 	})
 }
 
+func LoginPage() g.Node {
+	favicon := "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%230969da'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-family='Arial,sans-serif' font-size='20' font-weight='700' fill='white'%3ELD%3C/text%3E%3C/svg%3E"
+	return c.HTML5(c.HTML5Props{
+		Title:    "LibreDash Login",
+		Language: "en",
+		HTMLAttrs: []g.Node{
+			g.Attr("data-color-mode", "auto"),
+			g.Attr("data-light-theme", "light"),
+			g.Attr("data-dark-theme", "dark"),
+		},
+		Head: []g.Node{
+			h.Meta(h.Name("viewport"), h.Content("width=device-width, initial-scale=1")),
+			h.Link(h.Rel("preconnect"), h.Href("https://cdn.jsdelivr.net")),
+			h.Link(h.Rel("icon"), h.Href(favicon)),
+			h.Link(h.Href("https://cdn.jsdelivr.net/npm/daisyui@5"), h.Rel("stylesheet"), h.Type("text/css")),
+			h.Script(h.Src("https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4")),
+			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/theme.js"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/login.js"))),
+		},
+		Body: []g.Node{
+			h.Main(h.Class("login-screen"), h.Aria("label", "LibreDash login"),
+				g.El("ld-topology-background"),
+				h.Div(h.Class("login-shade"), h.Aria("hidden", "true")),
+				h.Section(h.Class("login-panel"),
+					h.Div(h.Class("login-brand"), h.Aria("hidden", "true"),
+						h.H1(g.Text("LibreDash")),
+					),
+					h.Button(h.Type("button"), h.Class("login-azure-button"),
+						h.Span(h.Class("microsoft-mark"), h.Aria("hidden", "true"),
+							h.Span(),
+							h.Span(),
+							h.Span(),
+							h.Span(),
+						),
+						h.Span(g.Text("Sign in with Azure Active Directory")),
+					),
+				),
+			),
+		},
+	})
+}
+
 func CatalogPage(catalog dashboard.Catalog) g.Node {
 	return c.HTML5(c.HTML5Props{
 		Title:    "LibreDash Dashboards",

@@ -4,6 +4,7 @@ tasks:
   dev:
     desc: Start the managed LibreDash dev server for this worktree
     deps:
+      - build
       - bootstrap
     cmds:
       - ./scripts/dev-server.sh start
@@ -35,5 +36,7 @@ tasks:
 
   test:
     desc: Run Go tests
+    deps:
+      - build
     cmds:
       - go test ./...

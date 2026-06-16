@@ -7,17 +7,17 @@ LibreDash is a small fullstack Go dashboard demo using gomponents, Datastar sign
 ```sh
 python3 -m pip install -r scripts/requirements.txt
 npm install
-npm run build
-python3 scripts/bootstrap_olist.py
 task dev
 ```
 
-`task dev` starts a managed dev server, chooses a worktree-safe port, stops this worktree's stale server if one is already running, and prints the URL. Use `task dev:status`, `task dev:logs`, and `task dev:stop` for lifecycle checks.
+`task dev` builds generated browser assets, syncs the demo data, starts a managed dev server, chooses a worktree-safe port, stops this worktree's stale server if one is already running, and prints the URL. Use `task dev:status`, `task dev:logs`, and `task dev:stop` for lifecycle checks.
 
-If you only need to run the existing checked-in CSS, the npm steps can be skipped:
+Generated files such as `static/app.css`, `static/charts.js`, and other bundled component assets are intentionally not checked in. If you run the app without `task dev`, build assets first:
 
 ```sh
 python3 -m pip install -r scripts/requirements.txt
+npm install
+npm run build
 python3 scripts/bootstrap_olist.py
 go run ./cmd/libredash
 ```
@@ -26,6 +26,7 @@ By default, the bootstrap script copies CSVs into `.data/olist`. To use a differ
 
 ```sh
 export LIBREDASH_DATA_DIR=/path/to/olist-csvs
+npm run build
 go run ./cmd/libredash
 ```
 
@@ -80,5 +81,5 @@ Production serve enables structured request logs, security headers, rate limits,
 ## Test
 
 ```sh
-go test ./...
+task test
 ```

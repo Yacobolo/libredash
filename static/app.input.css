@@ -1131,6 +1131,123 @@
     }
   }
 
+  .login-screen {
+    --login-accent: var(--bgColor-accent-emphasis);
+    position: relative;
+    display: grid;
+    min-height: 100svh;
+    place-items: center;
+    overflow: hidden;
+    background: #070b12;
+    color: #f0f6fc;
+    padding: 32px;
+  }
+
+  .login-screen ld-topology-background {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+
+  .login-shade {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: rgb(7 11 18 / 58%);
+    pointer-events: none;
+  }
+
+  .login-panel {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    width: min(100%, 386px);
+    justify-items: center;
+    gap: 22px;
+    border: 1px solid rgb(255 255 255 / 12%);
+    border-radius: 8px;
+    background: rgb(13 17 23 / 74%);
+    box-shadow:
+      0 24px 70px rgb(0 0 0 / 48%),
+      inset 0 1px 0 rgb(255 255 255 / 9%);
+    padding: 30px 30px 32px;
+    text-align: center;
+    backdrop-filter: blur(14px);
+  }
+
+  .login-brand {
+    display: grid;
+    justify-items: center;
+  }
+
+  .login-brand h1 {
+    margin: 0;
+    color: #f0f6fc;
+    font-size: clamp(1.72rem, 9vw, 2.38rem);
+    line-height: 1;
+    font-weight: 850;
+    letter-spacing: 0;
+  }
+
+  .login-azure-button {
+    display: inline-grid;
+    width: 100%;
+    min-height: 48px;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    border: 1px solid color-mix(in srgb, var(--login-accent), transparent 48%);
+    border-radius: 8px;
+    background: rgb(255 255 255 / 7%);
+    box-shadow: 0 12px 34px rgb(0 0 0 / 28%);
+    color: #fff;
+    cursor: pointer;
+    padding: 0 18px;
+    font: inherit;
+    font-size: 0.91rem;
+    font-weight: 780;
+    letter-spacing: 0;
+  }
+
+  .login-azure-button:hover,
+  .login-azure-button:focus-visible {
+    border-color: color-mix(in srgb, var(--login-accent), transparent 30%);
+    background: color-mix(in srgb, var(--login-accent), transparent 90%);
+    box-shadow:
+      0 12px 34px rgb(0 0 0 / 28%),
+      inset 0 0 0 1px color-mix(in srgb, var(--login-accent), transparent 62%);
+    outline: 0;
+  }
+
+  .microsoft-mark {
+    display: grid;
+    width: 20px;
+    height: 20px;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 2px;
+  }
+
+  .microsoft-mark span {
+    display: block;
+  }
+
+  .microsoft-mark span:nth-child(1) {
+    background: #f25022;
+  }
+
+  .microsoft-mark span:nth-child(2) {
+    background: #7fba00;
+  }
+
+  .microsoft-mark span:nth-child(3) {
+    background: #00a4ef;
+  }
+
+  .microsoft-mark span:nth-child(4) {
+    background: #ffb900;
+  }
+
   @media (max-width: 640px) {
     .app-shell {
       grid-template-columns: 1fr;
@@ -1213,6 +1330,14 @@
       border-left: 0;
     }
 
+    .login-screen {
+      padding: 24px;
+    }
+
+    .login-panel {
+      gap: 18px;
+      padding: 28px 22px 24px;
+    }
   }
   @media (prefers-reduced-motion: reduce) {
     *,

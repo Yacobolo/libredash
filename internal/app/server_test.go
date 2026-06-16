@@ -213,6 +213,27 @@ func TestCatalogRouteRendersDashboardCatalog(t *testing.T) {
 	}
 }
 
+func TestLoginRouteRendersAzureADLogin(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/login", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `<ld-topology-background`) {
+		t.Fatalf("login page did not render topology background component:\n%s", body)
+	}
+	if !strings.Contains(body, `Sign in with Azure Active Directory`) {
+		t.Fatalf("login page did not render Azure AD button:\n%s", body)
+	}
+	if !strings.Contains(body, `/static/login.js`) {
+		t.Fatalf("login page did not include login asset:\n%s", body)
+	}
+}
+
 func TestModelsRouteRendersSemanticModelCatalog(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/models", nil)
 	rec := httptest.NewRecorder()

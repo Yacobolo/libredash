@@ -90,6 +90,14 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if err := ui.LoginPage().Render(w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 	dashboardID := chi.URLParam(r, "dashboard")
 	pages := s.metrics.Pages(dashboardID)

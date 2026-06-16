@@ -13,6 +13,7 @@ func (s *Server) Routes() http.Handler {
 		mux.Use(requestLogger(s.logger))
 	}
 	mux.Use(securityHeaders(s.securityHeaders))
+	mux.Get("/login", s.login)
 	mux.Group(func(r chi.Router) {
 		r.Use(s.csrf)
 		r.Get("/", s.protected(platform.PermissionDashboardView, s.home))
