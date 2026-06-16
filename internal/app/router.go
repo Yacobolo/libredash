@@ -19,6 +19,8 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/", s.protected(platform.PermissionDashboardView, s.home))
 		r.Get("/dashboards/{dashboard}", s.protected(platform.PermissionDashboardView, s.dashboard))
 		r.Get("/dashboards/{dashboard}/pages/{page}", s.protected(platform.PermissionDashboardView, s.page))
+		r.Get("/metrics", s.protected(platform.PermissionDashboardView, s.metricsCatalog))
+		r.Get("/metrics/{view}", s.protected(platform.PermissionDashboardView, s.metricView))
 		r.Get("/models", s.protected(platform.PermissionDashboardView, s.models))
 		r.Get("/models/{model}", s.protected(platform.PermissionDashboardView, s.model))
 		r.With(s.rateLimits.updatesMiddleware()).Get("/updates", s.protected(platform.PermissionDashboardView, s.updates))

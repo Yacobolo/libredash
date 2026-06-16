@@ -127,6 +127,54 @@ relogios_presentes,watches_gifts
 		t.Fatalf("expected DuckDB cache file: %v", err)
 	}
 
+	views := metrics.MetricViews()
+	if len(views) != 1 {
+		t.Fatalf("metric views = %d, want 1", len(views))
+	}
+	if got := views[0].ID; got != "orders" {
+		t.Fatalf("metric view id = %q, want orders", got)
+	}
+	if got := views[0].DimensionCount; got != 7 {
+		t.Fatalf("metric view dimension count = %d, want 7", got)
+	}
+	if got := views[0].MeasureCount; got != 5 {
+		t.Fatalf("metric view measure count = %d, want 5", got)
+	}
+	if got := views[0].DashboardCount; got != 1 {
+		t.Fatalf("metric view dashboard count = %d, want 1", got)
+	}
+
+	view, ok := metrics.MetricView("orders")
+	if !ok {
+		t.Fatal("metric view orders not found")
+	}
+	if got := view.Dataset; got != "orders" {
+		t.Fatalf("metric view dataset = %q, want orders", got)
+	}
+	if got := view.Timeseries; got != "purchase_timestamp" {
+		t.Fatalf("metric view timeseries = %q, want purchase_timestamp", got)
+	}
+	if !hasMetricDimension(view.Dimensions, "category", "e.category") {
+		t.Fatalf("metric view dimensions missing category: %#v", view.Dimensions)
+	}
+	if !hasMetricMeasure(view.Measures, "revenue", "SUM(e.revenue)") {
+		t.Fatalf("metric view measures missing revenue: %#v", view.Measures)
+	}
+	if len(view.Dashboards) != 1 || view.Dashboards[0].ID != "executive-sales" {
+		t.Fatalf("metric view dashboards = %#v, want executive-sales", view.Dashboards)
+	}
+
+	graph, ok := metrics.ModelGraph("olist")
+	if !ok {
+		t.Fatal("model graph olist not found")
+	}
+	if !hasModelNode(graph.Nodes, "metrics_view:orders") {
+		t.Fatalf("model graph missing metrics view node: %#v", graph.Nodes)
+	}
+	if !hasModelEdge(graph.Edges, "dataset:orders", "metrics_view:orders") {
+		t.Fatalf("model graph missing dataset to metrics view edge: %#v", graph.Edges)
+	}
+
 	patch, err := metrics.QueryDashboard(context.Background(), "executive-sales", dashboard.Filters{Controls: map[string]dashboard.FilterControl{
 		"state":         {Type: "multi_select", Operator: "in", Values: []string{"SP"}},
 		"purchase_date": {Type: "date_range", Preset: "2018"},
@@ -468,6 +516,42 @@ func hasHierarchyPathValue(rows []dashboard.Datum, value string) bool {
 func tableRowsHaveKey(rows []map[string]any, key string) bool {
 	for _, row := range rows {
 		if _, ok := row[key]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMetricDimension(dimensions []dashboard.MetricViewDimension, name, expr string) bool {
+	for _, dimension := range dimensions {
+		if dimension.Name == name && dimension.Expr == expr {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMetricMeasure(measures []dashboard.MetricViewMeasure, name, expression string) bool {
+	for _, measure := range measures {
+		if measure.Name == name && measure.Expression == expression {
+			return true
+		}
+	}
+	return false
+}
+
+func hasModelNode(nodes []dashboard.ModelNode, id string) bool {
+	for _, node := range nodes {
+		if node.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func hasModelEdge(edges []dashboard.ModelEdge, source, target string) bool {
+	for _, edge := range edges {
+		if edge.Source == source && edge.Target == target {
 			return true
 		}
 	}

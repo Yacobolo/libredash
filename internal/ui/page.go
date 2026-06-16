@@ -220,6 +220,45 @@ func ModelsPage(catalog dashboard.Catalog) g.Node {
 	})
 }
 
+func MetricViewsPage(catalog dashboard.Catalog, views []dashboard.MetricViewSummary) g.Node {
+	return c.HTML5(c.HTML5Props{
+		Title:    "LibreDash Metric Views",
+		Language: "en",
+		HTMLAttrs: []g.Node{
+			g.Attr("data-color-mode", "auto"),
+			g.Attr("data-light-theme", "light"),
+			g.Attr("data-dark-theme", "dark"),
+		},
+		Head: []g.Node{
+			h.Meta(h.Name("viewport"), h.Content("width=device-width, initial-scale=1")),
+			h.Link(h.Rel("preconnect"), h.Href("https://cdn.jsdelivr.net")),
+			h.Link(h.Href("https://cdn.jsdelivr.net/npm/daisyui@5"), h.Rel("stylesheet"), h.Type("text/css")),
+			h.Script(h.Src("https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4")),
+			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/theme.js"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
+		},
+		Body: []g.Node{
+			h.Main(h.Class("report-app"),
+				h.Div(h.Class("app-shell"),
+					sidebar(sidebarConfigForMetrics(catalog)),
+					h.Section(h.Class("app-main catalog-main"), h.Aria("label", "LibreDash metric view catalog"),
+						workspaceHeader(
+							"",
+							"Metric Views",
+							"Business-facing analytics contracts.",
+							nil,
+						),
+						h.Div(h.Class("catalog-grid"),
+							g.Map(views, metricViewCard),
+						),
+					),
+				),
+			),
+		},
+	})
+}
+
 func dashboardCard(report dashboard.CatalogDashboard) g.Node {
 	eyebrow := strings.Join(report.MetricViewTitles, ", ")
 	if eyebrow == "" {
@@ -246,6 +285,27 @@ func dashboardCard(report dashboard.CatalogDashboard) g.Node {
 	)
 }
 
+func metricViewCard(view dashboard.MetricViewSummary) g.Node {
+	return h.Article(h.Class("catalog-card"),
+		h.Div(h.Class("catalog-card-main"),
+			h.P(h.Class("report-eyebrow"), g.Text(view.ModelTitle)),
+			h.H2(g.Text(view.Title)),
+			h.P(g.Text(view.Description)),
+		),
+		h.Div(h.Class("catalog-tags"),
+			h.Span(g.Text(view.Dataset)),
+			h.Span(g.Text(view.Timeseries)),
+		),
+		h.Footer(h.Class("catalog-card-footer"),
+			h.Span(g.Textf("%d dimensions, %d measures", view.DimensionCount, view.MeasureCount)),
+			h.A(h.Class("catalog-open"), h.Href("/metrics/"+view.ID),
+				lucide.ExternalLink(iconAttrs()),
+				h.Span(g.Text("Open")),
+			),
+		),
+	)
+}
+
 func modelCard(model dashboard.CatalogModel) g.Node {
 	return h.Article(h.Class("catalog-card"),
 		h.Div(h.Class("catalog-card-main"),
@@ -261,6 +321,201 @@ func modelCard(model dashboard.CatalogModel) g.Node {
 			),
 		),
 	)
+}
+
+func metricViewActions(view dashboard.MetricViewDetail) g.Node {
+	return h.Div(h.Class("report-actions"),
+		h.A(h.Class("report-action-button"), h.Href("/models/"+view.SemanticModel), h.Title("Open semantic model"), h.Aria("label", "Open semantic model"),
+			lucide.Network(iconAttrs()),
+		),
+	)
+}
+
+func metricViewSummary(view dashboard.MetricViewDetail) g.Node {
+	return h.Div(h.Class("metric-summary-strip"),
+		metricSummaryItem("Semantic model", h.A(h.Href("/models/"+view.SemanticModel), g.Text(view.ModelTitle))),
+		metricSummaryItem("Dataset", h.Code(g.Text(view.Dataset))),
+		metricSummaryItem("Timeseries", h.Code(g.Text(view.Timeseries))),
+		metricSummaryItem("Measures", h.Strong(g.Text(strconv.Itoa(view.MeasureCount)))),
+		metricSummaryItem("Dimensions", h.Strong(g.Text(strconv.Itoa(view.DimensionCount)))),
+		metricSummaryItem("Dashboards", h.Strong(g.Text(strconv.Itoa(view.DashboardCount)))),
+	)
+}
+
+func metricSummaryItem(label string, value g.Node) g.Node {
+	return h.Div(h.Class("metric-summary-item"),
+		h.Span(g.Text(label)),
+		value,
+	)
+}
+
+func metricViewDimensions(dimensions []dashboard.MetricViewDimension) g.Node {
+	return h.Section(h.ID("dimensions"), h.Class("metric-contract-section"),
+		metricSectionHeader("Dimensions", "Fields available for grouping and filtering.", len(dimensions)),
+		h.Div(h.Class("metric-table-wrap"),
+			h.Table(h.Class("metric-field-table"),
+				h.THead(
+					h.Tr(
+						h.Th(g.Text("Name")),
+						h.Th(g.Text("Label")),
+						h.Th(g.Text("Expression")),
+						h.Th(g.Text("Filter")),
+						h.Th(g.Text("Order")),
+					),
+				),
+				h.TBody(g.Map(dimensions, func(dimension dashboard.MetricViewDimension) g.Node {
+					return h.Tr(
+						h.Td(h.Code(g.Text(dimension.Name))),
+						h.Td(g.Text(displayLabel(dimension.Label, dimension.Name))),
+						h.Td(h.Code(h.Class("metric-expression"), g.Text(dimension.Expr))),
+						h.Td(g.Text(emptyDash(dimension.Where))),
+						h.Td(g.Text(emptyDash(dimension.OrderExpr))),
+					)
+				})),
+			),
+		),
+	)
+}
+
+func metricViewMeasures(measures []dashboard.MetricViewMeasure) g.Node {
+	return h.Section(h.ID("measures"), h.Class("metric-contract-section"),
+		metricSectionHeader("Measures", "Aggregate SQL expressions available for analysis.", len(measures)),
+		h.Div(h.Class("metric-table-wrap"),
+			h.Table(h.Class("metric-field-table metric-measure-table"),
+				h.THead(
+					h.Tr(
+						h.Th(g.Text("Name")),
+						h.Th(g.Text("Label")),
+						h.Th(g.Text("Expression")),
+						h.Th(g.Text("Unit")),
+						h.Th(g.Text("Format")),
+						h.Th(g.Text("Description")),
+					),
+				),
+				h.TBody(g.Map(measures, func(measure dashboard.MetricViewMeasure) g.Node {
+					return h.Tr(
+						h.Td(h.Code(g.Text(measure.Name))),
+						h.Td(g.Text(displayLabel(measure.Label, measure.Name))),
+						h.Td(h.Code(h.Class("metric-expression"), g.Text(measure.Expression))),
+						h.Td(g.Text(emptyDash(measure.Unit))),
+						h.Td(g.Text(emptyDash(measure.Format))),
+						h.Td(g.Text(emptyDash(measure.Description))),
+					)
+				})),
+			),
+		),
+	)
+}
+
+func metricViewDashboards(reports []dashboard.MetricViewDashboard) g.Node {
+	return h.Section(h.ID("usage"), h.Class("metric-rail-section"),
+		h.H2(g.Text("Used by")),
+		g.If(len(reports) == 0, h.P(h.Class("metric-empty"), g.Text("No dashboards reference this metric view yet."))),
+		g.Map(reports, func(report dashboard.MetricViewDashboard) g.Node {
+			return h.A(h.Class("metric-dashboard-link"), h.Href("/dashboards/"+report.ID),
+				h.Span(g.Text(report.Title)),
+				h.Small(g.Textf("%d pages", report.PageCount)),
+				lucide.ExternalLink(iconAttrs()),
+			)
+		}),
+	)
+}
+
+func metricSectionHeader(title, description string, count int) g.Node {
+	return h.Div(h.Class("metric-section-header"),
+		h.Div(
+			h.P(h.Class("report-eyebrow"), g.Textf("%d fields", count)),
+			h.H2(g.Text(title)),
+			h.P(g.Text(description)),
+		),
+	)
+}
+
+func metricViewRail(view dashboard.MetricViewDetail) g.Node {
+	return h.Aside(h.Class("metric-contract-rail"),
+		h.Nav(h.Class("metric-rail-section metric-section-nav"), h.Aria("label", "Metric view sections"),
+			h.H2(g.Text("Sections")),
+			h.A(h.Href("#measures"), g.Text("Measures")),
+			h.A(h.Href("#dimensions"), g.Text("Dimensions")),
+			h.A(h.Href("#usage"), g.Text("Usage")),
+		),
+		h.Section(h.Class("metric-rail-section"),
+			h.H2(g.Text("Contract")),
+			metricRailRow("Model", h.A(h.Href("/models/"+view.SemanticModel), g.Text(view.ModelTitle))),
+			metricRailRow("Dataset", h.Code(g.Text(view.Dataset))),
+			metricRailRow("Timeseries", h.Code(g.Text(view.Timeseries))),
+			metricRailRow("Measures", h.Strong(g.Text(strconv.Itoa(view.MeasureCount)))),
+			metricRailRow("Dimensions", h.Strong(g.Text(strconv.Itoa(view.DimensionCount)))),
+		),
+		metricViewDashboards(view.Dashboards),
+	)
+}
+
+func metricRailRow(label string, value g.Node) g.Node {
+	return h.Div(h.Class("metric-rail-row"),
+		h.Span(g.Text(label)),
+		value,
+	)
+}
+
+func displayLabel(label, fallback string) string {
+	if strings.TrimSpace(label) != "" {
+		return label
+	}
+	return fallback
+}
+
+func emptyDash(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "-"
+	}
+	return value
+}
+
+func MetricViewPage(catalog dashboard.Catalog, view dashboard.MetricViewDetail) g.Node {
+	return c.HTML5(c.HTML5Props{
+		Title:    "LibreDash Metric View",
+		Language: "en",
+		HTMLAttrs: []g.Node{
+			g.Attr("data-color-mode", "auto"),
+			g.Attr("data-light-theme", "light"),
+			g.Attr("data-dark-theme", "dark"),
+		},
+		Head: []g.Node{
+			h.Meta(h.Name("viewport"), h.Content("width=device-width, initial-scale=1")),
+			h.Link(h.Rel("preconnect"), h.Href("https://cdn.jsdelivr.net")),
+			h.Link(h.Href("https://cdn.jsdelivr.net/npm/daisyui@5"), h.Rel("stylesheet"), h.Type("text/css")),
+			h.Script(h.Src("https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4")),
+			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/theme.js"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
+		},
+		Body: []g.Node{
+			h.Main(h.Class("report-app"),
+				h.Div(h.Class("app-shell"),
+					sidebar(sidebarConfigForMetricView(catalog, view)),
+					h.Section(h.Class("app-main metric-main"), h.Aria("label", "LibreDash metric view"),
+						workspaceHeader(
+							"Metric view",
+							view.Title,
+							view.Description,
+							metricViewActions(view),
+						),
+						h.Div(h.Class("metric-contract-shell"),
+							metricViewSummary(view),
+							h.Div(h.Class("metric-contract-layout"),
+								h.Div(h.Class("metric-contract-main"),
+									metricViewMeasures(view.Measures),
+									metricViewDimensions(view.Dimensions),
+								),
+								metricViewRail(view),
+							),
+						),
+					),
+				),
+			),
+		},
+	})
 }
 
 func ModelPage(catalog dashboard.Catalog, model dashboard.ModelGraph) g.Node {
@@ -359,6 +614,14 @@ func sidebarConfigForModels(catalog dashboard.Catalog) map[string]any {
 	return sidebarConfig(catalog, "models", "", workspaceDisplayTitle(catalog), "Semantic Models", "Catalog", "", "", false)
 }
 
+func sidebarConfigForMetrics(catalog dashboard.Catalog) map[string]any {
+	return sidebarConfig(catalog, "metrics", "", workspaceDisplayTitle(catalog), "Metric Views", "Catalog", "", "", false)
+}
+
+func sidebarConfigForMetricView(catalog dashboard.Catalog, view dashboard.MetricViewDetail) map[string]any {
+	return sidebarConfig(catalog, "metrics", "", workspaceDisplayTitle(catalog), "Metric view", view.Title, view.SemanticModel, view.ModelTitle, false)
+}
+
 func sidebarConfigForReport(catalog dashboard.Catalog, report semantic.Dashboard, model *semantic.Model, activePage dashboard.Page) map[string]any {
 	return sidebarConfig(catalog, "dashboards", report.ID, workspaceDisplayTitle(catalog), report.Title, activePage.Title, model.Name, model.Title, true)
 }
@@ -387,6 +650,7 @@ func sidebarGroups(catalog dashboard.Catalog) []map[string]any {
 			"label": "Navigation",
 			"items": []map[string]any{
 				{"id": "dashboards", "label": "Dashboards", "href": "/", "icon": "dashboard", "meta": "Reports and models"},
+				{"id": "metrics", "label": "Metric Views", "href": "/metrics", "icon": "data", "meta": "Business metrics"},
 				{"id": "models", "label": "Semantic Models", "href": "/models", "icon": "model", "meta": "Reusable data models"},
 			},
 		},
