@@ -4,14 +4,16 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"log/slog"
 	"net/http"
-	"sort"
-	"strings"
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/semantic"
 	"github.com/Yacobolo/libredash/internal/ui"
+	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/csrf"
 	"github.com/starfederation/datastar-go/datastar"
 )
 
@@ -31,37 +33,49 @@ type queryMetrics interface {
 }
 
 type Server struct {
-	metrics queryMetrics
-	broker  *broker
+	metrics            queryMetrics
+	broker             *broker
+	store              *platform.Store
+	auth               *Auth
+	reloader           runtimeReloader
+	artifactDir        string
+	defaultWorkspaceID string
+	rateLimits         RateLimitConfig
+	securityHeaders    SecurityHeadersConfig
+	requestLogging     bool
+	logger             *slog.Logger
 }
 
 func New(metrics queryMetrics) *Server {
-	return &Server{metrics: metrics, broker: newBroker()}
+	return &Server{metrics: metrics, broker: newBroker(), logger: slog.Default()}
 }
 
-func (s *Server) Routes() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /", s.home)
-	mux.HandleFunc("GET /dashboards/{dashboard}", s.dashboard)
-	mux.HandleFunc("GET /dashboards/{dashboard}/pages/{page}", s.page)
-	mux.HandleFunc("GET /models", s.models)
-	mux.HandleFunc("GET /models/{model}", s.model)
-	mux.HandleFunc("GET /updates", s.updates)
-	mux.HandleFunc("POST /commands/table-window", s.tableWindow)
-	mux.HandleFunc("POST /commands/chart-select", s.chartSelect)
-	mux.HandleFunc("POST /commands/clear-selection", s.clearSelection)
-	mux.HandleFunc("POST /commands/reset-filters", s.resetFilters)
-	mux.HandleFunc("POST /commands/refresh-cache", s.refreshCache)
-	mux.Handle("GET /static/", noCache(http.StripPrefix("/static/", http.FileServer(http.Dir("static")))))
-
-	return mux
+type Options struct {
+	Store              *platform.Store
+	Auth               *Auth
+	Reloader           runtimeReloader
+	ArtifactDir        string
+	DefaultWorkspaceID string
+	RateLimits         RateLimitConfig
+	SecurityHeaders    SecurityHeadersConfig
+	RequestLogging     bool
+	Logger             *slog.Logger
 }
 
-func noCache(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
-		next.ServeHTTP(w, r)
-	})
+func NewWithOptions(metrics queryMetrics, options Options) *Server {
+	server := New(metrics)
+	server.store = options.Store
+	server.auth = options.Auth
+	server.reloader = options.Reloader
+	server.artifactDir = options.ArtifactDir
+	server.defaultWorkspaceID = options.DefaultWorkspaceID
+	server.rateLimits = options.RateLimits
+	server.securityHeaders = options.SecurityHeaders
+	server.requestLogging = options.RequestLogging
+	if options.Logger != nil {
+		server.logger = options.Logger
+	}
+	return server
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +91,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
-	dashboardID := r.PathValue("dashboard")
+	dashboardID := chi.URLParam(r, "dashboard")
 	pages := s.metrics.Pages(dashboardID)
 	if len(pages) == 0 {
 		http.NotFound(w, r)
@@ -87,7 +101,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
-	s.renderPage(w, r, r.PathValue("dashboard"), r.PathValue("page"))
+	s.renderPage(w, r, chi.URLParam(r, "dashboard"), chi.URLParam(r, "page"))
 }
 
 func (s *Server) models(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +113,7 @@ func (s *Server) models(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) model(w http.ResponseWriter, r *http.Request) {
-	model, ok := s.metrics.ModelGraph(r.PathValue("model"))
+	model, ok := s.metrics.ModelGraph(chi.URLParam(r, "model"))
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -127,7 +141,11 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, dashboardID,
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	initialFilters := report.FiltersFromURL(r.URL.Query())
-	if err := ui.Page(s.metrics.DataDir(), clientID, s.metrics.Catalog(), report, model, pages, activePage, initialFilters).Render(w); err != nil {
+	csrfToken := ""
+	if s.auth != nil {
+		csrfToken = csrf.Token(r)
+	}
+	if err := ui.Page(s.metrics.DataDir(), clientID, csrfToken, s.metrics.Catalog(), report, model, pages, activePage, initialFilters).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -211,205 +229,6 @@ func (s *Server) updates(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-}
-
-func (s *Server) tableWindow(w http.ResponseWriter, r *http.Request) {
-	signals := dashboard.Signals{}
-	if err := datastar.ReadSignals(r, &signals); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	dashboardID := s.dashboardID(r, signals)
-	filters := s.normalizeFilters(dashboardID, signals.Filters)
-	request := s.metrics.NormalizeTableRequest(dashboardID, signals.TableCommand)
-	clientID := clientStreamID(r, signals, dashboardID, pageIDFromRequest(r, signals))
-
-	table := s.queryTable(r.Context(), dashboardID, filters, request)
-	if !isCanceledTable(table) {
-		s.broker.publish(clientID, tablePatch(request.Table, table))
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) chartSelect(w http.ResponseWriter, r *http.Request) {
-	signals := dashboard.Signals{}
-	if err := datastar.ReadSignals(r, &signals); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	dashboardID := s.dashboardID(r, signals)
-	filters := s.normalizeFilters(dashboardID, signals.Filters).ToggleSelection(signals.ChartCommand)
-	request := s.metrics.NormalizeTableRequest(dashboardID, signals.TableCommand).Reset()
-	clientID := clientStreamID(r, signals, dashboardID, pageIDFromRequest(r, signals))
-
-	s.broker.publish(clientID, signalPatch{
-		"status": map[string]any{
-			"loading":       true,
-			"error":         "",
-			"dataDirectory": s.metrics.DataDir(),
-		},
-	})
-
-	patch, err := s.metrics.QueryDashboard(r.Context(), dashboardID, filters)
-	if err != nil {
-		patch = dashboard.EmptyPatch(filters, s.metrics.DataDir(), err)
-	}
-	s.broker.publish(clientID, dashboardPatch(patch))
-	s.broker.publish(clientID, s.tablesPatch(r.Context(), dashboardID, filters, request))
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) clearSelection(w http.ResponseWriter, r *http.Request) {
-	signals := dashboard.Signals{}
-	if err := datastar.ReadSignals(r, &signals); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	dashboardID := s.dashboardID(r, signals)
-	filters := s.normalizeFilters(dashboardID, signals.Filters)
-	filters.VisualSelections = nil
-	request := s.metrics.NormalizeTableRequest(dashboardID, signals.TableCommand).Reset()
-	clientID := clientStreamID(r, signals, dashboardID, pageIDFromRequest(r, signals))
-
-	s.broker.publish(clientID, signalPatch{
-		"status": map[string]any{
-			"loading":       true,
-			"error":         "",
-			"dataDirectory": s.metrics.DataDir(),
-		},
-	})
-
-	patch, err := s.metrics.QueryDashboard(r.Context(), dashboardID, filters)
-	if err != nil {
-		patch = dashboard.EmptyPatch(filters, s.metrics.DataDir(), err)
-	}
-	s.broker.publish(clientID, dashboardPatch(patch))
-	s.broker.publish(clientID, s.tablesPatch(r.Context(), dashboardID, filters, request))
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) resetFilters(w http.ResponseWriter, r *http.Request) {
-	signals := dashboard.Signals{}
-	if err := datastar.ReadSignals(r, &signals); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	dashboardID := s.dashboardID(r, signals)
-	filters := s.metrics.DefaultFilters(dashboardID)
-	request := s.metrics.NormalizeTableRequest(dashboardID, signals.TableCommand).Reset()
-	clientID := clientStreamID(r, signals, dashboardID, pageIDFromRequest(r, signals))
-
-	s.broker.publish(clientID, signalPatch{
-		"status": map[string]any{
-			"loading":       true,
-			"error":         "",
-			"dataDirectory": s.metrics.DataDir(),
-		},
-	})
-
-	patch, err := s.metrics.QueryDashboard(r.Context(), dashboardID, filters)
-	if err != nil {
-		patch = dashboard.EmptyPatch(filters, s.metrics.DataDir(), err)
-	}
-	s.broker.publish(clientID, dashboardPatch(patch))
-	s.broker.publish(clientID, s.tablesPatch(r.Context(), dashboardID, filters, request))
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) refreshCache(w http.ResponseWriter, r *http.Request) {
-	signals := dashboard.Signals{}
-	if err := datastar.ReadSignals(r, &signals); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	dashboardID := s.dashboardID(r, signals)
-	modelID := s.modelID(r, signals, dashboardID)
-	filters := s.normalizeFilters(dashboardID, signals.Filters)
-	request := s.metrics.NormalizeTableRequest(dashboardID, signals.TableCommand).Reset()
-	clientID := clientStreamID(r, signals, dashboardID, pageIDFromRequest(r, signals))
-
-	s.broker.publish(clientID, signalPatch{
-		"status": map[string]any{
-			"loading":       true,
-			"error":         "",
-			"dataDirectory": s.metrics.DataDir(),
-		},
-	})
-
-	if err := s.metrics.RefreshCache(r.Context(), modelID); err != nil {
-		s.broker.publish(clientID, dashboardPatch(dashboard.EmptyPatch(filters, s.metrics.DataDir(), err)))
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-
-	patch, err := s.metrics.QueryDashboard(r.Context(), dashboardID, filters)
-	if err != nil {
-		patch = dashboard.EmptyPatch(filters, s.metrics.DataDir(), err)
-	}
-	s.broker.publish(clientID, dashboardPatch(patch))
-	s.broker.publish(clientID, s.tablesPatch(r.Context(), dashboardID, filters, request))
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) queryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) dashboard.Table {
-	table, err := s.metrics.QueryTable(ctx, dashboardID, filters, request)
-	if err != nil {
-		return dashboard.EmptyTable(request, err)
-	}
-	return table
-}
-
-func isCanceledTable(table dashboard.Table) bool {
-	message := strings.ToLower(table.Error)
-	return strings.Contains(message, "context canceled") ||
-		strings.Contains(message, "context cancelled") ||
-		strings.Contains(message, "interrupt")
-}
-
-func (s *Server) normalizeFilters(dashboardID string, filters dashboard.Filters) dashboard.Filters {
-	defaults := s.metrics.DefaultFilters(dashboardID)
-	filters = filters.WithDefaults()
-	for name, control := range filters.Controls {
-		defaults.Controls[name] = control
-	}
-	defaults.VisualSelections = append([]dashboard.VisualSelection{}, filters.VisualSelections...)
-	return defaults.WithDefaults()
-}
-
-func tablePatch(name string, table dashboard.Table) signalPatch {
-	return signalPatch{
-		"tables": map[string]dashboard.Table{
-			name: table,
-		},
-	}
-}
-
-func (s *Server) tablesPatch(ctx context.Context, dashboardID string, filters dashboard.Filters, baseRequest dashboard.TableRequest) signalPatch {
-	report, _, ok := s.metrics.Report(dashboardID)
-	if !ok {
-		return tablePatch(baseRequest.Table, s.queryTable(ctx, dashboardID, filters, baseRequest))
-	}
-	tables := map[string]dashboard.Table{}
-	for _, name := range sortedTableNames(report.Tables) {
-		table := report.Tables[name]
-		request := baseRequest
-		request.Table = name
-		request.Block = "all"
-		request.Start = 0
-		request.Count = dashboard.TableChunkSize
-		request.Sort = table.DefaultSort
-		tables[name] = s.queryTable(ctx, dashboardID, filters, request)
-	}
-	return signalPatch{"tables": tables}
-}
-
-func sortedTableNames(tables map[string]semantic.TableVisual) []string {
-	names := make([]string, 0, len(tables))
-	for name := range tables {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
 }
 
 func dashboardPatch(patch dashboard.Patch) signalPatch {

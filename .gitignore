@@ -6,3 +6,7 @@
 node_modules/
 bin/
 coverage.out
+.env
+.env.*
+!.env.example
+infisical-export.*

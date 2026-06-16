@@ -1,0 +1,170 @@
+CREATE TABLE IF NOT EXISTS workspaces (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  active_deployment_id TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS deployments (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  digest TEXT NOT NULL DEFAULT '',
+  manifest_json TEXT NOT NULL DEFAULT '{}',
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  activated_at TEXT,
+  error TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS deployment_artifacts (
+  id TEXT PRIMARY KEY,
+  deployment_id TEXT NOT NULL UNIQUE REFERENCES deployments(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  digest TEXT NOT NULL,
+  format TEXT NOT NULL,
+  path TEXT NOT NULL,
+  manifest_json TEXT NOT NULL DEFAULT '{}',
+  size_bytes INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS assets (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  deployment_id TEXT NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+  asset_type TEXT NOT NULL,
+  asset_key TEXT NOT NULL,
+  parent_asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+  title TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  content_json TEXT NOT NULL DEFAULT '{}',
+  content_hash TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(deployment_id, asset_type, asset_key)
+);
+
+CREATE TABLE IF NOT EXISTS asset_edges (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  deployment_id TEXT NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+  from_asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+  to_asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+  edge_type TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS principals (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL DEFAULT '',
+  display_name TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS external_identities (
+  id TEXT PRIMARY KEY,
+  principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL,
+  tenant_id TEXT NOT NULL DEFAULT '',
+  subject TEXT NOT NULL,
+  email TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(provider, tenant_id, subject)
+);
+
+CREATE TABLE IF NOT EXISTS groups (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL DEFAULT '',
+  external_id TEXT NOT NULL DEFAULT '',
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(workspace_id, provider, external_id)
+);
+
+CREATE TABLE IF NOT EXISTS roles (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  permissions_json TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS role_bindings (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  principal_id TEXT REFERENCES principals(id) ON DELETE CASCADE,
+  group_id TEXT REFERENCES groups(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS oauth_states (
+  id TEXT PRIMARY KEY,
+  state_hash TEXT NOT NULL UNIQUE,
+  redirect_url TEXT NOT NULL DEFAULT '/',
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS api_tokens (
+  id TEXT PRIMARY KEY,
+  principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS cache_jobs (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  deployment_id TEXT REFERENCES deployments(id) ON DELETE SET NULL,
+  model_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS cache_job_runs (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL REFERENCES cache_jobs(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  finished_at TEXT,
+  error TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS audit_events (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL,
+  principal_id TEXT REFERENCES principals(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  target_type TEXT NOT NULL DEFAULT '',
+  target_id TEXT NOT NULL DEFAULT '',
+  metadata_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS deployments_workspace_created_idx ON deployments(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS assets_deployment_type_idx ON assets(deployment_id, asset_type);
+CREATE INDEX IF NOT EXISTS role_bindings_principal_idx ON role_bindings(workspace_id, principal_id);
+CREATE UNIQUE INDEX IF NOT EXISTS role_bindings_principal_unique_idx
+  ON role_bindings(workspace_id, role_id, principal_id)
+  WHERE principal_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS role_bindings_group_unique_idx
+  ON role_bindings(workspace_id, role_id, group_id)
+  WHERE group_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS sessions_token_hash_idx ON sessions(token_hash);

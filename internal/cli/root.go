@@ -1,0 +1,64 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/Yacobolo/libredash/internal/platform"
+	"github.com/spf13/cobra"
+)
+
+type rootOptions struct {
+	addr         string
+	dataDir      string
+	localCatalog string
+	production   bool
+	workspaceID  string
+	target       string
+	token        string
+	catalog      string
+	deployment   string
+}
+
+func Execute(ctx context.Context) error {
+	opts := &rootOptions{}
+	root := &cobra.Command{
+		Use:   "libredash",
+		Short: "LibreDash BI-as-code server and deployment CLI",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runServe(ctx, opts)
+		},
+	}
+	root.PersistentFlags().StringVar(&opts.workspaceID, "workspace", platform.DefaultWorkspaceID, "workspace id")
+	root.AddCommand(serveCommand(ctx, opts))
+	root.AddCommand(deployCommand(ctx, opts))
+	root.AddCommand(loginCommand(opts))
+	root.AddCommand(deploymentsCommand(ctx, opts))
+	root.AddCommand(rollbackCommand(ctx, opts))
+	root.AddCommand(adminCommand(ctx, opts))
+	return root.ExecuteContext(ctx)
+}
+
+func loginCommand(opts *rootOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "login",
+		Short: "Store a LibreDash API token for a target",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if opts.target == "" || opts.token == "" {
+				return fmt.Errorf("login requires --target and --token for v1 CLI authentication")
+			}
+			config, err := loadClientConfig()
+			if err != nil {
+				return err
+			}
+			if config.Targets == nil {
+				config.Targets = map[string]clientTarget{}
+			}
+			config.Targets[opts.target] = clientTarget{Token: opts.token}
+			return saveClientConfig(config)
+		},
+	}
+	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
+	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
+	return cmd
+}
