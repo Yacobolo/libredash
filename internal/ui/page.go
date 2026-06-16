@@ -19,11 +19,15 @@ func updateAction(dashboardID, pageID string) string {
 	return "@get('/updates?dashboard=" + dashboardID + "&page=" + pageID + "', {openWhenHidden: true})"
 }
 
+func postAction(path string) string {
+	return "@post('" + path + "', {headers: {'X-CSRF-Token': $csrfToken}})"
+}
+
 func staticAsset(path string) string {
 	return path + "?v=dev"
 }
 
-func Page(dataDir, clientID string, catalog dashboard.Catalog, report semantic.Dashboard, model *semantic.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) g.Node {
+func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report semantic.Dashboard, model *semantic.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) g.Node {
 	if activePage.ID == "" {
 		activePage = defaultPage()
 	}
@@ -63,7 +67,7 @@ func Page(dataDir, clientID string, catalog dashboard.Catalog, report semantic.D
 			h.Main(
 				h.ID("dashboard"),
 				h.Class("report-app"),
-				ds.Signals(initialSignals(dataDir, clientID, report, model, activePage, initialFilters)),
+				ds.Signals(initialSignals(dataDir, clientID, csrfToken, report, model, activePage, initialFilters)),
 				ds.Init(initAction),
 				g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+tableReset+action),
 				h.Div(h.Class("app-shell report-shell"),
@@ -416,7 +420,7 @@ func reportActions(modelID, dashboardID string) g.Node {
 			h.Title("Re-import DuckDB cache"),
 			h.Aria("label", "Re-import DuckDB cache"),
 			g.Attr("data-attr:disabled", "$status.loading"),
-			g.Attr("data-on:click", "@post('/commands/refresh-cache?model="+modelID+"&dashboard="+dashboardID+"')"),
+			g.Attr("data-on:click", postAction("/commands/refresh-cache?model="+modelID+"&dashboard="+dashboardID)),
 			lucide.RefreshCw(iconAttrs()),
 		),
 	)
@@ -430,7 +434,7 @@ func jsonString(value any) string {
 	return string(bytes)
 }
 
-func initialSignals(dataDir, clientID string, report semantic.Dashboard, model *semantic.Model, activePage dashboard.Page, initialFilters dashboard.Filters) map[string]any {
+func initialSignals(dataDir, clientID, csrfToken string, report semantic.Dashboard, model *semantic.Model, activePage dashboard.Page, initialFilters dashboard.Filters) map[string]any {
 	tableRequest := defaultTableRequest(report)
 	initialFilters = initialFilters.WithDefaults()
 	return map[string]any{
@@ -440,6 +444,7 @@ func initialSignals(dataDir, clientID string, report semantic.Dashboard, model *
 			"pageId":      activePage.ID,
 			"modelId":     model.Name,
 		},
+		"csrfToken":     csrfToken,
 		"filterConfig":  report.Filters,
 		"filters":       initialFilters,
 		"urlParams":     report.URLParamsFromFilters(initialFilters),
@@ -769,9 +774,9 @@ func filtersPane(report semantic.Dashboard, action string) g.Node {
 			g.Attr("data-attr:options", "$filterOptions"),
 			g.Attr("data-attr:loading", "$status.loading"),
 			g.Attr("data-on:ld-filters-change", "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); "+tableReset+action),
-			g.Attr("data-on:ld-filters-reset", "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); "+tableReset+"@post('/commands/reset-filters')"),
+			g.Attr("data-on:ld-filters-reset", "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); "+tableReset+postAction("/commands/reset-filters")),
 			g.Attr("data-on:ld-filters-refresh", action),
-			g.Attr("data-on:ld-visual-selection-clear", "$filters.visualSelections = []; @post('/commands/clear-selection')"),
+			g.Attr("data-on:ld-visual-selection-clear", "$filters.visualSelections = []; "+postAction("/commands/clear-selection")),
 		),
 	)
 }
@@ -791,8 +796,8 @@ func chartPanel(visualID string) g.Node {
 		g.El("ld-echart",
 			g.Attr("visual-id", visualID),
 			g.Attr("data-attr:chart", "$"+signal),
-			g.Attr("data-on:ld-chart-select", "$chartCommand = evt.detail; @post('/commands/chart-select')"),
-			g.Attr("data-on:ld-chart-clear-selection", "$filters.visualSelections = []; @post('/commands/clear-selection')"),
+			g.Attr("data-on:ld-chart-select", "$chartCommand = evt.detail; "+postAction("/commands/chart-select")),
+			g.Attr("data-on:ld-chart-clear-selection", "$filters.visualSelections = []; "+postAction("/commands/clear-selection")),
 		),
 	)
 }
@@ -805,7 +810,7 @@ func tablePanel(tableName string) g.Node {
 		g.El("ld-data-table",
 			g.Attr("table-id", tableName),
 			g.Attr("data-attr:table", "$tables."+tableName),
-			g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; @post('/commands/table-window')"),
+			g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; "+postAction("/commands/table-window")),
 		),
 	)
 }

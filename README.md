@@ -40,6 +40,31 @@ go run ./cmd/libredash
 - Lit chart components bind to signal paths such as `charts.revenue`.
 - The bundled `datastar-inspector` web component shows live Datastar signals in the browser.
 
+## Deploy
+
+Production mode serves the active deployed BI-as-code bundle from `.libredash` by default:
+
+```sh
+export LIBREDASH_PRODUCTION=1
+export LIBREDASH_API_TOKEN_ONLY_AUTH=1 # or configure Azure below
+libredash serve --production
+libredash admin bootstrap
+libredash deploy --target http://localhost:8080 --token <token> --catalog dashboards/catalog.yaml
+```
+
+Useful env vars:
+
+```sh
+LIBREDASH_HOME=/var/lib/libredash
+LIBREDASH_DATA_DIR=/path/to/data
+LIBREDASH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
+LIBREDASH_AZURE_CLIENT_ID=...
+LIBREDASH_AZURE_CLIENT_SECRET=...
+LIBREDASH_AZURE_CALLBACK_URL=https://your-host/auth/azureadv2/callback
+LIBREDASH_AZURE_TENANT=...
+LIBREDASH_CSRF_KEY=<32+ byte secret>
+```
+
 ## Test
 
 ```sh

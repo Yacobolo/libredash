@@ -59,7 +59,14 @@ func NewDuckDBMetrics(dataDir string) (*DuckDBMetrics, error) {
 			return nil, err
 		}
 	}
+	duckDBDir := dataDir
+	if path := os.Getenv("LIBREDASH_DUCKDB_DIR"); path != "" {
+		duckDBDir = path
+	}
+	return NewDuckDBMetricsFromCatalog(dataDir, catalogPath, duckDBDir)
+}
 
+func NewDuckDBMetricsFromCatalog(dataDir, catalogPath, duckDBDir string) (*DuckDBMetrics, error) {
 	workspace, err := semantic.LoadWorkspace(catalogPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading workspace: %w", err)
@@ -77,7 +84,7 @@ func NewDuckDBMetrics(dataDir string) (*DuckDBMetrics, error) {
 	for modelID, model := range workspace.Models {
 		runtime := &modelRuntime{
 			model:  model,
-			dbPath: duckDBPath(dataDir, modelID),
+			dbPath: duckDBPath(duckDBDir, modelID),
 		}
 		metrics.runtimes[modelID] = runtime
 		if err := metrics.validateFiles(runtime); err != nil {

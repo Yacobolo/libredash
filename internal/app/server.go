@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/semantic"
 	"github.com/Yacobolo/libredash/internal/ui"
+	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/csrf"
 	"github.com/starfederation/datastar-go/datastar"
 )
 
@@ -31,30 +34,113 @@ type queryMetrics interface {
 }
 
 type Server struct {
-	metrics queryMetrics
-	broker  *broker
+	metrics            queryMetrics
+	broker             *broker
+	store              *platform.Store
+	auth               *Auth
+	reloader           runtimeReloader
+	artifactDir        string
+	defaultWorkspaceID string
 }
 
 func New(metrics queryMetrics) *Server {
 	return &Server{metrics: metrics, broker: newBroker()}
 }
 
+type Options struct {
+	Store              *platform.Store
+	Auth               *Auth
+	Reloader           runtimeReloader
+	ArtifactDir        string
+	DefaultWorkspaceID string
+}
+
+func NewWithOptions(metrics queryMetrics, options Options) *Server {
+	server := New(metrics)
+	server.store = options.Store
+	server.auth = options.Auth
+	server.reloader = options.Reloader
+	server.artifactDir = options.ArtifactDir
+	server.defaultWorkspaceID = options.DefaultWorkspaceID
+	return server
+}
+
 func (s *Server) Routes() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /", s.home)
-	mux.HandleFunc("GET /dashboards/{dashboard}", s.dashboard)
-	mux.HandleFunc("GET /dashboards/{dashboard}/pages/{page}", s.page)
-	mux.HandleFunc("GET /models", s.models)
-	mux.HandleFunc("GET /models/{model}", s.model)
-	mux.HandleFunc("GET /updates", s.updates)
-	mux.HandleFunc("POST /commands/table-window", s.tableWindow)
-	mux.HandleFunc("POST /commands/chart-select", s.chartSelect)
-	mux.HandleFunc("POST /commands/clear-selection", s.clearSelection)
-	mux.HandleFunc("POST /commands/reset-filters", s.resetFilters)
-	mux.HandleFunc("POST /commands/refresh-cache", s.refreshCache)
-	mux.Handle("GET /static/", noCache(http.StripPrefix("/static/", http.FileServer(http.Dir("static")))))
+	mux := chi.NewRouter()
+	mux.Group(func(r chi.Router) {
+		r.Use(s.csrf)
+		r.Get("/", s.protected(platform.PermissionDashboardView, s.home))
+		r.Get("/dashboards/{dashboard}", s.protected(platform.PermissionDashboardView, s.dashboard))
+		r.Get("/dashboards/{dashboard}/pages/{page}", s.protected(platform.PermissionDashboardView, s.page))
+		r.Get("/models", s.protected(platform.PermissionDashboardView, s.models))
+		r.Get("/models/{model}", s.protected(platform.PermissionDashboardView, s.model))
+		r.Get("/updates", s.protected(platform.PermissionDashboardView, s.updates))
+		r.Post("/commands/table-window", s.protected(platform.PermissionDashboardView, s.tableWindow))
+		r.Post("/commands/chart-select", s.protected(platform.PermissionDashboardView, s.chartSelect))
+		r.Post("/commands/clear-selection", s.protected(platform.PermissionDashboardView, s.clearSelection))
+		r.Post("/commands/reset-filters", s.protected(platform.PermissionDashboardView, s.resetFilters))
+		r.Post("/commands/refresh-cache", s.protected(platform.PermissionCacheRefresh, s.refreshCache))
+		r.Post("/auth/logout", s.authLogout)
+	})
+	mux.Get("/auth/{provider}", s.authBegin)
+	mux.Get("/auth/{provider}/callback", s.authCallback)
+	if s.store != nil {
+		mux.Route("/api", func(r chi.Router) {
+			r.Use(s.csrf)
+			r.Post("/deployments", s.protected(platform.PermissionDeploymentCreate, s.createDeployment))
+			r.Get("/deployments", s.protected(platform.PermissionDeploymentCreate, s.listDeployments))
+			r.Get("/deployments/{deployment}", s.protected(platform.PermissionDeploymentCreate, s.getDeployment))
+			r.Put("/deployments/{deployment}/artifact", s.protected(platform.PermissionDeploymentCreate, s.uploadDeploymentArtifact))
+			r.Post("/deployments/{deployment}/validate", s.protected(platform.PermissionDeploymentCreate, s.validateDeployment))
+			r.Post("/deployments/{deployment}/activate", s.protected(platform.PermissionDeploymentActivate, s.activateDeployment))
+			r.Post("/deployments/{deployment}/rollback", s.protected(platform.PermissionDeploymentRollback, s.rollbackDeployment))
+		})
+	}
+	mux.Handle("/static/*", noCache(http.StripPrefix("/static/", http.FileServer(http.Dir("static")))))
 
 	return mux
+}
+
+func (s *Server) protected(permission string, handler http.HandlerFunc) http.HandlerFunc {
+	return s.protect(permission, handler).ServeHTTP
+}
+
+func (s *Server) protect(permission string, next http.Handler) http.Handler {
+	if s.auth == nil {
+		return next
+	}
+	return s.auth.Middleware(permission, next)
+}
+
+func (s *Server) csrf(next http.Handler) http.Handler {
+	if s.auth == nil {
+		return next
+	}
+	return s.auth.CSRFMiddleware(next)
+}
+
+func (s *Server) authBegin(w http.ResponseWriter, r *http.Request) {
+	if s.auth == nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.auth.Begin(w, r)
+}
+
+func (s *Server) authCallback(w http.ResponseWriter, r *http.Request) {
+	if s.auth == nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.auth.Callback(w, r)
+}
+
+func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
+	if s.auth == nil {
+		http.NotFound(w, r)
+		return
+	}
+	s.auth.Logout(w, r)
 }
 
 func noCache(next http.Handler) http.Handler {
@@ -77,7 +163,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
-	dashboardID := r.PathValue("dashboard")
+	dashboardID := chi.URLParam(r, "dashboard")
 	pages := s.metrics.Pages(dashboardID)
 	if len(pages) == 0 {
 		http.NotFound(w, r)
@@ -87,7 +173,7 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
-	s.renderPage(w, r, r.PathValue("dashboard"), r.PathValue("page"))
+	s.renderPage(w, r, chi.URLParam(r, "dashboard"), chi.URLParam(r, "page"))
 }
 
 func (s *Server) models(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +185,7 @@ func (s *Server) models(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) model(w http.ResponseWriter, r *http.Request) {
-	model, ok := s.metrics.ModelGraph(r.PathValue("model"))
+	model, ok := s.metrics.ModelGraph(chi.URLParam(r, "model"))
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -127,7 +213,11 @@ func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, dashboardID,
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	initialFilters := report.FiltersFromURL(r.URL.Query())
-	if err := ui.Page(s.metrics.DataDir(), clientID, s.metrics.Catalog(), report, model, pages, activePage, initialFilters).Render(w); err != nil {
+	csrfToken := ""
+	if s.auth != nil {
+		csrfToken = csrf.Token(r)
+	}
+	if err := ui.Page(s.metrics.DataDir(), clientID, csrfToken, s.metrics.Catalog(), report, model, pages, activePage, initialFilters).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
