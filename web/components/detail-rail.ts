@@ -42,7 +42,7 @@ class DetailRail extends HTMLElement {
     this.button.setAttribute('aria-expanded', String(!this.collapsed))
     this.button.setAttribute('aria-label', this.collapsed ? 'Expand details' : 'Collapse details')
     this.button.title = this.collapsed ? 'Expand details' : 'Collapse details'
-    this.button.textContent = this.collapsed ? '<' : '>'
+    this.button.innerHTML = this.collapsed ? detailsIcon() : collapseIcon()
   }
 
   private savedState(): boolean {
@@ -52,6 +52,14 @@ class DetailRail extends HTMLElement {
       return false
     }
   }
+}
+
+function detailsIcon(): string {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h6"></path></svg>'
+}
+
+function collapseIcon(): string {
+  return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>'
 }
 
 customElements.define('ld-detail-rail', DetailRail)

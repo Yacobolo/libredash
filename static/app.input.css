@@ -188,7 +188,7 @@
     min-height: 0;
     grid-template-rows: auto minmax(0, 1fr);
     overflow: hidden;
-    padding-bottom: 0;
+    padding: 0;
   }
 
   .workspace-header {
@@ -391,68 +391,16 @@
   }
 
   .metric-detail-header {
-    display: grid;
-    gap: 14px;
-    padding-bottom: 18px;
-  }
-
-  .metric-breadcrumb {
     display: flex;
-    min-width: 0;
     align-items: center;
-    gap: 8px;
-    color: var(--fgColor-muted);
-    font-size: 0.72rem;
-    font-weight: 800;
-  }
-
-  .metric-breadcrumb > svg {
-    width: 12px;
-    height: 12px;
-    color: var(--fgColor-muted);
-    opacity: 0.7;
-  }
-
-  .metric-breadcrumb a,
-  .metric-breadcrumb span {
-    display: inline-flex;
-    min-width: 0;
-    align-items: center;
-    gap: 6px;
-    color: var(--fgColor-muted);
-    text-decoration: none;
-  }
-
-  .metric-breadcrumb a:hover,
-  .metric-breadcrumb a:focus-visible {
-    color: var(--fgColor-default);
-    outline: 0;
-  }
-
-  .metric-breadcrumb a svg,
-  .metric-breadcrumb span svg {
-    width: 13px;
-    height: 13px;
-    color: var(--fgColor-muted);
-  }
-
-  .metric-breadcrumb code {
-    overflow: hidden;
-    max-width: 22ch;
-    border: 1px solid var(--borderColor-muted);
-    border-radius: 4px;
-    background: var(--bgColor-muted);
-    color: var(--fgColor-default);
-    padding: 2px 6px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
-    font-size: 0.68rem;
+    min-height: 112px;
+    padding: 16px 28px 12px;
   }
 
   .metric-header-row {
     display: flex;
-    align-items: end;
+    width: 100%;
+    align-items: center;
     justify-content: space-between;
     gap: 18px;
   }
@@ -542,6 +490,16 @@
     background: var(--bgColor-muted);
     color: var(--fgColor-default);
     outline: 0;
+  }
+
+  .metric-rail-toggle svg {
+    width: 15px;
+    height: 15px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
   }
 
   .metric-workspace[data-rail-collapsed] .metric-info-header,
@@ -747,7 +705,7 @@
     min-width: 0;
     align-content: start;
     overflow: hidden;
-    padding: 18px;
+    padding: 18px 28px;
   }
 
   .metric-tabs {
@@ -759,7 +717,7 @@
     gap: 24px;
     border-bottom: 1px solid var(--borderColor-default);
     background: var(--report-workspace-bg);
-    padding: 0 18px;
+    padding: 0;
   }
 
   .metric-tabs a {
@@ -770,7 +728,7 @@
     gap: 8px;
     border: 0;
     color: var(--fgColor-muted);
-    padding: 0;
+    padding: 0 28px;
     font-size: 0.82rem;
     font-weight: 850;
     text-decoration: none;
@@ -2018,7 +1976,7 @@
     }
 
     .metric-main {
-      padding-bottom: 0;
+      padding: 0;
     }
 
     .metric-metadata-bar {
@@ -2031,12 +1989,8 @@
     }
 
     .metric-detail-header {
-      gap: 12px;
+      min-height: auto;
       padding-bottom: 14px;
-    }
-
-    .metric-breadcrumb {
-      flex-wrap: wrap;
     }
 
     .metric-header-row {
@@ -2069,7 +2023,10 @@
     .metric-tabs {
       gap: 16px;
       overflow-x: auto;
-      padding: 0 12px;
+    }
+
+    .metric-tabs a {
+      padding: 0 16px;
     }
 
     .metric-contract-main {

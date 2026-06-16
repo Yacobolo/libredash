@@ -333,18 +333,8 @@ func metricViewActions(view dashboard.MetricViewDetail) g.Node {
 
 func metricViewHeader(view dashboard.MetricViewDetail) g.Node {
 	return h.Header(h.Class("metric-detail-header"),
-		h.Nav(h.Class("metric-breadcrumb"), h.Aria("label", "Metric view breadcrumb"),
-			h.A(h.Href("/metrics"), g.Text("Metric Views")),
-			lucide.ChevronRight(iconAttrs()),
-			h.A(h.Href("/models/"+view.SemanticModel), lucide.Box(iconAttrs()), h.Span(g.Text(view.ModelTitle))),
-			lucide.ChevronRight(iconAttrs()),
-			h.Span(lucide.Table2(iconAttrs()), h.Code(g.Text(view.Dataset))),
-			lucide.ChevronRight(iconAttrs()),
-			h.Span(lucide.Calendar(iconAttrs()), h.Code(g.Text(view.Timeseries))),
-		),
 		h.Div(h.Class("metric-header-row"),
 			h.Div(h.Class("metric-header-copy"),
-				h.P(h.Class("report-eyebrow"), g.Text("Metric view")),
 				h.H1(h.Class("workspace-title"), g.Text(view.Title)),
 				g.If(strings.TrimSpace(view.Description) != "", h.P(h.Class("workspace-detail"), g.Text(view.Description))),
 			),
