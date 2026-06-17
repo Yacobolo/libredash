@@ -382,8 +382,14 @@ func TestLoginRouteRendersAzureADLogin(t *testing.T) {
 	if !strings.Contains(body, `Sign in with Azure Active Directory`) {
 		t.Fatalf("login page did not render Azure AD button:\n%s", body)
 	}
-	if !strings.Contains(body, `/static/login.js`) {
-		t.Fatalf("login page did not include login asset:\n%s", body)
+	if !strings.Contains(body, `data-init__delay`) {
+		t.Fatalf("login page did not include lazy background init:\n%s", body)
+	}
+	if !strings.Contains(body, `libredash-login-background-init`) {
+		t.Fatalf("login page did not dispatch login background init event:\n%s", body)
+	}
+	if !strings.Contains(body, `/static/topology-background.js`) {
+		t.Fatalf("login page did not include lazy topology background asset:\n%s", body)
 	}
 }
 

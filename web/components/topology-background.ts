@@ -21,7 +21,8 @@ type VantaEffect = {
 
 class LibreDashTopologyBackground extends LitElement {
   private effect?: VantaEffect
-  private readonly themeListener = () => this.refreshEffect()
+  private refreshFrame?: number
+  private readonly themeListener = () => this.scheduleEffectRefresh()
 
   static styles = css`
     :host {
@@ -53,6 +54,7 @@ class LibreDashTopologyBackground extends LitElement {
 
   disconnectedCallback() {
     document.removeEventListener('libredash-theme-applied', this.themeListener)
+    if (this.refreshFrame) window.cancelAnimationFrame(this.refreshFrame)
     this.destroyEffect()
     super.disconnectedCallback()
   }
@@ -69,9 +71,13 @@ class LibreDashTopologyBackground extends LitElement {
     return html`<div class="mount" aria-hidden="true"></div>`
   }
 
-  private refreshEffect() {
-    this.destroyEffect()
-    window.requestAnimationFrame(() => this.startEffect())
+  private scheduleEffectRefresh() {
+    if (this.refreshFrame) return
+    this.refreshFrame = window.requestAnimationFrame(() => {
+      this.refreshFrame = undefined
+      this.destroyEffect()
+      window.requestAnimationFrame(() => this.startEffect())
+    })
   }
 
   private startEffect() {

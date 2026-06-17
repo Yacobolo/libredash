@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/semantic"
@@ -147,16 +148,20 @@ func LoginPage() g.Node {
 			h.Meta(h.Name("viewport"), h.Content("width=device-width, initial-scale=1")),
 			h.Link(h.Rel("preconnect"), h.Href("https://cdn.jsdelivr.net")),
 			h.Link(h.Rel("icon"), h.Href(favicon)),
-			h.Link(h.Href("https://cdn.jsdelivr.net/npm/daisyui@5"), h.Rel("stylesheet"), h.Type("text/css")),
-			h.Script(h.Src("https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4")),
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/theme.js"))),
-			h.Script(h.Type("module"), h.Src(staticAsset("/static/login.js"))),
+			loginBackgroundLoaderScript(),
 			inspectorScript(),
+			h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 		},
 		Body: []g.Node{
 			h.Main(h.Class("relative grid min-h-svh place-items-center overflow-hidden bg-login p-8 text-login-fg max-sm:p-6"), h.Aria("label", "LibreDash login"),
-				g.El("ld-topology-background"),
+				g.El("ld-topology-background",
+					h.Class("absolute inset-0 block bg-login"),
+					g.Attr("data-login-background", ""),
+					g.Attr("data-module-src", staticAsset("/static/topology-background.js")),
+					ds.Init("document.dispatchEvent(new CustomEvent('libredash-login-background-init'))", ds.ModifierDelay, ds.Duration(100*time.Millisecond)),
+				),
 				h.Div(h.Class("pointer-events-none absolute inset-0 z-login-shade bg-login-shade"), h.Aria("hidden", "true")),
 				h.Button(h.Type("button"), h.Class("absolute right-4 top-4 z-login-panel inline-grid size-8 place-items-center rounded-default border border-login-outline bg-login-panel text-login-fg shadow-resting-sm transition-colors duration-fast hover:bg-login-control-hover focus-visible:border-login-accent-strong focus-visible:bg-login-control-hover focus-visible:outline-0 max-sm:right-3 max-sm:top-3"), g.Attr("data-theme-toggle", ""),
 					lucide.Monitor(loginThemeIconAttrs("system")...),
@@ -652,6 +657,10 @@ func metricViewSignals(view dashboard.MetricViewDetail, activeSection string) ma
 
 func metricDetailRailStateScript() g.Node {
 	return h.Script(g.Raw(`try{if(window.localStorage.getItem("libredash.metricDetailRail")==="collapsed"){document.documentElement.setAttribute("data-metric-detail-rail","collapsed")}}catch(e){}`))
+}
+
+func loginBackgroundLoaderScript() g.Node {
+	return h.Script(g.Raw(`(()=>{const schedule=(task)=>{if("requestIdleCallback"in window){requestIdleCallback(task,{timeout:500});return}requestAnimationFrame(()=>requestAnimationFrame(task))};document.addEventListener("libredash-login-background-init",()=>schedule(()=>{const el=document.querySelector("[data-login-background]");if(!el)return;const state=el.dataset.backgroundState;if(state==="loading"||state==="loaded")return;const src=el.dataset.moduleSrc;if(!src)return;el.dataset.backgroundState="loading";import(src).then(()=>{el.dataset.backgroundState="loaded"}).catch((error)=>{el.dataset.backgroundState="error";console.error("LibreDash login background failed to load",error)})}))})();`))
 }
 
 func displayLabel(label, fallback string) string {
