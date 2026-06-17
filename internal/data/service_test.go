@@ -72,12 +72,12 @@ func TestCompileSourceRelation(t *testing.T) {
 		})
 	}
 
-	relation, err := compileSourceRelation(sourcePlan{kind: "database", connection: "crm", object: "public.accounts"})
+	relation, err := compileSourceRelation(sourcePlan{kind: "object", connection: "crm", object: "public.accounts"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := "SELECT * FROM conn_crm.public.accounts"; relation != want {
-		t.Fatalf("database relation = %q, want %q", relation, want)
+		t.Fatalf("object relation = %q, want %q", relation, want)
 	}
 
 	_, err = compileSourceRelation(sourcePlan{kind: "path", format: "csv", path: "/data/orders.csv", options: map[string]any{"bad-key": true}})
@@ -143,7 +143,7 @@ func TestCompileConnectionSecret(t *testing.T) {
 	}
 }
 
-func TestCompileLanceSourceSecrets(t *testing.T) {
+func TestCompileSourceSecretStatements(t *testing.T) {
 	model := &semantic.Model{
 		Connections: map[string]semantic.Connection{
 			"prod_lake": {
@@ -162,7 +162,7 @@ func TestCompileLanceSourceSecrets(t *testing.T) {
 			"named":      {Connection: "existing", Path: "named/products.lance", Format: "lance"},
 		},
 	}
-	statements, err := compileLanceSourceSecrets(model)
+	statements, err := compileSourceSecretStatements(model)
 	if err != nil {
 		t.Fatal(err)
 	}

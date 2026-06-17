@@ -6,8 +6,8 @@ import (
 	"os"
 	"regexp"
 	"sort"
-	"strings"
 
+	sourcereg "github.com/Yacobolo/libredash/internal/source"
 	"gopkg.in/yaml.v3"
 )
 
@@ -184,7 +184,7 @@ func (m *Model) Validate() error {
 
 func (m *Model) resolveSource(source Source) (Source, error) {
 	switch source.Kind() {
-	case "path", "database":
+	case sourcereg.KindPath, sourcereg.KindObject:
 		if source.Connection == "" {
 			source.Connection = m.DefaultConnection
 		}
@@ -207,7 +207,7 @@ func (m *Model) resolveSource(source Source) (Source, error) {
 				source.Options = options
 			}
 			if source.Format == "" {
-				format, ok := inferSourceFormat(source.Path)
+				format, ok := sourcereg.InferFormat(source.Path)
 				if !ok {
 					return source, fmt.Errorf("path %q requires format", source.Path)
 				}
@@ -283,7 +283,7 @@ func (s Source) Validate(name string, connections map[string]Connection) error {
 		}
 	}
 	switch s.Kind() {
-	case "path":
+	case sourcereg.KindPath:
 		if s.Connection == "" {
 			return fmt.Errorf("source %q requires connection", name)
 		}
@@ -291,36 +291,39 @@ func (s Source) Validate(name string, connections map[string]Connection) error {
 		if !ok {
 			return fmt.Errorf("source %q references unknown connection %q", name, s.Connection)
 		}
-		if !supportsLocationConnection(connection.Kind) {
+		connectionSpec, ok := sourcereg.LookupConnection(connection.Kind)
+		if !ok || !connectionSpec.AllowsPathSource {
 			return fmt.Errorf("source %q path cannot use %s connection %q", name, connection.Kind, s.Connection)
 		}
-		if connection.Kind == "local" && !isLocalLocation(s.Path) {
+		if connection.Kind == "local" && !sourcereg.IsLocalPath(s.Path) {
 			return fmt.Errorf("source %q local connection %q cannot use remote path %q", name, s.Connection, s.Path)
 		}
-		if isRemoteConnection(connection.Kind) && isLocalLocation(s.Path) && connection.Scope == "" {
+		if connectionSpec.AllowsPathSource && connection.Kind != "local" && sourcereg.IsLocalPath(s.Path) && connection.Scope == "" {
 			return fmt.Errorf("source %q remote connection %q requires scope for relative path %q", name, s.Connection, s.Path)
 		}
 		if s.Format == "" {
 			return fmt.Errorf("source %q path requires format", name)
 		}
-		if !supportsSourceFormat(s.Format) {
+		formatSpec, ok := sourcereg.LookupFormat(s.Format)
+		if !ok {
 			return fmt.Errorf("source %q has unsupported format %q", name, s.Format)
 		}
-		if s.Format == "lance" && len(s.Options) > 0 {
-			return fmt.Errorf("source %q lance path cannot set options", name)
+		if !formatSpec.AllowsOptions && len(s.Options) > 0 {
+			return fmt.Errorf("source %q %s path cannot set options", name, s.Format)
 		}
-	case "database":
+	case sourcereg.KindObject:
 		if s.Connection == "" {
-			return fmt.Errorf("source %q database object requires connection", name)
+			return fmt.Errorf("source %q object requires connection", name)
 		}
 		if s.Format != "" || len(s.Options) > 0 {
-			return fmt.Errorf("source %q database object cannot set format or options", name)
+			return fmt.Errorf("source %q object cannot set format or options", name)
 		}
 		connection, ok := connections[s.Connection]
 		if !ok {
 			return fmt.Errorf("source %q references unknown connection %q", name, s.Connection)
 		}
-		if !supportsDatabaseConnection(connection.Kind) {
+		connectionSpec, ok := sourcereg.LookupConnection(connection.Kind)
+		if !ok || !connectionSpec.AllowsObjectSource {
 			return fmt.Errorf("source %q object cannot use %s connection %q", name, connection.Kind, s.Connection)
 		}
 	default:
@@ -336,15 +339,16 @@ func (c Connection) Validate(name string) error {
 	if c.Kind == "" {
 		return fmt.Errorf("connection %q requires kind", name)
 	}
-	if !supportsConnectionKind(c.Kind) {
+	connectionSpec, ok := sourcereg.LookupConnection(c.Kind)
+	if !ok {
 		return fmt.Errorf("connection %q has unsupported kind %q", name, c.Kind)
 	}
-	if c.Kind == "ducklake" {
+	if connectionSpec.RequiresPath {
 		if c.Path == "" {
-			return fmt.Errorf("connection %q ducklake requires path", name)
+			return fmt.Errorf("connection %q %s requires path", name, c.Kind)
 		}
-	} else if c.Path != "" {
-		return fmt.Errorf("connection %q path is only supported for ducklake", name)
+	} else if c.Path != "" && !connectionSpec.AllowsPath {
+		return fmt.Errorf("connection %q path is only supported for path-backed connections", name)
 	}
 	if c.Secret != "" {
 		if err := validateSemanticIdentifier(c.Secret); err != nil {
@@ -360,7 +364,7 @@ func (c Connection) Validate(name string) error {
 		}
 	}
 	for key := range c.Options {
-		if !supportsConnectionOption(c.Kind, key) {
+		if !connectionAllowsOption(connectionSpec, key) {
 			return fmt.Errorf("connection %q has unsupported option %q", name, key)
 		}
 	}
@@ -374,13 +378,13 @@ func (c Connection) Validate(name string) error {
 
 func (s Source) Description() string {
 	switch s.Kind() {
-	case "path":
-		if supportsLakehouseFormat(s.Format) {
+	case sourcereg.KindPath:
+		if formatSpec, ok := sourcereg.LookupFormat(s.Format); ok && formatSpec.TableLike {
 			return s.Format + " table: " + s.Path
 		}
 		return s.Format + " file: " + s.Path
-	case "database":
-		return "database object: " + s.Object
+	case sourcereg.KindObject:
+		return "object: " + s.Object
 	default:
 		return "source"
 	}
@@ -388,10 +392,10 @@ func (s Source) Description() string {
 
 func (s Source) Role() string {
 	switch s.Kind() {
-	case "path":
+	case sourcereg.KindPath:
 		return s.Format
-	case "database":
-		return "database"
+	case sourcereg.KindObject:
+		return "object"
 	default:
 		return "source"
 	}
@@ -402,34 +406,16 @@ func (s Source) Kind() string {
 	kind := ""
 	if s.Path != "" {
 		count++
-		kind = "path"
+		kind = sourcereg.KindPath
 	}
 	if s.Object != "" {
 		count++
-		kind = "database"
+		kind = sourcereg.KindObject
 	}
 	if count != 1 {
 		return ""
 	}
 	return kind
-}
-
-func isLocalLocation(location string) bool {
-	for _, prefix := range []string{"s3://", "r2://", "gcs://", "gs://", "az://", "azure://", "abfss://", "http://", "https://", "file://"} {
-		if strings.HasPrefix(location, prefix) {
-			return false
-		}
-	}
-	return !strings.Contains(location, "://")
-}
-
-func supportsConnectionKind(kind string) bool {
-	switch kind {
-	case "local", "s3", "r2", "gcs", "http", "azure_blob", "postgres", "mysql", "sqlite", "ducklake":
-		return true
-	default:
-		return false
-	}
 }
 
 func supportsAuthMethod(method string) bool {
@@ -441,20 +427,13 @@ func supportsAuthMethod(method string) bool {
 	}
 }
 
-func supportsConnectionOption(kind, option string) bool {
-	switch kind {
-	case "ducklake":
-		return option == "data_path"
-	case "postgres", "mysql", "sqlite":
-		switch option {
-		case "connection_string", "uri", "path", "database":
+func connectionAllowsOption(connection sourcereg.Connection, option string) bool {
+	for _, allowed := range connection.AllowedOptions {
+		if option == allowed {
 			return true
-		default:
-			return false
 		}
-	default:
-		return false
 	}
+	return false
 }
 
 func validateSemanticIdentifier(value string) error {
@@ -462,92 +441,6 @@ func validateSemanticIdentifier(value string) error {
 		return fmt.Errorf("must match %s", semanticIdentifierPattern.String())
 	}
 	return nil
-}
-
-func supportsFileFormat(format string) bool {
-	switch format {
-	case "csv", "json", "parquet", "excel", "text", "blob", "vortex", "lance":
-		return true
-	default:
-		return false
-	}
-}
-
-func supportsLakehouseFormat(format string) bool {
-	switch format {
-	case "delta", "iceberg", "lance":
-		return true
-	default:
-		return false
-	}
-}
-
-func supportsSourceFormat(format string) bool {
-	return supportsFileFormat(format) || supportsLakehouseFormat(format)
-}
-
-func supportsLocationConnection(kind string) bool {
-	switch kind {
-	case "local", "s3", "r2", "gcs", "http", "azure_blob":
-		return true
-	default:
-		return false
-	}
-}
-
-func supportsDatabaseConnection(kind string) bool {
-	switch kind {
-	case "postgres", "mysql", "sqlite", "ducklake":
-		return true
-	default:
-		return false
-	}
-}
-
-func isRemoteConnection(kind string) bool {
-	return supportsLocationConnection(kind) && kind != "local"
-}
-
-func inferSourceFormat(location string) (string, bool) {
-	base, compression := splitCompressionSuffix(location)
-	ext := strings.ToLower(filepathExt(base))
-	switch {
-	case ext == ".csv" && (compression == "" || compression == ".gz"):
-		return "csv", true
-	case ext == ".json", ext == ".jsonl", ext == ".ndjson":
-		return "json", true
-	case ext == ".parquet":
-		return "parquet", true
-	case ext == ".xlsx":
-		return "excel", true
-	case ext == ".txt":
-		return "text", true
-	case ext == ".blob":
-		return "blob", true
-	case ext == ".vortex":
-		return "vortex", true
-	case ext == ".lance":
-		return "lance", true
-	default:
-		return "", false
-	}
-}
-
-func splitCompressionSuffix(location string) (string, string) {
-	if strings.HasSuffix(strings.ToLower(location), ".gz") {
-		return location[:len(location)-3], ".gz"
-	}
-	return location, ""
-}
-
-func filepathExt(location string) string {
-	if index := strings.LastIndexAny(location, `/\`); index >= 0 {
-		location = location[index+1:]
-	}
-	if index := strings.LastIndex(location, "."); index >= 0 {
-		return location[index:]
-	}
-	return ""
 }
 
 func (m *Model) CacheTableNames() []string {

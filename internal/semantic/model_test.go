@@ -322,7 +322,7 @@ func TestModelValidateRejectsInvalidConnections(t *testing.T) {
 		},
 		"non_ducklake_path": {
 			connection: Connection{Kind: "s3", Path: "s3://bucket/"},
-			contains:   "path is only supported for ducklake",
+			contains:   "path is only supported for path-backed connections",
 		},
 	}
 	for name, tc := range cases {
