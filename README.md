@@ -46,7 +46,7 @@ go run ./cmd/libredash
 
 ## Source Model
 
-Semantic model YAML declares user-facing `sources` and named `connections`. LibreDash compiles these declarations into DuckDB `raw.*` views and keeps DuckDB extension, secret, and scan setup behind the source contract. Each source is an object with exactly one of `location`, `object`, or `query`.
+Semantic model YAML declares user-facing `sources` and named `connections`. LibreDash compiles these declarations into DuckDB `raw.*` views and keeps DuckDB extension, secret, and scan setup behind the source contract. Each source is an object with exactly one of `location` or `object`.
 
 Local CSV:
 
@@ -57,7 +57,6 @@ connections:
   olist:
     kind: local
     defaults:
-      format: csv
       options:
         header: true
 
@@ -121,16 +120,7 @@ sources:
     object: public.accounts
 ```
 
-Trusted query source:
-
-```yaml
-sources:
-  custom:
-    query: |
-      SELECT * FROM future_scan_function('...')
-```
-
-For file locations, LibreDash infers `format` from clear extensions such as `.csv`, `.json`, `.jsonl`, `.parquet`, and `.xlsx`. Set `format` explicitly for ambiguous paths or table directories such as `events/*`, `format: delta`, and `format: iceberg`. `query` sources are trusted workspace code. Treat them like application SQL, not end-user input.
+For file locations, LibreDash infers `format` from clear extensions such as `.csv`, `.csv.gz`, `.json`, `.jsonl`, `.ndjson`, `.parquet`, `.xlsx`, `.txt`, `.blob`, and `.vortex`. Set source-level `format` explicitly for ambiguous paths or table directories such as `events/*`, `format: delta`, and `format: iceberg`. Advanced DuckDB integrations should be modeled explicitly before being exposed in source YAML.
 
 ## Deploy
 

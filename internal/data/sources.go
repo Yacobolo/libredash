@@ -65,7 +65,6 @@ type sourcePlan struct {
 	location   string
 	connection string
 	object     string
-	query      string
 	options    map[string]any
 }
 
@@ -83,7 +82,6 @@ func (m *DuckDBMetrics) resolveSourcePlan(model *semantic.Model, source semantic
 		format:     source.Format,
 		connection: source.Connection,
 		object:     source.Object,
-		query:      source.Query,
 		options:    source.Options,
 	}
 	if source.Location == "" {
@@ -147,6 +145,12 @@ func compileSourceRelation(plan sourcePlan) (string, error) {
 			return scanRelation("read_parquet", plan.location, plan.options)
 		case "excel":
 			return scanRelation("read_xlsx", plan.location, plan.options)
+		case "text":
+			return scanRelation("read_text", plan.location, plan.options)
+		case "blob":
+			return scanRelation("read_blob", plan.location, plan.options)
+		case "vortex":
+			return scanRelation("read_vortex", plan.location, plan.options)
 		case "delta":
 			return scanRelation("delta_scan", plan.location, plan.options)
 		case "iceberg":
@@ -164,8 +168,6 @@ func compileSourceRelation(plan sourcePlan) (string, error) {
 			return "", err
 		}
 		return fmt.Sprintf("SELECT * FROM %s.%s", alias, object), nil
-	case "query":
-		return plan.query, nil
 	default:
 		return "", fmt.Errorf("unsupported source kind %q", plan.kind)
 	}
@@ -279,7 +281,7 @@ func requiredExtensions(model *semantic.Model) []string {
 			switch source.Format {
 			case "excel":
 				extensions["excel"] = struct{}{}
-			case "delta", "iceberg":
+			case "delta", "iceberg", "vortex":
 				extensions[source.Format] = struct{}{}
 			}
 		case "database":

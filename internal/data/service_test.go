@@ -35,6 +35,18 @@ func TestCompileSourceRelation(t *testing.T) {
 			plan: sourcePlan{kind: "location", format: "excel", location: "/data/budget.xlsx", options: map[string]any{"sheet": "FY2026"}},
 			want: "SELECT * FROM read_xlsx('/data/budget.xlsx', sheet = 'FY2026')",
 		},
+		"text": {
+			plan: sourcePlan{kind: "location", format: "text", location: "/data/readme.txt"},
+			want: "SELECT * FROM read_text('/data/readme.txt')",
+		},
+		"blob": {
+			plan: sourcePlan{kind: "location", format: "blob", location: "/data/archive.blob"},
+			want: "SELECT * FROM read_blob('/data/archive.blob')",
+		},
+		"vortex": {
+			plan: sourcePlan{kind: "location", format: "vortex", location: "/data/orders.vortex"},
+			want: "SELECT * FROM read_vortex('/data/orders.vortex')",
+		},
 		"delta": {
 			plan: sourcePlan{kind: "location", format: "delta", location: "az://warehouse/orders"},
 			want: "SELECT * FROM delta_scan('az://warehouse/orders')",
@@ -56,22 +68,12 @@ func TestCompileSourceRelation(t *testing.T) {
 		})
 	}
 
-	var relation string
-	var err error
-	relation, err = compileSourceRelation(sourcePlan{kind: "database", connection: "crm", object: "public.accounts"})
+	relation, err := compileSourceRelation(sourcePlan{kind: "database", connection: "crm", object: "public.accounts"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := "SELECT * FROM conn_crm.public.accounts"; relation != want {
 		t.Fatalf("database relation = %q, want %q", relation, want)
-	}
-
-	relation, err = compileSourceRelation(sourcePlan{kind: "query", query: "SELECT 1 AS id"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if relation != "SELECT 1 AS id" {
-		t.Fatalf("query relation = %q, want trusted query passthrough", relation)
 	}
 
 	_, err = compileSourceRelation(sourcePlan{kind: "location", format: "csv", location: "/data/orders.csv", options: map[string]any{"bad-key": true}})
@@ -160,11 +162,12 @@ func TestRequiredExtensions(t *testing.T) {
 			"events":   {Format: "parquet", Location: "s3://bucket/events/*.parquet", Connection: "lake"},
 			"budget":   {Format: "excel", Location: "budget.xlsx", Connection: "lake"},
 			"orders":   {Format: "delta", Location: "az://warehouse/orders", Connection: "azure"},
+			"archive":  {Format: "vortex", Location: "orders.vortex", Connection: "lake"},
 			"accounts": {Connection: "crm", Object: "public.accounts"},
 		},
 	}
-	if got := strings.Join(requiredExtensions(model), ","); got != "azure,delta,excel,httpfs,postgres" {
-		t.Fatalf("required extensions = %q, want azure,delta,excel,httpfs,postgres", got)
+	if got := strings.Join(requiredExtensions(model), ","); got != "azure,delta,excel,httpfs,postgres,vortex" {
+		t.Fatalf("required extensions = %q, want azure,delta,excel,httpfs,postgres,vortex", got)
 	}
 }
 
@@ -234,7 +237,7 @@ func TestDuckDBMetricsResolvesSourcePlans(t *testing.T) {
 	}
 }
 
-func TestDuckDBMetricsRegistersCSVAndQuerySources(t *testing.T) {
+func TestDuckDBMetricsRegistersCSVSources(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "orders.csv", "order_id,revenue\no1,10.50\no2,20.25\n")
 	db, err := sql.Open("duckdb", filepath.Join(dir, "test.duckdb"))
@@ -252,30 +255,30 @@ func TestDuckDBMetricsRegistersCSVAndQuerySources(t *testing.T) {
 			Connections: map[string]semantic.Connection{
 				"local_files": {
 					Kind:     "local",
-					Defaults: semantic.ConnectionDefaults{Format: "csv", Options: map[string]any{"header": true}},
+					Defaults: semantic.ConnectionDefaults{Options: map[string]any{"header": true}},
 				},
 			},
 			Sources: map[string]semantic.Source{
 				"orders": {
-					Format:     "csv",
 					Location:   "orders.csv",
 					Connection: "local_files",
-					Options:    map[string]any{"header": true},
-				},
-				"targets": {
-					Query: "SELECT 'o1' AS order_id, 100::DOUBLE AS target",
 				},
 			},
 			Cache: semantic.Cache{Tables: map[string]semantic.CacheTable{
-				"joined": {
+				"orders": {
 					SQL: `
-						SELECT o.order_id, try_cast(o.revenue AS DOUBLE) AS revenue, t.target
-						FROM raw.orders o
-						LEFT JOIN raw.targets t ON t.order_id = o.order_id
+						SELECT order_id, try_cast(revenue AS DOUBLE) AS revenue
+						FROM raw.orders
 					`,
 				},
 			}},
+			Datasets: map[string]semantic.Dataset{
+				"orders": {Source: "orders"},
+			},
 		},
+	}
+	if err := runtime.model.Validate(); err != nil {
+		t.Fatalf("validate model: %v", err)
 	}
 	if err := metrics.registerSourceViews(context.Background(), runtime); err != nil {
 		t.Fatalf("register sources: %v", err)
@@ -285,18 +288,11 @@ func TestDuckDBMetricsRegistersCSVAndQuerySources(t *testing.T) {
 	}
 
 	var total float64
-	if err := db.QueryRowContext(context.Background(), "SELECT SUM(revenue) FROM cache.joined").Scan(&total); err != nil {
+	if err := db.QueryRowContext(context.Background(), "SELECT SUM(revenue) FROM cache.orders").Scan(&total); err != nil {
 		t.Fatal(err)
 	}
 	if total != 30.75 {
 		t.Fatalf("total revenue = %v, want 30.75", total)
-	}
-	var target float64
-	if err := db.QueryRowContext(context.Background(), "SELECT target FROM cache.joined WHERE order_id = 'o1'").Scan(&target); err != nil {
-		t.Fatal(err)
-	}
-	if target != 100 {
-		t.Fatalf("target = %v, want 100", target)
 	}
 }
 
@@ -360,15 +356,14 @@ func TestDuckDBMetricsRegistersDatabaseSourceTwice(t *testing.T) {
 	}
 }
 
-func TestDuckDBMetricsValidateFilesIgnoresRemoteAndQuerySources(t *testing.T) {
+func TestDuckDBMetricsValidateFilesIgnoresRemoteSources(t *testing.T) {
 	metrics := &DuckDBMetrics{dataDir: t.TempDir()}
 	runtime := &modelRuntime{model: &semantic.Model{
 		Connections: map[string]semantic.Connection{
 			"lake": {Kind: "s3"},
 		},
 		Sources: map[string]semantic.Source{
-			"events":  {Format: "parquet", Location: "s3://bucket/events/*.parquet", Connection: "lake"},
-			"targets": {Query: "SELECT 1 AS id"},
+			"events": {Format: "parquet", Location: "s3://bucket/events/*.parquet", Connection: "lake"},
 		},
 	}}
 	if err := metrics.validateFiles(runtime); err != nil {

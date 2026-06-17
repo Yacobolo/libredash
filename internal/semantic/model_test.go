@@ -130,7 +130,6 @@ func TestModelValidateAcceptsNativeSourceFamilies(t *testing.T) {
 		"local_files": {
 			Kind: "local",
 			Defaults: ConnectionDefaults{
-				Format:  "csv",
 				Options: map[string]any{"header": true},
 			},
 		},
@@ -166,9 +165,6 @@ func TestModelValidateAcceptsNativeSourceFamilies(t *testing.T) {
 			Connection: "crm",
 			Object:     "public.accounts",
 		},
-		"custom": {
-			Query: "SELECT 1 AS id",
-		},
 	}
 
 	if err := model.Validate(); err != nil {
@@ -188,10 +184,15 @@ func TestModelValidateInfersFileFormats(t *testing.T) {
 		want     string
 	}{
 		"csv":     {location: "orders.csv", want: "csv"},
+		"csv_gz":  {location: "orders.csv.gz", want: "csv"},
 		"json":    {location: "orders.json", want: "json"},
 		"jsonl":   {location: "orders.jsonl", want: "json"},
+		"ndjson":  {location: "orders.ndjson", want: "json"},
 		"parquet": {location: "orders.parquet", want: "parquet"},
 		"excel":   {location: "orders.xlsx", want: "excel"},
+		"text":    {location: "orders.txt", want: "text"},
+		"blob":    {location: "orders.blob", want: "blob"},
+		"vortex":  {location: "orders.vortex", want: "vortex"},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -216,11 +217,11 @@ func TestModelValidateRejectsInvalidSources(t *testing.T) {
 	}{
 		"missing_source_shape": {
 			source:   Source{Format: "csv"},
-			contains: "exactly one of location, object, or query",
+			contains: "exactly one of location or object",
 		},
 		"multiple_source_shapes": {
 			source:   Source{Location: "orders.csv", Object: "public.orders"},
-			contains: "exactly one of location, object, or query",
+			contains: "exactly one of location or object",
 		},
 		"location_bad_format": {
 			source:   Source{Format: "orc", Location: "orders.orc", Connection: "local_files"},
@@ -242,10 +243,6 @@ func TestModelValidateRejectsInvalidSources(t *testing.T) {
 		"unknown_connection": {
 			source:   Source{Format: "parquet", Location: "s3://bucket/*.parquet", Connection: "missing"},
 			contains: "unknown connection",
-		},
-		"query_with_connection": {
-			source:   Source{Query: "SELECT 1", Connection: "crm"},
-			contains: "query cannot set",
 		},
 		"bad_source_option_key": {
 			source:   Source{Format: "csv", Location: "orders.csv", Connection: "local_files", Options: map[string]any{"bad-key": true}},
@@ -290,7 +287,7 @@ func TestModelValidateRejectsInvalidConnections(t *testing.T) {
 			contains:   "secret",
 		},
 		"bad_default_option": {
-			connection: Connection{Kind: "local", Defaults: ConnectionDefaults{Format: "csv", Options: map[string]any{"bad-key": true}}},
+			connection: Connection{Kind: "local", Defaults: ConnectionDefaults{Options: map[string]any{"bad-key": true}}},
 			contains:   "default option",
 		},
 	}
@@ -324,6 +321,18 @@ sources:
     engine: postgres
     object: public.orders
 `,
+		"connection_default_format": `
+connections:
+  other_files:
+    kind: local
+    defaults:
+      format: csv
+`,
+		"source_query": `
+sources:
+  orders:
+    query: SELECT 1 AS id
+`,
 		"scalar_source": `
 sources:
   orders: orders.csv
@@ -339,8 +348,6 @@ default_connection: local_files
 connections:
   local_files:
     kind: local
-    defaults:
-      format: csv
 sources:
   products:
     location: products.csv
@@ -936,8 +943,7 @@ func minimalSourceModel() *Model {
 		DefaultConnection: "local_files",
 		Connections: map[string]Connection{
 			"local_files": {
-				Kind:     "local",
-				Defaults: ConnectionDefaults{Format: "csv"},
+				Kind: "local",
 			},
 		},
 		Sources: map[string]Source{

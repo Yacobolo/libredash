@@ -36,7 +36,6 @@ type Connection struct {
 }
 
 type ConnectionDefaults struct {
-	Format  string         `yaml:"format"`
 	Options map[string]any `yaml:"options"`
 }
 
@@ -53,7 +52,6 @@ type Source struct {
 	Location   string         `yaml:"location"`
 	Connection string         `yaml:"connection"`
 	Object     string         `yaml:"object"`
-	Query      string         `yaml:"query"`
 	Options    map[string]any `yaml:"options"`
 }
 
@@ -185,8 +183,6 @@ func (m *Model) Validate() error {
 
 func (m *Model) resolveSource(source Source) (Source, error) {
 	switch source.Kind() {
-	case "query":
-		return source, nil
 	case "location", "database":
 		if source.Connection == "" {
 			source.Connection = m.DefaultConnection
@@ -199,9 +195,6 @@ func (m *Model) resolveSource(source Source) (Source, error) {
 			return source, fmt.Errorf("references unknown connection %q", source.Connection)
 		}
 		if source.Location != "" {
-			if source.Format == "" {
-				source.Format = connection.Defaults.Format
-			}
 			if len(connection.Defaults.Options) > 0 {
 				options := make(map[string]any, len(connection.Defaults.Options)+len(source.Options))
 				for key, value := range connection.Defaults.Options {
@@ -326,15 +319,8 @@ func (s Source) Validate(name string, connections map[string]Connection) error {
 		if !supportsDatabaseConnection(connection.Kind) {
 			return fmt.Errorf("source %q object cannot use %s connection %q", name, connection.Kind, s.Connection)
 		}
-	case "query":
-		if s.Query == "" {
-			return fmt.Errorf("source %q query requires query", name)
-		}
-		if s.Connection != "" || s.Location != "" || s.Object != "" || s.Format != "" || len(s.Options) > 0 {
-			return fmt.Errorf("source %q query cannot set connection, location, object, format, or options", name)
-		}
 	default:
-		return fmt.Errorf("source %q requires exactly one of location, object, or query", name)
+		return fmt.Errorf("source %q requires exactly one of location or object", name)
 	}
 	return nil
 }
@@ -367,9 +353,6 @@ func (c Connection) Validate(name string) error {
 			return fmt.Errorf("connection %q has unsupported option %q", name, key)
 		}
 	}
-	if c.Defaults.Format != "" && !supportsSourceFormat(c.Defaults.Format) {
-		return fmt.Errorf("connection %q has unsupported default format %q", name, c.Defaults.Format)
-	}
 	for key := range c.Defaults.Options {
 		if err := validateSemanticIdentifier(key); err != nil {
 			return fmt.Errorf("connection %q default option %q is invalid: %w", name, key, err)
@@ -387,8 +370,6 @@ func (s Source) Description() string {
 		return s.Format + " file: " + s.Location
 	case "database":
 		return "database object: " + s.Object
-	case "query":
-		return "trusted query source"
 	default:
 		return "source"
 	}
@@ -400,8 +381,6 @@ func (s Source) Role() string {
 		return s.Format
 	case "database":
 		return "database"
-	case "query":
-		return "query"
 	default:
 		return "source"
 	}
@@ -417,10 +396,6 @@ func (s Source) Kind() string {
 	if s.Object != "" {
 		count++
 		kind = "database"
-	}
-	if s.Query != "" {
-		count++
-		kind = "query"
 	}
 	if count != 1 {
 		return ""
@@ -473,7 +448,7 @@ func validateSemanticIdentifier(value string) error {
 
 func supportsFileFormat(format string) bool {
 	switch format {
-	case "csv", "json", "parquet", "excel":
+	case "csv", "json", "parquet", "excel", "text", "blob", "vortex":
 		return true
 	default:
 		return false
@@ -516,18 +491,33 @@ func isRemoteConnection(kind string) bool {
 }
 
 func inferSourceFormat(location string) (string, bool) {
-	switch strings.ToLower(filepathExt(location)) {
-	case ".csv":
+	base, compression := splitCompressionSuffix(location)
+	ext := strings.ToLower(filepathExt(base))
+	switch {
+	case ext == ".csv" && (compression == "" || compression == ".gz"):
 		return "csv", true
-	case ".json", ".jsonl":
+	case ext == ".json", ext == ".jsonl", ext == ".ndjson":
 		return "json", true
-	case ".parquet":
+	case ext == ".parquet":
 		return "parquet", true
-	case ".xlsx":
+	case ext == ".xlsx":
 		return "excel", true
+	case ext == ".txt":
+		return "text", true
+	case ext == ".blob":
+		return "blob", true
+	case ext == ".vortex":
+		return "vortex", true
 	default:
 		return "", false
 	}
+}
+
+func splitCompressionSuffix(location string) (string, string) {
+	if strings.HasSuffix(strings.ToLower(location), ".gz") {
+		return location[:len(location)-3], ".gz"
+	}
+	return location, ""
 }
 
 func filepathExt(location string) string {

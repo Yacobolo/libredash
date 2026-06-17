@@ -8,7 +8,6 @@ connections:
   olist:
     kind: local
     defaults:
-      format: csv
       options:
         header: true
 
