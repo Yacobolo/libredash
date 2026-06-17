@@ -29,6 +29,7 @@ type Manifest struct {
 	CatalogPath    string         `json:"catalogPath"`
 	Files          []ManifestFile `json:"files"`
 	SemanticModels []string       `json:"semanticModels"`
+	MetricViews    []string       `json:"metricViews"`
 	Dashboards     []string       `json:"dashboards"`
 }
 
@@ -62,6 +63,9 @@ func PackCatalog(catalogPath string, out io.Writer) (Manifest, string, error) {
 	for _, model := range workspace.Catalog.SemanticModels {
 		relFiles = append(relFiles, cleanBundlePath(model.Path))
 	}
+	for _, view := range workspace.Catalog.MetricViews {
+		relFiles = append(relFiles, cleanBundlePath(view.Path))
+	}
 	for _, report := range workspace.Catalog.Dashboards {
 		relFiles = append(relFiles, cleanBundlePath(report.Path))
 	}
@@ -80,6 +84,9 @@ func PackCatalog(catalogPath string, out io.Writer) (Manifest, string, error) {
 	}
 	for _, model := range workspace.Catalog.SemanticModels {
 		manifest.SemanticModels = append(manifest.SemanticModels, model.ID)
+	}
+	for _, view := range workspace.Catalog.MetricViews {
+		manifest.MetricViews = append(manifest.MetricViews, view.ID)
 	}
 	for _, report := range workspace.Catalog.Dashboards {
 		manifest.Dashboards = append(manifest.Dashboards, report.ID)

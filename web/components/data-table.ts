@@ -2,8 +2,8 @@ import { LitElement, css, html, nothing } from 'lit'
 import { createRef, ref, type Ref } from 'lit/directives/ref.js'
 import {
   TableController,
+  createCoreRowModel,
   flexRender,
-  getCoreRowModel,
   type ColumnDef,
   type ColumnSizingState,
   type ColumnVisibilityState,
@@ -822,7 +822,7 @@ class DataTable extends LitElement {
         columns: this.tanstackColumnDefs(),
         data: this.tanstackRows,
         getRowId: (row) => row.__rowKey,
-        getCoreRowModel: getCoreRowModel(),
+        getCoreRowModel: createCoreRowModel(),
         manualSorting: true,
         manualFiltering: true,
         manualPagination: true,

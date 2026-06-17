@@ -165,6 +165,22 @@ func (m *Manager) Catalog() dashboard.Catalog {
 	return metrics.Catalog()
 }
 
+func (m *Manager) MetricViews() []dashboard.MetricViewSummary {
+	metrics, err := m.metrics()
+	if err != nil {
+		return nil
+	}
+	return metrics.MetricViews()
+}
+
+func (m *Manager) MetricView(id string) (dashboard.MetricViewDetail, bool) {
+	metrics, err := m.metrics()
+	if err != nil {
+		return dashboard.MetricViewDetail{}, false
+	}
+	return metrics.MetricView(id)
+}
+
 func (m *Manager) DefaultDashboardID() string {
 	metrics, err := m.metrics()
 	if err != nil {

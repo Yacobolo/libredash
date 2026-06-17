@@ -2,9 +2,9 @@ import { LitElement, html } from 'lit'
 import { property, state } from 'lit/decorators.js'
 import {
   TableController,
+  createCoreRowModel,
+  createSortedRowModel,
   flexRender,
-  getCoreRowModel,
-  getSortedRowModel,
   type ColumnDef,
   type SortingState,
 } from '@tanstack/lit-table'
@@ -99,8 +99,8 @@ class DataGrid extends LitElement {
       onSortingChange: (updater) => {
         this.sorting = applyUpdater(updater, this.sorting)
       },
-      getCoreRowModel: getCoreRowModel(),
-      getSortedRowModel: getSortedRowModel(),
+      getCoreRowModel: createCoreRowModel(),
+      getSortedRowModel: createSortedRowModel(),
     })
 
     if (grid.rows.length === 0) {

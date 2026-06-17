@@ -36,7 +36,7 @@ func TestPackValidateAndExtractAssets(t *testing.T) {
 	for _, asset := range validation.Assets {
 		types[asset.Type] = true
 	}
-	for _, typ := range []string{"catalog", "semantic_model", "dashboard", "page", "visual", "kpi", "filter", "table", "dataset", "measure", "dimension", "cache_table", "source"} {
+	for _, typ := range []string{"catalog", "semantic_model", "metric_view", "dashboard", "page", "visual", "kpi", "filter", "table", "dataset", "measure", "dimension", "cache_table", "source"} {
 		if !types[typ] {
 			t.Fatalf("missing asset type %q", typ)
 		}

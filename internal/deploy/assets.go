@@ -59,20 +59,29 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 				return nil, nil, err
 			}
 			edge(datasetID, byKey["cache_table:"+modelEntry.ID+"."+dataset.Source], "uses_cache_table")
-			for dimensionName, dimension := range dataset.Dimensions {
-				id, err := add("dimension", modelEntry.ID+"."+datasetName+"."+dimensionName, datasetID, dimensionLabel(dimensionName, dimension.Label), "", dimension)
-				if err != nil {
-					return nil, nil, err
-				}
-				edge(datasetID, id, "contains")
+		}
+	}
+	for _, viewEntry := range workspace.Catalog.MetricViews {
+		view := workspace.MetricViews[viewEntry.ID]
+		viewID, err := add("metric_view", viewEntry.ID, byKey["semantic_model:"+view.SemanticModel], viewEntry.Title, viewEntry.Description, view)
+		if err != nil {
+			return nil, nil, err
+		}
+		edge(byKey["semantic_model:"+view.SemanticModel], viewID, "contains")
+		edge(viewID, byKey["dataset:"+view.SemanticModel+"."+view.Dataset], "uses_dataset")
+		for dimensionName, dimension := range view.Dimensions {
+			id, err := add("dimension", view.ID+"."+dimensionName, viewID, dimensionLabel(dimensionName, dimension.Label), "", dimension)
+			if err != nil {
+				return nil, nil, err
 			}
-			for measureName, measure := range dataset.Measures {
-				id, err := add("measure", modelEntry.ID+"."+datasetName+"."+measureName, datasetID, measureLabel(measureName, measure.Label), "", measure)
-				if err != nil {
-					return nil, nil, err
-				}
-				edge(datasetID, id, "contains")
+			edge(viewID, id, "contains")
+		}
+		for measureName, measure := range view.Measures {
+			id, err := add("measure", view.ID+"."+measureName, viewID, measureLabel(measureName, measure.Label), "", measure)
+			if err != nil {
+				return nil, nil, err
 			}
+			edge(viewID, id, "contains")
 		}
 	}
 	for _, reportEntry := range workspace.Catalog.Dashboards {
@@ -81,7 +90,9 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 		if err != nil {
 			return nil, nil, err
 		}
-		edge(reportID, byKey["semantic_model:"+reportEntry.SemanticModel], "uses_model")
+		for _, viewID := range report.MetricViews {
+			edge(reportID, byKey["metric_view:"+viewID], "uses_metric_view")
+		}
 		for _, page := range report.Pages {
 			pageID, err := add("page", report.ID+"."+page.ID, reportID, page.Title, page.Description, page)
 			if err != nil {
@@ -94,29 +105,29 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 			if err != nil {
 				return nil, nil, err
 			}
-			edge(filterID, byKey["dimension:"+report.SemanticModel+"."+filter.Dataset+"."+filter.Dimension], "filters_dimension")
+			edge(filterID, byKey["dimension:"+filter.MetricView+"."+filter.Dimension], "filters_dimension")
 		}
 		for kpiName, kpi := range report.KPIs {
 			kpiID, err := add("kpi", report.ID+"."+kpiName, reportID, kpi.Title, kpi.Note, kpi)
 			if err != nil {
 				return nil, nil, err
 			}
-			edge(kpiID, byKey["measure:"+report.SemanticModel+"."+kpi.Dataset+"."+kpi.Measure], "uses_measure")
+			edge(kpiID, byKey["measure:"+kpi.MetricView+"."+kpi.Measure], "uses_measure")
 		}
 		for visualName, visual := range report.Visuals {
 			visualID, err := add("visual", report.ID+"."+visualName, reportID, visual.Title, "", visual)
 			if err != nil {
 				return nil, nil, err
 			}
-			edge(visualID, byKey["dataset:"+report.SemanticModel+"."+visual.Dataset], "uses_dataset")
+			edge(visualID, byKey["metric_view:"+visual.MetricView], "uses_metric_view")
 			for _, measure := range visual.Query.Measures {
-				edge(visualID, byKey["measure:"+report.SemanticModel+"."+visual.Dataset+"."+measure], "uses_measure")
+				edge(visualID, byKey["measure:"+visual.MetricView+"."+measure], "uses_measure")
 			}
 			for _, dimension := range visual.Query.Dimensions {
-				edge(visualID, byKey["dimension:"+report.SemanticModel+"."+visual.Dataset+"."+dimension], "uses_dimension")
+				edge(visualID, byKey["dimension:"+visual.MetricView+"."+dimension], "uses_dimension")
 			}
 			if visual.Query.Series != "" {
-				edge(visualID, byKey["dimension:"+report.SemanticModel+"."+visual.Dataset+"."+visual.Query.Series], "uses_dimension")
+				edge(visualID, byKey["dimension:"+visual.MetricView+"."+visual.Query.Series], "uses_dimension")
 			}
 		}
 		for tableName, table := range report.Tables {
@@ -124,7 +135,16 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 			if err != nil {
 				return nil, nil, err
 			}
-			edge(tableID, byKey["dataset:"+report.SemanticModel+"."+table.Dataset], "uses_dataset")
+			edge(tableID, byKey["metric_view:"+table.MetricView], "uses_metric_view")
+			for _, row := range table.Rows {
+				edge(tableID, byKey["dimension:"+table.MetricView+"."+row], "uses_dimension")
+			}
+			for _, dimension := range table.ColumnDims {
+				edge(tableID, byKey["dimension:"+table.MetricView+"."+dimension], "uses_dimension")
+			}
+			for _, measure := range table.Measures {
+				edge(tableID, byKey["measure:"+table.MetricView+"."+measure], "uses_measure")
+			}
 		}
 	}
 	return assets, edges, nil
