@@ -246,6 +246,44 @@ func TestPageRouteSeedsFiltersFromURL(t *testing.T) {
 	}
 }
 
+func TestHTMLRoutesIncludeDatastarInspector(t *testing.T) {
+	for _, path := range []string{
+		"/login",
+		"/",
+		"/dashboards/executive-sales/pages/overview",
+		"/models",
+		"/models/test",
+		"/metrics",
+		"/metrics/orders/measures",
+		"/metrics/orders/dimensions",
+		"/metrics/orders/usage",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+
+			New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			assertDatastarInspector(t, rec.Body.String())
+		})
+	}
+}
+
+func assertDatastarInspector(t *testing.T, body string) {
+	t.Helper()
+	for _, want := range []string{
+		`/static/datastar-inspector.js`,
+		`<datastar-inspector`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("page missing Datastar inspector marker %q:\n%s", want, body)
+		}
+	}
+}
+
 func TestCatalogRouteRendersDashboardCatalog(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()

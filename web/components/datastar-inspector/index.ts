@@ -6,4 +6,4 @@
 export { DatastarInspector } from './datastar-inspector.js'
 
 // Types
-export type { InspectorState, ViewMode, SignalObject, SignalValue } from './types.js'
+export type { InspectorState, SignalObject, SignalValue } from './types.js'

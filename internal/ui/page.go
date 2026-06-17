@@ -27,6 +27,14 @@ func staticAsset(path string) string {
 	return path + "?v=dev"
 }
 
+func inspectorScript() g.Node {
+	return h.Script(h.Type("module"), h.Src(staticAsset("/static/datastar-inspector.js")))
+}
+
+func inspectorElement() g.Node {
+	return g.El("datastar-inspector")
+}
+
 func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report semantic.Dashboard, model *semantic.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) g.Node {
 	if activePage.ID == "" {
 		activePage = defaultPage()
@@ -60,7 +68,7 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/charts.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/table.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/visual-modal.js"))),
-			h.Script(h.Type("module"), h.Src(staticAsset("/static/datastar-inspector.js"))),
+			inspectorScript(),
 			h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 		},
 		Body: []g.Node{
@@ -93,7 +101,7 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 					),
 				),
 				g.El("ld-visual-modal"),
-				g.El("datastar-inspector"),
+				inspectorElement(),
 			),
 		},
 	})
@@ -118,6 +126,7 @@ func LoginPage() g.Node {
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/theme.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/login.js"))),
+			inspectorScript(),
 		},
 		Body: []g.Node{
 			h.Main(h.Class("login-screen"), h.Aria("label", "LibreDash login"),
@@ -137,6 +146,7 @@ func LoginPage() g.Node {
 						h.Span(g.Text("Sign in with Azure Active Directory")),
 					),
 				),
+				inspectorElement(),
 			),
 		},
 	})
@@ -159,6 +169,7 @@ func CatalogPage(catalog dashboard.Catalog) g.Node {
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/theme.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
+			inspectorScript(),
 		},
 		Body: []g.Node{
 			h.Main(h.Class("report-app"),
@@ -176,6 +187,7 @@ func CatalogPage(catalog dashboard.Catalog) g.Node {
 						),
 					),
 				),
+				inspectorElement(),
 			),
 		},
 	})
@@ -198,6 +210,7 @@ func ModelsPage(catalog dashboard.Catalog) g.Node {
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/theme.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
+			inspectorScript(),
 		},
 		Body: []g.Node{
 			h.Main(h.Class("report-app"),
@@ -215,6 +228,7 @@ func ModelsPage(catalog dashboard.Catalog) g.Node {
 						),
 					),
 				),
+				inspectorElement(),
 			),
 		},
 	})
@@ -237,6 +251,7 @@ func MetricViewsPage(catalog dashboard.Catalog, views []dashboard.MetricViewSumm
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/theme.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
+			inspectorScript(),
 		},
 		Body: []g.Node{
 			h.Main(h.Class("report-app"),
@@ -254,6 +269,7 @@ func MetricViewsPage(catalog dashboard.Catalog, views []dashboard.MetricViewSumm
 						),
 					),
 				),
+				inspectorElement(),
 			),
 		},
 	})
@@ -644,6 +660,7 @@ func MetricViewPage(catalog dashboard.Catalog, view dashboard.MetricViewDetail, 
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/detail-rail.js"))),
 			g.If(activeSection == "usage", h.Script(h.Type("module"), h.Src(staticAsset("/static/metric-usage-graph.js")))),
+			inspectorScript(),
 			h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 		},
 		Body: []g.Node{
@@ -664,6 +681,7 @@ func MetricViewPage(catalog dashboard.Catalog, view dashboard.MetricViewDetail, 
 						),
 					),
 				),
+				inspectorElement(),
 			),
 		},
 	})
@@ -688,6 +706,7 @@ func ModelPage(catalog dashboard.Catalog, model dashboard.ModelGraph) g.Node {
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/theme.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/model-graph.js"))),
+			inspectorScript(),
 		},
 		Body: []g.Node{
 			h.Main(
@@ -707,6 +726,7 @@ func ModelPage(catalog dashboard.Catalog, model dashboard.ModelGraph) g.Node {
 						),
 					),
 				),
+				inspectorElement(),
 			),
 		},
 	})
