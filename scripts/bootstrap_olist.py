@@ -19,6 +19,7 @@ EXPECTED_CSVS = (
     "olist_products_dataset.csv",
     "olist_customers_dataset.csv",
     "olist_order_reviews_dataset.csv",
+    "product_category_name_translation.csv",
 )
 
 

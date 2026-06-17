@@ -148,16 +148,23 @@ func TestLoadOlistDashboard(t *testing.T) {
 	if got := report.Tables["category_status_pivot"].ColumnDims[0]; got != "status" {
 		t.Fatalf("category_status_pivot column dimension = %q, want status", got)
 	}
-	if len(report.Pages) != 3 {
-		t.Fatalf("page count = %d, want 3", len(report.Pages))
+	if len(report.Pages) != 24 {
+		t.Fatalf("page count = %d, want 24", len(report.Pages))
 	}
-	if got := report.Pages[1].ID; got != "operations" {
-		t.Fatalf("second page id = %q, want operations", got)
+	if got := report.Pages[1].ID; got != "chart-line" {
+		t.Fatalf("second page id = %q, want chart-line", got)
 	}
-	if got := report.Pages[2].ID; got != "tables" {
-		t.Fatalf("third page id = %q, want tables", got)
+	tablePageIndex := -1
+	for index, page := range report.Pages {
+		if page.ID == "tables" {
+			tablePageIndex = index
+			break
+		}
 	}
-	tablePage := report.Pages[2].WithDefaults()
+	if tablePageIndex == -1 {
+		t.Fatal("tables page missing")
+	}
+	tablePage := report.Pages[tablePageIndex].WithDefaults()
 	tableVisualCount := 0
 	for _, visual := range tablePage.PlacedVisuals() {
 		if visual.Kind == "table" {

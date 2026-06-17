@@ -127,6 +127,26 @@ datasets:
         aggregate: avg
         column: delivery_days
         format: decimal
+      delivery_days_min:
+        label: Delivery min
+        aggregate: expression
+        expression: MIN(e.delivery_days)
+        format: decimal
+      delivery_days_q1:
+        label: Delivery q1
+        aggregate: expression
+        expression: quantile_cont(e.delivery_days, 0.25)
+        format: decimal
+      delivery_days_q3:
+        label: Delivery q3
+        aggregate: expression
+        expression: quantile_cont(e.delivery_days, 0.75)
+        format: decimal
+      delivery_days_max:
+        label: Delivery max
+        aggregate: expression
+        expression: MAX(e.delivery_days)
+        format: decimal
 
 relationships:
   - id: orders_customers
