@@ -18,18 +18,23 @@ class DetailRail extends HTMLElement {
     this.button.type = 'button'
     this.button.className = [
       'inline-flex',
-      'size-action',
-      'min-h-action',
+      'size-7',
       'items-center',
       'justify-center',
-      'rounded-default',
+      'rounded-small',
       'border',
-      'border-outline-variant',
-      'bg-control',
+      'border-transparent',
+      'bg-transparent',
       'p-0',
-      'text-fg-default',
+      'text-fg-muted',
+      'transition-colors',
+      'duration-fast',
+      'hover:border-outline-muted',
       'hover:bg-control-hover',
+      'hover:text-fg-default',
+      'focus-visible:border-outline-accent',
       'focus-visible:bg-control-hover',
+      'focus-visible:text-fg-default',
       'focus-visible:outline-0',
     ].join(' ')
     this.button.addEventListener('click', () => this.toggle())
@@ -84,11 +89,11 @@ class DetailRail extends HTMLElement {
 }
 
 function detailsIcon(): string {
-  return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h6"></path></svg>'
+  return '<svg class="size-4" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h6"></path></svg>'
 }
 
 function collapseIcon(): string {
-  return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>'
+  return '<svg class="size-4" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>'
 }
 
 customElements.define('ld-detail-rail', DetailRail)

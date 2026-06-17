@@ -43,6 +43,7 @@ const (
 	eyebrowClass               = "m-0 mb-1 text-caption leading-tight font-900 uppercase text-fg-muted"
 	visualCardClass            = "h-full min-h-0 w-full overflow-hidden rounded-default border border-outline-variant bg-report-panel"
 	actionButtonClass          = "inline-flex size-action min-h-action items-center justify-center rounded-default border border-outline-variant bg-transparent p-0 text-fg-default hover:bg-control-hover focus-visible:bg-control-hover focus-visible:outline-0 disabled:cursor-not-allowed disabled:opacity-disabled"
+	metricActionButtonClass    = "inline-flex size-8 items-center justify-center rounded-small border border-transparent bg-transparent p-0 text-fg-muted no-underline transition-colors duration-fast hover:border-outline-muted hover:bg-control-hover hover:text-fg-default focus-visible:border-outline-accent focus-visible:bg-control-hover focus-visible:text-fg-default focus-visible:outline-0"
 	primaryLinkButtonClass     = "inline-flex min-h-control-md items-center justify-center gap-2 rounded-small bg-button-primary px-3 text-caption font-850 text-on-primary no-underline hover:bg-button-primary-hover focus-visible:bg-button-primary-hover focus-visible:outline-0"
 	tagClass                   = "rounded-full border border-outline-muted bg-container-low px-2 py-1 text-caption font-800 uppercase text-fg-muted"
 	metricContractSectionClass = "grid min-h-0 gap-3 overflow-hidden bg-transparent"
@@ -365,9 +366,9 @@ func modelCard(model dashboard.CatalogModel) g.Node {
 }
 
 func metricViewActions(view dashboard.MetricViewDetail) g.Node {
-	return h.Div(h.Class("report-actions"),
-		h.A(h.Class("report-action-button"), h.Href("/models/"+view.SemanticModel), h.Title("Open semantic model"), h.Aria("label", "Open semantic model"),
-			lucide.Network(iconAttrs()),
+	return h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"),
+		h.A(h.Class(metricActionButtonClass), h.Href("/models/"+view.SemanticModel), h.Title("Open semantic model"), h.Aria("label", "Open semantic model"),
+			lucide.Network(metricActionIconAttrs()...),
 		),
 	)
 }
@@ -1140,7 +1141,11 @@ func iconAttrs() g.Node {
 }
 
 func metricInfoIconAttrs() []g.Node {
-	return []g.Node{g.Attr("aria-hidden", "true"), h.Class("size-4 shrink-0 text-fg-muted")}
+	return []g.Node{g.Attr("aria-hidden", "true"), h.Class("size-4 shrink-0 text-fg-muted"), h.Style("stroke-width: 1.75")}
+}
+
+func metricActionIconAttrs() []g.Node {
+	return []g.Node{g.Attr("aria-hidden", "true"), h.Class("size-4 shrink-0"), h.Style("stroke-width: 1.75")}
 }
 
 func canvasVisual(x, y, width, height float64, children ...g.Node) g.Node {
