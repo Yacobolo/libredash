@@ -485,7 +485,7 @@ func metricViewMeasures() g.Node {
 
 func metricViewDashboards() g.Node {
 	return h.Section(h.ID("usage"), h.Class("metric-contract-section metric-contract-section-usage"),
-		g.El("ld-metric-usage-graph", g.Attr("data-attr:graph", "$metricUsageGraph")),
+		g.El("ld-metric-usage-graph", h.Class("block h-metric-usage min-h-0 rounded-default border border-outline-muted bg-surface"), g.Attr("data-attr:graph", "$metricUsageGraph")),
 		g.El("ld-data-grid", g.Attr("data-attr:grid", "$metricGrid")),
 	)
 }
@@ -710,7 +710,7 @@ func MetricViewPage(catalog dashboard.Catalog, view dashboard.MetricViewDetail, 
 					sidebar(sidebarConfigForMetricView(catalog, view)),
 					h.Section(h.Class("app-main metric-main"), h.Aria("label", "LibreDash metric view"),
 						metricViewHeader(view),
-						g.El("ld-detail-rail", h.Class("metric-workspace"),
+						g.El("ld-detail-rail", h.Class("metric-workspace"), g.Attr("data-detail-rail", ""),
 							h.Div(h.Class("metric-content-column"),
 								metricTabs(view, activeSection),
 								h.Div(h.Class("min-h-0 overflow-auto px-3 py-4"),
