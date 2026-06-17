@@ -1,4 +1,4 @@
-import { LitElement, css, html, svg as svgTemplate } from 'lit'
+import { LitElement, css, html, svg as svgTemplate, type PropertyValues } from 'lit'
 import { property, state } from 'lit/decorators.js'
 
 type ReportPage = {
@@ -44,7 +44,9 @@ class ReportSidebar extends LitElement {
       --ld-report-sidebar-width: 144px;
       display: block;
       width: var(--ld-report-sidebar-width);
-      min-height: 100svh;
+      height: 100svh;
+      min-height: 0;
+      overflow: hidden;
       color: var(--fgColor-default);
       font-family: var(--fontStack-system);
       transition: width 180ms var(--ld-ease-out);
@@ -59,8 +61,11 @@ class ReportSidebar extends LitElement {
       top: 0;
       display: grid;
       width: var(--ld-report-sidebar-width);
-      min-height: 100svh;
+      height: 100svh;
+      min-height: 0;
+      max-height: 100svh;
       grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
       border-right: 1px solid color-mix(in srgb, var(--borderColor-muted), transparent 36%);
       background: color-mix(in srgb, var(--bgColor-muted), var(--bgColor-default) 56%);
       transition: width 180ms var(--ld-ease-out);
@@ -135,8 +140,10 @@ class ReportSidebar extends LitElement {
       gap: 2px;
       min-width: 0;
       min-height: 0;
-      overflow: auto;
+      overflow-x: hidden;
+      overflow-y: auto;
       padding: 7px 5px;
+      scrollbar-gutter: stable;
     }
 
     a {
@@ -266,8 +273,11 @@ class ReportSidebar extends LitElement {
     }
   `
 
-  updated(): void {
+  updated(changed: PropertyValues<this>): void {
     this.toggleAttribute('data-collapsed', this.collapsed)
+    if (changed.has('config') || changed.has('collapsed')) {
+      this.scrollActivePageIntoView()
+    }
   }
 
   render() {
@@ -316,6 +326,13 @@ class ReportSidebar extends LitElement {
     } catch {
       // Session state still updates when storage is unavailable.
     }
+  }
+
+  private scrollActivePageIntoView(): void {
+    requestAnimationFrame(() => {
+      const active = this.renderRoot.querySelector<HTMLElement>('.page-link[aria-current="page"]')
+      active?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    })
   }
 }
 
