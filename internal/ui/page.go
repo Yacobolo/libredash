@@ -1140,7 +1140,7 @@ func loginThemeIconAttrs(mode string) []g.Node {
 
 func canvasVisual(x, y, width, height float64, children ...g.Node) g.Node {
 	nodes := []g.Node{
-		h.Class("canvas-visual"),
+		g.Attr("data-canvas-visual", ""),
 		g.Attr("data-x", formatCanvasNumber(x)),
 		g.Attr("data-y", formatCanvasNumber(y)),
 		g.Attr("data-w", formatCanvasNumber(width)),
@@ -1152,7 +1152,8 @@ func canvasVisual(x, y, width, height float64, children ...g.Node) g.Node {
 
 func canvasFilterVisual(x, y, width, height float64, children ...g.Node) g.Node {
 	nodes := []g.Node{
-		h.Class("canvas-visual canvas-filter-visual"),
+		g.Attr("data-canvas-visual", ""),
+		g.Attr("data-canvas-filter-visual", ""),
 		g.Attr("data-x", formatCanvasNumber(x)),
 		g.Attr("data-y", formatCanvasNumber(y)),
 		g.Attr("data-w", formatCanvasNumber(width)),
