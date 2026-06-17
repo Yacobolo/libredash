@@ -192,6 +192,11 @@ class DataTable extends LitElement {
       padding: 6px 8px 5px 10px;
     }
 
+    .toolbar > div {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
     h2 {
       min-width: 0;
       margin: 0;
@@ -419,9 +424,25 @@ class DataTable extends LitElement {
     .group-cell.row-header,
     .cell.row-header {
       position: sticky;
-      left: var(--ld-pin-left, 0px);
+      left: calc(var(--ld-pin-left, 0px) - 1px);
+      overflow: visible;
+      border-right: 0;
       background: var(--report-chart-surface, var(--card-bgColor, var(--bgColor-default)));
-      box-shadow: 1px 0 0 var(--borderColor-default), 2px 0 0 var(--report-chart-surface, var(--card-bgColor, var(--bgColor-default)));
+      box-shadow: none;
+    }
+
+    .header-cell.row-header::after,
+    .group-cell.row-header::after,
+    .cell.row-header::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      left: 100%;
+      z-index: 1;
+      width: 10px;
+      border-left: 1px solid var(--borderColor-default);
+      background: inherit;
+      pointer-events: none;
     }
 
     .header-cell.row-header {
@@ -436,6 +457,24 @@ class DataTable extends LitElement {
 
     .cell.row-header {
       z-index: 12;
+    }
+
+    .header-cell.row-header > .header-button,
+    .cell.row-header > *,
+    .group-cell.row-header > * {
+      position: relative;
+      z-index: 2;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cell-value {
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     button.header-button {
@@ -689,6 +728,19 @@ class DataTable extends LitElement {
       font-weight: 750;
     }
 
+    .footer span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .footer span:last-child {
+      flex: 0 0 auto;
+      margin-left: auto;
+      text-align: right;
+    }
+
     .footer strong {
       color: var(--fgColor-default);
       font-weight: 850;
@@ -707,12 +759,6 @@ class DataTable extends LitElement {
     @media (max-width: 760px) {
       .shell {
         min-height: 360px;
-      }
-
-      .toolbar,
-      .footer {
-        align-items: stretch;
-        flex-direction: column;
       }
     }
   `
@@ -999,7 +1045,7 @@ class DataTable extends LitElement {
             role="columnheader"
             style=${`grid-column:span ${group.span};${this.pinnedCellStyle(group.column.id, pinOffsets)}`}
           >
-            ${group.label}
+            <span class="cell-value">${group.label}</span>
           </div>
         `)}
       </div>
@@ -1091,7 +1137,7 @@ class DataTable extends LitElement {
                 this.selectCell(row, column, index)
               }}
             >
-              ${flexRender(cell.column.columnDef.cell, cell.getContext())}
+              <span class="cell-value">${flexRender(cell.column.columnDef.cell, cell.getContext())}</span>
             </button>
           `
         })}
