@@ -144,6 +144,25 @@ class ReportSidebar extends LitElement {
       overflow-y: auto;
       padding: 7px 5px;
       scrollbar-gutter: stable;
+      scrollbar-color: color-mix(in srgb, var(--fgColor-muted), transparent 42%) transparent;
+      scrollbar-width: thin;
+    }
+
+    nav::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    nav::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    nav::-webkit-scrollbar-thumb {
+      border-radius: var(--ld-radius-full);
+      background: color-mix(in srgb, var(--fgColor-muted), transparent 42%);
+    }
+
+    nav::-webkit-scrollbar-thumb:hover {
+      background: color-mix(in srgb, var(--fgColor-muted), transparent 20%);
     }
 
     a {
@@ -214,6 +233,16 @@ class ReportSidebar extends LitElement {
 
     :host([data-collapsed]) .collapse {
       margin-left: 0;
+    }
+
+    :host([data-collapsed]) nav {
+      scrollbar-gutter: auto;
+      scrollbar-width: none;
+    }
+
+    :host([data-collapsed]) nav::-webkit-scrollbar {
+      display: none;
+      width: 0;
     }
 
     :host([data-collapsed]) .page-link {
