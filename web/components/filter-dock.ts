@@ -34,11 +34,12 @@ function syncDockClasses(dock: HTMLDetailsElement, open: boolean): void {
   dock.dataset.state = open ? 'open' : 'closed'
   dock.classList.toggle('sm:w-filter-dock', open)
   dock.classList.toggle('sm:w-filter-closed', !open)
-  dock.classList.toggle('sm:bg-transparent', !open)
+  dock.classList.toggle('bg-report-workspace', open)
+  dock.classList.toggle('bg-report-panel-subtle', !open)
 
   const summary = dock.querySelector<HTMLElement>('[data-filter-summary]')
   summary?.classList.toggle('sm:hidden', open)
-  summary?.classList.toggle('sm:grid', !open)
+  summary?.classList.toggle('sm:flex', !open)
 
   const pane = dock.querySelector<HTMLElement>('[data-filter-pane]')
   pane?.classList.toggle('sm:block', open)

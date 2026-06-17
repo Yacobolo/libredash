@@ -94,7 +94,7 @@
   --spacing-control-md: var(--control-medium-size);
   --spacing-control-xs: var(--control-xsmall-size);
   --spacing-control-xl: var(--control-xlarge-size);
-  --spacing-filter-closed: var(--control-medium-size);
+  --spacing-filter-closed: var(--base-size-32);
   --spacing-filter-dock: 14.75rem;
   --spacing-inspector-panel: 32rem;
   --spacing-inspector-width: 24rem;

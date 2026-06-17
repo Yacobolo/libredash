@@ -113,7 +113,6 @@ class LibreDashSidebar extends LitElement {
       width: var(--ld-sidebar-width);
       min-height: 100svh;
       grid-template-rows: auto minmax(0, 1fr) auto;
-      border-right: 1px solid var(--borderColor-default);
       background: color-mix(in srgb, var(--bgColor-default), var(--bgColor-muted) 26%);
       transition: width 180ms var(--ld-ease-out);
     }

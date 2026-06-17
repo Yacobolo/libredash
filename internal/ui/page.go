@@ -374,14 +374,12 @@ func metricViewActions(view dashboard.MetricViewDetail) g.Node {
 }
 
 func metricViewHeader(view dashboard.MetricViewDetail) g.Node {
-	return h.Header(h.Class("metric-detail-header"),
-		h.Div(h.Class("metric-header-row"),
-			h.Div(h.Class("metric-header-copy"),
-				h.H1(h.Class("workspace-title"), g.Text(view.Title)),
-				g.If(strings.TrimSpace(view.Description) != "", h.P(h.Class("workspace-detail"), g.Text(view.Description))),
-			),
-			metricViewActions(view),
+	return h.Header(h.Class("grid min-w-0 grid-cols-workspace-header items-center gap-4 border-b border-outline-muted px-5 py-4"),
+		h.Div(h.Class("min-w-0"),
+			h.H1(h.Class("m-0 truncate text-title-sm font-850 leading-snug text-fg-default"), g.Text(view.Title)),
+			g.If(strings.TrimSpace(view.Description) != "", h.P(h.Class("m-0 mt-1 truncate text-body-sm font-650 leading-snug text-fg-muted"), g.Text(view.Description))),
 		),
+		metricViewActions(view),
 	)
 }
 
@@ -795,7 +793,7 @@ func modelGraphJSON(model dashboard.ModelGraph) string {
 }
 
 func sidebar(config map[string]any) g.Node {
-	return g.El("ld-sidebar", g.Attr("config", jsonString(config)))
+	return g.El("ld-sidebar", h.Class("border-r border-outline-variant max-sm:border-b max-sm:border-r-0"), g.Attr("config", jsonString(config)))
 }
 
 func sidebarConfigForCatalog(catalog dashboard.Catalog) map[string]any {
@@ -886,7 +884,7 @@ func workspaceDisplayTitle(catalog dashboard.Catalog) string {
 }
 
 func reportSidebar(config map[string]any) g.Node {
-	return g.El("ld-report-sidebar", g.Attr("config", jsonString(config)))
+	return g.El("ld-report-sidebar", h.Class("border-l border-outline-variant max-sm:border-l-0 max-sm:border-t"), g.Attr("config", jsonString(config)))
 }
 
 func reportSidebarConfig(report semantic.Dashboard, model *semantic.Model, pages []dashboard.Page, activePage dashboard.Page) map[string]any {
@@ -1148,6 +1146,10 @@ func metricActionIconAttrs() []g.Node {
 	return []g.Node{g.Attr("aria-hidden", "true"), h.Class("size-4 shrink-0"), h.Style("stroke-width: 1.75")}
 }
 
+func filterDockIconAttrs() []g.Node {
+	return []g.Node{g.Attr("aria-hidden", "true"), h.Class("size-4 shrink-0"), h.Style("stroke-width: 1.75")}
+}
+
 func canvasVisual(x, y, width, height float64, children ...g.Node) g.Node {
 	nodes := []g.Node{
 		h.Class("canvas-visual"),
@@ -1308,10 +1310,10 @@ func reportHeader(visual dashboard.PageVisual) g.Node {
 }
 
 func filtersDock(report semantic.Dashboard, pageID string, action string) g.Node {
-	return h.Details(h.Class("filters-dock"), h.Aria("label", "Report filters"),
-		h.Summary(h.Class("filters-dock-rail"), h.Title("Toggle filters"),
-			lucide.SlidersHorizontal(iconAttrs()),
-			h.Span(h.Class("filters-rail-label"), g.Text("Filters")),
+	return h.Details(h.Class("group grid min-h-0 w-full border-l border-outline-variant bg-report-panel-subtle transition-[width,background-color] duration-normal ease-ld sm:w-filter-closed"), h.Aria("label", "Report filters"), g.Attr("data-filter-dock", ""),
+		h.Summary(h.Class("flex min-h-control-xl cursor-pointer list-none items-center justify-center gap-2 border-b border-outline-variant px-2 text-caption font-900 uppercase text-fg-muted marker:hidden transition-colors duration-fast hover:text-fg-default focus-visible:text-fg-default focus-visible:outline-0 sm:flex sm:h-full sm:w-filter-closed sm:flex-col sm:justify-start sm:border-b-0 sm:px-0 sm:py-4"), h.Title("Toggle filters"), g.Attr("data-filter-summary", ""),
+			lucide.SlidersHorizontal(filterDockIconAttrs()...),
+			h.Span(h.Class("sm:[writing-mode:vertical-rl]"), g.Text("Filters")),
 			h.Span(h.Class("sr-only"), g.Text("Toggle filters")),
 		),
 		filtersPane(report, pageID, action),
@@ -1320,7 +1322,7 @@ func filtersDock(report semantic.Dashboard, pageID string, action string) g.Node
 
 func filtersPane(report semantic.Dashboard, pageID string, action string) g.Node {
 	tableReset := tableResetExpression()
-	return h.Div(h.Class("filters-pane"),
+	return h.Div(h.Class("min-h-0 w-full overflow-auto border-t border-outline-variant bg-report-workspace p-3 sm:hidden sm:w-filter-dock sm:border-l sm:border-t-0"), g.Attr("data-filter-pane", ""),
 		g.El("ld-filter-panel",
 			g.Attr("config", jsonString(report.FilterConfigForPage(pageID))),
 			g.Attr("data-attr:filters", "$filters"),
