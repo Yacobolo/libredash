@@ -17,9 +17,10 @@ type ReportSidebarConfig = {
 }
 
 type HoverTitle = {
-  index: number
+  index: string
   title: string
   top: number
+  active: boolean
 }
 
 const defaultConfig: ReportSidebarConfig = {
@@ -185,9 +186,10 @@ class ReportSidebar extends LitElement {
     .page-link {
       position: relative;
       display: grid;
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-columns: 24px minmax(0, 1fr);
       min-height: 30px;
       align-items: center;
+      gap: 6px;
       border: var(--ld-border-transparent);
       border-radius: var(--ld-radius-default);
       color: var(--fgColor-muted);
@@ -220,7 +222,21 @@ class ReportSidebar extends LitElement {
     }
 
     .page-index {
-      display: none;
+      display: grid;
+      width: 24px;
+      height: 24px;
+      place-items: center;
+      color: color-mix(in srgb, var(--fgColor-muted), transparent 12%);
+      font-size: var(--ld-font-size-caption);
+      font-variant-numeric: tabular-nums;
+      font-weight: var(--ld-font-weight-850);
+      line-height: var(--ld-line-height-none);
+    }
+
+    .page-link:hover .page-index,
+    .page-link:focus-visible .page-index,
+    .page-link[aria-current='page'] .page-index {
+      color: var(--fgColor-default);
     }
 
     .link-text {
@@ -265,15 +281,8 @@ class ReportSidebar extends LitElement {
     }
 
     :host([data-collapsed]) .page-index {
-      display: grid;
-      width: 24px;
-      height: 24px;
-      place-items: center;
-      color: var(--fgColor-muted);
+      color: color-mix(in srgb, var(--fgColor-muted), transparent 24%);
       background: transparent;
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-850);
-      line-height: var(--ld-line-height-none);
     }
 
     :host([data-collapsed]) .page-link:hover .page-index,
@@ -303,14 +312,13 @@ class ReportSidebar extends LitElement {
     :host([data-collapsed]) .hover-title {
       position: absolute;
       z-index: 40;
-      left: 5px;
+      left: 7px;
       min-height: 28px;
       max-width: 12rem;
       display: inline-flex;
       align-items: center;
       gap: 6px;
       padding: 0 9px 0 0;
-      border-right: 2px solid var(--ld-accent);
       background: color-mix(in srgb, var(--bgColor-muted), var(--bgColor-default) 56%);
       color: var(--fgColor-default);
       font-size: var(--ld-font-size-caption);
@@ -318,20 +326,27 @@ class ReportSidebar extends LitElement {
       line-height: var(--ld-line-height-none);
       pointer-events: none;
       transform: translateY(-50%);
-      transform-origin: left center;
-      animation: rail-title-fold-out 120ms var(--ld-ease-out);
+      animation: rail-title-fade-in 90ms var(--ld-ease-out);
       white-space: nowrap;
     }
 
-    @keyframes rail-title-fold-out {
+    :host([data-collapsed]) .hover-title[data-active]::before {
+      content: '';
+      position: absolute;
+      inset-block: 6px;
+      left: -2px;
+      width: 2px;
+      border-radius: var(--ld-radius-full);
+      background: var(--ld-accent);
+    }
+
+    @keyframes rail-title-fade-in {
       from {
         opacity: 0;
-        transform: translateY(-50%) scaleX(0.72);
       }
 
       to {
         opacity: 1;
-        transform: translateY(-50%) scaleX(1);
       }
     }
 
@@ -340,13 +355,28 @@ class ReportSidebar extends LitElement {
       width: 24px;
       height: 24px;
       place-items: center;
-      color: var(--fgColor-muted);
+      color: var(--fgColor-default);
+      font-variant-numeric: tabular-nums;
       font-weight: var(--ld-font-weight-850);
     }
 
     .hover-title-name {
       overflow: hidden;
       text-overflow: ellipsis;
+      animation: rail-title-name-fold-out 120ms var(--ld-ease-out);
+      transform-origin: left center;
+    }
+
+    @keyframes rail-title-name-fold-out {
+      from {
+        opacity: 0;
+        transform: translateX(-4px) scaleX(0.86);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateX(0) scaleX(1);
+      }
     }
 
     .rail-label {
@@ -397,10 +427,14 @@ class ReportSidebar extends LitElement {
 
         <nav aria-label="Report pages" @scroll=${this.hideHoverTitle}>
           <span class="rail-label" aria-hidden="true">Pages</span>
-          ${pages.map((page, index) => this.renderPageLink(page, index))}
+          ${pages.map((page, index) => this.renderPageLink(page, index, pages.length))}
         </nav>
         ${this.collapsed && this.hoverTitle ? html`
-          <div class="hover-title" style=${`top:${this.hoverTitle.top}px`}>
+          <div
+            class="hover-title"
+            style=${`top:${this.hoverTitle.top}px`}
+            ?data-active=${this.hoverTitle.active}
+          >
             <span class="hover-title-index" aria-hidden="true">${this.hoverTitle.index}</span>
             <span class="hover-title-name">${this.hoverTitle.title}</span>
           </div>
@@ -409,8 +443,9 @@ class ReportSidebar extends LitElement {
     `
   }
 
-  private renderPageLink(page: ReportPage, index: number) {
+  private renderPageLink(page: ReportPage, index: number, pageCount: number) {
     const active = Boolean(page.active || page.id === this.config.pageId)
+    const pageNumber = formatPageNumber(index, pageCount)
     const title = page.title || page.id
     return html`
       <a
@@ -418,12 +453,12 @@ class ReportSidebar extends LitElement {
         href=${page.href}
         aria-current=${active ? 'page' : 'false'}
         aria-label=${title}
-        @mouseenter=${(event: MouseEvent) => this.showHoverTitle(event, title, index + 1)}
+        @mouseenter=${(event: MouseEvent) => this.showHoverTitle(event, title, pageNumber, active)}
         @mouseleave=${this.hideHoverTitle}
-        @focus=${(event: FocusEvent) => this.showHoverTitle(event, title, index + 1)}
+        @focus=${(event: FocusEvent) => this.showHoverTitle(event, title, pageNumber, active)}
         @blur=${this.hideHoverTitle}
       >
-        <span class="page-index" aria-hidden="true">${index + 1}</span>
+        <span class="page-index" aria-hidden="true">${pageNumber}</span>
         <span class="link-text">${title}</span>
       </a>
     `
@@ -445,7 +480,7 @@ class ReportSidebar extends LitElement {
     })
   }
 
-  private showHoverTitle(event: MouseEvent | FocusEvent, title: string, index: number): void {
+  private showHoverTitle(event: MouseEvent | FocusEvent, title: string, index: string, active: boolean): void {
     if (!this.collapsed) return
     const target = event.currentTarget
     const aside = this.renderRoot.querySelector<HTMLElement>('aside')
@@ -456,6 +491,7 @@ class ReportSidebar extends LitElement {
       index,
       title,
       top: targetRect.top - asideRect.top + targetRect.height / 2,
+      active,
     }
   }
 
@@ -470,6 +506,11 @@ function storedCollapsed(): boolean {
   } catch {
     return false
   }
+}
+
+function formatPageNumber(index: number, pageCount: number): string {
+  const pageNumber = String(index + 1)
+  return pageCount >= 10 ? pageNumber.padStart(2, '0') : pageNumber
 }
 
 function icon(name: 'chevron-left' | 'chevron-right') {
