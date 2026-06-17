@@ -1,15 +1,9 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { createRef, ref, type Ref } from 'lit/directives/ref.js'
 import {
-  FlexRender,
   TableController,
-  columnPinningFeature,
-  columnResizingFeature,
-  columnSizingFeature,
-  columnVisibilityFeature,
-  rowSelectionFeature,
-  rowSortingFeature,
-  tableFeatures,
+  createCoreRowModel,
+  flexRender,
   type ColumnDef,
   type ColumnSizingState,
   type ColumnVisibilityState,
@@ -36,15 +30,6 @@ import {
   type VisualAction,
   type VisibleRowSlot,
 } from './table/types'
-
-const tableFeaturesConfig = tableFeatures({
-  columnPinningFeature,
-  columnResizingFeature,
-  columnSizingFeature,
-  columnVisibilityFeature,
-  rowSelectionFeature,
-  rowSortingFeature,
-})
 
 function defaultColumnSize(column: TableColumn): number {
   const widths: Record<string, number> = {
@@ -99,7 +84,7 @@ class DataTable extends LitElement {
   private blockCache: Record<BlockID, TableBlock> = emptyBlocks()
   private scrollElementRef: Ref<HTMLDivElement> = createRef()
   private resizeObserver?: ResizeObserver
-  private tableController = new TableController<typeof tableFeaturesConfig, TanStackTableRow>(this)
+  private tableController = new TableController<TanStackTableRow>(this)
   private handleOutsidePointerDown = (event: PointerEvent) => {
     const details = this.renderRoot.querySelector<HTMLDetailsElement>('.visual-options')
     if (!details?.open) return
@@ -814,7 +799,7 @@ class DataTable extends LitElement {
     return segments
   }
 
-  private tanstackColumnDefs(): Array<ColumnDef<typeof tableFeaturesConfig, TanStackTableRow, unknown>> {
+  private tanstackColumnDefs(): Array<ColumnDef<TanStackTableRow, unknown>> {
     return this.columnsForTanStack().map((column) => ({
       id: column.key,
       accessorKey: column.key,
@@ -824,7 +809,7 @@ class DataTable extends LitElement {
       minSize: column.key === 'order_id' || column.key === 'category' ? 160 : 64,
       enableResizing: true,
       meta: { align: column.align },
-    })) as Array<ColumnDef<typeof tableFeaturesConfig, TanStackTableRow, unknown>>
+    })) as Array<ColumnDef<TanStackTableRow, unknown>>
   }
 
   private tanstackTable() {
@@ -834,10 +819,10 @@ class DataTable extends LitElement {
       : []
     return this.tableController.table(
       {
-        features: tableFeaturesConfig,
         columns: this.tanstackColumnDefs(),
         data: this.tanstackRows,
         getRowId: (row) => row.__rowKey,
+        getCoreRowModel: createCoreRowModel(),
         manualSorting: true,
         manualFiltering: true,
         manualPagination: true,
@@ -864,12 +849,6 @@ class DataTable extends LitElement {
           if (!this.selectedRowId) this.selectedCellKey = ''
         },
       } as any,
-      (state: any) => ({
-        columnVisibility: state.columnVisibility,
-        columnSizing: state.columnSizing,
-        rowSelection: state.rowSelection,
-        sorting: state.sorting,
-      }),
     ) as any
   }
 
@@ -968,7 +947,7 @@ class DataTable extends LitElement {
                     return html`
                       <div class=${`header-cell ${column.role === 'row_header' ? 'row-header' : ''} ${sorted ? 'sorted' : ''}`} role="columnheader">
                         <button class="header-button" type="button" @click=${() => this.sortColumn(column)}>
-                          <span>${FlexRender({ header })}</span>
+                          <span>${flexRender(header.column.columnDef.header, header.getContext())}</span>
                           <span class="sort">${sortMark}</span>
                         </button>
                         ${header.column.getCanResize?.() ? html`
@@ -1035,7 +1014,7 @@ class DataTable extends LitElement {
                               this.selectCell(row, column, index)
                             }}
                           >
-                            ${FlexRender({ cell })}
+                            ${flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </button>
                         `
                       })}

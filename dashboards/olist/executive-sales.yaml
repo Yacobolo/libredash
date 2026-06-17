@@ -1,13 +1,13 @@
 id: executive-sales
 title: Executive Sales Dashboard
 description: Sales, order, category, and delivery overview.
-semantic_model: olist
+metrics_views: [orders]
 
 filters:
   purchase_date:
     type: date_range
     label: Period
-    dataset: orders
+    metrics_view: orders
     dimension: purchase_timestamp
     url_param: period
     from_url_param: from
@@ -32,7 +32,7 @@ filters:
   state:
     type: multi_select
     label: State
-    dataset: orders
+    metrics_view: orders
     dimension: state
     url_param: state
     operator: in
@@ -42,7 +42,7 @@ filters:
   category:
     type: text
     label: Category
-    dataset: orders
+    metrics_view: orders
     dimension: category
     url_param: category
     operator_url_param: category_op
@@ -53,7 +53,7 @@ visuals:
   total_orders:
     kind: kpi
     shape: single_value
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [order_count]
     options:
@@ -62,7 +62,7 @@ visuals:
   revenue_kpi:
     kind: kpi
     shape: single_value
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [revenue]
     options:
@@ -71,7 +71,7 @@ visuals:
   aov_kpi:
     kind: kpi
     shape: single_value
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [aov]
     options:
@@ -80,7 +80,7 @@ visuals:
   review_kpi:
     kind: kpi
     shape: single_value
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [review_score]
     options:
@@ -89,7 +89,7 @@ visuals:
   revenue:
     title: Revenue by month
     type: area
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [revenue]
@@ -105,7 +105,7 @@ visuals:
   orders:
     title: Orders by status
     type: donut
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status]
       measures: [order_count]
@@ -124,7 +124,7 @@ visuals:
     type: column
     options:
       stacked: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       series: status
@@ -141,7 +141,7 @@ visuals:
   categories:
     title: Top product categories
     type: bar
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category]
       measures: [revenue]
@@ -157,7 +157,7 @@ visuals:
   delivery:
     title: Delivery speed
     type: bar
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [delivery_bucket]
       measures: [order_count]
@@ -174,7 +174,7 @@ visuals:
     shape: matrix
     renderer: echarts
     type: heatmap
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [state, status]
       measures: [order_count]
@@ -189,7 +189,7 @@ visuals:
     shape: graph
     renderer: echarts
     type: sankey
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status, delivery_bucket]
       measures: [order_count]
@@ -202,7 +202,7 @@ visuals:
     shape: distribution
     renderer: echarts
     type: boxplot
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [delivery_bucket]
       measures: [delivery_days]
@@ -216,7 +216,7 @@ visuals:
     type: map
     options:
       map: brazil_states
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [state]
       measures: [order_count]
@@ -229,7 +229,7 @@ visuals:
     shape: graph
     renderer: echarts
     type: graph
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status, delivery_bucket]
       measures: [order_count]
@@ -246,7 +246,7 @@ visuals:
       series_types:
         Revenue: line
         Orders: column
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [revenue, order_count]
@@ -259,7 +259,7 @@ visuals:
     shape: category_delta
     renderer: echarts
     type: waterfall
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [revenue]
@@ -274,7 +274,7 @@ visuals:
     type: histogram
     options:
       bin_count: 16
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [delivery_days]
   status_radar:
@@ -282,7 +282,7 @@ visuals:
     shape: category_value
     renderer: echarts
     type: radar
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status]
       measures: [order_count]
@@ -295,7 +295,7 @@ visuals:
     shape: hierarchy
     renderer: echarts
     type: sunburst
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category, status]
       measures: [order_count]
@@ -308,7 +308,7 @@ visuals:
     shape: hierarchy
     renderer: echarts
     type: tree
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [state, status]
       measures: [order_count]
@@ -319,7 +319,7 @@ visuals:
   revenue_line:
     title: Revenue line by month
     type: line
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [revenue]
@@ -332,7 +332,7 @@ visuals:
     shape: category_series_value
     renderer: echarts
     type: line
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       series: status
@@ -348,7 +348,7 @@ visuals:
       step: middle
       show_symbols: false
       data_zoom: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [revenue]
@@ -363,7 +363,7 @@ visuals:
     type: area
     options:
       stacked: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       series: status
@@ -380,7 +380,7 @@ visuals:
       smooth: true
       show_symbols: false
       data_zoom: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [revenue]
@@ -395,7 +395,7 @@ visuals:
     type: bar
     options:
       stacked: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category]
       series: status
@@ -407,7 +407,7 @@ visuals:
   orders_by_month_column:
     title: Orders by month
     type: column
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [order_count]
@@ -422,7 +422,7 @@ visuals:
     type: column
     options:
       legend: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       series: status
@@ -434,7 +434,7 @@ visuals:
   status_pie:
     title: Orders by status pie
     type: pie
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status]
       measures: [order_count]
@@ -444,7 +444,7 @@ visuals:
   category_pie:
     title: Revenue by category pie
     type: pie
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category]
       measures: [revenue]
@@ -458,7 +458,7 @@ visuals:
     options:
       rose_type: radius
       show_labels: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status]
       measures: [order_count]
@@ -471,7 +471,7 @@ visuals:
     options:
       show_labels: true
       label_position: inside
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category]
       measures: [revenue]
@@ -482,7 +482,7 @@ visuals:
   category_donut:
     title: Revenue by category donut
     type: donut
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category]
       measures: [revenue]
@@ -496,7 +496,7 @@ visuals:
     options:
       center_label: Orders
       radius: ["54%", "76%"]
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status]
       measures: [order_count]
@@ -506,7 +506,7 @@ visuals:
   delivery_scatter:
     title: Delivery days scatter by month
     type: scatter
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [delivery_days]
@@ -519,7 +519,7 @@ visuals:
     shape: category_series_value
     renderer: echarts
     type: scatter
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       series: status
@@ -535,7 +535,7 @@ visuals:
       show_labels: true
       label_position: top
       symbol_size: 12
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [delivery_bucket]
       measures: [delivery_days]
@@ -545,7 +545,7 @@ visuals:
   status_funnel:
     title: Orders by status funnel
     type: funnel
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status]
       measures: [order_count]
@@ -555,7 +555,7 @@ visuals:
   delivery_funnel:
     title: Delivery speed funnel
     type: funnel
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [delivery_bucket]
       measures: [order_count]
@@ -569,7 +569,7 @@ visuals:
       funnel_align: left
       sort: ascending
       show_labels: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status]
       measures: [order_count]
@@ -579,7 +579,7 @@ visuals:
   category_treemap:
     title: Category revenue treemap
     type: treemap
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category]
       measures: [revenue]
@@ -590,7 +590,7 @@ visuals:
   state_treemap:
     title: State order treemap
     type: treemap
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [state]
       measures: [order_count]
@@ -604,7 +604,7 @@ visuals:
     options:
       roam: true
       breadcrumb: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category]
       measures: [revenue]
@@ -617,7 +617,7 @@ visuals:
     shape: single_value
     renderer: echarts
     type: gauge
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [order_count]
   review_gauge:
@@ -625,7 +625,7 @@ visuals:
     shape: single_value
     renderer: echarts
     type: gauge
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [review_score]
   review_gauge_thresholds:
@@ -644,7 +644,7 @@ visuals:
           color: "#bf8700"
         - value: 5
           color: "#1a7f37"
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [review_score]
   category_status_heatmap:
@@ -652,7 +652,7 @@ visuals:
     shape: matrix
     renderer: echarts
     type: heatmap
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category, status]
       measures: [order_count]
@@ -667,7 +667,7 @@ visuals:
     type: heatmap
     options:
       show_labels: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category, status]
       measures: [order_count]
@@ -680,7 +680,7 @@ visuals:
     shape: graph
     renderer: echarts
     type: sankey
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category, status]
       measures: [order_count]
@@ -696,7 +696,7 @@ visuals:
     options:
       node_gap: 18
       curveness: 0.32
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category, status]
       measures: [order_count]
@@ -709,7 +709,7 @@ visuals:
     shape: graph
     renderer: echarts
     type: graph
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category, status]
       measures: [order_count]
@@ -726,7 +726,7 @@ visuals:
       layout: circular
       curveness: 0.28
       focus: adjacency
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category, status]
       measures: [order_count]
@@ -741,7 +741,7 @@ visuals:
     type: map
     options:
       map: brazil_states
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [state]
       measures: [revenue]
@@ -758,7 +758,7 @@ visuals:
       map: brazil_states
       show_labels: true
       roam: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [state]
       measures: [revenue]
@@ -771,7 +771,7 @@ visuals:
     shape: ohlc
     renderer: echarts
     type: candlestick
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [delivery_days_q1, delivery_days_q3, delivery_days_min, delivery_days_max]
@@ -786,7 +786,7 @@ visuals:
     type: candlestick
     options:
       data_zoom: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [revenue_q1, revenue_q3, revenue_min, revenue_max]
@@ -799,7 +799,7 @@ visuals:
     shape: distribution
     renderer: echarts
     type: boxplot
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status]
       measures: [review_score]
@@ -813,7 +813,7 @@ visuals:
     type: boxplot
     options:
       data_zoom: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category]
       measures: [revenue]
@@ -830,7 +830,7 @@ visuals:
       series_types:
         Review: line
         Delivery days: column
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [status]
       measures: [review_score, delivery_days]
@@ -847,7 +847,7 @@ visuals:
       series_types:
         Revenue: column
         Orders: line
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [revenue, order_count]
@@ -860,7 +860,7 @@ visuals:
     shape: category_delta
     renderer: echarts
     type: waterfall
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [order_count]
@@ -876,7 +876,7 @@ visuals:
     options:
       show_labels: true
       data_zoom: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category]
       measures: [revenue]
@@ -891,7 +891,7 @@ visuals:
     type: histogram
     options:
       bin_count: 18
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [revenue]
   review_histogram:
@@ -902,7 +902,7 @@ visuals:
     options:
       bin_count: 10
       show_labels: true
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [review_score]
   delivery_radar:
@@ -910,7 +910,7 @@ visuals:
     shape: category_value
     renderer: echarts
     type: radar
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [delivery_bucket]
       measures: [order_count]
@@ -924,7 +924,7 @@ visuals:
     type: radar
     options:
       area: false
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [state]
       measures: [order_count]
@@ -937,7 +937,7 @@ visuals:
     shape: hierarchy
     renderer: echarts
     type: tree
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category, status]
       measures: [order_count]
@@ -953,7 +953,7 @@ visuals:
     options:
       orient: TB
       initial_depth: 2
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category, state, status]
       measures: [order_count]
@@ -966,7 +966,7 @@ visuals:
     shape: hierarchy
     renderer: echarts
     type: sunburst
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [state, status]
       measures: [order_count]
@@ -982,7 +982,7 @@ visuals:
     options:
       initial_depth: 2
       roam: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [category, state, status]
       measures: [order_count]
@@ -995,7 +995,7 @@ tables:
   orders:
     kind: data_table
     title: Orders
-    dataset: orders
+    metrics_view: orders
     default_sort:
       key: purchase_date
       direction: desc
@@ -1022,7 +1022,7 @@ tables:
   state_status_matrix:
     kind: matrix_table
     title: State status matrix
-    dataset: orders
+    metrics_view: orders
     rows: [state]
     columns: [status]
     measures: [order_count, revenue]
@@ -1032,7 +1032,7 @@ tables:
   category_status_pivot:
     kind: pivot_table
     title: Category status pivot
-    dataset: orders
+    metrics_view: orders
     rows: [category]
     columns: [status]
     measures: [order_count]

@@ -3,11 +3,6 @@
  */
 
 /**
- * View mode for signal display
- */
-export type ViewMode = 'json' | 'table'
-
-/**
  * Persisted inspector state (stored in sessionStorage)
  */
 export interface InspectorState {
@@ -15,8 +10,8 @@ export interface InspectorState {
   expanded: boolean
   /** Current filter text */
   filter: string
-  /** Current view mode */
-  viewMode: ViewMode
+  /** Expanded tree paths */
+  expandedPaths?: string[]
 }
 
 /**

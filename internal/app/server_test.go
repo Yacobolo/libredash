@@ -30,10 +30,61 @@ func (fakeMetrics) Catalog() dashboard.Catalog {
 		Models: []dashboard.CatalogModel{
 			{ID: "test", Title: "Test Model", Description: "Fixture model"},
 		},
+		MetricViews: []dashboard.CatalogMetricView{
+			{ID: "orders", Title: "Orders Metrics", Description: "Fixture metrics view", SemanticModel: "test", ModelTitle: "Test Model"},
+		},
 		Dashboards: []dashboard.CatalogDashboard{
-			{ID: "executive-sales", Title: "Executive Sales Dashboard", Description: "Fixture report", SemanticModel: "test", ModelTitle: "Test Model", Tags: []string{"sales"}, PageCount: 2},
+			{ID: "executive-sales", Title: "Executive Sales Dashboard", Description: "Fixture report", MetricViews: []string{"orders"}, MetricViewTitles: []string{"Orders Metrics"}, Tags: []string{"sales"}, PageCount: 2},
 		},
 	}
+}
+
+func (fakeMetrics) MetricViews() []dashboard.MetricViewSummary {
+	return []dashboard.MetricViewSummary{
+		{
+			ID:             "orders",
+			Title:          "Orders Metrics",
+			Description:    "Fixture metrics view",
+			SemanticModel:  "test",
+			ModelTitle:     "Test Model",
+			Dataset:        "orders",
+			Timeseries:     "purchase_timestamp",
+			DimensionCount: 2,
+			MeasureCount:   2,
+			DashboardCount: 1,
+		},
+	}
+}
+
+func (fakeMetrics) MetricView(id string) (dashboard.MetricViewDetail, bool) {
+	if id != "orders" {
+		return dashboard.MetricViewDetail{}, false
+	}
+	return dashboard.MetricViewDetail{
+		MetricViewSummary: dashboard.MetricViewSummary{
+			ID:             "orders",
+			Title:          "Orders Metrics",
+			Description:    "Fixture metrics view",
+			SemanticModel:  "test",
+			ModelTitle:     "Test Model",
+			Dataset:        "orders",
+			Timeseries:     "purchase_timestamp",
+			DimensionCount: 2,
+			MeasureCount:   2,
+			DashboardCount: 1,
+		},
+		Dimensions: []dashboard.MetricViewDimension{
+			{Name: "category", Label: "Category", Expr: "e.category"},
+			{Name: "delivery_bucket", Label: "Delivery speed", Expr: "e.delivery_bucket", Where: "e.delivery_bucket IS NOT NULL", OrderExpr: "MIN(e.delivery_days)"},
+		},
+		Measures: []dashboard.MetricViewMeasure{
+			{Name: "order_count", Label: "Orders", Expression: "COUNT(DISTINCT e.order_id)", Unit: "orders", Format: "integer"},
+			{Name: "revenue", Label: "Revenue", Expression: "SUM(e.revenue)", Unit: "R$", Format: "currency", Description: "Total paid revenue"},
+		},
+		Dashboards: []dashboard.MetricViewDashboard{
+			{ID: "executive-sales", Title: "Executive Sales Dashboard", Description: "Fixture report", Tags: []string{"sales"}, PageCount: 2},
+		},
+	}, true
 }
 
 func (fakeMetrics) DefaultDashboardID() string {
@@ -56,19 +107,19 @@ func (fakeMetrics) Report(dashboardID string) (semantic.Dashboard, *semantic.Mod
 		return semantic.Dashboard{}, nil, false
 	}
 	return semantic.Dashboard{
-			ID:            "executive-sales",
-			Title:         "Executive Sales Dashboard",
-			SemanticModel: "test",
+			ID:          "executive-sales",
+			Title:       "Executive Sales Dashboard",
+			MetricViews: []string{"orders"},
 			Filters: map[string]semantic.FilterDefinition{
-				"state":    {Type: "multi_select", Label: "State", Dataset: "orders", Dimension: "status", URLParam: "state", Operator: "in", Values: semantic.FilterValues{Source: "distinct", Limit: 50}},
-				"category": {Type: "text", Label: "Category", Dataset: "orders", Dimension: "status", URLParam: "category", DefaultOperator: "contains", Operators: []string{"contains", "equals"}},
+				"state":    {Type: "multi_select", Label: "State", MetricView: "orders", Dimension: "status", URLParam: "state", Operator: "in", Values: semantic.FilterValues{Source: "distinct", Limit: 50}},
+				"category": {Type: "text", Label: "Category", MetricView: "orders", Dimension: "status", URLParam: "category", DefaultOperator: "contains", Operators: []string{"contains", "equals"}},
 			},
 			Visuals: map[string]semantic.Visual{
-				"orders":       {Title: "Orders", Type: "donut", Dataset: "orders", Query: semantic.VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}}, Interaction: semantic.Interaction{Field: "status"}},
-				"ops_pipeline": {Title: "Ops Pipeline", Type: "bar", Dataset: "orders", Query: semantic.VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}}, Interaction: semantic.Interaction{Field: "status"}},
+				"orders":       {Title: "Orders", Type: "donut", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}}, Interaction: semantic.Interaction{Field: "status"}},
+				"ops_pipeline": {Title: "Ops Pipeline", Type: "bar", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}}, Interaction: semantic.Interaction{Field: "status"}},
 			},
 			Tables: map[string]semantic.TableVisual{
-				"orders": {Title: "Orders", Dataset: "orders", DefaultSort: dashboard.TableSort{Key: "purchase_date", Direction: "desc"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
+				"orders": {Title: "Orders", MetricView: "orders", DefaultSort: dashboard.TableSort{Key: "purchase_date", Direction: "desc"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
 			},
 			Pages: fakeMetrics{}.Pages(dashboardID),
 		}, &semantic.Model{
@@ -76,8 +127,7 @@ func (fakeMetrics) Report(dashboardID string) (semantic.Dashboard, *semantic.Mod
 			Title: "Test Model",
 			Datasets: map[string]semantic.Dataset{
 				"orders": {
-					Dimensions: map[string]semantic.Dimension{"status": {Expr: "status"}},
-					Measures:   map[string]semantic.Measure{"order_count": {Aggregate: "count_distinct", Column: "order_id", Unit: "orders"}},
+					Source: "orders_enriched",
 				},
 			},
 		}, true
@@ -138,9 +188,13 @@ func (fakeMetrics) ModelGraph(modelID string) (dashboard.ModelGraph, bool) {
 		Nodes: []dashboard.ModelNode{
 			{ID: "source:orders", Label: "orders", Kind: "source"},
 			{ID: "cache:orders_enriched", Label: "orders_enriched", Kind: "cache"},
+			{ID: "dataset:orders", Label: "orders", Kind: "dataset"},
+			{ID: "metrics_view:orders", Label: "Orders Metrics", Kind: "metrics_view"},
 		},
 		Edges: []dashboard.ModelEdge{
 			{ID: "orders_cache", Source: "source:orders", Target: "cache:orders_enriched", Kind: "materialization"},
+			{ID: "orders_dataset", Source: "cache:orders_enriched", Target: "dataset:orders", Kind: "dataset"},
+			{ID: "orders_metrics", Source: "dataset:orders", Target: "metrics_view:orders", Kind: "metrics"},
 		},
 	}, true
 }
@@ -253,6 +307,44 @@ func TestPageRouteSeedsOperationsPageFiltersFromURL(t *testing.T) {
 	}
 }
 
+func TestHTMLRoutesIncludeDatastarInspector(t *testing.T) {
+	for _, path := range []string{
+		"/login",
+		"/",
+		"/dashboards/executive-sales/pages/overview",
+		"/models",
+		"/models/test",
+		"/metrics",
+		"/metrics/orders/measures",
+		"/metrics/orders/dimensions",
+		"/metrics/orders/usage",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+
+			New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			assertDatastarInspector(t, rec.Body.String())
+		})
+	}
+}
+
+func assertDatastarInspector(t *testing.T, body string) {
+	t.Helper()
+	for _, want := range []string{
+		`/static/datastar-inspector.js`,
+		`<datastar-inspector`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("page missing Datastar inspector marker %q:\n%s", want, body)
+		}
+	}
+}
+
 func TestCatalogRouteRendersDashboardCatalog(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
@@ -316,6 +408,172 @@ func TestModelsRouteRendersSemanticModelCatalog(t *testing.T) {
 	}
 	if strings.Contains(body, `<ld-report-sidebar`) {
 		t.Fatalf("models catalog should not render report sidebar:\n%s", body)
+	}
+}
+
+func TestMetricsRouteRendersMetricViewCatalog(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `Metric Views`) {
+		t.Fatalf("metric view catalog missing title:\n%s", body)
+	}
+	if !strings.Contains(body, `Orders Metrics`) {
+		t.Fatalf("metric view catalog missing metric view card:\n%s", body)
+	}
+	if !strings.Contains(body, `href="/metrics/orders/measures"`) {
+		t.Fatalf("metric view catalog missing detail link:\n%s", body)
+	}
+	if !strings.Contains(body, `Metric Views`) || !strings.Contains(body, `/metrics`) {
+		t.Fatalf("sidebar missing metric views navigation:\n%s", body)
+	}
+}
+
+func TestMetricViewRouteRedirectsToMeasures(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/metrics/orders", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
+	}
+	if got, want := rec.Header().Get("Location"), "/metrics/orders/measures"; got != want {
+		t.Fatalf("Location = %q, want %q", got, want)
+	}
+}
+
+func TestMetricViewMeasuresRouteRendersMeasuresTab(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/metrics/orders/measures", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`Orders Metrics`,
+		`href="/models/test"`,
+		`<code>orders</code>`,
+		`<code>purchase_timestamp</code>`,
+		`href="/metrics/orders/measures"`,
+		`href="/metrics/orders/dimensions"`,
+		`href="/metrics/orders/usage"`,
+		`aria-current="page"`,
+		`/static/detail-rail.js`,
+		`<ld-detail-rail class="metric-workspace">`,
+		`data-signals=`,
+		`metricGrid`,
+		`<ld-data-grid data-attr:grid="$metricGrid"></ld-data-grid>`,
+		`Revenue`,
+		`SUM(e.revenue)`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metric view measures tab missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `metric-contract-rail`) || strings.Contains(body, `metric-rail-section`) {
+		t.Fatalf("metric view detail should not render the old right rail:\n%s", body)
+	}
+	for _, notWant := range []string{`>Measures</h2>`, `>Dimensions</h2>`, `>Used by</h2>`, `metric-section-header`, `metricUsageGraph`, `<ld-metric-usage-graph`} {
+		if strings.Contains(body, notWant) {
+			t.Fatalf("metric view measures tab should not render %q:\n%s", notWant, body)
+		}
+	}
+}
+
+func TestMetricViewDimensionsRouteRendersDimensionsTab(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/metrics/orders/dimensions", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`aria-current="page"`,
+		`Category`,
+		`e.category`,
+		`Delivery speed`,
+		`e.delivery_bucket IS NOT NULL`,
+		`metricGrid`,
+		`<ld-data-grid data-attr:grid="$metricGrid"></ld-data-grid>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metric view dimensions tab missing %q:\n%s", want, body)
+		}
+	}
+	for _, notWant := range []string{`>Measures</h2>`, `>Dimensions</h2>`, `>Used by</h2>`, `metric-section-header`, `SUM(e.revenue)`, `<ld-metric-usage-graph`} {
+		if strings.Contains(body, notWant) {
+			t.Fatalf("metric view dimensions tab should not render %q:\n%s", notWant, body)
+		}
+	}
+}
+
+func TestMetricViewUsageRouteRendersUsageTab(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/metrics/orders/usage", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`aria-current="page"`,
+		`data-signals=`,
+		`metricUsageGraph`,
+		`<ld-metric-usage-graph data-attr:graph="$metricUsageGraph"></ld-metric-usage-graph>`,
+		`metricGrid`,
+		`<ld-data-grid data-attr:grid="$metricGrid"></ld-data-grid>`,
+		`Dashboard`,
+		`Tags`,
+		`/dashboards/executive-sales`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metric view usage tab missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `data-graph=`) {
+		t.Fatalf("metric view detail should use signals instead of a serialized data-graph attribute:\n%s", body)
+	}
+	for _, notWant := range []string{`>Measures</h2>`, `>Dimensions</h2>`, `>Used by</h2>`, `metric-section-header`, `SUM(e.revenue)`, `e.category`} {
+		if strings.Contains(body, notWant) {
+			t.Fatalf("metric view usage tab should not render %q:\n%s", notWant, body)
+		}
+	}
+}
+
+func TestUnknownMetricViewRouteReturnsNotFound(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/metrics/missing", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func TestUnknownMetricViewSectionRouteReturnsNotFound(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/metrics/orders/missing", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
 

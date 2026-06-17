@@ -12,20 +12,20 @@ import (
 )
 
 type Dashboard struct {
-	ID            string                      `yaml:"id"`
-	Title         string                      `yaml:"title"`
-	Description   string                      `yaml:"description"`
-	SemanticModel string                      `yaml:"semantic_model"`
-	Filters       map[string]FilterDefinition `yaml:"filters"`
-	Visuals       map[string]Visual           `yaml:"visuals"`
-	Tables        map[string]TableVisual      `yaml:"tables"`
-	Pages         []dashboard.Page            `yaml:"pages"`
+	ID          string                      `yaml:"id"`
+	Title       string                      `yaml:"title"`
+	Description string                      `yaml:"description"`
+	MetricViews []string                    `yaml:"metrics_views"`
+	Filters     map[string]FilterDefinition `yaml:"filters"`
+	Visuals     map[string]Visual           `yaml:"visuals"`
+	Tables      map[string]TableVisual      `yaml:"tables"`
+	Pages       []dashboard.Page            `yaml:"pages"`
 }
 
 type FilterDefinition struct {
 	Type             string         `yaml:"type" json:"type"`
 	Label            string         `yaml:"label" json:"label"`
-	Dataset          string         `yaml:"dataset" json:"dataset"`
+	MetricView       string         `yaml:"metrics_view" json:"metricsView"`
 	Dimension        string         `yaml:"dimension" json:"dimension"`
 	Default          FilterDefault  `yaml:"default" json:"default"`
 	Custom           bool           `yaml:"custom" json:"custom,omitempty"`
@@ -79,7 +79,7 @@ type Visual struct {
 	Shape           string         `yaml:"shape"`
 	Renderer        string         `yaml:"renderer"`
 	Type            string         `yaml:"type"`
-	Dataset         string         `yaml:"dataset"`
+	MetricView      string         `yaml:"metrics_view"`
 	Query           VisualQuery    `yaml:"query"`
 	Options         map[string]any `yaml:"options"`
 	RendererOptions map[string]any `yaml:"renderer_options"`
@@ -113,7 +113,7 @@ type InteractionTargets struct {
 type TableVisual struct {
 	Kind        string                  `yaml:"kind"`
 	Title       string                  `yaml:"title"`
-	Dataset     string                  `yaml:"dataset"`
+	MetricView  string                  `yaml:"metrics_view"`
 	DefaultSort dashboard.TableSort     `yaml:"default_sort"`
 	Columns     []dashboard.TableColumn `yaml:"columns"`
 	Rows        []string                `yaml:"rows"`
@@ -125,7 +125,7 @@ func (t *TableVisual) UnmarshalYAML(value *yaml.Node) error {
 	type rawTableVisual struct {
 		Kind        string              `yaml:"kind"`
 		Title       string              `yaml:"title"`
-		Dataset     string              `yaml:"dataset"`
+		MetricView  string              `yaml:"metrics_view"`
 		DefaultSort dashboard.TableSort `yaml:"default_sort"`
 		Rows        []string            `yaml:"rows"`
 		Measures    []string            `yaml:"measures"`
@@ -136,7 +136,7 @@ func (t *TableVisual) UnmarshalYAML(value *yaml.Node) error {
 	}
 	t.Kind = raw.Kind
 	t.Title = raw.Title
-	t.Dataset = raw.Dataset
+	t.MetricView = raw.MetricView
 	t.DefaultSort = raw.DefaultSort
 	t.Rows = raw.Rows
 	t.Measures = raw.Measures
@@ -244,7 +244,7 @@ func copyMap(source map[string]any) map[string]any {
 	return next
 }
 
-func LoadDashboard(path string, model *Model) (*Dashboard, error) {
+func LoadDashboard(path string, metricViews map[string]*MetricView) (*Dashboard, error) {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -259,7 +259,7 @@ func LoadDashboard(path string, model *Model) (*Dashboard, error) {
 	if err := rejectLegacyKPIs(bytes); err != nil {
 		return nil, err
 	}
-	if err := report.Validate(model); err != nil {
+	if err := report.Validate(metricViews); err != nil {
 		return nil, err
 	}
 	return &report, nil
@@ -328,15 +328,27 @@ func mappingValue(node *yaml.Node, key string) *yaml.Node {
 	return nil
 }
 
-func (d *Dashboard) Validate(model *Model) error {
-	if d.ID == "" || d.Title == "" || d.SemanticModel == "" {
-		return fmt.Errorf("dashboard requires id, title, and semantic_model")
+func (d *Dashboard) Validate(metricViews map[string]*MetricView) error {
+	if d.ID == "" || d.Title == "" {
+		return fmt.Errorf("dashboard requires id and title")
 	}
-	if model == nil {
-		return fmt.Errorf("dashboard %q requires semantic model %q", d.ID, d.SemanticModel)
+	if len(d.MetricViews) == 0 {
+		return fmt.Errorf("dashboard %q requires metrics_views", d.ID)
 	}
-	if d.SemanticModel != model.Name {
-		return fmt.Errorf("dashboard %q semantic_model %q does not match model %q", d.ID, d.SemanticModel, model.Name)
+	allowedViews := map[string]*MetricView{}
+	modelName := ""
+	for _, viewName := range d.MetricViews {
+		view, ok := metricViews[viewName]
+		if !ok {
+			return fmt.Errorf("dashboard %q references unknown metrics view %q", d.ID, viewName)
+		}
+		if modelName == "" {
+			modelName = view.SemanticModel
+		}
+		if view.SemanticModel != modelName {
+			return fmt.Errorf("dashboard %q metrics views must use one semantic model", d.ID)
+		}
+		allowedViews[viewName] = view
 	}
 	if len(d.Visuals) == 0 {
 		return fmt.Errorf("dashboard %q requires visuals", d.ID)
@@ -345,14 +357,14 @@ func (d *Dashboard) Validate(model *Model) error {
 		return fmt.Errorf("dashboard %q requires pages", d.ID)
 	}
 	for name, filter := range d.Filters {
-		if filter.Type == "" || filter.Label == "" || filter.Dataset == "" || filter.Dimension == "" {
-			return fmt.Errorf("filter %q requires type, label, dataset, and dimension", name)
+		if filter.Type == "" || filter.Label == "" || filter.MetricView == "" || filter.Dimension == "" {
+			return fmt.Errorf("filter %q requires type, label, metrics_view, and dimension", name)
 		}
-		dataset, ok := model.Datasets[filter.Dataset]
+		view, ok := allowedViews[filter.MetricView]
 		if !ok {
-			return fmt.Errorf("filter %q references unknown dataset %q", name, filter.Dataset)
+			return fmt.Errorf("filter %q references unknown metrics view %q", name, filter.MetricView)
 		}
-		if _, ok := dataset.Dimensions[filter.Dimension]; !ok {
+		if _, ok := view.Dimensions[filter.Dimension]; !ok {
 			return fmt.Errorf("filter %q references unknown dimension %q", name, filter.Dimension)
 		}
 		switch filter.Type {
@@ -416,12 +428,12 @@ func (d *Dashboard) Validate(model *Model) error {
 	}
 	for name, visual := range d.Visuals {
 		kind := visual.KindOrDefault()
-		if visual.Dataset == "" || (kind != "kpi" && visual.Title == "") || (kind != "kpi" && visual.Type == "") {
-			return fmt.Errorf("visual %q requires title, dataset, and type", name)
+		if visual.MetricView == "" || (kind != "kpi" && visual.Title == "") || (kind != "kpi" && visual.Type == "") {
+			return fmt.Errorf("visual %q requires title, metrics_view, and type", name)
 		}
-		dataset, ok := model.Datasets[visual.Dataset]
+		view, ok := allowedViews[visual.MetricView]
 		if !ok {
-			return fmt.Errorf("visual %q references unknown dataset %q", name, visual.Dataset)
+			return fmt.Errorf("visual %q references unknown metrics view %q", name, visual.MetricView)
 		}
 		shape := visual.ShapeOrDefault()
 		renderer := visual.RendererOrDefault()
@@ -447,12 +459,12 @@ func (d *Dashboard) Validate(model *Model) error {
 			return err
 		}
 		for _, dimension := range visual.Query.Dimensions {
-			if _, ok := dataset.Dimensions[dimension]; !ok {
+			if _, ok := view.Dimensions[dimension]; !ok {
 				return fmt.Errorf("visual %q references unknown dimension %q", name, dimension)
 			}
 		}
 		if visual.Query.Series != "" {
-			if _, ok := dataset.Dimensions[visual.Query.Series]; !ok {
+			if _, ok := view.Dimensions[visual.Query.Series]; !ok {
 				return fmt.Errorf("visual %q references unknown series dimension %q", name, visual.Query.Series)
 			}
 			if !supportsSeries(shape) {
@@ -463,12 +475,9 @@ func (d *Dashboard) Validate(model *Model) error {
 			}
 		}
 		for _, measure := range visual.Query.Measures {
-			if _, ok := dataset.Measures[measure]; !ok {
+			if _, ok := view.Measures[measure]; !ok {
 				return fmt.Errorf("visual %q references unknown measure %q", name, measure)
 			}
-		}
-		if (shape == "distribution" || shape == "binned_measure") && dataset.Measures[visual.Query.Measures[0]].Column == "" {
-			return fmt.Errorf("visual %q shape %s requires a column-backed measure", name, shape)
 		}
 		if shape == "geo" {
 			if mapName, ok := visual.Options["map"].(string); !ok || strings.TrimSpace(mapName) == "" {
@@ -480,26 +489,26 @@ func (d *Dashboard) Validate(model *Model) error {
 				return fmt.Errorf("visual %q has sort missing field or expr", name)
 			}
 			if sort.Field != "" && sort.Field != "value" && sort.Field != visual.Query.Series {
-				if _, ok := dataset.Dimensions[sort.Field]; !ok {
-					if _, ok := dataset.Measures[sort.Field]; !ok {
+				if _, ok := view.Dimensions[sort.Field]; !ok {
+					if _, ok := view.Measures[sort.Field]; !ok {
 						return fmt.Errorf("visual %q sort references unknown field %q", name, sort.Field)
 					}
 				}
 			}
 		}
 		if visual.Interaction.Field != "" {
-			if _, ok := dataset.Dimensions[visual.Interaction.Field]; !ok {
+			if _, ok := view.Dimensions[visual.Interaction.Field]; !ok {
 				return fmt.Errorf("visual %q interaction references unknown field %q", name, visual.Interaction.Field)
 			}
 		}
 	}
 	for name, table := range d.Tables {
-		if table.Title == "" || table.Dataset == "" {
-			return fmt.Errorf("table %q requires title and dataset", name)
+		if table.Title == "" || table.MetricView == "" {
+			return fmt.Errorf("table %q requires title and metrics_view", name)
 		}
-		dataset, ok := model.Datasets[table.Dataset]
+		view, ok := allowedViews[table.MetricView]
 		if !ok {
-			return fmt.Errorf("table %q references unknown dataset %q", name, table.Dataset)
+			return fmt.Errorf("table %q references unknown metrics view %q", name, table.MetricView)
 		}
 		switch table.KindOrDefault() {
 		case "data_table":
@@ -514,12 +523,12 @@ func (d *Dashboard) Validate(model *Model) error {
 				return fmt.Errorf("table %q kind matrix_table supports at most one column dimension", name)
 			}
 			for _, dimension := range append(append([]string{}, table.Rows...), table.ColumnDims...) {
-				if _, ok := dataset.Dimensions[dimension]; !ok {
+				if _, ok := view.Dimensions[dimension]; !ok {
 					return fmt.Errorf("table %q references unknown dimension %q", name, dimension)
 				}
 			}
 			for _, measure := range table.Measures {
-				if _, ok := dataset.Measures[measure]; !ok {
+				if _, ok := view.Measures[measure]; !ok {
 					return fmt.Errorf("table %q references unknown measure %q", name, measure)
 				}
 			}
@@ -528,11 +537,11 @@ func (d *Dashboard) Validate(model *Model) error {
 				return fmt.Errorf("table %q kind pivot_table requires rows, one column dimension, and one measure", name)
 			}
 			for _, dimension := range append(append([]string{}, table.Rows...), table.ColumnDims...) {
-				if _, ok := dataset.Dimensions[dimension]; !ok {
+				if _, ok := view.Dimensions[dimension]; !ok {
 					return fmt.Errorf("table %q references unknown dimension %q", name, dimension)
 				}
 			}
-			if _, ok := dataset.Measures[table.Measures[0]]; !ok {
+			if _, ok := view.Measures[table.Measures[0]]; !ok {
 				return fmt.Errorf("table %q references unknown measure %q", name, table.Measures[0])
 			}
 		default:

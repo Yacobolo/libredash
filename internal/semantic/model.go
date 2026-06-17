@@ -32,25 +32,33 @@ type CacheTable struct {
 }
 
 type Dataset struct {
-	Source     string               `yaml:"source"`
-	Dimensions map[string]Dimension `yaml:"dimensions"`
-	Measures   map[string]Measure   `yaml:"measures"`
+	Source string `yaml:"source"`
 }
 
-type Dimension struct {
+type MetricView struct {
+	ID            string                     `yaml:"id"`
+	Title         string                     `yaml:"title"`
+	Description   string                     `yaml:"description"`
+	SemanticModel string                     `yaml:"semantic_model"`
+	Dataset       string                     `yaml:"dataset"`
+	Timeseries    string                     `yaml:"timeseries"`
+	Dimensions    map[string]MetricDimension `yaml:"dimensions"`
+	Measures      map[string]MetricMeasure   `yaml:"measures"`
+}
+
+type MetricDimension struct {
 	Label     string `yaml:"label"`
 	Expr      string `yaml:"expr"`
 	Where     string `yaml:"where"`
 	OrderExpr string `yaml:"order_expr"`
 }
 
-type Measure struct {
-	Label      string `yaml:"label"`
-	Aggregate  string `yaml:"aggregate"`
-	Column     string `yaml:"column"`
-	Expression string `yaml:"expression"`
-	Unit       string `yaml:"unit"`
-	Format     string `yaml:"format"`
+type MetricMeasure struct {
+	Label       string `yaml:"label"`
+	Description string `yaml:"description"`
+	Expression  string `yaml:"expression"`
+	Unit        string `yaml:"unit"`
+	Format      string `yaml:"format"`
 }
 
 type Relationship struct {
@@ -106,28 +114,6 @@ func (m *Model) Validate() error {
 		if _, ok := m.Cache.Tables[dataset.Source]; !ok {
 			return fmt.Errorf("dataset %q references unknown cache table %q", name, dataset.Source)
 		}
-		if len(dataset.Dimensions) == 0 {
-			return fmt.Errorf("dataset %q requires dimensions", name)
-		}
-		if len(dataset.Measures) == 0 {
-			return fmt.Errorf("dataset %q requires measures", name)
-		}
-		for dimensionName, dimension := range dataset.Dimensions {
-			if dimension.Expr == "" {
-				return fmt.Errorf("dataset %q dimension %q requires expr", name, dimensionName)
-			}
-		}
-		for measureName, measure := range dataset.Measures {
-			if measure.Aggregate == "" {
-				return fmt.Errorf("dataset %q measure %q requires aggregate", name, measureName)
-			}
-			if measure.Aggregate != "count" && measure.Aggregate != "expression" && measure.Column == "" {
-				return fmt.Errorf("dataset %q measure %q requires column", name, measureName)
-			}
-			if measure.Aggregate == "expression" && measure.Expression == "" {
-				return fmt.Errorf("dataset %q measure %q requires expression", name, measureName)
-			}
-		}
 	}
 	seenRelationships := map[string]struct{}{}
 	for index, relationship := range m.Relationships {
@@ -138,6 +124,59 @@ func (m *Model) Validate() error {
 			return fmt.Errorf("duplicate relationship id %q", relationship.ID)
 		}
 		seenRelationships[relationship.ID] = struct{}{}
+	}
+	return nil
+}
+
+func LoadMetricView(path string, model *Model) (*MetricView, error) {
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var view MetricView
+	if err := yaml.Unmarshal(bytes, &view); err != nil {
+		return nil, err
+	}
+	if err := view.Validate(model); err != nil {
+		return nil, err
+	}
+	return &view, nil
+}
+
+func (v *MetricView) Validate(model *Model) error {
+	if v.ID == "" || v.Title == "" || v.SemanticModel == "" || v.Dataset == "" {
+		return fmt.Errorf("metrics view requires id, title, semantic_model, and dataset")
+	}
+	if model == nil {
+		return fmt.Errorf("metrics view %q requires semantic model %q", v.ID, v.SemanticModel)
+	}
+	if v.SemanticModel != model.Name {
+		return fmt.Errorf("metrics view %q semantic_model %q does not match model %q", v.ID, v.SemanticModel, model.Name)
+	}
+	if _, ok := model.Datasets[v.Dataset]; !ok {
+		return fmt.Errorf("metrics view %q references unknown dataset %q", v.ID, v.Dataset)
+	}
+	if v.Timeseries == "" {
+		return fmt.Errorf("metrics view %q requires timeseries", v.ID)
+	}
+	if len(v.Dimensions) == 0 {
+		return fmt.Errorf("metrics view %q requires dimensions", v.ID)
+	}
+	if len(v.Measures) == 0 {
+		return fmt.Errorf("metrics view %q requires measures", v.ID)
+	}
+	if _, ok := v.Dimensions[v.Timeseries]; !ok {
+		return fmt.Errorf("metrics view %q timeseries %q is not a dimension", v.ID, v.Timeseries)
+	}
+	for name, dimension := range v.Dimensions {
+		if dimension.Expr == "" {
+			return fmt.Errorf("metrics view %q dimension %q requires expr", v.ID, name)
+		}
+	}
+	for name, measure := range v.Measures {
+		if measure.Label == "" || measure.Expression == "" {
+			return fmt.Errorf("metrics view %q measure %q requires label and expression", v.ID, name)
+		}
 	}
 	return nil
 }

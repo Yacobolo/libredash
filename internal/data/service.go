@@ -21,6 +21,7 @@ import (
 )
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var aggregateWrapperPattern = regexp.MustCompile(`(?is)^\s*(?:AVG|SUM|MIN|MAX|MEDIAN)\s*\((.+)\)\s*$`)
 
 type MissingDataError struct {
 	DataDir string
@@ -134,6 +135,58 @@ func (m *DuckDBMetrics) Catalog() dashboard.Catalog {
 	return m.catalog
 }
 
+func (m *DuckDBMetrics) MetricViews() []dashboard.MetricViewSummary {
+	summaries := make([]dashboard.MetricViewSummary, 0, len(m.workspace.MetricViews))
+	for _, id := range sortedKeys(m.workspace.MetricViews) {
+		summary, ok := m.metricViewSummary(id)
+		if ok {
+			summaries = append(summaries, summary)
+		}
+	}
+	return summaries
+}
+
+func (m *DuckDBMetrics) MetricView(id string) (dashboard.MetricViewDetail, bool) {
+	summary, ok := m.metricViewSummary(id)
+	if !ok {
+		return dashboard.MetricViewDetail{}, false
+	}
+	view := m.workspace.MetricViews[id]
+	detail := dashboard.MetricViewDetail{MetricViewSummary: summary}
+
+	for _, name := range sortedKeys(view.Dimensions) {
+		dimension := view.Dimensions[name]
+		detail.Dimensions = append(detail.Dimensions, dashboard.MetricViewDimension{
+			Name:      name,
+			Label:     dimension.Label,
+			Expr:      dimension.Expr,
+			Where:     dimension.Where,
+			OrderExpr: dimension.OrderExpr,
+		})
+	}
+	for _, name := range sortedKeys(view.Measures) {
+		measure := view.Measures[name]
+		detail.Measures = append(detail.Measures, dashboard.MetricViewMeasure{
+			Name:        name,
+			Label:       measure.Label,
+			Description: measure.Description,
+			Expression:  measure.Expression,
+			Unit:        measure.Unit,
+			Format:      measure.Format,
+		})
+	}
+	for _, report := range m.dashboardsForMetricView(id) {
+		detail.Dashboards = append(detail.Dashboards, dashboard.MetricViewDashboard{
+			ID:          report.ID,
+			Title:       report.Title,
+			Description: report.Description,
+			Tags:        append([]string{}, report.Tags...),
+			PageCount:   dashboardPageCount(m.workspace.Dashboards[report.ID]),
+		})
+	}
+	return detail, true
+}
+
 func (m *DuckDBMetrics) DefaultDashboardID() string {
 	return m.defaultID
 }
@@ -143,7 +196,11 @@ func (m *DuckDBMetrics) ModelIDForDashboard(dashboardID string) string {
 	if !ok {
 		return ""
 	}
-	return report.SemanticModel
+	view, ok := m.firstMetricView(report)
+	if !ok {
+		return ""
+	}
+	return view.SemanticModel
 }
 
 func (m *DuckDBMetrics) Report(dashboardID string) (semantic.Dashboard, *semantic.Model, bool) {
@@ -151,7 +208,11 @@ func (m *DuckDBMetrics) Report(dashboardID string) (semantic.Dashboard, *semanti
 	if !ok {
 		return semantic.Dashboard{}, nil, false
 	}
-	model, ok := m.workspace.Models[report.SemanticModel]
+	view, ok := m.firstMetricView(report)
+	if !ok {
+		return semantic.Dashboard{}, nil, false
+	}
+	model, ok := m.workspace.Models[view.SemanticModel]
 	if !ok {
 		return semantic.Dashboard{}, nil, false
 	}
@@ -237,7 +298,7 @@ func (m *DuckDBMetrics) ModelGraph(modelID string) (dashboard.ModelGraph, bool) 
 	if !ok {
 		return dashboard.ModelGraph{}, false
 	}
-	return modelGraph(model), true
+	return modelGraph(model, m.workspace.MetricViews), true
 }
 
 func (m *DuckDBMetrics) catalogView() dashboard.Catalog {
@@ -247,8 +308,9 @@ func (m *DuckDBMetrics) catalogView() dashboard.Catalog {
 			Title:       workspaceTitle(m.workspace.Catalog.Workspace),
 			Description: m.workspace.Catalog.Workspace.Description,
 		},
-		Models:     make([]dashboard.CatalogModel, 0, len(m.workspace.Catalog.SemanticModels)),
-		Dashboards: make([]dashboard.CatalogDashboard, 0, len(m.workspace.Catalog.Dashboards)),
+		Models:      make([]dashboard.CatalogModel, 0, len(m.workspace.Catalog.SemanticModels)),
+		MetricViews: make([]dashboard.CatalogMetricView, 0, len(m.workspace.Catalog.MetricViews)),
+		Dashboards:  make([]dashboard.CatalogDashboard, 0, len(m.workspace.Catalog.Dashboards)),
 	}
 	modelTitles := map[string]string{}
 	for _, model := range m.workspace.Catalog.SemanticModels {
@@ -259,22 +321,86 @@ func (m *DuckDBMetrics) catalogView() dashboard.Catalog {
 			Description: model.Description,
 		})
 	}
+	metricViewTitles := map[string]string{}
+	for _, view := range m.workspace.Catalog.MetricViews {
+		metricViewTitles[view.ID] = view.Title
+		catalog.MetricViews = append(catalog.MetricViews, dashboard.CatalogMetricView{
+			ID:            view.ID,
+			Title:         view.Title,
+			Description:   view.Description,
+			SemanticModel: view.SemanticModel,
+			ModelTitle:    modelTitles[view.SemanticModel],
+		})
+	}
 	for _, report := range m.workspace.Catalog.Dashboards {
 		pageCount := 0
+		metricViews := []string{}
+		metricViewNames := []string{}
 		if loaded, ok := m.workspace.Dashboards[report.ID]; ok {
 			pageCount = len(loaded.Pages)
+			metricViews = append(metricViews, loaded.MetricViews...)
+			for _, viewID := range loaded.MetricViews {
+				if title := metricViewTitles[viewID]; title != "" {
+					metricViewNames = append(metricViewNames, title)
+				}
+			}
 		}
 		catalog.Dashboards = append(catalog.Dashboards, dashboard.CatalogDashboard{
-			ID:            report.ID,
-			Title:         report.Title,
-			Description:   report.Description,
-			SemanticModel: report.SemanticModel,
-			ModelTitle:    modelTitles[report.SemanticModel],
-			Tags:          append([]string{}, report.Tags...),
-			PageCount:     pageCount,
+			ID:               report.ID,
+			Title:            report.Title,
+			Description:      report.Description,
+			MetricViews:      metricViews,
+			MetricViewTitles: metricViewNames,
+			Tags:             append([]string{}, report.Tags...),
+			PageCount:        pageCount,
 		})
 	}
 	return catalog
+}
+
+func (m *DuckDBMetrics) metricViewSummary(id string) (dashboard.MetricViewSummary, bool) {
+	view, ok := m.workspace.MetricViews[id]
+	if !ok {
+		return dashboard.MetricViewSummary{}, false
+	}
+	modelTitle := ""
+	for _, model := range m.workspace.Catalog.SemanticModels {
+		if model.ID == view.SemanticModel {
+			modelTitle = model.Title
+			break
+		}
+	}
+	return dashboard.MetricViewSummary{
+		ID:             view.ID,
+		Title:          view.Title,
+		Description:    view.Description,
+		SemanticModel:  view.SemanticModel,
+		ModelTitle:     modelTitle,
+		Dataset:        view.Dataset,
+		Timeseries:     view.Timeseries,
+		DimensionCount: len(view.Dimensions),
+		MeasureCount:   len(view.Measures),
+		DashboardCount: len(m.dashboardsForMetricView(id)),
+	}, true
+}
+
+func (m *DuckDBMetrics) dashboardsForMetricView(id string) []semantic.CatalogDashboard {
+	reports := []semantic.CatalogDashboard{}
+	for _, report := range m.workspace.Catalog.Dashboards {
+		loaded, ok := m.workspace.Dashboards[report.ID]
+		if !ok || !contains(loaded.MetricViews, id) {
+			continue
+		}
+		reports = append(reports, report)
+	}
+	return reports
+}
+
+func dashboardPageCount(report *semantic.Dashboard) int {
+	if report == nil {
+		return 0
+	}
+	return len(report.Pages)
 }
 
 func workspaceID(workspace semantic.CatalogWorkspace) string {
@@ -296,11 +422,23 @@ func (m *DuckDBMetrics) reportRuntime(dashboardID string) (*semantic.Dashboard, 
 	if !ok {
 		return nil, nil, fmt.Errorf("unknown dashboard %q", dashboardID)
 	}
-	runtime, ok := m.runtimes[report.SemanticModel]
+	view, ok := m.firstMetricView(report)
 	if !ok {
-		return nil, nil, fmt.Errorf("unknown semantic model %q", report.SemanticModel)
+		return nil, nil, fmt.Errorf("dashboard %q has no metrics views", dashboardID)
+	}
+	runtime, ok := m.runtimes[view.SemanticModel]
+	if !ok {
+		return nil, nil, fmt.Errorf("unknown semantic model %q", view.SemanticModel)
 	}
 	return report, runtime, nil
+}
+
+func (m *DuckDBMetrics) firstMetricView(report *semantic.Dashboard) (*semantic.MetricView, bool) {
+	if report == nil || len(report.MetricViews) == 0 {
+		return nil, false
+	}
+	view, ok := m.workspace.MetricViews[report.MetricViews[0]]
+	return view, ok
 }
 
 func (m *DuckDBMetrics) QueryDashboard(ctx context.Context, dashboardID string, filters dashboard.Filters) (dashboard.Patch, error) {
@@ -413,7 +551,7 @@ func (m *DuckDBMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID 
 		return m.queryAggregateTable(ctx, runtime, report, request, tableModel, filters)
 	}
 
-	totalRows, err := m.countRows(ctx, runtime, report, tableModel.Dataset, filters, "table", request.Table)
+	totalRows, err := m.countRows(ctx, runtime, report, tableModel.MetricView, filters, "table", request.Table)
 	if err != nil {
 		return dashboard.EmptyTable(request, err), nil
 	}
@@ -451,12 +589,12 @@ func (m *DuckDBMetrics) filterOptions(ctx context.Context, runtime *modelRuntime
 		if filter.Values.Source != "distinct" {
 			continue
 		}
-		source, err := datasetSource(runtime.model, filter.Dataset)
+		source, err := m.metricViewSource(filter.MetricView)
 		if err != nil {
 			return nil, err
 		}
-		dataset := runtime.model.Datasets[filter.Dataset]
-		dimension := dataset.Dimensions[filter.Dimension]
+		view := m.workspace.MetricViews[filter.MetricView]
+		dimension := view.Dimensions[filter.Dimension]
 		expr := dimensionExpression(dimension, "e")
 		where := "1 = 1"
 		if dimension.Where != "" {
@@ -585,7 +723,7 @@ func (m *DuckDBMetrics) visuals(ctx context.Context, runtime *modelRuntime, repo
 		if err != nil {
 			return nil, err
 		}
-		dataset := runtime.model.Datasets[visual.Dataset]
+		dataset := m.workspace.MetricViews[visual.MetricView]
 		measureName := visual.Query.Measures[0]
 		measure := dataset.Measures[measureName]
 		title := visual.Title
@@ -665,11 +803,11 @@ func (m *DuckDBMetrics) visualData(ctx context.Context, runtime *modelRuntime, r
 }
 
 func (m *DuckDBMetrics) categoryData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	source, err := datasetSource(runtime.model, visual.Dataset)
+	source, err := m.metricViewSource(visual.MetricView)
 	if err != nil {
 		return nil, err
 	}
-	dataset := runtime.model.Datasets[visual.Dataset]
+	dataset := m.workspace.MetricViews[visual.MetricView]
 	labelDimension := visual.Query.Dimensions[0]
 	labelExpr := dimensionExpression(dataset.Dimensions[labelDimension], "e")
 	measureName := visual.Query.Measures[0]
@@ -684,7 +822,7 @@ func (m *DuckDBMetrics) categoryData(ctx context.Context, runtime *modelRuntime,
 		groupBy = append(groupBy, "series")
 	}
 
-	where, args := m.filterWhere("e", runtime, report, visual.Dataset, filters, "visual", visualID)
+	where, args := m.filterWhere("e", runtime, report, visual.MetricView, filters, "visual", visualID)
 	for _, dimensionName := range append(append([]string{}, visual.Query.Dimensions...), visual.Query.Series) {
 		if dimensionName == "" {
 			continue
@@ -714,11 +852,11 @@ ORDER BY %s`, labelExpr, seriesExpr, valueExpr, source, where, strings.Join(grou
 }
 
 func (m *DuckDBMetrics) categoryMultiMeasureData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	source, err := datasetSource(runtime.model, visual.Dataset)
+	source, err := m.metricViewSource(visual.MetricView)
 	if err != nil {
 		return nil, err
 	}
-	dataset := runtime.model.Datasets[visual.Dataset]
+	dataset := m.workspace.MetricViews[visual.MetricView]
 	labelExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
 	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
 	orderBy := m.visualOrderBy(runtime.model, visual)
@@ -768,21 +906,22 @@ func (m *DuckDBMetrics) categoryDeltaData(ctx context.Context, runtime *modelRun
 }
 
 func (m *DuckDBMetrics) binnedMeasureData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	source, err := datasetSource(runtime.model, visual.Dataset)
+	source, err := m.metricViewSource(visual.MetricView)
 	if err != nil {
 		return nil, err
 	}
-	dataset := runtime.model.Datasets[visual.Dataset]
+	dataset := m.workspace.MetricViews[visual.MetricView]
 	measure := dataset.Measures[visual.Query.Measures[0]]
-	if err := validateIdentifier(measure.Column); err != nil {
+	columnExpr, err := rawValueExpression(measure)
+	if err != nil {
 		return nil, err
 	}
-	columnExpr := "CAST(e." + measure.Column + " AS DOUBLE)"
+	columnExpr = "CAST(" + columnExpr + " AS DOUBLE)"
 	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
 	binCount := optionInt(visual.Options, "bin_count", 20, 5, 60)
 
 	var minValue, maxValue sql.NullFloat64
-	boundsQuery := fmt.Sprintf("SELECT MIN(%s), MAX(%s) FROM %s e WHERE %s AND e.%s IS NOT NULL", columnExpr, columnExpr, source, where, measure.Column)
+	boundsQuery := fmt.Sprintf("SELECT MIN(%s), MAX(%s) FROM %s e WHERE %s AND %s IS NOT NULL", columnExpr, columnExpr, source, where, columnExpr)
 	if err := runtime.db.QueryRowContext(ctx, boundsQuery, args...).Scan(&minValue, &maxValue); err != nil {
 		return nil, err
 	}
@@ -791,7 +930,7 @@ func (m *DuckDBMetrics) binnedMeasureData(ctx context.Context, runtime *modelRun
 	}
 	if minValue.Float64 == maxValue.Float64 {
 		var count int
-		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s e WHERE %s AND e.%s IS NOT NULL", source, where, measure.Column)
+		countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s e WHERE %s AND %s IS NOT NULL", source, where, columnExpr)
 		if err := runtime.db.QueryRowContext(ctx, countQuery, args...).Scan(&count); err != nil {
 			return nil, err
 		}
@@ -807,9 +946,9 @@ func (m *DuckDBMetrics) binnedMeasureData(ctx context.Context, runtime *modelRun
 	query := fmt.Sprintf(`
 SELECT %s AS bucket, COUNT(*) AS value
 FROM %s e
-WHERE %s AND e.%s IS NOT NULL
+WHERE %s AND %s IS NOT NULL
 GROUP BY bucket
-ORDER BY bucket ASC`, bucketExpr, source, where, measure.Column)
+ORDER BY bucket ASC`, bucketExpr, source, where, columnExpr)
 	queryArgs := append([]any{minValue.Float64, maxValue.Float64, minValue.Float64, binCount}, args...)
 	rows, err := runtime.db.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
@@ -838,11 +977,11 @@ ORDER BY bucket ASC`, bucketExpr, source, where, measure.Column)
 }
 
 func (m *DuckDBMetrics) hierarchyData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	source, err := datasetSource(runtime.model, visual.Dataset)
+	source, err := m.metricViewSource(visual.MetricView)
 	if err != nil {
 		return nil, err
 	}
-	dataset := runtime.model.Datasets[visual.Dataset]
+	dataset := m.workspace.MetricViews[visual.MetricView]
 	levelExprs := make([]string, 0, len(visual.Query.Dimensions))
 	levelAliases := make([]string, 0, len(visual.Query.Dimensions))
 	for index, dimensionName := range visual.Query.Dimensions {
@@ -898,11 +1037,11 @@ ORDER BY %s`, strings.Join(levelExprs, ", "), valueExpr, source, where, strings.
 }
 
 func (m *DuckDBMetrics) singleValueData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	source, err := datasetSource(runtime.model, visual.Dataset)
+	source, err := m.metricViewSource(visual.MetricView)
 	if err != nil {
 		return nil, err
 	}
-	dataset := runtime.model.Datasets[visual.Dataset]
+	dataset := m.workspace.MetricViews[visual.MetricView]
 	measureName := visual.Query.Measures[0]
 	valueExpr, err := measureAggregateExpr(dataset.Measures[measureName])
 	if err != nil {
@@ -943,11 +1082,11 @@ func (m *DuckDBMetrics) graphData(ctx context.Context, runtime *modelRuntime, re
 }
 
 func (m *DuckDBMetrics) dimensionPairData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters, leftAlias, rightAlias string) ([]dashboard.Datum, error) {
-	source, err := datasetSource(runtime.model, visual.Dataset)
+	source, err := m.metricViewSource(visual.MetricView)
 	if err != nil {
 		return nil, err
 	}
-	dataset := runtime.model.Datasets[visual.Dataset]
+	dataset := m.workspace.MetricViews[visual.MetricView]
 	leftExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
 	rightExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[1]], "e")
 	rightSQLAlias := rightAlias
@@ -979,11 +1118,11 @@ ORDER BY %s`, leftExpr, leftAlias, rightExpr, rightSQLAlias, valueExpr, source, 
 }
 
 func (m *DuckDBMetrics) geoData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	source, err := datasetSource(runtime.model, visual.Dataset)
+	source, err := m.metricViewSource(visual.MetricView)
 	if err != nil {
 		return nil, err
 	}
-	dataset := runtime.model.Datasets[visual.Dataset]
+	dataset := m.workspace.MetricViews[visual.MetricView]
 	nameExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
 	valueExpr, err := measureAggregateExpr(dataset.Measures[visual.Query.Measures[0]])
 	if err != nil {
@@ -1008,11 +1147,11 @@ ORDER BY %s`, nameExpr, valueExpr, source, where, m.visualOrderBy(runtime.model,
 }
 
 func (m *DuckDBMetrics) ohlcData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	source, err := datasetSource(runtime.model, visual.Dataset)
+	source, err := m.metricViewSource(visual.MetricView)
 	if err != nil {
 		return nil, err
 	}
-	dataset := runtime.model.Datasets[visual.Dataset]
+	dataset := m.workspace.MetricViews[visual.MetricView]
 	labelExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
 	measureExprs := make([]string, 0, 4)
 	for _, measureName := range visual.Query.Measures {
@@ -1036,17 +1175,17 @@ ORDER BY %s`, labelExpr, measureExprs[0], measureExprs[1], measureExprs[2], meas
 }
 
 func (m *DuckDBMetrics) distributionData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	source, err := datasetSource(runtime.model, visual.Dataset)
+	source, err := m.metricViewSource(visual.MetricView)
 	if err != nil {
 		return nil, err
 	}
-	dataset := runtime.model.Datasets[visual.Dataset]
+	dataset := m.workspace.MetricViews[visual.MetricView]
 	labelExpr := dimensionExpression(dataset.Dimensions[visual.Query.Dimensions[0]], "e")
 	measure := dataset.Measures[visual.Query.Measures[0]]
-	if err := validateIdentifier(measure.Column); err != nil {
+	columnExpr, err := rawValueExpression(measure)
+	if err != nil {
 		return nil, err
 	}
-	columnExpr := "e." + measure.Column
 	where, args := m.visualWhere(runtime, report, visual, filters, visualID)
 	query := fmt.Sprintf(`
 SELECT %s AS label,
@@ -1066,8 +1205,8 @@ ORDER BY %s`, labelExpr, columnExpr, columnExpr, columnExpr, columnExpr, columnE
 }
 
 func (m *DuckDBMetrics) visualWhere(runtime *modelRuntime, report *semantic.Dashboard, visual semantic.Visual, filters dashboard.Filters, visualID string) (string, []any) {
-	dataset := runtime.model.Datasets[visual.Dataset]
-	where, args := m.filterWhere("e", runtime, report, visual.Dataset, filters, "visual", visualID)
+	dataset := m.workspace.MetricViews[visual.MetricView]
+	where, args := m.filterWhere("e", runtime, report, visual.MetricView, filters, "visual", visualID)
 	for _, dimensionName := range visualQueryDimensions(visual) {
 		if dimensionName == "" {
 			continue
@@ -1113,12 +1252,12 @@ func (m *DuckDBMetrics) queryDatums(ctx context.Context, runtime *modelRuntime, 
 	return data, rows.Err()
 }
 
-func (m *DuckDBMetrics) countRows(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, datasetName string, filters dashboard.Filters, targetKind, targetID string) (int, error) {
-	source, err := datasetSource(runtime.model, datasetName)
+func (m *DuckDBMetrics) countRows(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, metricViewID string, filters dashboard.Filters, targetKind, targetID string) (int, error) {
+	source, err := m.metricViewSource(metricViewID)
 	if err != nil {
 		return 0, err
 	}
-	where, args := m.filterWhere("e", runtime, report, datasetName, filters, targetKind, targetID)
+	where, args := m.filterWhere("e", runtime, report, metricViewID, filters, targetKind, targetID)
 	query := fmt.Sprintf("SELECT COUNT(*) FROM %s e WHERE %s", source, where)
 
 	var total int
@@ -1220,29 +1359,30 @@ func (m *DuckDBMetrics) matrixTableRows(ctx context.Context, runtime *modelRunti
 	if len(table.ColumnDims) == 1 {
 		return m.crossTabTableRows(ctx, runtime, report, table, filters, request, false)
 	}
-	source, err := datasetSource(runtime.model, table.Dataset)
+	source, err := m.metricViewSource(table.MetricView)
 	if err != nil {
 		return nil, nil, err
 	}
-	dataset := runtime.model.Datasets[table.Dataset]
+	metricView := m.workspace.MetricViews[table.MetricView]
 	columns := make([]dashboard.TableColumn, 0, len(table.Rows)+len(table.Measures))
 	selects := make([]string, 0, len(table.Rows)+len(table.Measures))
 	groupBy := make([]string, 0, len(table.Rows))
 	for _, dimensionName := range table.Rows {
-		dimension := dataset.Dimensions[dimensionName]
+		dimension := metricView.Dimensions[dimensionName]
 		selects = append(selects, fmt.Sprintf("%s AS %s", dimensionExpression(dimension, "e"), dimensionName))
 		groupBy = append(groupBy, dimensionName)
 		columns = append(columns, dashboard.TableColumn{Key: dimensionName, Label: dimensionLabel(dimensionName, dimension), Role: "row_header"})
 	}
 	for _, measureName := range table.Measures {
-		expr, err := measureAggregateExpr(dataset.Measures[measureName])
+		measure := metricView.Measures[measureName]
+		expr, err := measureAggregateExpr(measure)
 		if err != nil {
 			return nil, nil, err
 		}
 		selects = append(selects, fmt.Sprintf("%s AS %s", expr, measureName))
-		columns = append(columns, dashboard.TableColumn{Key: measureName, Label: measureLabel(measureName, dataset.Measures[measureName]), Align: "right", Role: "measure", Measure: measureName})
+		columns = append(columns, dashboard.TableColumn{Key: measureName, Label: measureLabel(measureName, measure), Align: "right", Role: "measure", Measure: measureName})
 	}
-	where, args := m.filterWhere("e", runtime, report, table.Dataset, filters, "table", request.Table)
+	where, args := m.filterWhere("e", runtime, report, table.MetricView, filters, "table", request.Table)
 	orderBy := strings.Join(groupBy, ", ")
 	if request.Sort.Key != "" && tableHasColumn(columns, request.Sort.Key) {
 		direction := "DESC"
@@ -1268,26 +1408,26 @@ func (m *DuckDBMetrics) pivotTableRows(ctx context.Context, runtime *modelRuntim
 }
 
 func (m *DuckDBMetrics) crossTabTableRows(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, table semantic.TableVisual, filters dashboard.Filters, request dashboard.TableRequest, pivotMode bool) ([]dashboard.TableColumn, []map[string]any, error) {
-	source, err := datasetSource(runtime.model, table.Dataset)
+	source, err := m.metricViewSource(table.MetricView)
 	if err != nil {
 		return nil, nil, err
 	}
-	dataset := runtime.model.Datasets[table.Dataset]
+	metricView := m.workspace.MetricViews[table.MetricView]
 	rowSelects := make([]string, 0, len(table.Rows))
 	groupBy := make([]string, 0, len(table.Rows)+1)
 	baseColumns := make([]dashboard.TableColumn, 0, len(table.Rows))
 	for _, dimensionName := range table.Rows {
-		dimension := dataset.Dimensions[dimensionName]
+		dimension := metricView.Dimensions[dimensionName]
 		rowSelects = append(rowSelects, fmt.Sprintf("%s AS %s", dimensionExpression(dimension, "e"), dimensionName))
 		groupBy = append(groupBy, dimensionName)
 		baseColumns = append(baseColumns, dashboard.TableColumn{Key: dimensionName, Label: dimensionLabel(dimensionName, dimension), Role: "row_header"})
 	}
 	columnDimensionName := table.ColumnDims[0]
-	columnDimension := dataset.Dimensions[columnDimensionName]
+	columnDimension := metricView.Dimensions[columnDimensionName]
 	valueSelects := make([]string, 0, len(table.Measures))
 	valueColumns := make([]string, 0, len(table.Measures))
 	for _, measureName := range table.Measures {
-		measureExpr, err := measureAggregateExpr(dataset.Measures[measureName])
+		measureExpr, err := measureAggregateExpr(metricView.Measures[measureName])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -1295,7 +1435,7 @@ func (m *DuckDBMetrics) crossTabTableRows(ctx context.Context, runtime *modelRun
 		valueColumns = append(valueColumns, measureName)
 	}
 	groupBy = append(groupBy, "pivot_label")
-	where, args := m.filterWhere("e", runtime, report, table.Dataset, filters, "table", request.Table)
+	where, args := m.filterWhere("e", runtime, report, table.MetricView, filters, "table", request.Table)
 	query := fmt.Sprintf(`
 SELECT %s, %s AS pivot_label, %s
 FROM %s e
@@ -1335,7 +1475,7 @@ LIMIT ?`, strings.Join(rowSelects, ", "), dimensionExpression(columnDimension, "
 		label := fmt.Sprint(raw["pivot_label"])
 		groupLabel := label
 		if pivotMode {
-			groupLabel = measureLabel(table.Measures[0], dataset.Measures[table.Measures[0]])
+			groupLabel = measureLabel(table.Measures[0], metricView.Measures[table.Measures[0]])
 		}
 		pivotKey, exists := pivotKeys[label]
 		if !exists {
@@ -1343,7 +1483,7 @@ LIMIT ?`, strings.Join(rowSelects, ", "), dimensionExpression(columnDimension, "
 			pivotKeys[label] = pivotKey
 		}
 		for _, measureName := range table.Measures {
-			measure := dataset.Measures[measureName]
+			measure := metricView.Measures[measureName]
 			columnIdentity := label + "\x00" + measureName
 			columnKey, columnExists := columnKeys[columnIdentity]
 			candidate := "pivot_" + pivotKey
@@ -1477,7 +1617,7 @@ func numericTableValue(value any) (float64, bool) {
 	}
 }
 
-func dimensionLabel(name string, dimension semantic.Dimension) string {
+func dimensionLabel(name string, dimension semantic.MetricDimension) string {
 	if strings.TrimSpace(dimension.Label) != "" {
 		return dimension.Label
 	}
@@ -1544,11 +1684,11 @@ func (m *DuckDBMetrics) tableRows(ctx context.Context, runtime *modelRuntime, re
 	if start+count > availableRows {
 		count = availableRows - start
 	}
-	source, err := datasetSource(runtime.model, table.Dataset)
+	source, err := m.metricViewSource(table.MetricView)
 	if err != nil {
 		return nil, err
 	}
-	where, args := m.filterWhere("e", runtime, report, table.Dataset, filters, "table", request.Table)
+	where, args := m.filterWhere("e", runtime, report, table.MetricView, filters, "table", request.Table)
 	sortExpr := tableSortExpr(table, request.Sort.Key)
 	direction := "DESC"
 	if request.Sort.Direction == "asc" {
@@ -1597,36 +1737,28 @@ LIMIT ? OFFSET ?`, strings.Join(selects, ", "), source, where, sortExpr, directi
 	return result, rows.Err()
 }
 
-func measureAggregateExpr(measure semantic.Measure) (string, error) {
-	switch measure.Aggregate {
-	case "count":
-		return "COUNT(*)", nil
-	case "count_distinct":
-		if err := validateIdentifier(measure.Column); err != nil {
-			return "", err
-		}
-		return "COUNT(DISTINCT e." + measure.Column + ")", nil
-	case "sum":
-		if err := validateIdentifier(measure.Column); err != nil {
-			return "", err
-		}
-		return "SUM(e." + measure.Column + ")", nil
-	case "avg":
-		if err := validateIdentifier(measure.Column); err != nil {
-			return "", err
-		}
-		return "AVG(e." + measure.Column + ")", nil
-	case "expression":
-		if measure.Expression == "" {
-			return "", fmt.Errorf("measure %q is missing expression", measure.Label)
-		}
-		return measure.Expression, nil
-	default:
-		return "", fmt.Errorf("unsupported measure aggregate %q", measure.Aggregate)
+func measureAggregateExpr(measure semantic.MetricMeasure) (string, error) {
+	if strings.TrimSpace(measure.Expression) == "" {
+		return "", fmt.Errorf("measure %q is missing expression", measure.Label)
 	}
+	return measure.Expression, nil
 }
 
-func measureLabel(name string, measure semantic.Measure) string {
+func rawValueExpression(measure semantic.MetricMeasure) (string, error) {
+	expr := strings.TrimSpace(measure.Expression)
+	if expr == "" {
+		return "", fmt.Errorf("measure %q is missing expression", measure.Label)
+	}
+	if matches := aggregateWrapperPattern.FindStringSubmatch(expr); len(matches) == 2 {
+		return strings.TrimSpace(matches[1]), nil
+	}
+	if strings.Contains(expr, "(") {
+		return "", fmt.Errorf("measure %q cannot be used as a raw value expression", measure.Label)
+	}
+	return expr, nil
+}
+
+func measureLabel(name string, measure semantic.MetricMeasure) string {
 	if strings.TrimSpace(measure.Label) != "" {
 		return measure.Label
 	}
@@ -1707,7 +1839,7 @@ func (m *DuckDBMetrics) visualOrderBy(model *semantic.Model, visual semantic.Vis
 	if len(visual.Query.Sort) == 0 {
 		return "label ASC"
 	}
-	dataset := model.Datasets[visual.Dataset]
+	metricView := m.workspace.MetricViews[visual.MetricView]
 	parts := make([]string, 0, len(visual.Query.Sort))
 	for _, sortSpec := range visual.Query.Sort {
 		direction := "ASC"
@@ -1716,7 +1848,7 @@ func (m *DuckDBMetrics) visualOrderBy(model *semantic.Model, visual semantic.Vis
 		}
 		expr := sortSpec.Expr
 		if expr == "" {
-			expr = m.sortExpression(dataset, visual, sortSpec.Field)
+			expr = m.sortExpression(metricView, visual, sortSpec.Field)
 		}
 		if expr == "" {
 			expr = "label"
@@ -1726,7 +1858,7 @@ func (m *DuckDBMetrics) visualOrderBy(model *semantic.Model, visual semantic.Vis
 	return strings.Join(parts, ", ")
 }
 
-func (m *DuckDBMetrics) sortExpression(dataset semantic.Dataset, visual semantic.Visual, field string) string {
+func (m *DuckDBMetrics) sortExpression(metricView *semantic.MetricView, visual semantic.Visual, field string) string {
 	if field == "" {
 		return defaultSortColumn(visual)
 	}
@@ -1736,7 +1868,10 @@ func (m *DuckDBMetrics) sortExpression(dataset semantic.Dataset, visual semantic
 	if field == visual.Query.Series {
 		return "series"
 	}
-	if dimension, ok := dataset.Dimensions[field]; ok {
+	if metricView == nil {
+		return ""
+	}
+	if dimension, ok := metricView.Dimensions[field]; ok {
 		if dimension.OrderExpr != "" {
 			return dimension.OrderExpr
 		}
@@ -1786,25 +1921,25 @@ func dimensionSortColumn(shape string, index int) string {
 	}
 }
 
-func (m *DuckDBMetrics) filterWhere(alias string, runtime *modelRuntime, report *semantic.Dashboard, datasetName string, filters dashboard.Filters, targetKind, targetID string) (string, []any) {
+func (m *DuckDBMetrics) filterWhere(alias string, runtime *modelRuntime, report *semantic.Dashboard, metricViewID string, filters dashboard.Filters, targetKind, targetID string) (string, []any) {
 	filters = filters.WithDefaults()
 	conditions := []string{"1 = 1"}
 	args := []any{}
 
 	for _, name := range sortedKeys(report.Filters) {
 		filter := report.Filters[name]
-		if filter.Dataset != datasetName {
+		if filter.MetricView != metricViewID {
 			continue
 		}
 		control, ok := filters.Controls[name]
 		if !ok {
 			continue
 		}
-		dataset, ok := runtime.model.Datasets[filter.Dataset]
+		metricView, ok := m.workspace.MetricViews[filter.MetricView]
 		if !ok {
 			continue
 		}
-		dimension, ok := dataset.Dimensions[filter.Dimension]
+		dimension, ok := metricView.Dimensions[filter.Dimension]
 		if !ok {
 			continue
 		}
@@ -1862,11 +1997,11 @@ func (m *DuckDBMetrics) filterWhere(alias string, runtime *modelRuntime, report 
 		if selection.Operator != "" && selection.Operator != "in" {
 			continue
 		}
-		dataset, ok := runtime.model.Datasets[datasetName]
+		metricView, ok := m.workspace.MetricViews[metricViewID]
 		if !ok {
 			continue
 		}
-		dimension, ok := dataset.Dimensions[selection.Field]
+		dimension, ok := metricView.Dimensions[selection.Field]
 		if !ok {
 			continue
 		}
@@ -1903,12 +2038,12 @@ func (m *DuckDBMetrics) dateFilterCondition(runtime *modelRuntime, filter semant
 			continue
 		}
 		if preset.RelativeDays > 0 {
-			source, err := datasetSource(runtime.model, filter.Dataset)
+			source, err := m.metricViewSource(filter.MetricView)
 			if err != nil {
 				return "", nil
 			}
-			dataset := runtime.model.Datasets[filter.Dataset]
-			dimension := dataset.Dimensions[filter.Dimension]
+			metricView := m.workspace.MetricViews[filter.MetricView]
+			dimension := metricView.Dimensions[filter.Dimension]
 			sourceExpr := dimensionExpression(dimension, "recent")
 			return fmt.Sprintf("%s >= (SELECT max(%s) - INTERVAL %d DAY FROM %s recent)", expr, sourceExpr, preset.RelativeDays, source), nil
 		}
@@ -1939,14 +2074,14 @@ func contains(values []string, value string) bool {
 	return false
 }
 
-func dimensionExpression(dimension semantic.Dimension, alias string) string {
+func dimensionExpression(dimension semantic.MetricDimension, alias string) string {
 	if identifierPattern.MatchString(dimension.Expr) {
 		return alias + "." + dimension.Expr
 	}
 	return strings.ReplaceAll(dimension.Expr, "{alias}", alias)
 }
 
-func dimensionWhere(dimension semantic.Dimension, alias string) string {
+func dimensionWhere(dimension semantic.MetricDimension, alias string) string {
 	if dimension.Where == "" {
 		return ""
 	}
@@ -2011,10 +2146,18 @@ func normalizeDBValue(value any) any {
 	}
 }
 
-func datasetSource(model *semantic.Model, name string) (string, error) {
-	dataset, ok := model.Datasets[name]
+func (m *DuckDBMetrics) metricViewSource(name string) (string, error) {
+	view, ok := m.workspace.MetricViews[name]
 	if !ok {
-		return "", fmt.Errorf("unknown dataset %q", name)
+		return "", fmt.Errorf("unknown metrics view %q", name)
+	}
+	model, ok := m.workspace.Models[view.SemanticModel]
+	if !ok {
+		return "", fmt.Errorf("unknown semantic model %q", view.SemanticModel)
+	}
+	dataset, ok := model.Datasets[view.Dataset]
+	if !ok {
+		return "", fmt.Errorf("metrics view %q references unknown dataset %q", name, view.Dataset)
 	}
 	return cacheSource(dataset.Source)
 }
@@ -2058,14 +2201,14 @@ func sqlString(path string) string {
 	return strings.ReplaceAll(filepath.ToSlash(path), "'", "''")
 }
 
-func modelGraph(model *semantic.Model) dashboard.ModelGraph {
+func modelGraph(model *semantic.Model, metricViews map[string]*semantic.MetricView) dashboard.ModelGraph {
 	graph := dashboard.ModelGraph{
 		Name:  model.Name,
 		Title: model.Title,
 		Stats: dashboard.ModelStats{
 			Sources:       len(model.Sources),
 			CacheTables:   len(model.Cache.Tables),
-			Metrics:       measureCount(model),
+			Metrics:       measureCount(model.Name, metricViews),
 			Visuals:       0,
 			ReportTables:  0,
 			Relationships: len(model.Relationships),
@@ -2129,23 +2272,13 @@ func modelGraph(model *semantic.Model) dashboard.ModelGraph {
 
 	for _, name := range sortedKeys(model.Datasets) {
 		dataset := model.Datasets[name]
-		fields := make([]dashboard.ModelField, 0, len(dataset.Dimensions)+len(dataset.Measures))
-		for _, dimension := range sortedKeys(dataset.Dimensions) {
-			fields = append(fields, dashboard.ModelField{Name: dimension, Role: "dimension"})
-		}
-		for _, measure := range sortedKeys(dataset.Measures) {
-			fields = append(fields, dashboard.ModelField{Name: measure, Role: "measure"})
-		}
 		graph.Nodes = append(graph.Nodes, dashboard.ModelNode{
 			ID:     nodeID("dataset", name),
 			Label:  name,
 			Kind:   "dataset",
 			Schema: "semantic",
-			Fields: fields,
 			Meta: []dashboard.ModelMeta{
 				{Label: "Source", Value: dataset.Source},
-				{Label: "Dimensions", Value: strconv.Itoa(len(dataset.Dimensions))},
-				{Label: "Measures", Value: strconv.Itoa(len(dataset.Measures))},
 			},
 		})
 		graph.Edges = append(graph.Edges, dashboard.ModelEdge{
@@ -2154,6 +2287,41 @@ func modelGraph(model *semantic.Model) dashboard.ModelGraph {
 			Target: nodeID("dataset", name),
 			Label:  "semantic dataset",
 			Kind:   "semantic",
+		})
+	}
+
+	for _, name := range sortedKeys(metricViews) {
+		view := metricViews[name]
+		if view.SemanticModel != model.Name {
+			continue
+		}
+		fields := make([]dashboard.ModelField, 0, len(view.Dimensions)+len(view.Measures))
+		for _, dimension := range sortedKeys(view.Dimensions) {
+			fields = append(fields, dashboard.ModelField{Name: dimension, Role: "dimension"})
+		}
+		for _, measure := range sortedKeys(view.Measures) {
+			fields = append(fields, dashboard.ModelField{Name: measure, Role: "measure"})
+		}
+		graph.Nodes = append(graph.Nodes, dashboard.ModelNode{
+			ID:          nodeID("metrics_view", name),
+			Label:       view.Title,
+			Kind:        "metrics_view",
+			Schema:      "metrics",
+			Description: view.Description,
+			Fields:      fields,
+			Meta: []dashboard.ModelMeta{
+				{Label: "Dataset", Value: view.Dataset},
+				{Label: "Timeseries", Value: view.Timeseries},
+				{Label: "Dimensions", Value: strconv.Itoa(len(view.Dimensions))},
+				{Label: "Measures", Value: strconv.Itoa(len(view.Measures))},
+			},
+		})
+		graph.Edges = append(graph.Edges, dashboard.ModelEdge{
+			ID:     "metrics_view_" + name + "_from_" + view.Dataset,
+			Source: nodeID("dataset", view.Dataset),
+			Target: nodeID("metrics_view", name),
+			Label:  "metrics view",
+			Kind:   "metrics",
 		})
 	}
 
@@ -2201,10 +2369,12 @@ func refreshLabel(runtime *modelRuntime) string {
 	return runtime.lastRefresh.Format("15:04:05")
 }
 
-func measureCount(model *semantic.Model) int {
+func measureCount(modelID string, metricViews map[string]*semantic.MetricView) int {
 	count := 0
-	for _, dataset := range model.Datasets {
-		count += len(dataset.Measures)
+	for _, view := range metricViews {
+		if view.SemanticModel == modelID {
+			count += len(view.Measures)
+		}
 	}
 	return count
 }

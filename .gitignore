@@ -10,6 +10,7 @@ static/app.css
 static/*.js
 !static/theme.js
 static/model-graph.css
+static/metric-usage-graph.css
 .env
 .env.*
 !.env.example

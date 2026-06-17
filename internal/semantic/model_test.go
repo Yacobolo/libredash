@@ -21,6 +21,9 @@ func TestLoadWorkspaceCatalog(t *testing.T) {
 	if len(workspace.Catalog.SemanticModels) != 1 {
 		t.Fatalf("model catalog count = %d, want 1", len(workspace.Catalog.SemanticModels))
 	}
+	if len(workspace.Catalog.MetricViews) != 1 {
+		t.Fatalf("metrics view catalog count = %d, want 1", len(workspace.Catalog.MetricViews))
+	}
 	if len(workspace.Catalog.Dashboards) != 1 {
 		t.Fatalf("dashboard catalog count = %d, want 1", len(workspace.Catalog.Dashboards))
 	}
@@ -29,6 +32,9 @@ func TestLoadWorkspaceCatalog(t *testing.T) {
 	}
 	if _, ok := workspace.Models["olist"]; !ok {
 		t.Fatal("workspace missing olist model")
+	}
+	if _, ok := workspace.MetricViews["orders"]; !ok {
+		t.Fatal("workspace missing orders metrics view")
 	}
 	if _, ok := workspace.Dashboards["executive-sales"]; !ok {
 		t.Fatal("workspace missing executive-sales dashboard")
@@ -42,22 +48,28 @@ func TestCatalogValidateRejectsDuplicateIDs(t *testing.T) {
 			{ID: "olist", Title: "Olist", Path: "olist/model.yaml"},
 			{ID: "olist", Title: "Olist Copy", Path: "olist/model.yaml"},
 		},
+		MetricViews: []CatalogMetricView{
+			{ID: "orders", Title: "Orders", Path: "olist/orders.metrics.yaml", SemanticModel: "olist"},
+		},
 		Dashboards: []CatalogDashboard{
-			{ID: "executive-sales", Title: "Executive Sales", SemanticModel: "olist", Path: "olist/executive-sales.yaml"},
+			{ID: "executive-sales", Title: "Executive Sales", Path: "olist/executive-sales.yaml"},
 		},
 	}
 
 	assertCatalogValidateError(t, catalog, baseDir, "duplicate semantic model")
 }
 
-func TestCatalogValidateRejectsUnknownDashboardModel(t *testing.T) {
+func TestCatalogValidateRejectsUnknownMetricViewModel(t *testing.T) {
 	baseDir := filepath.Join("..", "..", "dashboards")
 	catalog := Catalog{
 		SemanticModels: []CatalogModel{
 			{ID: "olist", Title: "Olist", Path: "olist/model.yaml"},
 		},
+		MetricViews: []CatalogMetricView{
+			{ID: "orders", Title: "Orders", Path: "olist/orders.metrics.yaml", SemanticModel: "missing"},
+		},
 		Dashboards: []CatalogDashboard{
-			{ID: "executive-sales", Title: "Executive Sales", SemanticModel: "missing", Path: "olist/executive-sales.yaml"},
+			{ID: "executive-sales", Title: "Executive Sales", Path: "olist/executive-sales.yaml"},
 		},
 	}
 
@@ -70,8 +82,11 @@ func TestCatalogValidateRejectsMissingPath(t *testing.T) {
 		SemanticModels: []CatalogModel{
 			{ID: "olist", Title: "Olist", Path: "olist/missing.yaml"},
 		},
+		MetricViews: []CatalogMetricView{
+			{ID: "orders", Title: "Orders", Path: "olist/orders.metrics.yaml", SemanticModel: "olist"},
+		},
 		Dashboards: []CatalogDashboard{
-			{ID: "executive-sales", Title: "Executive Sales", SemanticModel: "olist", Path: "olist/executive-sales.yaml"},
+			{ID: "executive-sales", Title: "Executive Sales", Path: "olist/executive-sales.yaml"},
 		},
 	}
 
@@ -97,7 +112,7 @@ func TestLoadOlistModel(t *testing.T) {
 
 func TestLoadOlistDashboard(t *testing.T) {
 	model := loadOlistModel(t)
-	report, err := LoadDashboard(filepath.Join("..", "..", "dashboards", "olist", "executive-sales.yaml"), model)
+	report, err := LoadDashboard(filepath.Join("..", "..", "dashboards", "olist", "executive-sales.yaml"), loadOlistMetricViews(t, model))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +120,7 @@ func TestLoadOlistDashboard(t *testing.T) {
 	if report.ID != "executive-sales" {
 		t.Fatalf("dashboard id = %q, want executive-sales", report.ID)
 	}
-	if got := report.Visuals["revenue"].Dataset; got != "orders" {
+	if got := report.Visuals["revenue"].MetricView; got != "orders" {
 		t.Fatalf("revenue visual dataset = %q, want orders", got)
 	}
 	if got := report.Visuals["orders"].Type; got != "donut" {
@@ -312,7 +327,7 @@ func TestDashboardValidateAcceptsV3VisualMetadata(t *testing.T) {
 	}
 	report.Visuals["revenue"] = visual
 
-	if err := report.Validate(model); err != nil {
+	if err := report.Validate(loadOlistMetricViews(t, model)); err != nil {
 		t.Fatalf("validate v3 visual: %v", err)
 	}
 }
@@ -333,27 +348,27 @@ func TestLoadDashboardRejectsLegacyTopLevelStacked(t *testing.T) {
 	path := filepath.Join(dir, "dashboard.yaml")
 	content := strings.ReplaceAll(`id: executive-sales
 title: Executive Sales Dashboard
-semantic_model: olist
+metrics_views: [orders]
 filters: {}
 visuals:
   total_orders:
     kind: kpi
     shape: single_value
-    dataset: orders
+    metrics_view: orders
     query:
       measures: [order_count]
   revenue:
     title: Revenue
     type: area
     stacked: true
-    dataset: orders
+    metrics_view: orders
     query:
       dimensions: [purchase_month]
       measures: [revenue]
 tables:
   orders:
     title: Orders
-    dataset: orders
+    metrics_view: orders
     columns:
       - key: order_id
         label: Order
@@ -369,7 +384,7 @@ pages:
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := LoadDashboard(path, model)
+	_, err := LoadDashboard(path, loadOlistMetricViews(t, model))
 	if err == nil || !strings.Contains(err.Error(), "legacy top-level stacked") {
 		t.Fatalf("LoadDashboard error = %v, want legacy stacked rejection", err)
 	}
@@ -409,7 +424,7 @@ pages:
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := LoadDashboard(path, model)
+	_, err := LoadDashboard(path, loadOlistMetricViews(t, model))
 	if err == nil || !strings.Contains(err.Error(), "legacy kpis") {
 		t.Fatalf("LoadDashboard error = %v, want legacy kpis rejection", err)
 	}
@@ -451,91 +466,91 @@ func TestDashboardValidateAcceptsAdvancedVisualShapes(t *testing.T) {
 
 	cases := map[string]Visual{
 		"heatmap": {
-			Title:    "Heatmap",
-			Shape:    "matrix",
-			Renderer: "echarts",
-			Type:     "heatmap",
-			Dataset:  "orders",
-			Query:    VisualQuery{Dimensions: []string{"state", "status"}, Measures: []string{"order_count"}},
+			Title:      "Heatmap",
+			Shape:      "matrix",
+			Renderer:   "echarts",
+			Type:       "heatmap",
+			MetricView: "orders",
+			Query:      VisualQuery{Dimensions: []string{"state", "status"}, Measures: []string{"order_count"}},
 		},
 		"sankey": {
-			Title:    "Flow",
-			Shape:    "graph",
-			Renderer: "echarts",
-			Type:     "sankey",
-			Dataset:  "orders",
-			Query:    VisualQuery{Dimensions: []string{"status", "delivery_bucket"}, Measures: []string{"order_count"}},
+			Title:      "Flow",
+			Shape:      "graph",
+			Renderer:   "echarts",
+			Type:       "sankey",
+			MetricView: "orders",
+			Query:      VisualQuery{Dimensions: []string{"status", "delivery_bucket"}, Measures: []string{"order_count"}},
 		},
 		"geo": {
-			Title:    "Map",
-			Shape:    "geo",
-			Renderer: "echarts",
-			Type:     "map",
-			Dataset:  "orders",
-			Options:  map[string]any{"map": "brazil_states"},
-			Query:    VisualQuery{Dimensions: []string{"state"}, Measures: []string{"order_count"}},
+			Title:      "Map",
+			Shape:      "geo",
+			Renderer:   "echarts",
+			Type:       "map",
+			MetricView: "orders",
+			Options:    map[string]any{"map": "brazil_states"},
+			Query:      VisualQuery{Dimensions: []string{"state"}, Measures: []string{"order_count"}},
 		},
 		"boxplot": {
-			Title:    "Distribution",
-			Shape:    "distribution",
-			Renderer: "echarts",
-			Type:     "boxplot",
-			Dataset:  "orders",
-			Query:    VisualQuery{Dimensions: []string{"delivery_bucket"}, Measures: []string{"delivery_days"}},
+			Title:      "Distribution",
+			Shape:      "distribution",
+			Renderer:   "echarts",
+			Type:       "boxplot",
+			MetricView: "orders",
+			Query:      VisualQuery{Dimensions: []string{"delivery_bucket"}, Measures: []string{"delivery_days"}},
 		},
 		"combo": {
-			Title:    "Combo",
-			Shape:    "category_multi_measure",
-			Renderer: "echarts",
-			Type:     "combo",
-			Dataset:  "orders",
-			Query:    VisualQuery{Dimensions: []string{"purchase_month"}, Measures: []string{"revenue", "order_count"}},
+			Title:      "Combo",
+			Shape:      "category_multi_measure",
+			Renderer:   "echarts",
+			Type:       "combo",
+			MetricView: "orders",
+			Query:      VisualQuery{Dimensions: []string{"purchase_month"}, Measures: []string{"revenue", "order_count"}},
 		},
 		"waterfall": {
-			Title:    "Waterfall",
-			Shape:    "category_delta",
-			Renderer: "echarts",
-			Type:     "waterfall",
-			Dataset:  "orders",
-			Query:    VisualQuery{Dimensions: []string{"purchase_month"}, Measures: []string{"revenue"}},
+			Title:      "Waterfall",
+			Shape:      "category_delta",
+			Renderer:   "echarts",
+			Type:       "waterfall",
+			MetricView: "orders",
+			Query:      VisualQuery{Dimensions: []string{"purchase_month"}, Measures: []string{"revenue"}},
 		},
 		"histogram": {
-			Title:    "Histogram",
-			Shape:    "binned_measure",
-			Renderer: "echarts",
-			Type:     "histogram",
-			Dataset:  "orders",
-			Query:    VisualQuery{Measures: []string{"delivery_days"}},
+			Title:      "Histogram",
+			Shape:      "binned_measure",
+			Renderer:   "echarts",
+			Type:       "histogram",
+			MetricView: "orders",
+			Query:      VisualQuery{Measures: []string{"delivery_days"}},
 		},
 		"radar": {
-			Title:    "Radar",
-			Shape:    "category_value",
-			Renderer: "echarts",
-			Type:     "radar",
-			Dataset:  "orders",
-			Query:    VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}},
+			Title:      "Radar",
+			Shape:      "category_value",
+			Renderer:   "echarts",
+			Type:       "radar",
+			MetricView: "orders",
+			Query:      VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}},
 		},
 		"tree": {
-			Title:    "Tree",
-			Shape:    "hierarchy",
-			Renderer: "echarts",
-			Type:     "tree",
-			Dataset:  "orders",
-			Query:    VisualQuery{Dimensions: []string{"state", "status"}, Measures: []string{"order_count"}},
+			Title:      "Tree",
+			Shape:      "hierarchy",
+			Renderer:   "echarts",
+			Type:       "tree",
+			MetricView: "orders",
+			Query:      VisualQuery{Dimensions: []string{"state", "status"}, Measures: []string{"order_count"}},
 		},
 		"sunburst": {
-			Title:    "Sunburst",
-			Shape:    "hierarchy",
-			Renderer: "echarts",
-			Type:     "sunburst",
-			Dataset:  "orders",
-			Query:    VisualQuery{Dimensions: []string{"category", "status"}, Measures: []string{"order_count"}},
+			Title:      "Sunburst",
+			Shape:      "hierarchy",
+			Renderer:   "echarts",
+			Type:       "sunburst",
+			MetricView: "orders",
+			Query:      VisualQuery{Dimensions: []string{"category", "status"}, Measures: []string{"order_count"}},
 		},
 	}
 	for name, visual := range cases {
 		report.Visuals = map[string]Visual{name: visual}
 		report.Pages = []dashboard.Page{{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{{ID: name, Kind: visual.Type + "_chart", Visual: name, Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 1, RowSpan: 1}}}}}
-		if err := report.Validate(model); err != nil {
+		if err := report.Validate(loadOlistMetricViews(t, model)); err != nil {
 			t.Fatalf("validate advanced shape %s: %v", name, err)
 		}
 	}
@@ -837,9 +852,18 @@ func loadOlistModel(t *testing.T) *Model {
 	return model
 }
 
+func loadOlistMetricViews(t *testing.T, model *Model) map[string]*MetricView {
+	t.Helper()
+	view, err := LoadMetricView(filepath.Join("..", "..", "dashboards", "olist", "orders.metrics.yaml"), model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return map[string]*MetricView{view.ID: view}
+}
+
 func loadOlistDashboard(t *testing.T, model *Model) *Dashboard {
 	t.Helper()
-	report, err := LoadDashboard(filepath.Join("..", "..", "dashboards", "olist", "executive-sales.yaml"), model)
+	report, err := LoadDashboard(filepath.Join("..", "..", "dashboards", "olist", "executive-sales.yaml"), loadOlistMetricViews(t, model))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -896,7 +920,7 @@ func assertModelValidateError(t *testing.T, model *Model, contains string) {
 
 func assertDashboardValidateError(t *testing.T, report *Dashboard, model *Model, contains string) {
 	t.Helper()
-	err := report.Validate(model)
+	err := report.Validate(loadOlistMetricViews(t, model))
 	if err == nil {
 		t.Fatalf("Validate() error = nil, want %q", contains)
 	}

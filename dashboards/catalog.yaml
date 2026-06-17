@@ -9,10 +9,16 @@ semantic_models:
     path: olist/model.yaml
     description: Brazilian ecommerce model backed by local Olist CSVs.
 
+metrics_views:
+  - id: orders
+    title: Orders Metrics
+    path: olist/orders.metrics.yaml
+    semantic_model: olist
+    description: Governed order metrics and dimensions for Olist commerce dashboards.
+
 dashboards:
   - id: executive-sales
     title: Executive Sales Dashboard
-    semantic_model: olist
     path: olist/executive-sales.yaml
     description: Sales, order, category, and delivery overview.
     tags: [sales, ecommerce, operations]

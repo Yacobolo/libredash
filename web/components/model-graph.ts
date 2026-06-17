@@ -426,8 +426,10 @@ function positionFor(node: ModelGraphNode, nodes: ModelGraphNode[]): { x: number
       return { x: 300, y: 292 + index * 128 }
     case 'dataset':
       return { x: 560, y: 292 + index * 128 }
+    case 'metrics_view':
+      return { x: 820, y: index * 128 }
     case 'metric':
-      return { x: 820, y: index * 116 }
+      return { x: 1040, y: index * 116 }
     case 'visual':
       return { x: 1060, y: index * 116 }
     case 'table':
@@ -477,6 +479,7 @@ function nodeStyle(kind: string): Record<string, string> {
     source: ['var(--data-blue-color-muted)', 'var(--data-blue-color-emphasis)', 'var(--borderColor-default)'],
     cache: ['var(--data-green-color-muted)', 'var(--data-green-color-emphasis)', 'var(--borderColor-success-muted)'],
     dataset: ['var(--data-auburn-color-muted)', 'var(--data-auburn-color-emphasis)', 'var(--borderColor-attention-muted)'],
+    metrics_view: ['var(--data-yellow-color-muted)', 'var(--data-yellow-color-emphasis)', 'var(--borderColor-attention-muted)'],
     metric: ['var(--data-yellow-color-muted)', 'var(--data-yellow-color-emphasis)', 'var(--borderColor-attention-muted)'],
     visual: ['var(--data-purple-color-muted)', 'var(--data-purple-color-emphasis)', 'var(--borderColor-accent-muted)'],
     report_table: ['var(--data-coral-color-muted)', 'var(--data-coral-color-emphasis)', 'var(--borderColor-default)'],
@@ -495,6 +498,8 @@ function nodeColor(kind: string): string {
       return 'var(--data-green-color-emphasis)'
     case 'dataset':
       return 'var(--data-auburn-color-emphasis)'
+    case 'metrics_view':
+      return 'var(--data-yellow-color-emphasis)'
     case 'metric':
       return 'var(--data-yellow-color-emphasis)'
     case 'visual':
@@ -514,6 +519,8 @@ function kindLabel(kind: string): string {
       return 'DuckDB cache'
     case 'dataset':
       return 'Semantic dataset'
+    case 'metrics_view':
+      return 'Metrics view'
     case 'metric':
       return 'Metric'
     case 'visual':

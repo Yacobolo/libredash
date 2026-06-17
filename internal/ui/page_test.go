@@ -11,23 +11,23 @@ import (
 
 func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	report := semantic.Dashboard{
-		ID:            "report",
-		Title:         "Report",
-		SemanticModel: "test",
+		ID:          "report",
+		Title:       "Report",
+		MetricViews: []string{"orders"},
 		Filters: map[string]semantic.FilterDefinition{
-			"state":    {Type: "multi_select", Label: "State", Dataset: "orders", Dimension: "state", URLParam: "state", Operator: "in"},
-			"category": {Type: "text", Label: "Category", Dataset: "orders", Dimension: "category", URLParam: "category", DefaultOperator: "contains"},
+			"state":    {Type: "multi_select", Label: "State", MetricView: "orders", Dimension: "state", URLParam: "state", Operator: "in"},
+			"category": {Type: "text", Label: "Category", MetricView: "orders", Dimension: "category", URLParam: "category", DefaultOperator: "contains"},
 		},
 		Visuals: map[string]semantic.Visual{
-			"active_chart":   {Title: "Active", Type: "bar", Dataset: "orders", Query: semantic.VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}}},
-			"active_kpi":     {Kind: "kpi", Shape: "single_value", Dataset: "orders", Query: semantic.VisualQuery{Measures: []string{"order_count"}}, Options: map[string]any{"note": "Filtered", "tone": "ink"}},
-			"off_page_chart": {Title: "Off Page", Type: "bar", Dataset: "orders", Query: semantic.VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}}},
+			"active_chart":   {Title: "Active", Type: "bar", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}}},
+			"active_kpi":     {Kind: "kpi", Shape: "single_value", MetricView: "orders", Query: semantic.VisualQuery{Measures: []string{"order_count"}}, Options: map[string]any{"note": "Filtered", "tone": "ink"}},
+			"off_page_chart": {Title: "Off Page", Type: "bar", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}}},
 		},
 		Tables: map[string]semantic.TableVisual{
-			"orders":   {Title: "Orders", Dataset: "orders", Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
-			"matrix":   {Title: "Matrix", Kind: "matrix_table", Dataset: "orders", Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
-			"pivot":    {Title: "Pivot", Kind: "pivot_table", Dataset: "orders", Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
-			"off_page": {Title: "Off Page", Dataset: "orders", Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
+			"orders":   {Title: "Orders", MetricView: "orders", Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
+			"matrix":   {Title: "Matrix", Kind: "matrix_table", MetricView: "orders", Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
+			"pivot":    {Title: "Pivot", Kind: "pivot_table", MetricView: "orders", Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
+			"off_page": {Title: "Off Page", MetricView: "orders", Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
 		},
 		Pages: []dashboard.Page{
 			{
@@ -56,11 +56,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 		Name:  "test",
 		Title: "Test",
 		Datasets: map[string]semantic.Dataset{
-			"orders": {
-				Measures: map[string]semantic.Measure{
-					"order_count": {Unit: "orders"},
-				},
-			},
+			"orders": {Source: "orders_enriched"},
 		},
 	}
 

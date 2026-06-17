@@ -24,25 +24,6 @@ export function countSignals(obj: unknown, count = 0): number {
   return count
 }
 
-export function flattenSignals(
-  obj: Record<string, unknown>,
-  prefix = ''
-): Array<[string, unknown]> {
-  const result: Array<[string, unknown]> = []
-
-  for (const [key, value] of Object.entries(obj)) {
-    const path = prefix ? `${prefix}.${key}` : key
-
-    if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      result.push(...flattenSignals(value as Record<string, unknown>, path))
-    } else {
-      result.push([path, value])
-    }
-  }
-
-  return result
-}
-
 export function parseFilterPattern(filterText: string): RegExp {
   if (filterText.startsWith('/') && filterText.lastIndexOf('/') > 0) {
     const lastSlash = filterText.lastIndexOf('/')
@@ -121,51 +102,4 @@ export function findChangedPaths(
   }
 
   return changed
-}
-
-export function renderJsonValue(
-  value: unknown,
-  changedPaths: Set<string>,
-  indent = 0,
-  path = ''
-): string {
-  const pad = '  '.repeat(indent)
-
-  if (value === null) {
-    return `<span class="text-on-surface-variant">null</span>`
-  }
-  if (typeof value === 'boolean') {
-    return `<span class="text-primary">${value}</span>`
-  }
-  if (typeof value === 'number') {
-    return `<span class="text-warning">${value}</span>`
-  }
-  if (typeof value === 'string') {
-    return `<span class="text-success">"${escapeHtml(value)}"</span>`
-  }
-  if (Array.isArray(value)) {
-    if (value.length === 0) return '[]'
-    const items = value
-      .map((v, i) => {
-        const itemPath = `${path}[${i}]`
-        return `${pad}  ${renderJsonValue(v, changedPaths, indent + 1, itemPath)}`
-      })
-      .join(',\n')
-    return `[\n${items}\n${pad}]`
-  }
-  if (typeof value === 'object') {
-    const entries = Object.entries(value)
-    if (entries.length === 0) return '{}'
-    const items = entries
-      .map(([k, v]) => {
-        const keyPath = path ? `${path}.${k}` : k
-        const isChanged = changedPaths.has(keyPath)
-        const flashClass = isChanged ? ' bg-warning rounded px-1' : ''
-        const lineContent = `<span class="text-secondary">"${escapeHtml(k)}"</span>: ${renderJsonValue(v, changedPaths, indent + 1, keyPath)}`
-        return `${pad}  <span class="${flashClass.trim()}">${lineContent}</span>`
-      })
-      .join(',\n')
-    return `{\n${items}\n${pad}}`
-  }
-  return String(value)
 }
