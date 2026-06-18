@@ -71,11 +71,17 @@ func (s *Server) workspaceAsset(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	http.Redirect(w, r, "/workspaces/"+workspaceID+"/assets/"+assetID+"/definition", http.StatusFound)
+	http.Redirect(w, r, "/workspaces/"+workspaceID+"/assets/"+assetID+"/details", http.StatusFound)
 }
 
 func (s *Server) workspaceAssetSection(w http.ResponseWriter, r *http.Request) {
 	section := chi.URLParam(r, "section")
+	if section == "definition" {
+		workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
+		assetID := chi.URLParam(r, "asset")
+		http.Redirect(w, r, "/workspaces/"+workspaceID+"/assets/"+assetID+"/details", http.StatusFound)
+		return
+	}
 	if !ui.ValidWorkspaceAssetSection(section) {
 		http.NotFound(w, r)
 		return
