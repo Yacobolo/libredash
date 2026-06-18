@@ -55,22 +55,18 @@ func WorkspacePage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, a
 func WorkspaceAssetPage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse, edges []api.AssetEdgeResponse, activeSection, roleLabel string) g.Node {
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
-	extraHead := []g.Node{}
+	extraHead := []g.Node{
+		h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
+	}
 	if activeSection == "lineage" {
 		extraHead = append(extraHead,
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/asset-lineage-graph.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/asset-lineage-graph.js"))),
-			h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
 		)
 	}
 	return workspaceDocument(asset.Title, catalog, "workspaces", roleLabel,
 		h.Section(h.Class(metricMainClass), h.Aria("label", "Workspace asset detail"),
-			workspaceHeader(
-				assetTypeLabel(asset.Type),
-				assetTitle(asset),
-				asset.Description,
-				assetActions(workspace.ID, asset),
-			),
+			assetHeader(workspace, asset, assets),
 			h.Div(h.Class(metricContentColumnClass),
 				assetDetailTabs(workspace.ID, asset.ID, activeSection, lineage.Count),
 				h.Div(h.Class("min-h-0 overflow-auto px-4 py-4"),
@@ -82,6 +78,55 @@ func WorkspaceAssetPage(catalog dashboard.Catalog, workspace api.WorkspaceRespon
 			),
 		),
 		extraHead...,
+	)
+}
+
+func assetHeader(workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse) g.Node {
+	if asset.Type == "metric_view" {
+		return assetBreadcrumbHeader(workspace, asset, assets)
+	}
+	return workspaceHeader(assetTypeLabel(asset.Type), assetTitle(asset), asset.Description, assetActions(workspace.ID, asset))
+}
+
+func assetBreadcrumbHeader(workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse) g.Node {
+	return h.Header(h.Class("grid min-w-0 grid-cols-workspace-header items-center gap-2 border-b border-outline-muted px-4 py-2.5"),
+		h.Nav(h.Class("min-w-0"), h.Aria("label", "Breadcrumb"),
+			h.Ol(h.Class("flex min-w-0 flex-wrap items-center gap-1.5 text-body-sm font-760 leading-snug"),
+				breadcrumbLink("Workspaces", "/workspaces"),
+				breadcrumbSeparator(),
+				breadcrumbLink(workspace.Title, "/workspaces/"+workspace.ID),
+				breadcrumbSeparator(),
+				assetBreadcrumbCurrent(asset),
+			),
+		),
+		h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"), assetActions(workspace.ID, asset)),
+	)
+}
+
+func breadcrumbLink(label, href string) g.Node {
+	return h.Li(h.Class("min-w-0"),
+		h.A(h.Href(href), h.Class("block min-w-0 truncate text-fg-muted no-underline hover:text-fg-default focus-visible:text-fg-default focus-visible:outline-0"),
+			g.Text(label),
+		),
+	)
+}
+
+func breadcrumbSeparator() g.Node {
+	return h.Li(h.Class("shrink-0 text-fg-muted"), h.Aria("hidden", "true"), g.Text("/"))
+}
+
+func assetBreadcrumbCurrent(asset api.AssetResponse) g.Node {
+	icon := assetIconByType[asset.Type]
+	if icon == nil {
+		icon = lucide.Component
+	}
+	return h.Li(h.Class("min-w-0"),
+		h.H1(h.Class("m-0 inline-flex min-w-0 items-center gap-2 text-title-sm font-850 leading-snug text-fg-default"),
+			h.Span(h.Class("inline-flex size-5 shrink-0 items-center justify-center text-fg-muted"), h.Aria("hidden", "true"),
+				icon(assetIconAttrs()...),
+			),
+			h.Span(h.Class("min-w-0 truncate"), g.Text(assetTitle(asset))),
+		),
 	)
 }
 
@@ -484,7 +529,7 @@ func workspaceAssetSectionHref(workspaceID, assetID, section string) string {
 
 func assetDetailsSection(workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse) g.Node {
 	return h.Section(h.ID("details"), h.Class("grid content-start gap-6"), h.Aria("label", "Asset details"),
-		assetIdentityStrip(workspace, asset, assets),
+		g.If(asset.Type != "metric_view", assetIdentityStrip(workspace, asset, assets)),
 		g.Group(assetDetailsNodes(workspace, asset, assets)),
 	)
 }
@@ -709,14 +754,81 @@ func semanticRelationshipsGrid(meta map[string]any) metricGrid {
 func metricViewAssetDetails(asset api.AssetResponse, assets []api.AssetResponse) []g.Node {
 	measures := childrenByType(asset.ID, "measure", assets)
 	dimensions := childrenByType(asset.ID, "dimension", assets)
+	semanticModel := assetParentTitle(asset.ParentID, assets)
+	if semanticModel == "" {
+		semanticModel = metaString(asset.Meta, "SemanticModel", "semantic_model")
+	}
 	return []g.Node{
 		definitionStats("Overview", []definitionFact{
-			{Label: "Semantic model", Value: metaString(asset.Meta, "SemanticModel", "semantic_model")},
+			{Label: "Type", Value: assetTypeLabel(asset.Type)},
+			{Label: "Key", Value: asset.Key, Code: true},
+			{Label: "Semantic model", Value: semanticModel},
 			{Label: "Dataset", Value: metaString(asset.Meta, "Dataset", "dataset")},
 			{Label: "Timeseries", Value: metaString(asset.Meta, "Timeseries", "timeseries")},
-			{Label: "Measures", Value: fmt.Sprint(len(measures))},
-			{Label: "Dimensions", Value: fmt.Sprint(len(dimensions))},
+			{Label: "Description", Value: asset.Description, Wide: true},
 		}),
+		definitionGrid(fmt.Sprintf("Measures (%d)", len(measures)), metricViewMeasuresGrid(asset, measures)),
+		definitionGrid(fmt.Sprintf("Dimensions (%d)", len(dimensions)), metricViewDimensionsGrid(asset, dimensions)),
+	}
+}
+
+func metricViewMeasuresGrid(parent api.AssetResponse, measures []api.AssetResponse) metricGrid {
+	sort.Slice(measures, func(i, j int) bool {
+		return metricChildName(parent, measures[i]) < metricChildName(parent, measures[j])
+	})
+	rows := make([]map[string]any, 0, len(measures))
+	for _, measure := range measures {
+		name := metricChildName(parent, measure)
+		rows = append(rows, map[string]any{
+			"name":       name,
+			"nameHref":   workspaceAssetSectionHref(parent.WorkspaceID, measure.ID, "details"),
+			"label":      displayLabel(assetTitle(measure), name),
+			"expression": metaString(measure.Meta, "Expression", "expression"),
+			"unit":       metricGridBadgeValue(metaString(measure.Meta, "Unit", "unit"), "success"),
+			"format":     metricGridBadgeValue(metaString(measure.Meta, "Format", "format"), "accent"),
+		})
+	}
+	return metricGrid{
+		Columns: []metricGridColumn{
+			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "150px"},
+			{ID: "label", Header: "Label", Width: "160px"},
+			{ID: "expression", Header: "Expression", Kind: "expression"},
+			{ID: "unit", Header: "Unit", Kind: "badge", Width: "82px"},
+			{ID: "format", Header: "Format", Kind: "badge", Width: "88px"},
+		},
+		Rows:     rows,
+		Empty:    "No measures are defined for this metric view.",
+		MinWidth: "100%",
+	}
+}
+
+func metricViewDimensionsGrid(parent api.AssetResponse, dimensions []api.AssetResponse) metricGrid {
+	sort.Slice(dimensions, func(i, j int) bool {
+		return metricChildName(parent, dimensions[i]) < metricChildName(parent, dimensions[j])
+	})
+	rows := make([]map[string]any, 0, len(dimensions))
+	for _, dimension := range dimensions {
+		name := metricChildName(parent, dimension)
+		rows = append(rows, map[string]any{
+			"name":       name,
+			"nameHref":   workspaceAssetSectionHref(parent.WorkspaceID, dimension.ID, "details"),
+			"label":      displayLabel(assetTitle(dimension), name),
+			"expression": metaString(dimension.Meta, "Expr", "expr", "Expression", "expression"),
+			"filter":     emptyDash(metaString(dimension.Meta, "Where", "where")),
+			"order":      emptyDash(metaString(dimension.Meta, "OrderExpr", "order_expr")),
+		})
+	}
+	return metricGrid{
+		Columns: []metricGridColumn{
+			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "170px"},
+			{ID: "label", Header: "Label", Width: "180px"},
+			{ID: "expression", Header: "Expression", Kind: "expression", Width: "260px"},
+			{ID: "filter", Header: "Filter", Kind: "expression", Width: "220px"},
+			{ID: "order", Header: "Order", Kind: "expression", Width: "190px"},
+		},
+		Rows:     rows,
+		Empty:    "No dimensions are defined for this metric view.",
+		MinWidth: "1020px",
 	}
 }
 
@@ -783,6 +895,7 @@ type definitionFact struct {
 	Label string
 	Value string
 	Code  bool
+	Wide  bool
 }
 
 func definitionFacts(title string, facts []definitionFact) g.Node {
@@ -821,14 +934,34 @@ func definitionStats(title string, facts []definitionFact) g.Node {
 		g.If(len(filtered) == 0, emptyState("No details are available.")),
 		g.If(len(filtered) > 0, h.Div(h.Class("grid min-w-0 grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-6 gap-y-4"),
 			g.Map(filtered, func(fact definitionFact) g.Node {
-				return h.Div(h.Class("grid min-w-0 content-start gap-1"),
+				return h.Div(h.Class(definitionStatItemClass(fact)),
 					h.Span(h.Class("text-caption font-900 uppercase leading-none text-fg-muted"), g.Text(fact.Label)),
-					g.If(fact.Code, h.Code(h.Class("min-w-0 truncate font-mono text-title-xs font-850 leading-tight text-fg-default"), g.Text(fact.Value))),
-					g.If(!fact.Code, h.Span(h.Class("min-w-0 truncate text-title-xs font-850 leading-tight text-fg-default"), g.Text(fact.Value))),
+					g.If(fact.Code, h.Code(h.Class(definitionStatValueClass(fact, true)), g.Text(fact.Value))),
+					g.If(!fact.Code, h.Span(h.Class(definitionStatValueClass(fact, false)), g.Text(fact.Value))),
 				)
 			}),
 		)),
 	)
+}
+
+func definitionStatItemClass(fact definitionFact) string {
+	if fact.Wide {
+		return "grid min-w-0 content-start gap-1 sm:col-span-2 xl:col-span-3"
+	}
+	return "grid min-w-0 content-start gap-1"
+}
+
+func definitionStatValueClass(fact definitionFact, code bool) string {
+	if fact.Wide {
+		if code {
+			return "min-w-0 whitespace-pre-wrap font-mono text-body-sm font-650 leading-snug text-fg-default"
+		}
+		return "min-w-0 text-body-sm font-650 leading-snug text-fg-default"
+	}
+	if code {
+		return "min-w-0 truncate font-mono text-title-xs font-850 leading-tight text-fg-default"
+	}
+	return "min-w-0 truncate text-title-xs font-850 leading-tight text-fg-default"
 }
 
 func definitionGrid(title string, grid metricGrid) g.Node {
@@ -1092,6 +1225,17 @@ func childrenByType(parentID, typ string, assets []api.AssetResponse) []api.Asse
 		}
 	}
 	return out
+}
+
+func metricChildName(parent, child api.AssetResponse) string {
+	prefix := parent.Key + "."
+	if strings.HasPrefix(child.Key, prefix) {
+		return strings.TrimPrefix(child.Key, prefix)
+	}
+	if child.Key != "" {
+		return child.Key
+	}
+	return assetTitle(child)
 }
 
 func childHref(workspaceID string, asset api.AssetResponse) string {
