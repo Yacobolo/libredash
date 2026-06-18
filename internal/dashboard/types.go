@@ -439,7 +439,7 @@ type TableRequest struct {
 }
 
 const (
-	TableChunkSize         = 200
+	TableChunkSize         = 50
 	TableInteractiveRowCap = 10000
 	TableRowHeight         = 34
 	TableMaxRequestCount   = 1000

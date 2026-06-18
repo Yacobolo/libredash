@@ -738,7 +738,7 @@ func TestUpdatesStreamsPageScopedChartSignals(t *testing.T) {
 }
 
 func TestRefreshCacheCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"all","start":0,"count":200}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"all","start":0,"count":50}}`)
 	req := httptest.NewRequest(http.MethodPost, "/commands/refresh-cache", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -751,7 +751,7 @@ func TestRefreshCacheCommandAcceptsDatastarSignals(t *testing.T) {
 }
 
 func TestChartSelectCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"visualSelections":[]},"runtime":{"clientId":"test-client"},"visualCommand":{"visualId":"orders","field":"status","value":"delivered","label":"delivered"},"tableCommand":{"table":"orders","block":"all","start":0,"count":200}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"visualSelections":[]},"runtime":{"clientId":"test-client"},"visualCommand":{"visualId":"orders","field":"status","value":"delivered","label":"delivered"},"tableCommand":{"table":"orders","block":"all","start":0,"count":50}}`)
 	req := httptest.NewRequest(http.MethodPost, "/commands/chart-select", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -772,22 +772,22 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 		{
 			name: "chart select",
 			path: "/commands/chart-select",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"visualSelections":[]},"visualCommand":{"visualId":"ops_pipeline","field":"status","value":"delivered","label":"delivered"},"tableCommand":{"block":"all","start":0,"count":200}}`,
+			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"visualSelections":[]},"visualCommand":{"visualId":"ops_pipeline","field":"status","value":"delivered","label":"delivered"},"tableCommand":{"block":"all","start":0,"count":50}}`,
 		},
 		{
 			name: "clear selection",
 			path: "/commands/clear-selection",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"visualSelections":[{"visualId":"ops_pipeline","field":"status","values":["delivered"]}]},"tableCommand":{"block":"all","start":0,"count":200}}`,
+			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"visualSelections":[{"visualId":"ops_pipeline","field":"status","values":["delivered"]}]},"tableCommand":{"block":"all","start":0,"count":50}}`,
 		},
 		{
 			name: "reset filters",
 			path: "/commands/reset-filters",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":200,"count":200}}`,
+			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":200,"count":50}}`,
 		},
 		{
 			name: "refresh cache",
 			path: "/commands/refresh-cache",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":0,"count":200}}`,
+			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":0,"count":50}}`,
 		},
 	}
 
@@ -811,7 +811,7 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 }
 
 func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"visualSelections":[{"visualId":"orders","field":"status","values":["delivered"]}]},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"all","start":0,"count":200}}`)
+	body := strings.NewReader(`{"filters":{"visualSelections":[{"visualId":"orders","field":"status","values":["delivered"]}]},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"all","start":0,"count":50}}`)
 	req := httptest.NewRequest(http.MethodPost, "/commands/clear-selection", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -824,7 +824,7 @@ func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
 }
 
 func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"visualSelections":[{"visualId":"orders","field":"status","values":["delivered"]}]},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"all","start":200,"count":200}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"visualSelections":[{"visualId":"orders","field":"status","values":["delivered"]}]},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"all","start":200,"count":50}}`)
 	req := httptest.NewRequest(http.MethodPost, "/commands/reset-filters", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -837,7 +837,7 @@ func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
 }
 
 func TestTableWindowCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"a","start":400,"count":200,"requestSeq":42,"sort":{"key":"revenue","direction":"desc"}}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"a","start":400,"count":50,"requestSeq":42,"sort":{"key":"revenue","direction":"desc"}}}`)
 	req := httptest.NewRequest(http.MethodPost, "/commands/table-window", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -854,7 +854,7 @@ func TestTableWindowCommandDoesNotPublishCanceledQueries(t *testing.T) {
 	updates, unsubscribe := server.broker.subscribe("test-client:executive-sales:overview")
 	defer unsubscribe()
 
-	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"overview"},"tableCommand":{"table":"orders","block":"all","start":400,"count":200,"requestSeq":42}}`)
+	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"overview"},"tableCommand":{"table":"orders","block":"all","start":400,"count":50,"requestSeq":42}}`)
 	req := httptest.NewRequest(http.MethodPost, "/commands/table-window", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

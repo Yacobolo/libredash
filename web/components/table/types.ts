@@ -71,6 +71,6 @@ export type TanStackTableRow = TableRow & {
 }
 
 export const blockIDs: BlockID[] = ['a', 'b', 'c']
-export const defaultChunkSize = 200
+export const defaultChunkSize = 50
 export const defaultRowHeight = 34
 export const defaultSort: TableSort = { key: 'purchase_date', direction: 'desc' }

@@ -58,6 +58,8 @@ const dataTableFeatures = tableFeatures({
   rowSortingFeature,
 })
 
+const groupHeaderHeight = 26
+
 function defaultColumnSize(column: TableColumn): number {
   const widths: Record<string, number> = {
     order_id: 240,
@@ -182,9 +184,12 @@ class DataTable extends LitElement {
       min-height: 0;
       min-width: 0;
       background: var(--report-chart-surface, var(--card-bgColor, var(--bgColor-default)));
+      isolation: isolate;
     }
 
     .toolbar {
+      position: relative;
+      z-index: 40;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -195,7 +200,20 @@ class DataTable extends LitElement {
       padding: 6px 8px 5px 10px;
     }
 
+    .toolbar::after {
+      content: '';
+      position: absolute;
+      inset-inline: 0;
+      bottom: -2px;
+      z-index: 1;
+      height: 3px;
+      background: inherit;
+      pointer-events: none;
+    }
+
     .toolbar > div {
+      position: relative;
+      z-index: 2;
       flex: 1 1 auto;
       min-width: 0;
     }
@@ -214,6 +232,7 @@ class DataTable extends LitElement {
 
     .visual-options {
       position: relative;
+      z-index: 2;
       flex: 0 0 auto;
     }
 
@@ -374,9 +393,10 @@ class DataTable extends LitElement {
       display: flex;
       align-items: center;
       min-width: 0;
-      min-height: 26px;
+      min-height: var(--ld-group-head-height, 26px);
       overflow: hidden;
       border-right: var(--ld-border-default);
+      background: inherit;
       padding: 0 9px;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -557,6 +577,8 @@ class DataTable extends LitElement {
       flex-direction: column;
       min-height: 0;
       min-width: 0;
+      margin-top: -1px;
+      overflow: hidden;
       border-top: 1px solid var(--borderColor-default);
       background: var(--report-chart-surface, var(--card-bgColor, var(--bgColor-default)));
     }
@@ -568,17 +590,20 @@ class DataTable extends LitElement {
       min-height: 0;
       min-width: 0;
       background: var(--report-chart-surface, var(--card-bgColor, var(--bgColor-default)));
+      overscroll-behavior: none;
       scrollbar-gutter: stable;
     }
 
     .table-plane {
       position: relative;
+      isolation: isolate;
       width: var(--ld-table-width, 1080px);
       min-width: var(--ld-table-width, 1080px);
     }
 
     .canvas {
       position: relative;
+      z-index: 0;
       width: var(--ld-table-width, 1080px);
       min-width: var(--ld-table-width, 1080px);
     }
@@ -1150,16 +1175,22 @@ class DataTable extends LitElement {
     const columnModels = allTableColumns(tanstack)
     const tanstackRows = new Map((tanstack.getRowModel?.().rows ?? []).map((row: any) => [row.id, row]))
     const totalHeight = this.availableRows * this.rowHeight
-    const hasGroupHeaderRow = headers.some((header: any) => header.column.columnDef.meta?.column?.group)
     const rowRange = this.rowRangeText()
     const selectedText = this.selectedRowId ? '1 row selected' : 'No selection'
     const loading = Boolean(this.table.loadingBlock) || this.visibleLoading
     const gridTemplate = this.gridTemplateFor(columns)
     const tableWidth = this.tableWidthFor(columns)
     const columnLineOffsets = this.columnLineOffsetsFor(columns)
+    const shellStyle = [
+      `--ld-table-columns:${gridTemplate}`,
+      `--ld-table-width:${tableWidth}px`,
+      `--ld-row-height:${this.rowHeight}px`,
+      `--ld-group-head-height:${groupHeaderHeight}px`,
+      `--ld-head-top:${groupHeaderHeight}px`,
+    ].join(';')
 
     return html`
-      <section class="shell" style=${`--ld-table-columns:${gridTemplate};--ld-table-width:${tableWidth}px;--ld-row-height:${this.rowHeight}px;--ld-head-top:${hasGroupHeaderRow ? '26px' : '0px'}`}>
+      <section class="shell" style=${shellStyle}>
         <div class="toolbar">
           <div>
             <h2>${this.table?.title ?? 'Orders'}</h2>
@@ -1200,7 +1231,7 @@ class DataTable extends LitElement {
           ${loading ? html`<div class="loading" aria-hidden="true"></div>` : nothing}
           <div class="table-scrollport" ${ref(this.bodyViewportRef)} @scroll=${this.handleScroll}>
             <div class="table-plane">
-              ${this.renderGroupHeaderRows(headers)}
+              ${this.renderGroupHeaderRows(headers, true)}
               ${this.renderHeaderRow(headers)}
               ${this.availableRows === 0 && !loading ? html`<div class="empty">Waiting for table data</div>` : html`
                 <div class="canvas" role="rowgroup" style=${`height:${totalHeight}px`}>

@@ -349,12 +349,14 @@
     font-family: var(--font-sans);
     background: var(--bgColor-default);
     color: var(--fgColor-default);
+    overscroll-behavior: none;
   }
 
   body {
     min-width: 320px;
     margin: 0;
     background: var(--bgColor-inset);
+    overscroll-behavior: none;
   }
 
   button,
