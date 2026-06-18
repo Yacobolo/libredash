@@ -4,7 +4,7 @@
  * A self-contained web component for inspecting Datastar signals.
  * Works in any Datastar project with zero configuration.
  */
-import { LitElement, html, nothing } from 'lit'
+import { LitElement, css, html, nothing } from 'lit'
 import { customElement, state } from 'lit/decorators.js'
 
 import type { InspectorState, SignalObject } from './types.js'
@@ -20,10 +20,6 @@ const STORAGE_KEY = 'ds-inspector'
 
 @customElement('datastar-inspector')
 export class DatastarInspector extends LitElement {
-  override createRenderRoot() {
-    return this
-  }
-
   @state() private expanded = false
   @state() private filter = ''
   @state() private signals: SignalObject = {}
@@ -39,8 +35,278 @@ export class DatastarInspector extends LitElement {
   private flashTimeout: number | null = null
   private parseFrame: number | null = null
 
+  static styles = css`
+    :host {
+      --ds-bg: var(--bgColor-default, #0d1117);
+      --ds-panel: var(--overlay-bgColor, var(--bgColor-default, #161b22));
+      --ds-panel-muted: var(--bgColor-muted, #21262d);
+      --ds-fg: var(--fgColor-default, #f0f6fc);
+      --ds-muted: var(--fgColor-muted, #8b949e);
+      --ds-border: var(--borderColor-default, #30363d);
+      --ds-border-muted: var(--borderColor-muted, #21262d);
+      --ds-accent: var(--bgColor-accent-emphasis, #1f6feb);
+      --ds-accent-fg: var(--fgColor-onEmphasis, #ffffff);
+      --ds-success: var(--fgColor-success, #3fb950);
+      --ds-warning: var(--fgColor-attention, #d29922);
+      --ds-radius: var(--ld-radius-default, 6px);
+      --ds-radius-full: var(--ld-radius-full, 999px);
+      --ds-shadow: 0 18px 48px rgb(0 0 0 / 42%), 0 0 0 1px rgb(255 255 255 / 4%);
+      color: var(--ds-fg);
+      font-family: var(--fontStack-system, Inter, ui-sans-serif, system-ui, sans-serif);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .toggle {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 99999;
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--ds-accent), white 18%);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 35% 24%, rgb(255 255 255 / 22%), transparent 30%),
+        linear-gradient(145deg, color-mix(in srgb, var(--ds-accent), white 10%), var(--ds-accent));
+      color: var(--ds-accent-fg);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: 0;
+      line-height: 1;
+      box-shadow: 0 10px 28px rgb(0 0 0 / 38%), 0 0 0 1px rgb(255 255 255 / 8%) inset;
+      transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+    }
+
+    .toggle:hover,
+    .toggle:focus-visible {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+      box-shadow: 0 14px 34px rgb(0 0 0 / 44%), 0 0 0 1px rgb(255 255 255 / 14%) inset;
+      outline: 0;
+    }
+
+    .toggle[data-unseen] {
+      animation: ds-pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes ds-pulse {
+      0%,
+      100% {
+        box-shadow: 0 10px 28px rgb(0 0 0 / 38%), 0 0 0 0 color-mix(in srgb, var(--ds-accent), transparent 40%);
+      }
+
+      50% {
+        box-shadow: 0 10px 28px rgb(0 0 0 / 38%), 0 0 0 7px color-mix(in srgb, var(--ds-accent), transparent 84%);
+      }
+    }
+
+    .panel {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 99999;
+      display: flex;
+      width: min(384px, calc(100vw - 32px));
+      height: min(512px, calc(100vh - 32px));
+      overflow: hidden;
+      flex-direction: column;
+      border: 1px solid var(--ds-border);
+      border-radius: 10px;
+      background: var(--ds-panel);
+      box-shadow: var(--ds-shadow);
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--ds-border-muted);
+      background: color-mix(in srgb, var(--ds-panel-muted), var(--ds-panel) 32%);
+      padding: 8px 10px;
+    }
+
+    .badge {
+      display: inline-grid;
+      min-width: 26px;
+      height: 20px;
+      place-items: center;
+      border-radius: var(--ds-radius-full);
+      background: var(--ds-accent);
+      color: var(--ds-accent-fg);
+      font-size: 11px;
+      font-weight: 850;
+      line-height: 1;
+    }
+
+    .filter {
+      min-width: 0;
+      height: 26px;
+      flex: 1;
+      border: 1px solid var(--ds-border);
+      border-radius: var(--ds-radius);
+      background: var(--ds-bg);
+      color: var(--ds-fg);
+      font-size: 12px;
+      outline: 0;
+      padding: 0 8px;
+    }
+
+    .filter::placeholder {
+      color: var(--ds-muted);
+      opacity: 0.8;
+    }
+
+    .filter:focus {
+      border-color: var(--ds-accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent), transparent 78%);
+    }
+
+    .icon-button {
+      display: grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: var(--ds-radius);
+      background: transparent;
+      color: var(--ds-muted);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .icon-button:hover,
+    .icon-button:focus-visible {
+      border-color: var(--ds-border);
+      background: var(--ds-panel-muted);
+      color: var(--ds-fg);
+      outline: 0;
+    }
+
+    .content {
+      min-height: 0;
+      flex: 1;
+      overflow: auto;
+      padding: 10px;
+    }
+
+    .empty {
+      display: grid;
+      height: 100%;
+      place-items: center;
+      color: var(--ds-muted);
+      font-size: 13px;
+    }
+
+    .tree {
+      font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .row,
+    .branch {
+      min-width: 0;
+      border: 0;
+      border-radius: 4px;
+      color: var(--ds-muted);
+      white-space: nowrap;
+    }
+
+    .row {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      padding: 2px 4px;
+    }
+
+    .branch {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: transparent;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: inherit;
+      padding: 2px 4px;
+      text-align: left;
+    }
+
+    .branch:hover,
+    .branch:focus-visible {
+      background: var(--ds-panel-muted);
+      outline: 0;
+    }
+
+    .changed {
+      background: color-mix(in srgb, var(--ds-warning), transparent 82%);
+    }
+
+    .key {
+      color: color-mix(in srgb, var(--ds-muted), var(--ds-fg) 18%);
+      font-weight: 650;
+    }
+
+    .separator,
+    .chevron,
+    .null {
+      color: var(--ds-muted);
+      opacity: 0.8;
+    }
+
+    .chevron {
+      display: inline-block;
+      width: 16px;
+      text-align: center;
+    }
+
+    .count {
+      border: 1px solid var(--ds-border);
+      border-radius: var(--ds-radius-full);
+      background: var(--ds-panel-muted);
+      color: var(--ds-muted);
+      font-size: 10px;
+      font-weight: 650;
+      line-height: 16px;
+      padding: 0 6px;
+    }
+
+    .value {
+      min-width: 0;
+      max-width: 16rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .boolean {
+      color: var(--ds-accent);
+    }
+
+    .number {
+      color: var(--ds-warning);
+    }
+
+    .string {
+      color: var(--ds-success);
+    }
+  `
+
   override connectedCallback() {
     super.connectedCallback()
+    this.ensureSignalsElement()
     this.loadState()
   }
 
@@ -57,6 +323,18 @@ export class DatastarInspector extends LitElement {
 
   override firstUpdated() {
     this.setupSignalObserver()
+  }
+
+  private ensureSignalsElement() {
+    let el = this.querySelector<HTMLElement>('[data-json-signals]')
+    if (!el) {
+      el = document.createElement('pre')
+      el.setAttribute('data-json-signals', '')
+      this.append(el)
+    }
+    el.id = this.signalsElementId
+    el.hidden = true
+    el.style.display = 'none'
   }
 
   private loadState() {
@@ -83,7 +361,7 @@ export class DatastarInspector extends LitElement {
   }
 
   private setupSignalObserver() {
-    const el = document.getElementById(this.signalsElementId)
+    const el = this.querySelector<HTMLElement>(`#${this.signalsElementId}`)
     if (!el) return
 
     this.observer?.disconnect()
@@ -181,8 +459,6 @@ export class DatastarInspector extends LitElement {
 
   override render() {
     return html`
-      <pre id="${this.signalsElementId}" class="hidden" data-json-signals></pre>
-
       ${this.expanded ? this.renderOpenPanel() : this.renderToggle()}
     `
   }
@@ -190,7 +466,8 @@ export class DatastarInspector extends LitElement {
   private renderToggle() {
     return html`
       <button
-        class="btn bg-primary text-on-primary border-primary btn-circle btn-sm fixed bottom-4 right-4 z-[99999] shadow-xl ${this.hasUnseenChanges ? 'animate-pulse' : ''}"
+        class="toggle"
+        ?data-unseen=${this.hasUnseenChanges}
         @click=${this.toggle}
         aria-label="Open Datastar Inspector"
       >
@@ -208,7 +485,7 @@ export class DatastarInspector extends LitElement {
 
   private renderPanel(filteredSignals: SignalObject, filteredCount: number, hasFilter: boolean) {
     return html`
-      <div class="fixed bottom-4 right-4 z-[99999] flex h-[32rem] w-96 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-box border border-outline-variant bg-surface shadow-2xl">
+      <div class="panel">
         ${this.renderHeader(filteredCount, hasFilter)}
         ${this.renderContent(filteredSignals, hasFilter)}
       </div>
@@ -221,19 +498,19 @@ export class DatastarInspector extends LitElement {
       : `Filter ${this.signalCount} signals...`
 
     return html`
-      <div class="flex items-center gap-2 border-b border-outline-variant bg-container-low px-3 py-2">
-        <span class="badge badge-primary badge-sm">DS</span>
+      <div class="header">
+        <span class="badge">DS</span>
         <input
           type="text"
-          class="input input-bordered input-xs w-full"
+          class="filter"
           placeholder="${placeholder}"
           .value=${this.filter}
           @input=${this.handleFilterInput}
         />
         ${hasFilter
-          ? html`<button class="btn btn-ghost btn-xs" @click=${this.clearFilter} aria-label="Clear filter">&times;</button>`
+          ? html`<button class="icon-button" @click=${this.clearFilter} aria-label="Clear filter">&times;</button>`
           : nothing}
-        <button class="btn btn-ghost btn-xs" @click=${this.close} aria-label="Close">&times;</button>
+        <button class="icon-button" @click=${this.close} aria-label="Close">&times;</button>
       </div>
     `
   }
@@ -242,9 +519,9 @@ export class DatastarInspector extends LitElement {
     const isEmpty = Object.keys(filteredSignals).length === 0
 
     return html`
-      <div class="flex-1 overflow-auto p-3">
+      <div class="content">
         ${isEmpty
-          ? html`<div class="flex h-full items-center justify-center text-sm text-on-surface-variant">
+          ? html`<div class="empty">
               ${hasFilter ? 'No signals match filter' : 'No signals found'}
             </div>`
           : this.renderJsonView(filteredSignals)}
@@ -254,7 +531,7 @@ export class DatastarInspector extends LitElement {
 
   private renderJsonView(signals: SignalObject) {
     return html`
-      <div class="font-mono text-xs leading-6">
+      <div class="tree">
         ${Object.entries(signals).map(([key, value]) => this.renderTreeNode(key, value, key, 0, this.filter.trim().length > 0))}
       </div>
     `
@@ -262,14 +539,14 @@ export class DatastarInspector extends LitElement {
 
   private renderTreeNode(key: string, value: unknown, path: string, depth: number, hasFilter: boolean) {
     const changed = this.isChanged(path)
-    const rowClass = changed ? 'bg-warning' : ''
+    const rowClass = changed ? ' changed' : ''
     const rowStyle = this.treeRowStyle(depth)
 
     if (!this.isBranch(value)) {
       return html`
-        <div class="flex min-w-0 items-baseline gap-1 rounded px-1 py-0.5 whitespace-nowrap ${rowClass}" style=${rowStyle}>
-          <span class="font-medium text-on-surface-variant opacity-80">${key}</span>
-          <span class="text-on-surface-variant opacity-70">:</span>
+        <div class="row${rowClass}" style=${rowStyle}>
+          <span class="key">${key}</span>
+          <span class="separator">:</span>
           ${this.renderPrimitive(value)}
         </div>
       `
@@ -283,19 +560,15 @@ export class DatastarInspector extends LitElement {
       <div>
         <button
           type="button"
-          class="flex min-w-0 cursor-pointer items-center gap-1 rounded border-0 bg-transparent px-1 py-0.5 text-left font-mono hover:bg-container-low ${rowClass}"
+          class="branch${rowClass}"
           style=${rowStyle}
           aria-expanded=${String(expanded)}
           aria-label=${expanded ? `Collapse ${key}` : `Expand ${key}`}
           @click=${() => this.togglePath(path)}
         >
-          <span class="inline-block w-4 text-center text-on-surface-variant opacity-75">${expanded ? '▾' : '▸'}</span>
-          <span class="font-medium text-on-surface-variant opacity-90">${key}</span>
-          <span
-            class="rounded border border-outline-variant bg-container-low px-1.5 text-[0.62rem] font-medium leading-4 text-on-surface-variant opacity-80"
-          >
-            ${marker}
-          </span>
+          <span class="chevron">${expanded ? '▾' : '▸'}</span>
+          <span class="key">${key}</span>
+          <span class="count">${marker}</span>
         </button>
         ${expanded
           ? this.childEntries(value).map(([childKey, childValue]) =>
@@ -314,22 +587,22 @@ export class DatastarInspector extends LitElement {
 
   private renderPrimitive(value: unknown) {
     if (value === null) {
-      return html`<span class="text-on-surface-variant opacity-85">null</span>`
+      return html`<span class="null">null</span>`
     }
     if (typeof value === 'boolean') {
-      return html`<span class="text-primary opacity-90">${String(value)}</span>`
+      return html`<span class="value boolean">${String(value)}</span>`
     }
     if (typeof value === 'number') {
-      return html`<span class="text-warning opacity-90">${value}</span>`
+      return html`<span class="value number">${value}</span>`
     }
     if (typeof value === 'string') {
       return html`
-        <span class="min-w-0 max-w-64 truncate text-success opacity-85">
+        <span class="value string">
           "${value}"
         </span>
       `
     }
-    return html`<span class="min-w-0 max-w-64 truncate text-on-surface-variant opacity-85">${String(value)}</span>`
+    return html`<span class="value">${String(value)}</span>`
   }
 
   private isBranch(value: unknown): value is Record<string, unknown> | unknown[] {
