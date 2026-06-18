@@ -52,9 +52,18 @@ func WorkspacePage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, a
 	)
 }
 
-func WorkspaceAssetPage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse, edges []api.AssetEdgeResponse, roleLabel string) g.Node {
+func WorkspaceAssetPage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse, edges []api.AssetEdgeResponse, activeSection, roleLabel string) g.Node {
+	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	definitionFields := assetDefinitionFields(asset.Meta)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
+	extraHead := []g.Node{}
+	if activeSection == "lineage" {
+		extraHead = append(extraHead,
+			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/asset-lineage-graph.css"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/asset-lineage-graph.js"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
+		)
+	}
 	return workspaceDocument(asset.Title, catalog, "workspaces", roleLabel,
 		h.Section(h.Class(metricMainClass), h.Aria("label", "Workspace asset detail"),
 			workspaceHeader(
@@ -65,21 +74,21 @@ func WorkspaceAssetPage(catalog dashboard.Catalog, workspace api.WorkspaceRespon
 			),
 			g.El("ld-detail-rail", h.Class(metricWorkspaceClass), g.Attr("data-detail-rail", ""),
 				h.Div(h.Class(metricContentColumnClass),
-					assetDetailTabs(lineage.Count),
+					assetDetailTabs(workspace.ID, asset.ID, activeSection, lineage.Count),
 					h.Div(h.Class("min-h-0 overflow-auto px-4 py-4"),
-						h.Section(h.ID("definition"), h.Class("grid content-start"), h.Aria("label", "Asset definition"),
-							g.If(len(definitionFields) == 0, emptyState("No YAML-derived definition metadata is available for this asset.")),
-							g.Group(definitionFields),
+						g.If(activeSection == "definition",
+							h.Section(h.ID("definition"), h.Class("grid content-start"), h.Aria("label", "Asset definition"),
+								g.If(len(definitionFields) == 0, emptyState("No YAML-derived definition metadata is available for this asset.")),
+								g.Group(definitionFields),
+							),
 						),
-						assetLineageSection(lineage),
+						g.If(activeSection == "lineage", assetLineageSection(lineage)),
 					),
 				),
 				assetDetailSidebar(asset),
 			),
 		),
-		h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/asset-lineage-graph.css"))),
-		h.Script(h.Type("module"), h.Src(staticAsset("/static/asset-lineage-graph.js"))),
-		h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
+		extraHead...,
 	)
 }
 
@@ -223,8 +232,24 @@ func workspaceAssetHref(workspaceID, typ, query string) string {
 	return href
 }
 
+func ValidWorkspaceAssetSection(section string) bool {
+	switch section {
+	case "definition", "lineage":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeWorkspaceAssetSection(section string) string {
+	if ValidWorkspaceAssetSection(section) {
+		return section
+	}
+	return "definition"
+}
+
 func assetRow(workspaceID string, asset api.AssetResponse) g.Node {
-	detailHref := "/workspaces/" + workspaceID + "/assets/" + asset.ID
+	detailHref := workspaceAssetSectionHref(workspaceID, asset.ID, "definition")
 	openHref := detailHref
 	if asset.Href != "" {
 		openHref = asset.Href
@@ -251,10 +276,10 @@ func assetActions(workspaceID string, asset api.AssetResponse) g.Node {
 	)
 }
 
-func assetDetailTabs(relatedCount int) g.Node {
+func assetDetailTabs(workspaceID, assetID, activeSection string, relatedCount int) g.Node {
 	return h.Nav(h.Class("flex min-w-0 gap-6 border-b border-outline-variant bg-report-workspace px-3"), h.Aria("label", "Workspace asset sections"),
-		assetDetailTabLink("#definition", true, "Definition", nil),
-		assetDetailTabLink("#lineage", false, "Lineage", metricTabCount(relatedCount)),
+		assetDetailTabLink(workspaceAssetSectionHref(workspaceID, assetID, "definition"), activeSection == "definition", "Definition", nil),
+		assetDetailTabLink(workspaceAssetSectionHref(workspaceID, assetID, "lineage"), activeSection == "lineage", "Lineage", metricTabCount(relatedCount)),
 	)
 }
 
@@ -428,7 +453,11 @@ func lineagePeerType(selectedID string, edge api.AssetEdgeResponse, from, to api
 }
 
 func lineageAssetHref(workspaceID string, asset api.AssetResponse) string {
-	return "/workspaces/" + workspaceID + "/assets/" + asset.ID
+	return workspaceAssetSectionHref(workspaceID, asset.ID, "definition")
+}
+
+func workspaceAssetSectionHref(workspaceID, assetID, section string) string {
+	return "/workspaces/" + workspaceID + "/assets/" + assetID + "/" + section
 }
 
 func assetDefinitionFields(meta map[string]any) []g.Node {

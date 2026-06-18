@@ -54,6 +54,33 @@ func (s *Server) connections(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) workspaceAsset(w http.ResponseWriter, r *http.Request) {
 	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
+	assetID := chi.URLParam(r, "asset")
+	assets, _, err := s.workspaceAssetsAndEdges(r, workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), statusForNotFound(err))
+		return
+	}
+	var selected api.AssetResponse
+	for _, asset := range assets {
+		if asset.ID == assetID {
+			selected = asset
+			break
+		}
+	}
+	if selected.ID == "" {
+		http.NotFound(w, r)
+		return
+	}
+	http.Redirect(w, r, "/workspaces/"+workspaceID+"/assets/"+assetID+"/definition", http.StatusFound)
+}
+
+func (s *Server) workspaceAssetSection(w http.ResponseWriter, r *http.Request) {
+	section := chi.URLParam(r, "section")
+	if !ui.ValidWorkspaceAssetSection(section) {
+		http.NotFound(w, r)
+		return
+	}
+	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
 	assets, edges, err := s.workspaceAssetsAndEdges(r, workspaceID)
 	if err != nil {
 		http.Error(w, err.Error(), statusForNotFound(err))
@@ -74,7 +101,7 @@ func (s *Server) workspaceAsset(w http.ResponseWriter, r *http.Request) {
 	workspace := s.workspaceResponse(r, workspaceID)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspaceAssetPage(s.metrics.Catalog(), workspace, selected, assets, edges, s.currentRoleLabel(r)).Render(w); err != nil {
+	if err := ui.WorkspaceAssetPage(s.metrics.Catalog(), workspace, selected, assets, edges, section, s.currentRoleLabel(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

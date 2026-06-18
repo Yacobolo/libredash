@@ -20,6 +20,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/workspaces", s.protected(platform.PermissionDashboardView, s.workspaces))
 		r.Get("/workspaces/{workspace}", s.protected(platform.PermissionDashboardView, s.workspaceAssets))
 		r.Get("/workspaces/{workspace}/assets/{asset}", s.protected(platform.PermissionDashboardView, s.workspaceAsset))
+		r.Get("/workspaces/{workspace}/assets/{asset}/{section}", s.protected(platform.PermissionDashboardView, s.workspaceAssetSection))
 		r.Get("/workspaces/{workspace}/permissions", s.protected(platform.PermissionRBACManage, s.workspacePermissions))
 		r.Post("/workspaces/{workspace}/permissions", s.protected(platform.PermissionRBACManage, s.updateWorkspacePermission))
 		r.Post("/workspaces/{workspace}/permissions/remove", s.protected(platform.PermissionRBACManage, s.removeWorkspacePermission))
