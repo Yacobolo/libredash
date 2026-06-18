@@ -483,44 +483,61 @@ func workspaceAssetSectionHref(workspaceID, assetID, section string) string {
 }
 
 func assetDetailsSection(workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse) g.Node {
-	return h.Section(h.ID("details"), h.Class("grid content-start gap-5"), h.Aria("label", "Asset details"),
+	return h.Section(h.ID("details"), h.Class("grid content-start gap-6"), h.Aria("label", "Asset details"),
+		assetIdentityStrip(workspace, asset, assets),
 		g.Group(assetDetailsNodes(workspace, asset, assets)),
 	)
 }
 
 func assetDetailsNodes(workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse) []g.Node {
-	nodes := []g.Node{definitionFacts("Identity", assetIdentityFacts(workspace, asset, assets))}
 	switch asset.Type {
 	case "semantic_model":
-		return append(nodes, semanticModelDetails(asset)...)
+		return semanticModelDetails(asset)
 	case "metric_view":
-		return append(nodes, metricViewAssetDetails(asset, assets)...)
+		return metricViewAssetDetails(asset, assets)
 	case "dashboard":
-		return append(nodes, dashboardAssetDetails(asset, assets)...)
+		return dashboardAssetDetails(asset, assets)
 	case "connection":
-		return append(nodes, connectionAssetDetails(asset)...)
+		return connectionAssetDetails(asset)
 	case "source":
-		return append(nodes, sourceAssetDetails(asset)...)
+		return sourceAssetDetails(asset)
 	case "measure":
-		return append(nodes, metricLeafDefinition("Measure", asset)...)
+		return metricLeafDefinition("Measure", asset)
 	case "dimension":
-		return append(nodes, metricLeafDefinition("Dimension", asset)...)
+		return metricLeafDefinition("Dimension", asset)
 	case "page", "visual", "table", "filter", "cache_table", "dataset":
-		return append(nodes, compactAssetDetails(asset)...)
+		return compactAssetDetails(asset)
 	default:
-		return append(nodes, rawFallbackDetails(asset)...)
+		return rawFallbackDetails(asset)
 	}
 }
 
-func assetIdentityFacts(workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse) []definitionFact {
-	return []definitionFact{
+func assetIdentityStrip(workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse) g.Node {
+	facts := []definitionFact{
 		{Label: "Type", Value: assetTypeLabel(asset.Type)},
 		{Label: "Key", Value: asset.Key, Code: true},
 		{Label: "Workspace", Value: workspace.Title},
 		{Label: "Parent", Value: assetParentTitle(asset.ParentID, assets)},
-		{Label: "Description", Value: asset.Description},
 		{Label: "Source", Value: "Published from Git/YAML"},
 	}
+	filtered := make([]definitionFact, 0, len(facts))
+	for _, fact := range facts {
+		if strings.TrimSpace(fact.Value) != "" {
+			filtered = append(filtered, fact)
+		}
+	}
+	return h.Section(h.Class("border-b border-outline-muted pb-4"), h.Aria("label", "Identity"),
+		h.H2(h.Class("sr-only"), g.Text("Identity")),
+		h.Div(h.Class("flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 text-body-sm"),
+			g.Map(filtered, func(fact definitionFact) g.Node {
+				return h.Div(h.Class("inline-flex min-w-0 items-baseline gap-1.5 border-r border-outline-muted pr-3 last:border-r-0 last:pr-0"),
+					h.Span(h.Class("text-caption font-900 uppercase leading-none text-fg-muted"), g.Text(fact.Label)),
+					g.If(fact.Code, h.Code(h.Class("min-w-0 truncate font-mono text-body-sm font-760 text-fg-default"), g.Text(fact.Value))),
+					g.If(!fact.Code, h.Span(h.Class("min-w-0 truncate text-body-sm font-760 text-fg-default"), g.Text(fact.Value))),
+				)
+			}),
+		),
+	)
 }
 
 func assetParentTitle(parentID string, assets []api.AssetResponse) string {
@@ -544,7 +561,7 @@ func semanticModelDetails(asset api.AssetResponse) []g.Node {
 	relationships := metaSlice(meta, "Relationships", "relationships")
 
 	return []g.Node{
-		definitionFacts("Overview", []definitionFact{
+		definitionStats("Overview", []definitionFact{
 			{Label: "Default connection", Value: metaString(meta, "DefaultConnection", "default_connection")},
 			{Label: "Connections", Value: fmt.Sprint(len(connections))},
 			{Label: "Sources", Value: fmt.Sprint(len(sources))},
@@ -693,7 +710,7 @@ func metricViewAssetDetails(asset api.AssetResponse, assets []api.AssetResponse)
 	measures := childrenByType(asset.ID, "measure", assets)
 	dimensions := childrenByType(asset.ID, "dimension", assets)
 	return []g.Node{
-		definitionFacts("Overview", []definitionFact{
+		definitionStats("Overview", []definitionFact{
 			{Label: "Semantic model", Value: metaString(asset.Meta, "SemanticModel", "semantic_model")},
 			{Label: "Dataset", Value: metaString(asset.Meta, "Dataset", "dataset")},
 			{Label: "Timeseries", Value: metaString(asset.Meta, "Timeseries", "timeseries")},
@@ -705,7 +722,7 @@ func metricViewAssetDetails(asset api.AssetResponse, assets []api.AssetResponse)
 
 func dashboardAssetDetails(asset api.AssetResponse, assets []api.AssetResponse) []g.Node {
 	return []g.Node{
-		definitionFacts("Overview", []definitionFact{
+		definitionStats("Overview", []definitionFact{
 			{Label: "Metric views", Value: strings.Join(stringSlice(metaValue(asset.Meta, "MetricViews", "metrics_views")), ", ")},
 			{Label: "Tags", Value: strings.Join(stringSlice(metaValue(asset.Meta, "Tags", "tags")), ", ")},
 			{Label: "Pages", Value: fmt.Sprint(len(childrenByType(asset.ID, "page", assets)))},
@@ -785,6 +802,29 @@ func definitionFacts(title string, facts []definitionFact) g.Node {
 					h.Span(h.Class("text-caption font-900 uppercase leading-none text-fg-muted"), g.Text(fact.Label)),
 					g.If(fact.Code, h.Code(h.Class("min-w-0 truncate font-mono text-body-sm font-720 text-fg-default"), g.Text(fact.Value))),
 					g.If(!fact.Code, h.Span(h.Class("min-w-0 truncate text-body-sm font-720 text-fg-default"), g.Text(fact.Value))),
+				)
+			}),
+		)),
+	)
+}
+
+func definitionStats(title string, facts []definitionFact) g.Node {
+	filtered := make([]definitionFact, 0, len(facts))
+	for _, fact := range facts {
+		if strings.TrimSpace(fact.Value) == "" {
+			continue
+		}
+		filtered = append(filtered, fact)
+	}
+	return h.Section(h.Class("grid min-w-0 content-start gap-3 border-b border-outline-muted pb-5 last:border-b-0"), h.Aria("label", title),
+		h.H2(h.Class("m-0 text-body-sm font-850 text-fg-default"), g.Text(title)),
+		g.If(len(filtered) == 0, emptyState("No details are available.")),
+		g.If(len(filtered) > 0, h.Div(h.Class("grid min-w-0 grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-6 gap-y-4"),
+			g.Map(filtered, func(fact definitionFact) g.Node {
+				return h.Div(h.Class("grid min-w-0 content-start gap-1"),
+					h.Span(h.Class("text-caption font-900 uppercase leading-none text-fg-muted"), g.Text(fact.Label)),
+					g.If(fact.Code, h.Code(h.Class("min-w-0 truncate font-mono text-title-xs font-850 leading-tight text-fg-default"), g.Text(fact.Value))),
+					g.If(!fact.Code, h.Span(h.Class("min-w-0 truncate text-title-xs font-850 leading-tight text-fg-default"), g.Text(fact.Value))),
 				)
 			}),
 		)),
