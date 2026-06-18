@@ -320,7 +320,7 @@
     --report-panel: var(--card-bgColor, var(--bgColor-default));
     --report-panel-subtle: var(--bgColor-muted);
     --report-chart-surface: var(--card-bgColor, var(--bgColor-default));
-    --report-table-stripe: color-mix(in srgb, var(--bgColor-accent-muted), var(--bgColor-neutral-muted) 40%);
+    --report-table-stripe: color-mix(in srgb, var(--fgColor-muted), var(--bgColor-default) 88%);
     --report-grid-dot: transparent;
     --ld-login-bg: var(--bgColor-default);
     --ld-login-fg: var(--fgColor-default);

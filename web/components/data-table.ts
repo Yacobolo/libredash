@@ -697,7 +697,7 @@ class DataTable extends LitElement {
     }
 
     .zebra .row:nth-child(even) {
-      background: color-mix(in srgb, var(--report-table-stripe, var(--bgColor-accent-muted)), var(--report-chart-surface, var(--bgColor-default)) 18%);
+      background: color-mix(in srgb, var(--report-table-stripe, var(--bgColor-neutral-muted)), var(--report-chart-surface, var(--bgColor-default)) 18%);
     }
 
     .grid-rows .row,
