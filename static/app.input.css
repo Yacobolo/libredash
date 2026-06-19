@@ -128,8 +128,6 @@
   --shadow-resting-sm: var(--shadow-resting-small);
   --shadow-resting-md: var(--shadow-resting-medium);
   --shadow-floating: var(--shadow-floating-small);
-  --shadow-login-button: var(--shadow-floating-small);
-  --shadow-login-panel: var(--shadow-floating-large);
 
   --ease-*: initial;
   --ease-ld: var(--base-easing-easeOut);
@@ -169,8 +167,6 @@
 
   --z-index-sidebar: 20;
   --z-index-report-sidebar: 19;
-  --z-index-login-shade: 1;
-  --z-index-login-panel: 2;
   --z-index-inspector: 99999;
 
   --opacity-disabled: 0.62;
@@ -273,15 +269,6 @@
   --color-chart-6: var(--ld-data-6);
   --color-chart-6-muted: var(--ld-data-6-muted);
 
-  --color-login: var(--ld-login-bg);
-  --color-login-fg: var(--ld-login-fg);
-  --color-login-shade: var(--ld-login-shade);
-  --color-login-panel: var(--ld-login-panel);
-  --color-login-outline: var(--ld-login-outline);
-  --color-login-control: var(--ld-login-control);
-  --color-login-control-hover: var(--ld-login-control-hover);
-  --color-login-accent: var(--ld-login-accent);
-  --color-login-accent-strong: var(--ld-login-accent-strong);
 }
 
 @layer base {
@@ -361,9 +348,9 @@
     --ld-bg-panel: var(--card-bgColor, var(--bgColor-default));
     --ld-bg-panel-muted: var(--bgColor-muted);
     --ld-bg-panel-subtle: var(--bgColor-muted);
-    --ld-bg-control: var(--control-bgColor-rest);
-    --ld-bg-control-hover: var(--control-bgColor-hover);
-    --ld-bg-control-active: var(--control-bgColor-active);
+    --ld-bg-control: var(--ld-bg-panel-muted);
+    --ld-bg-control-hover: var(--ld-bg-hover);
+    --ld-bg-control-active: var(--ld-bg-selected);
     --ld-bg-selected: var(--bgColor-accent-muted);
     --ld-bg-overlay: var(--overlay-bgColor, var(--bgColor-default));
     --ld-bg-accent-muted: var(--bgColor-accent-muted);
@@ -478,27 +465,8 @@
     --ld-asset-visual-bg: var(--data-red-color-muted);
     --ld-asset-visual-accent: var(--data-red-color-emphasis);
     --ld-asset-visual-border: var(--borderColor-danger-muted);
-    --ld-login-bg: var(--bgColor-default);
-    --ld-login-fg: var(--fgColor-default);
-    --ld-login-shade: color-mix(in srgb, var(--ld-login-bg), transparent 72%);
-    --ld-login-panel: color-mix(in srgb, var(--bgColor-muted) 92%, var(--fgColor-muted));
-    --ld-login-outline: var(--borderColor-default);
-    --ld-login-control: var(--control-bgColor-rest);
-    --ld-login-control-hover: var(--control-bgColor-hover);
-    --ld-login-accent: color-mix(in srgb, var(--bgColor-accent-emphasis), transparent 34%);
-    --ld-login-accent-strong: color-mix(in srgb, var(--bgColor-accent-emphasis), transparent 18%);
-    --ld-topology-bg: var(--ld-login-bg);
+    --ld-topology-bg: var(--ld-bg-app);
     --ld-modal-backdrop: color-mix(in srgb, var(--bgColor-inverse), transparent 44%);
-  }
-
-  [data-color-mode="dark"] {
-    --ld-login-panel: var(--bgColor-inset);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    [data-color-mode="auto"] {
-      --ld-login-panel: var(--bgColor-inset);
-    }
   }
 
   html {

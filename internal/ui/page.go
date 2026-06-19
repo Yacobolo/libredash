@@ -159,24 +159,24 @@ func LoginPage() g.Node {
 			h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 		},
 		Body: []g.Node{
-			h.Main(h.Class("relative grid min-h-svh place-items-center overflow-hidden bg-login p-8 text-login-fg max-sm:p-6"), h.Aria("label", "LibreDash login"),
+			h.Main(h.Class("relative grid h-svh min-h-svh place-items-center overflow-hidden bg-app p-6 text-fg-default"), h.Aria("label", "LibreDash login"),
 				g.El("ld-topology-background",
-					h.Class("absolute inset-0 block bg-login"),
+					h.Class("absolute inset-0 block bg-app"),
 					g.Attr("data-login-background", ""),
 					g.Attr("data-module-src", staticAsset("/static/topology-background.js")),
-					ds.Init("document.dispatchEvent(new CustomEvent('libredash-login-background-init'))", ds.ModifierDelay, ds.Duration(100*time.Millisecond)),
+					ds.Init("document.dispatchEvent(new CustomEvent('libredash-login-background-init'))", ds.ModifierDelay, ds.Duration(900*time.Millisecond)),
 				),
-				h.Div(h.Class("pointer-events-none absolute inset-0 z-login-shade bg-login-shade"), h.Aria("hidden", "true")),
-				h.Button(h.Type("button"), h.Class("absolute right-4 top-4 z-login-panel inline-grid size-8 place-items-center rounded-default border border-login-outline bg-login-panel text-login-fg shadow-resting-sm transition-colors duration-fast hover:bg-login-control-hover focus-visible:border-login-accent-strong focus-visible:bg-login-control-hover focus-visible:outline-0 max-sm:right-3 max-sm:top-3"), g.Attr("data-theme-toggle", ""),
+				h.Div(h.Class("pointer-events-none absolute inset-0 z-10 bg-app/80"), h.Aria("hidden", "true")),
+				h.Button(h.Type("button"), h.Class("absolute right-4 top-4 z-20 inline-grid size-8 appearance-none place-items-center rounded-default border border-outline-variant bg-control text-fg-muted shadow-resting-sm hover:bg-control-hover hover:text-fg-default focus-visible:border-outline-accent focus-visible:bg-control-hover focus-visible:text-fg-default focus-visible:outline-0 max-sm:right-3 max-sm:top-3"), g.Attr("data-theme-toggle", ""),
 					lucide.Monitor(loginThemeIconAttrs("system")...),
 					lucide.Sun(loginThemeIconAttrs("light")...),
 					lucide.Moon(loginThemeIconAttrs("dark")...),
 				),
-				h.Section(h.Class("relative z-login-panel grid w-full max-w-login-panel justify-items-center gap-6 rounded-large border border-login-outline bg-login-panel p-8 text-center shadow-login-panel backdrop-blur-md max-sm:gap-5 max-sm:px-6 max-sm:py-7"),
+				h.Section(h.Class("relative z-20 grid w-full max-w-login-panel justify-items-center gap-5 rounded-default border border-outline-variant bg-panel p-6 text-center shadow-resting-md max-sm:px-5 max-sm:py-6"),
 					h.Div(h.Class("grid justify-items-center"), h.Aria("hidden", "true"),
-						h.H1(h.Class("m-0 text-display font-semibold leading-tight text-login-fg"), g.Text("LibreDash")),
+						h.H1(h.Class("m-0 text-title-md font-semibold leading-snug text-fg-default"), g.Text("LibreDash")),
 					),
-					h.Button(h.Type("button"), h.Class("inline-grid min-h-control-xl w-full grid-cols-login-button items-center gap-3 rounded-large border border-login-accent bg-login-control px-5 text-body-md font-medium text-login-fg shadow-login-button hover:border-login-accent-strong hover:bg-login-control-hover focus-visible:border-login-accent-strong focus-visible:bg-login-control-hover focus-visible:outline-0"),
+					h.Button(h.Type("button"), h.Class("inline-grid min-h-control-xl w-full appearance-none grid-cols-login-button items-center gap-3 rounded-default border border-outline-variant bg-control px-4 text-body-md font-medium text-fg-default shadow-resting-sm hover:border-outline-accent hover:bg-control-hover focus-visible:border-outline-accent focus-visible:bg-control-hover focus-visible:outline-0"),
 						h.Span(h.Class("grid size-5 grid-cols-2 grid-rows-2 gap-px"), h.Aria("hidden", "true"),
 							h.Span(h.Class("block bg-danger")),
 							h.Span(h.Class("block bg-success")),
@@ -186,7 +186,7 @@ func LoginPage() g.Node {
 						h.Span(g.Text("Sign in with Azure Active Directory")),
 					),
 				),
-				inspectorElement(),
+				h.Div(h.Class("absolute"), inspectorElement()),
 			),
 		},
 	})
@@ -638,7 +638,7 @@ func metricDetailRailStateScript() g.Node {
 }
 
 func loginBackgroundLoaderScript() g.Node {
-	return h.Script(g.Raw(`(()=>{const schedule=(task)=>{if("requestIdleCallback"in window){requestIdleCallback(task,{timeout:500});return}requestAnimationFrame(()=>requestAnimationFrame(task))};document.addEventListener("libredash-login-background-init",()=>schedule(()=>{const el=document.querySelector("[data-login-background]");if(!el)return;const state=el.dataset.backgroundState;if(state==="loading"||state==="loaded")return;const src=el.dataset.moduleSrc;if(!src)return;el.dataset.backgroundState="loading";import(src).then(()=>{el.dataset.backgroundState="loaded"}).catch((error)=>{el.dataset.backgroundState="error";console.error("LibreDash login background failed to load",error)})}))})();`))
+	return h.Script(g.Raw(`(()=>{const schedule=(task)=>{const run=()=>{"requestIdleCallback"in window?requestIdleCallback(task,{timeout:1600}):setTimeout(task,600)};document.readyState==="complete"?run():window.addEventListener("load",run,{once:true})};document.addEventListener("libredash-login-background-init",()=>schedule(()=>{const el=document.querySelector("[data-login-background]");if(!el)return;const state=el.dataset.backgroundState;if(state==="loading"||state==="loaded")return;const src=el.dataset.moduleSrc;if(!src)return;el.dataset.backgroundState="loading";import(src).then(()=>{el.dataset.backgroundState="loaded"}).catch((error)=>{el.dataset.backgroundState="error";console.error("LibreDash login background failed to load",error)})}))})();`))
 }
 
 func displayLabel(label, fallback string) string {

@@ -1,10 +1,9 @@
 const storageKey = 'libredash-color-mode';
 const root = document.documentElement;
-const buttons = [...document.querySelectorAll('[data-theme-value]')];
-const toggles = [...document.querySelectorAll('[data-theme-toggle]')];
 const media = window.matchMedia?.('(prefers-color-scheme: dark)');
 const nextModes = { system: 'light', light: 'dark', dark: 'system' };
 const modeLabels = { system: 'System theme', light: 'Light theme', dark: 'Dark theme' };
+let lastAppliedEvent = 0;
 
 function storedMode() {
   const saved = localStorage.getItem(storageKey);
@@ -20,10 +19,10 @@ function setMode(mode) {
   root.dataset.darkTheme = 'dark';
   root.style.colorScheme = resolved;
   localStorage.setItem(storageKey, next);
-  for (const button of buttons) {
+  for (const button of document.querySelectorAll('[data-theme-value]')) {
     button.setAttribute('aria-pressed', String(button.dataset.themeValue === next));
   }
-  for (const toggle of toggles) {
+  for (const toggle of document.querySelectorAll('[data-theme-toggle]')) {
     const nextMode = nextModes[next] || 'system';
     const label = `${modeLabels[next] || 'System theme'}. Switch to ${modeLabels[nextMode] || 'system theme'}.`;
     toggle.dataset.themeMode = next;
@@ -35,16 +34,24 @@ function setMode(mode) {
       icon.classList.toggle('hidden', !active);
     }
   }
-  document.dispatchEvent(new CustomEvent('libredash-theme-applied', { detail: { mode: next, resolvedMode: resolved } }));
+
+  const eventID = ++lastAppliedEvent;
+  requestAnimationFrame(() => {
+    if (eventID !== lastAppliedEvent) return;
+    document.dispatchEvent(new CustomEvent('libredash-theme-applied', { detail: { mode: next, resolvedMode: resolved } }));
+  });
 }
 
-for (const button of buttons) {
-  button.addEventListener('click', () => setMode(button.dataset.themeValue));
-}
+document.addEventListener('click', (event) => {
+  const button = event.target.closest?.('[data-theme-value]');
+  if (button) {
+    setMode(button.dataset.themeValue);
+    return;
+  }
 
-for (const toggle of toggles) {
-  toggle.addEventListener('click', () => setMode(nextModes[storedMode()] || 'system'));
-}
+  const toggle = event.target.closest?.('[data-theme-toggle]');
+  if (toggle) setMode(nextModes[storedMode()] || 'system');
+});
 
 document.addEventListener('libredash-theme-change', (event) => {
   setMode(event.detail?.mode);
