@@ -114,7 +114,7 @@ class VisualModal extends LitElement {
 
     button:hover,
     button:focus-visible {
-      background: var(--ld-bg-panel-muted);
+      background: var(--ld-bg-control-hover);
       outline: 0;
     }
 

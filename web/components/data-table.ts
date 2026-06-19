@@ -436,7 +436,7 @@ class DataTable extends LitElement {
     }
 
     .column-menu label:hover {
-      background: var(--ld-bg-panel-muted);
+      background: var(--ld-bg-hover);
     }
 
     .column-menu input {

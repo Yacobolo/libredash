@@ -160,7 +160,7 @@ class LibreDashSidebar extends LitElement {
     .collapse-button:hover,
     .collapse-button:focus-visible {
       border-color: var(--ld-line-muted);
-      background: var(--ld-bg-panel-muted);
+      background: var(--ld-bg-control-hover);
       color: var(--ld-fg-default);
       outline: 0;
     }
@@ -228,7 +228,7 @@ class LibreDashSidebar extends LitElement {
 
     .nav-item:hover,
     .nav-item:focus-visible {
-      background: var(--ld-bg-panel-muted);
+      background: var(--ld-bg-hover);
       color: var(--ld-fg-default);
       outline: 0;
     }
@@ -300,7 +300,7 @@ class LibreDashSidebar extends LitElement {
     }
 
     .user-card:hover {
-      background: var(--ld-bg-panel-muted);
+      background: var(--ld-bg-hover);
     }
 
     .avatar {
@@ -368,7 +368,7 @@ class LibreDashSidebar extends LitElement {
     .theme-button:hover,
     .theme-button:focus-visible {
       border-color: var(--ld-line-muted);
-      background: var(--ld-bg-panel-muted);
+      background: var(--ld-bg-control-hover);
       color: var(--ld-fg-default);
       outline: 0;
     }

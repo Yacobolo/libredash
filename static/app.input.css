@@ -426,9 +426,11 @@
     --ld-dashboard-bg: var(--ld-bg-app);
     --ld-dashboard-panel: var(--ld-bg-panel);
     --ld-dashboard-panel-muted: var(--ld-bg-panel-muted);
+    --ld-report-canvas-bg: var(--ld-dashboard-bg);
+    --ld-report-page-bg: transparent;
     --report-workspace-bg: var(--ld-dashboard-bg);
-    --report-canvas-bg: var(--ld-dashboard-bg);
-    --report-page-bg: transparent;
+    --report-canvas-bg: var(--ld-report-canvas-bg);
+    --report-page-bg: var(--ld-report-page-bg);
     --report-panel: var(--ld-dashboard-panel);
     --report-panel-subtle: var(--ld-dashboard-panel-muted);
     --report-chart-surface: var(--ld-chart-surface);
@@ -501,15 +503,15 @@
 
   html {
     font-family: var(--font-sans);
-    background: var(--bgColor-default);
-    color: var(--fgColor-default);
+    background: var(--ld-bg-page);
+    color: var(--ld-fg-default);
     overscroll-behavior: none;
   }
 
   body {
     min-width: 320px;
     margin: 0;
-    background: var(--bgColor-inset);
+    background: var(--ld-bg-app);
     overscroll-behavior: none;
   }
 

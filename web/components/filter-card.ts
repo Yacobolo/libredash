@@ -188,7 +188,7 @@ const filterCardStyles = css`
     }
 
     .check:hover {
-      background: var(--ld-bg-panel-muted);
+      background: var(--ld-bg-hover);
     }
 
     .check input {

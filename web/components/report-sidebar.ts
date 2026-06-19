@@ -143,7 +143,7 @@ class ReportSidebar extends LitElement {
     .collapse:hover,
     .collapse:focus-visible {
       border-color: var(--ld-line-muted);
-      background: var(--ld-bg-panel-muted);
+      background: var(--ld-bg-control-hover);
       color: var(--ld-fg-default);
       outline: 0;
     }
@@ -200,7 +200,7 @@ class ReportSidebar extends LitElement {
 
     .page-link:hover,
     .page-link:focus-visible {
-      background: var(--ld-bg-panel-muted);
+      background: var(--ld-bg-hover);
       color: var(--ld-fg-default);
       outline: 0;
     }

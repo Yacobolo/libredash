@@ -128,7 +128,7 @@ class FilterPanel extends LitElement {
       gap: 6px;
       border: var(--ld-border-muted);
       border-radius: var(--ld-radius-default);
-      background: color-mix(in srgb, var(--ld-bg-panel), transparent 18%);
+      background: var(--ld-bg-panel);
       padding: 8px;
     }
 
@@ -157,7 +157,7 @@ class FilterPanel extends LitElement {
     .reset {
       border: var(--ld-border-default);
       border-radius: var(--ld-radius-tight);
-      background: var(--ld-bg-page);
+      background: var(--ld-bg-control);
       color: var(--ld-fg-muted);
       cursor: pointer;
       padding: 3px 6px;

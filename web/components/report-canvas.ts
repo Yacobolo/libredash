@@ -43,7 +43,7 @@ class ReportCanvas extends LitElement {
       height: 100%;
       min-width: 0;
       min-height: 0;
-      background: var(--report-canvas-bg, var(--ld-bg-app));
+      background: var(--ld-report-canvas-bg);
     }
 
     .viewport {
@@ -81,7 +81,7 @@ class ReportCanvas extends LitElement {
       height: calc(var(--report-canvas-height) * 1px);
       transform: scale(var(--report-canvas-scale));
       transform-origin: top left;
-      background: var(--report-page-bg, transparent);
+      background: var(--ld-report-page-bg);
     }
 
     ::slotted([data-canvas-visual]) {
