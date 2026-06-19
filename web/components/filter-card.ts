@@ -20,7 +20,7 @@ const filterCardStyles = css`
     :host {
       display: block;
       height: 100%;
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
       font-family: var(--fontStack-system);
     }
 
@@ -39,11 +39,11 @@ const filterCardStyles = css`
 
     .label {
       overflow: hidden;
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-900);
+      font-weight: var(--ld-font-weight-strong);
       line-height: var(--ld-line-height-none);
       text-transform: uppercase;
     }
@@ -56,7 +56,7 @@ const filterCardStyles = css`
       gap: 8px;
       border: 0;
       background: transparent;
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
       cursor: pointer;
       padding: 0;
       text-align: left;
@@ -69,15 +69,15 @@ const filterCardStyles = css`
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-850);
+      font-weight: var(--ld-font-weight-strong);
       line-height: var(--ld-line-height-tight);
     }
 
     .chevron {
       flex: 0 0 auto;
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-900);
+      font-weight: var(--ld-font-weight-strong);
     }
 
     .popover {
@@ -90,7 +90,7 @@ const filterCardStyles = css`
       gap: 7px;
       border: var(--ld-border-default);
       border-radius: var(--ld-radius-default);
-      background: var(--overlay-bgColor, var(--bgColor-default));
+      background: var(--ld-bg-overlay);
       box-shadow: var(--ld-shadow-floating-sm);
       padding: 8px;
     }
@@ -108,11 +108,11 @@ const filterCardStyles = css`
       min-height: 27px;
       border: var(--ld-border-default);
       border-radius: var(--ld-radius-tight);
-      background: var(--control-bgColor-rest);
-      color: var(--fgColor-default);
+      background: var(--ld-bg-control);
+      color: var(--ld-fg-default);
       padding: 0 7px;
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-650);
+      font-weight: var(--ld-font-weight-regular);
       outline-offset: 2px;
       box-sizing: border-box;
     }
@@ -134,12 +134,12 @@ const filterCardStyles = css`
       min-height: 27px;
       border: var(--ld-border-default);
       border-radius: var(--ld-radius-tight);
-      background: var(--control-bgColor-rest);
-      color: var(--fgColor-default);
+      background: var(--ld-bg-control);
+      color: var(--ld-fg-default);
       cursor: pointer;
       padding: 0 7px;
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-850);
+      font-weight: var(--ld-font-weight-strong);
     }
 
     .chip.custom {
@@ -148,7 +148,7 @@ const filterCardStyles = css`
 
     .chip[aria-pressed='true'] {
       border-color: var(--ld-accent);
-      background: color-mix(in srgb, var(--ld-accent) 20%, var(--control-bgColor-rest));
+      background: color-mix(in srgb, var(--ld-accent) 20%, var(--ld-bg-control));
     }
 
     .date-row,
@@ -163,9 +163,9 @@ const filterCardStyles = css`
     }
 
     .action.primary {
-      border-color: var(--button-primary-bgColor-rest);
-      background: var(--button-primary-bgColor-rest);
-      color: var(--button-primary-fgColor-rest);
+      border-color: var(--ld-accent);
+      background: var(--ld-accent);
+      color: var(--ld-accent-fg);
     }
 
     .checks {
@@ -182,13 +182,13 @@ const filterCardStyles = css`
       gap: 6px;
       border-radius: var(--ld-radius-tight);
       padding: 4px;
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-750);
+      font-weight: var(--ld-font-weight-medium);
     }
 
     .check:hover {
-      background: var(--bgColor-muted);
+      background: var(--ld-bg-hover);
     }
 
     .check input {
@@ -199,9 +199,9 @@ const filterCardStyles = css`
     }
 
     .empty {
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-750);
+      font-weight: var(--ld-font-weight-medium);
       padding: 4px;
     }
   `

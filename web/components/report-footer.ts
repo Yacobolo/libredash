@@ -28,7 +28,7 @@ class ReportFooter extends LitElement {
     :host {
       display: block;
       min-width: 0;
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
       font-family: var(--fontStack-system);
     }
 
@@ -49,9 +49,9 @@ class ReportFooter extends LitElement {
       min-width: 0;
       align-items: center;
       gap: 7px;
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-850);
+      font-weight: var(--ld-font-weight-strong);
       white-space: nowrap;
     }
 
@@ -60,15 +60,15 @@ class ReportFooter extends LitElement {
       height: 7px;
       flex: 0 0 auto;
       border-radius: var(--ld-radius-full);
-      background: var(--fgColor-success);
+      background: var(--ld-fg-success);
     }
 
     .status.loading .dot {
-      background: var(--fgColor-attention);
+      background: var(--ld-fg-warning);
     }
 
     .status.error .dot {
-      background: var(--fgColor-danger);
+      background: var(--ld-fg-danger);
     }
 
     ld-report-zoom {

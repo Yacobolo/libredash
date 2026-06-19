@@ -82,6 +82,9 @@ VALUES (?, ?, ?, ?, ?, ?);
 -- name: ListAssetsByDeployment :many
 SELECT * FROM assets WHERE deployment_id = ? ORDER BY asset_type, asset_key;
 
+-- name: ListAssetEdgesByDeployment :many
+SELECT * FROM asset_edges WHERE deployment_id = ? ORDER BY edge_type, from_asset_id, to_asset_id;
+
 -- name: UpsertPrincipal :exec
 INSERT INTO principals (id, email, display_name, updated_at)
 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
@@ -116,9 +119,31 @@ ON CONFLICT(name) DO UPDATE SET permissions_json = excluded.permissions_json;
 -- name: GetRoleByName :one
 SELECT * FROM roles WHERE name = ?;
 
+-- name: ListRoles :many
+SELECT * FROM roles ORDER BY name;
+
 -- name: InsertRoleBinding :exec
 INSERT OR IGNORE INTO role_bindings (id, workspace_id, role_id, principal_id, group_id)
 VALUES (?, ?, ?, ?, ?);
+
+-- name: ListRoleBindingsByWorkspace :many
+SELECT
+  rb.id,
+  rb.workspace_id,
+  rb.principal_id,
+  p.email,
+  p.display_name,
+  r.name AS role_name,
+  rb.created_at
+FROM role_bindings rb
+JOIN roles r ON r.id = rb.role_id
+LEFT JOIN principals p ON p.id = rb.principal_id
+WHERE rb.workspace_id = ? AND rb.principal_id IS NOT NULL
+ORDER BY p.email, r.name;
+
+-- name: DeletePrincipalRoleBindings :exec
+DELETE FROM role_bindings
+WHERE workspace_id = ? AND principal_id = ?;
 
 -- name: ListPrincipalRolePermissions :many
 SELECT r.permissions_json

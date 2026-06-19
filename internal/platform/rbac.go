@@ -44,6 +44,47 @@ func (s *Store) BindRole(ctx context.Context, workspaceID, principalID, roleName
 	})
 }
 
+func (s *Store) SetPrincipalRole(ctx context.Context, workspaceID, email, displayName, roleName string) (db.Principal, error) {
+	email = normalizeEmail(email)
+	if email == "" {
+		return db.Principal{}, fmt.Errorf("email is required")
+	}
+	if strings.TrimSpace(roleName) == "" {
+		return db.Principal{}, fmt.Errorf("role is required")
+	}
+	if _, err := s.q.GetRoleByName(ctx, roleName); err != nil {
+		return db.Principal{}, err
+	}
+	principal, err := s.UpsertPrincipal(ctx, PrincipalInput{
+		ID:          PrincipalIDForEmail(email),
+		Email:       email,
+		DisplayName: firstNonEmpty(strings.TrimSpace(displayName), email),
+	})
+	if err != nil {
+		return db.Principal{}, err
+	}
+	if err := s.q.DeletePrincipalRoleBindings(ctx, db.DeletePrincipalRoleBindingsParams{
+		WorkspaceID: workspaceID,
+		PrincipalID: sql.NullString{String: principal.ID, Valid: true},
+	}); err != nil {
+		return db.Principal{}, err
+	}
+	if err := s.BindRole(ctx, workspaceID, principal.ID, roleName); err != nil {
+		return db.Principal{}, err
+	}
+	return principal, nil
+}
+
+func (s *Store) RemovePrincipalRoles(ctx context.Context, workspaceID, principalID string) error {
+	if strings.TrimSpace(principalID) == "" {
+		return fmt.Errorf("principal id is required")
+	}
+	return s.q.DeletePrincipalRoleBindings(ctx, db.DeletePrincipalRoleBindingsParams{
+		WorkspaceID: workspaceID,
+		PrincipalID: sql.NullString{String: principalID, Valid: true},
+	})
+}
+
 func (s *Store) BootstrapAdmin(ctx context.Context, workspaceID, email string) error {
 	email = strings.TrimSpace(email)
 	if email == "" {
@@ -142,4 +183,13 @@ func (s *Store) HasPermission(ctx context.Context, workspaceID, principalID, per
 		}
 	}
 	return false, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

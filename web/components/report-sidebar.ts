@@ -55,7 +55,7 @@ class ReportSidebar extends LitElement {
       height: 100svh;
       min-height: 0;
       overflow: hidden;
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
       font-family: var(--fontStack-system);
       transition: width 180ms var(--ld-ease-out);
     }
@@ -80,8 +80,8 @@ class ReportSidebar extends LitElement {
       max-height: 100svh;
       grid-template-rows: auto minmax(0, 1fr);
       overflow: hidden;
-      border-right: 1px solid color-mix(in srgb, var(--borderColor-muted), transparent 36%);
-      background: color-mix(in srgb, var(--bgColor-muted), var(--bgColor-default) 56%);
+      border-right: 1px solid color-mix(in srgb, var(--ld-line-muted), transparent 36%);
+      background: var(--ld-report-rail-bg);
       transition: width 180ms var(--ld-ease-out);
     }
 
@@ -111,17 +111,17 @@ class ReportSidebar extends LitElement {
 
     .section-title {
       overflow: hidden;
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-950);
+      font-weight: var(--ld-font-weight-strong);
       letter-spacing: 0;
       text-transform: uppercase;
     }
 
     .section-title {
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
       font-size: var(--ld-font-size-caption);
     }
 
@@ -135,16 +135,16 @@ class ReportSidebar extends LitElement {
       border: var(--ld-border-transparent);
       border-radius: var(--ld-radius-default);
       background: transparent;
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       cursor: pointer;
       padding: 0;
     }
 
     .collapse:hover,
     .collapse:focus-visible {
-      border-color: var(--borderColor-muted);
-      background: var(--bgColor-muted);
-      color: var(--fgColor-default);
+      border-color: var(--ld-line-muted);
+      background: var(--ld-bg-control-hover);
+      color: var(--ld-fg-default);
       outline: 0;
     }
 
@@ -158,7 +158,7 @@ class ReportSidebar extends LitElement {
       overflow-y: auto;
       padding: 7px 5px;
       scrollbar-gutter: stable;
-      scrollbar-color: color-mix(in srgb, var(--fgColor-muted), transparent 42%) transparent;
+      scrollbar-color: var(--ld-scrollbar-thumb) transparent;
       scrollbar-width: thin;
     }
 
@@ -172,11 +172,11 @@ class ReportSidebar extends LitElement {
 
     nav::-webkit-scrollbar-thumb {
       border-radius: var(--ld-radius-full);
-      background: color-mix(in srgb, var(--fgColor-muted), transparent 42%);
+      background: var(--ld-scrollbar-thumb);
     }
 
     nav::-webkit-scrollbar-thumb:hover {
-      background: color-mix(in srgb, var(--fgColor-muted), transparent 20%);
+      background: var(--ld-scrollbar-thumb-hover);
     }
 
     a {
@@ -192,23 +192,23 @@ class ReportSidebar extends LitElement {
       gap: 6px;
       border: var(--ld-border-transparent);
       border-radius: var(--ld-radius-default);
-      color: color-mix(in srgb, var(--fgColor-muted), transparent 8%);
+      color: color-mix(in srgb, var(--ld-fg-muted), transparent 8%);
       padding: 0 9px;
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-760);
+      font-weight: var(--ld-font-weight-medium);
     }
 
     .page-link:hover,
     .page-link:focus-visible {
-      background: var(--bgColor-muted);
-      color: var(--fgColor-default);
+      background: var(--ld-bg-hover);
+      color: var(--ld-fg-default);
       outline: 0;
     }
 
     .page-link[aria-current='page'] {
       border-color: transparent;
-      background: color-mix(in srgb, var(--bgColor-muted), var(--bgColor-default) 42%);
-      color: var(--fgColor-default);
+      background: var(--ld-bg-hover);
+      color: var(--ld-fg-default);
     }
 
     .page-link[aria-current='page']::before {
@@ -226,17 +226,17 @@ class ReportSidebar extends LitElement {
       width: 24px;
       height: 24px;
       place-items: center;
-      color: color-mix(in srgb, var(--fgColor-muted), transparent 24%);
+      color: color-mix(in srgb, var(--ld-fg-muted), transparent 24%);
       font-size: var(--ld-font-size-caption);
       font-variant-numeric: tabular-nums;
-      font-weight: var(--ld-font-weight-850);
+      font-weight: var(--ld-font-weight-strong);
       line-height: var(--ld-line-height-none);
     }
 
     .page-link:hover .page-index,
     .page-link:focus-visible .page-index,
     .page-link[aria-current='page'] .page-index {
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
     }
 
     .link-text {
@@ -249,7 +249,7 @@ class ReportSidebar extends LitElement {
     .page-link:hover .link-text,
     .page-link:focus-visible .link-text,
     .page-link[aria-current='page'] .link-text {
-      font-weight: var(--ld-font-weight-850);
+      font-weight: var(--ld-font-weight-strong);
     }
 
     :host([data-collapsed]) header {
@@ -292,11 +292,11 @@ class ReportSidebar extends LitElement {
 
     :host([data-collapsed]) .page-link:hover .page-index,
     :host([data-collapsed]) .page-link:focus-visible .page-index {
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
     }
 
     :host([data-collapsed]) .page-link[aria-current='page'] .page-index {
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
     }
 
     :host([data-collapsed]) .page-link {
@@ -324,10 +324,10 @@ class ReportSidebar extends LitElement {
       align-items: center;
       gap: 6px;
       padding: 0 9px 0 0;
-      background: color-mix(in srgb, var(--bgColor-muted), var(--bgColor-default) 56%);
-      color: var(--fgColor-default);
+      background: var(--ld-report-rail-bg);
+      color: var(--ld-fg-default);
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-850);
+      font-weight: var(--ld-font-weight-strong);
       line-height: var(--ld-line-height-none);
       pointer-events: none;
       transform: translateY(-50%);
@@ -360,9 +360,9 @@ class ReportSidebar extends LitElement {
       width: 24px;
       height: 24px;
       place-items: center;
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
       font-variant-numeric: tabular-nums;
-      font-weight: var(--ld-font-weight-850);
+      font-weight: var(--ld-font-weight-strong);
     }
 
     .hover-title-name {
@@ -391,9 +391,9 @@ class ReportSidebar extends LitElement {
     :host([data-collapsed]) .rail-label {
       display: block;
       margin: 8px auto 10px;
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-950);
+      font-weight: var(--ld-font-weight-strong);
       letter-spacing: 0;
       line-height: var(--ld-line-height-none);
       text-orientation: mixed;

@@ -43,7 +43,7 @@ class ReportCanvas extends LitElement {
       height: 100%;
       min-width: 0;
       min-height: 0;
-      background: var(--report-canvas-bg, var(--bgColor-inset));
+      background: var(--ld-report-canvas-bg);
     }
 
     .viewport {
@@ -81,7 +81,7 @@ class ReportCanvas extends LitElement {
       height: calc(var(--report-canvas-height) * 1px);
       transform: scale(var(--report-canvas-scale));
       transform-origin: top left;
-      background: var(--report-page-bg, transparent);
+      background: var(--ld-report-page-bg);
     }
 
     ::slotted([data-canvas-visual]) {
@@ -265,7 +265,7 @@ class ReportZoom extends LitElement {
   static styles = css`
     :host {
       display: inline-block;
-      color: var(--fgColor-default);
+      color: var(--ld-fg-default);
       font-family: var(--fontStack-system);
     }
 
@@ -284,7 +284,7 @@ class ReportZoom extends LitElement {
       border: 0;
       border-radius: var(--ld-radius-default);
       background: transparent;
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       cursor: pointer;
       padding: 0;
       font: inherit;
@@ -292,14 +292,14 @@ class ReportZoom extends LitElement {
 
     button:hover,
     button:focus-visible {
-      background: var(--bgColor-muted);
-      color: var(--fgColor-default);
+      background: var(--ld-bg-panel-muted);
+      color: var(--ld-fg-default);
       outline: 0;
     }
 
     button[aria-pressed='true'] {
-      background: color-mix(in srgb, var(--fgColor-accent), transparent 86%);
-      color: var(--fgColor-accent);
+      background: color-mix(in srgb, var(--ld-fg-link), transparent 86%);
+      color: var(--ld-fg-link);
     }
 
     svg {
@@ -324,7 +324,7 @@ class ReportZoom extends LitElement {
     input::-webkit-slider-runnable-track {
       height: 4px;
       border-radius: var(--ld-radius-full);
-      background: var(--borderColor-muted);
+      background: var(--ld-line-muted);
     }
 
     input::-webkit-slider-thumb {
@@ -334,13 +334,13 @@ class ReportZoom extends LitElement {
       margin-top: -4px;
       border: var(--ld-border-default);
       border-radius: var(--ld-radius-full);
-      background: var(--fgColor-muted);
+      background: var(--ld-fg-muted);
     }
 
     input::-moz-range-track {
       height: 4px;
       border-radius: var(--ld-radius-full);
-      background: var(--borderColor-muted);
+      background: var(--ld-line-muted);
     }
 
     input::-moz-range-thumb {
@@ -348,7 +348,7 @@ class ReportZoom extends LitElement {
       height: 12px;
       border: var(--ld-border-default);
       border-radius: var(--ld-radius-full);
-      background: var(--fgColor-muted);
+      background: var(--ld-fg-muted);
     }
 
     input:focus-visible {
@@ -356,12 +356,12 @@ class ReportZoom extends LitElement {
     }
 
     input:focus-visible::-webkit-slider-thumb {
-      outline: var(--ld-border-width-focus) solid var(--borderColor-accent-muted);
+      outline: var(--ld-border-width-focus) solid var(--ld-line-accent-muted);
       outline-offset: 2px;
     }
 
     input:focus-visible::-moz-range-thumb {
-      outline: var(--ld-border-width-focus) solid var(--borderColor-accent-muted);
+      outline: var(--ld-border-width-focus) solid var(--ld-line-accent-muted);
       outline-offset: 2px;
     }
 
@@ -375,10 +375,10 @@ class ReportZoom extends LitElement {
 
     .percent {
       min-width: 38px;
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       text-align: center;
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-850);
+      font-weight: var(--ld-font-weight-strong);
       white-space: nowrap;
     }
 

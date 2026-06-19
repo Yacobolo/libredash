@@ -133,7 +133,7 @@ class ModelGraph extends LitElement {
             pannable: true,
             zoomable: true,
             nodeColor: (node: Node) => nodeColor(String(node.data?.kind ?? 'source')),
-            maskColor: 'color-mix(in srgb, var(--bgColor-default), transparent 26%)',
+            maskColor: 'color-mix(in srgb, var(--ld-bg-page), transparent 26%)',
             style: { width: 140, height: 92 },
           }),
           React.createElement(Controls, { key: 'controls', showInteractive: false }),
@@ -173,7 +173,7 @@ const modelGraphStyles = `
     grid-template-columns: minmax(0, 1fr) 280px;
     border: var(--ld-border-default);
     border-radius: var(--borderRadius-default);
-    background: var(--bgColor-default);
+    background: var(--ld-bg-panel);
     box-shadow: var(--shadow-resting-medium);
     overflow: hidden;
   }
@@ -182,14 +182,14 @@ const modelGraphStyles = `
     min-width: 0;
     min-height: 0;
     background:
-      linear-gradient(var(--bgColor-default), var(--bgColor-default)),
-      radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--fgColor-muted), transparent 86%) 1px, transparent 0);
+      linear-gradient(var(--ld-bg-page), var(--ld-bg-page)),
+      radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ld-fg-muted), transparent 86%) 1px, transparent 0);
     background-size: auto, 18px 18px;
   }
 
   ld-model-graph .inspector {
     border-left: var(--ld-border-default);
-    background: var(--bgColor-muted);
+    background: var(--ld-bg-panel-muted);
     padding: 12px;
     overflow: auto;
   }
@@ -202,9 +202,9 @@ const modelGraphStyles = `
 
   ld-model-graph .kind {
     margin: 0 0 12px;
-    color: var(--fgColor-muted);
+    color: var(--ld-fg-muted);
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-900);
+    font-weight: var(--ld-font-weight-strong);
     text-transform: uppercase;
   }
 
@@ -222,9 +222,9 @@ const modelGraphStyles = `
   }
 
   ld-model-graph .detail-row span:first-child {
-    color: var(--fgColor-muted);
+    color: var(--ld-fg-muted);
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-900);
+    font-weight: var(--ld-font-weight-strong);
     text-transform: uppercase;
   }
 
@@ -242,10 +242,10 @@ const modelGraphStyles = `
     gap: 8px;
     border: var(--ld-border-default);
     border-radius: var(--borderRadius-small);
-    background: var(--bgColor-default);
+    background: var(--ld-bg-panel);
     padding: 5px 7px;
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-750);
+    font-weight: var(--ld-font-weight-medium);
   }
 
   ld-model-graph .field code {
@@ -256,14 +256,14 @@ const modelGraphStyles = `
   }
 
   ld-model-graph .field span {
-    color: var(--fgColor-muted);
+    color: var(--ld-fg-muted);
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-900);
+    font-weight: var(--ld-font-weight-strong);
     text-transform: uppercase;
   }
 
   ld-model-graph .empty {
-    color: var(--fgColor-muted);
+    color: var(--ld-fg-muted);
     font-size: var(--ld-font-size-body-md);
     line-height: var(--ld-line-height-normal);
   }
@@ -272,14 +272,14 @@ const modelGraphStyles = `
     width: 214px;
     border: 1px solid var(--node-border);
     border-radius: var(--borderRadius-default);
-    background: var(--bgColor-default);
+    background: var(--ld-bg-panel);
     box-shadow: var(--shadow-resting-small);
-    color: var(--fgColor-default);
+    color: var(--ld-fg-default);
     overflow: hidden;
   }
 
   ld-model-graph .node-card.selected {
-    outline: var(--ld-border-width-focus) solid var(--fgColor-accent);
+    outline: var(--ld-border-width-focus) solid var(--ld-fg-link);
     outline-offset: 2px;
   }
 
@@ -290,9 +290,9 @@ const modelGraphStyles = `
   }
 
   ld-model-graph .node-kind {
-    color: var(--fgColor-muted);
+    color: var(--ld-fg-muted);
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-950);
+    font-weight: var(--ld-font-weight-strong);
     letter-spacing: 0;
     text-transform: uppercase;
   }
@@ -303,7 +303,7 @@ const modelGraphStyles = `
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-900);
+    font-weight: var(--ld-font-weight-strong);
     line-height: var(--ld-line-height-tight);
   }
 
@@ -322,7 +322,7 @@ const modelGraphStyles = `
     border-bottom: var(--ld-border-muted);
     padding: 3px 0;
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-750);
+    font-weight: var(--ld-font-weight-medium);
   }
 
   ld-model-graph .node-field:last-child {
@@ -337,14 +337,14 @@ const modelGraphStyles = `
   }
 
   ld-model-graph .node-field span {
-    color: var(--fgColor-muted);
+    color: var(--ld-fg-muted);
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-900);
+    font-weight: var(--ld-font-weight-strong);
     text-transform: uppercase;
   }
 
   ld-model-graph .react-flow {
-    color: var(--fgColor-default);
+    color: var(--ld-fg-default);
   }
 
   ld-model-graph .react-flow__attribution {
@@ -354,14 +354,14 @@ const modelGraphStyles = `
   ld-model-graph .react-flow__controls,
   ld-model-graph .react-flow__minimap {
     border: var(--ld-border-default);
-    background: var(--bgColor-default);
+    background: var(--ld-bg-panel);
     box-shadow: var(--shadow-resting-small);
   }
 
   ld-model-graph .react-flow__controls-button {
-    border-bottom-color: var(--borderColor-muted);
-    background: var(--bgColor-default);
-    color: var(--fgColor-default);
+    border-bottom-color: var(--ld-line-muted);
+    background: var(--ld-bg-panel);
+    color: var(--ld-fg-default);
   }
 
   @media (max-width: 980px) {
@@ -398,17 +398,17 @@ function toFlowEdge(edge: ModelGraphEdge): Edge {
     type: edge.kind === 'relationship' ? 'smoothstep' : 'default',
     markerEnd: { type: MarkerType.ArrowClosed },
     style: {
-      stroke: edge.kind === 'relationship' ? 'var(--fgColor-accent)' : 'var(--borderColor-accent-emphasis)',
+      stroke: edge.kind === 'relationship' ? 'var(--ld-fg-link)' : 'var(--ld-line-accent)',
       strokeDasharray: edge.kind === 'semantic' ? '4 4' : undefined,
       strokeWidth: edge.kind === 'relationship' ? 1.8 : 1.4,
     },
     labelStyle: {
-      fill: 'var(--fgColor-muted)',
+      fill: 'var(--ld-fg-muted)',
       fontSize: 10,
-      fontWeight: 800,
+      fontWeight: 500,
     },
     labelBgStyle: {
-      fill: 'var(--bgColor-default)',
+      fill: 'var(--ld-bg-page)',
       fillOpacity: 0.9,
     },
   }
@@ -474,13 +474,13 @@ function ModelNodeComponent({ data }: { data: ModelGraphNode & { selected?: bool
 
 function nodeStyle(kind: string): Record<string, string> {
   const palette: Record<string, [string, string, string]> = {
-    source: ['var(--data-blue-color-muted)', 'var(--data-blue-color-emphasis)', 'var(--borderColor-default)'],
-    cache: ['var(--data-green-color-muted)', 'var(--data-green-color-emphasis)', 'var(--borderColor-success-muted)'],
-    dataset: ['var(--data-auburn-color-muted)', 'var(--data-auburn-color-emphasis)', 'var(--borderColor-attention-muted)'],
-    metrics_view: ['var(--data-yellow-color-muted)', 'var(--data-yellow-color-emphasis)', 'var(--borderColor-attention-muted)'],
-    metric: ['var(--data-yellow-color-muted)', 'var(--data-yellow-color-emphasis)', 'var(--borderColor-attention-muted)'],
-    visual: ['var(--data-purple-color-muted)', 'var(--data-purple-color-emphasis)', 'var(--borderColor-accent-muted)'],
-    report_table: ['var(--data-coral-color-muted)', 'var(--data-coral-color-emphasis)', 'var(--borderColor-default)'],
+    source: ['var(--ld-asset-source-bg)', 'var(--ld-asset-source-accent)', 'var(--ld-asset-source-border)'],
+    cache: ['var(--ld-asset-cache-table-bg)', 'var(--ld-asset-cache-table-accent)', 'var(--ld-asset-cache-table-border)'],
+    dataset: ['var(--ld-asset-dataset-bg)', 'var(--ld-asset-dataset-accent)', 'var(--ld-asset-dataset-border)'],
+    metrics_view: ['var(--ld-asset-metric-view-bg)', 'var(--ld-asset-metric-view-accent)', 'var(--ld-asset-metric-view-border)'],
+    metric: ['var(--ld-asset-measure-bg)', 'var(--ld-asset-measure-accent)', 'var(--ld-asset-measure-border)'],
+    visual: ['var(--ld-asset-visual-bg)', 'var(--ld-asset-visual-accent)', 'var(--ld-asset-visual-border)'],
+    report_table: ['var(--ld-asset-table-bg)', 'var(--ld-asset-table-accent)', 'var(--ld-asset-table-border)'],
   }
   const [bg, accent, border] = palette[kind] ?? palette.source
   return {
@@ -493,19 +493,19 @@ function nodeStyle(kind: string): Record<string, string> {
 function nodeColor(kind: string): string {
   switch (kind) {
     case 'cache':
-      return 'var(--data-green-color-emphasis)'
+      return 'var(--ld-asset-cache-table-accent)'
     case 'dataset':
-      return 'var(--data-auburn-color-emphasis)'
+      return 'var(--ld-asset-dataset-accent)'
     case 'metrics_view':
-      return 'var(--data-yellow-color-emphasis)'
+      return 'var(--ld-asset-metric-view-accent)'
     case 'metric':
-      return 'var(--data-yellow-color-emphasis)'
+      return 'var(--ld-asset-measure-accent)'
     case 'visual':
-      return 'var(--data-purple-color-emphasis)'
+      return 'var(--ld-asset-visual-accent)'
     case 'report_table':
-      return 'var(--data-coral-color-emphasis)'
+      return 'var(--ld-asset-table-accent)'
     default:
-      return 'var(--data-blue-color-emphasis)'
+      return 'var(--ld-asset-source-accent)'
   }
 }
 

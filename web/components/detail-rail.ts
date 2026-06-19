@@ -26,7 +26,7 @@ class DetailRail extends HTMLElement {
       'border-transparent',
       'bg-transparent',
       'p-0',
-      'text-fg-muted',
+      'text-icon-muted',
       'transition-colors',
       'duration-fast',
       'hover:border-outline-muted',

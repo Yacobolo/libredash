@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/deploy"
+	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/semantic"
 	_ "github.com/marcboeker/go-duckdb/v2"
 )
@@ -134,6 +136,19 @@ func (m *DuckDBMetrics) DataDir() string {
 
 func (m *DuckDBMetrics) Catalog() dashboard.Catalog {
 	return m.catalog
+}
+
+func (m *DuckDBMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]platform.Asset, []platform.AssetEdge, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.workspace == nil {
+		return nil, nil, false
+	}
+	assets, edges, err := deploy.ExtractAssets(workspaceID, deploymentID, m.workspace)
+	if err != nil {
+		return nil, nil, false
+	}
+	return assets, edges, true
 }
 
 func (m *DuckDBMetrics) MetricViews() []dashboard.MetricViewSummary {

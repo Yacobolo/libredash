@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:css && npm run build:url-sync && npm run build:sidebar && npm run build:report-sidebar && npm run build:filters && npm run build:filter-panel && npm run build:filter-card && npm run build:inspector && npm run build:table && npm run build:data-grid && npm run build:detail-rail && npm run build:canvas && npm run build:footer && npm run build:charts && npm run build:visual-modal && npm run build:model && npm run build:login-background && npm run build:metric-usage",
+    "build": "npm run build:css && npm run build:url-sync && npm run build:sidebar && npm run build:report-sidebar && npm run build:filters && npm run build:filter-panel && npm run build:filter-card && npm run build:inspector && npm run build:table && npm run build:data-grid && npm run build:detail-rail && npm run build:canvas && npm run build:footer && npm run build:charts && npm run build:visual-modal && npm run build:model && npm run build:login-background && npm run build:metric-usage && npm run build:asset-lineage",
     "build:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css",
     "build:url-sync": "esbuild web/components/url-sync.ts --bundle --format=esm --outfile=static/url-sync.js",
     "build:sidebar": "esbuild web/components/sidebar.ts --bundle --format=esm --outfile=static/sidebar.js",
@@ -23,6 +23,7 @@
     "build:model": "esbuild web/components/model-graph.ts --bundle --format=esm --outfile=static/model-graph.js",
     "build:login-background": "esbuild web/components/topology-background.ts --bundle --format=esm --outfile=static/topology-background.js",
     "build:metric-usage": "esbuild web/components/metric-usage-graph.ts --bundle --format=esm --outfile=static/metric-usage-graph.js",
+    "build:asset-lineage": "esbuild web/components/asset-lineage-graph.ts --bundle --format=esm --outfile=static/asset-lineage-graph.js",
     "watch:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css --watch"
   },
   "devDependencies": {

@@ -87,6 +87,21 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 	return err
 }
 
+const deletePrincipalRoleBindings = `-- name: DeletePrincipalRoleBindings :exec
+DELETE FROM role_bindings
+WHERE workspace_id = ? AND principal_id = ?
+`
+
+type DeletePrincipalRoleBindingsParams struct {
+	WorkspaceID string         `json:"workspace_id"`
+	PrincipalID sql.NullString `json:"principal_id"`
+}
+
+func (q *Queries) DeletePrincipalRoleBindings(ctx context.Context, arg DeletePrincipalRoleBindingsParams) error {
+	_, err := q.db.ExecContext(ctx, deletePrincipalRoleBindings, arg.WorkspaceID, arg.PrincipalID)
+	return err
+}
+
 const deleteSessionByTokenHash = `-- name: DeleteSessionByTokenHash :exec
 DELETE FROM sessions WHERE token_hash = ?
 `
@@ -438,6 +453,41 @@ func (q *Queries) InsertRoleBinding(ctx context.Context, arg InsertRoleBindingPa
 	return err
 }
 
+const listAssetEdgesByDeployment = `-- name: ListAssetEdgesByDeployment :many
+SELECT id, workspace_id, deployment_id, from_asset_id, to_asset_id, edge_type, created_at FROM asset_edges WHERE deployment_id = ? ORDER BY edge_type, from_asset_id, to_asset_id
+`
+
+func (q *Queries) ListAssetEdgesByDeployment(ctx context.Context, deploymentID string) ([]AssetEdge, error) {
+	rows, err := q.db.QueryContext(ctx, listAssetEdgesByDeployment, deploymentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AssetEdge{}
+	for rows.Next() {
+		var i AssetEdge
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.DeploymentID,
+			&i.FromAssetID,
+			&i.ToAssetID,
+			&i.EdgeType,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAssetsByDeployment = `-- name: ListAssetsByDeployment :many
 SELECT id, workspace_id, deployment_id, asset_type, asset_key, parent_asset_id, title, description, content_json, content_hash, created_at FROM assets WHERE deployment_id = ? ORDER BY asset_type, asset_key
 `
@@ -541,6 +591,90 @@ func (q *Queries) ListPrincipalRolePermissions(ctx context.Context, arg ListPrin
 			return nil, err
 		}
 		items = append(items, permissions_json)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoleBindingsByWorkspace = `-- name: ListRoleBindingsByWorkspace :many
+SELECT
+  rb.id,
+  rb.workspace_id,
+  rb.principal_id,
+  p.email,
+  p.display_name,
+  r.name AS role_name,
+  rb.created_at
+FROM role_bindings rb
+JOIN roles r ON r.id = rb.role_id
+LEFT JOIN principals p ON p.id = rb.principal_id
+WHERE rb.workspace_id = ? AND rb.principal_id IS NOT NULL
+ORDER BY p.email, r.name
+`
+
+type ListRoleBindingsByWorkspaceRow struct {
+	ID          string         `json:"id"`
+	WorkspaceID string         `json:"workspace_id"`
+	PrincipalID sql.NullString `json:"principal_id"`
+	Email       sql.NullString `json:"email"`
+	DisplayName sql.NullString `json:"display_name"`
+	RoleName    string         `json:"role_name"`
+	CreatedAt   string         `json:"created_at"`
+}
+
+func (q *Queries) ListRoleBindingsByWorkspace(ctx context.Context, workspaceID string) ([]ListRoleBindingsByWorkspaceRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRoleBindingsByWorkspace, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRoleBindingsByWorkspaceRow{}
+	for rows.Next() {
+		var i ListRoleBindingsByWorkspaceRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.PrincipalID,
+			&i.Email,
+			&i.DisplayName,
+			&i.RoleName,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRoles = `-- name: ListRoles :many
+SELECT id, name, permissions_json FROM roles ORDER BY name
+`
+
+func (q *Queries) ListRoles(ctx context.Context) ([]Role, error) {
+	rows, err := q.db.QueryContext(ctx, listRoles)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Role{}
+	for rows.Next() {
+		var i Role
+		if err := rows.Scan(&i.ID, &i.Name, &i.PermissionsJson); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

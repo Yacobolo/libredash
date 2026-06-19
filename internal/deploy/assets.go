@@ -36,12 +36,20 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 			return nil, nil, err
 		}
 		edge(catalogID, modelID, "contains")
+		for connectionName, connection := range model.Connections {
+			id, err := add("connection", modelEntry.ID+"."+connectionName, modelID, connectionName, connectionDescription(connection), connection)
+			if err != nil {
+				return nil, nil, err
+			}
+			edge(modelID, id, "contains")
+		}
 		for sourceName, source := range model.Sources {
 			id, err := add("source", modelEntry.ID+"."+sourceName, modelID, sourceName, source.Description(), source)
 			if err != nil {
 				return nil, nil, err
 			}
 			edge(modelID, id, "contains")
+			edge(id, byKey["connection:"+modelEntry.ID+"."+source.Connection], "uses_connection")
 		}
 		for cacheName, cache := range model.Cache.Tables {
 			id, err := add("cache_table", modelEntry.ID+"."+cacheName, modelID, cacheName, cache.Description, cache)
@@ -141,6 +149,13 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 		}
 	}
 	return assets, edges, nil
+}
+
+func connectionDescription(connection semantic.Connection) string {
+	if connection.Kind == "" {
+		return "connection"
+	}
+	return connection.Kind + " connection"
 }
 
 func dimensionLabel(name, label string) string {

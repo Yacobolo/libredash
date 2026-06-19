@@ -2,6 +2,9 @@ import type { EChartsOption } from 'echarts'
 import type { ChartDatum, ChartPayload, ChartTokens, ChartType } from './types'
 import { booleanValue, colorWithAlpha, formatValue, normalizeShape, normalizeType, numberValue, selectedValues, stringValue, unique } from './utils'
 
+const chartFontWeightMedium = 500
+const chartFontWeightStrong = 600
+
 export function buildEChartsOption(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
   switch (normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length))) {
     case 'single_value':
@@ -94,7 +97,7 @@ function legendOption(payload: ChartPayload, tokens: ChartTokens) {
 		bottom: position === 'bottom' ? 0 : undefined,
 		right: position === 'right' || position === 'top' ? 8 : undefined,
 		left: position === 'left' || position === 'bottom' ? 8 : undefined,
-		textStyle: { color: tokens.muted, fontSize: 10, fontWeight: 700 },
+		textStyle: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium },
 	}
 }
 
@@ -112,7 +115,7 @@ function labelOption(payload: ChartPayload, tokens: ChartTokens, fallbackPositio
 		position: stringOption(payload, 'label_position', fallbackPosition),
 		color: tokens.text,
 		fontSize: 10,
-		fontWeight: 750,
+		fontWeight: chartFontWeightMedium,
 	}
 }
 
@@ -164,8 +167,8 @@ function partToWholeAdapter(payload: ChartPayload, tokens: ChartTokens): ECharts
 					left: 'center',
 					top: '45%',
 					textAlign: 'center',
-					textStyle: { color: tokens.text, fontSize: 18, fontWeight: 850 },
-					subtextStyle: { color: tokens.muted, fontSize: 10, fontWeight: 700 },
+					textStyle: { color: tokens.text, fontSize: 18, fontWeight: chartFontWeightStrong },
+					subtextStyle: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium },
 				}
 				: undefined,
 			series: [
@@ -178,7 +181,7 @@ function partToWholeAdapter(payload: ChartPayload, tokens: ChartTokens): ECharts
 					data: itemData,
 					selectedMode: 'multiple',
 					roseType: stringOption(payload, 'rose_type') || undefined,
-					label: { color: tokens.muted, fontSize: 10, fontWeight: 700, ...labelOption(payload, tokens, type === 'donut' ? 'outside' : 'outside', true) },
+					label: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium, ...labelOption(payload, tokens, type === 'donut' ? 'outside' : 'outside', true) },
 					universalTransition: true,
 				},
 			],
@@ -200,7 +203,7 @@ function partToWholeAdapter(payload: ChartPayload, tokens: ChartTokens): ECharts
 					sort: stringOption(payload, 'sort', 'descending'),
 					funnelAlign: stringOption(payload, 'funnel_align', 'center'),
 					data: itemData,
-					label: { color: tokens.text, fontSize: 10, fontWeight: 700, ...labelOption(payload, tokens, 'inside', true) },
+					label: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium, ...labelOption(payload, tokens, 'inside', true) },
 				},
 			],
 		}
@@ -218,7 +221,7 @@ function partToWholeAdapter(payload: ChartPayload, tokens: ChartTokens): ECharts
 					nodeClick: false,
 					breadcrumb: { show: boolOption(payload, 'breadcrumb') },
 					data: itemData,
-					label: { color: tokens.text, fontSize: 10, fontWeight: 800 },
+					label: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium },
           upperLabel: { show: false },
         },
       ],
@@ -246,14 +249,14 @@ function singleValueAdapter(payload: ChartPayload, tokens: ChartTokens): ECharts
 				axisLine: { lineStyle: { width: progressWidth, color: thresholdColors(payload, tokens, maxValue) } },
 				axisTick: { show: false },
 				splitLine: { length: 8, lineStyle: { color: tokens.border } },
-				axisLabel: { color: tokens.muted, fontSize: 10, fontWeight: 700 },
+				axisLabel: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium },
 				pointer: { show: boolOption(payload, 'show_pointer', true), width: 4 },
 				anchor: { show: true, size: 6, itemStyle: { color: tokens.palette[0] } },
         detail: {
           valueAnimation: true,
           color: tokens.text,
           fontSize: 24,
-          fontWeight: 850,
+          fontWeight: chartFontWeightStrong,
           formatter: (next: number) => formatValue(next, payload.unit),
         },
         data: [{ name: stringValue(point, 'label') || payload.title, value, itemStyle: { color: tokens.palette[0] } }],
@@ -284,7 +287,7 @@ function categoryAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOpt
           ...axis('category', tokens),
           data: labels,
           inverse: true,
-          axisLabel: { color: tokens.text, fontWeight: 750, fontSize: 10 },
+          axisLabel: { color: tokens.text, fontWeight: chartFontWeightMedium, fontSize: 10 },
         }
       : axis('value', tokens),
     xAxis: horizontal
@@ -294,7 +297,7 @@ function categoryAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOpt
           data: labels,
           axisLabel: {
             color: tokens.muted,
-            fontWeight: 700,
+            fontWeight: chartFontWeightMedium,
             fontSize: 10,
             interval: Math.ceil(labels.length / 6),
           },
@@ -340,9 +343,9 @@ function comboAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption
 	const dualAxis = boolOption(payload, 'dual_axis')
 	return {
 		...baseOption(payload, tokens),
-		legend: { show: true, top: 0, right: 8, textStyle: { color: tokens.muted, fontSize: 10, fontWeight: 700 } },
+		legend: { show: true, top: 0, right: 8, textStyle: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium } },
 		grid: { top: 28, right: 24, bottom: 32, left: 48, containLabel: true },
-		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontWeight: 700, fontSize: 10, interval: Math.ceil(labels.length / 6) } },
+		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontWeight: chartFontWeightMedium, fontSize: 10, interval: Math.ceil(labels.length / 6) } },
 		yAxis: dualAxis ? [axis('value', tokens), { ...axis('value', tokens), splitLine: { show: false } }] : axis('value', tokens),
 		series: seriesNames.map((seriesName, seriesIndex) => {
       const configuredType = seriesTypes[seriesName] ?? seriesTypes[measureKeyForSeries(payload, seriesName)] ?? (seriesIndex === 0 ? 'bar' : 'line')
@@ -371,7 +374,7 @@ function waterfallAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOp
   return {
 		...baseOption(payload, tokens),
 		grid: { top: 16, right: 20, bottom: boolOption(payload, 'data_zoom') ? 54 : 32, left: 44, containLabel: true },
-		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontWeight: 700, fontSize: 10, interval: Math.ceil(labels.length / 6) } },
+		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontWeight: chartFontWeightMedium, fontSize: 10, interval: Math.ceil(labels.length / 6) } },
     yAxis: axis('value', tokens),
     series: [
       {
@@ -409,7 +412,7 @@ function histogramAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOp
   return {
 		...baseOption(payload, tokens),
 		grid: { top: 16, right: 20, bottom: boolOption(payload, 'data_zoom') ? 54 : 32, left: 44, containLabel: true },
-		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontWeight: 700, fontSize: 10, interval: Math.ceil(labels.length / 8) } },
+		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontWeight: chartFontWeightMedium, fontSize: 10, interval: Math.ceil(labels.length / 8) } },
     yAxis: axis('value', tokens),
     series: [
       {
@@ -438,7 +441,7 @@ function radarAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption
     tooltip: { trigger: 'item', borderColor: tokens.border, backgroundColor: tokens.surface, textStyle: { color: tokens.text } },
     radar: {
       indicator: data.map((row) => ({ name: stringValue(row, 'label'), max: maxValue * 1.15 })),
-      axisName: { color: tokens.muted, fontSize: 10, fontWeight: 700 },
+      axisName: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium },
       splitLine: { lineStyle: { color: tokens.grid } },
       splitArea: { areaStyle: { color: ['transparent', colorWithAlpha(tokens.palette[0], 0.04)] } },
       axisLine: { lineStyle: { color: tokens.border } },
@@ -467,8 +470,8 @@ function matrixAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOptio
 		...baseOption(payload, tokens),
     tooltip: { trigger: 'item', borderColor: tokens.border, backgroundColor: tokens.surface, textStyle: { color: tokens.text } },
     grid: { top: 18, right: 18, bottom: 48, left: 56, containLabel: true },
-    xAxis: { ...axis('category', tokens), data: columns, axisLabel: { color: tokens.muted, fontSize: 10, fontWeight: 700 } },
-    yAxis: { ...axis('category', tokens), data: rows, axisLabel: { color: tokens.text, fontSize: 10, fontWeight: 750 } },
+    xAxis: { ...axis('category', tokens), data: columns, axisLabel: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium } },
+    yAxis: { ...axis('category', tokens), data: rows, axisLabel: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium } },
     visualMap: {
       min: 0,
       max: maxValue,
@@ -477,7 +480,7 @@ function matrixAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOptio
       left: 'center',
       bottom: 6,
       inRange: { color: [colorWithAlpha(tokens.palette[0], 0.16), tokens.palette[0]] },
-      textStyle: { color: tokens.muted, fontSize: 10, fontWeight: 700 },
+      textStyle: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium },
     },
     series: [
       {
@@ -516,7 +519,7 @@ function graphAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption
 					type: 'graph',
 					layout,
 					roam: boolOption(payload, 'roam', true),
-					label: { show: true, color: tokens.text, fontSize: 10, fontWeight: 700 },
+					label: { show: true, color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium },
 					force: layout === 'force' ? { repulsion: 80, edgeLength: 80 } : undefined,
 					data: nodeNames.map((name, index) => ({ name, itemStyle: { color: tokens.palette[index % tokens.palette.length] } })),
 					links: data.map((row) => ({ source: stringValue(row, 'source'), target: stringValue(row, 'target'), value: numberValue(row, 'value') })),
@@ -542,7 +545,7 @@ function graphAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption
 				orient: stringOption(payload, 'orient') || undefined,
 				data: nodeNames.map((name) => ({ name })),
 				links: data.map((row) => ({ source: stringValue(row, 'source'), target: stringValue(row, 'target'), value: numberValue(row, 'value') })),
-				label: { color: tokens.text, fontSize: 10, fontWeight: 700 },
+				label: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium },
 				lineStyle: { color: 'gradient', curveness: numberOption(payload, 'curveness', 0.5) },
 				emphasis: { focus: stringOption(payload, 'focus', 'adjacency') },
 			},
@@ -559,7 +562,7 @@ function geoAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
       max: Math.max(1, ...(payload.data ?? []).map((row) => numberValue(row, 'value'))),
       left: 8,
       bottom: 8,
-      textStyle: { color: tokens.muted, fontSize: 10, fontWeight: 700 },
+      textStyle: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium },
       inRange: { color: [colorWithAlpha(tokens.palette[0], 0.18), tokens.palette[0]] },
     },
     series: [
@@ -583,7 +586,7 @@ function ohlcAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption 
   return {
 		...baseOption(payload, tokens),
 		grid: { top: 16, right: 20, bottom: boolOption(payload, 'data_zoom') ? 54 : 32, left: 44, containLabel: true },
-		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontSize: 10, fontWeight: 700 } },
+		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium } },
     yAxis: axis('value', tokens),
     series: [
       {
@@ -603,7 +606,7 @@ function distributionAdapter(payload: ChartPayload, tokens: ChartTokens): EChart
   return {
 		...baseOption(payload, tokens),
 		grid: { top: 16, right: 20, bottom: boolOption(payload, 'data_zoom') ? 54 : 32, left: 44, containLabel: true },
-		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontSize: 10, fontWeight: 700 } },
+		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium } },
     yAxis: axis('value', tokens),
     series: [
       {
@@ -638,8 +641,8 @@ function hierarchyAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOp
 				roam: boolOption(payload, 'roam', true),
 				initialTreeDepth: numberOption(payload, 'initial_depth', -1),
 				symbolSize: 7,
-          label: { color: tokens.text, fontSize: 10, fontWeight: 700 },
-          leaves: { label: { color: tokens.muted, fontSize: 10, fontWeight: 700 } },
+          label: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium },
+          leaves: { label: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium } },
           lineStyle: { color: tokens.border },
 				emphasis: { focus: stringOption(payload, 'focus', 'descendant') },
         },
@@ -659,7 +662,7 @@ function hierarchyAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOp
 				sort: undefined,
 				nodeClick: boolOption(payload, 'roam') ? 'rootToNode' : false,
 				initialTreeDepth: numberOption(payload, 'initial_depth', -1),
-				label: { color: tokens.text, fontSize: 10, fontWeight: 700, rotate: 'radial' },
+				label: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium, rotate: 'radial' },
 				itemStyle: { borderColor: tokens.surface, borderWidth: 1 },
       },
     ],
@@ -671,7 +674,7 @@ function axis(type: 'category' | 'value', tokens: ChartTokens) {
     type,
     axisLine: { lineStyle: { color: tokens.border } },
     axisTick: { show: false },
-    axisLabel: { color: tokens.muted, fontWeight: 700, fontSize: 10 },
+    axisLabel: { color: tokens.muted, fontWeight: chartFontWeightMedium, fontSize: 10 },
     splitLine: { lineStyle: { color: tokens.grid } },
   }
 }

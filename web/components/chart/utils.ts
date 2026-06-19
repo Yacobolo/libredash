@@ -10,22 +10,24 @@ export function stylesFor(element: HTMLElement): ChartTokens {
     return ''
   }
   const value = (...names: string[]) => token(...names) || 'currentColor'
-  const chart1 = value('--ld-chart-1', '--fgColor-accent')
+  const chart1 = value('--ld-data-1', '--ld-chart-1', '--fgColor-accent')
   return {
-    text: value('--fgColor-default'),
-    muted: value('--fgColor-muted'),
-    border: value('--borderColor-default'),
-    grid: value('--ld-chart-grid', '--borderColor-muted'),
-    surface: value('--report-chart-surface', '--card-bgColor', '--bgColor-default'),
-    fill: token('--ld-chart-1-muted') || colorWithAlpha(chart1, 0.35),
-    dimmed: value('--borderColor-muted'),
+    text: value('--ld-fg-default', '--fgColor-default'),
+    muted: value('--ld-fg-muted', '--fgColor-muted'),
+    border: value('--ld-line-default', '--borderColor-default'),
+    grid: value('--ld-chart-grid', '--ld-line-muted', '--borderColor-muted'),
+    surface: value('--ld-chart-surface', '--report-chart-surface', '--card-bgColor', '--bgColor-default'),
+    fill: token('--ld-data-1-muted') || token('--ld-chart-1-muted') || colorWithAlpha(chart1, 0.35),
+    dimmed: value('--ld-line-muted', '--borderColor-muted'),
     palette: [
       chart1,
-      value('--ld-chart-2', '--fgColor-success'),
-      value('--ld-chart-3', '--fgColor-done'),
-      value('--ld-chart-4', '--fgColor-danger'),
-      value('--ld-chart-5', '--fgColor-success'),
-      value('--ld-chart-6', '--fgColor-sponsors'),
+      value('--ld-data-2', '--ld-chart-2', '--fgColor-success'),
+      value('--ld-data-3', '--ld-chart-3', '--fgColor-done'),
+      value('--ld-data-4', '--ld-chart-4', '--fgColor-danger'),
+      value('--ld-data-5', '--ld-chart-5', '--fgColor-success'),
+      value('--ld-data-6', '--ld-chart-6', '--fgColor-sponsors'),
+      value('--ld-data-7', '--fgColor-accent'),
+      value('--ld-data-8', '--fgColor-attention'),
     ],
   }
 }

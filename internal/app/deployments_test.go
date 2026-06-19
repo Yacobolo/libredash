@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/platform"
 	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
 	"github.com/Yacobolo/libredash/internal/runtime"
+	"github.com/Yacobolo/libredash/internal/semantic"
 	"github.com/gorilla/csrf"
 )
 
@@ -238,6 +240,136 @@ func TestDeploymentActivationPrepareFailureLeavesDeploymentInactive(t *testing.T
 	}
 }
 
+func TestWorkspaceAssetAPIListsActiveDeploymentAssets(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := NewAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces/test/assets?type=connection", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"type":"connection"`)) {
+		t.Fatalf("connection asset missing:\n%s", rec.Body.String())
+	}
+	if bytes.Contains(rec.Body.Bytes(), []byte(`"auth"`)) {
+		t.Fatalf("connection API leaked auth content:\n%s", rec.Body.String())
+	}
+}
+
+func TestWorkspacePageDefaultsToTopLevelAssets(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := NewAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	req := httptest.NewRequest(http.MethodGet, "/workspaces/test", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"Executive Sales Dashboard", "Olist Commerce", "Orders Metrics"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("workspace page missing top-level asset %q:\n%s", want, body)
+		}
+	}
+	for _, notWant := range []string{"olist_orders_dataset.csv", "orders_enriched", "review_score"} {
+		if strings.Contains(body, notWant) {
+			t.Fatalf("workspace page rendered low-level asset %q:\n%s", notWant, body)
+		}
+	}
+}
+
+func TestWorkspacePermissionsRejectViewer(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	principal, err := store.UpsertPrincipal(ctx, platform.PrincipalInput{Email: "viewer@example.com", DisplayName: "Viewer"})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	if err := store.BindRole(ctx, "test", principal.ID, "viewer"); err != nil {
+		t.Fatalf("bind role: %v", err)
+	}
+	token, err := store.CreateAPIToken(ctx, principal.ID, "test")
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	auth := NewAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	req := httptest.NewRequest(http.MethodGet, "/workspaces/test/permissions", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestWorkspaceRoleBindingAPIUpsertsPrincipalRole(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	owner, err := store.UpsertPrincipal(ctx, platform.PrincipalInput{Email: "owner@example.com", DisplayName: "Owner"})
+	if err != nil {
+		t.Fatalf("upsert owner: %v", err)
+	}
+	if err := store.BindRole(ctx, "test", owner.ID, "owner"); err != nil {
+		t.Fatalf("bind owner: %v", err)
+	}
+	token, err := store.CreateAPIToken(ctx, owner.ID, "test")
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+	auth := NewAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces/test/role-bindings", bytes.NewBufferString(`{"email":"analyst@example.com","displayName":"Analyst","role":"viewer"}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("upsert status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	updateReq := httptest.NewRequest(http.MethodPost, "/api/workspaces/test/role-bindings", bytes.NewBufferString(`{"email":"analyst@example.com","displayName":"Analyst","role":"editor"}`))
+	updateReq.Header.Set("Authorization", "Bearer "+token)
+	updateReq.Header.Set("Accept", "application/json")
+	updateRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(updateRec, updateReq)
+	if updateRec.Code != http.StatusOK {
+		t.Fatalf("update status = %d body=%s", updateRec.Code, updateRec.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/workspaces/test/role-bindings", nil)
+	listReq.Header.Set("Authorization", "Bearer "+token)
+	listReq.Header.Set("Accept", "application/json")
+	listRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("list status = %d body=%s", listRec.Code, listRec.Body.String())
+	}
+	body := listRec.Body.String()
+	if !strings.Contains(body, `"email":"analyst@example.com"`) || !strings.Contains(body, `"role":"editor"`) {
+		t.Fatalf("role binding missing:\n%s", body)
+	}
+	if strings.Contains(body, `"role":"viewer"`) {
+		t.Fatalf("role binding was duplicated instead of replaced:\n%s", body)
+	}
+}
+
 func testStore(t *testing.T) *platform.Store {
 	t.Helper()
 	store, err := platform.Open(context.Background(), filepath.Join(t.TempDir(), "libredash.db"))
@@ -249,6 +381,29 @@ func testStore(t *testing.T) *platform.Store {
 		t.Fatalf("ensure workspace: %v", err)
 	}
 	return store
+}
+
+func seedActiveDeployment(t *testing.T, store *platform.Store, workspaceID string) {
+	t.Helper()
+	ctx := context.Background()
+	deployment, err := store.CreateDeployment(ctx, workspaceID, "tester")
+	if err != nil {
+		t.Fatalf("create deployment: %v", err)
+	}
+	workspace, err := semantic.LoadWorkspace(filepath.Join("..", "..", "dashboards", "catalog.yaml"))
+	if err != nil {
+		t.Fatalf("load workspace: %v", err)
+	}
+	assets, edges, err := deploy.ExtractAssets(workspaceID, deployment.ID, workspace)
+	if err != nil {
+		t.Fatalf("extract assets: %v", err)
+	}
+	if err := store.ValidateDeployment(ctx, deployment.ID, "digest-"+deployment.ID, "{}", zeroArtifact(deployment.ID, workspaceID), assets, edges); err != nil {
+		t.Fatalf("validate deployment: %v", err)
+	}
+	if err := store.ActivateDeployment(ctx, workspaceID, deployment.ID); err != nil {
+		t.Fatalf("activate deployment: %v", err)
+	}
 }
 
 func zeroArtifact(deploymentID, workspaceID string) platformdb.InsertDeploymentArtifactParams {

@@ -59,7 +59,6 @@ function sortValue(value: unknown): string | number {
 class DataGrid extends LitElement {
   @property({ attribute: false }) grid: Grid | null = null
   @property({ attribute: 'grid' }) gridAttribute = ''
-  @property({ attribute: 'data-grid' }) dataGrid = '{}'
   @state() private sorting: GridSort[] = []
 
   createRenderRoot(): HTMLElement {
@@ -121,10 +120,9 @@ class DataGrid extends LitElement {
 
   private get resolvedGrid(): Required<Grid> {
     if (this.grid) return normalizeGrid(this.grid)
-    for (const source of [this.gridAttribute, this.dataGrid]) {
-      if (!source) continue
+    if (this.gridAttribute) {
       try {
-        return normalizeGrid(JSON.parse(source) as Grid)
+        return normalizeGrid(JSON.parse(this.gridAttribute) as Grid)
       } catch {
         // Datastar sets the property in normal operation. Attribute parsing is only a fallback.
       }
@@ -222,7 +220,7 @@ const dataGridStyles = `
 
   ld-data-grid .data-grid th,
   ld-data-grid .data-grid td {
-    border-bottom: 1px solid color-mix(in srgb, var(--borderColor-muted), transparent 28%);
+    border-bottom: 1px solid color-mix(in srgb, var(--ld-line-muted), transparent 28%);
     padding: 10px 10px;
     text-align: left;
     vertical-align: top;
@@ -230,18 +228,18 @@ const dataGridStyles = `
 
   ld-data-grid .data-grid th {
     background: transparent;
-    color: var(--fgColor-muted);
+    color: var(--ld-fg-muted);
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-850);
+    font-weight: var(--ld-font-weight-medium);
     letter-spacing: 0.03em;
     text-transform: uppercase;
   }
 
   ld-data-grid .data-grid td {
-    color: var(--fgColor-default);
+    color: var(--ld-fg-default);
     font-size: var(--ld-font-size-body-md);
     line-height: var(--ld-line-height-normal);
-    font-weight: var(--base-text-weight-semibold);
+    font-weight: var(--ld-font-weight-regular);
   }
 
   ld-data-grid .data-grid th.is-right,
@@ -258,7 +256,7 @@ const dataGridStyles = `
   }
 
   ld-data-grid .data-grid tbody tr:hover {
-    background: color-mix(in srgb, var(--bgColor-muted), transparent 58%);
+    background: var(--ld-bg-hover);
   }
 
   ld-data-grid .data-grid-sort {
@@ -281,13 +279,13 @@ const dataGridStyles = `
 
   ld-data-grid .data-grid-sort:hover,
   ld-data-grid .data-grid-sort:focus-visible {
-    color: var(--fgColor-default);
+    color: var(--ld-fg-default);
     outline: 0;
   }
 
   ld-data-grid .data-grid-sort-indicator {
     min-width: 8px;
-    color: var(--fgColor-accent);
+    color: var(--ld-fg-link);
     text-align: right;
   }
 
@@ -300,22 +298,22 @@ const dataGridStyles = `
     display: inline-flex;
     max-width: 100%;
     overflow: hidden;
-    color: var(--fgColor-default);
+    color: var(--ld-fg-default);
     padding: 0;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-700);
+    font-weight: var(--ld-font-weight-medium);
   }
 
   ld-data-grid .grid-expression {
     display: block;
     overflow: hidden;
-    color: var(--fgColor-default);
+    color: var(--ld-fg-default);
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-650);
+    font-weight: var(--ld-font-weight-regular);
   }
 
   ld-data-grid .grid-badge {
@@ -326,32 +324,32 @@ const dataGridStyles = `
     border-radius: var(--borderRadius-full);
     padding: 0 7px;
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-850);
+    font-weight: var(--ld-font-weight-medium);
   }
 
   ld-data-grid .grid-badge-success {
-    border: 1px solid color-mix(in srgb, var(--fgColor-success), transparent 64%);
-    background: color-mix(in srgb, var(--fgColor-success), transparent 91%);
-    color: var(--fgColor-default);
+    border: 1px solid var(--ld-line-success-muted);
+    background: var(--ld-bg-success-muted);
+    color: var(--ld-fg-default);
   }
 
   ld-data-grid .grid-badge-accent {
-    border: 1px solid color-mix(in srgb, var(--fgColor-accent), transparent 64%);
-    background: color-mix(in srgb, var(--fgColor-accent), transparent 91%);
-    color: var(--fgColor-default);
+    border: 1px solid var(--ld-line-accent-muted);
+    background: var(--ld-bg-accent-muted);
+    color: var(--ld-fg-default);
   }
 
   ld-data-grid .grid-badge-attention {
-    border: 1px solid color-mix(in srgb, var(--fgColor-attention), transparent 64%);
-    background: color-mix(in srgb, var(--fgColor-attention), transparent 91%);
-    color: var(--fgColor-default);
+    border: 1px solid var(--ld-line-warning-muted);
+    background: var(--ld-bg-warning-muted);
+    color: var(--ld-fg-default);
   }
 
   ld-data-grid .grid-badge-muted,
   ld-data-grid .grid-badge-default {
     border: var(--ld-border-muted);
-    background: var(--bgColor-muted);
-    color: var(--fgColor-muted);
+    background: var(--ld-bg-panel-muted);
+    color: var(--ld-fg-muted);
   }
 
   ld-data-grid .grid-number {
@@ -359,8 +357,8 @@ const dataGridStyles = `
   }
 
   ld-data-grid .grid-link {
-    color: var(--fgColor-accent);
-    font-weight: var(--ld-font-weight-850);
+    color: var(--ld-fg-link);
+    font-weight: var(--ld-font-weight-medium);
     text-decoration: none;
   }
 
@@ -382,17 +380,17 @@ const dataGridStyles = `
     align-items: center;
     border: var(--ld-border-muted);
     border-radius: var(--borderRadius-full);
-    background: var(--bgColor-muted);
-    color: var(--fgColor-muted);
+    background: var(--ld-bg-panel-muted);
+    color: var(--ld-fg-muted);
     padding: 0 7px;
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-850);
+    font-weight: var(--ld-font-weight-medium);
     text-transform: uppercase;
   }
 
   ld-data-grid .grid-muted,
   ld-data-grid .data-grid-empty {
-    color: var(--fgColor-muted);
+    color: var(--ld-fg-muted);
   }
 
   ld-data-grid .data-grid-empty {
@@ -400,7 +398,7 @@ const dataGridStyles = `
     border-bottom: var(--ld-border-muted);
     padding: 18px 0;
     font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-650);
+    font-weight: var(--ld-font-weight-regular);
   }
 `
 

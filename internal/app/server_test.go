@@ -348,7 +348,7 @@ func assertDatastarInspector(t *testing.T, body string) {
 	}
 }
 
-func TestCatalogRouteRendersDashboardCatalog(t *testing.T) {
+func TestHomeRouteRendersDashboardCatalog(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
@@ -358,14 +358,20 @@ func TestCatalogRouteRendersDashboardCatalog(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
+	if !strings.Contains(body, `Dashboards`) {
+		t.Fatalf("home missing dashboard catalog title:\n%s", body)
+	}
 	if !strings.Contains(body, `Executive Sales Dashboard`) {
-		t.Fatalf("catalog missing dashboard title:\n%s", body)
+		t.Fatalf("home missing dashboard card:\n%s", body)
 	}
 	if !strings.Contains(body, `href="/dashboards/executive-sales"`) {
-		t.Fatalf("catalog missing dashboard link:\n%s", body)
+		t.Fatalf("home missing dashboard link:\n%s", body)
+	}
+	if !strings.Contains(body, `Workspaces`) || !strings.Contains(body, `/workspaces`) {
+		t.Fatalf("home sidebar missing workspace navigation:\n%s", body)
 	}
 	if strings.Contains(body, `<ld-report-sidebar`) {
-		t.Fatalf("catalog should not render report sidebar:\n%s", body)
+		t.Fatalf("dashboard catalog should not render report sidebar:\n%s", body)
 	}
 }
 
@@ -544,7 +550,7 @@ func TestMetricViewUsageRouteRendersUsageTab(t *testing.T) {
 		`aria-current="page"`,
 		`data-signals=`,
 		`metricUsageGraph`,
-		`<ld-metric-usage-graph class="block h-metric-usage min-h-0 rounded-default border border-outline-muted bg-surface" data-attr:graph="$metricUsageGraph"></ld-metric-usage-graph>`,
+		`<ld-metric-usage-graph class="block h-metric-usage min-h-0 rounded-default border border-outline-muted bg-panel" data-attr:graph="$metricUsageGraph"></ld-metric-usage-graph>`,
 		`metricGrid`,
 		`data-attr:grid="$metricGrid"`,
 		`Dashboard`,

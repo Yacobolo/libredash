@@ -13,7 +13,7 @@ const chartStyles = css`
     display: block;
     height: 100%;
     min-height: 0;
-    color: var(--fgColor-default);
+    color: var(--ld-fg-default);
     font-family: var(--fontStack-system);
   }
 
@@ -22,7 +22,7 @@ const chartStyles = css`
     height: 100%;
     min-height: 0;
     grid-template-rows: auto minmax(0, 1fr);
-    background: var(--report-chart-surface, var(--card-bgColor, var(--bgColor-default)));
+    background: var(--ld-chart-surface);
   }
 
   header {
@@ -41,16 +41,16 @@ const chartStyles = css`
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: var(--ld-font-size-body-md);
-    font-weight: var(--ld-font-weight-850);
+    font-weight: var(--ld-font-weight-strong);
     letter-spacing: 0;
     line-height: var(--ld-line-height-compact);
   }
 
   .unit {
     flex: 0 0 auto;
-    color: var(--fgColor-muted);
+    color: var(--ld-fg-muted);
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-900);
+    font-weight: var(--ld-font-weight-strong);
     text-transform: uppercase;
   }
 
@@ -73,10 +73,10 @@ const chartStyles = css`
     place-items: center;
     border: var(--ld-border-transparent);
     border-radius: var(--ld-radius-tight);
-    color: var(--fgColor-muted);
+    color: var(--ld-icon-muted);
     cursor: pointer;
     font-size: var(--ld-font-size-body-lg);
-    font-weight: var(--ld-font-weight-900);
+    font-weight: var(--ld-font-weight-strong);
     line-height: var(--ld-line-height-none);
     list-style: none;
   }
@@ -88,9 +88,9 @@ const chartStyles = css`
   .options summary:hover,
   .options summary:focus-visible,
   .options[open] summary {
-    border-color: var(--borderColor-default);
-    background: var(--bgColor-muted);
-    color: var(--fgColor-default);
+    border-color: var(--ld-line-default);
+    background: var(--ld-bg-panel-muted);
+    color: var(--ld-icon-default);
     outline: 0;
   }
 
@@ -103,7 +103,7 @@ const chartStyles = css`
     width: 176px;
     border: var(--ld-border-default);
     border-radius: var(--ld-radius-default);
-    background: var(--overlay-bgColor, var(--bgColor-default));
+    background: var(--ld-bg-overlay);
     box-shadow: var(--ld-shadow-floating-sm);
     padding: 4px;
   }
@@ -116,12 +116,12 @@ const chartStyles = css`
     border: 0;
     border-radius: var(--ld-radius-tight);
     background: transparent;
-    color: var(--fgColor-default);
+    color: var(--ld-fg-default);
     cursor: pointer;
     padding: 0 8px;
     font: inherit;
     font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-750);
+    font-weight: var(--ld-font-weight-medium);
     text-align: left;
   }
 
@@ -138,7 +138,7 @@ const chartStyles = css`
 
   .menu button:hover,
   .menu button:focus-visible {
-    background: var(--bgColor-muted);
+    background: var(--ld-bg-panel-muted);
     outline: 0;
   }
 
@@ -168,10 +168,10 @@ const chartStyles = css`
     min-height: 0;
     place-items: center;
     margin: 12px;
-    border: 1px dashed var(--borderColor-default);
-    background: var(--report-panel-subtle, var(--bgColor-muted));
-    color: var(--fgColor-muted);
-    font-weight: var(--ld-font-weight-800);
+    border: 1px dashed var(--ld-line-default);
+    background: var(--ld-bg-panel-muted);
+    color: var(--ld-fg-muted);
+    font-weight: var(--ld-font-weight-medium);
   }
 `
 
@@ -372,7 +372,7 @@ class KPICard extends LitElement {
       min-height: 104px;
       border: var(--ld-border-default);
       border-radius: var(--ld-radius-default);
-      background: var(--report-chart-surface, var(--card-bgColor, var(--bgColor-default)));
+      background: var(--ld-chart-surface);
       box-shadow: var(--shadow-resting-small);
       padding: 12px 14px 12px 16px;
       overflow: hidden;
@@ -385,44 +385,44 @@ class KPICard extends LitElement {
       inset-block: 0;
       left: 0;
       width: 5px;
-      background: var(--borderColor-muted);
+      background: var(--ld-line-muted);
     }
 
     .label {
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-900);
+      font-weight: var(--ld-font-weight-strong);
       text-transform: uppercase;
     }
 
     .value {
       margin: 8px 0 4px;
       font-size: var(--ld-font-size-display);
-      font-weight: var(--ld-font-weight-850);
+      font-weight: var(--ld-font-weight-strong);
       line-height: var(--ld-line-height-none);
       letter-spacing: 0;
     }
 
     .note {
-      color: var(--fgColor-muted);
+      color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-body-md);
-      font-weight: var(--ld-font-weight-700);
+      font-weight: var(--ld-font-weight-medium);
     }
 
     .green::before {
-      background: var(--ld-chart-2, var(--data-green-color-emphasis));
+      background: var(--ld-data-2);
     }
     .amber::before {
-      background: var(--ld-accent, var(--bgColor-accent-emphasis));
+      background: var(--ld-accent);
     }
     .coral::before {
-      background: var(--ld-chart-4, var(--data-coral-color-emphasis));
+      background: var(--ld-data-4);
     }
     .ink::before {
-      background: var(--ld-chart-1, var(--data-blue-color-emphasis));
+      background: var(--ld-data-1);
     }
     .neutral::before {
-      background: var(--borderColor-muted);
+      background: var(--ld-line-muted);
     }
 
   `
