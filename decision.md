@@ -321,20 +321,23 @@ A metric view is the business-facing query surface.
 It should usually declare one base table and one grain. It exposes a curated set of dimensions and measures.
 
 ```yaml
-metric_views:
-  orders:
-    title: Orders Metrics
-    base_table: orders
-    timeseries: orders.purchase_timestamp
-    dimensions:
-      - orders.purchase_month
-      - orders.status
-      - customers.state
-      - products.category
-    measures:
-      - orders.order_count
-      - orders.revenue
-      - orders.aov
+id: orders
+title: Orders Metrics
+semantic_model: olist
+base_table: orders
+grain: order_id
+time:
+  default_field: orders.purchase_timestamp
+  allowed_grains: [day, week, month, quarter, year]
+dimensions:
+  - orders.purchase_month
+  - orders.status
+  - customers.state
+  - products.category
+measures:
+  - orders.order_count
+  - orders.revenue
+  - orders.aov
 ```
 
 Metric view rules:
@@ -375,10 +378,13 @@ The visual declares the business question. LibreDash resolves fields, joins, mat
 query:
   metric_view: orders
   dimensions:
-    - customers.state
+    - field: customers.state
+      alias: state
   measures:
-    - orders.revenue
-    - orders.order_count
+    - field: orders.revenue
+      alias: revenue
+    - field: orders.order_count
+      alias: order_count
   filters:
     - field: orders.status
       operator: equals
@@ -740,17 +746,17 @@ Rill's common flow is:
 connectors / sources
   -> SQL models
   -> materialized OLAP table or view
-  -> metrics view over one model/table
+  -> metric view over one model/table
   -> dashboards
 ```
 
-Rill recommends One Big Table modeling for dashboarding and uses metrics views as the semantic layer over one model/table. That is pragmatic and fast, but it makes the authored model less relationship-aware.
+Rill recommends One Big Table modeling for dashboarding and uses metric views as the semantic layer over one model/table. That is pragmatic and fast, but it makes the authored model less relationship-aware.
 
 LibreDash should keep Rill's good ideas:
 
 - BI-as-code.
 - Local DuckDB-first development.
-- Metrics views as the dashboard-facing contract.
+- Metric views as the dashboard-facing contract.
 - Simple query API for dashboards and custom consumers.
 - Materialized serving tables for speed.
 

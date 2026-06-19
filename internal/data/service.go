@@ -421,7 +421,7 @@ func (m *DuckDBMetrics) reportRuntime(dashboardID string) (*semantic.Dashboard, 
 	}
 	view, ok := m.firstMetricView(report)
 	if !ok {
-		return nil, nil, fmt.Errorf("dashboard %q has no metrics views", dashboardID)
+		return nil, nil, fmt.Errorf("dashboard %q has no metric views", dashboardID)
 	}
 	runtime, ok := m.runtimes[view.SemanticModel]
 	if !ok {

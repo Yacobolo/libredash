@@ -39,7 +39,7 @@ func (fakeMetrics) Catalog() dashboard.Catalog {
 			{ID: "test", Title: "Test Model", Description: "Fixture model"},
 		},
 		MetricViews: []dashboard.CatalogMetricView{
-			{ID: "orders", Title: "Orders Metrics", Description: "Fixture metrics view", SemanticModel: "test", ModelTitle: "Test Model"},
+			{ID: "orders", Title: "Orders Metrics", Description: "Fixture metric view", SemanticModel: "test", ModelTitle: "Test Model"},
 		},
 		Dashboards: []dashboard.CatalogDashboard{
 			{ID: "executive-sales", Title: "Executive Sales Dashboard", Description: "Fixture report", MetricViews: []string{"orders"}, MetricViewTitles: []string{"Orders Metrics"}, Tags: []string{"sales"}, PageCount: 2},
@@ -52,7 +52,7 @@ func (fakeMetrics) MetricViews() []dashboard.MetricViewSummary {
 		{
 			ID:             "orders",
 			Title:          "Orders Metrics",
-			Description:    "Fixture metrics view",
+			Description:    "Fixture metric view",
 			SemanticModel:  "test",
 			ModelTitle:     "Test Model",
 			BaseTable:      "orders",
@@ -72,7 +72,7 @@ func (fakeMetrics) MetricView(id string) (dashboard.MetricViewDetail, bool) {
 		MetricViewSummary: dashboard.MetricViewSummary{
 			ID:             "orders",
 			Title:          "Orders Metrics",
-			Description:    "Fixture metrics view",
+			Description:    "Fixture metric view",
 			SemanticModel:  "test",
 			ModelTitle:     "Test Model",
 			BaseTable:      "orders",

@@ -1,7 +1,7 @@
 id: executive-sales
 title: Executive Sales Dashboard
 description: Sales, order, category, and delivery overview.
-metrics_views:
+metric_views:
 - orders
 filters:
   purchase_date:

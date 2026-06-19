@@ -9,7 +9,7 @@ semantic_models:
     path: olist/model.yaml
     description: Brazilian ecommerce model backed by local Olist CSVs.
 
-metrics_views:
+metric_views:
   - id: orders
     title: Orders Metrics
     path: olist/orders.metrics.yaml

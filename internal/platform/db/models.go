@@ -53,25 +53,6 @@ type AuditEvent struct {
 	CreatedAt    string         `json:"created_at"`
 }
 
-type CacheJob struct {
-	ID           string         `json:"id"`
-	WorkspaceID  string         `json:"workspace_id"`
-	DeploymentID sql.NullString `json:"deployment_id"`
-	ModelID      string         `json:"model_id"`
-	Status       string         `json:"status"`
-	CreatedAt    string         `json:"created_at"`
-	UpdatedAt    string         `json:"updated_at"`
-}
-
-type CacheJobRun struct {
-	ID         string         `json:"id"`
-	JobID      string         `json:"job_id"`
-	Status     string         `json:"status"`
-	StartedAt  string         `json:"started_at"`
-	FinishedAt sql.NullString `json:"finished_at"`
-	Error      string         `json:"error"`
-}
-
 type Deployment struct {
 	ID           string         `json:"id"`
 	WorkspaceID  string         `json:"workspace_id"`
@@ -114,6 +95,25 @@ type Group struct {
 	ExternalID  string `json:"external_id"`
 	Name        string `json:"name"`
 	CreatedAt   string `json:"created_at"`
+}
+
+type MaterializationJob struct {
+	ID           string         `json:"id"`
+	WorkspaceID  string         `json:"workspace_id"`
+	DeploymentID sql.NullString `json:"deployment_id"`
+	ModelID      string         `json:"model_id"`
+	Status       string         `json:"status"`
+	CreatedAt    string         `json:"created_at"`
+	UpdatedAt    string         `json:"updated_at"`
+}
+
+type MaterializationJobRun struct {
+	ID         string         `json:"id"`
+	JobID      string         `json:"job_id"`
+	Status     string         `json:"status"`
+	StartedAt  string         `json:"started_at"`
+	FinishedAt sql.NullString `json:"finished_at"`
+	Error      string         `json:"error"`
 }
 
 type OauthState struct {

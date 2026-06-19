@@ -1,6 +1,7 @@
 package semantic
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 type Catalog struct {
 	Workspace      CatalogWorkspace    `yaml:"workspace"`
 	SemanticModels []CatalogModel      `yaml:"semantic_models"`
-	MetricViews    []CatalogMetricView `yaml:"metrics_views"`
+	MetricViews    []CatalogMetricView `yaml:"metric_views"`
 	Dashboards     []CatalogDashboard  `yaml:"dashboards"`
 }
 
@@ -53,12 +54,17 @@ type Workspace struct {
 }
 
 func LoadWorkspace(path string) (*Workspace, error) {
-	bytes, err := os.ReadFile(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectLegacyCatalogContract(content); err != nil {
+		return nil, err
+	}
 	var catalog Catalog
-	if err := yaml.Unmarshal(bytes, &catalog); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(content))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&catalog); err != nil {
 		return nil, err
 	}
 	baseDir := filepath.Dir(path)
@@ -89,13 +95,13 @@ func LoadWorkspace(path string) (*Workspace, error) {
 		model := workspace.Models[entry.SemanticModel]
 		view, err := LoadMetricView(filepath.Join(baseDir, entry.Path), model)
 		if err != nil {
-			return nil, fmt.Errorf("loading metrics view %q: %w", entry.ID, err)
+			return nil, fmt.Errorf("loading metric view %q: %w", entry.ID, err)
 		}
 		if view.ID != entry.ID {
-			return nil, fmt.Errorf("catalog metrics view %q path loads metrics view %q", entry.ID, view.ID)
+			return nil, fmt.Errorf("catalog metric view %q path loads metric view %q", entry.ID, view.ID)
 		}
 		if view.SemanticModel != entry.SemanticModel {
-			return nil, fmt.Errorf("catalog metrics view %q references model %q but file references %q", entry.ID, entry.SemanticModel, view.SemanticModel)
+			return nil, fmt.Errorf("catalog metric view %q references model %q but file references %q", entry.ID, entry.SemanticModel, view.SemanticModel)
 		}
 		workspace.MetricViews[entry.ID] = view
 	}
@@ -114,12 +120,27 @@ func LoadWorkspace(path string) (*Workspace, error) {
 	return workspace, nil
 }
 
+func rejectLegacyCatalogContract(content []byte) error {
+	var node yaml.Node
+	if err := yaml.Unmarshal(content, &node); err != nil {
+		return err
+	}
+	root := mappingNode(&node)
+	if root == nil {
+		return nil
+	}
+	if mappingValue(root, "metrics_views") != nil {
+		return fmt.Errorf("catalog uses legacy metrics_views; use metric_views")
+	}
+	return nil
+}
+
 func (c Catalog) Validate(baseDir string) error {
 	if len(c.SemanticModels) == 0 {
 		return fmt.Errorf("catalog requires semantic_models")
 	}
 	if len(c.MetricViews) == 0 {
-		return fmt.Errorf("catalog requires metrics_views")
+		return fmt.Errorf("catalog requires metric_views")
 	}
 	if len(c.Dashboards) == 0 {
 		return fmt.Errorf("catalog requires dashboards")
@@ -141,17 +162,17 @@ func (c Catalog) Validate(baseDir string) error {
 	metricViews := map[string]struct{}{}
 	for index, view := range c.MetricViews {
 		if view.ID == "" || view.Title == "" || view.Path == "" || view.SemanticModel == "" {
-			return fmt.Errorf("catalog metrics view %d requires id, title, path, and semantic_model", index)
+			return fmt.Errorf("catalog metric view %d requires id, title, path, and semantic_model", index)
 		}
 		if _, exists := metricViews[view.ID]; exists {
-			return fmt.Errorf("duplicate metrics view id %q", view.ID)
+			return fmt.Errorf("duplicate metric view id %q", view.ID)
 		}
 		metricViews[view.ID] = struct{}{}
 		if _, ok := models[view.SemanticModel]; !ok {
-			return fmt.Errorf("metrics view %q references unknown semantic model %q", view.ID, view.SemanticModel)
+			return fmt.Errorf("metric view %q references unknown semantic model %q", view.ID, view.SemanticModel)
 		}
 		if _, err := os.Stat(filepath.Join(baseDir, view.Path)); err != nil {
-			return fmt.Errorf("metrics view %q path %q: %w", view.ID, view.Path, err)
+			return fmt.Errorf("metric view %q path %q: %w", view.ID, view.Path, err)
 		}
 	}
 

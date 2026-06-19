@@ -154,38 +154,38 @@ func (m *Model) resolveSource(source Source) (Source, error) {
 
 func (v *MetricView) Validate(model *Model) error {
 	if v.ID == "" || v.Title == "" || v.SemanticModel == "" || v.BaseTable == "" {
-		return fmt.Errorf("metrics view requires id, title, semantic_model, and base_table")
+		return fmt.Errorf("metric view requires id, title, semantic_model, and base_table")
 	}
 	if model == nil {
-		return fmt.Errorf("metrics view %q requires semantic model %q", v.ID, v.SemanticModel)
+		return fmt.Errorf("metric view %q requires semantic model %q", v.ID, v.SemanticModel)
 	}
 	if v.SemanticModel != model.Name {
-		return fmt.Errorf("metrics view %q semantic_model %q does not match model %q", v.ID, v.SemanticModel, model.Name)
+		return fmt.Errorf("metric view %q semantic_model %q does not match model %q", v.ID, v.SemanticModel, model.Name)
 	}
 	base, ok := model.Tables[v.BaseTable]
 	if !ok {
-		return fmt.Errorf("metrics view %q references unknown base table %q", v.ID, v.BaseTable)
+		return fmt.Errorf("metric view %q references unknown base table %q", v.ID, v.BaseTable)
 	}
 	if v.Grain == "" {
 		v.Grain = base.Grain
 	}
 	if v.Grain == "" {
-		return fmt.Errorf("metrics view %q requires grain", v.ID)
+		return fmt.Errorf("metric view %q requires grain", v.ID)
 	}
 	if v.Time.DefaultField == "" {
-		return fmt.Errorf("metrics view %q requires time.default_field", v.ID)
+		return fmt.Errorf("metric view %q requires time.default_field", v.ID)
 	}
 	if len(v.DimensionRefs) == 0 {
-		return fmt.Errorf("metrics view %q requires dimensions", v.ID)
+		return fmt.Errorf("metric view %q requires dimensions", v.ID)
 	}
 	if len(v.MeasureRefs) == 0 {
-		return fmt.Errorf("metrics view %q requires measures", v.ID)
+		return fmt.Errorf("metric view %q requires measures", v.ID)
 	}
 	v.Dimensions = map[string]MetricDimension{}
 	for _, ref := range v.DimensionRefs {
 		dimension, err := model.ResolveDimension(ref)
 		if err != nil {
-			return fmt.Errorf("metrics view %q dimension %q: %w", v.ID, ref, err)
+			return fmt.Errorf("metric view %q dimension %q: %w", v.ID, ref, err)
 		}
 		v.Dimensions[ref] = dimension
 	}
@@ -193,15 +193,15 @@ func (v *MetricView) Validate(model *Model) error {
 	for _, ref := range v.MeasureRefs {
 		measure, err := model.ResolveMeasure(ref)
 		if err != nil {
-			return fmt.Errorf("metrics view %q measure %q: %w", v.ID, ref, err)
+			return fmt.Errorf("metric view %q measure %q: %w", v.ID, ref, err)
 		}
 		if measure.Table != v.BaseTable {
-			return fmt.Errorf("metrics view %q measure %q is owned by %q, want base table %q", v.ID, ref, measure.Table, v.BaseTable)
+			return fmt.Errorf("metric view %q measure %q is owned by %q, want base table %q", v.ID, ref, measure.Table, v.BaseTable)
 		}
 		v.Measures[ref] = measure
 	}
 	if _, ok := v.Dimensions[v.Time.DefaultField]; !ok {
-		return fmt.Errorf("metrics view %q time.default_field %q is not an exposed dimension", v.ID, v.Time.DefaultField)
+		return fmt.Errorf("metric view %q time.default_field %q is not an exposed dimension", v.ID, v.Time.DefaultField)
 	}
 	return nil
 }

@@ -7,6 +7,21 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func rejectLegacyDashboardCollectionKeys(bytes []byte) error {
+	var node yaml.Node
+	if err := yaml.Unmarshal(bytes, &node); err != nil {
+		return err
+	}
+	root := mappingNode(&node)
+	if root == nil {
+		return nil
+	}
+	if mappingValue(root, "metrics_views") != nil {
+		return fmt.Errorf("dashboard uses legacy metrics_views; use metric_views")
+	}
+	return nil
+}
+
 func rejectLegacyDashboardQueryContract(bytes []byte) error {
 	var node yaml.Node
 	if err := yaml.Unmarshal(bytes, &node); err != nil {

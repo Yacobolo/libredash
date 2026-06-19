@@ -1,28 +1,29 @@
-# Finish Semantic Planner Hardening And Cleanup
+# Finish Technical Debt Cleanup
 
 ## Summary
 
-Close the remaining gaps from the semantic model to metric view migration. The core path is already working; this pass hardens planner correctness, finishes vocabulary cleanup, trims the largest files, and verifies the Olist dashboard end to end.
+Clean up the remaining debt from the semantic planner migration with one focused pass: make public vocabulary consistent, finish generated DB naming, and split the largest semantic/data files enough that future changes have clear homes.
 
 ## Key Changes
 
-- Harden `internal/query` relationship resolution with deterministic BFS over active safe paths.
-- Require selected output aliases and sort fields to be safe SQL identifiers, and require sorts to reference selected aliases.
-- Rename public graph/UI kinds and labels from legacy cache/dataset/metrics-view wording to model table, metric view, and materialization wording.
-- Rename refresh command and permission from cache refresh to materialization refresh.
-- Split remaining large semantic dashboard validation and visual adapter code into focused files.
-- Add a favicon/static response so browser verification is clean.
+- Rename authored YAML collection keys from `metrics_views` to `metric_views` in catalog and dashboard contracts.
+- Reject legacy `metrics_views` and `metrics_view` authored keys explicitly; do not add compatibility aliases.
+- Normalize validation and product wording to `metric view`, `model table`, and `materialization`.
+- Regenerate sqlc platform DB code so materialization job tables produce `MaterializationJob` types.
+- Split semantic dashboard contracts/validation/filter helpers and large semantic/data tests into focused files.
+- Keep runtime semantics, planner behavior, dashboard visuals, and frontend payloads unchanged.
 
 ## Test Plan
 
-- Extend planner tests for multi-hop joins, ambiguity, fanout, many-to-many, inactive paths, unexposed fields, non-base measures, aliases, and sorts.
-- Extend semantic/app tests for renamed graph kinds and materialization command routing.
+- Add semantic contract tests for `metric_views` acceptance and `metrics_views` rejection.
+- Keep legacy raw SQL, scalar field, top-level `metrics_view`, KPI, and table shorthand rejection tests.
+- Verify generated DB model names and materialization refresh route/permission behavior.
 - Run `task test`.
-- Run `task dev` and verify the Olist dashboard page, SSE updates, rendered dashboard, filters, cross-filtering, and browser console.
+- Run `task dev`, verify the Olist dashboard page and `/updates` stream, then stop the dev server.
 
 ## Assumptions
 
 - No backwards compatibility is required.
-- Dashboard YAML continues to query metric views only.
-- Metric view measures remain owned by the base table.
+- `metric_views` is the only authored collection key after this cleanup.
+- Focused file splitting is enough; no arbitrary line-count target is required.
 - OBTs, rollups, and query-result caches remain out of scope.
