@@ -193,6 +193,33 @@ func TestWorkspaceAssetRowsUseDetailLinksForModelAndMetricAssets(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAssetRowsRenderTokenBackedIconColors(t *testing.T) {
+	workspace, catalog, assets, _ := testWorkspaceAssetFixtures()
+	visibleAssets := []api.AssetResponse{assets[0], assets[5], assets[8]}
+
+	var out strings.Builder
+	err := WorkspacePage(catalog, workspace, visibleAssets, "", "", "Owner").Render(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := html.UnescapeString(out.String())
+
+	for _, want := range []string{
+		`<th class="px-3 py-2 text-caption font-medium uppercase text-fg-muted" scope="col">Name</th>`,
+		`<th class="px-3 py-2 text-caption font-medium uppercase text-fg-muted w-40" scope="col">Type</th>`,
+		`<th class="px-3 py-2 text-caption font-medium uppercase text-fg-muted w-56 max-md:hidden" scope="col">Key</th>`,
+		`<th class="px-3 py-2 text-caption font-medium uppercase text-fg-muted w-48 max-lg:hidden" scope="col">Parent</th>`,
+		"background-color: var(--ld-asset-semantic-model-bg); border-color: var(--ld-asset-semantic-model-border); color: var(--ld-asset-semantic-model-accent)",
+		"background-color: var(--ld-asset-metric-view-bg); border-color: var(--ld-asset-metric-view-border); color: var(--ld-asset-metric-view-accent)",
+		"background-color: var(--ld-asset-dashboard-bg); border-color: var(--ld-asset-dashboard-border); color: var(--ld-asset-dashboard-accent)",
+		`href="/workspaces/libredash/assets/model/details">Olist Commerce</a>`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("workspace asset rows did not render token-backed icon style %q:\n%s", want, rendered)
+		}
+	}
+}
+
 func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []api.AssetResponse, []api.AssetEdgeResponse) {
 	workspace := api.WorkspaceResponse{ID: "libredash", Title: "LibreDash Workspace", Description: "Local BI workspace."}
 	catalog := dashboard.Catalog{Workspace: dashboard.CatalogWorkspace{ID: workspace.ID, Title: workspace.Title, Description: workspace.Description}}

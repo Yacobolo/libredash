@@ -193,7 +193,6 @@
   --grid-template-columns-login-button: 1.375rem minmax(0, 1fr);
   --grid-template-columns-metric-workspace: minmax(0, 1fr) 18rem;
   --grid-template-columns-metric-workspace-collapsed: minmax(0, 1fr) 3rem;
-  --grid-template-columns-asset-row: auto minmax(0, 1fr) minmax(8rem, 16rem) auto;
   --grid-template-columns-role-row: minmax(0, 1fr) auto auto;
   --grid-template-columns-workspace-detail: minmax(0, 1.2fr) minmax(18rem, 0.8fr);
   --grid-template-columns-workspace-header: minmax(0, 1fr) auto;
