@@ -656,8 +656,8 @@ relogios_presentes,watches_gifts
 	if got := views[0].ID; got != "orders" {
 		t.Fatalf("metric view id = %q, want orders", got)
 	}
-	if got := views[0].DimensionCount; got != 7 {
-		t.Fatalf("metric view dimension count = %d, want 7", got)
+	if got := views[0].DimensionCount; got != 9 {
+		t.Fatalf("metric view dimension count = %d, want 9", got)
 	}
 	if got := views[0].MeasureCount; got != 13 {
 		t.Fatalf("metric view measure count = %d, want 13", got)
@@ -757,7 +757,7 @@ relogios_presentes,watches_gifts
 
 	selectedFilters := dashboard.Filters{
 		VisualSelections: []dashboard.VisualSelection{
-			{VisualID: "orders", Field: "status", Operator: "in", Values: []string{"delivered"}},
+			{VisualID: "orders", Field: "orders.status", Operator: "in", Values: []string{"delivered"}},
 		},
 	}
 	selectedPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", selectedFilters)
@@ -983,7 +983,7 @@ relogios_presentes,watches_gifts
 
 	filteredTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{
 		VisualSelections: []dashboard.VisualSelection{
-			{VisualID: "orders", Field: "status", Operator: "in", Values: []string{"delivered"}},
+			{VisualID: "orders", Field: "orders.status", Operator: "in", Values: []string{"delivered"}},
 		},
 	}, dashboard.TableRequest{Table: "orders", Block: "all", Count: 10, RequestSeq: 8})
 	if err != nil {

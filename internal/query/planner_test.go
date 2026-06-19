@@ -76,6 +76,65 @@ func TestPlannerFilters(t *testing.T) {
 	}
 }
 
+func TestPlannerRowQueryWithRelatedDimension(t *testing.T) {
+	planner := NewPlanner(testModel(), testViews())
+	plan, err := planner.PlanRows(RowRequest{
+		MetricView: "orders",
+		Dimensions: []Field{
+			{Field: "orders.order_id", Alias: "order_id"},
+			{Field: "customers.state", Alias: "state"},
+		},
+		Measures: []Field{{Field: "orders.revenue", Alias: "revenue"}},
+		Sort:     []Sort{{Field: "order_id", Direction: "asc"}},
+		Limit:    25,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan.SQL, "LEFT JOIN model.customers t1 ON t0.customer_id = t1.customer_id") {
+		t.Fatalf("row plan SQL missing customer join:\n%s", plan.SQL)
+	}
+	if !strings.Contains(plan.SQL, "t0.order_id AS order_id") || !strings.Contains(plan.SQL, "t1.customer_state AS state") {
+		t.Fatalf("row plan SQL missing selected dimensions:\n%s", plan.SQL)
+	}
+	if !strings.Contains(plan.SQL, "t0.revenue AS revenue") {
+		t.Fatalf("row plan SQL missing raw measure:\n%s", plan.SQL)
+	}
+}
+
+func TestPlannerRawValues(t *testing.T) {
+	planner := NewPlanner(testModel(), testViews())
+	plan, err := planner.PlanRawValues(RawValueRequest{
+		MetricView: "orders",
+		Dimensions: []Field{{Field: "customers.state", Alias: "label"}},
+		Measure:    Field{Field: "orders.revenue", Alias: "value"},
+		Filters:    []Filter{{Field: "customers.state", Operator: "equals", Values: []any{"SP"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan.SQL, "t1.customer_state AS label") || !strings.Contains(plan.SQL, "CAST(t0.revenue AS DOUBLE) AS value") {
+		t.Fatalf("raw value plan SQL missing fields:\n%s", plan.SQL)
+	}
+	if !strings.Contains(plan.SQL, "t1.customer_state = ?") {
+		t.Fatalf("raw value plan SQL missing filter:\n%s", plan.SQL)
+	}
+}
+
+func TestPlannerCountWithRelatedFilter(t *testing.T) {
+	planner := NewPlanner(testModel(), testViews())
+	plan, err := planner.PlanCount(CountRequest{
+		MetricView: "orders",
+		Filters:    []Filter{{Field: "customers.state", Operator: "in", Values: []any{"SP"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan.SQL, "COUNT(*) AS value") || !strings.Contains(plan.SQL, "LEFT JOIN model.customers") {
+		t.Fatalf("count plan SQL missing count or join:\n%s", plan.SQL)
+	}
+}
+
 func TestPlannerRejectsUnsafeFanout(t *testing.T) {
 	model := testModel()
 	model.Relationships = append(model.Relationships, semantic.Relationship{
@@ -136,6 +195,7 @@ func testViews() map[string]*semantic.MetricView {
 		"orders": {
 			ID: "orders", SemanticModel: "commerce", BaseTable: "orders", Grain: "order_id",
 			Dimensions: map[string]semantic.MetricDimension{
+				"orders.order_id":           {Field: "orders.order_id", Table: "orders", Name: "order_id", Expr: "order_id"},
 				"orders.purchase_timestamp": {Field: "orders.purchase_timestamp", Table: "orders", Name: "purchase_timestamp", Expr: "purchase_timestamp"},
 				"customers.state":           {Field: "customers.state", Table: "customers", Name: "state", Expr: "customer_state"},
 			},

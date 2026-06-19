@@ -9,6 +9,7 @@ import (
 )
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+var aggregateWrapperPattern = regexp.MustCompile(`(?is)^\s*(?:AVG|SUM|MIN|MAX|MEDIAN|QUANTILE_CONT)\s*\((.+?)(?:,\s*[-0-9.]+)?\)\s*$`)
 
 func quoteIdent(value string) (string, error) {
 	if !identifierPattern.MatchString(value) {
@@ -75,7 +76,29 @@ func dimensionExpr(dimension semantic.MetricDimension, aliases map[string]tableA
 	return applyAliases(dimension.SQLExpression(), aliases, alias)
 }
 
+func dimensionWhereExpr(dimension semantic.MetricDimension, aliases map[string]tableAlias) string {
+	if strings.TrimSpace(dimension.Where) == "" {
+		return ""
+	}
+	alias := aliases[dimension.Table].Alias
+	return applyAliases(dimension.Where, aliases, alias)
+}
+
 func measureExpr(measure semantic.MetricMeasure, aliases map[string]tableAlias) string {
 	alias := aliases[measure.Table].Alias
 	return applyAliases(measure.Expression, aliases, alias)
+}
+
+func rawMeasureExpr(measure semantic.MetricMeasure, aliases map[string]tableAlias) (string, error) {
+	expr := strings.TrimSpace(measure.Expression)
+	if expr == "" {
+		return "", fmt.Errorf("measure %q is missing expression", measure.Label)
+	}
+	if matches := aggregateWrapperPattern.FindStringSubmatch(expr); len(matches) == 2 {
+		expr = strings.TrimSpace(matches[1])
+	} else if strings.Contains(expr, "(") {
+		return "", fmt.Errorf("measure %q cannot be used as a raw value expression", measure.Label)
+	}
+	alias := aliases[measure.Table].Alias
+	return applyAliases(expr, aliases, alias), nil
 }

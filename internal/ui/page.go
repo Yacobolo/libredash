@@ -856,7 +856,7 @@ func sidebarGroups(catalog dashboard.Catalog) []map[string]any {
 			"label": "Data",
 			"items": []map[string]any{
 				{"id": "data:sources", "label": "Sources", "href": "/", "icon": "data", "meta": "Coming soon", "disabled": true},
-				{"id": "data:cache", "label": "DuckDB Cache", "href": "/", "icon": "cache", "meta": "Import mode", "disabled": true},
+				{"id": "data:materializations", "label": "Materializations", "href": "/", "icon": "cache", "meta": "DuckDB import", "disabled": true},
 				{"id": "settings", "label": "Settings", "href": "/", "icon": "settings", "meta": "Coming soon", "disabled": true},
 			},
 		},
@@ -926,8 +926,8 @@ func reportActions(modelID, dashboardID string) g.Node {
 		h.Button(
 			h.Class(actionButtonClass),
 			h.Type("button"),
-			h.Title("Re-import DuckDB cache"),
-			h.Aria("label", "Re-import DuckDB cache"),
+			h.Title("Refresh model materializations"),
+			h.Aria("label", "Refresh model materializations"),
 			g.Attr("data-attr:disabled", "$status.loading"),
 			g.Attr("data-on:click", postAction("/commands/refresh-cache?model="+modelID+"&dashboard="+dashboardID)),
 			lucide.RefreshCw(buttonIconAttrs()...),

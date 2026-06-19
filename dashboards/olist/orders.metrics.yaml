@@ -10,11 +10,13 @@ time:
   allowed_grains: [day, week, month, quarter, year]
 
 dimensions:
+  - orders.order_id
+  - orders.customer_id
   - orders.purchase_month
   - orders.purchase_timestamp
   - orders.purchase_date
   - orders.status
-  - orders.state
+  - customers.state
   - orders.category
   - orders.delivery_bucket
 

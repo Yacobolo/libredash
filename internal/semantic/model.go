@@ -4,118 +4,12 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"regexp"
 	"sort"
 	"strings"
 
 	sourcereg "github.com/Yacobolo/libredash/internal/source"
 	"gopkg.in/yaml.v3"
 )
-
-var (
-	semanticIdentifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	envReferencePattern       = regexp.MustCompile(`^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$`)
-)
-
-type Model struct {
-	Name              string                `yaml:"name"`
-	Title             string                `yaml:"title"`
-	Description       string                `yaml:"description"`
-	DefaultConnection string                `yaml:"default_connection"`
-	Connections       map[string]Connection `yaml:"connections"`
-	Sources           map[string]Source     `yaml:"sources"`
-	Tables            map[string]ModelTable `yaml:"tables"`
-	Relationships     []Relationship        `yaml:"relationships"`
-}
-
-type Connection struct {
-	Kind     string             `yaml:"kind"`
-	Path     string             `yaml:"path"`
-	Root     string             `yaml:"root"`
-	Scope    string             `yaml:"scope"`
-	Auth     ConnectionAuth     `yaml:"auth"`
-	Options  map[string]any     `yaml:"options"`
-	Defaults ConnectionDefaults `yaml:"defaults"`
-}
-
-type ConnectionDefaults struct {
-	Options map[string]any `yaml:"options"`
-}
-
-type ConnectionAuth map[string]any
-
-type Source struct {
-	Format     string         `yaml:"format"`
-	Path       string         `yaml:"path"`
-	Connection string         `yaml:"connection"`
-	Object     string         `yaml:"object"`
-	Options    map[string]any `yaml:"options"`
-}
-
-type ModelTable struct {
-	Kind        string                     `yaml:"kind"`
-	Source      string                     `yaml:"source"`
-	Transform   ModelTransform             `yaml:"transform"`
-	PrimaryKey  string                     `yaml:"primary_key"`
-	Grain       string                     `yaml:"grain"`
-	Dimensions  map[string]MetricDimension `yaml:"dimensions"`
-	Measures    map[string]MetricMeasure   `yaml:"measures"`
-	Description string                     `yaml:"description"`
-}
-
-type ModelTransform struct {
-	SQL string `yaml:"sql"`
-}
-
-type MetricView struct {
-	ID            string                     `yaml:"id"`
-	Title         string                     `yaml:"title"`
-	Description   string                     `yaml:"description"`
-	SemanticModel string                     `yaml:"semantic_model"`
-	BaseTable     string                     `yaml:"base_table"`
-	Grain         string                     `yaml:"grain"`
-	Time          ViewTime                   `yaml:"time"`
-	DimensionRefs []string                   `yaml:"dimensions"`
-	MeasureRefs   []string                   `yaml:"measures"`
-	Dimensions    map[string]MetricDimension `yaml:"-"`
-	Measures      map[string]MetricMeasure   `yaml:"-"`
-}
-
-type ViewTime struct {
-	DefaultField  string   `yaml:"default_field"`
-	AllowedGrains []string `yaml:"allowed_grains"`
-}
-
-type MetricDimension struct {
-	Field      string `yaml:"-"`
-	Table      string `yaml:"-"`
-	Name       string `yaml:"-"`
-	Label      string `yaml:"label"`
-	Expr       string `yaml:"expr"`
-	Expression string `yaml:"expression"`
-	Where      string `yaml:"where"`
-	OrderExpr  string `yaml:"order_expr"`
-	Type       string `yaml:"type"`
-}
-
-type MetricMeasure struct {
-	Field       string `yaml:"-"`
-	Table       string `yaml:"-"`
-	Name        string `yaml:"-"`
-	Label       string `yaml:"label"`
-	Description string `yaml:"description"`
-	Expression  string `yaml:"expression"`
-	Unit        string `yaml:"unit"`
-	Format      string `yaml:"format"`
-}
-
-type Relationship struct {
-	ID          string `yaml:"id"`
-	From        string `yaml:"from"`
-	To          string `yaml:"to"`
-	Cardinality string `yaml:"cardinality"`
-	Active      bool   `yaml:"active"`
-}
 
 func Load(path string) (*Model, error) {
 	content, err := os.ReadFile(path)
@@ -258,21 +152,6 @@ func (m *Model) resolveSource(source Source) (Source, error) {
 	}
 }
 
-func LoadMetricView(path string, model *Model) (*MetricView, error) {
-	bytes, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var view MetricView
-	if err := yaml.Unmarshal(bytes, &view); err != nil {
-		return nil, err
-	}
-	if err := view.Validate(model); err != nil {
-		return nil, err
-	}
-	return &view, nil
-}
-
 func (v *MetricView) Validate(model *Model) error {
 	if v.ID == "" || v.Title == "" || v.SemanticModel == "" || v.BaseTable == "" {
 		return fmt.Errorf("metrics view requires id, title, semantic_model, and base_table")
@@ -325,117 +204,6 @@ func (v *MetricView) Validate(model *Model) error {
 		return fmt.Errorf("metrics view %q time.default_field %q is not an exposed dimension", v.ID, v.Time.DefaultField)
 	}
 	return nil
-}
-
-func (m *Model) ResolveDimension(ref string) (MetricDimension, error) {
-	tableName, fieldName, err := splitSemanticField(ref)
-	if err != nil {
-		return MetricDimension{}, err
-	}
-	table, ok := m.Tables[tableName]
-	if !ok {
-		return MetricDimension{}, fmt.Errorf("unknown table %q", tableName)
-	}
-	dimension, ok := table.Dimensions[fieldName]
-	if !ok {
-		return MetricDimension{}, fmt.Errorf("unknown dimension %q", fieldName)
-	}
-	dimension.Field = ref
-	dimension.Table = tableName
-	dimension.Name = fieldName
-	return dimension, nil
-}
-
-func (m *Model) ResolveMeasure(ref string) (MetricMeasure, error) {
-	tableName, fieldName, err := splitSemanticField(ref)
-	if err != nil {
-		return MetricMeasure{}, err
-	}
-	table, ok := m.Tables[tableName]
-	if !ok {
-		return MetricMeasure{}, fmt.Errorf("unknown table %q", tableName)
-	}
-	measure, ok := table.Measures[fieldName]
-	if !ok {
-		return MetricMeasure{}, fmt.Errorf("unknown measure %q", fieldName)
-	}
-	measure.Field = ref
-	measure.Table = tableName
-	measure.Name = fieldName
-	return measure, nil
-}
-
-func (m *Model) ResolveField(ref string) (MetricDimension, MetricMeasure, string, error) {
-	if dimension, err := m.ResolveDimension(ref); err == nil {
-		return dimension, MetricMeasure{}, "dimension", nil
-	}
-	if measure, err := m.ResolveMeasure(ref); err == nil {
-		return MetricDimension{}, measure, "measure", nil
-	}
-	return MetricDimension{}, MetricMeasure{}, "", fmt.Errorf("unknown field %q", ref)
-}
-
-func (v *MetricView) ResolveDimensionRef(ref string) (string, MetricDimension, error) {
-	if dimension, ok := v.Dimensions[ref]; ok {
-		return ref, dimension, nil
-	}
-	field, err := resolveShortField(ref, v.Dimensions)
-	if err != nil {
-		return "", MetricDimension{}, err
-	}
-	return field, v.Dimensions[field], nil
-}
-
-func (v *MetricView) ResolveMeasureRef(ref string) (string, MetricMeasure, error) {
-	if measure, ok := v.Measures[ref]; ok {
-		return ref, measure, nil
-	}
-	field, err := resolveShortField(ref, v.Measures)
-	if err != nil {
-		return "", MetricMeasure{}, err
-	}
-	return field, v.Measures[field], nil
-}
-
-func resolveShortField[T any](ref string, fields map[string]T) (string, error) {
-	if strings.Contains(ref, ".") {
-		return "", fmt.Errorf("field %q is not exposed", ref)
-	}
-	match := ""
-	suffix := "." + ref
-	for field := range fields {
-		if strings.HasSuffix(field, suffix) {
-			if match != "" {
-				return "", fmt.Errorf("field %q is ambiguous; use a qualified field", ref)
-			}
-			match = field
-		}
-	}
-	if match == "" {
-		return "", fmt.Errorf("field %q is not exposed", ref)
-	}
-	return match, nil
-}
-
-func splitSemanticField(ref string) (string, string, error) {
-	parts := strings.Split(ref, ".")
-	if len(parts) != 2 {
-		return "", "", fmt.Errorf("field %q must be qualified as table.field", ref)
-	}
-	if err := validateSemanticIdentifier(parts[0]); err != nil {
-		return "", "", fmt.Errorf("table %q is invalid: %w", parts[0], err)
-	}
-	if err := validateSemanticIdentifier(parts[1]); err != nil {
-		return "", "", fmt.Errorf("field %q is invalid: %w", parts[1], err)
-	}
-	return parts[0], parts[1], nil
-}
-
-func (d MetricDimension) SQLExpression() string {
-	if strings.TrimSpace(d.Expr) != "" {
-		return d.Expr
-	}
-	return d.Expression
 }
 
 func (s Source) Validate(name string, connections map[string]Connection) error {

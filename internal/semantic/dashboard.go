@@ -1,6 +1,7 @@
 package semantic
 
 import (
+	"bytes"
 	"fmt"
 	"net/url"
 	"os"
@@ -25,8 +26,8 @@ type Dashboard struct {
 type FilterDefinition struct {
 	Type             string         `yaml:"type" json:"type"`
 	Label            string         `yaml:"label" json:"label"`
-	MetricView       string         `yaml:"metrics_view" json:"metricsView"`
-	Dimension        string         `yaml:"dimension" json:"dimension"`
+	MetricView       string         `yaml:"metric_view" json:"metricsView"`
+	Dimension        string         `yaml:"field" json:"dimension"`
 	Default          FilterDefault  `yaml:"default" json:"default"`
 	Custom           bool           `yaml:"custom" json:"custom,omitempty"`
 	Presets          []FilterPreset `yaml:"presets" json:"presets,omitempty"`
@@ -79,7 +80,7 @@ type Visual struct {
 	Shape           string         `yaml:"shape"`
 	Renderer        string         `yaml:"renderer"`
 	Type            string         `yaml:"type"`
-	MetricView      string         `yaml:"metrics_view"`
+	MetricView      string         `yaml:"-"`
 	Query           VisualQuery    `yaml:"query"`
 	Options         map[string]any `yaml:"options"`
 	RendererOptions map[string]any `yaml:"renderer_options"`
@@ -108,16 +109,17 @@ type QueryTime struct {
 }
 
 func (f *FieldRef) UnmarshalYAML(value *yaml.Node) error {
-	switch value.Kind {
-	case yaml.ScalarNode:
-		f.Field = value.Value
-		return nil
-	case yaml.MappingNode:
-		type raw FieldRef
-		return value.Decode((*raw)(f))
-	default:
-		return fmt.Errorf("field ref must be a scalar or mapping")
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("field ref must be a mapping with field and alias")
 	}
+	type raw FieldRef
+	if err := value.Decode((*raw)(f)); err != nil {
+		return err
+	}
+	if f.Field == "" || f.Alias == "" {
+		return fmt.Errorf("field ref requires field and alias")
+	}
+	return nil
 }
 
 func (f FieldRef) IsZero() bool {
@@ -143,64 +145,23 @@ type InteractionTargets struct {
 type TableVisual struct {
 	Kind              string                                     `yaml:"kind"`
 	Title             string                                     `yaml:"title"`
-	MetricView        string                                     `yaml:"metrics_view"`
+	MetricView        string                                     `yaml:"-"`
+	Query             TableQuery                                 `yaml:"query"`
 	DefaultSort       dashboard.TableSort                        `yaml:"default_sort"`
 	Style             dashboard.TableStyle                       `yaml:"style"`
 	Columns           []dashboard.TableColumn                    `yaml:"columns"`
-	Rows              []string                                   `yaml:"rows"`
-	Measures          []string                                   `yaml:"measures"`
+	Rows              []string                                   `yaml:"-"`
+	Measures          []string                                   `yaml:"-"`
 	MeasureFormatting map[string][]dashboard.TableFormattingRule `yaml:"measure_formatting"`
+	DataColumns       []FieldRef                                 `yaml:"-"`
 	ColumnDims        []string                                   `yaml:"-"`
 }
 
-func (t *TableVisual) UnmarshalYAML(value *yaml.Node) error {
-	type rawTableVisual struct {
-		Kind              string                                     `yaml:"kind"`
-		Title             string                                     `yaml:"title"`
-		MetricView        string                                     `yaml:"metrics_view"`
-		DefaultSort       dashboard.TableSort                        `yaml:"default_sort"`
-		Style             dashboard.TableStyle                       `yaml:"style"`
-		Rows              []string                                   `yaml:"rows"`
-		Measures          []string                                   `yaml:"measures"`
-		MeasureFormatting map[string][]dashboard.TableFormattingRule `yaml:"measure_formatting"`
-	}
-	var raw rawTableVisual
-	if err := value.Decode(&raw); err != nil {
-		return err
-	}
-	t.Kind = raw.Kind
-	t.Title = raw.Title
-	t.MetricView = raw.MetricView
-	t.DefaultSort = raw.DefaultSort
-	t.Style = raw.Style
-	t.Rows = raw.Rows
-	t.Measures = raw.Measures
-	t.MeasureFormatting = raw.MeasureFormatting
-
-	columnsNode := mappingValue(value, "columns")
-	if columnsNode == nil {
-		return nil
-	}
-	if columnsNode.Kind != yaml.SequenceNode {
-		return fmt.Errorf("table %q columns must be a sequence", raw.Title)
-	}
-	if len(columnsNode.Content) == 0 {
-		return nil
-	}
-	switch columnsNode.Content[0].Kind {
-	case yaml.MappingNode:
-		if err := columnsNode.Decode(&t.Columns); err != nil {
-			return err
-		}
-	case yaml.ScalarNode:
-		t.ColumnDims = make([]string, 0, len(columnsNode.Content))
-		for _, item := range columnsNode.Content {
-			t.ColumnDims = append(t.ColumnDims, item.Value)
-		}
-	default:
-		return fmt.Errorf("table %q columns must contain column objects or dimension names", raw.Title)
-	}
-	return nil
+type TableQuery struct {
+	MetricView string     `yaml:"metric_view"`
+	Columns    []FieldRef `yaml:"columns"`
+	Rows       []FieldRef `yaml:"rows"`
+	Measures   []FieldRef `yaml:"measures"`
 }
 
 func (t TableVisual) KindOrDefault() string {
@@ -281,24 +242,96 @@ func copyMap(source map[string]any) map[string]any {
 }
 
 func LoadDashboard(path string, metricViews map[string]*MetricView) (*Dashboard, error) {
-	bytes, err := os.ReadFile(path)
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectLegacyVisualStacked(content); err != nil {
+		return nil, err
+	}
+	if err := rejectLegacyKPIs(content); err != nil {
+		return nil, err
+	}
+	if err := rejectLegacyDashboardQueryContract(content); err != nil {
+		return nil, err
+	}
 	var report Dashboard
-	if err := yaml.Unmarshal(bytes, &report); err != nil {
-		return nil, err
-	}
-	if err := rejectLegacyVisualStacked(bytes); err != nil {
-		return nil, err
-	}
-	if err := rejectLegacyKPIs(bytes); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(content))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&report); err != nil {
 		return nil, err
 	}
 	if err := report.Validate(metricViews); err != nil {
 		return nil, err
 	}
 	return &report, nil
+}
+
+func rejectLegacyDashboardQueryContract(bytes []byte) error {
+	var node yaml.Node
+	if err := yaml.Unmarshal(bytes, &node); err != nil {
+		return err
+	}
+	root := mappingNode(&node)
+	if root == nil {
+		return nil
+	}
+	for _, section := range []string{"filters", "visuals", "tables"} {
+		items := mappingValue(root, section)
+		if items == nil || items.Kind != yaml.MappingNode {
+			continue
+		}
+		for index := 0; index+1 < len(items.Content); index += 2 {
+			name := items.Content[index].Value
+			item := items.Content[index+1]
+			if item.Kind != yaml.MappingNode {
+				continue
+			}
+			if mappingValue(item, "metrics_view") != nil {
+				return fmt.Errorf("%s %q uses legacy metrics_view; use metric_view or query.metric_view", strings.TrimSuffix(section, "s"), name)
+			}
+			if section == "visuals" && mappingValue(item, "metric_view") != nil {
+				return fmt.Errorf("visual %q uses top-level metric_view; use query.metric_view", name)
+			}
+			if section == "tables" {
+				if mappingValue(item, "rows") != nil || mappingValue(item, "measures") != nil {
+					return fmt.Errorf("table %q uses legacy rows/measures; use query.rows/query.measures", name)
+				}
+			}
+			queryNode := mappingValue(item, "query")
+			if queryNode == nil {
+				continue
+			}
+			if rawSQL := mappingValue(queryNode, "sql"); rawSQL != nil {
+				return fmt.Errorf("%s %q uses raw SQL; dashboards must query metric views", strings.TrimSuffix(section, "s"), name)
+			}
+			for _, key := range []string{"dimensions", "measures", "rows", "columns"} {
+				if err := rejectScalarFieldRefs(section, name, queryNode, key); err != nil {
+					return err
+				}
+			}
+			if series := mappingValue(queryNode, "series"); series != nil && series.Kind == yaml.ScalarNode {
+				return fmt.Errorf("%s %q query.series must be a field object", strings.TrimSuffix(section, "s"), name)
+			}
+		}
+	}
+	return nil
+}
+
+func rejectScalarFieldRefs(section, name string, queryNode *yaml.Node, key string) error {
+	node := mappingValue(queryNode, key)
+	if node == nil {
+		return nil
+	}
+	if node.Kind != yaml.SequenceNode {
+		return fmt.Errorf("%s %q query.%s must be a sequence", strings.TrimSuffix(section, "s"), name, key)
+	}
+	for _, item := range node.Content {
+		if item.Kind != yaml.MappingNode {
+			return fmt.Errorf("%s %q query.%s must contain field objects", strings.TrimSuffix(section, "s"), name, key)
+		}
+	}
+	return nil
 }
 
 func rejectLegacyVisualStacked(bytes []byte) error {
@@ -394,7 +427,7 @@ func (d *Dashboard) Validate(metricViews map[string]*MetricView) error {
 	}
 	for name, filter := range d.Filters {
 		if filter.Type == "" || filter.Label == "" || filter.MetricView == "" || filter.Dimension == "" {
-			return fmt.Errorf("filter %q requires type, label, metrics_view, and dimension", name)
+			return fmt.Errorf("filter %q requires type, label, metric_view, and field", name)
 		}
 		view, ok := allowedViews[filter.MetricView]
 		if !ok {
@@ -467,10 +500,8 @@ func (d *Dashboard) Validate(metricViews map[string]*MetricView) error {
 	}
 	for name, visual := range d.Visuals {
 		kind := visual.KindOrDefault()
-		if visual.Query.MetricView != "" {
-			visual.MetricView = visual.Query.MetricView
-		}
-		if visual.MetricView == "" || (kind != "kpi" && visual.Title == "") || (kind != "kpi" && visual.Type == "") {
+		visual.MetricView = visual.Query.MetricView
+		if visual.Query.MetricView == "" || (kind != "kpi" && visual.Title == "") || (kind != "kpi" && visual.Type == "") {
 			return fmt.Errorf("visual %q requires title, query.metric_view, and type", name)
 		}
 		view, ok := allowedViews[visual.MetricView]
@@ -532,18 +563,9 @@ func (d *Dashboard) Validate(metricViews map[string]*MetricView) error {
 				return fmt.Errorf("visual %q shape geo requires options.map", name)
 			}
 		}
-		for index, sort := range visual.Query.Sort {
+		for _, sort := range visual.Query.Sort {
 			if sort.Field == "" && sort.Expr == "" {
 				return fmt.Errorf("visual %q has sort missing field or expr", name)
-			}
-			if sort.Field != "" && sort.Field != "value" && sort.Field != visual.Query.Series.Field {
-				if field, _, err := view.ResolveDimensionRef(sort.Field); err == nil {
-					visual.Query.Sort[index].Field = field
-				} else if field, _, err := view.ResolveMeasureRef(sort.Field); err == nil {
-					visual.Query.Sort[index].Field = field
-				} else {
-					return fmt.Errorf("visual %q sort references unknown field %q", name, sort.Field)
-				}
 			}
 		}
 		if visual.Interaction.Field != "" {
@@ -556,8 +578,9 @@ func (d *Dashboard) Validate(metricViews map[string]*MetricView) error {
 		d.Visuals[name] = visual
 	}
 	for name, table := range d.Tables {
-		if table.Title == "" || table.MetricView == "" {
-			return fmt.Errorf("table %q requires title and metrics_view", name)
+		table.MetricView = table.Query.MetricView
+		if table.Title == "" || table.Query.MetricView == "" {
+			return fmt.Errorf("table %q requires title and query.metric_view", name)
 		}
 		if err := validateTableStyle(name, table.Style); err != nil {
 			return err
@@ -584,39 +607,44 @@ func (d *Dashboard) Validate(metricViews map[string]*MetricView) error {
 		}
 		switch table.KindOrDefault() {
 		case "data_table":
-			if len(table.Columns) == 0 {
-				return fmt.Errorf("table %q kind data_table requires columns", name)
+			if len(table.Columns) == 0 || len(table.Query.Columns) == 0 {
+				return fmt.Errorf("table %q kind data_table requires presentation columns and query.columns", name)
+			}
+			table.DataColumns = make([]FieldRef, len(table.Query.Columns))
+			copy(table.DataColumns, table.Query.Columns)
+			for index, column := range table.DataColumns {
+				field, _, err := view.ResolveDimensionRef(column.Field)
+				if err == nil {
+					table.DataColumns[index].Field = field
+					continue
+				}
+				field, _, err = view.ResolveMeasureRef(column.Field)
+				if err != nil {
+					return fmt.Errorf("table %q query.columns references unknown field %q", name, column.Field)
+				}
+				table.DataColumns[index].Field = field
+			}
+			for _, column := range table.Columns {
+				if !tableHasQueryAlias(table.DataColumns, column.Key) {
+					return fmt.Errorf("table %q column %q has no matching query column alias", name, column.Key)
+				}
 			}
 		case "matrix_table":
-			if len(table.Rows) == 0 || len(table.Measures) == 0 {
-				return fmt.Errorf("table %q kind matrix_table requires rows and measures", name)
+			if len(table.Query.Rows) == 0 || len(table.Query.Measures) == 0 {
+				return fmt.Errorf("table %q kind matrix_table requires query.rows and query.measures", name)
 			}
-			if len(table.ColumnDims) > 1 {
+			if len(table.Query.Columns) > 1 {
 				return fmt.Errorf("table %q kind matrix_table supports at most one column dimension", name)
 			}
-			for _, dimension := range append(append([]string{}, table.Rows...), table.ColumnDims...) {
-				if _, _, err := view.ResolveDimensionRef(dimension); err != nil {
-					return fmt.Errorf("table %q references unknown dimension %q", name, dimension)
-				}
-			}
-			normalizeTableFields(view, &table)
-			for _, measure := range table.Measures {
-				if _, _, err := view.ResolveMeasureRef(measure); err != nil {
-					return fmt.Errorf("table %q references unknown measure %q", name, measure)
-				}
+			if err := normalizeTableFields(name, view, &table); err != nil {
+				return err
 			}
 		case "pivot_table":
-			if len(table.Rows) == 0 || len(table.ColumnDims) != 1 || len(table.Measures) != 1 {
-				return fmt.Errorf("table %q kind pivot_table requires rows, one column dimension, and one measure", name)
+			if len(table.Query.Rows) == 0 || len(table.Query.Columns) != 1 || len(table.Query.Measures) != 1 {
+				return fmt.Errorf("table %q kind pivot_table requires query.rows, one query column dimension, and one query measure", name)
 			}
-			for _, dimension := range append(append([]string{}, table.Rows...), table.ColumnDims...) {
-				if _, _, err := view.ResolveDimensionRef(dimension); err != nil {
-					return fmt.Errorf("table %q references unknown dimension %q", name, dimension)
-				}
-			}
-			normalizeTableFields(view, &table)
-			if _, _, err := view.ResolveMeasureRef(table.Measures[0]); err != nil {
-				return fmt.Errorf("table %q references unknown measure %q", name, table.Measures[0])
+			if err := normalizeTableFields(name, view, &table); err != nil {
+				return err
 			}
 		default:
 			return fmt.Errorf("table %q has unsupported kind %q", name, table.Kind)
@@ -726,22 +754,41 @@ func validateTableColumn(tableName string, column dashboard.TableColumn) error {
 	return nil
 }
 
-func normalizeTableFields(view *MetricView, table *TableVisual) {
-	for index, dimension := range table.Rows {
-		if field, _, err := view.ResolveDimensionRef(dimension); err == nil {
-			table.Rows[index] = field
+func normalizeTableFields(name string, view *MetricView, table *TableVisual) error {
+	table.Rows = make([]string, len(table.Query.Rows))
+	for index, dimension := range table.Query.Rows {
+		field, _, err := view.ResolveDimensionRef(dimension.Field)
+		if err != nil {
+			return fmt.Errorf("table %q query.rows references unknown dimension %q", name, dimension.Field)
+		}
+		table.Rows[index] = field
+	}
+	table.ColumnDims = make([]string, len(table.Query.Columns))
+	for index, dimension := range table.Query.Columns {
+		field, _, err := view.ResolveDimensionRef(dimension.Field)
+		if err != nil {
+			return fmt.Errorf("table %q query.columns references unknown dimension %q", name, dimension.Field)
+		}
+		table.ColumnDims[index] = field
+	}
+	table.Measures = make([]string, len(table.Query.Measures))
+	for index, measure := range table.Query.Measures {
+		field, _, err := view.ResolveMeasureRef(measure.Field)
+		if err != nil {
+			return fmt.Errorf("table %q query.measures references unknown measure %q", name, measure.Field)
+		}
+		table.Measures[index] = field
+	}
+	return nil
+}
+
+func tableHasQueryAlias(columns []FieldRef, alias string) bool {
+	for _, column := range columns {
+		if column.Alias == alias {
+			return true
 		}
 	}
-	for index, dimension := range table.ColumnDims {
-		if field, _, err := view.ResolveDimensionRef(dimension); err == nil {
-			table.ColumnDims[index] = field
-		}
-	}
-	for index, measure := range table.Measures {
-		if field, _, err := view.ResolveMeasureRef(measure); err == nil {
-			table.Measures[index] = field
-		}
-	}
+	return false
 }
 
 func normalizeTableFormatting(view *MetricView, table *TableVisual) {

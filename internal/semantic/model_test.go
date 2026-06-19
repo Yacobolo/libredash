@@ -935,6 +935,7 @@ func TestDashboardValidateAcceptsAdvancedVisualShapes(t *testing.T) {
 		},
 	}
 	for name, visual := range cases {
+		visual.Query.MetricView = "orders"
 		report.Visuals = map[string]Visual{name: visual}
 		report.Pages = []dashboard.Page{{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{{ID: name, Kind: visual.Type + "_chart", Visual: name, Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 1, RowSpan: 1}}}}}
 		if err := report.Validate(loadOlistMetricViews(t, model)); err != nil {
@@ -1040,13 +1041,13 @@ func TestDashboardValidateRejectsInvalidTableVariant(t *testing.T) {
 	report := loadOlistDashboard(t, model)
 
 	table := report.Tables["state_status_matrix"]
-	table.Rows = []string{"missing_dimension"}
+	table.Query.Rows = fieldRefs("missing_dimension")
 	report.Tables["state_status_matrix"] = table
 	assertDashboardValidateError(t, report, model, "unknown dimension")
 
 	report = loadOlistDashboard(t, model)
 	table = report.Tables["category_status_pivot"]
-	table.ColumnDims = []string{"missing_dimension"}
+	table.Query.Columns = fieldRefs("missing_dimension")
 	report.Tables["category_status_pivot"] = table
 	assertDashboardValidateError(t, report, model, "unknown dimension")
 }
@@ -1284,9 +1285,22 @@ func minimalSourceModel() *Model {
 func fieldRefs(fields ...string) []FieldRef {
 	refs := make([]FieldRef, len(fields))
 	for i, field := range fields {
-		refs[i] = FieldRef{Field: field}
+		qualified := field
+		if !strings.Contains(field, ".") {
+			if field == "state" {
+				qualified = "customers.state"
+			} else {
+				qualified = "orders." + field
+			}
+		}
+		refs[i] = FieldRef{Field: qualified, Alias: displayFieldName(qualified)}
 	}
 	return refs
+}
+
+func displayFieldName(field string) string {
+	parts := strings.Split(field, ".")
+	return parts[len(parts)-1]
 }
 
 func chartShowcaseMatrix() map[string][]string {

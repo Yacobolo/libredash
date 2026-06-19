@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	semanticquery "github.com/Yacobolo/libredash/internal/query"
 	"github.com/Yacobolo/libredash/internal/semantic"
 )
 
@@ -105,51 +106,47 @@ func (m *DuckDBMetrics) matrixTableRows(ctx context.Context, runtime *modelRunti
 	if len(table.ColumnDims) == 1 {
 		return m.crossTabTableRows(ctx, runtime, report, table, filters, request, false)
 	}
-	source, err := m.metricViewSource(table.MetricView)
-	if err != nil {
-		return nil, nil, err
-	}
 	metricView := m.workspace.MetricViews[table.MetricView]
 	columns := make([]dashboard.TableColumn, 0, len(table.Rows)+len(table.Measures))
-	selects := make([]string, 0, len(table.Rows)+len(table.Measures))
-	groupBy := make([]string, 0, len(table.Rows))
+	dimensions := make([]semanticquery.Field, 0, len(table.Rows))
+	measures := make([]semanticquery.Field, 0, len(table.Measures))
 	for _, dimensionName := range table.Rows {
 		dimension := metricView.Dimensions[dimensionName]
 		key := displayField(dimensionName)
-		selects = append(selects, fmt.Sprintf("%s AS %s", dimensionExpression(dimension, "e"), key))
-		groupBy = append(groupBy, key)
+		dimensions = append(dimensions, fieldRef(dimensionName, key))
 		column := dashboard.TableColumn{Key: key, Label: dimensionLabel(key, dimension), Role: "row_header", Format: "text"}
 		columns = append(columns, mergeTableColumn(column, tableColumnOverride(table, dimensionName)))
 	}
 	for _, measureName := range table.Measures {
 		measure := metricView.Measures[measureName]
 		key := displayField(measureName)
-		expr, err := measureAggregateExpr(measure)
-		if err != nil {
-			return nil, nil, err
-		}
-		selects = append(selects, fmt.Sprintf("%s AS %s", modelTableExpr(expr, metricView.BaseTable, "e"), key))
+		measures = append(measures, fieldRef(measureName, key))
 		column := dashboard.TableColumn{Key: key, Label: measureLabel(key, measure), Align: "right", Role: "measure", Measure: key, Format: tableMeasureFormat(measure), Formatting: tableMeasureFormatting(table, measureName)}
 		columns = append(columns, mergeTableColumn(column, tableColumnOverride(table, measureName)))
 	}
-	where, args := m.filterWhere("e", runtime, report, table.MetricView, filters, "table", request.Table)
-	orderBy := strings.Join(groupBy, ", ")
-	if request.Sort.Key != "" && tableHasColumn(columns, request.Sort.Key) {
-		direction := "DESC"
-		if request.Sort.Direction == "asc" {
-			direction = "ASC"
-		}
-		orderBy = request.Sort.Key + " " + direction
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, table.MetricView, filters, "table", request.Table)
+	if err != nil {
+		return nil, nil, err
 	}
-	query := fmt.Sprintf(`
-SELECT %s
-FROM %s e
-WHERE %s
-GROUP BY %s
-ORDER BY %s
-LIMIT ?`, strings.Join(selects, ", "), source, where, strings.Join(groupBy, ", "), orderBy)
-	args = append(args, dashboard.TableInteractiveRowCap+1)
-	rows, err := m.queryTableDatums(ctx, runtime, query, tableColumnKeys(columns), args...)
+	sorts := make([]semanticquery.Sort, 0, len(dimensions))
+	for _, dimension := range dimensions {
+		sorts = append(sorts, semanticquery.Sort{Field: dimension.Alias, Direction: "asc"})
+	}
+	if request.Sort.Key != "" && tableHasColumn(columns, request.Sort.Key) {
+		sorts = []semanticquery.Sort{{Field: request.Sort.Key, Direction: request.Sort.Direction}}
+	}
+	plan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).Plan(semanticquery.Request{
+		MetricView: table.MetricView,
+		Dimensions: dimensions,
+		Measures:   measures,
+		Filters:    queryFilters,
+		Sort:       sorts,
+		Limit:      dashboard.TableInteractiveRowCap + 1,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	rows, err := m.queryTableDatums(ctx, runtime, plan.SQL, plan.Columns, plan.Args...)
 	return columns, rows, err
 }
 
@@ -158,46 +155,45 @@ func (m *DuckDBMetrics) pivotTableRows(ctx context.Context, runtime *modelRuntim
 }
 
 func (m *DuckDBMetrics) crossTabTableRows(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, table semantic.TableVisual, filters dashboard.Filters, request dashboard.TableRequest, pivotMode bool) ([]dashboard.TableColumn, []map[string]any, error) {
-	source, err := m.metricViewSource(table.MetricView)
-	if err != nil {
-		return nil, nil, err
-	}
 	metricView := m.workspace.MetricViews[table.MetricView]
-	rowSelects := make([]string, 0, len(table.Rows))
-	groupBy := make([]string, 0, len(table.Rows)+1)
+	dimensions := make([]semanticquery.Field, 0, len(table.Rows)+1)
 	baseColumns := make([]dashboard.TableColumn, 0, len(table.Rows))
 	for _, dimensionName := range table.Rows {
 		dimension := metricView.Dimensions[dimensionName]
 		key := displayField(dimensionName)
-		rowSelects = append(rowSelects, fmt.Sprintf("%s AS %s", dimensionExpression(dimension, "e"), key))
-		groupBy = append(groupBy, key)
+		dimensions = append(dimensions, fieldRef(dimensionName, key))
 		column := dashboard.TableColumn{Key: key, Label: dimensionLabel(key, dimension), Role: "row_header", Format: "text"}
 		baseColumns = append(baseColumns, mergeTableColumn(column, tableColumnOverride(table, dimensionName)))
 	}
 	columnDimensionName := table.ColumnDims[0]
-	columnDimension := metricView.Dimensions[columnDimensionName]
-	valueSelects := make([]string, 0, len(table.Measures))
+	dimensions = append(dimensions, fieldRef(columnDimensionName, "pivot_label"))
+	measures := make([]semanticquery.Field, 0, len(table.Measures))
 	valueColumns := make([]string, 0, len(table.Measures))
 	for _, measureName := range table.Measures {
-		measureExpr, err := measureAggregateExpr(metricView.Measures[measureName])
-		if err != nil {
-			return nil, nil, err
-		}
 		key := displayField(measureName)
-		valueSelects = append(valueSelects, fmt.Sprintf("%s AS %s", modelTableExpr(measureExpr, metricView.BaseTable, "e"), key))
+		measures = append(measures, fieldRef(measureName, key))
 		valueColumns = append(valueColumns, key)
 	}
-	groupBy = append(groupBy, "pivot_label")
-	where, args := m.filterWhere("e", runtime, report, table.MetricView, filters, "table", request.Table)
-	query := fmt.Sprintf(`
-SELECT %s, %s AS pivot_label, %s
-FROM %s e
-WHERE %s
-GROUP BY %s
-ORDER BY %s
-LIMIT ?`, strings.Join(rowSelects, ", "), dimensionExpression(columnDimension, "e"), strings.Join(valueSelects, ", "), source, where, strings.Join(groupBy, ", "), strings.Join(groupBy, ", "))
-	args = append(args, dashboard.TableInteractiveRowCap+1)
-	rawRows, err := m.queryTableDatums(ctx, runtime, query, append(append(append([]string{}, displayFields(table.Rows)...), "pivot_label"), valueColumns...), args...)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, table.MetricView, filters, "table", request.Table)
+	if err != nil {
+		return nil, nil, err
+	}
+	sorts := make([]semanticquery.Sort, 0, len(dimensions))
+	for _, dimension := range dimensions {
+		sorts = append(sorts, semanticquery.Sort{Field: dimension.Alias, Direction: "asc"})
+	}
+	plan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).Plan(semanticquery.Request{
+		MetricView: table.MetricView,
+		Dimensions: dimensions,
+		Measures:   measures,
+		Filters:    queryFilters,
+		Sort:       sorts,
+		Limit:      dashboard.TableInteractiveRowCap + 1,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	rawRows, err := m.queryTableDatums(ctx, runtime, plan.SQL, plan.Columns, plan.Args...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -489,70 +485,64 @@ func (m *DuckDBMetrics) tableRows(ctx context.Context, runtime *modelRuntime, re
 	if start+count > availableRows {
 		count = availableRows - start
 	}
-	source, err := m.metricViewSource(table.MetricView)
+	metricView := m.workspace.MetricViews[table.MetricView]
+	dimensions := []semanticquery.Field{}
+	measures := []semanticquery.Field{}
+	for _, column := range table.DataColumns {
+		if _, ok := metricView.Dimensions[column.Field]; ok {
+			dimensions = append(dimensions, fieldRef(column.Field, column.Alias))
+			continue
+		}
+		measures = append(measures, fieldRef(column.Field, column.Alias))
+	}
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, table.MetricView, filters, "table", request.Table)
 	if err != nil {
 		return nil, err
 	}
-	where, args := m.filterWhere("e", runtime, report, table.MetricView, filters, "table", request.Table)
-	sortExpr := tableSortExpr(table, request.Sort.Key)
-	direction := "DESC"
-	if request.Sort.Direction == "asc" {
-		direction = "ASC"
+	sortKey := tableSortKey(table, request.Sort.Key)
+	direction := request.Sort.Direction
+	if direction == "" {
+		direction = "desc"
 	}
-
-	selects := make([]string, 0, len(table.Columns))
-	for _, column := range table.Columns {
-		if err := validateIdentifier(column.Key); err != nil {
-			return nil, err
-		}
-		selects = append(selects, "e."+column.Key)
+	sorts := []semanticquery.Sort{{Field: sortKey, Direction: direction}}
+	if sortKey != "order_id" && tableHasQueryAlias(table.DataColumns, "order_id") {
+		sorts = append(sorts, semanticquery.Sort{Field: "order_id", Direction: "asc"})
 	}
-
-	query := fmt.Sprintf(`
-SELECT %s
-FROM %s e
-WHERE %s
-ORDER BY %s %s, e.order_id ASC
-LIMIT ? OFFSET ?`, strings.Join(selects, ", "), source, where, sortExpr, direction)
-
-	args = append(args, count, start)
-	rows, err := runtime.db.QueryContext(ctx, query, args...)
+	plan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).PlanRows(semanticquery.RowRequest{
+		MetricView: table.MetricView,
+		Dimensions: dimensions,
+		Measures:   measures,
+		Filters:    queryFilters,
+		Sort:       sorts,
+		Limit:      count,
+		Offset:     start,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	values := make([]any, len(table.Columns))
-	scans := make([]any, len(table.Columns))
-	for i := range values {
-		scans[i] = &values[i]
-	}
-
-	result := []map[string]any{}
-	for rows.Next() {
-		if err := rows.Scan(scans...); err != nil {
-			return nil, err
-		}
-		row := map[string]any{}
-		for i, column := range table.Columns {
-			row[column.Key] = normalizeDBValue(values[i])
-		}
-		result = append(result, row)
-	}
-	return result, rows.Err()
+	return m.queryTableDatums(ctx, runtime, plan.SQL, plan.Columns, plan.Args...)
 }
 
-func tableSortExpr(table semantic.TableVisual, key string) string {
+func tableSortKey(table semantic.TableVisual, key string) string {
 	if key == "" {
 		key = table.DefaultSort.Key
 	}
 	for _, column := range table.Columns {
 		if column.Key == key {
-			return "e." + column.Key
+			return column.Key
 		}
 	}
 	if table.DefaultSort.Key != "" {
-		return "e." + table.DefaultSort.Key
+		return table.DefaultSort.Key
 	}
-	return "e.order_id"
+	return "order_id"
+}
+
+func tableHasQueryAlias(columns []semantic.FieldRef, alias string) bool {
+	for _, column := range columns {
+		if column.Alias == alias {
+			return true
+		}
+	}
+	return false
 }

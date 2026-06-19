@@ -59,7 +59,6 @@ tables:
           strftime(CAST(o.order_purchase_timestamp AS TIMESTAMP), '%Y-%m') AS purchase_month,
           strftime(CAST(o.order_purchase_timestamp AS TIMESTAMP), '%Y-%m-%d') AS purchase_date,
           o.order_status AS status,
-          c.customer_state AS state,
           COALESCE(category.category, 'uncategorized') AS category,
           round(COALESCE(revenue.revenue, 0), 2) AS revenue,
           round(COALESCE(review.review_score, 0), 2) AS review_score,
@@ -76,7 +75,6 @@ tables:
             ELSE '31+ days'
           END AS delivery_bucket
         FROM raw.orders o
-        JOIN raw.customers c ON c.customer_id = o.customer_id
         LEFT JOIN revenue ON revenue.order_id = o.order_id
         LEFT JOIN review ON review.order_id = o.order_id
         LEFT JOIN category ON category.order_id = o.order_id
@@ -102,9 +100,6 @@ tables:
       status:
         label: Status
         expr: status
-      state:
-        label: State
-        expr: state
       category:
         label: Category
         expr: category
