@@ -216,9 +216,9 @@ function positionFor(node: UsageNode, nodes: UsageNode[]): { x: number; y: numbe
   switch (node.kind) {
     case 'model':
       return { x: 0, y: 92 }
-    case 'dataset':
+    case 'model_table':
       return { x: 250, y: 92 }
-    case 'metrics_view':
+    case 'metric_view':
       return { x: 500, y: 92 }
     case 'dashboard':
       return { x: 760, y: Math.max(18, index * 118) }
@@ -243,8 +243,8 @@ function UsageNodeComponent({ data }: { data: UsageNode }) {
 function nodeStyle(kind: string): Record<string, string> {
   const palette: Record<string, [string, string, string]> = {
     model: ['var(--ld-asset-semantic-model-bg)', 'var(--ld-asset-semantic-model-accent)', 'var(--ld-asset-semantic-model-border)'],
-    dataset: ['var(--ld-asset-dataset-bg)', 'var(--ld-asset-dataset-accent)', 'var(--ld-asset-dataset-border)'],
-    metrics_view: ['var(--ld-asset-metric-view-bg)', 'var(--ld-asset-metric-view-accent)', 'var(--ld-asset-metric-view-border)'],
+    model_table: ['var(--ld-asset-dataset-bg)', 'var(--ld-asset-dataset-accent)', 'var(--ld-asset-dataset-border)'],
+    metric_view: ['var(--ld-asset-metric-view-bg)', 'var(--ld-asset-metric-view-accent)', 'var(--ld-asset-metric-view-border)'],
     dashboard: ['var(--ld-asset-dashboard-bg)', 'var(--ld-asset-dashboard-accent)', 'var(--ld-asset-dashboard-border)'],
   }
   const [bg, accent, border] = palette[kind] ?? palette.model
@@ -259,10 +259,10 @@ function kindLabel(kind: string): string {
   switch (kind) {
     case 'model':
       return 'Semantic model'
-    case 'dataset':
-      return 'Dataset'
-    case 'metrics_view':
-      return 'Metrics view'
+    case 'model_table':
+      return 'Model table'
+    case 'metric_view':
+      return 'Metric view'
     case 'dashboard':
       return 'Dashboard'
     default:

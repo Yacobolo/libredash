@@ -13,6 +13,7 @@ func (s *Server) Routes() http.Handler {
 		mux.Use(requestLogger(s.logger))
 	}
 	mux.Use(securityHeaders(s.securityHeaders))
+	mux.Get("/favicon.ico", favicon)
 	mux.Get("/login", s.login)
 	mux.Group(func(r chi.Router) {
 		r.Use(s.csrf)
@@ -37,7 +38,7 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/commands/chart-select", s.protected(platform.PermissionDashboardView, s.chartSelect))
 		r.Post("/commands/clear-selection", s.protected(platform.PermissionDashboardView, s.clearSelection))
 		r.Post("/commands/reset-filters", s.protected(platform.PermissionDashboardView, s.resetFilters))
-		r.Post("/commands/refresh-cache", s.protected(platform.PermissionCacheRefresh, s.refreshCache))
+		r.Post("/commands/refresh-materializations", s.protected(platform.PermissionMaterializationsRefresh, s.refreshMaterializations))
 		r.Post("/auth/logout", s.authLogout)
 	})
 	mux.Group(func(r chi.Router) {
@@ -117,4 +118,10 @@ func noCache(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
+}
+
+func favicon(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("Content-Type", "image/svg+xml")
+	_, _ = w.Write([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#0969da"/><path d="M8 22h16v3H8zm1-5h4v4H9zm5-7h4v11h-4zm5 4h4v7h-4z" fill="#fff"/></svg>`))
 }

@@ -1,14 +1,12 @@
 id: executive-sales
 title: Executive Sales Dashboard
 description: Sales, order, category, and delivery overview.
-metrics_views: [orders]
-
+metric_views:
+- orders
 filters:
   purchase_date:
     type: date_range
     label: Period
-    metrics_view: orders
-    dimension: purchase_timestamp
     url_param: period
     from_url_param: from
     to_url_param: to
@@ -16,107 +14,136 @@ filters:
       preset: all
     custom: true
     presets:
-      - value: all
-        label: All orders
-      - value: recent
-        label: Latest 90 days
-        relative_days: 90
-      - value: "2018"
-        label: "2018"
-        from: "2018-01-01"
-        to: "2019-01-01"
-      - value: "2017"
-        label: "2017"
-        from: "2017-01-01"
-        to: "2018-01-01"
+    - value: all
+      label: All orders
+    - value: recent
+      label: Latest 90 days
+      relative_days: 90
+    - value: '2018'
+      label: '2018'
+      from: '2018-01-01'
+      to: '2019-01-01'
+    - value: '2017'
+      label: '2017'
+      from: '2017-01-01'
+      to: '2018-01-01'
+    metric_view: orders
+    field: orders.purchase_timestamp
   state:
     type: multi_select
     label: State
-    metrics_view: orders
-    dimension: state
     url_param: state
     operator: in
     values:
       source: distinct
       limit: 50
+    metric_view: orders
+    field: customers.state
   category:
     type: text
     label: Category
-    metrics_view: orders
-    dimension: category
     url_param: category
     operator_url_param: category_op
     default_operator: contains
-    operators: [contains, equals, starts_with, not_contains]
-
+    operators:
+    - contains
+    - equals
+    - starts_with
+    - not_contains
+    metric_view: orders
+    field: orders.category
 visuals:
   total_orders:
     kind: kpi
     shape: single_value
-    metrics_view: orders
     query:
-      measures: [order_count]
+      measures:
+      - field: orders.order_count
+        alias: order_count
+      metric_view: orders
     options:
       note: Filtered order count
       tone: ink
   revenue_kpi:
     kind: kpi
     shape: single_value
-    metrics_view: orders
     query:
-      measures: [revenue]
+      measures:
+      - field: orders.revenue
+        alias: revenue
+      metric_view: orders
     options:
-      note: Cached payment value
+      note: Payment value
       tone: green
   aov_kpi:
     kind: kpi
     shape: single_value
-    metrics_view: orders
     query:
-      measures: [aov]
+      measures:
+      - field: orders.aov
+        alias: aov
+      metric_view: orders
     options:
       note: Revenue per order
       tone: amber
   review_kpi:
     kind: kpi
     shape: single_value
-    metrics_view: orders
     query:
-      measures: [review_score]
+      measures:
+      - field: orders.review_score
+        alias: review_score
+      metric_view: orders
     options:
       note: Average score
       tone: coral
   revenue:
     title: Revenue by month
     type: area
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [revenue]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 30
+      metric_view: orders
     interaction:
-      field: purchase_month
+      field: orders.purchase_month
       targets:
-        visuals: [orders, categories, delivery]
-        tables: [orders]
+        visuals:
+        - orders
+        - categories
+        - delivery
+        tables:
+        - orders
   orders:
     title: Orders by status
     type: donut
-    metrics_view: orders
     query:
-      dimensions: [status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
+      metric_view: orders
     interaction:
-      field: status
+      field: orders.status
       targets:
-        visuals: [revenue, categories, delivery]
-        tables: [orders]
+        visuals:
+        - revenue
+        - categories
+        - delivery
+        tables:
+        - orders
   orders_by_month_status:
     title: Orders by month and status
     shape: category_series_value
@@ -124,91 +151,133 @@ visuals:
     type: column
     options:
       stacked: true
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      series: status
-      measures: [order_count]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      series:
+        field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 40
+      metric_view: orders
     interaction:
-      field: purchase_month
+      field: orders.purchase_month
       targets:
-        visuals: [orders, categories, delivery]
-        tables: [orders]
+        visuals:
+        - orders
+        - categories
+        - delivery
+        tables:
+        - orders
   categories:
     title: Top product categories
     type: bar
-    metrics_view: orders
     query:
-      dimensions: [category]
-      measures: [revenue]
+      dimensions:
+      - field: orders.category
+        alias: category
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 10
+      metric_view: orders
     interaction:
-      field: category
+      field: orders.category
       targets:
-        visuals: [revenue, orders, delivery]
-        tables: [orders]
+        visuals:
+        - revenue
+        - orders
+        - delivery
+        tables:
+        - orders
   delivery:
     title: Delivery speed
     type: bar
-    metrics_view: orders
     query:
-      dimensions: [delivery_bucket]
-      measures: [order_count]
+      dimensions:
+      - field: orders.delivery_bucket
+        alias: delivery_bucket
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: delivery_bucket
-          direction: asc
+      - field: delivery_bucket
+        direction: asc
+      metric_view: orders
     interaction:
-      field: delivery_bucket
+      field: orders.delivery_bucket
       targets:
-        visuals: [revenue, orders, categories]
-        tables: [orders]
+        visuals:
+        - revenue
+        - orders
+        - categories
+        tables:
+        - orders
   state_status_heatmap:
     title: State by order status
     shape: matrix
     renderer: echarts
     type: heatmap
-    metrics_view: orders
     query:
-      dimensions: [state, status]
-      measures: [order_count]
+      dimensions:
+      - field: customers.state
+        alias: state
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: state
-          direction: asc
-        - field: status
-          direction: asc
+      - field: state
+        direction: asc
+      - field: status
+        direction: asc
       limit: 120
+      metric_view: orders
   status_delivery_flow:
     title: Status to delivery speed
     shape: graph
     renderer: echarts
     type: sankey
-    metrics_view: orders
     query:
-      dimensions: [status, delivery_bucket]
-      measures: [order_count]
+      dimensions:
+      - field: orders.status
+        alias: status
+      - field: orders.delivery_bucket
+        alias: delivery_bucket
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 40
+      metric_view: orders
   delivery_distribution:
     title: Delivery day distribution
     shape: distribution
     renderer: echarts
     type: boxplot
-    metrics_view: orders
     query:
-      dimensions: [delivery_bucket]
-      measures: [delivery_days]
+      dimensions:
+      - field: orders.delivery_bucket
+        alias: delivery_bucket
+      measures:
+      - field: orders.delivery_days
+        alias: delivery_days
       sort:
-        - field: delivery_bucket
-          direction: asc
+      - field: delivery_bucket
+        direction: asc
+      metric_view: orders
   state_order_map:
     title: Orders by state
     shape: geo
@@ -216,27 +285,37 @@ visuals:
     type: map
     options:
       map: brazil_states
-    metrics_view: orders
     query:
-      dimensions: [state]
-      measures: [order_count]
+      dimensions:
+      - field: customers.state
+        alias: state
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 27
+      metric_view: orders
   status_delivery_graph:
     title: Status and delivery network
     shape: graph
     renderer: echarts
     type: graph
-    metrics_view: orders
     query:
-      dimensions: [status, delivery_bucket]
-      measures: [order_count]
+      dimensions:
+      - field: orders.status
+        alias: status
+      - field: orders.delivery_bucket
+        alias: delivery_bucket
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 40
+      metric_view: orders
   revenue_orders_combo:
     title: Revenue and orders by month
     shape: category_multi_measure
@@ -246,27 +325,37 @@ visuals:
       series_types:
         Revenue: line
         Orders: column
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [revenue, order_count]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.revenue
+        alias: revenue
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 30
+      metric_view: orders
   revenue_waterfall:
     title: Monthly revenue contribution
     shape: category_delta
     renderer: echarts
     type: waterfall
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [revenue]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 18
+      metric_view: orders
   delivery_histogram:
     title: Delivery days histogram
     shape: binned_measure
@@ -274,73 +363,101 @@ visuals:
     type: histogram
     options:
       bin_count: 16
-    metrics_view: orders
     query:
-      measures: [delivery_days]
+      measures:
+      - field: orders.delivery_days
+        alias: delivery_days
+      metric_view: orders
   status_radar:
     title: Order status radar
     shape: category_value
     renderer: echarts
     type: radar
-    metrics_view: orders
     query:
-      dimensions: [status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 8
+      metric_view: orders
   category_status_sunburst:
     title: Category and status hierarchy
     shape: hierarchy
     renderer: echarts
     type: sunburst
-    metrics_view: orders
     query:
-      dimensions: [category, status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.category
+        alias: category
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 80
+      metric_view: orders
   state_status_tree:
     title: State and status tree
     shape: hierarchy
     renderer: echarts
     type: tree
-    metrics_view: orders
     query:
-      dimensions: [state, status]
-      measures: [order_count]
+      dimensions:
+      - field: customers.state
+        alias: state
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 80
+      metric_view: orders
   revenue_line:
     title: Revenue line by month
     type: line
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [revenue]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 30
+      metric_view: orders
   revenue_line_status:
     title: Revenue line by status
     shape: category_series_value
     renderer: echarts
     type: line
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      series: status
-      measures: [revenue]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      series:
+        field: orders.status
+        alias: status
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 60
+      metric_view: orders
   revenue_line_step:
     title: Stepped revenue line
     type: line
@@ -348,14 +465,18 @@ visuals:
       step: middle
       show_symbols: false
       data_zoom: true
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [revenue]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 30
+      metric_view: orders
   revenue_area_status:
     title: Stacked revenue area
     shape: category_series_value
@@ -363,15 +484,21 @@ visuals:
     type: area
     options:
       stacked: true
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      series: status
-      measures: [revenue]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      series:
+        field: orders.status
+        alias: status
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 60
+      metric_view: orders
   revenue_area_smooth:
     title: Smooth revenue area
     renderer: echarts
@@ -380,14 +507,18 @@ visuals:
       smooth: true
       show_symbols: false
       data_zoom: true
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [revenue]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 30
+      metric_view: orders
   categories_by_status_bar:
     title: Category revenue by status
     shape: category_series_value
@@ -395,26 +526,36 @@ visuals:
     type: bar
     options:
       stacked: true
-    metrics_view: orders
     query:
-      dimensions: [category]
-      series: status
-      measures: [revenue]
+      dimensions:
+      - field: orders.category
+        alias: category
+      series:
+        field: orders.status
+        alias: status
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 60
+      metric_view: orders
   orders_by_month_column:
     title: Orders by month
     type: column
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [order_count]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 30
+      metric_view: orders
   orders_by_month_status_grouped:
     title: Orders by month and status grouped
     shape: category_series_value
@@ -422,112 +563,154 @@ visuals:
     type: column
     options:
       legend: true
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      series: status
-      measures: [order_count]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      series:
+        field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 60
+      metric_view: orders
   status_pie:
     title: Orders by status pie
     type: pie
-    metrics_view: orders
     query:
-      dimensions: [status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
+      metric_view: orders
   category_pie:
     title: Revenue by category pie
     type: pie
-    metrics_view: orders
     query:
-      dimensions: [category]
-      measures: [revenue]
+      dimensions:
+      - field: orders.category
+        alias: category
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 8
+      metric_view: orders
   status_pie_rose:
     title: Orders by status rose pie
     type: pie
     options:
       rose_type: radius
       show_labels: true
-    metrics_view: orders
     query:
-      dimensions: [status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
+      metric_view: orders
   category_pie_inside:
     title: Compact category pie
     type: pie
     options:
       show_labels: true
       label_position: inside
-    metrics_view: orders
     query:
-      dimensions: [category]
-      measures: [revenue]
+      dimensions:
+      - field: orders.category
+        alias: category
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 6
+      metric_view: orders
   category_donut:
     title: Revenue by category donut
     type: donut
-    metrics_view: orders
     query:
-      dimensions: [category]
-      measures: [revenue]
+      dimensions:
+      - field: orders.category
+        alias: category
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 8
+      metric_view: orders
   orders_donut_center:
     title: Orders donut with center label
     type: donut
     options:
       center_label: Orders
-      radius: ["54%", "76%"]
-    metrics_view: orders
+      radius:
+      - 54%
+      - 76%
     query:
-      dimensions: [status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
+      metric_view: orders
   delivery_scatter:
     title: Delivery days scatter by month
     type: scatter
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [delivery_days]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.delivery_days
+        alias: delivery_days
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 30
+      metric_view: orders
   delivery_scatter_status:
     title: Delivery days scatter by status
     shape: category_series_value
     renderer: echarts
     type: scatter
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      series: status
-      measures: [delivery_days]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      series:
+        field: orders.status
+        alias: status
+      measures:
+      - field: orders.delivery_days
+        alias: delivery_days
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 60
+      metric_view: orders
   delivery_scatter_labeled:
     title: Labeled delivery scatter
     type: scatter
@@ -535,33 +718,45 @@ visuals:
       show_labels: true
       label_position: top
       symbol_size: 12
-    metrics_view: orders
     query:
-      dimensions: [delivery_bucket]
-      measures: [delivery_days]
+      dimensions:
+      - field: orders.delivery_bucket
+        alias: delivery_bucket
+      measures:
+      - field: orders.delivery_days
+        alias: delivery_days
       sort:
-        - field: delivery_bucket
-          direction: asc
+      - field: delivery_bucket
+        direction: asc
+      metric_view: orders
   status_funnel:
     title: Orders by status funnel
     type: funnel
-    metrics_view: orders
     query:
-      dimensions: [status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
+      metric_view: orders
   delivery_funnel:
     title: Delivery speed funnel
     type: funnel
-    metrics_view: orders
     query:
-      dimensions: [delivery_bucket]
-      measures: [order_count]
+      dimensions:
+      - field: orders.delivery_bucket
+        alias: delivery_bucket
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: delivery_bucket
-          direction: asc
+      - field: delivery_bucket
+        direction: asc
+      metric_view: orders
   status_funnel_left:
     title: Left aligned status funnel
     type: funnel
@@ -569,65 +764,85 @@ visuals:
       funnel_align: left
       sort: ascending
       show_labels: true
-    metrics_view: orders
     query:
-      dimensions: [status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: asc
+      - field: value
+        direction: asc
+      metric_view: orders
   category_treemap:
     title: Category revenue treemap
     type: treemap
-    metrics_view: orders
     query:
-      dimensions: [category]
-      measures: [revenue]
+      dimensions:
+      - field: orders.category
+        alias: category
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 18
+      metric_view: orders
   state_treemap:
     title: State order treemap
     type: treemap
-    metrics_view: orders
     query:
-      dimensions: [state]
-      measures: [order_count]
+      dimensions:
+      - field: customers.state
+        alias: state
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 18
+      metric_view: orders
   category_treemap_roam:
     title: Navigable category treemap
     type: treemap
     options:
       roam: true
       breadcrumb: true
-    metrics_view: orders
     query:
-      dimensions: [category]
-      measures: [revenue]
+      dimensions:
+      - field: orders.category
+        alias: category
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 18
+      metric_view: orders
   total_orders_gauge:
     title: Total orders gauge
     shape: single_value
     renderer: echarts
     type: gauge
-    metrics_view: orders
     query:
-      measures: [order_count]
+      measures:
+      - field: orders.order_count
+        alias: order_count
+      metric_view: orders
   review_gauge:
     title: Average review gauge
     shape: single_value
     renderer: echarts
     type: gauge
-    metrics_view: orders
     query:
-      measures: [review_score]
+      measures:
+      - field: orders.review_score
+        alias: review_score
+      metric_view: orders
   review_gauge_thresholds:
     title: Review gauge with thresholds
     shape: single_value
@@ -638,28 +853,36 @@ visuals:
       max: 5
       progress_width: 16
       thresholds:
-        - value: 3
-          color: "#cf222e"
-        - value: 4
-          color: "#bf8700"
-        - value: 5
-          color: "#1a7f37"
-    metrics_view: orders
+      - value: 3
+        color: '#cf222e'
+      - value: 4
+        color: '#bf8700'
+      - value: 5
+        color: '#1a7f37'
     query:
-      measures: [review_score]
+      measures:
+      - field: orders.review_score
+        alias: review_score
+      metric_view: orders
   category_status_heatmap:
     title: Category by order status
     shape: matrix
     renderer: echarts
     type: heatmap
-    metrics_view: orders
     query:
-      dimensions: [category, status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.category
+        alias: category
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 120
+      metric_view: orders
   category_status_heatmap_labels:
     title: Labeled category status heatmap
     shape: matrix
@@ -667,27 +890,39 @@ visuals:
     type: heatmap
     options:
       show_labels: true
-    metrics_view: orders
     query:
-      dimensions: [category, status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.category
+        alias: category
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 80
+      metric_view: orders
   category_status_flow:
     title: Category to status flow
     shape: graph
     renderer: echarts
     type: sankey
-    metrics_view: orders
     query:
-      dimensions: [category, status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.category
+        alias: category
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 60
+      metric_view: orders
   category_status_flow_spacious:
     title: Spacious category to status flow
     shape: graph
@@ -696,27 +931,39 @@ visuals:
     options:
       node_gap: 18
       curveness: 0.32
-    metrics_view: orders
     query:
-      dimensions: [category, status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.category
+        alias: category
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 60
+      metric_view: orders
   category_status_graph:
     title: Category and status network
     shape: graph
     renderer: echarts
     type: graph
-    metrics_view: orders
     query:
-      dimensions: [category, status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.category
+        alias: category
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 60
+      metric_view: orders
   category_status_graph_circular:
     title: Circular category and status network
     shape: graph
@@ -726,14 +973,20 @@ visuals:
       layout: circular
       curveness: 0.28
       focus: adjacency
-    metrics_view: orders
     query:
-      dimensions: [category, status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.category
+        alias: category
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 60
+      metric_view: orders
   state_revenue_map:
     title: Revenue by state
     shape: geo
@@ -741,14 +994,18 @@ visuals:
     type: map
     options:
       map: brazil_states
-    metrics_view: orders
     query:
-      dimensions: [state]
-      measures: [revenue]
+      dimensions:
+      - field: customers.state
+        alias: state
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 27
+      metric_view: orders
   state_revenue_map_labeled:
     title: Labeled revenue map
     shape: geo
@@ -758,27 +1015,41 @@ visuals:
       map: brazil_states
       show_labels: true
       roam: true
-    metrics_view: orders
     query:
-      dimensions: [state]
-      measures: [revenue]
+      dimensions:
+      - field: customers.state
+        alias: state
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 27
+      metric_view: orders
   delivery_candlestick:
     title: Delivery day candlestick by month
     shape: ohlc
     renderer: echarts
     type: candlestick
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [delivery_days_q1, delivery_days_q3, delivery_days_min, delivery_days_max]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.delivery_days_q1
+        alias: delivery_days_q1
+      - field: orders.delivery_days_q3
+        alias: delivery_days_q3
+      - field: orders.delivery_days_min
+        alias: delivery_days_min
+      - field: orders.delivery_days_max
+        alias: delivery_days_max
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 30
+      metric_view: orders
   revenue_candlestick:
     title: Revenue OHLC by month
     shape: ohlc
@@ -786,26 +1057,40 @@ visuals:
     type: candlestick
     options:
       data_zoom: true
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [revenue_q1, revenue_q3, revenue_min, revenue_max]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.revenue_q1
+        alias: revenue_q1
+      - field: orders.revenue_q3
+        alias: revenue_q3
+      - field: orders.revenue_min
+        alias: revenue_min
+      - field: orders.revenue_max
+        alias: revenue_max
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 30
+      metric_view: orders
   review_distribution:
     title: Review score distribution
     shape: distribution
     renderer: echarts
     type: boxplot
-    metrics_view: orders
     query:
-      dimensions: [status]
-      measures: [review_score]
+      dimensions:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.review_score
+        alias: review_score
       sort:
-        - field: status
-          direction: asc
+      - field: status
+        direction: asc
+      metric_view: orders
   revenue_distribution:
     title: Revenue distribution
     shape: distribution
@@ -813,14 +1098,18 @@ visuals:
     type: boxplot
     options:
       data_zoom: true
-    metrics_view: orders
     query:
-      dimensions: [category]
-      measures: [revenue]
+      dimensions:
+      - field: orders.category
+        alias: category
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: category
-          direction: desc
+      - field: category
+        direction: desc
       limit: 12
+      metric_view: orders
   review_delivery_combo:
     title: Review and delivery by status
     shape: category_multi_measure
@@ -830,13 +1119,19 @@ visuals:
       series_types:
         Review: line
         Delivery days: column
-    metrics_view: orders
     query:
-      dimensions: [status]
-      measures: [review_score, delivery_days]
+      dimensions:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.review_score
+        alias: review_score
+      - field: orders.delivery_days
+        alias: delivery_days
       sort:
-        - field: status
-          direction: asc
+      - field: status
+        direction: asc
+      metric_view: orders
   revenue_orders_dual_axis_combo:
     title: Revenue and orders dual-axis combo
     shape: category_multi_measure
@@ -847,27 +1142,37 @@ visuals:
       series_types:
         Revenue: column
         Orders: line
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [revenue, order_count]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.revenue
+        alias: revenue
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 60
+      metric_view: orders
   orders_waterfall:
     title: Monthly order contribution
     shape: category_delta
     renderer: echarts
     type: waterfall
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [order_count]
+      dimensions:
+      - field: orders.purchase_month
+        alias: purchase_month
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: purchase_month
-          direction: asc
+      - field: purchase_month
+        direction: asc
       limit: 18
+      metric_view: orders
   revenue_waterfall_labeled:
     title: Labeled revenue waterfall
     shape: category_delta
@@ -876,14 +1181,18 @@ visuals:
     options:
       show_labels: true
       data_zoom: true
-    metrics_view: orders
     query:
-      dimensions: [category]
-      measures: [revenue]
+      dimensions:
+      - field: orders.category
+        alias: category
+      measures:
+      - field: orders.revenue
+        alias: revenue
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 12
+      metric_view: orders
   revenue_histogram:
     title: Revenue histogram
     shape: binned_measure
@@ -891,9 +1200,11 @@ visuals:
     type: histogram
     options:
       bin_count: 18
-    metrics_view: orders
     query:
-      measures: [revenue]
+      measures:
+      - field: orders.revenue
+        alias: revenue
+      metric_view: orders
   review_histogram:
     title: Review score histogram
     shape: binned_measure
@@ -902,21 +1213,27 @@ visuals:
     options:
       bin_count: 10
       show_labels: true
-    metrics_view: orders
     query:
-      measures: [review_score]
+      measures:
+      - field: orders.review_score
+        alias: review_score
+      metric_view: orders
   delivery_radar:
     title: Delivery speed radar
     shape: category_value
     renderer: echarts
     type: radar
-    metrics_view: orders
     query:
-      dimensions: [delivery_bucket]
-      measures: [order_count]
+      dimensions:
+      - field: orders.delivery_bucket
+        alias: delivery_bucket
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: delivery_bucket
-          direction: asc
+      - field: delivery_bucket
+        direction: asc
+      metric_view: orders
   state_radar:
     title: State order radar
     shape: category_value
@@ -924,27 +1241,37 @@ visuals:
     type: radar
     options:
       area: false
-    metrics_view: orders
     query:
-      dimensions: [state]
-      measures: [order_count]
+      dimensions:
+      - field: customers.state
+        alias: state
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 8
+      metric_view: orders
   category_status_tree:
     title: Category and status tree
     shape: hierarchy
     renderer: echarts
     type: tree
-    metrics_view: orders
     query:
-      dimensions: [category, status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.category
+        alias: category
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 80
+      metric_view: orders
   category_state_status_tree:
     title: Category, state, and status tree
     shape: hierarchy
@@ -953,27 +1280,41 @@ visuals:
     options:
       orient: TB
       initial_depth: 2
-    metrics_view: orders
     query:
-      dimensions: [category, state, status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.category
+        alias: category
+      - field: customers.state
+        alias: state
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 120
+      metric_view: orders
   state_status_sunburst:
     title: State and status sunburst
     shape: hierarchy
     renderer: echarts
     type: sunburst
-    metrics_view: orders
     query:
-      dimensions: [state, status]
-      measures: [order_count]
+      dimensions:
+      - field: customers.state
+        alias: state
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 80
+      metric_view: orders
   category_state_status_sunburst:
     title: Category, state, and status sunburst
     shape: hierarchy
@@ -982,975 +1323,1755 @@ visuals:
     options:
       initial_depth: 2
       roam: true
-    metrics_view: orders
     query:
-      dimensions: [category, state, status]
-      measures: [order_count]
+      dimensions:
+      - field: orders.category
+        alias: category
+      - field: customers.state
+        alias: state
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
       sort:
-        - field: value
-          direction: desc
+      - field: value
+        direction: desc
       limit: 120
-
+      metric_view: orders
 tables:
   orders:
     kind: data_table
     title: Orders
-    metrics_view: orders
     default_sort:
       key: purchase_date
       direction: desc
     columns:
-      - key: order_id
-        label: Order
-        width: 240
-        format: text
-      - key: purchase_date
-        label: Purchased
-        width: 126
-        format: text
-      - key: status
-        label: Status
-        width: 128
-        format: text
-      - key: state
-        label: State
-        width: 78
-        format: text
-      - key: category
-        label: Category
-        width: 210
-        format: text
-      - key: revenue
-        label: Revenue
-        align: right
-        width: 130
-        format: currency
-      - key: review_score
-        label: Review
-        align: right
-        width: 104
-        format: decimal
-      - key: delivery_days
-        label: Delivery
-        align: right
-        width: 108
-        format: days
+    - key: order_id
+      label: Order
+      width: 240
+      format: text
+    - key: purchase_date
+      label: Purchased
+      width: 126
+      format: text
+    - key: status
+      label: Status
+      width: 128
+      format: text
+    - key: state
+      label: State
+      width: 78
+      format: text
+    - key: category
+      label: Category
+      width: 210
+      format: text
+    - key: revenue
+      label: Revenue
+      align: right
+      width: 130
+      format: currency
+    - key: review_score
+      label: Review
+      align: right
+      width: 104
+      format: decimal
+    - key: delivery_days
+      label: Delivery
+      align: right
+      width: 108
+      format: days
+    query:
+      metric_view: orders
+      columns:
+      - field: orders.order_id
+        alias: order_id
+      - field: orders.purchase_date
+        alias: purchase_date
+      - field: orders.status
+        alias: status
+      - field: customers.state
+        alias: state
+      - field: orders.category
+        alias: category
+      - field: orders.revenue
+        alias: revenue
+      - field: orders.review_score
+        alias: review_score
+      - field: orders.delivery_days
+        alias: delivery_days
   orders_compact:
     kind: data_table
     title: Orders compact
-    metrics_view: orders
-    style: { density: compact, zebra: false, grid: rows }
+    style:
+      density: compact
+      zebra: false
+      grid: rows
     default_sort:
       key: purchase_date
       direction: desc
     columns:
-      - key: order_id
-        label: Order
-        width: 200
-        format: text
-      - key: status
-        label: Status
-        width: 116
-        format: text
-      - key: state
-        label: State
-        width: 70
-        format: text
-      - key: revenue
-        label: Revenue
-        align: right
-        width: 116
-        format: currency
-      - key: review_score
-        label: Review
-        align: right
-        width: 92
-        format: decimal
+    - key: order_id
+      label: Order
+      width: 200
+      format: text
+    - key: status
+      label: Status
+      width: 116
+      format: text
+    - key: state
+      label: State
+      width: 70
+      format: text
+    - key: revenue
+      label: Revenue
+      align: right
+      width: 116
+      format: currency
+    - key: review_score
+      label: Review
+      align: right
+      width: 92
+      format: decimal
+    query:
+      metric_view: orders
+      columns:
+      - field: orders.order_id
+        alias: order_id
+      - field: orders.status
+        alias: status
+      - field: customers.state
+        alias: state
+      - field: orders.revenue
+        alias: revenue
+      - field: orders.review_score
+        alias: review_score
   orders_spacious:
     kind: data_table
     title: Orders spacious
-    metrics_view: orders
-    style: { density: spacious, zebra: true, grid: rows }
+    style:
+      density: spacious
+      zebra: true
+      grid: rows
     default_sort:
       key: purchase_date
       direction: desc
     columns:
-      - key: order_id
-        label: Order
-        width: 250
-        format: text
-      - key: purchase_date
-        label: Purchased
-        width: 136
-        format: text
-      - key: category
-        label: Category
-        width: 230
-        format: text
-      - key: revenue
-        label: Revenue
-        align: right
-        width: 140
-        format: currency
-      - key: delivery_days
-        label: Delivery
-        align: right
-        width: 116
-        format: days
+    - key: order_id
+      label: Order
+      width: 250
+      format: text
+    - key: purchase_date
+      label: Purchased
+      width: 136
+      format: text
+    - key: category
+      label: Category
+      width: 230
+      format: text
+    - key: revenue
+      label: Revenue
+      align: right
+      width: 140
+      format: currency
+    - key: delivery_days
+      label: Delivery
+      align: right
+      width: 116
+      format: days
+    query:
+      metric_view: orders
+      columns:
+      - field: orders.order_id
+        alias: order_id
+      - field: orders.purchase_date
+        alias: purchase_date
+      - field: orders.category
+        alias: category
+      - field: orders.revenue
+        alias: revenue
+      - field: orders.delivery_days
+        alias: delivery_days
   orders_full_grid:
     kind: data_table
     title: Orders full grid
-    metrics_view: orders
-    style: { density: comfortable, zebra: true, grid: full }
+    style:
+      density: comfortable
+      zebra: true
+      grid: full
     default_sort:
       key: revenue
       direction: desc
     columns:
-      - key: order_id
-        label: Order
-        width: 220
-        format: text
-      - key: status
-        label: Status
-        width: 122
-        format: text
-      - key: state
-        label: State
-        width: 76
-        format: text
-      - key: category
-        label: Category
-        width: 190
-        format: text
-      - key: revenue
-        label: Revenue
-        align: right
-        width: 128
-        format: currency
-      - key: delivery_days
-        label: Delivery
-        align: right
-        width: 110
-        format: days
+    - key: order_id
+      label: Order
+      width: 220
+      format: text
+    - key: status
+      label: Status
+      width: 122
+      format: text
+    - key: state
+      label: State
+      width: 76
+      format: text
+    - key: category
+      label: Category
+      width: 190
+      format: text
+    - key: revenue
+      label: Revenue
+      align: right
+      width: 128
+      format: currency
+    - key: delivery_days
+      label: Delivery
+      align: right
+      width: 110
+      format: days
+    query:
+      metric_view: orders
+      columns:
+      - field: orders.order_id
+        alias: order_id
+      - field: orders.status
+        alias: status
+      - field: customers.state
+        alias: state
+      - field: orders.category
+        alias: category
+      - field: orders.revenue
+        alias: revenue
+      - field: orders.delivery_days
+        alias: delivery_days
   orders_conditional:
     kind: data_table
     title: Orders conditional formatting
-    metrics_view: orders
-    style: { density: comfortable, zebra: true, grid: full }
+    style:
+      density: comfortable
+      zebra: true
+      grid: full
     default_sort:
       key: revenue
       direction: desc
     columns:
-      - key: order_id
-        label: Order
-        width: 212
-        format: text
-      - key: status
-        label: Status
-        width: 132
-        format: text
-        formatting:
-          - kind: badge
-            values:
-              delivered: success
-              shipped: accent
-              invoiced: muted
-              processing: accent
-              approved: accent
-              unavailable: warning
-              canceled: danger
-      - key: revenue
-        label: Revenue
-        align: right
-        width: 136
-        format: currency
-        formatting:
-          - kind: data_bar
-            min: 0
-            max: 500
-            color: accent
-      - key: review_score
-        label: Review
-        align: right
-        width: 102
-        format: decimal
-        formatting:
-          - kind: text_color
-            min: 4
-            color: success
-          - kind: text_color
-            max: 2.99
-            color: danger
-          - kind: text_color
-            min: 3
-            max: 3.99
-            color: warning
-      - key: delivery_days
-        label: Delivery
-        align: right
-        width: 112
-        format: days
-        formatting:
-          - kind: background_scale
-            min: 0
-            max: 30
-            high_color: danger
+    - key: order_id
+      label: Order
+      width: 212
+      format: text
+    - key: status
+      label: Status
+      width: 132
+      format: text
+      formatting:
+      - kind: badge
+        values:
+          delivered: success
+          shipped: accent
+          invoiced: muted
+          processing: accent
+          approved: accent
+          unavailable: warning
+          canceled: danger
+    - key: revenue
+      label: Revenue
+      align: right
+      width: 136
+      format: currency
+      formatting:
+      - kind: data_bar
+        min: 0
+        max: 500
+        color: accent
+    - key: review_score
+      label: Review
+      align: right
+      width: 102
+      format: decimal
+      formatting:
+      - kind: text_color
+        min: 4
+        color: success
+      - kind: text_color
+        max: 2.99
+        color: danger
+      - kind: text_color
+        min: 3
+        max: 3.99
+        color: warning
+    - key: delivery_days
+      label: Delivery
+      align: right
+      width: 112
+      format: days
+      formatting:
+      - kind: background_scale
+        min: 0
+        max: 30
+        high_color: danger
+    query:
+      metric_view: orders
+      columns:
+      - field: orders.order_id
+        alias: order_id
+      - field: orders.status
+        alias: status
+      - field: orders.revenue
+        alias: revenue
+      - field: orders.review_score
+        alias: review_score
+      - field: orders.delivery_days
+        alias: delivery_days
   state_status_matrix:
     kind: matrix_table
     title: State status matrix
-    metrics_view: orders
-    rows: [state]
-    columns: [status]
-    measures: [order_count, revenue]
     default_sort:
       key: state
       direction: asc
+    query:
+      metric_view: orders
+      rows:
+      - field: customers.state
+        alias: state
+      columns:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
+      - field: orders.revenue
+        alias: revenue
   category_status_pivot:
     kind: pivot_table
     title: Category status pivot
-    metrics_view: orders
-    rows: [category]
-    columns: [status]
-    measures: [order_count]
     default_sort:
       key: category
       direction: asc
+    query:
+      metric_view: orders
+      rows:
+      - field: orders.category
+        alias: category
+      columns:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
   state_status_matrix_formatted:
     kind: matrix_table
     title: State/category matrix formatted
-    metrics_view: orders
-    style: { density: comfortable, zebra: true, grid: full }
-    rows: [state, category]
-    measures: [order_count, revenue]
+    style:
+      density: comfortable
+      zebra: true
+      grid: full
     columns:
-      - key: state
-        label: State
-        width: 76
-        format: text
-      - key: category
-        label: Category
-        width: 190
-        format: text
-      - key: order_count
-        label: Orders
-        group: Measures
-        width: 120
-        format: integer
-      - key: revenue
-        label: Revenue
-        group: Measures
-        width: 132
-        format: currency
+    - key: state
+      label: State
+      width: 76
+      format: text
+    - key: category
+      label: Category
+      width: 190
+      format: text
+    - key: order_count
+      label: Orders
+      group: Measures
+      width: 120
+      format: integer
+    - key: revenue
+      label: Revenue
+      group: Measures
+      width: 132
+      format: currency
     measure_formatting:
-      order_count:
-        - kind: data_bar
-          min: 0
-          max: 250
-          color: accent
-      revenue:
-        - kind: data_bar
-          min: 0
-          max: 20000
-          color: success
+      orders.order_count:
+      - kind: data_bar
+        min: 0
+        max: 250
+        color: accent
+      orders.revenue:
+      - kind: data_bar
+        min: 0
+        max: 20000
+        color: success
     default_sort:
       key: state
       direction: asc
+    query:
+      metric_view: orders
+      rows:
+      - field: customers.state
+        alias: state
+      - field: orders.category
+        alias: category
+      measures:
+      - field: orders.order_count
+        alias: order_count
+      - field: orders.revenue
+        alias: revenue
   category_status_pivot_heat:
     kind: pivot_table
     title: Category status pivot heat
-    metrics_view: orders
-    style: { density: compact, zebra: true, grid: full }
-    rows: [category]
-    columns: [status]
-    measures: [order_count]
+    style:
+      density: compact
+      zebra: true
+      grid: full
     measure_formatting:
-      order_count:
-        - kind: background_scale
-          min: 0
-          max: 200
-          high_color: accent
+      orders.order_count:
+      - kind: background_scale
+        min: 0
+        max: 200
+        high_color: accent
     default_sort:
       key: category
       direction: asc
-
+    query:
+      metric_view: orders
+      rows:
+      - field: orders.category
+        alias: category
+      columns:
+      - field: orders.status
+        alias: status
+      measures:
+      - field: orders.order_count
+        alias: order_count
 pages:
-  - id: overview
-    title: Overview
-    description: Executive sales summary
-    canvas:
-      width: 1366
-      height: 912
-    grid:
-      columns: 12
-      row_height: 48
-      gap: 16
-      padding: 16
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: total-orders
-        kind: kpi_card
-        visual: total_orders
-        placement: { col: 1, row: 2, col_span: 3, row_span: 2 }
-      - id: revenue-kpi
-        kind: kpi_card
-        visual: revenue_kpi
-        placement: { col: 4, row: 2, col_span: 3, row_span: 2 }
-      - id: aov-kpi
-        kind: kpi_card
-        visual: aov_kpi
-        placement: { col: 7, row: 2, col_span: 3, row_span: 2 }
-      - id: review-kpi
-        kind: kpi_card
-        visual: review_kpi
-        placement: { col: 10, row: 2, col_span: 3, row_span: 2 }
-      - id: revenue
-        kind: line_chart
-        visual: revenue
-        placement: { col: 1, row: 4, col_span: 6, row_span: 5 }
-      - id: orders
-        kind: bar_chart
-        visual: orders
-        placement: { col: 7, row: 4, col_span: 3, row_span: 5 }
-      - id: delivery
-        kind: bar_chart
-        visual: delivery
-        placement: { col: 10, row: 4, col_span: 3, row_span: 5 }
-      - id: categories
-        kind: bar_chart
-        visual: categories
-        placement: { col: 1, row: 9, col_span: 6, row_span: 6 }
-      - id: orders-table
-        kind: table
-        table: orders
-        placement: { col: 7, row: 9, col_span: 6, row_span: 6 }
-  - id: chart-line
-    title: Line
-    description: Single and multi-series line chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: revenue-line
-        kind: line_chart
-        visual: revenue_line
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: revenue-line-status
-        kind: line_chart
-        visual: revenue_line_status
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: revenue-line-step
-        kind: line_chart
-        visual: revenue_line_step
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-area
-    title: Area
-    description: Single and stacked area chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: revenue-area
-        kind: area_chart
-        visual: revenue
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: revenue-area-status
-        kind: area_chart
-        visual: revenue_area_status
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: revenue-area-smooth
-        kind: area_chart
-        visual: revenue_area_smooth
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-bar
-    title: Bar
-    description: Horizontal bar chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: categories
-        kind: bar_chart
-        visual: categories
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: delivery
-        kind: bar_chart
-        visual: delivery
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: categories-by-status
-        kind: bar_chart
-        visual: categories_by_status_bar
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-column
-    title: Column
-    description: Vertical and stacked column chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: orders-column
-        kind: column_chart
-        visual: orders_by_month_column
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: orders-column-status
-        kind: column_chart
-        visual: orders_by_month_status
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: orders-column-status-grouped
-        kind: column_chart
-        visual: orders_by_month_status_grouped
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-pie
-    title: Pie
-    description: Pie chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: status-pie
-        kind: pie_chart
-        visual: status_pie
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: status-pie-rose
-        kind: pie_chart
-        visual: status_pie_rose
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: category-pie-inside
-        kind: pie_chart
-        visual: category_pie_inside
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-donut
-    title: Donut
-    description: Donut chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: status-donut
-        kind: donut_chart
-        visual: orders
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: category-donut
-        kind: donut_chart
-        visual: category_donut
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: orders-donut-center
-        kind: donut_chart
-        visual: orders_donut_center
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-scatter
-    title: Scatter
-    description: Single and multi-series scatter chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: delivery-scatter
-        kind: scatter_chart
-        visual: delivery_scatter
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: delivery-scatter-status
-        kind: scatter_chart
-        visual: delivery_scatter_status
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: delivery-scatter-labeled
-        kind: scatter_chart
-        visual: delivery_scatter_labeled
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-funnel
-    title: Funnel
-    description: Funnel chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: status-funnel
-        kind: funnel_chart
-        visual: status_funnel
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: delivery-funnel
-        kind: funnel_chart
-        visual: delivery_funnel
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: status-funnel-left
-        kind: funnel_chart
-        visual: status_funnel_left
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-treemap
-    title: Treemap
-    description: Treemap chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: category-treemap
-        kind: treemap_chart
-        visual: category_treemap
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: state-treemap
-        kind: treemap_chart
-        visual: state_treemap
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: category-treemap-roam
-        kind: treemap_chart
-        visual: category_treemap_roam
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-gauge
-    title: Gauge
-    description: Single value gauge variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: orders-gauge
-        kind: gauge_chart
-        visual: total_orders_gauge
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: review-gauge
-        kind: gauge_chart
-        visual: review_gauge
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: review-gauge-thresholds
-        kind: gauge_chart
-        visual: review_gauge_thresholds
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-heatmap
-    title: Heatmap
-    description: Matrix heatmap variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: state-status-heatmap
-        kind: heatmap_chart
-        visual: state_status_heatmap
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: category-status-heatmap
-        kind: heatmap_chart
-        visual: category_status_heatmap
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: category-status-heatmap-labels
-        kind: heatmap_chart
-        visual: category_status_heatmap_labels
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-sankey
-    title: Sankey
-    description: Flow chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: status-delivery-flow
-        kind: sankey_chart
-        visual: status_delivery_flow
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: category-status-flow
-        kind: sankey_chart
-        visual: category_status_flow
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: category-status-flow-spacious
-        kind: sankey_chart
-        visual: category_status_flow_spacious
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-graph
-    title: Graph
-    description: Network chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: status-delivery-graph
-        kind: graph_chart
-        visual: status_delivery_graph
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: category-status-graph
-        kind: graph_chart
-        visual: category_status_graph
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: category-status-graph-circular
-        kind: graph_chart
-        visual: category_status_graph_circular
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-map
-    title: Map
-    description: Geo map variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: state-order-map
-        kind: map_chart
-        visual: state_order_map
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: state-revenue-map
-        kind: map_chart
-        visual: state_revenue_map
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: state-revenue-map-labeled
-        kind: map_chart
-        visual: state_revenue_map_labeled
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-candlestick
-    title: Candlestick
-    description: OHLC chart examples
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: delivery-candlestick
-        kind: candlestick_chart
-        visual: delivery_candlestick
-        placement: { col: 1, row: 2, col_span: 6, row_span: 8 }
-      - id: revenue-candlestick
-        kind: candlestick_chart
-        visual: revenue_candlestick
-        placement: { col: 7, row: 2, col_span: 6, row_span: 8 }
-  - id: chart-boxplot
-    title: Boxplot
-    description: Distribution chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: delivery-distribution
-        kind: boxplot_chart
-        visual: delivery_distribution
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: review-distribution
-        kind: boxplot_chart
-        visual: review_distribution
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: revenue-distribution
-        kind: boxplot_chart
-        visual: revenue_distribution
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-combo
-    title: Combo
-    description: Multi-measure combo chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: revenue-orders-combo
-        kind: combo_chart
-        visual: revenue_orders_combo
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: review-delivery-combo
-        kind: combo_chart
-        visual: review_delivery_combo
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: revenue-orders-dual-axis-combo
-        kind: combo_chart
-        visual: revenue_orders_dual_axis_combo
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-waterfall
-    title: Waterfall
-    description: Delta chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: revenue-waterfall
-        kind: waterfall_chart
-        visual: revenue_waterfall
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: orders-waterfall
-        kind: waterfall_chart
-        visual: orders_waterfall
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: revenue-waterfall-labeled
-        kind: waterfall_chart
-        visual: revenue_waterfall_labeled
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-histogram
-    title: Histogram
-    description: Binned measure chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: delivery-histogram
-        kind: histogram_chart
-        visual: delivery_histogram
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: revenue-histogram
-        kind: histogram_chart
-        visual: revenue_histogram
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: review-histogram
-        kind: histogram_chart
-        visual: review_histogram
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-radar
-    title: Radar
-    description: Radar chart variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: status-radar
-        kind: radar_chart
-        visual: status_radar
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: delivery-radar
-        kind: radar_chart
-        visual: delivery_radar
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: state-radar
-        kind: radar_chart
-        visual: state_radar
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-tree
-    title: Tree
-    description: Tree hierarchy variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: state-status-tree
-        kind: tree_chart
-        visual: state_status_tree
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: category-status-tree
-        kind: tree_chart
-        visual: category_status_tree
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: category-state-status-tree
-        kind: tree_chart
-        visual: category_state_status_tree
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: chart-sunburst
-    title: Sunburst
-    description: Sunburst hierarchy variations
-    canvas: { width: 1366, height: 672 }
-    grid: { columns: 12, row_height: 48, gap: 16, padding: 16 }
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: category-status-sunburst
-        kind: sunburst_chart
-        visual: category_status_sunburst
-        placement: { col: 1, row: 2, col_span: 4, row_span: 8 }
-      - id: state-status-sunburst
-        kind: sunburst_chart
-        visual: state_status_sunburst
-        placement: { col: 5, row: 2, col_span: 4, row_span: 8 }
-      - id: category-state-status-sunburst
-        kind: sunburst_chart
-        visual: category_state_status_sunburst
-        placement: { col: 9, row: 2, col_span: 4, row_span: 8 }
-  - id: tables
-    title: Tables
-    description: Detail, matrix, and pivot table variations
-    canvas:
-      width: 1366
-      height: 2560
-    grid:
-      columns: 12
-      row_height: 48
-      gap: 16
-      padding: 16
-    visuals:
-      - id: period-filter
-        kind: filter_card
-        filter: purchase_date
-        placement: { col: 1, row: 1, col_span: 3, row_span: 1 }
-      - id: state-filter
-        kind: filter_card
-        filter: state
-        placement: { col: 4, row: 1, col_span: 3, row_span: 1 }
-      - id: orders-table
-        kind: table
-        table: orders
-        placement: { col: 1, row: 2, col_span: 12, row_span: 7 }
-      - id: orders-compact
-        kind: table
-        table: orders_compact
-        placement: { col: 1, row: 9, col_span: 6, row_span: 6 }
-      - id: orders-spacious
-        kind: table
-        table: orders_spacious
-        placement: { col: 7, row: 9, col_span: 6, row_span: 6 }
-      - id: orders-full-grid
-        kind: table
-        table: orders_full_grid
-        placement: { col: 1, row: 15, col_span: 6, row_span: 7 }
-      - id: orders-conditional
-        kind: table
-        table: orders_conditional
-        placement: { col: 7, row: 15, col_span: 6, row_span: 7 }
-      - id: state-status-matrix
-        kind: table
-        table: state_status_matrix
-        placement: { col: 1, row: 22, col_span: 6, row_span: 7 }
-      - id: category-status-pivot
-        kind: table
-        table: category_status_pivot
-        placement: { col: 7, row: 22, col_span: 6, row_span: 7 }
-      - id: state-status-matrix-formatted
-        kind: table
-        table: state_status_matrix_formatted
-        placement: { col: 1, row: 29, col_span: 6, row_span: 8 }
-      - id: category-status-pivot-heat
-        kind: table
-        table: category_status_pivot_heat
-        placement: { col: 7, row: 29, col_span: 6, row_span: 8 }
+- id: overview
+  title: Overview
+  description: Executive sales summary
+  canvas:
+    width: 1366
+    height: 912
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: total-orders
+    kind: kpi_card
+    visual: total_orders
+    placement:
+      col: 1
+      row: 2
+      col_span: 3
+      row_span: 2
+  - id: revenue-kpi
+    kind: kpi_card
+    visual: revenue_kpi
+    placement:
+      col: 4
+      row: 2
+      col_span: 3
+      row_span: 2
+  - id: aov-kpi
+    kind: kpi_card
+    visual: aov_kpi
+    placement:
+      col: 7
+      row: 2
+      col_span: 3
+      row_span: 2
+  - id: review-kpi
+    kind: kpi_card
+    visual: review_kpi
+    placement:
+      col: 10
+      row: 2
+      col_span: 3
+      row_span: 2
+  - id: revenue
+    kind: line_chart
+    visual: revenue
+    placement:
+      col: 1
+      row: 4
+      col_span: 6
+      row_span: 5
+  - id: orders
+    kind: bar_chart
+    visual: orders
+    placement:
+      col: 7
+      row: 4
+      col_span: 3
+      row_span: 5
+  - id: delivery
+    kind: bar_chart
+    visual: delivery
+    placement:
+      col: 10
+      row: 4
+      col_span: 3
+      row_span: 5
+  - id: categories
+    kind: bar_chart
+    visual: categories
+    placement:
+      col: 1
+      row: 9
+      col_span: 6
+      row_span: 6
+  - id: orders-table
+    kind: table
+    table: orders
+    placement:
+      col: 7
+      row: 9
+      col_span: 6
+      row_span: 6
+- id: chart-line
+  title: Line
+  description: Single and multi-series line chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: revenue-line
+    kind: line_chart
+    visual: revenue_line
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: revenue-line-status
+    kind: line_chart
+    visual: revenue_line_status
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: revenue-line-step
+    kind: line_chart
+    visual: revenue_line_step
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-area
+  title: Area
+  description: Single and stacked area chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: revenue-area
+    kind: area_chart
+    visual: revenue
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: revenue-area-status
+    kind: area_chart
+    visual: revenue_area_status
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: revenue-area-smooth
+    kind: area_chart
+    visual: revenue_area_smooth
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-bar
+  title: Bar
+  description: Horizontal bar chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: categories
+    kind: bar_chart
+    visual: categories
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: delivery
+    kind: bar_chart
+    visual: delivery
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: categories-by-status
+    kind: bar_chart
+    visual: categories_by_status_bar
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-column
+  title: Column
+  description: Vertical and stacked column chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: orders-column
+    kind: column_chart
+    visual: orders_by_month_column
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: orders-column-status
+    kind: column_chart
+    visual: orders_by_month_status
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: orders-column-status-grouped
+    kind: column_chart
+    visual: orders_by_month_status_grouped
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-pie
+  title: Pie
+  description: Pie chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: status-pie
+    kind: pie_chart
+    visual: status_pie
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: status-pie-rose
+    kind: pie_chart
+    visual: status_pie_rose
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-pie-inside
+    kind: pie_chart
+    visual: category_pie_inside
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-donut
+  title: Donut
+  description: Donut chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: status-donut
+    kind: donut_chart
+    visual: orders
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-donut
+    kind: donut_chart
+    visual: category_donut
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: orders-donut-center
+    kind: donut_chart
+    visual: orders_donut_center
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-scatter
+  title: Scatter
+  description: Single and multi-series scatter chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: delivery-scatter
+    kind: scatter_chart
+    visual: delivery_scatter
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: delivery-scatter-status
+    kind: scatter_chart
+    visual: delivery_scatter_status
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: delivery-scatter-labeled
+    kind: scatter_chart
+    visual: delivery_scatter_labeled
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-funnel
+  title: Funnel
+  description: Funnel chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: status-funnel
+    kind: funnel_chart
+    visual: status_funnel
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: delivery-funnel
+    kind: funnel_chart
+    visual: delivery_funnel
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: status-funnel-left
+    kind: funnel_chart
+    visual: status_funnel_left
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-treemap
+  title: Treemap
+  description: Treemap chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: category-treemap
+    kind: treemap_chart
+    visual: category_treemap
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: state-treemap
+    kind: treemap_chart
+    visual: state_treemap
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-treemap-roam
+    kind: treemap_chart
+    visual: category_treemap_roam
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-gauge
+  title: Gauge
+  description: Single value gauge variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: orders-gauge
+    kind: gauge_chart
+    visual: total_orders_gauge
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: review-gauge
+    kind: gauge_chart
+    visual: review_gauge
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: review-gauge-thresholds
+    kind: gauge_chart
+    visual: review_gauge_thresholds
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-heatmap
+  title: Heatmap
+  description: Matrix heatmap variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-status-heatmap
+    kind: heatmap_chart
+    visual: state_status_heatmap
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-status-heatmap
+    kind: heatmap_chart
+    visual: category_status_heatmap
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-status-heatmap-labels
+    kind: heatmap_chart
+    visual: category_status_heatmap_labels
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-sankey
+  title: Sankey
+  description: Flow chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: status-delivery-flow
+    kind: sankey_chart
+    visual: status_delivery_flow
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-status-flow
+    kind: sankey_chart
+    visual: category_status_flow
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-status-flow-spacious
+    kind: sankey_chart
+    visual: category_status_flow_spacious
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-graph
+  title: Graph
+  description: Network chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: status-delivery-graph
+    kind: graph_chart
+    visual: status_delivery_graph
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-status-graph
+    kind: graph_chart
+    visual: category_status_graph
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-status-graph-circular
+    kind: graph_chart
+    visual: category_status_graph_circular
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-map
+  title: Map
+  description: Geo map variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-order-map
+    kind: map_chart
+    visual: state_order_map
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: state-revenue-map
+    kind: map_chart
+    visual: state_revenue_map
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: state-revenue-map-labeled
+    kind: map_chart
+    visual: state_revenue_map_labeled
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-candlestick
+  title: Candlestick
+  description: OHLC chart examples
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: delivery-candlestick
+    kind: candlestick_chart
+    visual: delivery_candlestick
+    placement:
+      col: 1
+      row: 2
+      col_span: 6
+      row_span: 8
+  - id: revenue-candlestick
+    kind: candlestick_chart
+    visual: revenue_candlestick
+    placement:
+      col: 7
+      row: 2
+      col_span: 6
+      row_span: 8
+- id: chart-boxplot
+  title: Boxplot
+  description: Distribution chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: delivery-distribution
+    kind: boxplot_chart
+    visual: delivery_distribution
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: review-distribution
+    kind: boxplot_chart
+    visual: review_distribution
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: revenue-distribution
+    kind: boxplot_chart
+    visual: revenue_distribution
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-combo
+  title: Combo
+  description: Multi-measure combo chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: revenue-orders-combo
+    kind: combo_chart
+    visual: revenue_orders_combo
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: review-delivery-combo
+    kind: combo_chart
+    visual: review_delivery_combo
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: revenue-orders-dual-axis-combo
+    kind: combo_chart
+    visual: revenue_orders_dual_axis_combo
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-waterfall
+  title: Waterfall
+  description: Delta chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: revenue-waterfall
+    kind: waterfall_chart
+    visual: revenue_waterfall
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: orders-waterfall
+    kind: waterfall_chart
+    visual: orders_waterfall
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: revenue-waterfall-labeled
+    kind: waterfall_chart
+    visual: revenue_waterfall_labeled
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-histogram
+  title: Histogram
+  description: Binned measure chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: delivery-histogram
+    kind: histogram_chart
+    visual: delivery_histogram
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: revenue-histogram
+    kind: histogram_chart
+    visual: revenue_histogram
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: review-histogram
+    kind: histogram_chart
+    visual: review_histogram
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-radar
+  title: Radar
+  description: Radar chart variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: status-radar
+    kind: radar_chart
+    visual: status_radar
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: delivery-radar
+    kind: radar_chart
+    visual: delivery_radar
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: state-radar
+    kind: radar_chart
+    visual: state_radar
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-tree
+  title: Tree
+  description: Tree hierarchy variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-status-tree
+    kind: tree_chart
+    visual: state_status_tree
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-status-tree
+    kind: tree_chart
+    visual: category_status_tree
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-state-status-tree
+    kind: tree_chart
+    visual: category_state_status_tree
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: chart-sunburst
+  title: Sunburst
+  description: Sunburst hierarchy variations
+  canvas:
+    width: 1366
+    height: 672
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: category-status-sunburst
+    kind: sunburst_chart
+    visual: category_status_sunburst
+    placement:
+      col: 1
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: state-status-sunburst
+    kind: sunburst_chart
+    visual: state_status_sunburst
+    placement:
+      col: 5
+      row: 2
+      col_span: 4
+      row_span: 8
+  - id: category-state-status-sunburst
+    kind: sunburst_chart
+    visual: category_state_status_sunburst
+    placement:
+      col: 9
+      row: 2
+      col_span: 4
+      row_span: 8
+- id: tables
+  title: Tables
+  description: Detail, matrix, and pivot table variations
+  canvas:
+    width: 1366
+    height: 2560
+  grid:
+    columns: 12
+    row_height: 48
+    gap: 16
+    padding: 16
+  visuals:
+  - id: period-filter
+    kind: filter_card
+    filter: purchase_date
+    placement:
+      col: 1
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: state-filter
+    kind: filter_card
+    filter: state
+    placement:
+      col: 4
+      row: 1
+      col_span: 3
+      row_span: 1
+  - id: orders-table
+    kind: table
+    table: orders
+    placement:
+      col: 1
+      row: 2
+      col_span: 12
+      row_span: 7
+  - id: orders-compact
+    kind: table
+    table: orders_compact
+    placement:
+      col: 1
+      row: 9
+      col_span: 6
+      row_span: 6
+  - id: orders-spacious
+    kind: table
+    table: orders_spacious
+    placement:
+      col: 7
+      row: 9
+      col_span: 6
+      row_span: 6
+  - id: orders-full-grid
+    kind: table
+    table: orders_full_grid
+    placement:
+      col: 1
+      row: 15
+      col_span: 6
+      row_span: 7
+  - id: orders-conditional
+    kind: table
+    table: orders_conditional
+    placement:
+      col: 7
+      row: 15
+      col_span: 6
+      row_span: 7
+  - id: state-status-matrix
+    kind: table
+    table: state_status_matrix
+    placement:
+      col: 1
+      row: 22
+      col_span: 6
+      row_span: 7
+  - id: category-status-pivot
+    kind: table
+    table: category_status_pivot
+    placement:
+      col: 7
+      row: 22
+      col_span: 6
+      row_span: 7
+  - id: state-status-matrix-formatted
+    kind: table
+    table: state_status_matrix_formatted
+    placement:
+      col: 1
+      row: 29
+      col_span: 6
+      row_span: 8
+  - id: category-status-pivot-heat
+    kind: table
+    table: category_status_pivot_heat
+    placement:
+      col: 7
+      row: 29
+      col_span: 6
+      row_span: 8

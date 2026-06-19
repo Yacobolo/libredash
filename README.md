@@ -35,12 +35,12 @@ go run ./cmd/libredash
 - `GET /` renders the file-backed dashboard catalog with gomponents.
 - `GET /dashboards/{dashboard}` opens a dashboard, and `GET /dashboards/{dashboard}/pages/{page}` renders a report page.
 - `GET /metrics` renders the metric view catalog, and `GET /metrics/{view}` renders metric contract details.
-- `GET /models/{model}` renders the semantic model lineage graph, including metric views built on top of datasets.
+- `GET /models/{model}` renders the semantic model lineage graph, including metric views built on top of model tables.
 - `GET /updates?dashboard={dashboard}&page={page}` opens a long-running Datastar SSE stream and patches signals with `datastar.MarshalAndPatchSignals`.
 - DuckDB registers local CSV files as views and materializes model-scoped import tables.
-- `dashboards/catalog.yaml` discovers semantic models, metrics views, and dashboards.
-- Semantic model YAML owns sources, cache tables, datasets, and relationships; metrics view YAML owns business dimensions and aggregate measure expressions.
-- Dashboard YAML owns pages, filters, KPIs, visuals, tables, and interactions over metrics views.
+- `dashboards/catalog.yaml` discovers semantic models, metric views, and dashboards.
+- Semantic model YAML owns sources, model tables, dimensions, measures, and relationships; metric view YAML exposes curated business fields.
+- Dashboard YAML owns pages, filters, KPIs, visuals, tables, and interactions over metric views.
 - Lit chart components bind to signal paths such as `charts.revenue`.
 - The bundled `datastar-inspector` web component shows live Datastar signals in the browser.
 
@@ -119,7 +119,7 @@ sources:
     object: public.accounts
 ```
 
-Lance dataset:
+Lance source:
 
 ```yaml
 connections:

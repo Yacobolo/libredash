@@ -245,12 +245,12 @@ func (m *Manager) QueryTablePage(ctx context.Context, dashboardID, pageID string
 	return metrics.QueryTablePage(ctx, dashboardID, pageID, filters, request)
 }
 
-func (m *Manager) RefreshCache(ctx context.Context, modelID string) error {
+func (m *Manager) RefreshMaterializations(ctx context.Context, modelID string) error {
 	metrics, err := m.metrics()
 	if err != nil {
 		return err
 	}
-	return metrics.RefreshCache(ctx, modelID)
+	return metrics.RefreshMaterializations(ctx, modelID)
 }
 
 func (m *Manager) DataDir() string {

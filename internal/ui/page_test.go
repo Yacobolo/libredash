@@ -9,6 +9,14 @@ import (
 	"github.com/Yacobolo/libredash/internal/semantic"
 )
 
+func fieldRefs(fields ...string) []semantic.FieldRef {
+	refs := make([]semantic.FieldRef, len(fields))
+	for i, field := range fields {
+		refs[i] = semantic.FieldRef{Field: field}
+	}
+	return refs
+}
+
 func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	report := semantic.Dashboard{
 		ID:          "report",
@@ -19,9 +27,9 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 			"category": {Type: "text", Label: "Category", MetricView: "orders", Dimension: "category", URLParam: "category", DefaultOperator: "contains"},
 		},
 		Visuals: map[string]semantic.Visual{
-			"active_chart":   {Title: "Active", Type: "bar", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}}},
-			"active_kpi":     {Kind: "kpi", Shape: "single_value", MetricView: "orders", Query: semantic.VisualQuery{Measures: []string{"order_count"}}, Options: map[string]any{"note": "Filtered", "tone": "ink"}},
-			"off_page_chart": {Title: "Off Page", Type: "bar", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: []string{"status"}, Measures: []string{"order_count"}}},
+			"active_chart":   {Title: "Active", Type: "bar", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: fieldRefs("status"), Measures: fieldRefs("order_count")}},
+			"active_kpi":     {Kind: "kpi", Shape: "single_value", MetricView: "orders", Query: semantic.VisualQuery{Measures: fieldRefs("order_count")}, Options: map[string]any{"note": "Filtered", "tone": "ink"}},
+			"off_page_chart": {Title: "Off Page", Type: "bar", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: fieldRefs("status"), Measures: fieldRefs("order_count")}},
 		},
 		Tables: map[string]semantic.TableVisual{
 			"orders":   {Title: "Orders", MetricView: "orders", Style: dashboard.TableStyle{Density: "compact", Grid: "full"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order", Width: 220, Format: "text"}}},
@@ -55,8 +63,12 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	model := &semantic.Model{
 		Name:  "test",
 		Title: "Test",
-		Datasets: map[string]semantic.Dataset{
-			"orders": {Source: "orders_enriched"},
+		Tables: map[string]semantic.ModelTable{
+			"orders": {
+				Kind: "fact", Source: "orders", PrimaryKey: "order_id", Grain: "order_id",
+				Dimensions: map[string]semantic.MetricDimension{"order_id": {Expr: "order_id"}},
+				Measures:   map[string]semantic.MetricMeasure{"order_count": {Label: "Orders", Expression: "COUNT(*)"}},
+			},
 		},
 	}
 

@@ -51,22 +51,15 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 			edge(modelID, id, "contains")
 			edge(id, byKey["connection:"+modelEntry.ID+"."+source.Connection], "uses_connection")
 		}
-		for cacheName, cache := range model.Cache.Tables {
-			id, err := add("cache_table", modelEntry.ID+"."+cacheName, modelID, cacheName, cache.Description, cache)
+		for tableName, table := range model.Tables {
+			id, err := add("model_table", modelEntry.ID+"."+tableName, modelID, tableName, table.Description, table)
 			if err != nil {
 				return nil, nil, err
 			}
 			edge(modelID, id, "contains")
-			for sourceName := range model.Sources {
-				edge(id, byKey["source:"+modelEntry.ID+"."+sourceName], "reads_source")
+			if table.Source != "" {
+				edge(id, byKey["source:"+modelEntry.ID+"."+table.Source], "reads_source")
 			}
-		}
-		for datasetName, dataset := range model.Datasets {
-			datasetID, err := add("dataset", modelEntry.ID+"."+datasetName, modelID, datasetName, "", dataset)
-			if err != nil {
-				return nil, nil, err
-			}
-			edge(datasetID, byKey["cache_table:"+modelEntry.ID+"."+dataset.Source], "uses_cache_table")
 		}
 	}
 	for _, viewEntry := range workspace.Catalog.MetricViews {
@@ -76,7 +69,7 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 			return nil, nil, err
 		}
 		edge(byKey["semantic_model:"+view.SemanticModel], viewID, "contains")
-		edge(viewID, byKey["dataset:"+view.SemanticModel+"."+view.Dataset], "uses_dataset")
+		edge(viewID, byKey["model_table:"+view.SemanticModel+"."+view.BaseTable], "uses_model_table")
 		for dimensionName, dimension := range view.Dimensions {
 			id, err := add("dimension", view.ID+"."+dimensionName, viewID, dimensionLabel(dimensionName, dimension.Label), "", dimension)
 			if err != nil {
@@ -122,13 +115,13 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 			}
 			edge(visualID, byKey["metric_view:"+visual.MetricView], "uses_metric_view")
 			for _, measure := range visual.Query.Measures {
-				edge(visualID, byKey["measure:"+visual.MetricView+"."+measure], "uses_measure")
+				edge(visualID, byKey["measure:"+visual.MetricView+"."+measure.Field], "uses_measure")
 			}
 			for _, dimension := range visual.Query.Dimensions {
-				edge(visualID, byKey["dimension:"+visual.MetricView+"."+dimension], "uses_dimension")
+				edge(visualID, byKey["dimension:"+visual.MetricView+"."+dimension.Field], "uses_dimension")
 			}
-			if visual.Query.Series != "" {
-				edge(visualID, byKey["dimension:"+visual.MetricView+"."+visual.Query.Series], "uses_dimension")
+			if !visual.Query.Series.IsZero() {
+				edge(visualID, byKey["dimension:"+visual.MetricView+"."+visual.Query.Series.Field], "uses_dimension")
 			}
 		}
 		for tableName, table := range report.Tables {

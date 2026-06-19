@@ -99,7 +99,7 @@ func (s *Server) resetFilters(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) refreshCache(w http.ResponseWriter, r *http.Request) {
+func (s *Server) refreshMaterializations(w http.ResponseWriter, r *http.Request) {
 	signals := dashboard.Signals{}
 	if err := datastar.ReadSignals(r, &signals); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -114,7 +114,7 @@ func (s *Server) refreshCache(w http.ResponseWriter, r *http.Request) {
 
 	s.broker.publish(clientID, loadingPatch(s.metrics.DataDir()))
 
-	if err := s.metrics.RefreshCache(r.Context(), modelID); err != nil {
+	if err := s.metrics.RefreshMaterializations(r.Context(), modelID); err != nil {
 		s.broker.publish(clientID, dashboardPatch(dashboard.EmptyPatch(filters, s.metrics.DataDir(), err)))
 		w.WriteHeader(http.StatusNoContent)
 		return

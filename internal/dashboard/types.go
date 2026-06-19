@@ -50,7 +50,7 @@ type MetricViewSummary struct {
 	Description    string `json:"description"`
 	SemanticModel  string `json:"semanticModel"`
 	ModelTitle     string `json:"modelTitle"`
-	Dataset        string `json:"dataset"`
+	BaseTable      string `json:"baseTable"`
 	Timeseries     string `json:"timeseries"`
 	DimensionCount int    `json:"dimensionCount"`
 	MeasureCount   int    `json:"measureCount"`
@@ -210,7 +210,7 @@ type ModelGraph struct {
 
 type ModelStats struct {
 	Sources       int `json:"sources"`
-	CacheTables   int `json:"cacheTables"`
+	ModelTables   int `json:"modelTables"`
 	Metrics       int `json:"metrics"`
 	Visuals       int `json:"visuals"`
 	ReportTables  int `json:"reportTables"`

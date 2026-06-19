@@ -26,12 +26,12 @@ var migrationsFS embed.FS
 const (
 	DefaultWorkspaceID = "libredash"
 
-	PermissionDashboardView      = "dashboard:view"
-	PermissionDeploymentCreate   = "deployment:create"
-	PermissionDeploymentActivate = "deployment:activate"
-	PermissionDeploymentRollback = "deployment:rollback"
-	PermissionCacheRefresh       = "cache:refresh"
-	PermissionRBACManage         = "rbac:manage"
+	PermissionDashboardView           = "dashboard:view"
+	PermissionDeploymentCreate        = "deployment:create"
+	PermissionDeploymentActivate      = "deployment:activate"
+	PermissionDeploymentRollback      = "deployment:rollback"
+	PermissionMaterializationsRefresh = "materializations:refresh"
+	PermissionRBACManage              = "rbac:manage"
 )
 
 var rolePermissions = map[string][]string{
@@ -40,7 +40,7 @@ var rolePermissions = map[string][]string{
 		PermissionDeploymentCreate,
 		PermissionDeploymentActivate,
 		PermissionDeploymentRollback,
-		PermissionCacheRefresh,
+		PermissionMaterializationsRefresh,
 		PermissionRBACManage,
 	},
 	"admin": {
@@ -48,7 +48,7 @@ var rolePermissions = map[string][]string{
 		PermissionDeploymentCreate,
 		PermissionDeploymentActivate,
 		PermissionDeploymentRollback,
-		PermissionCacheRefresh,
+		PermissionMaterializationsRefresh,
 		PermissionRBACManage,
 	},
 	"deployer": {
@@ -56,11 +56,11 @@ var rolePermissions = map[string][]string{
 		PermissionDeploymentCreate,
 		PermissionDeploymentActivate,
 		PermissionDeploymentRollback,
-		PermissionCacheRefresh,
+		PermissionMaterializationsRefresh,
 	},
 	"editor": {
 		PermissionDashboardView,
-		PermissionCacheRefresh,
+		PermissionMaterializationsRefresh,
 	},
 	"viewer": {
 		PermissionDashboardView,

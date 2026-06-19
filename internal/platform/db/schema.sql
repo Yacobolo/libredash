@@ -128,7 +128,7 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   last_used_at TEXT
 );
 
-CREATE TABLE IF NOT EXISTS cache_jobs (
+CREATE TABLE IF NOT EXISTS materialization_jobs (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   deployment_id TEXT REFERENCES deployments(id) ON DELETE SET NULL,
@@ -138,9 +138,9 @@ CREATE TABLE IF NOT EXISTS cache_jobs (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS cache_job_runs (
+CREATE TABLE IF NOT EXISTS materialization_job_runs (
   id TEXT PRIMARY KEY,
-  job_id TEXT NOT NULL REFERENCES cache_jobs(id) ON DELETE CASCADE,
+  job_id TEXT NOT NULL REFERENCES materialization_jobs(id) ON DELETE CASCADE,
   status TEXT NOT NULL,
   started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   finished_at TEXT,

@@ -420,11 +420,11 @@ function positionFor(node: ModelGraphNode, nodes: ModelGraphNode[]): { x: number
   switch (kind) {
     case 'source':
       return { x: 0, y: index * 116 }
-    case 'cache':
+    case 'materialization':
       return { x: 300, y: 292 + index * 128 }
-    case 'dataset':
+    case 'model_table':
       return { x: 560, y: 292 + index * 128 }
-    case 'metrics_view':
+    case 'metric_view':
       return { x: 820, y: index * 128 }
     case 'metric':
       return { x: 1040, y: index * 116 }
@@ -475,9 +475,9 @@ function ModelNodeComponent({ data }: { data: ModelGraphNode & { selected?: bool
 function nodeStyle(kind: string): Record<string, string> {
   const palette: Record<string, [string, string, string]> = {
     source: ['var(--ld-asset-source-bg)', 'var(--ld-asset-source-accent)', 'var(--ld-asset-source-border)'],
-    cache: ['var(--ld-asset-cache-table-bg)', 'var(--ld-asset-cache-table-accent)', 'var(--ld-asset-cache-table-border)'],
-    dataset: ['var(--ld-asset-dataset-bg)', 'var(--ld-asset-dataset-accent)', 'var(--ld-asset-dataset-border)'],
-    metrics_view: ['var(--ld-asset-metric-view-bg)', 'var(--ld-asset-metric-view-accent)', 'var(--ld-asset-metric-view-border)'],
+    materialization: ['var(--ld-asset-cache-table-bg)', 'var(--ld-asset-cache-table-accent)', 'var(--ld-asset-cache-table-border)'],
+    model_table: ['var(--ld-asset-dataset-bg)', 'var(--ld-asset-dataset-accent)', 'var(--ld-asset-dataset-border)'],
+    metric_view: ['var(--ld-asset-metric-view-bg)', 'var(--ld-asset-metric-view-accent)', 'var(--ld-asset-metric-view-border)'],
     metric: ['var(--ld-asset-measure-bg)', 'var(--ld-asset-measure-accent)', 'var(--ld-asset-measure-border)'],
     visual: ['var(--ld-asset-visual-bg)', 'var(--ld-asset-visual-accent)', 'var(--ld-asset-visual-border)'],
     report_table: ['var(--ld-asset-table-bg)', 'var(--ld-asset-table-accent)', 'var(--ld-asset-table-border)'],
@@ -492,11 +492,11 @@ function nodeStyle(kind: string): Record<string, string> {
 
 function nodeColor(kind: string): string {
   switch (kind) {
-    case 'cache':
+    case 'materialization':
       return 'var(--ld-asset-cache-table-accent)'
-    case 'dataset':
+    case 'model_table':
       return 'var(--ld-asset-dataset-accent)'
-    case 'metrics_view':
+    case 'metric_view':
       return 'var(--ld-asset-metric-view-accent)'
     case 'metric':
       return 'var(--ld-asset-measure-accent)'
@@ -513,12 +513,12 @@ function kindLabel(kind: string): string {
   switch (kind) {
     case 'source':
       return 'Source table'
-    case 'cache':
-      return 'DuckDB cache'
-    case 'dataset':
-      return 'Semantic dataset'
-    case 'metrics_view':
-      return 'Metrics view'
+    case 'materialization':
+      return 'Materialization'
+    case 'model_table':
+      return 'Model table'
+    case 'metric_view':
+      return 'Metric view'
     case 'metric':
       return 'Metric'
     case 'visual':

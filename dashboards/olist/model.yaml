@@ -27,10 +27,11 @@ sources:
   translations:
     path: product_category_name_translation.csv
 
-cache:
-  tables:
-    orders_enriched:
-      description: One row per order with reusable dimensions and measures for dashboard visuals.
+tables:
+  orders:
+    kind: fact
+    description: One row per order with reusable order grain measures.
+    transform:
       sql: |
         WITH revenue AS (
           SELECT order_id, SUM(try_cast(payment_value AS DOUBLE)) AS revenue
@@ -58,7 +59,6 @@ cache:
           strftime(CAST(o.order_purchase_timestamp AS TIMESTAMP), '%Y-%m') AS purchase_month,
           strftime(CAST(o.order_purchase_timestamp AS TIMESTAMP), '%Y-%m-%d') AS purchase_date,
           o.order_status AS status,
-          c.customer_state AS state,
           COALESCE(category.category, 'uncategorized') AS category,
           round(COALESCE(revenue.revenue, 0), 2) AS revenue,
           round(COALESCE(review.review_score, 0), 2) AS review_score,
@@ -75,43 +75,140 @@ cache:
             ELSE '31+ days'
           END AS delivery_bucket
         FROM raw.orders o
-        JOIN raw.customers c ON c.customer_id = o.customer_id
         LEFT JOIN revenue ON revenue.order_id = o.order_id
         LEFT JOIN review ON review.order_id = o.order_id
         LEFT JOIN category ON category.order_id = o.order_id
-
-datasets:
-  orders:
-    source: orders_enriched
+    primary_key: order_id
+    grain: order_id
+    dimensions:
+      order_id:
+        label: Order ID
+        expr: order_id
+      customer_id:
+        label: Customer ID
+        expr: customer_id
+      purchase_month:
+        label: Purchase month
+        expr: purchase_month
+      purchase_timestamp:
+        label: Purchase timestamp
+        expr: purchase_timestamp
+        type: time
+      purchase_date:
+        label: Purchase date
+        expr: purchase_date
+      status:
+        label: Status
+        expr: status
+      category:
+        label: Category
+        expr: category
+      delivery_bucket:
+        label: Delivery speed
+        expr: delivery_bucket
+        where: delivery_bucket IS NOT NULL
+        order_expr: MIN(delivery_days)
+    measures:
+      order_count:
+        label: Orders
+        expression: COUNT(DISTINCT orders.order_id)
+        unit: orders
+        format: integer
+      revenue:
+        label: Revenue
+        expression: SUM(orders.revenue)
+        unit: R$
+        format: currency
+      revenue_min:
+        label: Revenue min
+        expression: MIN(orders.revenue)
+        unit: R$
+        format: currency
+      revenue_q1:
+        label: Revenue q1
+        expression: quantile_cont(orders.revenue, 0.25)
+        unit: R$
+        format: currency
+      revenue_q3:
+        label: Revenue q3
+        expression: quantile_cont(orders.revenue, 0.75)
+        unit: R$
+        format: currency
+      revenue_max:
+        label: Revenue max
+        expression: MAX(orders.revenue)
+        unit: R$
+        format: currency
+      aov:
+        label: AOV
+        expression: SUM(orders.revenue) / NULLIF(COUNT(DISTINCT orders.order_id), 0)
+        unit: R$
+        format: currency
+      review_score:
+        label: Review
+        expression: AVG(orders.review_score)
+        format: decimal
+      delivery_days:
+        label: Delivery days
+        expression: AVG(orders.delivery_days)
+        format: decimal
+      delivery_days_min:
+        label: Delivery min
+        expression: MIN(orders.delivery_days)
+        format: decimal
+      delivery_days_q1:
+        label: Delivery q1
+        expression: quantile_cont(orders.delivery_days, 0.25)
+        format: decimal
+      delivery_days_q3:
+        label: Delivery q3
+        expression: quantile_cont(orders.delivery_days, 0.75)
+        format: decimal
+      delivery_days_max:
+        label: Delivery max
+        expression: MAX(orders.delivery_days)
+        format: decimal
+  customers:
+    kind: dimension
+    source: customers
+    primary_key: customer_id
+    grain: customer_id
+    dimensions:
+      customer_id:
+        label: Customer ID
+        expr: customer_id
+      state:
+        label: State
+        expr: customer_state
 
 relationships:
   - id: orders_customers
-    from: raw.orders.customer_id
-    to: raw.customers.customer_id
+    from: orders.customer_id
+    to: customers.customer_id
     cardinality: many_to_one
     active: true
   - id: order_items_orders
-    from: raw.order_items.order_id
-    to: raw.orders.order_id
+    from: order_items.order_id
+    to: orders.order_id
     cardinality: many_to_one
-    active: true
+    active: false
   - id: payments_orders
-    from: raw.payments.order_id
-    to: raw.orders.order_id
+    from: payments.order_id
+    to: orders.order_id
     cardinality: many_to_one
-    active: true
+    active: false
   - id: reviews_orders
-    from: raw.reviews.order_id
-    to: raw.orders.order_id
+    from: reviews.order_id
+    to: orders.order_id
     cardinality: many_to_one
-    active: true
+    active: false
   - id: order_items_products
-    from: raw.order_items.product_id
-    to: raw.products.product_id
+    from: order_items.product_id
+    to: products.product_id
     cardinality: many_to_one
-    active: true
+    active: false
   - id: products_translations
-    from: raw.products.product_category_name
-    to: raw.translations.product_category_name
+    from: products.product_category_name
+    to: translations.product_category_name
     cardinality: many_to_one
-    active: true
+    active: false

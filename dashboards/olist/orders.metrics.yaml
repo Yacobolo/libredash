@@ -2,91 +2,35 @@ id: orders
 title: Orders Metrics
 description: Governed order metrics and dimensions for the Olist commerce model.
 semantic_model: olist
-dataset: orders
-timeseries: purchase_timestamp
+base_table: orders
+grain: order_id
+
+time:
+  default_field: orders.purchase_timestamp
+  allowed_grains: [day, week, month, quarter, year]
 
 dimensions:
-  purchase_month:
-    label: Purchase month
-    expr: e.purchase_month
-  purchase_timestamp:
-    label: Purchase timestamp
-    expr: e.purchase_timestamp
-  purchase_date:
-    label: Purchase date
-    expr: e.purchase_date
-  status:
-    label: Status
-    expr: e.status
-  state:
-    label: State
-    expr: e.state
-  category:
-    label: Category
-    expr: e.category
-  delivery_bucket:
-    label: Delivery speed
-    expr: e.delivery_bucket
-    where: e.delivery_bucket IS NOT NULL
-    order_expr: MIN(e.delivery_days)
+  - orders.order_id
+  - orders.customer_id
+  - orders.purchase_month
+  - orders.purchase_timestamp
+  - orders.purchase_date
+  - orders.status
+  - customers.state
+  - orders.category
+  - orders.delivery_bucket
 
 measures:
-  order_count:
-    label: Orders
-    expression: COUNT(DISTINCT e.order_id)
-    unit: orders
-    format: integer
-  revenue:
-    label: Revenue
-    expression: SUM(e.revenue)
-    unit: R$
-    format: currency
-  revenue_min:
-    label: Revenue min
-    expression: MIN(e.revenue)
-    unit: R$
-    format: currency
-  revenue_q1:
-    label: Revenue q1
-    expression: quantile_cont(e.revenue, 0.25)
-    unit: R$
-    format: currency
-  revenue_q3:
-    label: Revenue q3
-    expression: quantile_cont(e.revenue, 0.75)
-    unit: R$
-    format: currency
-  revenue_max:
-    label: Revenue max
-    expression: MAX(e.revenue)
-    unit: R$
-    format: currency
-  aov:
-    label: AOV
-    expression: SUM(e.revenue) / NULLIF(COUNT(DISTINCT e.order_id), 0)
-    unit: R$
-    format: currency
-  review_score:
-    label: Review
-    expression: AVG(e.review_score)
-    format: decimal
-  delivery_days:
-    label: Delivery days
-    expression: AVG(e.delivery_days)
-    format: decimal
-  delivery_days_min:
-    label: Delivery min
-    expression: MIN(e.delivery_days)
-    format: decimal
-  delivery_days_q1:
-    label: Delivery q1
-    expression: quantile_cont(e.delivery_days, 0.25)
-    format: decimal
-  delivery_days_q3:
-    label: Delivery q3
-    expression: quantile_cont(e.delivery_days, 0.75)
-    format: decimal
-  delivery_days_max:
-    label: Delivery max
-    expression: MAX(e.delivery_days)
-    format: decimal
+  - orders.order_count
+  - orders.revenue
+  - orders.revenue_min
+  - orders.revenue_q1
+  - orders.revenue_q3
+  - orders.revenue_max
+  - orders.aov
+  - orders.review_score
+  - orders.delivery_days
+  - orders.delivery_days_min
+  - orders.delivery_days_q1
+  - orders.delivery_days_q3
+  - orders.delivery_days_max

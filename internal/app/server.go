@@ -30,7 +30,7 @@ type queryMetrics interface {
 	QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error)
 	QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
 	QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
-	RefreshCache(ctx context.Context, modelID string) error
+	RefreshMaterializations(ctx context.Context, modelID string) error
 	DataDir() string
 	Pages(dashboardID string) []dashboard.Page
 	ModelGraph(modelID string) (dashboard.ModelGraph, bool)
