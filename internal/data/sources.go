@@ -57,6 +57,13 @@ func (m *DuckDBMetrics) prepareSourceRuntime(ctx context.Context, runtime *model
 			continue
 		}
 		connection := runtime.model.Connections[source.Connection]
+		connectionSpec, ok := sourcereg.LookupConnection(connection.Kind)
+		if !ok {
+			return fmt.Errorf("unsupported connection kind %q", connection.Kind)
+		}
+		if !connectionRequiresObjectAttach(connectionSpec) {
+			continue
+		}
 		stmt, err := m.compileObjectAttach(runtime.model, source.Connection, connection)
 		if err != nil {
 			return err
@@ -73,12 +80,14 @@ func (m *DuckDBMetrics) prepareSourceRuntime(ctx context.Context, runtime *model
 }
 
 type sourcePlan struct {
-	kind       string
-	format     string
-	path       string
-	connection string
-	object     string
-	options    map[string]any
+	kind             string
+	format           string
+	path             string
+	connection       string
+	connectionConfig semantic.Connection
+	connectionSpec   sourcereg.Connection
+	object           string
+	options          map[string]any
 }
 
 func (m *DuckDBMetrics) sourceRelation(model *semantic.Model, source semantic.Source) (string, error) {
@@ -96,6 +105,12 @@ func (m *DuckDBMetrics) resolveSourcePlan(model *semantic.Model, source semantic
 		connection: source.Connection,
 		object:     source.Object,
 		options:    source.Options,
+	}
+	if connection, ok := model.Connections[source.Connection]; ok {
+		plan.connectionConfig = connection
+		if spec, ok := sourcereg.LookupConnection(connection.Kind); ok {
+			plan.connectionSpec = spec
+		}
 	}
 	if source.Path == "" {
 		return plan, nil
@@ -159,14 +174,40 @@ func compileSourceRelation(plan sourcePlan) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		alias, err := databaseAlias(plan.connection)
-		if err != nil {
-			return "", err
+		switch plan.connectionSpec.ObjectRelation {
+		case sourcereg.ObjectRelationAttach:
+			alias, err := databaseAlias(plan.connection)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("SELECT * FROM %s.%s", alias, object), nil
+		case sourcereg.ObjectRelationQuackQuery:
+			return quackQueryRelation(plan.connectionConfig.Path, object, plan.connectionConfig.Options)
+		default:
+			return "", fmt.Errorf("unsupported object relation mode %q", plan.connectionSpec.ObjectRelation)
 		}
-		return fmt.Sprintf("SELECT * FROM %s.%s", alias, object), nil
 	default:
 		return "", fmt.Errorf("unsupported source kind %q", plan.kind)
 	}
+}
+
+func connectionRequiresObjectAttach(connection sourcereg.Connection) bool {
+	return connection.ObjectRelation == sourcereg.ObjectRelationAttach
+}
+
+func quackQueryRelation(uri, object string, options map[string]any) (string, error) {
+	args := []string{
+		"'" + sqlString(uri) + "'",
+		"'" + sqlString("SELECT * FROM "+object) + "'",
+	}
+	if value, ok := options["disable_ssl"]; ok {
+		disableSSL, ok := value.(bool)
+		if !ok {
+			return "", fmt.Errorf("quack disable_ssl option must be a boolean")
+		}
+		args = append(args, fmt.Sprintf("disable_ssl => %t", disableSSL))
+	}
+	return fmt.Sprintf("SELECT * FROM quack_query(%s)", strings.Join(args, ", ")), nil
 }
 
 func replacementScanRelation(path string) string {
@@ -343,17 +384,30 @@ func compileTypedConnectionSecret(name string, connection semantic.Connection, s
 	if err != nil {
 		return "", false, err
 	}
-	parts := []string{"TYPE " + secretType, "PROVIDER " + duckDBSecretProvider(secretType, connection.Auth)}
+	parts := []string{"TYPE " + secretType}
+	if secretType != "quack" {
+		parts = append(parts, "PROVIDER "+duckDBSecretProvider(secretType, connection.Auth))
+	}
 	for _, key := range sortedKeys(connection.Auth) {
 		if err := validateIdentifier(key); err != nil {
 			return "", false, fmt.Errorf("invalid auth param %q: %w", key, err)
 		}
 		parts = append(parts, duckDBAuthParameter(key)+" "+sqlLiteral(connection.Auth[key]))
 	}
-	if connection.Scope != "" {
-		parts = append(parts, "SCOPE '"+sqlString(connection.Scope)+"'")
+	if scope := duckDBSecretScope(secretType, connection); scope != "" {
+		parts = append(parts, "SCOPE '"+sqlString(scope)+"'")
 	}
 	return fmt.Sprintf("CREATE OR REPLACE SECRET %s (%s)", secret, strings.Join(parts, ", ")), true, nil
+}
+
+func duckDBSecretScope(secretType string, connection semantic.Connection) string {
+	if connection.Scope != "" {
+		return connection.Scope
+	}
+	if secretType == "quack" {
+		return connection.Path
+	}
+	return ""
 }
 
 func duckDBSecretProvider(secretType string, auth semantic.ConnectionAuth) string {
@@ -389,6 +443,8 @@ func duckDBAuthParameter(key string) string {
 		return "SESSION_TOKEN"
 	case "tenant_id":
 		return "TENANT_ID"
+	case "token":
+		return "TOKEN"
 	case "url_style":
 		return "URL_STYLE"
 	case "use_ssl":
@@ -405,6 +461,9 @@ func (m *DuckDBMetrics) compileObjectAttach(model *semantic.Model, connectionNam
 	}
 	if connectionSpec.AttachKind == sourcereg.AttachDuckLake {
 		return m.compileDuckLakeAttach(model, connectionName, connection)
+	}
+	if connectionSpec.AttachKind == "" {
+		return "", nil
 	}
 	return compileDatabaseAttach(connectionName, connection)
 }

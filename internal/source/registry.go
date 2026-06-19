@@ -14,6 +14,9 @@ const (
 
 	AttachDatabase = "database"
 	AttachDuckLake = "ducklake"
+
+	ObjectRelationAttach     = "attach"
+	ObjectRelationQuackQuery = "quack_query"
 )
 
 type Format struct {
@@ -40,6 +43,7 @@ type Connection struct {
 	RequiredAuthSets   [][]string
 	AllowNoAuth        bool
 	AttachKind         string
+	ObjectRelation     string
 }
 
 var formats = map[string]Format{
@@ -173,6 +177,7 @@ var connections = map[string]Connection{
 		AuthKeys:           []string{"connection_string"},
 		RequiredAuthSets:   [][]string{{"connection_string"}},
 		AttachKind:         AttachDatabase,
+		ObjectRelation:     ObjectRelationAttach,
 	},
 	"mysql": {
 		Kind:               "mysql",
@@ -182,6 +187,7 @@ var connections = map[string]Connection{
 		AuthKeys:           []string{"connection_string"},
 		RequiredAuthSets:   [][]string{{"connection_string"}},
 		AttachKind:         AttachDatabase,
+		ObjectRelation:     ObjectRelationAttach,
 	},
 	"sqlite": {
 		Kind:               "sqlite",
@@ -193,6 +199,7 @@ var connections = map[string]Connection{
 		RequiredAuthSets:   [][]string{{"path"}},
 		AllowNoAuth:        true,
 		AttachKind:         AttachDatabase,
+		ObjectRelation:     ObjectRelationAttach,
 	},
 	"ducklake": {
 		Kind:               "ducklake",
@@ -206,6 +213,19 @@ var connections = map[string]Connection{
 		RequiredAuthSets:   [][]string{{"access_key_id", "secret_access_key"}, {"connection_string"}, {"account_name", "tenant_id", "client_id", "client_secret"}},
 		AllowNoAuth:        true,
 		AttachKind:         AttachDuckLake,
+		ObjectRelation:     ObjectRelationAttach,
+	},
+	"quack": {
+		Kind:               "quack",
+		SecretType:         "quack",
+		RequiredExtension:  "quack",
+		AllowsObjectSource: true,
+		AllowsPath:         true,
+		RequiresPath:       true,
+		AllowedOptions:     []string{"disable_ssl"},
+		AuthKeys:           []string{"token"},
+		RequiredAuthSets:   [][]string{{"token"}},
+		ObjectRelation:     ObjectRelationQuackQuery,
 	},
 }
 

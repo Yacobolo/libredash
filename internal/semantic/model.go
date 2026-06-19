@@ -293,6 +293,9 @@ func (c Connection) Validate(name string) (Connection, error) {
 			return c, fmt.Errorf("connection %q has unsupported option %q", name, key)
 		}
 	}
+	if err := validateConnectionOptions(name, c); err != nil {
+		return c, err
+	}
 	for key := range c.Defaults.Options {
 		if err := validateSemanticIdentifier(key); err != nil {
 			return c, fmt.Errorf("connection %q default option %q is invalid: %w", name, key, err)
@@ -350,6 +353,21 @@ func connectionAllowsOption(connection sourcereg.Connection, option string) bool
 		}
 	}
 	return false
+}
+
+func validateConnectionOptions(name string, connection Connection) error {
+	switch connection.Kind {
+	case "quack":
+		if !strings.HasPrefix(connection.Path, "quack:") {
+			return fmt.Errorf("connection %q quack path must start with quack:", name)
+		}
+		if value, ok := connection.Options["disable_ssl"]; ok {
+			if _, ok := value.(bool); !ok {
+				return fmt.Errorf("connection %q disable_ssl option must be a boolean", name)
+			}
+		}
+	}
+	return nil
 }
 
 func validateConnectionAuth(name string, connection Connection, spec sourcereg.Connection) (ConnectionAuth, error) {

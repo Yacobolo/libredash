@@ -158,6 +158,22 @@ sources:
     object: main.orders
 ```
 
+Experimental Quack remote query:
+
+```yaml
+connections:
+  remote_quack:
+    kind: quack
+    path: quack:quack.example.com:443
+    auth:
+      token: ${LIBREDASH_QUACK_TOKEN}
+
+sources:
+  remote_schemata:
+    connection: remote_quack
+    object: information_schema.schemata
+```
+
 LibreDash owns the credential contract. Connection `auth` fields are resolved from `${ENV_VAR}` references or literal config values, validated by connection kind, and compiled into temporary DuckDB secrets internally. External secret managers such as Infisical should inject environment variables before `libredash serve` starts.
 
 For file and table paths, LibreDash infers `format` from clear extensions such as `.csv`, `.csv.gz`, `.json`, `.jsonl`, `.ndjson`, `.parquet`, `.xlsx`, `.txt`, `.blob`, `.vortex`, and `.lance`. Set source-level `format` explicitly for ambiguous paths or table directories such as `events/*`, `format: delta`, and `format: iceberg`. Advanced DuckDB integrations should be modeled explicitly before being exposed in source YAML.

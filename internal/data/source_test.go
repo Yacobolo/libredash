@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/semantic"
+	sourcereg "github.com/Yacobolo/libredash/internal/source"
 )
 
 func TestCompileSourceRelation(t *testing.T) {
@@ -70,12 +72,54 @@ func TestCompileSourceRelation(t *testing.T) {
 		})
 	}
 
-	relation, err := compileSourceRelation(sourcePlan{kind: "object", connection: "crm", object: "public.accounts"})
+	relation, err := compileSourceRelation(sourcePlan{
+		kind:           "object",
+		connection:     "crm",
+		connectionSpec: sourcereg.Connection{ObjectRelation: sourcereg.ObjectRelationAttach},
+		object:         "public.accounts",
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := "SELECT * FROM conn_crm.public.accounts"; relation != want {
 		t.Fatalf("object relation = %q, want %q", relation, want)
+	}
+
+	relation, err = compileSourceRelation(sourcePlan{
+		kind:       "object",
+		connection: "remote_quack",
+		connectionConfig: semantic.Connection{
+			Path:    "quack:quack.example.com:443",
+			Options: map[string]any{"disable_ssl": true},
+		},
+		connectionSpec: sourcereg.Connection{ObjectRelation: sourcereg.ObjectRelationQuackQuery},
+		object:         "information_schema.schemata",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "SELECT * FROM quack_query('quack:quack.example.com:443', 'SELECT * FROM information_schema.schemata', disable_ssl => true)"
+	if relation != want {
+		t.Fatalf("quack relation = %q, want %q", relation, want)
+	}
+	if strings.Contains(relation, "secret-token") {
+		t.Fatalf("quack relation contains token: %q", relation)
+	}
+	relation, err = compileSourceRelation(sourcePlan{
+		kind:       "object",
+		connection: "remote_quack",
+		connectionConfig: semantic.Connection{
+			Path: "quack:quack.example.com:443",
+		},
+		connectionSpec: sourcereg.Connection{ObjectRelation: sourcereg.ObjectRelationQuackQuery},
+		object:         "information_schema.schemata",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = "SELECT * FROM quack_query('quack:quack.example.com:443', 'SELECT * FROM information_schema.schemata')"
+	if relation != want {
+		t.Fatalf("quack relation without options = %q, want %q", relation, want)
 	}
 
 	_, err = compileSourceRelation(sourcePlan{kind: "path", format: "csv", path: "/data/orders.csv", options: map[string]any{"bad-key": true}})
@@ -166,6 +210,19 @@ func TestCompileConnectionSecret(t *testing.T) {
 	want = "CREATE OR REPLACE SECRET libredash_lakehouse (TYPE ducklake, PROVIDER config, KEY_ID 'key', REGION 'us-east-1', SECRET 'secret', SCOPE 's3://analytics-prod/ducklake/')"
 	if !ok || stmt != want {
 		t.Fatalf("ducklake secret = %q ok=%v, want %q ok=true", stmt, ok, want)
+	}
+
+	stmt, ok, err = compileConnectionSecret("remote_quack", semantic.Connection{
+		Kind: "quack",
+		Path: "quack:quack.example.com:443",
+		Auth: semantic.ConnectionAuth{"token": "secret-token"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = "CREATE OR REPLACE SECRET libredash_remote_quack (TYPE quack, TOKEN 'secret-token', SCOPE 'quack:quack.example.com:443')"
+	if !ok || stmt != want {
+		t.Fatalf("quack secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
 }
 
@@ -277,6 +334,11 @@ func TestRequiredExtensions(t *testing.T) {
 			"azure": {Kind: "azure_blob"},
 			"crm":   {Kind: "postgres"},
 			"duck":  {Kind: "ducklake", Path: "metadata.ducklake"},
+			"remote_quack": {
+				Kind: "quack",
+				Path: "quack:quack.example.com:443",
+				Auth: semantic.ConnectionAuth{"token": "secret-token"},
+			},
 		},
 		Sources: map[string]semantic.Source{
 			"events":   {Format: "parquet", Path: "s3://bucket/events/*.parquet", Connection: "lake"},
@@ -286,10 +348,11 @@ func TestRequiredExtensions(t *testing.T) {
 			"vectors":  {Format: "lance", Path: "vectors/products.lance", Connection: "lake"},
 			"accounts": {Connection: "crm", Object: "public.accounts"},
 			"lake_tbl": {Connection: "duck", Object: "main.orders"},
+			"schemata": {Connection: "remote_quack", Object: "information_schema.schemata"},
 		},
 	}
-	if got := strings.Join(requiredExtensions(model), ","); got != "azure,delta,ducklake,excel,httpfs,lance,postgres,vortex" {
-		t.Fatalf("required extensions = %q, want azure,delta,ducklake,excel,httpfs,lance,postgres,vortex", got)
+	if got := strings.Join(requiredExtensions(model), ","); got != "azure,delta,ducklake,excel,httpfs,lance,postgres,quack,vortex" {
+		t.Fatalf("required extensions = %q, want azure,delta,ducklake,excel,httpfs,lance,postgres,quack,vortex", got)
 	}
 }
 
@@ -309,12 +372,19 @@ func TestDuckDBMetricsResolvesSourcePlans(t *testing.T) {
 			"prod_lake": {Kind: "s3", Scope: "s3://analytics-prod/", Auth: semantic.ConnectionAuth{"access_key_id": "key", "secret_access_key": "secret"}},
 			"azure":     {Kind: "azure_blob", Scope: "az://warehouse/", Auth: semantic.ConnectionAuth{"connection_string": "DefaultEndpointsProtocol=https;AccountName=warehouse"}},
 			"vectors":   {Kind: "s3", Scope: "s3://analytics-prod/", Auth: semantic.ConnectionAuth{"access_key_id": "key", "secret_access_key": "secret"}},
+			"remote_quack": {
+				Kind:    "quack",
+				Path:    "quack:quack.example.com:443",
+				Auth:    semantic.ConnectionAuth{"token": "secret-token"},
+				Options: map[string]any{"disable_ssl": false},
+			},
 		},
 		Sources: map[string]semantic.Source{
 			"orders":     {Path: "orders.csv"},
 			"events":     {Connection: "prod_lake", Path: "events/*", Format: "parquet"},
 			"delta":      {Connection: "azure", Path: "tables/orders", Format: "delta"},
 			"embeddings": {Connection: "vectors", Path: "vectors/products.lance"},
+			"schemata":   {Connection: "remote_quack", Object: "information_schema.schemata"},
 		},
 		Tables: map[string]semantic.ModelTable{
 			"orders": {
@@ -360,6 +430,14 @@ func TestDuckDBMetricsResolvesSourcePlans(t *testing.T) {
 	}
 	if want := "SELECT * FROM 's3://analytics-prod/vectors/products.lance'"; relation != want {
 		t.Fatalf("lance relation = %q, want %q", relation, want)
+	}
+
+	relation, err = metrics.sourceRelation(model, model.Sources["schemata"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "SELECT * FROM quack_query('quack:quack.example.com:443', 'SELECT * FROM information_schema.schemata', disable_ssl => false)"; relation != want {
+		t.Fatalf("quack relation = %q, want %q", relation, want)
 	}
 
 	bad := model.Sources["events"]
@@ -428,6 +506,53 @@ func TestDuckDBMetricsRegistersCSVSources(t *testing.T) {
 	}
 	if total != 30.75 {
 		t.Fatalf("total revenue = %v, want 30.75", total)
+	}
+}
+
+func TestDuckDBQuackSmoke(t *testing.T) {
+	uri := os.Getenv("LIBREDASH_QUACK_TEST_URI")
+	token := os.Getenv("LIBREDASH_QUACK_TEST_TOKEN")
+	if uri == "" || token == "" {
+		t.Skip("set LIBREDASH_QUACK_TEST_URI and LIBREDASH_QUACK_TEST_TOKEN to run Quack smoke test")
+	}
+
+	db, err := sql.Open("duckdb", filepath.Join(t.TempDir(), "quack-smoke.duckdb"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var version string
+	if err := db.QueryRowContext(context.Background(), "SELECT version()").Scan(&version); err != nil {
+		t.Fatalf("query DuckDB version: %v", err)
+	}
+	t.Logf("DuckDB version: %s", version)
+
+	if _, err := db.ExecContext(context.Background(), "INSTALL quack"); err != nil {
+		t.Fatalf("install quack: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), "LOAD quack"); err != nil {
+		t.Fatalf("load quack: %v", err)
+	}
+	stmt := fmt.Sprintf(
+		"CREATE OR REPLACE SECRET libredash_quack_smoke (TYPE quack, TOKEN '%s', SCOPE '%s')",
+		sqlString(token),
+		sqlString(uri),
+	)
+	if _, err := db.ExecContext(context.Background(), stmt); err != nil {
+		t.Fatalf("create quack secret: %v", err)
+	}
+
+	query := fmt.Sprintf(
+		"SELECT COUNT(*) FROM quack_query('%s', 'select * from information_schema.schemata')",
+		sqlString(uri),
+	)
+	var count int
+	if err := db.QueryRowContext(context.Background(), query).Scan(&count); err != nil {
+		t.Fatalf("query quack schemata: %v", err)
+	}
+	if count == 0 {
+		t.Fatal("quack schemata query returned zero rows")
 	}
 }
 

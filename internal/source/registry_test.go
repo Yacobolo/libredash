@@ -16,7 +16,7 @@ func TestRegistryIncludesSupportedFormats(t *testing.T) {
 }
 
 func TestRegistryIncludesSupportedConnectionKinds(t *testing.T) {
-	expected := []string{"local", "s3", "r2", "gcs", "http", "azure_blob", "postgres", "mysql", "sqlite", "ducklake"}
+	expected := []string{"local", "s3", "r2", "gcs", "http", "azure_blob", "postgres", "mysql", "sqlite", "ducklake", "quack"}
 	for _, kind := range expected {
 		connection, ok := LookupConnection(kind)
 		if !ok {
@@ -58,13 +58,23 @@ func TestRegistrySpecializedCapabilities(t *testing.T) {
 	}
 
 	ducklake, _ := LookupConnection("ducklake")
-	if ducklake.AttachKind != AttachDuckLake || !ducklake.AllowsObjectSource || !ducklake.RequiresPath {
+	if ducklake.AttachKind != AttachDuckLake || ducklake.ObjectRelation != ObjectRelationAttach || !ducklake.AllowsObjectSource || !ducklake.RequiresPath {
 		t.Fatalf("ducklake registry = %#v, want object attach with required path", ducklake)
+	}
+
+	postgres, _ := LookupConnection("postgres")
+	if postgres.AttachKind != AttachDatabase || postgres.ObjectRelation != ObjectRelationAttach || !postgres.AllowsObjectSource {
+		t.Fatalf("postgres registry = %#v, want database object attach", postgres)
 	}
 
 	s3, _ := LookupConnection("s3")
 	if s3.RequiredExtension != "httpfs" || s3.SecretType != "s3" || !s3.AllowsPathSource {
 		t.Fatalf("s3 registry = %#v, want httpfs path source", s3)
+	}
+
+	quack, _ := LookupConnection("quack")
+	if quack.RequiredExtension != "quack" || quack.SecretType != "quack" || quack.ObjectRelation != ObjectRelationQuackQuery || !quack.AllowsObjectSource || quack.AllowsPathSource {
+		t.Fatalf("quack registry = %#v, want quack object source", quack)
 	}
 }
 
@@ -85,6 +95,11 @@ func TestRegistryConnectionAuthPolicy(t *testing.T) {
 	local, _ := LookupConnection("local")
 	if !local.AllowNoAuth || len(local.AuthKeys) != 0 {
 		t.Fatalf("local auth policy = %#v, want no-auth only", local)
+	}
+
+	quack, _ := LookupConnection("quack")
+	if !contains(quack.AuthKeys, "token") || len(quack.RequiredAuthSets) != 1 || len(quack.RequiredAuthSets[0]) != 1 {
+		t.Fatalf("quack auth policy = %#v, want token auth", quack)
 	}
 }
 

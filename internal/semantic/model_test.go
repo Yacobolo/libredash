@@ -72,6 +72,11 @@ func TestModelValidateAcceptsNativeSourceFamilies(t *testing.T) {
 			Kind: "ducklake",
 			Path: "metadata.ducklake",
 		},
+		"remote_quack": {
+			Kind: "quack",
+			Path: "quack:quack.example.com:443",
+			Auth: ConnectionAuth{"token": "secret-token"},
+		},
 	}
 	model.Sources = map[string]Source{
 		"orders": {
@@ -98,6 +103,10 @@ func TestModelValidateAcceptsNativeSourceFamilies(t *testing.T) {
 		"ducklake_orders": {
 			Connection: "lakehouse",
 			Object:     "main.orders",
+		},
+		"remote_schemata": {
+			Connection: "remote_quack",
+			Object:     "information_schema.schemata",
 		},
 	}
 
@@ -213,6 +222,10 @@ func TestModelValidateRejectsInvalidSources(t *testing.T) {
 			source:   Source{Path: "main.orders", Connection: "lakehouse", Format: "parquet"},
 			contains: "path cannot use ducklake connection",
 		},
+		"quack_path_source": {
+			source:   Source{Path: "main.orders", Connection: "remote_quack", Format: "parquet"},
+			contains: "path cannot use quack connection",
+		},
 		"database_missing_connection": {
 			source:    Source{Object: "public.accounts"},
 			contains:  "requires connection",
@@ -241,6 +254,11 @@ func TestModelValidateRejectsInvalidSources(t *testing.T) {
 				"local_files": {Kind: "local"},
 				"crm":         {Kind: "mysql", Auth: ConnectionAuth{"connection_string": "mysql://crm"}},
 				"lakehouse":   {Kind: "ducklake", Path: "metadata.ducklake"},
+				"remote_quack": {
+					Kind: "quack",
+					Path: "quack:quack.example.com:443",
+					Auth: ConnectionAuth{"token": "secret-token"},
+				},
 			}
 			model.Sources = map[string]Source{"orders": tc.source}
 			assertModelValidateError(t, model, tc.contains)
@@ -284,6 +302,30 @@ func TestModelValidateRejectsInvalidConnections(t *testing.T) {
 		"non_ducklake_path": {
 			connection: Connection{Kind: "s3", Path: "s3://bucket/", Auth: ConnectionAuth{"access_key_id": "key", "secret_access_key": "secret"}},
 			contains:   "path is only supported for path-backed connections",
+		},
+		"quack_missing_path": {
+			connection: Connection{Kind: "quack", Auth: ConnectionAuth{"token": "secret-token"}},
+			contains:   "quack requires path",
+		},
+		"quack_bad_uri": {
+			connection: Connection{Kind: "quack", Path: "https://quack.example.com", Auth: ConnectionAuth{"token": "secret-token"}},
+			contains:   "quack path must start with quack:",
+		},
+		"quack_missing_token": {
+			connection: Connection{Kind: "quack", Path: "quack:quack.example.com:443"},
+			contains:   "requires auth",
+		},
+		"quack_bad_auth_key": {
+			connection: Connection{Kind: "quack", Path: "quack:quack.example.com:443", Auth: ConnectionAuth{"password": "secret-token"}},
+			contains:   "unsupported auth key",
+		},
+		"quack_bad_option": {
+			connection: Connection{Kind: "quack", Path: "quack:quack.example.com:443", Auth: ConnectionAuth{"token": "secret-token"}, Options: map[string]any{"threads": 4}},
+			contains:   "unsupported option",
+		},
+		"quack_disable_ssl_not_bool": {
+			connection: Connection{Kind: "quack", Path: "quack:quack.example.com:443", Auth: ConnectionAuth{"token": "secret-token"}, Options: map[string]any{"disable_ssl": "true"}},
+			contains:   "disable_ssl option must be a boolean",
 		},
 	}
 	for name, tc := range cases {
