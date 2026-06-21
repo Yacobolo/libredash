@@ -145,6 +145,29 @@ Default limits:
 - `ReserveOutputTokens`: 4096
 - `HardInputLimitTokens`: `ContextWindowTokens - ReserveOutputTokens`
 
+### Stop Reasons and Finish Reasons
+
+The harness should normalize provider-specific finish reasons and expose stable stop reasons to callers and events.
+
+Model finish reasons:
+
+- `stop`: the model completed normally.
+- `tool_calls`: the model requested one or more tool calls.
+- `truncated`: the provider stopped because the output limit was reached. OpenAI-compatible adapters should normalize provider values such as `length` to this value.
+- `content_filter`: the provider stopped for safety/filtering.
+- `unknown`: the provider returned no recognized finish reason.
+
+Run stop reasons:
+
+- `completed`: the run ended with a final assistant response.
+- `max_turns`: `MaxTurns` stopped the loop.
+- `max_tool_calls`: `MaxToolCalls` stopped the loop.
+- `context_limit`: the harness could not build a model request within the configured context budget.
+- `truncated`: the final model response was truncated.
+- `canceled`: the context or `Abort()` canceled the run.
+- `model_error`: the model request failed.
+- `fatal_tool_error`: a tool error marked fatal stopped the run.
+
 ### Messages
 
 The core message model should map directly to the OpenAI-compatible chat/tool API and remain serializable. This is intentionally narrower than a fully provider-neutral abstraction because the package is an embedded harness, not a cross-provider framework.
@@ -286,6 +309,7 @@ Recommended tool error codes:
 - `unknown_tool`
 - `invalid_tool_arguments`
 - `tool_execution_failed`
+- `tool_panic`
 - `tool_timeout`
 - `tool_output_too_large`
 - `tool_result_invalid`
@@ -319,14 +343,16 @@ The harness does not own full UI or audit history in V1. Applications that need 
    - model
    - tool definitions
    - limits
-5. Loop calls the configured OpenAI-compatible model provider.
-6. Loop streams assistant deltas and appends the assistant message.
-7. If tool calls exist, loop validates them.
-8. Loop executes valid tool calls with bounded parallelism.
-9. Loop appends tool-result messages in assistant source order, including validation failures.
-10. Harness emits turn end.
-11. Harness compacts old transcript turns if the compaction trigger is reached.
-12. Loop ends when no tool calls remain or a limit stops the run.
+5. Harness estimates model context size, including system prompt, summary, recent messages, tool definitions, and output reserve.
+6. Harness runs proactive compaction before the model call if the request would exceed the compaction trigger.
+7. Loop calls the configured OpenAI-compatible model provider.
+8. Loop streams assistant deltas and appends the assistant message.
+9. If tool calls exist, loop validates them.
+10. Loop executes valid tool calls with bounded parallelism.
+11. Loop appends tool-result messages in assistant source order, including validation failures.
+12. Harness emits turn end.
+13. Harness compacts old transcript turns if the post-turn compaction trigger is reached.
+14. Loop ends when no tool calls remain or a limit stops the run.
 
 ### Abort
 
@@ -349,6 +375,9 @@ Initial event types:
 - `agent_end`
 - `turn_start`
 - `turn_end`
+- `model_request`
+- `model_response`
+- `model_retry`
 - `message_delta`
 - `message_end`
 - `tool_start`
@@ -361,7 +390,10 @@ Initial event types:
 
 Event requirements:
 
-- Every event has run ID, turn ID, timestamp, and sequence number.
+- Every event has run ID, timestamp, and sequence number.
+- Turn-scoped events have turn ID.
+- Every event has severity: `debug`, `info`, `warn`, or `error`.
+- Events may include request/correlation IDs supplied by the host application.
 - Tool events include tool call ID and tool name.
 - Provider events include provider/model metadata when the model adapter supplies it.
 - Usage events include token/cost data when available.
@@ -386,6 +418,8 @@ Execution is one-way:
 This keeps service reads fast while preserving deterministic transcript order. Tool handlers must be concurrency-safe. Tools that mutate important state should return proposed changes and let the LibreDash application apply them through a separate approved workflow.
 
 Normal tool failures must not cancel sibling tool calls. Only context cancellation or fatal harness errors should stop the batch. Every requested tool call should produce exactly one tool-result message.
+
+The harness should defensively recover panics from tool handlers and convert them into `tool_panic` model-visible tool errors. A nil or otherwise invalid handler result is converted into `tool_result_invalid`. These safeguards protect the embedding process; tools should still be written as ordinary error-returning Go code.
 
 Policy controls:
 
@@ -433,6 +467,14 @@ Default behavior:
 - Set tools to empty in compaction model requests.
 - Require a text response from the compaction request.
 - If compaction fails, emit an error event and continue without compacting until a hard limit is reached.
+
+Compaction triggers:
+
+- Proactive: before every model call, estimate `system + summary + recent messages + tool definitions + ReserveOutputTokens`. If it reaches `TriggerRatio * ContextWindowTokens`, compact before calling the model.
+- Post-turn: after a completed turn, compact if the same estimated context reaches the trigger.
+- Context-overflow retry: if the provider rejects a turn model request for context length, run compaction once, rebuild the request, and retry once. Do not apply this retry to compaction requests, malformed requests, authentication errors, rate limits, or arbitrary provider failures.
+
+If proactive compaction cannot make the request fit under `HardInputLimitTokens`, the harness should stop with `context_limit` instead of dropping the active user message or splitting an assistant tool-call block from its tool results.
 
 The summary prompt should ask the model to preserve:
 
@@ -596,7 +638,7 @@ File responsibilities:
 - `message.go`: message roles, content parts, transcript and model-context helpers.
 - `tools.go`: `ToolDefinition`, `ToolCall`, `ToolResult`, tool registry, tool execution.
 - `validation.go`: harness-level validation for definitions, tool calls, tool outputs, and limits.
-- `compaction.go`: keep-last-N-turn compaction, summary request creation, summary replacement.
+- `compaction.go`: keep-last-N-turn compaction, proactive budget checks, context-overflow retry compaction, summary request creation, summary replacement.
 - `events.go`: event types, event sink, sequencing, no-op sink.
 - `errors.go`: stable error codes and helpers for model-visible tool error payloads.
 - `limits.go`: limits, defaults, and token-estimation interfaces.
@@ -607,10 +649,10 @@ Test focus:
 
 - `agent_test.go`: public harness construction, prompt lifecycle, busy/abort behavior.
 - `loop_test.go`: fake model loop paths, multi-turn tool cycles, stop conditions.
-- `tools_test.go`: bounded parallel execution, deterministic result ordering, timeout/cancel handling.
+- `tools_test.go`: bounded parallel execution, deterministic result ordering, timeout/cancel handling, panic recovery, nil result handling.
 - `validation_test.go`: unknown tool, malformed args, schema failures, oversized output, duplicate IDs.
-- `compaction_test.go`: keep-last-turn boundaries, no split tool results, summary replacement, no-tools summary request.
-- `events_test.go`: event order and event payload IDs.
+- `compaction_test.go`: keep-last-turn boundaries, no split tool results, proactive compaction, context-overflow retry, summary replacement, no-tools summary request.
+- `events_test.go`: event order, event payload IDs, severity, and correlation metadata.
 
 V1 should keep one package namespace, `agent`, and avoid subpackages. Optional future adapters such as OpenAI SDK wiring should live outside the core first, likely in LibreDash `internal/`, until the generic boundary proves stable.
 
@@ -622,7 +664,7 @@ V1 should keep one package namespace, `agent`, and avoid subpackages. Optional f
 4. Add event subscription and streaming deltas.
 5. Add tool-call validation and model-visible tool error results.
 6. Add bounded parallel tool execution with deterministic result ordering.
-7. Add automatic keep-last-N-turns compaction.
+7. Add automatic keep-last-N-turns compaction, proactive budget checks, and one context-overflow compaction retry.
 8. Add limits for max turns, max tool calls, max concurrent tools, per-tool timeout, result size, and context window.
 9. Wire a LibreDash-specific agent package outside the generic core.
 
@@ -636,9 +678,9 @@ Add only when the embedded LibreDash agent proves it needs them:
 - multimodal message parts
 - richer observability adapters
 
-## Open Questions
+## Resolved V1 Decisions
 
-- Should this package be named `pkg/agent`, `pkg/agentloop`, or `pkg/agentkit` to avoid implying built-in intelligence?
-- Should `pkg/agent` expose a thin OpenAI client adapter, or should LibreDash own that adapter in `internal/` first?
-- Should tool input schemas be `json.RawMessage`, `map[string]any`, or a small OpenAI-compatible schema type?
-- What is the minimum useful BI tool set for the first embedded LibreDash agent?
+- Package name: use `pkg/agent`.
+- OpenAI SDK adapter: keep it outside `pkg/agent` for V1. LibreDash can own the first adapter in `internal/`, using `openai-go` and `option.WithBaseURL` for OpenAI-compatible endpoints.
+- Tool input schemas: expose schemas as `json.RawMessage` in public definitions and compile them internally with `github.com/santhosh-tekuri/jsonschema/v6`.
+- First BI tool set: define it outside the generic package and start with the smallest useful read/action surface for the embedded LibreDash assistant.
