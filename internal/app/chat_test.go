@@ -224,6 +224,97 @@ func TestChatConversationRouteLoadsOwnedEventsAndRejectsOtherPrincipal(t *testin
 	}
 }
 
+func TestChatConversationRouteQueuesMissingTitleRepair(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	owner, token := chatPrincipalAndToken(t, ctx, store)
+	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Greeting"},"finish_reason":"stop"}],"usage":{"prompt_tokens":4,"completion_tokens":1,"total_tokens":5}}`)
+	}))
+	defer modelServer.Close()
+	auth := NewAuth(store, "test", AuthConfig{APITokenOnly: true})
+	service := agentapp.NewService(fakeMetrics{}, store, agentapp.Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: service, DefaultWorkspaceID: "test"})
+	scope := agentapp.Scope{WorkspaceID: "test", PrincipalID: owner.ID}
+	conversation, err := service.CreateConversation(ctx, scope, "")
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	if _, err := store.AppendAgentMessage(ctx, platform.AgentMessageInput{
+		WorkspaceID:    "test",
+		PrincipalID:    owner.ID,
+		ConversationID: conversation.ID,
+		Role:           platform.AgentMessageRoleUser,
+		ContentText:    "how are you?",
+	}); err != nil {
+		t.Fatalf("append message: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/chat/"+conversation.ID, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "client-test"})
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `&#34;titlePending&#34;:true`) {
+		t.Fatalf("default one-turn conversation should render title pending:\n%s", rec.Body.String())
+	}
+	waitForAgentConversationTitle(t, store, "test", owner.ID, conversation.ID, "Greeting")
+}
+
+func TestChatConversationRouteSkipsTitleRepairForManualAndMultiUserTitles(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	owner, token := chatPrincipalAndToken(t, ctx, store)
+	var calls atomic.Int64
+	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Should not be used"},"finish_reason":"stop"}]}`)
+	}))
+	defer modelServer.Close()
+	auth := NewAuth(store, "test", AuthConfig{APITokenOnly: true})
+	service := agentapp.NewService(fakeMetrics{}, store, agentapp.Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: service, DefaultWorkspaceID: "test"})
+	scope := agentapp.Scope{WorkspaceID: "test", PrincipalID: owner.ID}
+	manual, err := service.CreateConversation(ctx, scope, "Manual title")
+	if err != nil {
+		t.Fatalf("create manual: %v", err)
+	}
+	multi, err := service.CreateConversation(ctx, scope, "")
+	if err != nil {
+		t.Fatalf("create multi: %v", err)
+	}
+	for _, text := range []string{"hello", "again"} {
+		if _, err := store.AppendAgentMessage(ctx, platform.AgentMessageInput{
+			WorkspaceID:    "test",
+			PrincipalID:    owner.ID,
+			ConversationID: multi.ID,
+			Role:           platform.AgentMessageRoleUser,
+			ContentText:    text,
+		}); err != nil {
+			t.Fatalf("append message: %v", err)
+		}
+	}
+	for _, conversationID := range []string{manual.ID, multi.ID} {
+		req := httptest.NewRequest(http.MethodGet, "/chat/"+conversationID, nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		server.Routes().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), `&#34;titlePending&#34;:true`) {
+			t.Fatalf("conversation %s should not render title pending:\n%s", conversationID, rec.Body.String())
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	if calls.Load() != 0 {
+		t.Fatalf("title model calls = %d, want 0", calls.Load())
+	}
+}
+
 func TestChatTurnStreamsDatastarSignalsAndPersistsEvents(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
@@ -402,6 +493,24 @@ func waitForBrokerSubscription(t *testing.T, server *Server, key string) {
 		time.Sleep(time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for broker subscription %q", key)
+}
+
+func waitForAgentConversationTitle(t *testing.T, store *platform.Store, workspaceID, principalID, conversationID, want string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	var got string
+	for time.Now().Before(deadline) {
+		conversation, err := store.GetAgentConversation(context.Background(), workspaceID, principalID, conversationID)
+		if err != nil {
+			t.Fatalf("get conversation: %v", err)
+		}
+		got = conversation.Title
+		if got == want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("conversation title = %q, want %q", got, want)
 }
 
 type platformdbPrincipal struct {

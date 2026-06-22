@@ -52,7 +52,7 @@ func (m *OpenAIModel) Complete(ctx context.Context, req agent.ModelRequest, stre
 		Tools:     openAITools(req.Tools),
 		MaxTokens: req.Limits.ReserveOutputTokens,
 	}
-	if shouldDisableThinking(m.config) {
+	if disableThinkingForRequest(m.config) {
 		body.Thinking = &openAIThinking{Type: "disabled"}
 	}
 	if len(body.Tools) > 0 {
@@ -172,7 +172,8 @@ func isContextLimitResponse(status int, body string) bool {
 	return strings.Contains(body, "context") || strings.Contains(body, "maximum context") || strings.Contains(body, "token")
 }
 
-func shouldDisableThinking(config Config) bool {
+// DeepSeek V4 enables reasoning by default; short metadata calls need normal content.
+func disableThinkingForRequest(config Config) bool {
 	model := strings.ToLower(strings.TrimSpace(config.Model))
 	return strings.HasPrefix(model, "deepseek-v4")
 }
