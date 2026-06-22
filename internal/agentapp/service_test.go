@@ -126,6 +126,167 @@ func TestServicePromptPersistsRunEventsMessagesAndTranscript(t *testing.T) {
 	}
 }
 
+func TestServiceGenerateConversationTitleUsesNoToolsAndSavesCleanTitle(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentAppStore(t, ctx)
+	defer store.Close()
+	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
+	var got openAIChatRequest
+	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatalf("decode model request: %v", err)
+		}
+		writeJSON(t, w, openAIChatResponse{Choices: []openAIChoice{{
+			Message:      openAIMessage{Role: "assistant", Content: "<think>private</think>\n\"Available dashboards.\""},
+			FinishReason: "stop",
+		}}, Usage: openAIUsage{PromptTokens: 12, CompletionTokens: 3, TotalTokens: 15}})
+	}))
+	defer modelServer.Close()
+
+	scope := Scope{WorkspaceID: "test", PrincipalID: principal.ID}
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
+	conversation, err := service.CreateConversation(ctx, scope, "")
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	if _, err := store.AppendAgentMessage(ctx, platform.AgentMessageInput{
+		WorkspaceID:    scope.WorkspaceID,
+		PrincipalID:    scope.PrincipalID,
+		ConversationID: conversation.ID,
+		Role:           platform.AgentMessageRoleUser,
+		ContentText:    "What dashboards can I use?",
+	}); err != nil {
+		t.Fatalf("append user message: %v", err)
+	}
+	updated, err := service.GenerateConversationTitle(ctx, scope, conversation.ID)
+	if err != nil {
+		t.Fatalf("generate title: %v", err)
+	}
+	if updated.Title != "Available dashboards" {
+		t.Fatalf("title = %q", updated.Title)
+	}
+	if got.Model != "fake-model" || got.MaxTokens != titleReserveOutputTokens {
+		t.Fatalf("title model/max = %s/%d", got.Model, got.MaxTokens)
+	}
+	if got.Thinking != nil {
+		t.Fatalf("non-deepseek title request should not include thinking config: %#v", got.Thinking)
+	}
+	if len(got.Tools) != 0 || got.ToolChoice != "" {
+		t.Fatalf("title request should not include tools: %#v choice=%q", got.Tools, got.ToolChoice)
+	}
+	if len(got.Messages) != 2 || got.Messages[0].Role != "system" || got.Messages[1].Role != "user" {
+		t.Fatalf("title messages = %#v", got.Messages)
+	}
+	if !strings.Contains(got.Messages[1].Content, "What dashboards can I use?") {
+		t.Fatalf("title prompt did not include first user prompt: %#v", got.Messages)
+	}
+}
+
+func TestServiceGenerateConversationTitleFallsBackWhenModelReturnsEmptyContent(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentAppStore(t, ctx)
+	defer store.Close()
+	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
+	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(t, w, openAIChatResponse{Choices: []openAIChoice{{
+			Message:      openAIMessage{Role: "assistant", Content: ""},
+			FinishReason: "length",
+		}}, Usage: openAIUsage{PromptTokens: 12, CompletionTokens: 64, TotalTokens: 76}})
+	}))
+	defer modelServer.Close()
+
+	scope := Scope{WorkspaceID: "test", PrincipalID: principal.ID}
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
+	conversation, err := service.CreateConversation(ctx, scope, "")
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	if _, err := store.AppendAgentMessage(ctx, platform.AgentMessageInput{
+		WorkspaceID:    scope.WorkspaceID,
+		PrincipalID:    scope.PrincipalID,
+		ConversationID: conversation.ID,
+		Role:           platform.AgentMessageRoleUser,
+		ContentText:    "how are you?",
+	}); err != nil {
+		t.Fatalf("append user message: %v", err)
+	}
+	updated, err := service.GenerateConversationTitle(ctx, scope, conversation.ID)
+	if err != nil {
+		t.Fatalf("generate title: %v", err)
+	}
+	if updated.Title != "How are you" {
+		t.Fatalf("title = %q", updated.Title)
+	}
+}
+
+func TestServiceGenerateConversationTitleIsBestEffortAndSkipsUnsafeCases(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentAppStore(t, ctx)
+	defer store.Close()
+	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
+	scope := Scope{WorkspaceID: "test", PrincipalID: principal.ID}
+	var calls atomic.Int64
+	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		http.Error(w, "provider down", http.StatusBadGateway)
+	}))
+	defer modelServer.Close()
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
+
+	titled, err := service.CreateConversation(ctx, scope, "Manual title")
+	if err != nil {
+		t.Fatalf("create titled conversation: %v", err)
+	}
+	if updated, err := service.GenerateConversationTitle(ctx, scope, titled.ID); err != nil || updated.Title != "Manual title" {
+		t.Fatalf("manual title changed or errored: updated=%#v err=%v", updated, err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("model called for manual title")
+	}
+
+	multi, err := service.CreateConversation(ctx, scope, "")
+	if err != nil {
+		t.Fatalf("create multi conversation: %v", err)
+	}
+	for _, text := range []string{"hello", "again"} {
+		if _, err := store.AppendAgentMessage(ctx, platform.AgentMessageInput{
+			WorkspaceID:    scope.WorkspaceID,
+			PrincipalID:    scope.PrincipalID,
+			ConversationID: multi.ID,
+			Role:           platform.AgentMessageRoleUser,
+			ContentText:    text,
+		}); err != nil {
+			t.Fatalf("append user message: %v", err)
+		}
+	}
+	if updated, err := service.GenerateConversationTitle(ctx, scope, multi.ID); err != nil || updated.Title != platform.AgentConversationDefaultTitle {
+		t.Fatalf("multi-user title changed or errored: updated=%#v err=%v", updated, err)
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("model called for multi-user conversation")
+	}
+
+	failing, err := service.CreateConversation(ctx, scope, "")
+	if err != nil {
+		t.Fatalf("create failing conversation: %v", err)
+	}
+	if _, err := store.AppendAgentMessage(ctx, platform.AgentMessageInput{
+		WorkspaceID:    scope.WorkspaceID,
+		PrincipalID:    scope.PrincipalID,
+		ConversationID: failing.ID,
+		Role:           platform.AgentMessageRoleUser,
+		ContentText:    "list metric views",
+	}); err != nil {
+		t.Fatalf("append failing user message: %v", err)
+	}
+	if updated, err := service.GenerateConversationTitle(ctx, scope, failing.ID); err != nil || updated.Title != "List metric views" {
+		t.Fatalf("failing provider title changed or errored: updated=%#v err=%v", updated, err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("model calls = %d, want 1 for failing provider", calls.Load())
+	}
+}
+
 func TestServiceConversationTranscriptDerivesDisplayItems(t *testing.T) {
 	ctx := context.Background()
 	store := openAgentAppStore(t, ctx)

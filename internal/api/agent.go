@@ -15,6 +15,7 @@ type AgentConversationResponse struct {
 	ArchivedAt      string `json:"archivedAt,omitempty"`
 	MessageCount    int    `json:"messageCount,omitempty"`
 	LastMessageText string `json:"lastMessageText,omitempty"`
+	TitlePending    bool   `json:"titlePending,omitempty"`
 }
 
 type AgentMessageResponse struct {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/agentapp"
+	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/platform"
 )
 
@@ -55,11 +56,14 @@ func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 		`<ld-chat-composer`,
 		`&#34;compact&#34;:true`,
 		`data-attr:config=`,
+		`collapsible: false`,
+		`numbered: false`,
 		`data-attr:transcript="$agent.transcript"`,
 		`data-attr:pending="$agentTurnPending || $agent.status.running"`,
 		`data-indicator="agentTurnPending"`,
 		`data-on:ld-chat-submit`,
 		`/chat/turns`,
+		`/chat/updates`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("chat page missing %q:\n%s", want, body)
@@ -226,18 +230,35 @@ func TestChatTurnStreamsDatastarSignalsAndPersistsEvents(t *testing.T) {
 	principal, token := chatPrincipalAndToken(t, ctx, store)
 	var calls atomic.Int64
 	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if calls.Add(1) == 1 {
+		switch calls.Add(1) {
+		case 1:
 			writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Let me look that up.","tool_calls":[{"id":"call_1","type":"function","function":{"name":"list_dashboards","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`)
 			return
+		case 2:
+			writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Executive Sales is available."},"finish_reason":"stop"}],"usage":{"prompt_tokens":20,"completion_tokens":5,"total_tokens":25}}`)
+			return
+		default:
+			writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Available dashboards"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":2,"total_tokens":10}}`)
 		}
-		writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Executive Sales is available."},"finish_reason":"stop"}],"usage":{"prompt_tokens":20,"completion_tokens":5,"total_tokens":25}}`)
 	}))
 	defer modelServer.Close()
 	auth := NewAuth(store, "test", AuthConfig{APITokenOnly: true})
 	agentService := agentapp.NewService(fakeMetrics{}, store, agentapp.Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agentService, DefaultWorkspaceID: "test"})
 
-	signals := map[string]any{"agent": map[string]any{"activeConversationId": "", "composer": map[string]any{"value": "What dashboards can I use?"}}}
+	signals := map[string]any{
+		"csrfToken":        "test-token",
+		"agentTurnPending": false,
+		"agent": map[string]any{
+			"activeConversationId": "",
+			"composer":             map[string]any{"value": "What dashboards can I use?", "disabled": false, "placeholder": "Ask"},
+			"conversations": []map[string]any{
+				{"id": "agentconv_existing", "title": "New conversation", "titlePending": ""},
+			},
+			"status":     map[string]any{"enabled": true, "running": false},
+			"transcript": []map[string]any{},
+		},
+	}
 	req := chatSignalsRequest(http.MethodPost, "/chat/turns", token, signals)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -280,6 +301,12 @@ func TestChatTurnStreamsDatastarSignalsAndPersistsEvents(t *testing.T) {
 	if strings.Contains(body, "pending:user") {
 		t.Fatalf("turn response emitted an optimistic pending message:\n%s", body)
 	}
+	if !strings.Contains(body, `"titlePending":true`) {
+		t.Fatalf("draft turn response should mark generated title pending:\n%s", body)
+	}
+	if !strings.Contains(body, `"running":false`) {
+		t.Fatalf("draft turn should finish normal composer running state before title generation:\n%s", body)
+	}
 }
 
 func TestChatTurnWithActiveConversationDoesNotReplaceURL(t *testing.T) {
@@ -312,6 +339,40 @@ func TestChatTurnWithActiveConversationDoesNotReplaceURL(t *testing.T) {
 	}
 }
 
+func TestChatUpdatesStreamsConversationPatches(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	principal, token := chatPrincipalAndToken(t, ctx, store)
+	auth := NewAuth(store, "test", AuthConfig{APITokenOnly: true})
+	service := agentapp.NewService(fakeMetrics{}, store, agentapp.Config{APIKey: "key", Model: "fake-model"})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: service, DefaultWorkspaceID: "test"})
+	scope := agentapp.Scope{WorkspaceID: "test", PrincipalID: principal.ID}
+	key := chatStreamID(scope, "client-test")
+
+	reqCtx, cancel := context.WithCancel(context.Background())
+	req := httptest.NewRequest(http.MethodGet, "/chat/updates", nil).WithContext(reqCtx)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "client-test"})
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		server.Routes().ServeHTTP(rec, req)
+	}()
+	waitForBrokerSubscription(t, server, key)
+	server.broker.publish(key, signalPatch{"agent": map[string]any{"conversations": []api.AgentConversationResponse{{ID: "agentconv_title", Title: "Available dashboards"}}}})
+	time.Sleep(25 * time.Millisecond)
+	cancel()
+	<-done
+
+	body := rec.Body.String()
+	for _, want := range []string{"event: datastar-patch-signals", `"conversations"`, "Available dashboards"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("chat updates stream missing %q:\n%s", want, body)
+		}
+	}
+}
+
 func chatPrincipalAndToken(t *testing.T, ctx context.Context, store *platform.Store) (platformdbPrincipal, string) {
 	t.Helper()
 	principal, err := store.UpsertPrincipal(ctx, platform.PrincipalInput{Email: "viewer@example.com", DisplayName: "Viewer"})
@@ -326,6 +387,21 @@ func chatPrincipalAndToken(t *testing.T, ctx context.Context, store *platform.St
 		t.Fatalf("create token: %v", err)
 	}
 	return platformdbPrincipal{ID: principal.ID}, token
+}
+
+func waitForBrokerSubscription(t *testing.T, server *Server, key string) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		server.broker.mu.Lock()
+		count := len(server.broker.clients[key])
+		server.broker.mu.Unlock()
+		if count > 0 {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for broker subscription %q", key)
 }
 
 type platformdbPrincipal struct {

@@ -30,6 +30,7 @@ func ChatPage(catalog dashboard.Catalog, csrfToken, roleLabel string, signal api
 					"csrfToken": csrfToken,
 					"agent":     signal,
 				}),
+				g.If(signal.Status.Enabled, ds.Init("@get('/chat/updates', {openWhenHidden: true})")),
 				h.Div(h.Class(reportShellClass),
 					sidebar(sidebarConfigForChat(catalog, roleLabel)),
 					g.El("ld-sub-sidebar",
@@ -81,14 +82,16 @@ storageKey: 'libredash-chat-conversations-collapsed',
 activeId: $agent.activeConversationId,
 emptyText: 'No conversations yet.',
 disabled: ($agent.status && $agent.status.running) || false,
+collapsible: false,
+numbered: false,
 items: [
 {id: 'new', title: 'New chat', href: '/chat/new', active: !$agent.activeConversationId},
 ...($agent.conversations || []).map((conversation) => ({
 id: conversation.id,
 title: conversation.title || 'Conversation',
-meta: conversation.updatedAt || '',
 href: '/chat/' + encodeURIComponent(conversation.id),
-active: conversation.id === $agent.activeConversationId
+active: conversation.id === $agent.activeConversationId,
+pending: conversation.titlePending || false
 }))
 ]
 })`

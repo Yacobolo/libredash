@@ -1363,6 +1363,48 @@ func (q *Queries) UpdateAgentConversationTranscript(ctx context.Context, arg Upd
 	return i, err
 }
 
+const updateDefaultAgentConversationTitle = `-- name: UpdateDefaultAgentConversationTitle :one
+UPDATE agent_conversations
+SET title = ?1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?2
+  AND workspace_id = ?3
+  AND principal_id = ?4
+  AND status = 'active'
+  AND title = 'New conversation'
+RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at
+`
+
+type UpdateDefaultAgentConversationTitleParams struct {
+	Title       string `json:"title"`
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) UpdateDefaultAgentConversationTitle(ctx context.Context, arg UpdateDefaultAgentConversationTitleParams) (AgentConversation, error) {
+	row := q.db.QueryRowContext(ctx, updateDefaultAgentConversationTitle,
+		arg.Title,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+	)
+	var i AgentConversation
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.PrincipalID,
+		&i.Title,
+		&i.Status,
+		&i.MetadataJson,
+		&i.TranscriptJson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
 const updateDeploymentStatus = `-- name: UpdateDeploymentStatus :exec
 UPDATE deployments
 SET status = ?, error = ?

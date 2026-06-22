@@ -216,6 +216,17 @@ WHERE id = sqlc.arg(id)
   AND principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
+-- name: UpdateDefaultAgentConversationTitle :one
+UPDATE agent_conversations
+SET title = sqlc.arg(title),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id)
+  AND workspace_id = sqlc.arg(workspace_id)
+  AND principal_id = sqlc.arg(principal_id)
+  AND status = 'active'
+  AND title = 'New conversation'
+RETURNING *;
+
 -- name: AppendAgentMessage :one
 INSERT INTO agent_messages (id, conversation_id, run_id, seq, role, content_text, content_json, tool_call_id, tool_name, is_error)
 SELECT

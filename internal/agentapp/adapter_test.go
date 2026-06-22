@@ -66,6 +66,9 @@ func TestOpenAIModelConvertsChatCompletionPayloads(t *testing.T) {
 	if got.Model != "deepseek-v4-flash" || got.MaxTokens != 123 {
 		t.Fatalf("request model/max = %s/%d", got.Model, got.MaxTokens)
 	}
+	if got.Thinking == nil || got.Thinking.Type != "disabled" {
+		t.Fatalf("deepseek v4 request should disable thinking: %#v", got.Thinking)
+	}
 	if len(got.Messages) != 3 || got.Messages[2].Role != "tool" || got.Messages[2].ToolCallID != "call_previous" {
 		t.Fatalf("messages = %#v", got.Messages)
 	}

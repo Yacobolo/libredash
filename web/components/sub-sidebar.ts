@@ -8,6 +8,7 @@ type SubSidebarItem = {
   href?: string
   active?: boolean
   disabled?: boolean
+  pending?: boolean
 }
 
 type SubSidebarConfig = {
@@ -18,12 +19,16 @@ type SubSidebarConfig = {
   activeId?: string
   emptyText?: string
   disabled?: boolean
+  collapsible?: boolean
+  numbered?: boolean
   items?: SubSidebarItem[]
 }
 
 type ResolvedConfig = Required<Pick<SubSidebarConfig, 'label' | 'railLabel' | 'ariaLabel' | 'storageKey' | 'emptyText'>> & {
   activeId: string
   disabled: boolean
+  collapsible: boolean
+  numbered: boolean
   items: SubSidebarItem[]
 }
 
@@ -42,6 +47,8 @@ const defaultConfig: ResolvedConfig = {
   activeId: '',
   emptyText: 'No items.',
   disabled: false,
+  collapsible: true,
+  numbered: true,
   items: [],
 }
 
@@ -162,6 +169,10 @@ class SubSidebar extends LitElement {
       stroke-width: 2;
     }
 
+    .collapse[hidden] {
+      display: none;
+    }
+
     nav {
       display: grid;
       align-content: start;
@@ -215,6 +226,11 @@ class SubSidebar extends LitElement {
       font: inherit;
       font-size: var(--ld-font-size-caption);
       font-weight: var(--ld-font-weight-medium);
+    }
+
+    .item-link.unnumbered {
+      grid-template-columns: minmax(0, 1fr);
+      padding-inline: 10px;
     }
 
     .item-link:hover,
@@ -277,10 +293,27 @@ class SubSidebar extends LitElement {
       white-space: nowrap;
     }
 
+    .item-title-row {
+      display: inline-flex;
+      min-width: 0;
+      align-items: center;
+      gap: 6px;
+    }
+
     .item-title {
       font-size: var(--ld-font-size-caption);
       font-weight: var(--ld-font-weight-medium);
       line-height: var(--ld-line-height-tight);
+    }
+
+    .pending-spinner {
+      width: 10px;
+      height: 10px;
+      flex: 0 0 auto;
+      border: 1.5px solid var(--ld-line-muted);
+      border-top-color: var(--ld-fg-muted);
+      border-radius: var(--ld-radius-full);
+      animation: pending-spin var(--ld-transition-slow, 700ms) linear infinite;
     }
 
     .item-link:hover .item-title,
@@ -440,6 +473,12 @@ class SubSidebar extends LitElement {
         transform: translateX(0) scaleX(1);
       }
     }
+
+    @keyframes pending-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
   `
 
   updated(changed: PropertyValues<this>): void {
@@ -447,7 +486,7 @@ class SubSidebar extends LitElement {
     if (changed.has('config')) {
       this.syncCollapsedStorage(config.storageKey)
     }
-    this.toggleAttribute('data-collapsed', this.collapsed)
+    this.toggleAttribute('data-collapsed', this.isCollapsed(config))
     if (changed.has('config') || changed.has('collapsed')) {
       this.scrollActiveItemIntoView()
     }
@@ -455,6 +494,7 @@ class SubSidebar extends LitElement {
 
   render() {
     const config = this.resolvedConfig
+    const collapsed = this.isCollapsed(config)
     return html`
       <aside aria-label=${config.ariaLabel}>
         <header>
@@ -463,12 +503,13 @@ class SubSidebar extends LitElement {
             <button
               class="collapse"
               type="button"
-              aria-label=${this.collapsed ? `Expand ${config.label}` : `Collapse ${config.label}`}
-              aria-pressed=${String(this.collapsed)}
-              title=${this.collapsed ? `Expand ${config.label}` : `Collapse ${config.label}`}
+              ?hidden=${!config.collapsible}
+              aria-label=${collapsed ? `Expand ${config.label}` : `Collapse ${config.label}`}
+              aria-pressed=${String(collapsed)}
+              title=${collapsed ? `Expand ${config.label}` : `Collapse ${config.label}`}
               @click=${() => this.toggleCollapsed(config.storageKey)}
             >
-              ${icon(this.collapsed ? 'chevron-right' : 'chevron-left')}
+              ${icon(collapsed ? 'chevron-right' : 'chevron-left')}
             </button>
           </div>
         </header>
@@ -478,13 +519,13 @@ class SubSidebar extends LitElement {
           ${config.items.length === 0 ? html`<div class="empty">${config.emptyText}</div>` : null}
           ${config.items.map((item, index) => this.renderItem(config, item, index, config.items.length))}
         </nav>
-        ${this.collapsed && this.hoverTitle ? html`
+        ${collapsed && this.hoverTitle ? html`
           <div
             class="hover-title"
             style=${`top:${this.hoverTitle.top}px`}
             ?data-active=${this.hoverTitle.active}
           >
-            <span class="hover-title-index" aria-hidden="true">${this.hoverTitle.index}</span>
+            ${this.hoverTitle.index ? html`<span class="hover-title-index" aria-hidden="true">${this.hoverTitle.index}</span>` : null}
             <span class="hover-title-name">${this.hoverTitle.title}</span>
           </div>
         ` : null}
@@ -502,6 +543,8 @@ class SubSidebar extends LitElement {
       activeId: cleanText(this.config.activeId),
       emptyText: cleanText(this.config.emptyText) || defaultConfig.emptyText,
       disabled: Boolean(this.config.disabled),
+      collapsible: this.config.collapsible !== false,
+      numbered: this.config.numbered !== false,
       items: Array.isArray(this.config.items) ? this.config.items.filter((item) => cleanText(item.id) !== '') : [],
     }
   }
@@ -511,24 +554,28 @@ class SubSidebar extends LitElement {
     const indexLabel = formatItemNumber(index, count)
     const title = cleanText(item.title) || item.id
     const disabled = Boolean(config.disabled || item.disabled)
+    const hoverIndex = config.numbered ? indexLabel : ''
     const content = html`
-      <span class="item-index" aria-hidden="true">${indexLabel}</span>
+      ${config.numbered ? html`<span class="item-index" aria-hidden="true">${indexLabel}</span>` : null}
       <span class="item-text">
-        <span class="item-title">${title}</span>
+        <span class="item-title-row">
+          <span class="item-title">${title}</span>
+          ${item.pending ? html`<span class="pending-spinner" aria-label="Title loading"></span>` : null}
+        </span>
         ${cleanText(item.meta) ? html`<span class="item-meta">${item.meta}</span>` : null}
       </span>
     `
     const listeners = {
-      mouseenter: (event: MouseEvent) => this.showHoverTitle(event, title, indexLabel, active),
+      mouseenter: (event: MouseEvent) => this.showHoverTitle(event, title, hoverIndex, active),
       mouseleave: this.hideHoverTitle,
-      focus: (event: FocusEvent) => this.showHoverTitle(event, title, indexLabel, active),
+      focus: (event: FocusEvent) => this.showHoverTitle(event, title, hoverIndex, active),
       blur: this.hideHoverTitle,
     }
 
     if (item.href) {
       return html`
         <a
-          class="item-link"
+          class=${`item-link${config.numbered ? '' : ' unnumbered'}`}
           href=${item.href}
           aria-current=${active ? 'page' : 'false'}
           aria-label=${title}
@@ -544,7 +591,7 @@ class SubSidebar extends LitElement {
 
     return html`
       <button
-        class="item-link"
+        class=${`item-link${config.numbered ? '' : ' unnumbered'}`}
         type="button"
         aria-current=${active ? 'page' : 'false'}
         aria-label=${title}
@@ -570,6 +617,7 @@ class SubSidebar extends LitElement {
   }
 
   private toggleCollapsed(storageKey: string): void {
+    if (!this.resolvedConfig.collapsible) return
     this.collapsed = !this.collapsed
     try {
       localStorage.setItem(storageKey, String(this.collapsed))
@@ -592,7 +640,7 @@ class SubSidebar extends LitElement {
   }
 
   private showHoverTitle(event: MouseEvent | FocusEvent, title: string, index: string, active: boolean): void {
-    if (!this.collapsed) return
+    if (!this.isCollapsed(this.resolvedConfig)) return
     const target = event.currentTarget
     const aside = this.renderRoot.querySelector<HTMLElement>('aside')
     if (!(target instanceof HTMLElement) || !aside) return
@@ -608,6 +656,10 @@ class SubSidebar extends LitElement {
 
   private hideHoverTitle = (): void => {
     this.hoverTitle = undefined
+  }
+
+  private isCollapsed(config: ResolvedConfig): boolean {
+    return config.collapsible && this.collapsed
   }
 }
 

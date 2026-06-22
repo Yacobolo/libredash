@@ -43,6 +43,26 @@ func TestAgentPersistenceLifecycle(t *testing.T) {
 	if conversation.TranscriptJson != `[{"role":"user","content":"seed"}]` {
 		t.Fatalf("updated transcript = %q", conversation.TranscriptJson)
 	}
+	defaultConversation, err := store.CreateAgentConversation(ctx, AgentConversationInput{
+		WorkspaceID: "test",
+		PrincipalID: owner.ID,
+	})
+	if err != nil {
+		t.Fatalf("create default conversation: %v", err)
+	}
+	defaultConversation, err = store.UpdateDefaultAgentConversationTitle(ctx, "test", owner.ID, defaultConversation.ID, "Available dashboards")
+	if err != nil {
+		t.Fatalf("update default title: %v", err)
+	}
+	if defaultConversation.Title != "Available dashboards" {
+		t.Fatalf("updated title = %q", defaultConversation.Title)
+	}
+	if _, err := store.UpdateDefaultAgentConversationTitle(ctx, "test", owner.ID, conversation.ID, "Should not overwrite"); err != sql.ErrNoRows {
+		t.Fatalf("update non-default title error = %v, want sql.ErrNoRows", err)
+	}
+	if _, err := store.ArchiveAgentConversation(ctx, "test", owner.ID, defaultConversation.ID); err != nil {
+		t.Fatalf("archive default conversation: %v", err)
+	}
 
 	hidden, err := store.CreateAgentConversation(ctx, AgentConversationInput{
 		WorkspaceID: "test",

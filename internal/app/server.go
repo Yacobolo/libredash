@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/agentapp"
@@ -50,10 +51,12 @@ type Server struct {
 	securityHeaders    SecurityHeadersConfig
 	requestLogging     bool
 	logger             *slog.Logger
+	chatTitleMu        sync.Mutex
+	pendingChatTitles  map[string]struct{}
 }
 
 func New(metrics queryMetrics) *Server {
-	return &Server{metrics: metrics, broker: newBroker(), logger: slog.Default()}
+	return &Server{metrics: metrics, broker: newBroker(), logger: slog.Default(), pendingChatTitles: map[string]struct{}{}}
 }
 
 type Options struct {

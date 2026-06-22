@@ -24,6 +24,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/workspaces/{workspace}/assets/{asset}/{section}", s.protected(platform.PermissionDashboardView, s.workspaceAssetSection))
 		r.Get("/chat", s.protected(platform.PermissionDashboardView, s.chat))
 		r.Get("/chat/new", s.protected(platform.PermissionDashboardView, s.chatNew))
+		r.Get("/chat/updates", s.protected(platform.PermissionDashboardView, s.chatUpdates))
 		r.Get("/chat/{conversation}", s.protected(platform.PermissionDashboardView, s.chatConversation))
 		r.Post("/chat/turns", s.protected(platform.PermissionDashboardView, s.chatTurn))
 		r.Get("/workspaces/{workspace}/permissions", s.protected(platform.PermissionRBACManage, s.workspacePermissions))

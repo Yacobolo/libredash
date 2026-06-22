@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/agentapp"
 	"github.com/Yacobolo/libredash/internal/api"
@@ -16,7 +17,16 @@ import (
 )
 
 type chatSignals struct {
-	Agent api.AgentChatSignal `json:"agent"`
+	Agent chatTurnAgentSignal `json:"agent"`
+}
+
+type chatTurnAgentSignal struct {
+	ActiveConversationID string                 `json:"activeConversationId"`
+	Composer             chatTurnComposerSignal `json:"composer"`
+}
+
+type chatTurnComposerSignal struct {
+	Value string `json:"value"`
 }
 
 func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
@@ -58,10 +68,12 @@ func (s *Server) chatConversation(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), statusForNotFound(err))
 		return
 	}
+	s.queueMissingChatTitle(r.Context(), scope, conversationID, chatClientID(r))
 	s.renderChat(w, r, s.chatSignalWith(scope, conversationID, transcript, "", false))
 }
 
 func (s *Server) renderChat(w http.ResponseWriter, r *http.Request, signal api.AgentChatSignal) {
+	_ = ensureClientID(w, r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if err := ui.ChatPage(s.metrics.Catalog(), csrfToken(r, s.auth), s.currentRoleLabel(r), signal).Render(w); err != nil {
@@ -74,6 +86,7 @@ func (s *Server) chatTurn(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	clientID := chatClientID(r)
 	signals := chatSignals{}
 	if err := datastar.ReadSignals(r, &signals); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -84,6 +97,7 @@ func (s *Server) chatTurn(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "input is required", http.StatusBadRequest)
 		return
 	}
+	streamConversations := s.chatConversations(scope)
 	conversationID := strings.TrimSpace(signals.Agent.ActiveConversationID)
 	createdConversation := false
 	if conversationID == "" {
@@ -110,7 +124,7 @@ func (s *Server) chatTurn(w http.ResponseWriter, r *http.Request) {
 	streamActiveID := strings.TrimSpace(signals.Agent.ActiveConversationID)
 	emit := func(event api.AgentEventEnvelope) {
 		transcript = applyLiveTranscriptEvent(transcript, conversationID, event)
-		_ = sse.MarshalAndPatchSignals(map[string]any{"agent": chatSignalFromClient(signals.Agent, streamActiveID, transcript, "", true, true)})
+		_ = sse.MarshalAndPatchSignals(map[string]any{"agent": chatSignalWithConversations(streamConversations, streamActiveID, transcript, "", true, true)})
 	}
 	result, err := service.Prompt(r.Context(), agentapp.PromptInput{
 		Scope:          scope,
@@ -130,14 +144,53 @@ func (s *Server) chatTurn(w http.ResponseWriter, r *http.Request) {
 			transcript = refreshed
 		}
 	}
+	shouldGenerateTitle := createdConversation && err == nil && result.RunID != ""
+	if shouldGenerateTitle {
+		s.markChatTitlePending(conversationID)
+	}
 	_ = sse.MarshalAndPatchSignals(map[string]any{"agent": s.chatSignalWith(scope, conversationID, transcript, statusErr, false)})
+	if shouldGenerateTitle {
+		s.generateConversationTitleAsync(scope, conversationID, clientID)
+	}
 }
 
-func chatSignalFromClient(base api.AgentChatSignal, activeID string, transcript []api.AgentChatTranscriptItem, statusErr string, running, enabled bool) api.AgentChatSignal {
+func (s *Server) chatUpdates(w http.ResponseWriter, r *http.Request) {
+	_, scope, ok := s.chatService(w, r)
+	if !ok {
+		return
+	}
+	sse := datastar.NewSSE(w, r)
+	updates, unsubscribe := s.broker.subscribe(chatStreamID(scope, chatClientID(r)))
+	defer unsubscribe()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case patch := <-updates:
+			if err := sse.MarshalAndPatchSignals(patch); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func (s *Server) chatService(w http.ResponseWriter, r *http.Request) (*agentapp.Service, agentapp.Scope, bool) {
+	if s.agent == nil || !s.agent.Enabled() {
+		http.Error(w, agentapp.ErrDisabled.Error(), http.StatusServiceUnavailable)
+		return nil, agentapp.Scope{}, false
+	}
+	scope := s.chatScope(r)
+	if scope.PrincipalID == "" {
+		http.Error(w, "chat requires an authenticated principal", http.StatusUnauthorized)
+		return nil, agentapp.Scope{}, false
+	}
+	return s.agent, scope, true
+}
+
+func chatSignalWithConversations(conversations []api.AgentConversationResponse, activeID string, transcript []api.AgentChatTranscriptItem, statusErr string, running, enabled bool) api.AgentChatSignal {
 	if !enabled && statusErr == "" {
 		statusErr = "Agent is not configured"
 	}
-	conversations := base.Conversations
 	if conversations == nil {
 		conversations = []api.AgentConversationResponse{}
 	}
@@ -156,19 +209,6 @@ func chatSignalFromClient(base api.AgentChatSignal, activeID string, transcript 
 			Placeholder: chatPlaceholder(enabled, running),
 		},
 	}
-}
-
-func (s *Server) chatService(w http.ResponseWriter, r *http.Request) (*agentapp.Service, agentapp.Scope, bool) {
-	if s.agent == nil || !s.agent.Enabled() {
-		http.Error(w, agentapp.ErrDisabled.Error(), http.StatusServiceUnavailable)
-		return nil, agentapp.Scope{}, false
-	}
-	scope := s.chatScope(r)
-	if scope.PrincipalID == "" {
-		http.Error(w, "chat requires an authenticated principal", http.StatusUnauthorized)
-		return nil, agentapp.Scope{}, false
-	}
-	return s.agent, scope, true
 }
 
 func (s *Server) chatScope(r *http.Request) agentapp.Scope {
@@ -195,14 +235,7 @@ func (s *Server) chatSignal(ctx context.Context, scope agentapp.Scope, activeID,
 }
 
 func (s *Server) chatSignalWith(scope agentapp.Scope, activeID string, transcript []api.AgentChatTranscriptItem, statusErr string, running bool) api.AgentChatSignal {
-	conversations := []api.AgentConversationResponse{}
-	if s.agent != nil && scope.PrincipalID != "" {
-		if rows, err := s.agent.ListConversations(context.Background(), scope); err == nil {
-			for _, row := range rows {
-				conversations = append(conversations, agentConversationDTO(row))
-			}
-		}
-	}
+	conversations := s.chatConversations(scope)
 	enabled := s.agent != nil && s.agent.Enabled()
 	if !enabled && statusErr == "" {
 		statusErr = "Agent is not configured"
@@ -222,6 +255,95 @@ func (s *Server) chatSignalWith(scope agentapp.Scope, activeID string, transcrip
 			Placeholder: chatPlaceholder(enabled, running),
 		},
 	}
+}
+
+func (s *Server) chatConversations(scope agentapp.Scope) []api.AgentConversationResponse {
+	conversations := []api.AgentConversationResponse{}
+	if s.agent == nil || scope.PrincipalID == "" {
+		return conversations
+	}
+	rows, err := s.agent.ListConversations(context.Background(), scope)
+	if err != nil {
+		return conversations
+	}
+	for _, row := range rows {
+		out := agentConversationDTO(row)
+		out.TitlePending = s.isChatTitlePending(row.ID)
+		conversations = append(conversations, out)
+	}
+	return conversations
+}
+
+func (s *Server) generateConversationTitleAsync(scope agentapp.Scope, conversationID, clientID string) {
+	if s.agent == nil {
+		s.clearChatTitlePending(conversationID)
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		_, _ = s.agent.GenerateConversationTitle(ctx, scope, conversationID)
+		s.clearChatTitlePending(conversationID)
+		s.broker.publish(chatStreamID(scope, clientID), signalPatch{
+			"agent": map[string]any{
+				"conversations": s.chatConversations(scope),
+			},
+		})
+	}()
+}
+
+func (s *Server) queueMissingChatTitle(ctx context.Context, scope agentapp.Scope, conversationID, clientID string) {
+	if s.agent == nil || s.isChatTitlePending(conversationID) {
+		return
+	}
+	ok, err := s.agent.ConversationNeedsGeneratedTitle(ctx, scope, conversationID)
+	if err != nil || !ok {
+		return
+	}
+	s.markChatTitlePending(conversationID)
+	s.generateConversationTitleAsync(scope, conversationID, clientID)
+}
+
+func (s *Server) markChatTitlePending(conversationID string) {
+	if conversationID == "" {
+		return
+	}
+	s.chatTitleMu.Lock()
+	defer s.chatTitleMu.Unlock()
+	if s.pendingChatTitles == nil {
+		s.pendingChatTitles = map[string]struct{}{}
+	}
+	s.pendingChatTitles[conversationID] = struct{}{}
+}
+
+func (s *Server) clearChatTitlePending(conversationID string) {
+	if conversationID == "" {
+		return
+	}
+	s.chatTitleMu.Lock()
+	defer s.chatTitleMu.Unlock()
+	delete(s.pendingChatTitles, conversationID)
+}
+
+func (s *Server) isChatTitlePending(conversationID string) bool {
+	s.chatTitleMu.Lock()
+	defer s.chatTitleMu.Unlock()
+	_, ok := s.pendingChatTitles[conversationID]
+	return ok
+}
+
+func chatStreamID(scope agentapp.Scope, clientID string) string {
+	if strings.TrimSpace(clientID) == "" {
+		clientID = "default"
+	}
+	return "chat:" + clientID + ":" + scope.WorkspaceID + ":" + scope.PrincipalID
+}
+
+func chatClientID(r *http.Request) string {
+	if cookie, err := r.Cookie("ld_client_id"); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+	return "default"
 }
 
 func appendServerUserTranscript(transcript []api.AgentChatTranscriptItem, conversationID, input string) []api.AgentChatTranscriptItem {

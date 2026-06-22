@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	AgentConversationDefaultTitle   = "New conversation"
 	AgentConversationStatusActive   = "active"
 	AgentConversationStatusArchived = "archived"
 
@@ -89,7 +90,7 @@ func (s *Store) CreateAgentConversation(ctx context.Context, input AgentConversa
 	}
 	title := strings.TrimSpace(input.Title)
 	if title == "" {
-		title = "New conversation"
+		title = AgentConversationDefaultTitle
 	}
 	return s.q.CreateAgentConversation(ctx, db.CreateAgentConversationParams{
 		ID:             newID("agentconv"),
@@ -137,6 +138,26 @@ func (s *Store) ArchiveAgentConversation(ctx context.Context, workspaceID, princ
 		return db.AgentConversation{}, fmt.Errorf("conversation id is required")
 	}
 	return s.q.ArchiveAgentConversation(ctx, db.ArchiveAgentConversationParams{
+		ID:          conversationID,
+		WorkspaceID: workspaceID,
+		PrincipalID: principalID,
+	})
+}
+
+func (s *Store) UpdateDefaultAgentConversationTitle(ctx context.Context, workspaceID, principalID, conversationID, title string) (db.AgentConversation, error) {
+	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	if err != nil {
+		return db.AgentConversation{}, err
+	}
+	if strings.TrimSpace(conversationID) == "" {
+		return db.AgentConversation{}, fmt.Errorf("conversation id is required")
+	}
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return db.AgentConversation{}, fmt.Errorf("conversation title is required")
+	}
+	return s.q.UpdateDefaultAgentConversationTitle(ctx, db.UpdateDefaultAgentConversationTitleParams{
+		Title:       title,
 		ID:          conversationID,
 		WorkspaceID: workspaceID,
 		PrincipalID: principalID,
