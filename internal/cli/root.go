@@ -18,6 +18,8 @@ type rootOptions struct {
 	token        string
 	catalog      string
 	deployment   string
+	conversation string
+	jsonOutput   bool
 }
 
 func Execute(ctx context.Context) error {
@@ -32,6 +34,7 @@ func Execute(ctx context.Context) error {
 	root.PersistentFlags().StringVar(&opts.workspaceID, "workspace", platform.DefaultWorkspaceID, "workspace id")
 	root.AddCommand(serveCommand(ctx, opts))
 	root.AddCommand(deployCommand(ctx, opts))
+	root.AddCommand(agentCommand(ctx, opts))
 	root.AddCommand(loginCommand(opts))
 	root.AddCommand(deploymentsCommand(ctx, opts))
 	root.AddCommand(rollbackCommand(ctx, opts))

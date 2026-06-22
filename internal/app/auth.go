@@ -189,6 +189,9 @@ func (a *Auth) CSRFMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if !a.cookieSecure && r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+			r = csrf.PlaintextHTTPRequest(r)
+		}
 		protected.ServeHTTP(w, r)
 	})
 }

@@ -61,7 +61,7 @@ func New(def Definition) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Agent{def: def, tools: tools, toolSpecs: specs}, nil
+	return &Agent{def: def, tools: tools, toolSpecs: specs, transcript: cloneMessages(def.InitialTranscript)}, nil
 }
 
 func (a *Agent) Prompt(ctx context.Context, req PromptRequest) (RunResult, error) {

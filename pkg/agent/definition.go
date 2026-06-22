@@ -16,9 +16,10 @@ type Definition struct {
 	SystemPrompt string
 	Model        Model
 
-	Tools      []ToolDefinition
-	Limits     Limits
-	Compaction CompactionConfig
+	Tools             []ToolDefinition
+	Limits            Limits
+	Compaction        CompactionConfig
+	InitialTranscript []Message
 
 	Events      EventSink
 	Clock       Clock
@@ -37,6 +38,7 @@ func (d Definition) withDefaults() Definition {
 	if d.IDGenerator == nil {
 		d.IDGenerator = &sequenceIDGenerator{}
 	}
+	d.InitialTranscript = cloneMessages(d.InitialTranscript)
 	return d
 }
 

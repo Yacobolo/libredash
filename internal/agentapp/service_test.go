@@ -1,0 +1,304 @@
+package agentapp
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/platform"
+	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	"github.com/Yacobolo/libredash/internal/semantic"
+	"github.com/Yacobolo/libredash/pkg/agent"
+)
+
+func TestReadOnlyToolsExposeWorkspaceFactsAndBoundRows(t *testing.T) {
+	service := NewService(fakeAgentMetrics{}, nil, Config{APIKey: "key", Model: "model"})
+	tools := service.toolDefinitions(Scope{WorkspaceID: "test", PrincipalID: "principal"})
+
+	list := runTool(t, tools, "list_dashboards", `{}`)
+	if !strings.Contains(list, "executive-sales") {
+		t.Fatalf("list_dashboards output = %s", list)
+	}
+	describe := runTool(t, tools, "describe_metric_view", `{"metric_view_id":"orders"}`)
+	if !strings.Contains(describe, "order_count") {
+		t.Fatalf("describe_metric_view output = %s", describe)
+	}
+	table := runTool(t, tools, "query_table", `{"dashboard_id":"executive-sales","page_id":"overview","table_id":"orders","count":500}`)
+	var tableOut dashboard.Table
+	if err := json.Unmarshal([]byte(table), &tableOut); err != nil {
+		t.Fatalf("decode table output: %v", err)
+	}
+	if len(tableOut.Blocks["a"].Rows) != 50 {
+		t.Fatalf("query_table rows were not capped to 50: %s", table)
+	}
+}
+
+func TestServicePromptPersistsRunEventsMessagesAndTranscript(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentAppStore(t, ctx)
+	defer store.Close()
+	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
+
+	var calls atomic.Int64
+	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		call := calls.Add(1)
+		var req openAIChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode model request: %v", err)
+		}
+		switch call {
+		case 1:
+			writeJSON(t, w, openAIChatResponse{Choices: []openAIChoice{{
+				Message: openAIMessage{Role: "assistant", ToolCalls: []openAIToolCall{{
+					ID:   "call_dashboards",
+					Type: "function",
+					Function: openAIFunctionCall{
+						Name:      "list_dashboards",
+						Arguments: `{}`,
+					},
+				}}},
+				FinishReason: "tool_calls",
+			}}, Usage: openAIUsage{PromptTokens: 20, CompletionTokens: 5, TotalTokens: 25}})
+		case 2:
+			if len(req.Messages) == 0 || req.Messages[len(req.Messages)-1].Role != "tool" {
+				t.Fatalf("second request did not include tool result: %#v", req.Messages)
+			}
+			writeJSON(t, w, openAIChatResponse{Choices: []openAIChoice{{
+				Message:      openAIMessage{Role: "assistant", Content: "You have Executive Sales available."},
+				FinishReason: "stop",
+			}}, Usage: openAIUsage{PromptTokens: 30, CompletionTokens: 9, TotalTokens: 39}})
+		default:
+			t.Fatalf("unexpected model call %d", call)
+		}
+	}))
+	defer modelServer.Close()
+
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
+	conversation, err := service.CreateConversation(ctx, Scope{WorkspaceID: "test", PrincipalID: principal.ID}, "Dashboards")
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	result, err := service.Prompt(ctx, PromptInput{
+		Scope:          Scope{WorkspaceID: "test", PrincipalID: principal.ID},
+		ConversationID: conversation.ID,
+		Input:          "What dashboards can I use?",
+		CorrelationID:  "corr_1",
+	})
+	if err != nil {
+		t.Fatalf("prompt: %v", err)
+	}
+	if !strings.Contains(result.Content, "Executive Sales") || result.StopReason != agent.StopReasonCompleted {
+		t.Fatalf("result = %#v", result)
+	}
+	messages, err := store.ListAgentMessages(ctx, "test", principal.ID, conversation.ID)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	if len(messages) != 4 {
+		t.Fatalf("messages len = %d, want user/assistant/tool/assistant: %#v", len(messages), messages)
+	}
+	runs, err := store.ListAgentRuns(ctx, "test", principal.ID, conversation.ID)
+	if err != nil {
+		t.Fatalf("list runs: %v", err)
+	}
+	if len(runs) != 1 || runs[0].ID != result.RunID || runs[0].TotalTokens != 64 {
+		t.Fatalf("runs = %#v result=%#v", runs, result)
+	}
+	events, err := store.ListAgentEvents(ctx, "test", principal.ID, result.RunID)
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if len(events) == 0 || events[0].Seq != 1 {
+		t.Fatalf("events = %#v", events)
+	}
+	updated, err := store.GetAgentConversation(ctx, "test", principal.ID, conversation.ID)
+	if err != nil {
+		t.Fatalf("get updated conversation: %v", err)
+	}
+	if !strings.Contains(updated.TranscriptJson, "Executive Sales") {
+		t.Fatalf("transcript was not updated: %s", updated.TranscriptJson)
+	}
+}
+
+func TestServiceRejectsConcurrentConversationTurns(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentAppStore(t, ctx)
+	defer store.Close()
+	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
+	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		writeJSON(t, w, openAIChatResponse{Choices: []openAIChoice{{
+			Message:      openAIMessage{Role: "assistant", Content: "ok"},
+			FinishReason: "stop",
+		}}})
+	}))
+	defer modelServer.Close()
+
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
+	conversation, err := service.CreateConversation(ctx, Scope{WorkspaceID: "test", PrincipalID: principal.ID}, "Dashboards")
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	errs := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() {
+			_, err := service.Prompt(ctx, PromptInput{
+				Scope:          Scope{WorkspaceID: "test", PrincipalID: principal.ID},
+				ConversationID: conversation.ID,
+				Input:          "hello",
+			})
+			errs <- err
+		}()
+	}
+	first := <-errs
+	second := <-errs
+	if !IsBusy(first) && !IsBusy(second) {
+		t.Fatalf("errors = %v / %v, want one busy error", first, second)
+	}
+}
+
+type fakeAgentMetrics struct{}
+
+func (fakeAgentMetrics) Catalog() dashboard.Catalog {
+	return dashboard.Catalog{
+		Workspace: dashboard.CatalogWorkspace{ID: "test", Title: "Test Workspace"},
+		Models: []dashboard.CatalogModel{
+			{ID: "test", Title: "Test Model", Description: "Fixture model"},
+		},
+		MetricViews: []dashboard.CatalogMetricView{
+			{ID: "orders", Title: "Orders Metrics", SemanticModel: "test", ModelTitle: "Test Model"},
+		},
+		Dashboards: []dashboard.CatalogDashboard{
+			{ID: "executive-sales", Title: "Executive Sales", Description: "Sales dashboard", MetricViews: []string{"orders"}, PageCount: 1},
+		},
+	}
+}
+
+func (fakeAgentMetrics) MetricViews() []dashboard.MetricViewSummary {
+	return []dashboard.MetricViewSummary{{ID: "orders", Title: "Orders Metrics", SemanticModel: "test", BaseTable: "orders", DimensionCount: 1, MeasureCount: 1}}
+}
+
+func (fakeAgentMetrics) MetricView(id string) (dashboard.MetricViewDetail, bool) {
+	if id != "orders" {
+		return dashboard.MetricViewDetail{}, false
+	}
+	return dashboard.MetricViewDetail{
+		MetricViewSummary: dashboard.MetricViewSummary{ID: "orders", Title: "Orders Metrics", SemanticModel: "test", BaseTable: "orders"},
+		Dimensions:        []dashboard.MetricViewDimension{{Name: "status", Label: "Status"}},
+		Measures:          []dashboard.MetricViewMeasure{{Name: "order_count", Label: "Orders", Expression: "COUNT(*)"}},
+		Dashboards:        []dashboard.MetricViewDashboard{{ID: "executive-sales", Title: "Executive Sales"}},
+	}, true
+}
+
+func (fakeAgentMetrics) ModelGraph(id string) (dashboard.ModelGraph, bool) {
+	if id != "test" {
+		return dashboard.ModelGraph{}, false
+	}
+	return dashboard.ModelGraph{Name: "test", Title: "Test Model", Stats: dashboard.ModelStats{ModelTables: 1}, Nodes: []dashboard.ModelNode{{ID: "model_table:orders", Label: "orders"}}}, true
+}
+
+func (fakeAgentMetrics) Report(id string) (semantic.Dashboard, *semantic.Model, bool) {
+	if id != "executive-sales" {
+		return semantic.Dashboard{}, nil, false
+	}
+	return semantic.Dashboard{
+		ID:          "executive-sales",
+		Title:       "Executive Sales",
+		Description: "Sales dashboard",
+		MetricViews: []string{"orders"},
+		Visuals: map[string]semantic.Visual{
+			"orders": {Title: "Orders", MetricView: "orders"},
+		},
+		Tables: map[string]semantic.TableVisual{
+			"orders": {Title: "Orders", MetricView: "orders"},
+		},
+		Pages: []dashboard.Page{{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{{ID: "orders", Visual: "orders"}, {ID: "orders-table", Table: "orders"}}}},
+	}, &semantic.Model{Name: "test", Title: "Test Model"}, true
+}
+
+func (fakeAgentMetrics) Pages(id string) []dashboard.Page {
+	report, _, ok := fakeAgentMetrics{}.Report(id)
+	if !ok {
+		return nil
+	}
+	return report.Pages
+}
+
+func (fakeAgentMetrics) DefaultFilters(string) dashboard.Filters {
+	return dashboard.Filters{}.WithDefaults()
+}
+
+func (fakeAgentMetrics) NormalizeTableRequest(_ string, request dashboard.TableRequest) dashboard.TableRequest {
+	return request.WithDefaults()
+}
+
+func (fakeAgentMetrics) QueryDashboardPage(_ context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	return dashboard.Patch{
+		Filters: filters.WithDefaults(),
+		Visuals: map[string]dashboard.Visual{
+			"orders": {ID: "orders", Title: "Orders", Data: []dashboard.Datum{{"label": "delivered", "value": 10}}},
+		},
+	}, nil
+}
+
+func (fakeAgentMetrics) QueryTablePage(_ context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+	rows := make([]map[string]any, 0, request.Count)
+	for i := 0; i < request.Count; i++ {
+		rows = append(rows, map[string]any{"order_id": "order_" + string(rune('A'+i%26))})
+	}
+	return dashboard.Table{
+		Title:         "Orders",
+		AvailableRows: len(rows),
+		Blocks:        map[string]dashboard.TableBlock{"a": {Rows: rows}},
+	}, nil
+}
+
+func runTool(t *testing.T, tools []agent.ToolDefinition, name, args string) string {
+	t.Helper()
+	for _, tool := range tools {
+		if tool.Name != name {
+			continue
+		}
+		result, err := tool.Handler.Run(context.Background(), agent.ToolCall{ID: "call_1", Name: name, Arguments: []byte(args)})
+		if err != nil {
+			t.Fatalf("%s returned error: %v", name, err)
+		}
+		bytes, err := json.Marshal(result.Content)
+		if err != nil {
+			t.Fatalf("marshal %s result: %v", name, err)
+		}
+		return string(bytes)
+	}
+	t.Fatalf("tool %q not found", name)
+	return ""
+}
+
+func openAgentAppStore(t *testing.T, ctx context.Context) *platform.Store {
+	t.Helper()
+	store, err := platform.Open(ctx, t.TempDir()+"/libredash.db")
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := store.EnsureWorkspace(ctx, platform.WorkspaceInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	return store
+}
+
+func createAgentAppPrincipal(t *testing.T, ctx context.Context, store *platform.Store, email string) platformdb.Principal {
+	t.Helper()
+	principal, err := store.UpsertPrincipal(ctx, platform.PrincipalInput{Email: email, DisplayName: email})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	if err := store.BindRole(ctx, "test", principal.ID, "viewer"); err != nil {
+		t.Fatalf("bind role: %v", err)
+	}
+	return principal
+}

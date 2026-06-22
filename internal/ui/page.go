@@ -860,6 +860,7 @@ func sidebarGroups(catalog dashboard.Catalog) []map[string]any {
 			"label": "Navigation",
 			"items": []map[string]any{
 				{"id": "dashboards", "label": "Dashboards", "href": "/", "icon": "dashboard", "meta": "Reports"},
+				{"id": "chat", "label": "Chat", "href": "/chat", "icon": "chat", "meta": "Agent interface"},
 				{"id": "workspaces", "label": "Workspaces", "href": "/workspaces", "icon": "catalog", "meta": "Published assets"},
 				{"id": "metrics", "label": "Metric Views", "href": "/metrics", "icon": "data", "meta": "Business metrics"},
 				{"id": "models", "label": "Semantic Models", "href": "/models", "icon": "model", "meta": "Reusable data models"},

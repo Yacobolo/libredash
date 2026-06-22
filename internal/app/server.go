@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Yacobolo/libredash/internal/agentapp"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/semantic"
@@ -40,6 +41,7 @@ type Server struct {
 	metrics            queryMetrics
 	broker             *broker
 	store              *platform.Store
+	agent              *agentapp.Service
 	auth               *Auth
 	reloader           runtimeReloader
 	artifactDir        string
@@ -56,6 +58,7 @@ func New(metrics queryMetrics) *Server {
 
 type Options struct {
 	Store              *platform.Store
+	Agent              *agentapp.Service
 	Auth               *Auth
 	Reloader           runtimeReloader
 	ArtifactDir        string
@@ -69,6 +72,7 @@ type Options struct {
 func NewWithOptions(metrics queryMetrics, options Options) *Server {
 	server := New(metrics)
 	server.store = options.Store
+	server.agent = options.Agent
 	server.auth = options.Auth
 	server.reloader = options.Reloader
 	server.artifactDir = options.ArtifactDir

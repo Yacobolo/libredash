@@ -363,3 +363,51 @@ func TestEventSinkErrorsAreBestEffort(t *testing.T) {
 		t.Fatal("event sink was not called")
 	}
 }
+
+func TestInitialTranscriptSeedsModelRequestsAndIsCloned(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{{Content: "done", FinishReason: FinishReasonStop}}}
+	initial := []Message{
+		{ID: "summary_1", Role: RoleSummary, Content: "The user cares about revenue."},
+		{ID: "user_1", Role: RoleUser, Content: "Earlier question"},
+		{
+			ID:      "assistant_1",
+			Role:    RoleAssistant,
+			Content: "I will inspect the dashboard.",
+			ToolCalls: []ToolCall{{
+				ID:        "call_1",
+				Name:      "list_dashboards",
+				Arguments: []byte(`{}`),
+			}},
+		},
+		{ID: "tool_1", Role: RoleTool, ToolCallID: "call_1", ToolName: "list_dashboards", Content: `{"dashboards":["sales"]}`},
+	}
+	a := mustAgent(t, Definition{
+		Name:              "test",
+		SystemPrompt:      "system",
+		Model:             model,
+		InitialTranscript: initial,
+	})
+	initial[1].Content = "mutated"
+	initial[2].ToolCalls[0].Name = "mutated_tool"
+
+	if got := a.Transcript(); got[1].Content != "Earlier question" || got[2].ToolCalls[0].Name != "list_dashboards" {
+		t.Fatalf("initial transcript was not cloned: %#v", got)
+	}
+
+	if _, err := a.Prompt(context.Background(), PromptRequest{Input: "What changed?"}); err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	if len(model.requests) != 1 {
+		t.Fatalf("model calls = %d, want 1", len(model.requests))
+	}
+	got := model.requests[0].Messages
+	if roles(got) != "system,system,user,assistant,tool,user" {
+		t.Fatalf("request roles = %s", roles(got))
+	}
+	if got[1].Content != "Conversation summary:\nThe user cares about revenue." {
+		t.Fatalf("summary message = %q", got[1].Content)
+	}
+	if got[3].ToolCalls[0].Name != "list_dashboards" {
+		t.Fatalf("tool call was mutated in request: %#v", got[3].ToolCalls)
+	}
+}

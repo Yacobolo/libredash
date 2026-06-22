@@ -39,6 +39,7 @@ type ThemeMode = 'system' | 'light' | 'dark'
 type IconName =
   | 'catalog'
   | 'dashboard'
+  | 'chat'
   | 'model'
   | 'data'
   | 'cache'
@@ -647,6 +648,8 @@ function icon(name: IconName) {
       return iconSvg(svgTemplate`<rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect>`)
     case 'dashboard':
       return iconSvg(svgTemplate`<path d="M3 3v18h18"></path><path d="M8 17V9"></path><path d="M13 17V5"></path><path d="M18 17v-6"></path>`)
+    case 'chat':
+      return iconSvg(svgTemplate`<path d="M21 12a8 8 0 0 1-8 8H7l-4 3 1.5-5A8 8 0 1 1 21 12Z"></path><path d="M8 11h8"></path><path d="M8 15h5"></path>`)
     case 'model':
       return iconSvg(svgTemplate`<ellipse cx="12" cy="5" rx="8" ry="3"></ellipse><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5"></path><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"></path>`)
     case 'data':
