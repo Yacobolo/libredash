@@ -514,6 +514,9 @@
     --ld-asset-measure-bg: var(--data-green-color-muted);
     --ld-asset-measure-accent: var(--data-green-color-emphasis);
     --ld-asset-measure-border: var(--borderColor-success-muted);
+    --ld-asset-model-table-bg: var(--data-auburn-color-muted);
+    --ld-asset-model-table-accent: var(--data-auburn-color-emphasis);
+    --ld-asset-model-table-border: var(--borderColor-attention-muted);
     --ld-asset-metric-view-bg: var(--data-yellow-color-muted);
     --ld-asset-metric-view-accent: var(--data-yellow-color-emphasis);
     --ld-asset-metric-view-border: var(--borderColor-attention-muted);

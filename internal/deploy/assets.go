@@ -1,6 +1,9 @@
 package deploy
 
 import (
+	"regexp"
+	"sort"
+
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/semantic"
 )
@@ -59,6 +62,10 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 			edge(modelID, id, "contains")
 			if table.Source != "" {
 				edge(id, byKey["source:"+modelEntry.ID+"."+table.Source], "reads_source")
+			} else {
+				for _, sourceName := range transformSourceRefs(table.Transform.SQL, model.Sources) {
+					edge(id, byKey["source:"+modelEntry.ID+"."+sourceName], "reads_source")
+				}
 			}
 		}
 	}
@@ -142,6 +149,25 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 		}
 	}
 	return assets, edges, nil
+}
+
+func transformSourceRefs(sql string, sources map[string]semantic.Source) []string {
+	if sql == "" || len(sources) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(sources))
+	for name := range sources {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		pattern := regexp.MustCompile(`(?i)\braw\.` + regexp.QuoteMeta(name) + `\b`)
+		if pattern.MatchString(sql) {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 func connectionDescription(connection semantic.Connection) string {

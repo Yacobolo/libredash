@@ -44,15 +44,32 @@ func TestPackValidateAndExtractAssets(t *testing.T) {
 	if len(validation.Edges) == 0 {
 		t.Fatal("expected lineage edges")
 	}
+	assetTypes := map[string]string{}
+	for _, asset := range validation.Assets {
+		assetTypes[asset.ID] = asset.Type
+	}
 	hasSourceConnectionEdge := false
+	hasMetricModelTableEdge := false
+	hasModelTableSourceEdge := false
 	for _, edge := range validation.Edges {
 		if edge.Type == "uses_connection" {
 			hasSourceConnectionEdge = true
-			break
+		}
+		if edge.Type == "uses_model_table" {
+			hasMetricModelTableEdge = true
+		}
+		if edge.Type == "reads_source" && assetTypes[edge.FromAssetID] == "model_table" && assetTypes[edge.ToAssetID] == "source" {
+			hasModelTableSourceEdge = true
 		}
 	}
 	if !hasSourceConnectionEdge {
 		t.Fatal("expected source to connection lineage edge")
+	}
+	if !hasMetricModelTableEdge {
+		t.Fatal("expected metric view to model table lineage edge")
+	}
+	if !hasModelTableSourceEdge {
+		t.Fatal("expected model table to source lineage edge")
 	}
 }
 

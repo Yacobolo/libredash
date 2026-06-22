@@ -41,6 +41,41 @@ func TestLoadOlistModel(t *testing.T) {
 	}
 }
 
+func TestMetricViewRejectsMeasureOutsideBaseTable(t *testing.T) {
+	model := minimalSourceModel()
+	model.Sources["customers"] = Source{Path: "customers.csv"}
+	model.Tables["customers"] = ModelTable{
+		Kind:       "dimension",
+		Source:     "customers",
+		PrimaryKey: "customer_id",
+		Grain:      "customer_id",
+		Dimensions: map[string]MetricDimension{
+			"customer_id": {Expr: "customer_id"},
+			"state":       {Expr: "customer_state"},
+		},
+		Measures: map[string]MetricMeasure{
+			"customer_count": {Label: "Customers", Expression: "COUNT(DISTINCT customers.customer_id)"},
+		},
+	}
+	if err := model.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil", err)
+	}
+	view := &MetricView{
+		ID:            "orders",
+		Title:         "Orders",
+		SemanticModel: "test",
+		BaseTable:     "orders",
+		Grain:         "order_id",
+		Time:          ViewTime{DefaultField: "orders.order_id"},
+		DimensionRefs: []string{"orders.order_id", "customers.state"},
+		MeasureRefs:   []string{"orders.order_count", "customers.customer_count"},
+	}
+	err := view.Validate(model)
+	if err == nil || !strings.Contains(err.Error(), `is owned by "customers", want base table "orders"`) {
+		t.Fatalf("Validate() error = %v, want non-base measure rejection", err)
+	}
+}
+
 func TestModelValidateAcceptsNativeSourceFamilies(t *testing.T) {
 	model := minimalSourceModel()
 	model.DefaultConnection = "local_files"

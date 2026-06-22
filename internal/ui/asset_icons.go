@@ -24,6 +24,7 @@ var assetPresentationByType = map[string]assetPresentation{
 	"dimension":       assetPresentationFor(lucide.Ruler, "dimension"),
 	"filter":          assetPresentationFor(lucide.ListFilter, "filter"),
 	"measure":         assetPresentationFor(lucide.Sigma, "measure"),
+	"model_table":     assetPresentationFor(lucide.TableProperties, "model-table"),
 	"metric_view":     assetPresentationFor(lucide.ChartNoAxesCombined, "metric-view"),
 	"page":            assetPresentationFor(lucide.PanelTop, "page"),
 	"semantic_model":  assetPresentationFor(lucide.Box, "semantic-model"),

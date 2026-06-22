@@ -30,7 +30,7 @@ sources:
 tables:
   orders:
     kind: fact
-    description: One row per order with reusable order grain measures.
+    description: One row per order with explicit order-grain derived fields for v1 metric-view measures.
     transform:
       sql: |
         WITH revenue AS (

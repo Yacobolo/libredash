@@ -838,8 +838,7 @@ Current LibreDash already has pieces of this model:
 
 - Connections.
 - Sources.
-- Cache tables.
-- Datasets.
+- Model tables.
 - Relationships.
 - Metric views.
 - Dashboards.
@@ -847,16 +846,16 @@ Current LibreDash already has pieces of this model:
 The current runtime effectively does:
 
 ```text
-source -> raw DuckDB view -> cache table -> dataset -> metric view -> dashboard
+source -> raw DuckDB view -> model table -> metric view -> dashboard
 ```
 
 The long-term migration should reinterpret these concepts:
 
 - `source` remains source.
-- `cache table` becomes an implementation detail or is renamed to backing materialization.
-- `dataset` evolves into model table or public semantic table.
+- `model table` is the authored semantic fact/dimension table.
+- Physical cache tables, OBTs, and rollups become implementation details or backing materializations.
 - `relationships` become active query-planning metadata.
-- `metric view` moves from one physical dataset to one base table plus related dimensions/measures.
+- `metric view` remains anchored on one base table plus safe related dimensions.
 
 ## Non-Goals
 

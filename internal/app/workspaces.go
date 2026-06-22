@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/api"
@@ -34,6 +35,14 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) workspaceAssets(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Get("type") == "connection" {
+		target := "/connections"
+		if query := strings.TrimSpace(r.URL.Query().Get("q")); query != "" {
+			target += "?q=" + url.QueryEscape(query)
+		}
+		http.Redirect(w, r, target, http.StatusFound)
+		return
+	}
 	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
 	assets, _, err := s.workspaceAssetsAndEdges(r, workspaceID)
 	if err != nil {
@@ -52,7 +61,19 @@ func (s *Server) workspaceAssets(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) connections(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, "/workspaces/"+s.workspaceID("")+"?type=connection", http.StatusFound)
+	workspaceID := s.workspaceID("")
+	assets, _, err := s.workspaceAssetsAndEdges(r, workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), statusForNotFound(err))
+		return
+	}
+	connections := filterAssets(assets, "connection", r.URL.Query().Get("q"))
+	workspace := s.workspaceResponse(r, workspaceID)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if err := ui.ConnectionsPage(s.metrics.Catalog(), workspace, connections, r.URL.Query().Get("q"), s.currentRoleLabel(r)).Render(w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) workspaceAsset(w http.ResponseWriter, r *http.Request) {
@@ -530,7 +551,7 @@ func safeAssetMeta(assetType, raw string) map[string]any {
 	case "source":
 		return pickMeta(content, "format", "Format", "path", "Path", "connection", "Connection", "object", "Object", "options", "Options")
 	case "metric_view":
-		return pickMeta(content, "semantic_model", "SemanticModel", "dataset", "Dataset", "timeseries", "Timeseries")
+		return pickMeta(content, "semantic_model", "SemanticModel", "base_table", "BaseTable", "timeseries", "Timeseries")
 	case "measure":
 		return pickMeta(content, "expression", "Expression", "unit", "Unit", "format", "Format")
 	case "dimension":

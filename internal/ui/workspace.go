@@ -56,6 +56,24 @@ func WorkspacePage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, a
 	)
 }
 
+func ConnectionsPage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, assets []api.AssetResponse, query, roleLabel string) g.Node {
+	return workspaceDocument("Connections", catalog, "connections", roleLabel, nil,
+		h.Section(h.Class(workspaceMainClass), h.Aria("label", "Connections"),
+			workspaceHeader(
+				"Global",
+				"Connections",
+				"Connection assets are managed globally and referenced by semantic models.",
+				nil,
+			),
+			connectionToolbar(query),
+			h.Div(h.Class(workspacePanelClass),
+				g.If(len(assets) == 0, h.Div(h.Class("p-3"), emptyState("No connections match this view."))),
+				g.If(len(assets) > 0, assetTable(workspace.ID, assets)),
+			),
+		),
+	)
+}
+
 func workspacePageSignals(access api.WorkspaceAccessResponse, csrfToken string) map[string]any {
 	return map[string]any{
 		"workspaceAccess": WorkspaceAccessSignals(access, csrfToken),
@@ -256,9 +274,6 @@ func activeDeploymentLabel(workspace api.WorkspaceResponse) string {
 
 func assetToolbar(workspaceID, activeType, query string) g.Node {
 	types := []string{"", "dashboard", "semantic_model", "metric_view"}
-	if activeType == "connection" {
-		types = append(types, "connection")
-	}
 	return h.Div(h.Class("grid min-w-0 gap-3 border-b border-outline-variant bg-app px-3 pt-3"), g.Attr("data-workspace-asset-toolbar", ""),
 		h.Form(h.Method("get"), h.Action("/workspaces/"+workspaceID), h.Class("flex min-w-0 max-w-workspace-search items-center gap-2"),
 			h.Input(h.Type("search"), h.Name("q"), h.Value(query), h.Placeholder("Search workspace assets..."), h.Class("min-h-control-md w-full rounded-small border border-outline-variant bg-control px-3 text-body-sm font-medium text-fg-default placeholder:text-fg-muted")),
@@ -273,6 +288,15 @@ func assetToolbar(workspaceID, activeType, query string) g.Node {
 				}
 				return assetTabLink(workspaceID, typ, activeType, query, label)
 			}),
+		),
+	)
+}
+
+func connectionToolbar(query string) g.Node {
+	return h.Div(h.Class("grid min-w-0 gap-3 border-b border-outline-variant bg-app px-3 py-3"), g.Attr("data-connection-toolbar", ""),
+		h.Form(h.Method("get"), h.Action("/connections"), h.Class("flex min-w-0 max-w-workspace-search items-center gap-2"),
+			h.Input(h.Type("search"), h.Name("q"), h.Value(query), h.Placeholder("Search connections..."), h.Class("min-h-control-md w-full rounded-small border border-outline-variant bg-control px-3 text-body-sm font-medium text-fg-default placeholder:text-fg-muted")),
+			h.Button(h.Type("submit"), h.Class(metricActionButtonClass), h.Title("Search"), h.Aria("label", "Search"), lucide.Search(metricActionIconAttrs()...)),
 		),
 	)
 }
@@ -635,50 +659,38 @@ func dashboardAssetLineage(workspaceID string, selected api.AssetResponse, asset
 			addEdge(semanticEdge)
 		}
 
-		for _, datasetEdge := range outgoing[metricView.ID] {
-			if datasetEdge.Type != "uses_dataset" {
+		for _, tableEdge := range outgoing[metricView.ID] {
+			if tableEdge.Type != "uses_model_table" {
 				continue
 			}
-			dataset, ok := byID[datasetEdge.ToAssetID]
-			if !ok || dataset.Type != "dataset" {
+			modelTable, ok := byID[tableEdge.ToAssetID]
+			if !ok || modelTable.Type != "model_table" {
 				continue
 			}
-			addAsset(3, labelFromKey(datasetEdge.Type), dataset)
-			addEdge(datasetEdge)
+			addAsset(3, labelFromKey(tableEdge.Type), modelTable)
+			addEdge(tableEdge)
 
-			for _, cacheEdge := range outgoing[dataset.ID] {
-				if cacheEdge.Type != "uses_cache_table" {
+			for _, sourceEdge := range outgoing[modelTable.ID] {
+				if sourceEdge.Type != "reads_source" {
 					continue
 				}
-				cacheTable, ok := byID[cacheEdge.ToAssetID]
-				if !ok || cacheTable.Type != "cache_table" {
+				source, ok := byID[sourceEdge.ToAssetID]
+				if !ok || source.Type != "source" {
 					continue
 				}
-				addAsset(4, labelFromKey(cacheEdge.Type), cacheTable)
-				addEdge(cacheEdge)
+				addAsset(4, labelFromKey(sourceEdge.Type), source)
+				addEdge(sourceEdge)
 
-				for _, sourceEdge := range outgoing[cacheTable.ID] {
-					if sourceEdge.Type != "reads_source" {
+				for _, connectionEdge := range outgoing[source.ID] {
+					if connectionEdge.Type != "uses_connection" {
 						continue
 					}
-					source, ok := byID[sourceEdge.ToAssetID]
-					if !ok || source.Type != "source" {
+					connection, ok := byID[connectionEdge.ToAssetID]
+					if !ok || connection.Type != "connection" {
 						continue
 					}
-					addAsset(5, labelFromKey(sourceEdge.Type), source)
-					addEdge(sourceEdge)
-
-					for _, connectionEdge := range outgoing[source.ID] {
-						if connectionEdge.Type != "uses_connection" {
-							continue
-						}
-						connection, ok := byID[connectionEdge.ToAssetID]
-						if !ok || connection.Type != "connection" {
-							continue
-						}
-						addAsset(6, labelFromKey(connectionEdge.Type), connection)
-						addEdge(connectionEdge)
-					}
+					addAsset(5, labelFromKey(connectionEdge.Type), connection)
+					addEdge(connectionEdge)
 				}
 			}
 		}
@@ -909,23 +921,20 @@ func semanticModelDetailModel(model *assetDetailModel, workspace api.WorkspaceRe
 	meta := asset.Meta
 	connections := sortedMapKeys(metaMap(meta, "Connections", "connections"))
 	sources := sortedMapKeys(metaMap(meta, "Sources", "sources"))
-	cacheTables := sortedMapKeys(metaMap(metaMap(meta, "Cache", "cache"), "Tables", "tables"))
-	datasets := sortedMapKeys(metaMap(meta, "Datasets", "datasets"))
+	modelTables := sortedMapKeys(metaMap(meta, "Tables", "tables"))
 	relationships := metaSlice(meta, "Relationships", "relationships")
 
 	model.Overview = append(model.Overview,
 		definitionFact{Label: "Default connection", Value: metaString(meta, "DefaultConnection", "default_connection")},
 		definitionFact{Label: "Connections", Value: fmt.Sprint(len(connections))},
 		definitionFact{Label: "Sources", Value: fmt.Sprint(len(sources))},
-		definitionFact{Label: "Cache tables", Value: fmt.Sprint(len(cacheTables))},
-		definitionFact{Label: "Datasets", Value: fmt.Sprint(len(datasets))},
+		definitionFact{Label: "Model tables", Value: fmt.Sprint(len(modelTables))},
 		definitionFact{Label: "Relationships", Value: fmt.Sprint(len(relationships))},
 	)
 	model.Sections = append(model.Sections,
 		assetDetailSection{Title: fmt.Sprintf("Connections (%d)", len(connections)), Signal: "assetDetailsSemanticConnectionsGrid", Grid: semanticConnectionsGrid(workspace.ID, asset, assets, meta)},
 		assetDetailSection{Title: fmt.Sprintf("Sources (%d)", len(sources)), Signal: "assetDetailsSemanticSourcesGrid", Grid: semanticSourcesGrid(workspace.ID, asset, assets, meta)},
-		assetDetailSection{Title: fmt.Sprintf("Cache tables (%d)", len(cacheTables)), Signal: "assetDetailsSemanticCacheTablesGrid", Grid: semanticCacheGrid(workspace.ID, asset, assets, edges, meta)},
-		assetDetailSection{Title: fmt.Sprintf("Datasets (%d)", len(datasets)), Signal: "assetDetailsSemanticDatasetsGrid", Grid: semanticDatasetsGrid(workspace.ID, asset, assets, meta)},
+		assetDetailSection{Title: fmt.Sprintf("Model tables (%d)", len(modelTables)), Signal: "assetDetailsSemanticModelTablesGrid", Grid: semanticModelTablesGrid(workspace.ID, asset, assets, edges, meta)},
 		assetDetailSection{Title: fmt.Sprintf("Relationships (%d)", len(relationships)), Signal: "assetDetailsSemanticRelationshipsGrid", Grid: semanticRelationshipsGrid(meta)},
 	)
 }
@@ -946,8 +955,7 @@ func semanticModelDetails(asset api.AssetResponse) []g.Node {
 	meta := asset.Meta
 	connections := sortedMapKeys(metaMap(meta, "Connections", "connections"))
 	sources := sortedMapKeys(metaMap(meta, "Sources", "sources"))
-	cacheTables := sortedMapKeys(metaMap(metaMap(meta, "Cache", "cache"), "Tables", "tables"))
-	datasets := sortedMapKeys(metaMap(meta, "Datasets", "datasets"))
+	modelTables := sortedMapKeys(metaMap(meta, "Tables", "tables"))
 	relationships := metaSlice(meta, "Relationships", "relationships")
 
 	return []g.Node{
@@ -955,8 +963,7 @@ func semanticModelDetails(asset api.AssetResponse) []g.Node {
 			{Label: "Default connection", Value: metaString(meta, "DefaultConnection", "default_connection")},
 			{Label: "Connections", Value: fmt.Sprint(len(connections))},
 			{Label: "Sources", Value: fmt.Sprint(len(sources))},
-			{Label: "Cache tables", Value: fmt.Sprint(len(cacheTables))},
-			{Label: "Datasets", Value: fmt.Sprint(len(datasets))},
+			{Label: "Model tables", Value: fmt.Sprint(len(modelTables))},
 			{Label: "Relationships", Value: fmt.Sprint(len(relationships))},
 		}),
 	}
@@ -1016,56 +1023,44 @@ func semanticSourcesGrid(workspaceID string, parent api.AssetResponse, assets []
 	}
 }
 
-func semanticCacheGrid(workspaceID string, parent api.AssetResponse, assets []api.AssetResponse, edges []api.AssetEdgeResponse, meta map[string]any) metricGrid {
-	tables := metaMap(metaMap(meta, "Cache", "cache"), "Tables", "tables")
+func semanticModelTablesGrid(workspaceID string, parent api.AssetResponse, assets []api.AssetResponse, edges []api.AssetEdgeResponse, meta map[string]any) metricGrid {
+	tables := metaMap(meta, "Tables", "tables")
 	rows := make([]map[string]any, 0, len(tables))
 	for _, name := range sortedMapKeys(tables) {
 		table := asMap(tables[name])
-		child := childAssetByName(parent.ID, "cache_table", name, assets)
+		child := childAssetByName(parent.ID, "model_table", name, assets)
+		source := metaString(table, "Source", "source")
+		backing := "Transform SQL"
+		if source != "" {
+			backing = source
+		}
+		transform := metaMap(table, "Transform", "transform")
 		rows = append(rows, map[string]any{
 			"name":        name,
 			"nameHref":    childHref(workspaceID, child),
+			"kind":        metricGridBadgeValue(metaString(table, "Kind", "kind"), "muted"),
+			"grain":       emptyDash(metaString(table, "Grain", "grain")),
+			"primaryKey":  emptyDash(metaString(table, "PrimaryKey", "primary_key")),
+			"backing":     backing,
 			"description": emptyDash(metaString(table, "Description", "description")),
 			"reads":       strings.Join(dependentAssetNames(child.ID, "reads_source", assets, edges), ", "),
-			"sql":         sqlPreview(metaString(table, "SQL", "sql")),
+			"sql":         sqlPreview(metaString(transform, "SQL", "sql")),
 		})
 	}
 	return metricGrid{
 		Columns: []metricGridColumn{
 			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "180px"},
-			{ID: "description", Header: "Description", Width: "320px"},
+			{ID: "kind", Header: "Kind", Kind: "badge", Width: "110px"},
+			{ID: "grain", Header: "Grain", Kind: "code", Width: "140px"},
+			{ID: "primaryKey", Header: "Primary key", Kind: "code", Width: "150px"},
+			{ID: "backing", Header: "Source / transform", Kind: "expression", Width: "190px"},
 			{ID: "reads", Header: "Reads", Kind: "expression", Width: "220px"},
-			{ID: "sql", Header: "SQL preview", Kind: "expression"},
+			{ID: "description", Header: "Description", Width: "260px"},
+			{ID: "sql", Header: "SQL preview", Kind: "expression", Width: "320px"},
 		},
 		Rows:     rows,
-		Empty:    "No cache tables are defined for this semantic model.",
-		MinWidth: "980px",
-	}
-}
-
-func semanticDatasetsGrid(workspaceID string, parent api.AssetResponse, assets []api.AssetResponse, meta map[string]any) metricGrid {
-	datasets := metaMap(meta, "Datasets", "datasets")
-	rows := make([]map[string]any, 0, len(datasets))
-	for _, name := range sortedMapKeys(datasets) {
-		dataset := asMap(datasets[name])
-		child := childAssetByName(parent.ID, "dataset", name, assets)
-		sourceName := metaString(dataset, "Source", "source")
-		source := childAssetByName(parent.ID, "cache_table", sourceName, assets)
-		rows = append(rows, map[string]any{
-			"name":       name,
-			"nameHref":   childHref(workspaceID, child),
-			"source":     emptyDash(sourceName),
-			"sourceHref": childHref(workspaceID, source),
-		})
-	}
-	return metricGrid{
-		Columns: []metricGridColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "220px"},
-			{ID: "source", Header: "Source cache table", Kind: "link", HrefKey: "sourceHref"},
-		},
-		Rows:     rows,
-		Empty:    "No datasets are defined for this semantic model.",
-		MinWidth: "520px",
+		Empty:    "No model tables are defined for this semantic model.",
+		MinWidth: "1370px",
 	}
 }
 
@@ -1105,7 +1100,7 @@ func metricViewDetailModel(model *assetDetailModel, asset api.AssetResponse, ass
 	}
 	model.Overview = append(model.Overview,
 		definitionFact{Label: "Semantic model", Value: semanticModel},
-		definitionFact{Label: "Dataset", Value: metaString(asset.Meta, "Dataset", "dataset")},
+		definitionFact{Label: "Base table", Value: metaString(asset.Meta, "BaseTable", "base_table")},
 		definitionFact{Label: "Timeseries", Value: metaString(asset.Meta, "Timeseries", "timeseries")},
 	)
 	model.Sections = append(model.Sections,
@@ -1761,7 +1756,9 @@ func assetTypeLabel(typ string) string {
 	case "metric_view":
 		return "Metric view"
 	case "cache_table":
-		return "Cache table"
+		return "Materialization"
+	case "model_table":
+		return "Model table"
 	default:
 		return strings.Title(strings.ReplaceAll(typ, "_", " "))
 	}

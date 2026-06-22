@@ -31,13 +31,11 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForSemanticModel(t *testing.T) {
 		"Default connection",
 		"Connections (1)",
 		"Sources (1)",
-		"Cache tables (1)",
-		"Datasets (1)",
+		"Model tables (1)",
 		"Relationships (1)",
 		`data-attr:grid="$assetDetailsSemanticConnectionsGrid"`,
 		`data-attr:grid="$assetDetailsSemanticSourcesGrid"`,
-		`data-attr:grid="$assetDetailsSemanticCacheTablesGrid"`,
-		`data-attr:grid="$assetDetailsSemanticDatasetsGrid"`,
+		`data-attr:grid="$assetDetailsSemanticModelTablesGrid"`,
 		`data-attr:grid="$assetDetailsSemanticRelationshipsGrid"`,
 	} {
 		if !strings.Contains(rendered, want) {
@@ -62,8 +60,7 @@ func TestWorkspaceAssetDetailSignalsUseSharedGridShape(t *testing.T) {
 	for _, key := range []string{
 		"assetDetailsSemanticConnectionsGrid",
 		"assetDetailsSemanticSourcesGrid",
-		"assetDetailsSemanticCacheTablesGrid",
-		"assetDetailsSemanticDatasetsGrid",
+		"assetDetailsSemanticModelTablesGrid",
 		"assetDetailsSemanticRelationshipsGrid",
 	} {
 		if _, ok := semanticSignals[key]; !ok {
@@ -151,7 +148,7 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForMetricView(t *testing.T) {
 		"Breadcrumb",
 		"Orders Metrics",
 		"Overview",
-		"Dataset",
+		"Base table",
 		"orders",
 		"Timeseries",
 		"purchase_timestamp",
@@ -197,7 +194,13 @@ func TestWorkspaceAssetRowsUseDetailLinksForModelAndMetricAssets(t *testing.T) {
 
 func TestWorkspaceAssetRowsRenderTokenBackedIconColors(t *testing.T) {
 	workspace, catalog, assets, _ := testWorkspaceAssetFixtures()
-	visibleAssets := []api.AssetResponse{assets[0], assets[5], assets[8]}
+	byType := map[string]api.AssetResponse{}
+	for _, asset := range assets {
+		if _, ok := byType[asset.Type]; !ok {
+			byType[asset.Type] = asset
+		}
+	}
+	visibleAssets := []api.AssetResponse{byType["semantic_model"], byType["metric_view"], byType["dashboard"]}
 
 	var out strings.Builder
 	err := WorkspacePage(catalog, workspace, visibleAssets, "", "", "Owner", testWorkspaceAccess(workspace, true), "csrf").Render(&out)
@@ -313,20 +316,22 @@ func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []a
 				"Sources": map[string]any{
 					"orders": map[string]any{"Connection": "olist", "Format": "csv", "Path": "orders.csv"},
 				},
-				"Cache": map[string]any{
-					"Tables": map[string]any{"orders_enriched": map[string]any{"Description": "One row per order.", "SQL": "select * from raw.orders"}},
-				},
-				"Datasets": map[string]any{
-					"orders": map[string]any{"Source": "orders_enriched"},
+				"Tables": map[string]any{
+					"orders": map[string]any{
+						"Kind":        "fact",
+						"Source":      "orders",
+						"PrimaryKey":  "order_id",
+						"Grain":       "order_id",
+						"Description": "One row per order.",
+					},
 				},
 				"Relationships": []any{map[string]any{"ID": "orders_customers", "From": "raw.orders.customer_id", "To": "raw.customers.customer_id", "Cardinality": "many_to_one", "Active": true}},
 			},
 		},
 		{ID: "connection", WorkspaceID: workspace.ID, Type: "connection", Key: "olist.olist", ParentID: "model", Title: "Olist connection", Meta: map[string]any{"Kind": "local", "credentials_configured": false}},
 		{ID: "source", WorkspaceID: workspace.ID, Type: "source", Key: "olist.orders", ParentID: "model", Title: "orders", Meta: map[string]any{"Connection": "olist", "Format": "csv", "Path": "orders.csv"}},
-		{ID: "cache", WorkspaceID: workspace.ID, Type: "cache_table", Key: "olist.orders_enriched", ParentID: "model", Title: "orders_enriched"},
-		{ID: "dataset", WorkspaceID: workspace.ID, Type: "dataset", Key: "olist.orders", ParentID: "model", Title: "orders"},
-		{ID: "metric", WorkspaceID: workspace.ID, Type: "metric_view", Key: "orders", ParentID: "model", Title: "Orders Metrics", Description: "Order metrics.", Meta: map[string]any{"Dataset": "orders", "Timeseries": "purchase_timestamp"}},
+		{ID: "model-table", WorkspaceID: workspace.ID, Type: "model_table", Key: "olist.orders", ParentID: "model", Title: "orders"},
+		{ID: "metric", WorkspaceID: workspace.ID, Type: "metric_view", Key: "orders", ParentID: "model", Title: "Orders Metrics", Description: "Order metrics.", Meta: map[string]any{"BaseTable": "orders", "Timeseries": "purchase_timestamp"}},
 		{ID: "measure", WorkspaceID: workspace.ID, Type: "measure", Key: "orders.revenue", ParentID: "metric", Title: "Revenue", Meta: map[string]any{"Expression": "SUM(revenue)", "Format": "currency"}},
 		{ID: "dimension", WorkspaceID: workspace.ID, Type: "dimension", Key: "orders.state", ParentID: "metric", Title: "State", Meta: map[string]any{"Expr": "customer_state"}},
 		{ID: "dashboard", WorkspaceID: workspace.ID, Type: "dashboard", Key: "executive-sales", Title: "Executive Sales Dashboard", Description: "Sales overview.", Href: "/dashboards/executive-sales", Meta: map[string]any{"MetricViews": []any{"orders"}, "Tags": []any{"sales"}}},
@@ -337,9 +342,8 @@ func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []a
 	}
 	edges := []api.AssetEdgeResponse{
 		{ID: "model-metric", FromAssetID: "model", ToAssetID: "metric", Type: "contains"},
-		{ID: "metric-dataset", FromAssetID: "metric", ToAssetID: "dataset", Type: "uses_dataset"},
-		{ID: "dataset-cache", FromAssetID: "dataset", ToAssetID: "cache", Type: "uses_cache_table"},
-		{ID: "cache-source", FromAssetID: "cache", ToAssetID: "source", Type: "reads_source"},
+		{ID: "metric-model-table", FromAssetID: "metric", ToAssetID: "model-table", Type: "uses_model_table"},
+		{ID: "model-table-source", FromAssetID: "model-table", ToAssetID: "source", Type: "reads_source"},
 		{ID: "source-connection", FromAssetID: "source", ToAssetID: "connection", Type: "uses_connection"},
 		{ID: "dashboard-metric", FromAssetID: "dashboard", ToAssetID: "metric", Type: "uses_metric_view"},
 	}
