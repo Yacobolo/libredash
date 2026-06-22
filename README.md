@@ -34,8 +34,9 @@ go run ./cmd/libredash
 
 - `GET /` renders the file-backed dashboard catalog with gomponents.
 - `GET /dashboards/{dashboard}` opens a dashboard, and `GET /dashboards/{dashboard}/pages/{page}` renders a report page.
-- `GET /metrics` renders the metric view catalog, and `GET /metrics/{view}` renders metric contract details.
-- `GET /models/{model}` renders the semantic model lineage graph, including metric views built on top of model tables.
+- `GET /workspaces` renders published BI workspaces, and `GET /workspaces/{workspace}` renders canonical dashboard, semantic model, metric view, and connection assets.
+- `GET /workspaces/{workspace}/assets/{asset}/details` renders canonical asset details, including semantic model and metric view definitions.
+- `GET /workspaces/{workspace}/assets/{asset}/lineage` renders canonical asset lineage.
 - `GET /updates?dashboard={dashboard}&page={page}` opens a long-running Datastar SSE stream and patches signals with `datastar.MarshalAndPatchSignals`.
 - DuckDB registers local CSV files as views and materializes model-scoped import tables.
 - `dashboards/catalog.yaml` discovers semantic models, metric views, and dashboards.

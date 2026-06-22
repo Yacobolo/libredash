@@ -130,54 +130,6 @@ relogios_presentes,watches_gifts
 		t.Fatalf("expected DuckDB materialization file: %v", err)
 	}
 
-	views := metrics.MetricViews()
-	if len(views) != 1 {
-		t.Fatalf("metric views = %d, want 1", len(views))
-	}
-	if got := views[0].ID; got != "orders" {
-		t.Fatalf("metric view id = %q, want orders", got)
-	}
-	if got := views[0].DimensionCount; got != 9 {
-		t.Fatalf("metric view dimension count = %d, want 9", got)
-	}
-	if got := views[0].MeasureCount; got != 13 {
-		t.Fatalf("metric view measure count = %d, want 13", got)
-	}
-	if got := views[0].DashboardCount; got != 1 {
-		t.Fatalf("metric view dashboard count = %d, want 1", got)
-	}
-
-	view, ok := metrics.MetricView("orders")
-	if !ok {
-		t.Fatal("metric view orders not found")
-	}
-	if got := view.BaseTable; got != "orders" {
-		t.Fatalf("metric view base table = %q, want orders", got)
-	}
-	if got := view.Timeseries; got != "orders.purchase_timestamp" {
-		t.Fatalf("metric view timeseries = %q, want orders.purchase_timestamp", got)
-	}
-	if !hasMetricDimension(view.Dimensions, "orders.category", "category") {
-		t.Fatalf("metric view dimensions missing category: %#v", view.Dimensions)
-	}
-	if !hasMetricMeasure(view.Measures, "orders.revenue", "SUM(orders.revenue)") {
-		t.Fatalf("metric view measures missing revenue: %#v", view.Measures)
-	}
-	if len(view.Dashboards) != 1 || view.Dashboards[0].ID != "executive-sales" {
-		t.Fatalf("metric view dashboards = %#v, want executive-sales", view.Dashboards)
-	}
-
-	graph, ok := metrics.ModelGraph("olist")
-	if !ok {
-		t.Fatal("model graph olist not found")
-	}
-	if !hasModelNode(graph.Nodes, "metric_view:orders") {
-		t.Fatalf("model graph missing metric view node: %#v", graph.Nodes)
-	}
-	if !hasModelEdge(graph.Edges, "model_table:orders", "metric_view:orders") {
-		t.Fatalf("model graph missing model table to metric view edge: %#v", graph.Edges)
-	}
-
 	patch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", dashboard.Filters{Controls: map[string]dashboard.FilterControl{
 		"state":         {Type: "multi_select", Operator: "in", Values: []string{"SP"}},
 		"purchase_date": {Type: "date_range", Preset: "2018"},

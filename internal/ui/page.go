@@ -29,28 +29,24 @@ func staticAsset(path string) string {
 }
 
 const (
-	appRootClass               = "min-h-svh bg-app text-fg-default"
-	appShellClass              = "grid min-h-svh grid-cols-app-shell bg-app max-sm:grid-cols-1"
-	reportShellClass           = "grid min-h-svh grid-cols-report-shell bg-app max-sm:grid-cols-1"
-	appMainClass               = "grid min-w-0 min-h-svh grid-rows-app-main bg-app"
-	catalogMainClass           = appMainClass + " gap-3 px-4 py-4 max-sm:min-h-0 max-sm:p-3"
-	reportMainClass            = appMainClass + " h-svh min-h-0 overflow-hidden"
-	metricMainClass            = "grid h-svh min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-app"
-	modelMainClass             = appMainClass + " gap-3 px-4 py-4 max-sm:min-h-0 max-sm:p-3"
-	cardClass                  = "grid min-h-min-card max-w-card grid-rows-card rounded-default border border-outline-variant bg-panel p-4 shadow-resting-sm"
-	cardTitleClass             = "m-0 mt-1 text-body-md leading-snug font-semibold text-fg-default"
-	cardDescriptionClass       = "m-0 mt-2 text-body-sm leading-relaxed font-normal text-fg-muted"
-	cardFooterClass            = "mt-4 flex items-center justify-between gap-3 border-t border-outline-muted pt-3 text-caption font-medium text-fg-muted"
-	eyebrowClass               = "m-0 mb-1 text-caption leading-tight font-medium uppercase text-fg-muted"
-	visualCardClass            = "h-full min-h-0 w-full overflow-hidden rounded-default border border-outline-variant bg-panel"
-	actionButtonClass          = "inline-flex size-action min-h-action items-center justify-center rounded-default border border-outline-variant bg-transparent p-0 text-fg-default hover:bg-control-hover focus-visible:bg-control-hover focus-visible:outline-0 disabled:cursor-not-allowed disabled:border-control-border-disabled disabled:bg-control-disabled disabled:text-control-fg-disabled"
-	metricActionButtonClass    = "inline-flex size-8 items-center justify-center rounded-small border border-transparent bg-transparent p-0 text-fg-muted no-underline transition-colors duration-micro ease-hover hover:border-outline-muted hover:bg-control-hover hover:text-fg-default focus-visible:border-outline-accent focus-visible:bg-control-hover focus-visible:text-fg-default focus-visible:outline-0"
-	primaryLinkButtonClass     = "inline-flex min-h-control-xs items-center justify-center gap-1.5 rounded-small bg-button-primary px-2.5 text-caption font-semibold text-on-primary no-underline hover:bg-button-primary-hover focus-visible:bg-button-primary-hover focus-visible:outline-0"
-	tagClass                   = "rounded-full border border-outline-muted bg-panel-muted px-2 py-0.5 text-caption font-medium uppercase text-fg-muted"
-	metricContractSectionClass = "grid min-h-0 gap-3 overflow-hidden bg-transparent"
-	metricWorkspaceClass       = "grid min-h-0 min-w-0 grid-cols-metric-workspace overflow-hidden bg-app data-[rail-collapsed]:grid-cols-metric-workspace-collapsed max-md:grid-cols-1"
-	metricContentColumnClass   = "grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
-	metricInfoSidebarClass     = "grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border-l border-outline-variant bg-app max-md:border-l-0 max-md:border-t"
+	appRootClass             = "min-h-svh bg-app text-fg-default"
+	appShellClass            = "grid min-h-svh grid-cols-app-shell bg-app max-sm:grid-cols-1"
+	reportShellClass         = "grid min-h-svh grid-cols-report-shell bg-app max-sm:grid-cols-1"
+	appMainClass             = "grid min-w-0 min-h-svh grid-rows-app-main bg-app"
+	catalogMainClass         = appMainClass + " gap-3 px-4 py-4 max-sm:min-h-0 max-sm:p-3"
+	reportMainClass          = appMainClass + " h-svh min-h-0 overflow-hidden"
+	metricMainClass          = "grid h-svh min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-app"
+	cardClass                = "grid min-h-min-card max-w-card grid-rows-card rounded-default border border-outline-variant bg-panel p-4 shadow-resting-sm"
+	cardTitleClass           = "m-0 mt-1 text-body-md leading-snug font-semibold text-fg-default"
+	cardDescriptionClass     = "m-0 mt-2 text-body-sm leading-relaxed font-normal text-fg-muted"
+	cardFooterClass          = "mt-4 flex items-center justify-between gap-3 border-t border-outline-muted pt-3 text-caption font-medium text-fg-muted"
+	eyebrowClass             = "m-0 mb-1 text-caption leading-tight font-medium uppercase text-fg-muted"
+	visualCardClass          = "h-full min-h-0 w-full overflow-hidden rounded-default border border-outline-variant bg-panel"
+	actionButtonClass        = "inline-flex size-action min-h-action items-center justify-center rounded-default border border-outline-variant bg-transparent p-0 text-fg-default hover:bg-control-hover focus-visible:bg-control-hover focus-visible:outline-0 disabled:cursor-not-allowed disabled:border-control-border-disabled disabled:bg-control-disabled disabled:text-control-fg-disabled"
+	metricActionButtonClass  = "inline-flex size-8 items-center justify-center rounded-small border border-transparent bg-transparent p-0 text-fg-muted no-underline transition-colors duration-micro ease-hover hover:border-outline-muted hover:bg-control-hover hover:text-fg-default focus-visible:border-outline-accent focus-visible:bg-control-hover focus-visible:text-fg-default focus-visible:outline-0"
+	primaryLinkButtonClass   = "inline-flex min-h-control-xs items-center justify-center gap-1.5 rounded-small bg-button-primary px-2.5 text-caption font-semibold text-on-primary no-underline hover:bg-button-primary-hover focus-visible:bg-button-primary-hover focus-visible:outline-0"
+	tagClass                 = "rounded-full border border-outline-muted bg-panel-muted px-2 py-0.5 text-caption font-medium uppercase text-fg-muted"
+	metricContentColumnClass = "grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
 )
 
 func inspectorScript() g.Node {
@@ -227,76 +223,6 @@ func CatalogPage(catalog dashboard.Catalog) g.Node {
 	})
 }
 
-func ModelsPage(catalog dashboard.Catalog) g.Node {
-	return c.HTML5(c.HTML5Props{
-		Title:    "LibreDash Semantic Models",
-		Language: "en",
-		HTMLAttrs: []g.Node{
-			g.Attr("data-color-mode", "auto"),
-			g.Attr("data-light-theme", "light"),
-			g.Attr("data-dark-theme", "dark"),
-		},
-		Head: pageHead(
-			h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
-			inspectorScript(),
-		),
-		Body: []g.Node{
-			h.Main(h.Class(appRootClass),
-				h.Div(h.Class(appShellClass),
-					sidebar(sidebarConfigForModels(catalog)),
-					h.Section(h.Class(catalogMainClass), h.Aria("label", "LibreDash semantic model catalog"),
-						workspaceHeader(
-							"",
-							"Semantic Models",
-							"Reusable model definitions.",
-							nil,
-						),
-						h.Div(h.Class("grid grid-cols-catalog-grid items-start justify-start gap-4"),
-							g.Map(catalog.Models, modelCard),
-						),
-					),
-				),
-				inspectorElement(),
-			),
-		},
-	})
-}
-
-func MetricViewsPage(catalog dashboard.Catalog, views []dashboard.MetricViewSummary) g.Node {
-	return c.HTML5(c.HTML5Props{
-		Title:    "LibreDash Metric Views",
-		Language: "en",
-		HTMLAttrs: []g.Node{
-			g.Attr("data-color-mode", "auto"),
-			g.Attr("data-light-theme", "light"),
-			g.Attr("data-dark-theme", "dark"),
-		},
-		Head: pageHead(
-			h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
-			inspectorScript(),
-		),
-		Body: []g.Node{
-			h.Main(h.Class(appRootClass),
-				h.Div(h.Class(appShellClass),
-					sidebar(sidebarConfigForMetrics(catalog)),
-					h.Section(h.Class(catalogMainClass), h.Aria("label", "LibreDash metric view catalog"),
-						workspaceHeader(
-							"",
-							"Metric Views",
-							"Business-facing analytics contracts.",
-							nil,
-						),
-						h.Div(h.Class("grid grid-cols-catalog-grid items-start justify-start gap-4"),
-							g.Map(views, metricViewCard),
-						),
-					),
-				),
-				inspectorElement(),
-			),
-		},
-	})
-}
-
 func dashboardCard(report dashboard.CatalogDashboard) g.Node {
 	eyebrow := strings.Join(report.MetricViewTitles, ", ")
 	if eyebrow == "" {
@@ -323,109 +249,8 @@ func dashboardCard(report dashboard.CatalogDashboard) g.Node {
 	)
 }
 
-func metricViewCard(view dashboard.MetricViewSummary) g.Node {
-	return h.Article(h.Class(cardClass),
-		h.Div(h.Class("min-w-0"),
-			h.P(h.Class(eyebrowClass), g.Text(view.ModelTitle)),
-			h.H2(h.Class(cardTitleClass), g.Text(view.Title)),
-			h.P(h.Class(cardDescriptionClass), g.Text(view.Description)),
-		),
-		h.Div(h.Class("mt-4 flex flex-wrap gap-2"),
-			h.Span(h.Class(tagClass), g.Text(view.BaseTable)),
-			h.Span(h.Class(tagClass), g.Text(view.Timeseries)),
-		),
-		h.Footer(h.Class(cardFooterClass),
-			h.Span(g.Textf("%d dimensions, %d measures", view.DimensionCount, view.MeasureCount)),
-			h.A(h.Class(primaryLinkButtonClass), h.Href("/metrics/"+view.ID+"/measures"),
-				lucide.ExternalLink(buttonIconAttrs()...),
-				h.Span(g.Text("Open")),
-			),
-		),
-	)
-}
-
-func modelCard(model dashboard.CatalogModel) g.Node {
-	return h.Article(h.Class(cardClass),
-		h.Div(h.Class("min-w-0"),
-			h.P(h.Class(eyebrowClass), g.Text("Semantic model")),
-			h.H2(h.Class(cardTitleClass), g.Text(model.Title)),
-			h.P(h.Class(cardDescriptionClass), g.Text(model.Description)),
-		),
-		h.Footer(h.Class(cardFooterClass),
-			h.Span(g.Text("Reusable model")),
-			h.A(h.Class(primaryLinkButtonClass), h.Href("/models/"+model.ID),
-				lucide.ExternalLink(buttonIconAttrs()...),
-				h.Span(g.Text("Open")),
-			),
-		),
-	)
-}
-
-func metricViewActions(view dashboard.MetricViewDetail) g.Node {
-	return h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"),
-		h.A(h.Class(metricActionButtonClass), h.Href("/models/"+view.SemanticModel), h.Title("Open semantic model"), h.Aria("label", "Open semantic model"),
-			lucide.Network(metricActionIconAttrs()...),
-		),
-	)
-}
-
-func metricViewHeader(view dashboard.MetricViewDetail) g.Node {
-	return h.Header(h.Class("grid min-w-0 grid-cols-workspace-header items-center gap-4 border-b border-outline-muted px-5 py-4"),
-		h.Div(h.Class("min-w-0"),
-			h.H1(h.Class("m-0 truncate text-title-sm font-semibold leading-snug text-fg-default"), g.Text(view.Title)),
-			g.If(strings.TrimSpace(view.Description) != "", h.P(h.Class("m-0 mt-1 truncate text-body-sm font-normal leading-snug text-fg-muted"), g.Text(view.Description))),
-		),
-		metricViewActions(view),
-	)
-}
-
-func metricViewInfoSidebar(view dashboard.MetricViewDetail) g.Node {
-	return h.Aside(h.Class(metricInfoSidebarClass), h.Aria("label", "Metric view details"), g.Attr("data-metric-info-sidebar", ""),
-		h.Div(h.Class("flex min-h-control-xl items-center justify-between gap-2 border-b border-outline-muted px-4 py-2"), g.Attr("data-metric-info-header", ""),
-			h.H2(h.Class("m-0 flex min-w-0 items-center gap-2 truncate text-body-sm font-semibold text-fg-default"), lucide.FileText(metricInfoIconAttrs()...), h.Span(g.Text("Details"))),
-		),
-		h.Div(h.Class("grid content-start overflow-auto"), g.Attr("data-metric-info-body", ""),
-			h.Div(h.Class("grid content-start"),
-				metricInfoItem("Model context", h.A(h.Class("inline-flex min-w-0 items-center gap-2 text-fg-accent no-underline hover:underline"), h.Href("/models/"+view.SemanticModel), lucide.Box(metricInfoIconAttrs()...), h.Span(h.Class("truncate"), g.Text(view.ModelTitle)))),
-				metricInfoItem("Base table", h.Span(h.Class("inline-flex min-w-0 items-center gap-2"), lucide.Table2(metricInfoIconAttrs()...), h.Code(h.Class("truncate font-mono"), g.Text(view.BaseTable)))),
-				metricInfoItem("Primary timeseries", h.Span(h.Class("inline-flex min-w-0 items-center gap-2"), lucide.Calendar(metricInfoIconAttrs()...), h.Code(h.Class("truncate font-mono"), g.Text(view.Timeseries)))),
-			),
-		),
-	)
-}
-
-func metricInfoItem(label string, value g.Node) g.Node {
-	return h.Div(h.Class("grid content-start gap-2 border-b border-outline-muted px-4 py-4 text-body-sm last:border-b-0"),
-		h.Span(h.Class("text-caption font-medium uppercase leading-none text-fg-muted"), g.Text(label)),
-		h.Div(h.Class("min-w-0 text-body-sm font-medium text-fg-default"), value),
-	)
-}
-
 func metricTabCount(count int) g.Node {
 	return h.Span(h.Class("inline-flex min-w-4 items-center justify-center rounded-full bg-panel-muted px-1.5 py-px text-caption font-medium leading-none text-fg-muted"), g.Text(strconv.Itoa(count)))
-}
-
-func pluralize(label string, count int) string {
-	if count == 1 {
-		return label
-	}
-	return label + "s"
-}
-
-func ValidMetricViewSection(section string) bool {
-	switch section {
-	case "measures", "dimensions", "usage":
-		return true
-	default:
-		return false
-	}
-}
-
-func normalizeMetricViewSection(section string) string {
-	if ValidMetricViewSection(section) {
-		return section
-	}
-	return "measures"
 }
 
 type metricGrid struct {
@@ -449,192 +274,11 @@ type metricGridBadge struct {
 	Tone  string `json:"tone,omitempty"`
 }
 
-func metricViewDimensions() g.Node {
-	return h.Section(h.ID("dimensions"), h.Class(metricContractSectionClass+" metric-contract-section-dimensions"),
-		g.El("ld-data-grid", g.Attr("data-attr:grid", "$metricGrid")),
-	)
-}
-
-func metricViewMeasures() g.Node {
-	return h.Section(h.ID("measures"), h.Class(metricContractSectionClass+" metric-contract-section-measures"),
-		g.El("ld-data-grid", g.Attr("data-attr:grid", "$metricGrid")),
-	)
-}
-
-func metricViewDashboards() g.Node {
-	return h.Section(h.ID("usage"), h.Class(metricContractSectionClass+" metric-contract-section-usage"),
-		g.El("ld-metric-usage-graph", h.Class("block h-metric-usage min-h-0 rounded-default border border-outline-muted bg-panel"), g.Attr("data-attr:graph", "$metricUsageGraph")),
-		g.El("ld-data-grid", g.Attr("data-attr:grid", "$metricGrid")),
-	)
-}
-
-func metricViewGrid(view dashboard.MetricViewDetail, activeSection string) metricGrid {
-	switch activeSection {
-	case "dimensions":
-		rows := make([]map[string]any, 0, len(view.Dimensions))
-		for _, dimension := range view.Dimensions {
-			rows = append(rows, map[string]any{
-				"name":       dimension.Name,
-				"label":      displayLabel(dimension.Label, dimension.Name),
-				"expression": dimension.Expr,
-				"filter":     emptyDash(dimension.Where),
-				"order":      emptyDash(dimension.OrderExpr),
-			})
-		}
-		return metricGrid{
-			Columns: []metricGridColumn{
-				{ID: "name", Header: "Name", Kind: "code", Width: "170px"},
-				{ID: "label", Header: "Label", Width: "180px"},
-				{ID: "expression", Header: "Expression", Kind: "expression", Width: "260px"},
-				{ID: "filter", Header: "Filter", Kind: "expression", Width: "220px"},
-				{ID: "order", Header: "Order", Kind: "expression", Width: "190px"},
-			},
-			Rows:     rows,
-			Empty:    "No dimensions are defined for this metric view.",
-			MinWidth: "1020px",
-		}
-	case "usage":
-		rows := make([]map[string]any, 0, len(view.Dashboards))
-		for _, report := range view.Dashboards {
-			rows = append(rows, map[string]any{
-				"dashboard":     report.Title,
-				"dashboardHref": "/dashboards/" + report.ID,
-				"description":   emptyDash(report.Description),
-				"tags":          report.Tags,
-				"pages":         report.PageCount,
-			})
-		}
-		return metricGrid{
-			Columns: []metricGridColumn{
-				{ID: "dashboard", Header: "Dashboard", Kind: "link", HrefKey: "dashboardHref", Width: "250px"},
-				{ID: "description", Header: "Description", Width: "420px"},
-				{ID: "tags", Header: "Tags", Kind: "tags", Width: "220px"},
-				{ID: "pages", Header: "Pages", Kind: "number", Align: "right", Width: "90px"},
-			},
-			Rows:     rows,
-			Empty:    "No dashboards reference this metric view yet.",
-			MinWidth: "980px",
-		}
-	default:
-		rows := make([]map[string]any, 0, len(view.Measures))
-		for _, measure := range view.Measures {
-			rows = append(rows, map[string]any{
-				"name":       measure.Name,
-				"label":      displayLabel(measure.Label, measure.Name),
-				"expression": measure.Expression,
-				"unit":       metricGridBadgeValue(measure.Unit, "success"),
-				"format":     metricGridBadgeValue(measure.Format, "accent"),
-			})
-		}
-		return metricGrid{
-			Columns: []metricGridColumn{
-				{ID: "name", Header: "Name", Kind: "code", Width: "150px"},
-				{ID: "label", Header: "Label", Width: "160px"},
-				{ID: "expression", Header: "Expression", Kind: "expression"},
-				{ID: "unit", Header: "Unit", Kind: "badge", Width: "82px"},
-				{ID: "format", Header: "Format", Kind: "badge", Width: "88px"},
-			},
-			Rows:     rows,
-			Empty:    "No measures are defined for this metric view.",
-			MinWidth: "100%",
-		}
-	}
-}
-
 func metricGridBadgeValue(value, tone string) any {
 	if strings.TrimSpace(value) == "" {
 		return ""
 	}
 	return metricGridBadge{Label: value, Tone: tone}
-}
-
-func metricUsageGraph(view dashboard.MetricViewDetail) any {
-	type graphNode struct {
-		ID    string `json:"id"`
-		Label string `json:"label"`
-		Kind  string `json:"kind"`
-		Meta  string `json:"meta,omitempty"`
-	}
-	type graphEdge struct {
-		ID     string `json:"id"`
-		Source string `json:"source"`
-		Target string `json:"target"`
-		Label  string `json:"label,omitempty"`
-		Kind   string `json:"kind"`
-	}
-	type graph struct {
-		Nodes []graphNode `json:"nodes"`
-		Edges []graphEdge `json:"edges"`
-	}
-	nodes := []graphNode{
-		{ID: "model", Label: view.ModelTitle, Kind: "model", Meta: view.SemanticModel},
-		{ID: "model_table", Label: view.BaseTable, Kind: "model_table", Meta: "model table"},
-		{ID: "metric_view", Label: view.Title, Kind: "metric_view", Meta: "metric contract"},
-	}
-	edges := []graphEdge{
-		{ID: "model_table_edge", Source: "model", Target: "model_table", Label: "defines", Kind: "semantic"},
-		{ID: "metric_view_edge", Source: "model_table", Target: "metric_view", Label: "exposes", Kind: "semantic"},
-	}
-	for _, report := range view.Dashboards {
-		nodeID := "dashboard:" + report.ID
-		nodes = append(nodes, graphNode{
-			ID:    nodeID,
-			Label: report.Title,
-			Kind:  "dashboard",
-			Meta:  strconv.Itoa(report.PageCount) + " " + pluralize("page", report.PageCount),
-		})
-		edges = append(edges, graphEdge{
-			ID:     "metric_view_" + report.ID,
-			Source: "metric_view",
-			Target: nodeID,
-			Label:  "used by",
-			Kind:   "usage",
-		})
-	}
-	return graph{Nodes: nodes, Edges: edges}
-}
-
-func metricTabs(view dashboard.MetricViewDetail, activeSection string) g.Node {
-	return h.Nav(h.Class("flex min-w-0 gap-6 overflow-x-auto border-b border-outline-variant bg-app px-3"), h.Aria("label", "Metric view sections"),
-		metricTabLink(view.ID, "measures", activeSection, "Measures", metricTabCount(view.MeasureCount)),
-		metricTabLink(view.ID, "dimensions", activeSection, "Dimensions", metricTabCount(view.DimensionCount)),
-		metricTabLink(view.ID, "usage", activeSection, "Usage", metricTabCount(view.DashboardCount)),
-	)
-}
-
-func metricTabLink(viewID, section, activeSection, label string, meta g.Node) g.Node {
-	className := "relative -mb-px inline-flex min-h-control-xl items-center gap-2 whitespace-nowrap border-b-2 px-1 text-body-sm font-medium no-underline transition-colors duration-micro ease-hover"
-	if section == activeSection {
-		className += " border-fg-accent font-semibold text-fg-default"
-	} else {
-		className += " border-transparent text-fg-muted hover:border-outline-muted hover:text-fg-default"
-	}
-	return h.A(h.Class(className), h.Href("/metrics/"+viewID+"/"+section), g.If(section == activeSection, h.Aria("current", "page")), h.Span(g.Text(label)), meta)
-}
-
-func metricViewActiveSection(view dashboard.MetricViewDetail, activeSection string) g.Node {
-	switch activeSection {
-	case "dimensions":
-		return metricViewDimensions()
-	case "usage":
-		return metricViewDashboards()
-	default:
-		return metricViewMeasures()
-	}
-}
-
-func metricViewSignals(view dashboard.MetricViewDetail, activeSection string) map[string]any {
-	signals := map[string]any{
-		"metricGrid": metricViewGrid(view, activeSection),
-	}
-	if activeSection == "usage" {
-		signals["metricUsageGraph"] = metricUsageGraph(view)
-	}
-	return signals
-}
-
-func metricDetailRailStateScript() g.Node {
-	return h.Script(g.Raw(`try{if(window.localStorage.getItem("libredash.metricDetailRail")==="collapsed"){document.documentElement.setAttribute("data-metric-detail-rail","collapsed")}}catch(e){}`))
 }
 
 func loginBackgroundLoaderScript() g.Node {
@@ -653,89 +297,6 @@ func emptyDash(value string) string {
 		return "-"
 	}
 	return value
-}
-
-func MetricViewPage(catalog dashboard.Catalog, view dashboard.MetricViewDetail, activeSection string) g.Node {
-	activeSection = normalizeMetricViewSection(activeSection)
-	return c.HTML5(c.HTML5Props{
-		Title:    "LibreDash Metric View",
-		Language: "en",
-		HTMLAttrs: []g.Node{
-			g.Attr("data-color-mode", "auto"),
-			g.Attr("data-light-theme", "light"),
-			g.Attr("data-dark-theme", "dark"),
-		},
-		Head: pageHead(
-			metricDetailRailStateScript(),
-			g.If(activeSection == "usage", h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/metric-usage-graph.css")))),
-			h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
-			h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
-			h.Script(h.Type("module"), h.Src(staticAsset("/static/detail-rail.js"))),
-			g.If(activeSection == "usage", h.Script(h.Type("module"), h.Src(staticAsset("/static/metric-usage-graph.js")))),
-			inspectorScript(),
-			h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
-		),
-		Body: []g.Node{
-			h.Main(h.Class(appRootClass),
-				ds.Signals(metricViewSignals(view, activeSection)),
-				h.Div(h.Class(appShellClass),
-					sidebar(sidebarConfigForMetricView(catalog, view)),
-					h.Section(h.Class(metricMainClass), h.Aria("label", "LibreDash metric view"),
-						metricViewHeader(view),
-						g.El("ld-detail-rail", h.Class(metricWorkspaceClass), g.Attr("data-detail-rail", ""),
-							h.Div(h.Class(metricContentColumnClass),
-								metricTabs(view, activeSection),
-								h.Div(h.Class("min-h-0 overflow-auto px-3 py-4"),
-									metricViewActiveSection(view, activeSection),
-								),
-							),
-							metricViewInfoSidebar(view),
-						),
-					),
-				),
-				inspectorElement(),
-			),
-		},
-	})
-}
-
-func ModelPage(catalog dashboard.Catalog, model dashboard.ModelGraph) g.Node {
-	return c.HTML5(c.HTML5Props{
-		Title:    "LibreDash Model",
-		Language: "en",
-		HTMLAttrs: []g.Node{
-			g.Attr("data-color-mode", "auto"),
-			g.Attr("data-light-theme", "light"),
-			g.Attr("data-dark-theme", "dark"),
-		},
-		Head: pageHead(
-			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/model-graph.css"))),
-			h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
-			h.Script(h.Type("module"), h.Src(staticAsset("/static/model-graph.js"))),
-			inspectorScript(),
-		),
-		Body: []g.Node{
-			h.Main(
-				h.ID("model"),
-				h.Class(appRootClass),
-				h.Div(h.Class(appShellClass),
-					sidebar(sidebarConfigForModel(catalog, model)),
-					h.Section(h.Class(modelMainClass), h.Aria("label", "LibreDash semantic model"),
-						workspaceHeader(
-							"Semantic model",
-							model.Title,
-							model.Name,
-							modelStats(model.Stats),
-						),
-						h.Div(h.Class("grid min-h-model-graph min-w-0 flex-1 overflow-hidden rounded-default border border-outline-variant bg-panel shadow-resting-md"),
-							g.El("ld-model-graph", h.Class("block min-h-0 w-full"), g.Attr("data-model", modelGraphJSON(model))),
-						),
-					),
-				),
-				inspectorElement(),
-			),
-		},
-	})
 }
 
 func defaultPage() dashboard.Page {
@@ -768,31 +329,6 @@ func formatReportPageNumber(index, pageCount int) string {
 	return pageNumber
 }
 
-func modelStats(stats dashboard.ModelStats) g.Node {
-	return h.Div(h.Class("model-stats"),
-		modelStat("Sources", stats.Sources),
-		modelStat("Tables", stats.ModelTables),
-		modelStat("Metrics", stats.Metrics),
-		modelStat("Visuals", stats.Visuals),
-		modelStat("Relations", stats.Relationships),
-	)
-}
-
-func modelStat(label string, value int) g.Node {
-	return h.Div(h.Class("model-stat"),
-		h.Strong(g.Text(strconv.Itoa(value))),
-		h.Span(g.Text(label)),
-	)
-}
-
-func modelGraphJSON(model dashboard.ModelGraph) string {
-	bytes, err := json.Marshal(model)
-	if err != nil {
-		return "{}"
-	}
-	return string(bytes)
-}
-
 func sidebar(config map[string]any) g.Node {
 	return g.El("ld-sidebar", h.Class("border-r border-outline-variant max-sm:border-b max-sm:border-r-0"), g.Attr("config", jsonString(config)))
 }
@@ -808,24 +344,8 @@ func sidebarConfigForCatalog(catalog dashboard.Catalog) map[string]any {
 	return sidebarConfig(catalog, "dashboards", "", workspaceDisplayTitle(catalog), "Dashboards", "Discovery", modelID, modelTitle, false)
 }
 
-func sidebarConfigForModels(catalog dashboard.Catalog) map[string]any {
-	return sidebarConfig(catalog, "workspaces", "", workspaceDisplayTitle(catalog), "Semantic Models", "Catalog", "", "", false)
-}
-
-func sidebarConfigForMetrics(catalog dashboard.Catalog) map[string]any {
-	return sidebarConfig(catalog, "workspaces", "", workspaceDisplayTitle(catalog), "Metric Views", "Catalog", "", "", false)
-}
-
-func sidebarConfigForMetricView(catalog dashboard.Catalog, view dashboard.MetricViewDetail) map[string]any {
-	return sidebarConfig(catalog, "workspaces", "", workspaceDisplayTitle(catalog), "Metric view", view.Title, view.SemanticModel, view.ModelTitle, false)
-}
-
 func sidebarConfigForReport(catalog dashboard.Catalog, report semantic.Dashboard, model *semantic.Model, activePage dashboard.Page) map[string]any {
 	return sidebarConfig(catalog, "workspaces", report.ID, workspaceDisplayTitle(catalog), report.Title, activePage.Title, model.Name, model.Title, true)
-}
-
-func sidebarConfigForModel(catalog dashboard.Catalog, model dashboard.ModelGraph) map[string]any {
-	return sidebarConfig(catalog, "workspaces", "", workspaceDisplayTitle(catalog), "Semantic model", model.Title, model.Name, model.Title, false)
 }
 
 func sidebarConfigForWorkspace(catalog dashboard.Catalog, active, roleLabel string) map[string]any {
@@ -861,27 +381,11 @@ func sidebarGroups(catalog dashboard.Catalog) []map[string]any {
 			"items": []map[string]any{
 				{"id": "dashboards", "label": "Dashboards", "href": "/", "icon": "dashboard", "meta": "Reports"},
 				{"id": "workspaces", "label": "Workspaces", "href": "/workspaces", "icon": "catalog", "meta": "Published assets"},
-				{"id": "metrics", "label": "Metric Views", "href": "/metrics", "icon": "data", "meta": "Business metrics"},
-				{"id": "models", "label": "Semantic Models", "href": "/models", "icon": "model", "meta": "Reusable data models"},
 				{"id": "connections", "label": "Connections", "href": "/connections", "icon": "data", "meta": "Data access"},
 				{"id": "settings", "label": "Settings", "href": "/workspaces/" + workspaceID + "/permissions", "icon": "settings", "meta": "Permissions"},
 			},
 		},
 	}
-}
-
-func modelItems(models []dashboard.CatalogModel) []map[string]any {
-	items := make([]map[string]any, 0, len(models))
-	for _, model := range models {
-		items = append(items, map[string]any{
-			"id":    "model:" + model.ID,
-			"label": model.Title,
-			"href":  "/models/" + model.ID,
-			"icon":  "model",
-			"meta":  "Semantic model",
-		})
-	}
-	return items
 }
 
 func workspaceDisplayTitle(catalog dashboard.Catalog) string {
@@ -912,7 +416,6 @@ func reportSidebarConfig(report semantic.Dashboard, model *semantic.Model, pages
 		"pageTitle":      activePage.Title,
 		"modelId":        model.Name,
 		"modelTitle":     model.Title,
-		"modelHref":      "/models/" + model.Name,
 		"pages":          items,
 	}
 }
@@ -1163,10 +666,6 @@ func iconAttrs() g.Node {
 
 func buttonIconAttrs() []g.Node {
 	return []g.Node{g.Attr("aria-hidden", "true"), h.Class("size-4 shrink-0"), h.Style("stroke-width: 1.75")}
-}
-
-func metricInfoIconAttrs() []g.Node {
-	return []g.Node{g.Attr("aria-hidden", "true"), h.Class("size-4 shrink-0 text-icon-muted"), h.Style("stroke-width: 1.75")}
 }
 
 func metricActionIconAttrs() []g.Node {

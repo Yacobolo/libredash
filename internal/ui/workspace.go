@@ -166,7 +166,6 @@ func workspaceDocument(title string, catalog dashboard.Catalog, active, roleLabe
 	}
 	head := []g.Node{
 		h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
-		h.Script(h.Type("module"), h.Src(staticAsset("/static/detail-rail.js"))),
 		inspectorScript(),
 		h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 	}
@@ -335,33 +334,6 @@ func assetDetailTabLink(href string, active bool, label string, meta g.Node) g.N
 		className += " border-transparent text-fg-muted hover:border-outline-muted hover:text-fg-default"
 	}
 	return h.A(h.Class(className), h.Href(href), g.If(active, h.Aria("current", "page")), h.Span(g.Text(label)), meta)
-}
-
-func assetDetailSidebar(workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse) g.Node {
-	return h.Aside(h.Class(metricInfoSidebarClass), h.Aria("label", "Asset details"), g.Attr("data-metric-info-sidebar", ""),
-		h.Div(h.Class("flex min-h-control-xl items-center justify-between gap-2 border-b border-outline-muted px-4 py-2"), g.Attr("data-metric-info-header", ""),
-			h.H2(h.Class("m-0 flex min-w-0 items-center gap-2 truncate text-body-sm font-semibold text-fg-default"), assetTypeIcon(asset.Type), h.Span(g.Text("Details"))),
-		),
-		h.Div(h.Class("grid content-start overflow-auto"), g.Attr("data-metric-info-body", ""),
-			h.Div(h.Class("grid content-start"),
-				metricInfoItem("Type", h.Span(g.Text(assetTypeLabel(asset.Type)))),
-				metricInfoItem("Key", h.Code(h.Class("truncate font-mono"), g.Text(asset.Key))),
-				metricInfoItem("Workspace", h.A(h.Class("text-fg-accent no-underline hover:underline"), h.Href("/workspaces/"+workspace.ID), g.Text(workspace.Title))),
-				g.If(asset.ParentID != "", metricInfoItem("Parent", assetParentLink(workspace.ID, asset.ParentID, assets))),
-				g.If(asset.Description != "", metricInfoItem("Description", h.Span(g.Text(asset.Description)))),
-				metricInfoItem("Source", h.Span(g.Text("Published from Git/YAML"))),
-			),
-		),
-	)
-}
-
-func assetParentLink(workspaceID, parentID string, assets []api.AssetResponse) g.Node {
-	for _, asset := range assets {
-		if asset.ID == parentID {
-			return h.A(h.Class("text-fg-accent no-underline hover:underline"), h.Href(workspaceAssetSectionHref(workspaceID, asset.ID, "details")), g.Text(assetTitle(asset)))
-		}
-	}
-	return h.Code(h.Class("truncate font-mono"), g.Text(parentID))
 }
 
 type assetLineageModel struct {

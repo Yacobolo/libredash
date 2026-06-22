@@ -488,10 +488,6 @@ func assetHref(assetType, key string) string {
 	switch assetType {
 	case "dashboard":
 		return "/dashboards/" + key
-	case "semantic_model":
-		return "/models/" + key
-	case "metric_view":
-		return "/metrics/" + key + "/measures"
 	default:
 		return ""
 	}
@@ -547,10 +543,10 @@ func fallbackAssets(catalog dashboard.Catalog, workspaceID string) []api.AssetRe
 		assets = append(assets, api.AssetResponse{ID: "dashboard:" + report.ID, WorkspaceID: workspaceID, Type: "dashboard", Key: report.ID, Title: report.Title, Description: report.Description, Href: "/dashboards/" + report.ID})
 	}
 	for _, model := range catalog.Models {
-		assets = append(assets, api.AssetResponse{ID: "semantic_model:" + model.ID, WorkspaceID: workspaceID, Type: "semantic_model", Key: model.ID, Title: model.Title, Description: model.Description, Href: "/models/" + model.ID})
+		assets = append(assets, api.AssetResponse{ID: "semantic_model:" + model.ID, WorkspaceID: workspaceID, Type: "semantic_model", Key: model.ID, Title: model.Title, Description: model.Description})
 	}
 	for _, view := range catalog.MetricViews {
-		assets = append(assets, api.AssetResponse{ID: "metric_view:" + view.ID, WorkspaceID: workspaceID, Type: "metric_view", Key: view.ID, Title: view.Title, Description: view.Description, Href: "/metrics/" + view.ID + "/measures"})
+		assets = append(assets, api.AssetResponse{ID: "metric_view:" + view.ID, WorkspaceID: workspaceID, Type: "metric_view", Key: view.ID, Title: view.Title, Description: view.Description})
 	}
 	return assets
 }

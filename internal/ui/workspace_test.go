@@ -130,6 +130,69 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForLeafAsset(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAssetDetailsRenderSharedShapeForMetricView(t *testing.T) {
+	workspace, catalog, assets, edges := testWorkspaceAssetFixtures()
+	var metric api.AssetResponse
+	for _, asset := range assets {
+		if asset.Type == "metric_view" {
+			metric = asset
+			break
+		}
+	}
+
+	var out strings.Builder
+	err := WorkspaceAssetPage(catalog, workspace, metric, assets, edges, "details", "Owner").Render(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := html.UnescapeString(out.String())
+
+	for _, want := range []string{
+		"Breadcrumb",
+		"Orders Metrics",
+		"Overview",
+		"Dataset",
+		"orders",
+		"Timeseries",
+		"purchase_timestamp",
+		"Measures (1)",
+		"Dimensions (1)",
+		`data-attr:grid="$assetDetailsMeasuresGrid"`,
+		`data-attr:grid="$assetDetailsDimensionsGrid"`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("metric view details did not render %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, `/metrics`) || strings.Contains(rendered, `/models`) {
+		t.Fatalf("metric view details rendered removed legacy link:\n%s", rendered)
+	}
+}
+
+func TestWorkspaceAssetRowsUseDetailLinksForModelAndMetricAssets(t *testing.T) {
+	workspace, _, assets, _ := testWorkspaceAssetFixtures()
+	byType := map[string]api.AssetResponse{}
+	for _, asset := range assets {
+		if _, ok := byType[asset.Type]; !ok {
+			byType[asset.Type] = asset
+		}
+	}
+
+	for _, typ := range []string{"semantic_model", "metric_view"} {
+		var out strings.Builder
+		if err := assetRow(workspace.ID, byType[typ]).Render(&out); err != nil {
+			t.Fatal(err)
+		}
+		rendered := html.UnescapeString(out.String())
+		if strings.Contains(rendered, `/models`) || strings.Contains(rendered, `/metrics`) {
+			t.Fatalf("%s asset row rendered removed legacy link:\n%s", typ, rendered)
+		}
+		if !strings.Contains(rendered, "/workspaces/libredash/assets/"+byType[typ].ID+"/details") {
+			t.Fatalf("%s asset row did not link to canonical details:\n%s", typ, rendered)
+		}
+	}
+}
+
 func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []api.AssetResponse, []api.AssetEdgeResponse) {
 	workspace := api.WorkspaceResponse{ID: "libredash", Title: "LibreDash Workspace", Description: "Local BI workspace."}
 	catalog := dashboard.Catalog{Workspace: dashboard.CatalogWorkspace{ID: workspace.ID, Title: workspace.Title, Description: workspace.Description}}

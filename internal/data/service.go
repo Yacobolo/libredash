@@ -147,58 +147,6 @@ func (m *DuckDBMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]pla
 	return assets, edges, true
 }
 
-func (m *DuckDBMetrics) MetricViews() []dashboard.MetricViewSummary {
-	summaries := make([]dashboard.MetricViewSummary, 0, len(m.workspace.MetricViews))
-	for _, id := range sortedKeys(m.workspace.MetricViews) {
-		summary, ok := m.metricViewSummary(id)
-		if ok {
-			summaries = append(summaries, summary)
-		}
-	}
-	return summaries
-}
-
-func (m *DuckDBMetrics) MetricView(id string) (dashboard.MetricViewDetail, bool) {
-	summary, ok := m.metricViewSummary(id)
-	if !ok {
-		return dashboard.MetricViewDetail{}, false
-	}
-	view := m.workspace.MetricViews[id]
-	detail := dashboard.MetricViewDetail{MetricViewSummary: summary}
-
-	for _, name := range sortedKeys(view.Dimensions) {
-		dimension := view.Dimensions[name]
-		detail.Dimensions = append(detail.Dimensions, dashboard.MetricViewDimension{
-			Name:      name,
-			Label:     dimension.Label,
-			Expr:      dimension.Expr,
-			Where:     dimension.Where,
-			OrderExpr: dimension.OrderExpr,
-		})
-	}
-	for _, name := range sortedKeys(view.Measures) {
-		measure := view.Measures[name]
-		detail.Measures = append(detail.Measures, dashboard.MetricViewMeasure{
-			Name:        name,
-			Label:       measure.Label,
-			Description: measure.Description,
-			Expression:  measure.Expression,
-			Unit:        measure.Unit,
-			Format:      measure.Format,
-		})
-	}
-	for _, report := range m.dashboardsForMetricView(id) {
-		detail.Dashboards = append(detail.Dashboards, dashboard.MetricViewDashboard{
-			ID:          report.ID,
-			Title:       report.Title,
-			Description: report.Description,
-			Tags:        append([]string{}, report.Tags...),
-			PageCount:   dashboardPageCount(m.workspace.Dashboards[report.ID]),
-		})
-	}
-	return detail, true
-}
-
 func (m *DuckDBMetrics) DefaultDashboardID() string {
 	return m.defaultID
 }
@@ -305,14 +253,6 @@ func (m *DuckDBMetrics) Pages(dashboardID string) []dashboard.Page {
 	return pages
 }
 
-func (m *DuckDBMetrics) ModelGraph(modelID string) (dashboard.ModelGraph, bool) {
-	model, ok := m.workspace.Models[modelID]
-	if !ok {
-		return dashboard.ModelGraph{}, false
-	}
-	return modelGraph(model, m.workspace.MetricViews), true
-}
-
 func (m *DuckDBMetrics) catalogView() dashboard.Catalog {
 	catalog := dashboard.Catalog{
 		Workspace: dashboard.CatalogWorkspace{
@@ -368,51 +308,6 @@ func (m *DuckDBMetrics) catalogView() dashboard.Catalog {
 		})
 	}
 	return catalog
-}
-
-func (m *DuckDBMetrics) metricViewSummary(id string) (dashboard.MetricViewSummary, bool) {
-	view, ok := m.workspace.MetricViews[id]
-	if !ok {
-		return dashboard.MetricViewSummary{}, false
-	}
-	modelTitle := ""
-	for _, model := range m.workspace.Catalog.SemanticModels {
-		if model.ID == view.SemanticModel {
-			modelTitle = model.Title
-			break
-		}
-	}
-	return dashboard.MetricViewSummary{
-		ID:             view.ID,
-		Title:          view.Title,
-		Description:    view.Description,
-		SemanticModel:  view.SemanticModel,
-		ModelTitle:     modelTitle,
-		BaseTable:      view.BaseTable,
-		Timeseries:     view.Time.DefaultField,
-		DimensionCount: len(view.Dimensions),
-		MeasureCount:   len(view.Measures),
-		DashboardCount: len(m.dashboardsForMetricView(id)),
-	}, true
-}
-
-func (m *DuckDBMetrics) dashboardsForMetricView(id string) []semantic.CatalogDashboard {
-	reports := []semantic.CatalogDashboard{}
-	for _, report := range m.workspace.Catalog.Dashboards {
-		loaded, ok := m.workspace.Dashboards[report.ID]
-		if !ok || !contains(loaded.MetricViews, id) {
-			continue
-		}
-		reports = append(reports, report)
-	}
-	return reports
-}
-
-func dashboardPageCount(report *semantic.Dashboard) int {
-	if report == nil {
-		return 0
-	}
-	return len(report.Pages)
 }
 
 func workspaceID(workspace semantic.CatalogWorkspace) string {

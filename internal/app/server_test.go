@@ -47,54 +47,6 @@ func (fakeMetrics) Catalog() dashboard.Catalog {
 	}
 }
 
-func (fakeMetrics) MetricViews() []dashboard.MetricViewSummary {
-	return []dashboard.MetricViewSummary{
-		{
-			ID:             "orders",
-			Title:          "Orders Metrics",
-			Description:    "Fixture metric view",
-			SemanticModel:  "test",
-			ModelTitle:     "Test Model",
-			BaseTable:      "orders",
-			Timeseries:     "purchase_timestamp",
-			DimensionCount: 2,
-			MeasureCount:   2,
-			DashboardCount: 1,
-		},
-	}
-}
-
-func (fakeMetrics) MetricView(id string) (dashboard.MetricViewDetail, bool) {
-	if id != "orders" {
-		return dashboard.MetricViewDetail{}, false
-	}
-	return dashboard.MetricViewDetail{
-		MetricViewSummary: dashboard.MetricViewSummary{
-			ID:             "orders",
-			Title:          "Orders Metrics",
-			Description:    "Fixture metric view",
-			SemanticModel:  "test",
-			ModelTitle:     "Test Model",
-			BaseTable:      "orders",
-			Timeseries:     "purchase_timestamp",
-			DimensionCount: 2,
-			MeasureCount:   2,
-			DashboardCount: 1,
-		},
-		Dimensions: []dashboard.MetricViewDimension{
-			{Name: "category", Label: "Category", Expr: "e.category"},
-			{Name: "delivery_bucket", Label: "Delivery speed", Expr: "e.delivery_bucket", Where: "e.delivery_bucket IS NOT NULL", OrderExpr: "MIN(e.delivery_days)"},
-		},
-		Measures: []dashboard.MetricViewMeasure{
-			{Name: "order_count", Label: "Orders", Expression: "COUNT(DISTINCT e.order_id)", Unit: "orders", Format: "integer"},
-			{Name: "revenue", Label: "Revenue", Expression: "SUM(e.revenue)", Unit: "R$", Format: "currency", Description: "Total paid revenue"},
-		},
-		Dashboards: []dashboard.MetricViewDashboard{
-			{ID: "executive-sales", Title: "Executive Sales Dashboard", Description: "Fixture report", Tags: []string{"sales"}, PageCount: 2},
-		},
-	}, true
-}
-
 func (fakeMetrics) DefaultDashboardID() string {
 	return "executive-sales"
 }
@@ -185,27 +137,6 @@ func (fakeMetrics) Pages(dashboardID string) []dashboard.Page {
 			},
 		},
 	}
-}
-
-func (fakeMetrics) ModelGraph(modelID string) (dashboard.ModelGraph, bool) {
-	if modelID != "test" {
-		return dashboard.ModelGraph{}, false
-	}
-	return dashboard.ModelGraph{
-		Name:  "test",
-		Title: "Test Model",
-		Stats: dashboard.ModelStats{Sources: 1, ModelTables: 1, Relationships: 1},
-		Nodes: []dashboard.ModelNode{
-			{ID: "source:orders", Label: "orders", Kind: "source"},
-			{ID: "model_table:orders", Label: "orders", Kind: "model_table"},
-			{ID: "metric_view:orders", Label: "Orders Metrics", Kind: "metric_view"},
-		},
-		Edges: []dashboard.ModelEdge{
-			{ID: "orders_materialization", Source: "source:orders", Target: "materialization:orders", Kind: "materialization"},
-			{ID: "orders_model_table", Source: "materialization:orders", Target: "model_table:orders", Kind: "model_table"},
-			{ID: "orders_metric_view", Source: "model_table:orders", Target: "metric_view:orders", Kind: "metric_view"},
-		},
-	}, true
 }
 
 func (fakeMetrics) QueryDashboard(_ context.Context, _ string, filters dashboard.Filters) (dashboard.Patch, error) {
@@ -324,12 +255,6 @@ func TestHTMLRoutesIncludeDatastarInspector(t *testing.T) {
 		"/login",
 		"/",
 		"/dashboards/executive-sales/pages/overview",
-		"/models",
-		"/models/test",
-		"/metrics",
-		"/metrics/orders/measures",
-		"/metrics/orders/dimensions",
-		"/metrics/orders/usage",
 	} {
 		t.Run(path, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, path, nil)
@@ -376,8 +301,15 @@ func TestHomeRouteRendersDashboardCatalog(t *testing.T) {
 	if !strings.Contains(body, `href="/dashboards/executive-sales"`) {
 		t.Fatalf("home missing dashboard link:\n%s", body)
 	}
-	if !strings.Contains(body, `Workspaces`) || !strings.Contains(body, `/workspaces`) {
-		t.Fatalf("home sidebar missing workspace navigation:\n%s", body)
+	for _, want := range []string{`Dashboards`, `/`, `Workspaces`, `/workspaces`, `Connections`, `/connections`, `Settings`, `/workspaces/test-workspace/permissions`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("home sidebar missing %q:\n%s", want, body)
+		}
+	}
+	for _, notWant := range []string{`Metric Views`, `/metrics`, `Semantic Models`, `/models`} {
+		if strings.Contains(body, notWant) {
+			t.Fatalf("home sidebar rendered removed navigation %q:\n%s", notWant, body)
+		}
 	}
 	if strings.Contains(body, `<ld-report-sidebar`) {
 		t.Fatalf("dashboard catalog should not render report sidebar:\n%s", body)
@@ -411,197 +343,6 @@ func TestLoginRouteRendersAzureADLogin(t *testing.T) {
 	}
 }
 
-func TestModelsRouteRendersSemanticModelCatalog(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/models", nil)
-	rec := httptest.NewRecorder()
-
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, `Semantic Models`) {
-		t.Fatalf("models catalog missing title:\n%s", body)
-	}
-	if !strings.Contains(body, `Test Model`) {
-		t.Fatalf("models catalog missing model card:\n%s", body)
-	}
-	if !strings.Contains(body, `href="/models/test"`) {
-		t.Fatalf("models catalog missing model link:\n%s", body)
-	}
-	if strings.Contains(body, `<ld-report-sidebar`) {
-		t.Fatalf("models catalog should not render report sidebar:\n%s", body)
-	}
-}
-
-func TestMetricsRouteRendersMetricViewCatalog(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
-	rec := httptest.NewRecorder()
-
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, `Metric Views`) {
-		t.Fatalf("metric view catalog missing title:\n%s", body)
-	}
-	if !strings.Contains(body, `Orders Metrics`) {
-		t.Fatalf("metric view catalog missing metric view card:\n%s", body)
-	}
-	if !strings.Contains(body, `href="/metrics/orders/measures"`) {
-		t.Fatalf("metric view catalog missing detail link:\n%s", body)
-	}
-	if !strings.Contains(body, `Metric Views`) || !strings.Contains(body, `/metrics`) {
-		t.Fatalf("sidebar missing metric views navigation:\n%s", body)
-	}
-}
-
-func TestMetricViewRouteRedirectsToMeasures(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/metrics/orders", nil)
-	rec := httptest.NewRecorder()
-
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusFound {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
-	}
-	if got, want := rec.Header().Get("Location"), "/metrics/orders/measures"; got != want {
-		t.Fatalf("Location = %q, want %q", got, want)
-	}
-}
-
-func TestMetricViewMeasuresRouteRendersMeasuresTab(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/metrics/orders/measures", nil)
-	rec := httptest.NewRecorder()
-
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{
-		`Orders Metrics`,
-		`href="/models/test"`,
-		`>orders</code>`,
-		`>purchase_timestamp</code>`,
-		`href="/metrics/orders/measures"`,
-		`href="/metrics/orders/dimensions"`,
-		`href="/metrics/orders/usage"`,
-		`aria-current="page"`,
-		`/static/detail-rail.js`,
-		`data-detail-rail`,
-		`data-metric-info-sidebar`,
-		`data-signals=`,
-		`metricGrid`,
-		`data-attr:grid="$metricGrid"`,
-		`Revenue`,
-		`SUM(e.revenue)`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("metric view measures tab missing %q:\n%s", want, body)
-		}
-	}
-	if strings.Contains(body, `metric-contract-rail`) || strings.Contains(body, `metric-rail-section`) {
-		t.Fatalf("metric view detail should not render the old right rail:\n%s", body)
-	}
-	for _, notWant := range []string{`>Measures</h2>`, `>Dimensions</h2>`, `>Used by</h2>`, `metric-section-header`, `metricUsageGraph`, `<ld-metric-usage-graph`} {
-		if strings.Contains(body, notWant) {
-			t.Fatalf("metric view measures tab should not render %q:\n%s", notWant, body)
-		}
-	}
-}
-
-func TestMetricViewDimensionsRouteRendersDimensionsTab(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/metrics/orders/dimensions", nil)
-	rec := httptest.NewRecorder()
-
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{
-		`aria-current="page"`,
-		`Category`,
-		`e.category`,
-		`Delivery speed`,
-		`e.delivery_bucket IS NOT NULL`,
-		`metricGrid`,
-		`data-attr:grid="$metricGrid"`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("metric view dimensions tab missing %q:\n%s", want, body)
-		}
-	}
-	for _, notWant := range []string{`>Measures</h2>`, `>Dimensions</h2>`, `>Used by</h2>`, `metric-section-header`, `SUM(e.revenue)`, `<ld-metric-usage-graph`} {
-		if strings.Contains(body, notWant) {
-			t.Fatalf("metric view dimensions tab should not render %q:\n%s", notWant, body)
-		}
-	}
-}
-
-func TestMetricViewUsageRouteRendersUsageTab(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/metrics/orders/usage", nil)
-	rec := httptest.NewRecorder()
-
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{
-		`aria-current="page"`,
-		`data-signals=`,
-		`metricUsageGraph`,
-		`<ld-metric-usage-graph class="block h-metric-usage min-h-0 rounded-default border border-outline-muted bg-panel" data-attr:graph="$metricUsageGraph"></ld-metric-usage-graph>`,
-		`metricGrid`,
-		`data-attr:grid="$metricGrid"`,
-		`Dashboard`,
-		`Tags`,
-		`/dashboards/executive-sales`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("metric view usage tab missing %q:\n%s", want, body)
-		}
-	}
-	if strings.Contains(body, `data-graph=`) {
-		t.Fatalf("metric view detail should use signals instead of a serialized data-graph attribute:\n%s", body)
-	}
-	for _, notWant := range []string{`>Measures</h2>`, `>Dimensions</h2>`, `>Used by</h2>`, `metric-section-header`, `SUM(e.revenue)`, `e.category`} {
-		if strings.Contains(body, notWant) {
-			t.Fatalf("metric view usage tab should not render %q:\n%s", notWant, body)
-		}
-	}
-}
-
-func TestUnknownMetricViewRouteReturnsNotFound(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/metrics/missing", nil)
-	rec := httptest.NewRecorder()
-
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
-	}
-}
-
-func TestUnknownMetricViewSectionRouteReturnsNotFound(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/metrics/orders/missing", nil)
-	rec := httptest.NewRecorder()
-
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
-	}
-}
-
 func TestDashboardRouteRedirectsToFirstPage(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/dashboards/executive-sales", nil)
 	rec := httptest.NewRecorder()
@@ -628,7 +369,17 @@ func TestUnknownPageRouteReturnsNotFound(t *testing.T) {
 }
 
 func TestLegacyRoutesReturnNotFound(t *testing.T) {
-	for _, path := range []string{"/pages/overview", "/model"} {
+	for _, path := range []string{
+		"/pages/overview",
+		"/model",
+		"/models",
+		"/models/test",
+		"/metrics",
+		"/metrics/orders",
+		"/metrics/orders/measures",
+		"/metrics/orders/dimensions",
+		"/metrics/orders/usage",
+	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		rec := httptest.NewRecorder()
 
@@ -637,27 +388,6 @@ func TestLegacyRoutesReturnNotFound(t *testing.T) {
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("%s status = %d, want %d", path, rec.Code, http.StatusNotFound)
 		}
-	}
-}
-
-func TestModelRouteRendersSemanticModelGraph(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/models/test", nil)
-	rec := httptest.NewRecorder()
-
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
-	}
-	body := rec.Body.String()
-	if !strings.Contains(body, `<ld-model-graph`) {
-		t.Fatalf("body does not render model graph component:\n%s", body)
-	}
-	if !strings.Contains(body, `Test Model`) {
-		t.Fatalf("body does not include model title:\n%s", body)
-	}
-	if strings.Contains(body, `<ld-report-sidebar`) {
-		t.Fatalf("model page should not render report sidebar:\n%s", body)
 	}
 }
 

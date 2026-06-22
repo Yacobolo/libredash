@@ -127,42 +127,6 @@ func tableHasAnyFormatting(columns []dashboard.TableColumn, kind string) bool {
 	return false
 }
 
-func hasMetricDimension(dimensions []dashboard.MetricViewDimension, name, expr string) bool {
-	for _, dimension := range dimensions {
-		if dimension.Name == name && dimension.Expr == expr {
-			return true
-		}
-	}
-	return false
-}
-
-func hasMetricMeasure(measures []dashboard.MetricViewMeasure, name, expression string) bool {
-	for _, measure := range measures {
-		if measure.Name == name && measure.Expression == expression {
-			return true
-		}
-	}
-	return false
-}
-
-func hasModelNode(nodes []dashboard.ModelNode, id string) bool {
-	for _, node := range nodes {
-		if node.ID == id {
-			return true
-		}
-	}
-	return false
-}
-
-func hasModelEdge(edges []dashboard.ModelEdge, source, target string) bool {
-	for _, edge := range edges {
-		if edge.Source == source && edge.Target == target {
-			return true
-		}
-	}
-	return false
-}
-
 func datumString(row dashboard.Datum, key string) string {
 	value, ok := row[key]
 	if !ok || value == nil {

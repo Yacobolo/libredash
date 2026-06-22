@@ -9,8 +9,6 @@ coverage.out
 static/app.css
 static/*.js
 !static/theme.js
-static/model-graph.css
-static/metric-usage-graph.css
 static/asset-lineage-graph.css
 .env
 .env.*

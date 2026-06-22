@@ -44,51 +44,6 @@ type CatalogDashboard struct {
 	PageCount        int      `json:"pageCount"`
 }
 
-type MetricViewSummary struct {
-	ID             string `json:"id"`
-	Title          string `json:"title"`
-	Description    string `json:"description"`
-	SemanticModel  string `json:"semanticModel"`
-	ModelTitle     string `json:"modelTitle"`
-	BaseTable      string `json:"baseTable"`
-	Timeseries     string `json:"timeseries"`
-	DimensionCount int    `json:"dimensionCount"`
-	MeasureCount   int    `json:"measureCount"`
-	DashboardCount int    `json:"dashboardCount"`
-}
-
-type MetricViewDetail struct {
-	MetricViewSummary
-	Dimensions []MetricViewDimension `json:"dimensions"`
-	Measures   []MetricViewMeasure   `json:"measures"`
-	Dashboards []MetricViewDashboard `json:"dashboards"`
-}
-
-type MetricViewDimension struct {
-	Name      string `json:"name"`
-	Label     string `json:"label"`
-	Expr      string `json:"expr"`
-	Where     string `json:"where,omitempty"`
-	OrderExpr string `json:"orderExpr,omitempty"`
-}
-
-type MetricViewMeasure struct {
-	Name        string `json:"name"`
-	Label       string `json:"label"`
-	Description string `json:"description,omitempty"`
-	Expression  string `json:"expression"`
-	Unit        string `json:"unit,omitempty"`
-	Format      string `json:"format,omitempty"`
-}
-
-type MetricViewDashboard struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	Tags        []string `json:"tags"`
-	PageCount   int      `json:"pageCount"`
-}
-
 type Page struct {
 	ID          string       `json:"id" yaml:"id"`
 	Title       string       `json:"title" yaml:"title"`
@@ -198,54 +153,6 @@ type PageVisual struct {
 	Title     string        `json:"title,omitempty" yaml:"title"`
 	Subtitle  string        `json:"subtitle,omitempty" yaml:"subtitle"`
 	Badges    []string      `json:"badges,omitempty" yaml:"badges"`
-}
-
-type ModelGraph struct {
-	Name  string      `json:"name"`
-	Title string      `json:"title"`
-	Stats ModelStats  `json:"stats"`
-	Nodes []ModelNode `json:"nodes"`
-	Edges []ModelEdge `json:"edges"`
-}
-
-type ModelStats struct {
-	Sources       int `json:"sources"`
-	ModelTables   int `json:"modelTables"`
-	Metrics       int `json:"metrics"`
-	Visuals       int `json:"visuals"`
-	ReportTables  int `json:"reportTables"`
-	Relationships int `json:"relationships"`
-}
-
-type ModelNode struct {
-	ID          string       `json:"id"`
-	Label       string       `json:"label"`
-	Kind        string       `json:"kind"`
-	Schema      string       `json:"schema,omitempty"`
-	Description string       `json:"description,omitempty"`
-	Fields      []ModelField `json:"fields,omitempty"`
-	Meta        []ModelMeta  `json:"meta,omitempty"`
-}
-
-type ModelField struct {
-	Name string `json:"name"`
-	Role string `json:"role,omitempty"`
-}
-
-type ModelMeta struct {
-	Label string `json:"label"`
-	Value string `json:"value"`
-}
-
-type ModelEdge struct {
-	ID          string `json:"id"`
-	Source      string `json:"source"`
-	Target      string `json:"target"`
-	Label       string `json:"label,omitempty"`
-	Kind        string `json:"kind"`
-	SourceField string `json:"sourceField,omitempty"`
-	TargetField string `json:"targetField,omitempty"`
-	Cardinality string `json:"cardinality,omitempty"`
 }
 
 type Filters struct {

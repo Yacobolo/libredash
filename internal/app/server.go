@@ -19,8 +19,6 @@ import (
 
 type queryMetrics interface {
 	Catalog() dashboard.Catalog
-	MetricViews() []dashboard.MetricViewSummary
-	MetricView(id string) (dashboard.MetricViewDetail, bool)
 	DefaultDashboardID() string
 	ModelIDForDashboard(dashboardID string) string
 	Report(dashboardID string) (semantic.Dashboard, *semantic.Model, bool)
@@ -33,7 +31,6 @@ type queryMetrics interface {
 	RefreshMaterializations(ctx context.Context, modelID string) error
 	DataDir() string
 	Pages(dashboardID string) []dashboard.Page
-	ModelGraph(modelID string) (dashboard.ModelGraph, bool)
 }
 
 type Server struct {
@@ -114,62 +111,6 @@ func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	s.renderPage(w, r, chi.URLParam(r, "dashboard"), chi.URLParam(r, "page"))
-}
-
-func (s *Server) metricsCatalog(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.MetricViewsPage(s.metrics.Catalog(), s.metrics.MetricViews()).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) metricView(w http.ResponseWriter, r *http.Request) {
-	viewID := r.PathValue("view")
-	if _, ok := s.metrics.MetricView(viewID); !ok {
-		http.NotFound(w, r)
-		return
-	}
-	http.Redirect(w, r, "/metrics/"+viewID+"/measures", http.StatusFound)
-}
-
-func (s *Server) metricViewSection(w http.ResponseWriter, r *http.Request) {
-	view, ok := s.metrics.MetricView(r.PathValue("view"))
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-	section := r.PathValue("section")
-	if !ui.ValidMetricViewSection(section) {
-		http.NotFound(w, r)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.MetricViewPage(s.metrics.Catalog(), view, section).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) models(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.ModelsPage(s.metrics.Catalog()).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) model(w http.ResponseWriter, r *http.Request) {
-	model, ok := s.metrics.ModelGraph(chi.URLParam(r, "model"))
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.ModelPage(s.metrics.Catalog(), model).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 }
 
 func (s *Server) renderPage(w http.ResponseWriter, r *http.Request, dashboardID, pageID string) {
