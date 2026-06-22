@@ -160,6 +160,7 @@ func TestServiceConversationTranscriptDerivesDisplayItems(t *testing.T) {
 		PrincipalID:    principal.ID,
 		ConversationID: conversation.ID,
 		Role:           platform.AgentMessageRoleAssistant,
+		ContentText:    "Let me look that up.",
 		ContentJSON:    `{"tool_calls":[{"id":"call_1","name":"list_dashboards"}]}`,
 	}); err != nil {
 		t.Fatalf("append assistant tool call: %v", err)
@@ -189,17 +190,20 @@ func TestServiceConversationTranscriptDerivesDisplayItems(t *testing.T) {
 	if err != nil {
 		t.Fatalf("conversation transcript: %v", err)
 	}
-	if len(transcript) != 3 {
-		t.Fatalf("transcript len = %d, want user/tool/assistant: %#v", len(transcript), transcript)
+	if len(transcript) != 4 {
+		t.Fatalf("transcript len = %d, want user/assistant/tool/assistant: %#v", len(transcript), transcript)
 	}
 	if transcript[0].Kind != "user" || transcript[0].Text != "hello" {
 		t.Fatalf("user item = %#v", transcript[0])
 	}
-	if transcript[1].Kind != "tool" || transcript[1].ToolCallID != "call_1" || transcript[1].Status != "complete" || transcript[1].Summary != "Found 2 dashboards" {
-		t.Fatalf("tool item = %#v", transcript[1])
+	if transcript[1].Kind != "assistant" || transcript[1].Markdown != "Let me look that up." {
+		t.Fatalf("assistant preamble item = %#v", transcript[1])
 	}
-	if transcript[2].Kind != "assistant" || !strings.Contains(transcript[2].Markdown, "two") {
-		t.Fatalf("assistant item = %#v", transcript[2])
+	if transcript[2].Kind != "tool" || transcript[2].ToolCallID != "call_1" || transcript[2].Status != "complete" || transcript[2].Summary != "Found 2 dashboards" {
+		t.Fatalf("tool item = %#v", transcript[2])
+	}
+	if transcript[3].Kind != "assistant" || !strings.Contains(transcript[3].Markdown, "two") {
+		t.Fatalf("assistant item = %#v", transcript[3])
 	}
 	for _, item := range transcript {
 		if strings.Contains(item.Text+item.Markdown+item.Summary, "internal summary") {

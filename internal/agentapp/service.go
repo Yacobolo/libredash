@@ -483,6 +483,17 @@ func transcriptFromMessages(conversationID string, messages []platformdb.AgentMe
 				CreatedAt:      message.CreatedAt,
 			})
 		case platform.AgentMessageRoleAssistant:
+			if strings.TrimSpace(message.ContentText) != "" {
+				items = append(items, api.AgentChatTranscriptItem{
+					ID:             message.ID,
+					Kind:           "assistant",
+					Markdown:       message.ContentText,
+					Status:         "complete",
+					ConversationID: conversationID,
+					RunID:          runID,
+					CreatedAt:      message.CreatedAt,
+				})
+			}
 			for _, call := range toolCallsFromContentJSON(message.ContentJson) {
 				if call.ID == "" {
 					continue
@@ -495,17 +506,6 @@ func transcriptFromMessages(conversationID string, messages []platformdb.AgentMe
 					Name:           call.Name,
 					Title:          toolTitle(call.Name),
 					Status:         "running",
-					ConversationID: conversationID,
-					RunID:          runID,
-					CreatedAt:      message.CreatedAt,
-				})
-			}
-			if strings.TrimSpace(message.ContentText) != "" {
-				items = append(items, api.AgentChatTranscriptItem{
-					ID:             message.ID,
-					Kind:           "assistant",
-					Markdown:       message.ContentText,
-					Status:         "complete",
 					ConversationID: conversationID,
 					RunID:          runID,
 					CreatedAt:      message.CreatedAt,

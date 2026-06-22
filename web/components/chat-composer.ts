@@ -18,13 +18,13 @@ class ChatComposer extends LitElement {
     form {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
-      gap: 8px;
-      padding: 12px;
+      gap: var(--ld-space-md);
+      padding: var(--ld-space-md) var(--ld-space-lg);
     }
 
     textarea {
       box-sizing: border-box;
-      min-height: 44px;
+      min-height: 40px;
       max-height: 160px;
       width: 100%;
       resize: vertical;
@@ -35,7 +35,7 @@ class ChatComposer extends LitElement {
       font: inherit;
       font-size: var(--ld-font-size-body-sm);
       line-height: var(--ld-line-height-normal);
-      padding: 10px 11px;
+      padding: var(--ld-space-md) var(--ld-space-lg);
       outline: 0;
     }
 
@@ -46,8 +46,8 @@ class ChatComposer extends LitElement {
 
     button {
       display: inline-flex;
-      min-height: 44px;
-      min-width: 72px;
+      min-height: 40px;
+      min-width: 68px;
       align-items: center;
       justify-content: center;
       gap: 8px;
@@ -60,7 +60,7 @@ class ChatComposer extends LitElement {
       font: inherit;
       font-size: var(--ld-font-size-body-sm);
       font-weight: var(--ld-font-weight-strong);
-      padding: 0 14px;
+      padding: 0 var(--ld-space-lg);
       box-shadow: var(--shadow-resting-small);
       transition:
         background var(--duration-fast) var(--ease-ld),

@@ -227,7 +227,7 @@ func TestChatTurnStreamsDatastarSignalsAndPersistsEvents(t *testing.T) {
 	var calls atomic.Int64
 	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) == 1 {
-			writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"list_dashboards","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`)
+			writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Let me look that up.","tool_calls":[{"id":"call_1","type":"function","function":{"name":"list_dashboards","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`)
 			return
 		}
 		writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Executive Sales is available."},"finish_reason":"stop"}],"usage":{"prompt_tokens":20,"completion_tokens":5,"total_tokens":25}}`)
@@ -249,6 +249,9 @@ func TestChatTurnStreamsDatastarSignalsAndPersistsEvents(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Fatalf("turn response missing %q:\n%s", want, body)
 		}
+	}
+	if strings.Index(body, "Let me look that up.") == -1 || strings.Index(body, "List Dashboards") == -1 || strings.Index(body, "Let me look that up.") > strings.Index(body, "List Dashboards") {
+		t.Fatalf("assistant preamble should appear before tool row:\n%s", body)
 	}
 	for _, unwanted := range []string{`"events"`, "message_delta", "message_appended", "agent_end"} {
 		if strings.Contains(body, unwanted) {
