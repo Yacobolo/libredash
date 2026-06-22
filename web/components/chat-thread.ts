@@ -65,42 +65,55 @@ class ChatThread extends LitElement {
 
   static styles = css`
     :host {
+      box-sizing: border-box;
       display: block;
+      height: 100%;
       min-height: 0;
+      overflow: hidden;
       color: var(--ld-fg-default);
       font-family: var(--fontStack-system);
     }
 
+    *,
+    *::before,
+    *::after {
+      box-sizing: inherit;
+    }
+
     .thread {
       display: grid;
-      min-height: 100%;
+      height: 100%;
+      min-height: 0;
       grid-template-rows: minmax(0, 1fr);
+      overflow: hidden;
       background: var(--ld-bg-page);
     }
 
     .scroll {
+      height: 100%;
       min-height: 0;
       overflow: auto;
-      padding: 20px;
+      overscroll-behavior: contain;
+      padding: var(--ld-chat-thread-padding);
     }
 
     .stack {
       display: grid;
-      width: min(100%, 880px);
+      width: min(100%, var(--ld-chat-stack-width));
       margin-inline: auto;
-      gap: 12px;
+      gap: var(--ld-chat-stack-gap);
     }
 
     .empty,
     .alert {
       display: grid;
-      gap: 6px;
+      gap: var(--ld-space-sm);
       align-content: center;
-      min-height: 260px;
+      min-height: var(--ld-chat-empty-min-height);
       border: var(--ld-border-muted);
       border-radius: var(--ld-radius-default);
       background: var(--ld-bg-panel);
-      padding: 20px;
+      padding: var(--ld-chat-thread-padding);
       color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-body-sm);
       text-align: center;
@@ -116,8 +129,8 @@ class ChatThread extends LitElement {
 
     .message {
       display: grid;
-      gap: 5px;
-      max-width: min(760px, 100%);
+      gap: var(--ld-chat-message-gap);
+      max-width: min(var(--ld-chat-message-width), 100%);
     }
 
     .message.user {
@@ -140,7 +153,7 @@ class ChatThread extends LitElement {
       border: var(--ld-border-muted);
       border-radius: var(--ld-radius-default);
       background: var(--ld-bg-panel);
-      padding: 10px 12px;
+      padding: var(--ld-chat-bubble-padding-block) var(--ld-chat-bubble-padding-inline);
       font-size: var(--ld-font-size-body-sm);
       line-height: var(--ld-line-height-relaxed);
       overflow-wrap: anywhere;
@@ -155,7 +168,7 @@ class ChatThread extends LitElement {
     }
 
     .bubble.markdown :is(p, ul, ol, pre, blockquote) {
-      margin-block: 0 10px;
+      margin-block: 0 var(--ld-chat-markdown-block-gap);
     }
 
     .bubble.markdown :is(p, ul, ol, pre, blockquote):last-child {
@@ -164,19 +177,19 @@ class ChatThread extends LitElement {
 
     .bubble.markdown ul,
     .bubble.markdown ol {
-      padding-left: 20px;
+      padding-left: var(--ld-chat-markdown-list-indent);
     }
 
     .bubble.markdown li + li {
-      margin-top: 2px;
+      margin-top: var(--ld-chat-markdown-list-item-gap);
     }
 
     .bubble.markdown code {
-      border-radius: calc(var(--ld-radius-default) - 2px);
+      border-radius: var(--ld-chat-code-radius);
       background: var(--ld-bg-control);
-      padding: 1px 4px;
+      padding: var(--ld-chat-code-padding-block) var(--ld-chat-code-padding-inline);
       font-family: var(--fontStack-monospace);
-      font-size: 0.92em;
+      font-size: var(--ld-chat-code-font-scale);
     }
 
     .bubble.markdown pre {
@@ -185,7 +198,7 @@ class ChatThread extends LitElement {
       border: var(--ld-border-muted);
       border-radius: var(--ld-radius-default);
       background: var(--ld-bg-control);
-      padding: 9px 10px;
+      padding: var(--ld-chat-pre-padding-block) var(--ld-chat-pre-padding-inline);
     }
 
     .bubble.markdown pre code {
@@ -196,15 +209,15 @@ class ChatThread extends LitElement {
     }
 
     .bubble.markdown blockquote {
-      border-left: 2px solid var(--ld-line-muted);
-      padding-left: 10px;
+      border-left: var(--ld-chat-quote-border-width) solid var(--ld-line-muted);
+      padding-left: var(--ld-chat-bubble-padding-block);
       color: var(--ld-fg-muted);
     }
 
     .bubble.markdown a {
       color: var(--ld-fg-accent);
-      text-decoration-thickness: 1px;
-      text-underline-offset: 2px;
+      text-decoration-thickness: var(--ld-chat-link-underline-thickness);
+      text-underline-offset: var(--ld-chat-link-underline-offset);
     }
 
     .user .bubble {
@@ -213,7 +226,7 @@ class ChatThread extends LitElement {
     }
 
     .tool .bubble {
-      max-height: 180px;
+      max-height: var(--ld-chat-tool-max-height);
       overflow: auto;
       font-family: var(--fontStack-monospace);
       font-size: var(--ld-font-size-caption);
@@ -230,21 +243,21 @@ class ChatThread extends LitElement {
       width: fit-content;
       max-width: 100%;
       align-items: center;
-      gap: 8px;
+      gap: var(--ld-chat-activity-gap);
       border: var(--ld-border-muted);
       border-radius: var(--ld-radius-full);
       background: var(--ld-bg-panel-muted);
-      padding: 4px 9px;
+      padding: var(--ld-chat-activity-padding-block) var(--ld-chat-activity-padding-inline);
       color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-caption);
       font-weight: var(--ld-font-weight-strong);
     }
 
     .dot {
-      width: 7px;
-      height: 7px;
+      width: var(--ld-chat-activity-dot-size);
+      height: var(--ld-chat-activity-dot-size);
       flex: 0 0 auto;
-      border-radius: 999px;
+      border-radius: var(--ld-radius-full);
       background: var(--ld-fg-warning);
     }
 
@@ -258,7 +271,7 @@ class ChatThread extends LitElement {
 
     @media (max-width: 720px) {
       .scroll {
-        padding: 12px;
+        padding: var(--ld-chat-thread-padding-compact);
       }
     }
   `
