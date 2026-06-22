@@ -172,7 +172,9 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForMetricView(t *testing.T) {
 func TestWorkspaceAssetRowsUseDetailLinksForModelAndMetricAssets(t *testing.T) {
 	workspace, _, assets, _ := testWorkspaceAssetFixtures()
 	byType := map[string]api.AssetResponse{}
+	byID := map[string]api.AssetResponse{}
 	for _, asset := range assets {
+		byID[asset.ID] = asset
 		if _, ok := byType[asset.Type]; !ok {
 			byType[asset.Type] = asset
 		}
@@ -180,7 +182,7 @@ func TestWorkspaceAssetRowsUseDetailLinksForModelAndMetricAssets(t *testing.T) {
 
 	for _, typ := range []string{"semantic_model", "metric_view"} {
 		var out strings.Builder
-		if err := assetRow(workspace.ID, byType[typ]).Render(&out); err != nil {
+		if err := assetRow(workspace.ID, byType[typ], byID).Render(&out); err != nil {
 			t.Fatal(err)
 		}
 		rendered := html.UnescapeString(out.String())
