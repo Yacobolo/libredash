@@ -19,19 +19,23 @@ func Load(path string) (*Model, error) {
 	if err := rejectSourceBusinessSemantics(content); err != nil {
 		return nil, err
 	}
-	var model Model
+	var file modelFile
 	decoder := yaml.NewDecoder(bytes.NewReader(content))
 	decoder.KnownFields(true)
-	if err := decoder.Decode(&model); err != nil {
+	if err := decoder.Decode(&file); err != nil {
+		return nil, err
+	}
+	model, err := file.compile()
+	if err != nil {
 		return nil, err
 	}
 	if err := model.Validate(); err != nil {
 		return nil, err
 	}
-	return &model, nil
+	return model, nil
 }
 
-func (m *SemanticModelMeasures) UnmarshalYAML(value *yaml.Node) error {
+func (m *semanticModelMeasures) UnmarshalYAML(value *yaml.Node) error {
 	m.Items = map[string]MetricMeasure{}
 	if value == nil || value.Kind == yaml.ScalarNode && value.Tag == "!!null" {
 		return nil
@@ -91,9 +95,6 @@ func (m *Model) Validate() error {
 	if m.Name == "" {
 		return fmt.Errorf("semantic model name is required")
 	}
-	if err := m.compileSemanticModelFirstContract(); err != nil {
-		return err
-	}
 	if len(m.Sources) == 0 {
 		return fmt.Errorf("semantic model %q has no sources", m.Name)
 	}
@@ -122,7 +123,6 @@ func (m *Model) Validate() error {
 		}
 		m.Sources[name] = resolved
 	}
-	newShape := len(m.SemanticModels) > 0
 	if len(m.Tables) == 0 {
 		return fmt.Errorf("semantic model %q has no model tables", m.Name)
 	}
@@ -133,7 +133,7 @@ func (m *Model) Validate() error {
 		if table.SQL != "" && table.Transform.SQL == "" {
 			table.Transform.SQL = table.SQL
 		}
-		if newShape && table.Kind == "" {
+		if table.Kind == "" {
 			table.Kind = "model"
 		}
 		if table.Kind == "" {
@@ -142,18 +142,20 @@ func (m *Model) Validate() error {
 		if table.Source == "" && table.Transform.SQL == "" {
 			return fmt.Errorf("model table %q requires source or transform.sql", name)
 		}
-		if !newShape && table.Source != "" && table.Transform.SQL != "" {
-			return fmt.Errorf("model table %q requires exactly one of source or transform.sql", name)
-		}
 		if table.Source != "" {
 			if _, ok := m.Sources[table.Source]; !ok {
 				return fmt.Errorf("model table %q references unknown source %q", name, table.Source)
 			}
 		}
+		dependencies, err := m.modelTableSourceDependencies(name, table)
+		if err != nil {
+			return err
+		}
+		table.SourceDependencies = dependencies
 		if table.PrimaryKey == "" {
 			return fmt.Errorf("model table %q requires primary_key", name)
 		}
-		if newShape && table.Grain == "" {
+		if table.Grain == "" {
 			table.Grain = table.PrimaryKey
 		}
 		if table.Grain == "" {
@@ -174,7 +176,7 @@ func (m *Model) Validate() error {
 			if measure.Expression == "" {
 				measure.Expression = measure.Expr
 			}
-			if newShape && measure.Label == "" {
+			if measure.Label == "" {
 				measure.Label = titleFromIdentifier(field)
 			}
 			if measure.Table == "" {
@@ -202,36 +204,44 @@ func (m *Model) Validate() error {
 	return nil
 }
 
-func (m *Model) compileSemanticModelFirstContract() error {
-	if len(m.SemanticModels) == 0 {
-		return nil
+func (file modelFile) compile() (*Model, error) {
+	model := &Model{
+		Name:              file.Name,
+		Title:             file.Title,
+		Description:       file.Description,
+		DefaultConnection: file.DefaultConnection,
+		Connections:       file.Connections,
+		Sources:           file.Sources,
 	}
-	spec, ok := m.SemanticModels[m.Name]
-	if !ok && len(m.SemanticModels) == 1 {
-		for _, candidate := range m.SemanticModels {
+	if len(file.SemanticModels) == 0 {
+		return nil, fmt.Errorf("semantic model %q is not defined under semantic_models", file.Name)
+	}
+	spec, ok := file.SemanticModels[file.Name]
+	if !ok && len(file.SemanticModels) == 1 {
+		for _, candidate := range file.SemanticModels {
 			spec = candidate
 			ok = true
 		}
 	}
 	if !ok {
-		return fmt.Errorf("semantic model %q is not defined under semantic_models", m.Name)
+		return nil, fmt.Errorf("semantic model %q is not defined under semantic_models", file.Name)
 	}
 	if len(spec.Tables) == 0 {
-		return fmt.Errorf("semantic model %q requires tables", m.Name)
+		return nil, fmt.Errorf("semantic model %q requires tables", file.Name)
 	}
-	if len(m.Models) == 0 {
-		return fmt.Errorf("semantic model %q requires models", m.Name)
+	if len(file.Models) == 0 {
+		return nil, fmt.Errorf("semantic model %q requires models", file.Name)
 	}
 	tables := map[string]ModelTable{}
 	for tableName, tableRef := range spec.Tables {
 		if err := validateSemanticIdentifier(tableName); err != nil {
-			return fmt.Errorf("semantic model table %q is invalid: %w", tableName, err)
+			return nil, fmt.Errorf("semantic model table %q is invalid: %w", tableName, err)
 		}
 		modelName := tableRef.Model
 		if modelName == "" {
 			modelName = tableName
 		}
-		modelTable, ok := m.Models[modelName]
+		modelTable, ok := file.Models[modelName]
 		if !ok {
 			modelTable = ModelTable{Source: modelName}
 		}
@@ -248,7 +258,7 @@ func (m *Model) compileSemanticModelFirstContract() error {
 		}
 		for field, dimension := range tableRef.Fields {
 			if err := validateSemanticIdentifier(field); err != nil {
-				return fmt.Errorf("semantic model table %q field %q is invalid: %w", tableName, field, err)
+				return nil, fmt.Errorf("semantic model table %q field %q is invalid: %w", tableName, field, err)
 			}
 			if dimension.Expr == "" && dimension.Expression == "" {
 				dimension.Expr = field
@@ -268,23 +278,23 @@ func (m *Model) compileSemanticModelFirstContract() error {
 	}
 	defaults := spec.Measures.Defaults
 	if defaults.Table == "" && len(spec.Measures.Items) > 0 {
-		return fmt.Errorf("semantic model %q measure defaults require table", m.Name)
+		return nil, fmt.Errorf("semantic model %q measure defaults require table", file.Name)
 	}
 	if err := validateSemanticRelationships(defaults.Table, spec.Relationships); err != nil {
-		return err
+		return nil, err
 	}
 	measures := map[string]MetricMeasure{}
 	for name, measure := range spec.Measures.Items {
 		tableName := defaultString(measure.Table, defaults.Table)
 		table, ok := tables[tableName]
 		if !ok {
-			return fmt.Errorf("semantic model measure %q references unknown table %q", name, tableName)
+			return nil, fmt.Errorf("semantic model measure %q references unknown table %q", name, tableName)
 		}
 		if measure.Expression == "" {
 			measure.Expression = measure.Expr
 		}
 		if measure.Expression == "" {
-			return fmt.Errorf("semantic model measure %q requires expr", name)
+			return nil, fmt.Errorf("semantic model measure %q requires expr", name)
 		}
 		measure.Field = name
 		measure.Name = name
@@ -299,16 +309,56 @@ func (m *Model) compileSemanticModelFirstContract() error {
 		tables[tableName] = table
 		measures[name] = measure
 	}
-	m.Tables = tables
-	m.Relationships = spec.Relationships
-	for index, relationship := range m.Relationships {
+	model.Tables = tables
+	model.Relationships = spec.Relationships
+	for index, relationship := range model.Relationships {
 		if relationship.ID == "" {
 			relationship.ID = relationshipID(relationship, index)
-			m.Relationships[index] = relationship
+			model.Relationships[index] = relationship
 		}
 	}
-	m.Measures = measures
-	return nil
+	model.Measures = measures
+	return model, nil
+}
+
+func (m *Model) modelTableSourceDependencies(tableName string, table ModelTable) ([]string, error) {
+	seen := map[string]struct{}{}
+	add := func(source string) error {
+		source = strings.TrimSpace(source)
+		if source == "" {
+			return nil
+		}
+		if _, ok := m.Sources[source]; !ok {
+			return fmt.Errorf("model table %q references unknown source %q", tableName, source)
+		}
+		seen[source] = struct{}{}
+		return nil
+	}
+	if err := add(table.Source); err != nil {
+		return nil, err
+	}
+	for _, source := range table.Sources {
+		if err := add(source); err != nil {
+			return nil, err
+		}
+	}
+	sql := table.Transform.SQL
+	if sql == "" {
+		sql = table.SQL
+	}
+	for source := range m.Sources {
+		if strings.Contains(sql, "source."+source) {
+			if err := add(source); err != nil {
+				return nil, err
+			}
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for source := range seen {
+		result = append(result, source)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 func validateSemanticRelationships(baseTable string, relationships []Relationship) error {

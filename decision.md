@@ -47,7 +47,7 @@ sources:
 
 models:
   orders:
-    source: olist_orders
+    sources: [olist_orders]
     sql: |
       SELECT
         order_id,

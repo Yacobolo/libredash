@@ -20,21 +20,22 @@ type Dashboard struct {
 }
 
 type FilterDefinition struct {
-	Type             string         `yaml:"type" json:"type"`
-	Label            string         `yaml:"label" json:"label"`
-	Dimension        string         `yaml:"field" json:"dimension"`
-	Default          FilterDefault  `yaml:"default" json:"default"`
-	Custom           bool           `yaml:"custom" json:"custom,omitempty"`
-	Presets          []FilterPreset `yaml:"presets" json:"presets,omitempty"`
-	Operator         string         `yaml:"operator" json:"operator,omitempty"`
-	Values           FilterValues   `yaml:"values" json:"values,omitempty"`
-	DefaultOperator  string         `yaml:"default_operator" json:"defaultOperator,omitempty"`
-	Operators        []string       `yaml:"operators" json:"operators,omitempty"`
-	Options          []FilterOption `yaml:"options" json:"options,omitempty"`
-	URLParam         string         `yaml:"url_param" json:"urlParam,omitempty"`
-	FromURLParam     string         `yaml:"from_url_param" json:"fromURLParam,omitempty"`
-	ToURLParam       string         `yaml:"to_url_param" json:"toURLParam,omitempty"`
-	OperatorURLParam string         `yaml:"operator_url_param" json:"operatorURLParam,omitempty"`
+	Type             string             `yaml:"type" json:"type"`
+	Label            string             `yaml:"label" json:"label"`
+	Dimension        string             `yaml:"field" json:"dimension"`
+	Default          FilterDefault      `yaml:"default" json:"default"`
+	Custom           bool               `yaml:"custom" json:"custom,omitempty"`
+	Presets          []FilterPreset     `yaml:"presets" json:"presets,omitempty"`
+	Operator         string             `yaml:"operator" json:"operator,omitempty"`
+	Values           FilterValues       `yaml:"values" json:"values,omitempty"`
+	DefaultOperator  string             `yaml:"default_operator" json:"defaultOperator,omitempty"`
+	Operators        []string           `yaml:"operators" json:"operators,omitempty"`
+	Options          []FilterOption     `yaml:"options" json:"options,omitempty"`
+	URLParam         string             `yaml:"url_param" json:"urlParam,omitempty"`
+	FromURLParam     string             `yaml:"from_url_param" json:"fromURLParam,omitempty"`
+	ToURLParam       string             `yaml:"to_url_param" json:"toURLParam,omitempty"`
+	OperatorURLParam string             `yaml:"operator_url_param" json:"operatorURLParam,omitempty"`
+	Targets          InteractionTargets `yaml:"targets" json:"targets,omitempty"`
 }
 
 type FilterConfig struct {
@@ -287,8 +288,8 @@ type Interaction struct {
 }
 
 type InteractionTargets struct {
-	Visuals []string `yaml:"visuals"`
-	Tables  []string `yaml:"tables"`
+	Visuals []string `yaml:"visuals" json:"visuals,omitempty"`
+	Tables  []string `yaml:"tables" json:"tables,omitempty"`
 }
 
 type TableVisual struct {
@@ -306,11 +307,11 @@ type TableVisual struct {
 }
 
 type TableQuery struct {
-	Table      string     `yaml:"table"`
-	Fields     []string   `yaml:"fields"`
-	Columns    []FieldRef `yaml:"columns"`
-	Rows       []FieldRef `yaml:"rows"`
-	Measures   []FieldRef `yaml:"measures"`
+	Table    string     `yaml:"table"`
+	Fields   []string   `yaml:"fields"`
+	Columns  []FieldRef `yaml:"columns"`
+	Rows     []FieldRef `yaml:"rows"`
+	Measures []FieldRef `yaml:"measures"`
 }
 
 func (q *TableQuery) UnmarshalYAML(value *yaml.Node) error {

@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/semantic"
@@ -56,16 +55,28 @@ func (p *Planner) semanticView(table string, dimensions []Field, measures []Fiel
 	grain := ""
 	resolvedMeasures := map[string]semantic.MetricMeasure{}
 	for _, item := range measures {
-		measure := item.Measure
-		if strings.TrimSpace(measure.SQLExpression()) == "" {
+		measure := semantic.MetricMeasure{}
+		if strings.TrimSpace(item.Measure.SQLExpression()) == "" {
 			var err error
 			measure, err = p.Model.ResolveMeasure(item.Field)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			measure.Field = defaultString(measure.Field, item.Field)
-			measure.Name = defaultString(measure.Name, item.Field)
+			measure = semantic.MetricMeasure{
+				Field:       defaultString(item.Measure.Field, item.Field),
+				Name:        defaultString(item.Measure.Name, item.Field),
+				Label:       item.Measure.Label,
+				Description: item.Measure.Description,
+				Expr:        item.Measure.Expr,
+				Expression:  item.Measure.SQLExpression(),
+				Table:       item.Measure.Table,
+				Grain:       item.Measure.Grain,
+				Time:        item.Measure.Time,
+				Grains:      append([]string{}, item.Measure.Grains...),
+				Unit:        item.Measure.Unit,
+				Format:      item.Measure.Format,
+			}
 		}
 		if measure.Table == "" {
 			return nil, fmt.Errorf("measure %q has no base table", item.Field)
@@ -156,82 +167,7 @@ func (p *Planner) aliases(view *semantic.QueryScope, fields []string) (map[strin
 }
 
 func (p *Planner) relationshipPath(base, target string) ([]semantic.Relationship, error) {
-	if base == target {
-		return nil, nil
-	}
-
-	frontier := []pathCandidate{{Table: base, Visited: map[string]bool{base: true}}}
-	for len(frontier) > 0 {
-		next := []pathCandidate{}
-		matches := [][]semantic.Relationship{}
-		for _, candidate := range frontier {
-			for _, edge := range p.safeEdgesFrom(candidate.Table) {
-				if candidate.Visited[edge.Table] {
-					continue
-				}
-				path := append(append([]semantic.Relationship{}, candidate.Path...), edge.Relationship)
-				if edge.Table == target {
-					matches = append(matches, path)
-					continue
-				}
-				visited := copyVisited(candidate.Visited)
-				visited[edge.Table] = true
-				next = append(next, pathCandidate{Table: edge.Table, Path: path, Visited: visited})
-			}
-		}
-		if len(matches) > 1 {
-			return nil, fmt.Errorf("ambiguous relationship path from %q to %q", base, target)
-		}
-		if len(matches) == 1 {
-			return matches[0], nil
-		}
-		frontier = next
-	}
-	return nil, fmt.Errorf("no safe relationship path from %q to %q", base, target)
-}
-
-func (p *Planner) safeEdgesFrom(table string) []relationshipEdge {
-	edges := []relationshipEdge{}
-	for _, relationship := range p.Model.Relationships {
-		edge, ok := safeEdgeFrom(table, relationship)
-		if ok {
-			edges = append(edges, edge)
-		}
-	}
-	sort.Slice(edges, func(i, j int) bool {
-		if edges[i].Table != edges[j].Table {
-			return edges[i].Table < edges[j].Table
-		}
-		if edges[i].Relationship.ID != edges[j].Relationship.ID {
-			return edges[i].Relationship.ID < edges[j].Relationship.ID
-		}
-		if edges[i].Relationship.From != edges[j].Relationship.From {
-			return edges[i].Relationship.From < edges[j].Relationship.From
-		}
-		return edges[i].Relationship.To < edges[j].Relationship.To
-	})
-	return edges
-}
-
-func safeEdgeFrom(table string, relationship semantic.Relationship) (relationshipEdge, bool) {
-	if !relationship.Active {
-		return relationshipEdge{}, false
-	}
-	fromTable, _, err := splitField(relationship.From)
-	if err != nil {
-		return relationshipEdge{}, false
-	}
-	toTable, _, err := splitField(relationship.To)
-	if err != nil {
-		return relationshipEdge{}, false
-	}
-	if fromTable == table && safeCardinality(relationship.Cardinality) {
-		return relationshipEdge{Table: toTable, Relationship: relationship}, true
-	}
-	if relationship.Cardinality == "one_to_one" && toTable == table {
-		return relationshipEdge{Table: fromTable, Relationship: relationship}, true
-	}
-	return relationshipEdge{}, false
+	return p.Model.SafeRelationshipPath(base, target)
 }
 
 func defaultString(value, fallback string) string {
@@ -268,32 +204,9 @@ func pathTables(base string, path []semantic.Relationship) []tablePath {
 	return tables
 }
 
-func copyVisited(values map[string]bool) map[string]bool {
-	next := make(map[string]bool, len(values)+1)
-	for key, value := range values {
-		next[key] = value
-	}
-	return next
-}
-
-type pathCandidate struct {
-	Table   string
-	Path    []semantic.Relationship
-	Visited map[string]bool
-}
-
-type relationshipEdge struct {
-	Table        string
-	Relationship semantic.Relationship
-}
-
 type tablePath struct {
 	Table string
 	Path  []semantic.Relationship
-}
-
-func safeCardinality(cardinality string) bool {
-	return cardinality == "many_to_one" || cardinality == "one_to_one"
 }
 
 func splitField(field string) (string, string, error) {

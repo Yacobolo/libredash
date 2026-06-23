@@ -509,6 +509,21 @@ func minimalSourceModel() *Model {
 	}
 }
 
+func addIsolatedProductTable(model *Model) {
+	model.Tables["products"] = ModelTable{
+		Kind:       "model",
+		Source:     "products",
+		PrimaryKey: "product_id",
+		Grain:      "product_id",
+		Dimensions: map[string]MetricDimension{
+			"category": {Expr: "category"},
+		},
+	}
+	if model.Sources["products"].Path == "" {
+		model.Sources["products"] = Source{Path: "products.csv", Connection: model.DefaultConnection}
+	}
+}
+
 func fieldRefs(fields ...string) []FieldRef {
 	refs := make([]FieldRef, len(fields))
 	for i, field := range fields {

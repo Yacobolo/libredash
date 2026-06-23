@@ -67,6 +67,13 @@ func (m *DuckDBMetrics) semanticFilters(ctx context.Context, runtime *modelRunti
 		if !ok {
 			continue
 		}
+		applies, err := report.FilterAppliesToTarget(runtime.model, filter, targetKind, targetID)
+		if err != nil {
+			return nil, err
+		}
+		if !applies {
+			continue
+		}
 		switch filter.Type {
 		case "date_range":
 			dateFilters := m.dateSemanticFilters(runtime, filter, control)

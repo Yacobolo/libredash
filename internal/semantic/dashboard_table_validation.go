@@ -62,6 +62,73 @@ func normalizeTableFields(name string, model *Model, table *TableVisual) error {
 	return nil
 }
 
+func normalizeDataTableFields(name string, model *Model, table *TableVisual) error {
+	columns := make([]FieldRef, 0, len(table.Query.Columns)+len(table.Query.Fields))
+	if len(table.Query.Columns) > 0 {
+		columns = append(columns, table.Query.Columns...)
+	} else {
+		for _, field := range table.Query.Fields {
+			columns = append(columns, FieldRef{Field: field, Alias: fieldRefAlias(field)})
+		}
+	}
+	if len(columns) == 0 {
+		return fmt.Errorf("table %q kind data_table requires query.fields or query.columns", name)
+	}
+	seenAliases := map[string]struct{}{}
+	for index, column := range columns {
+		if column.Alias == "" {
+			column.Alias = fieldRefAlias(column.Field)
+		}
+		if _, exists := seenAliases[column.Alias]; exists {
+			return fmt.Errorf("table %q has duplicate query output alias %q", name, column.Alias)
+		}
+		seenAliases[column.Alias] = struct{}{}
+		if dimension, err := model.ResolveDimension(column.Field); err == nil {
+			column.Field = dimension.Field
+			columns[index] = column
+			continue
+		}
+		measure, err := model.ResolveMeasure(column.Field)
+		if err != nil {
+			return fmt.Errorf("table %q query column %q references unknown field %q", name, column.Alias, column.Field)
+		}
+		column.Field = measure.Field
+		columns[index] = column
+	}
+	table.DataColumns = columns
+	if len(table.Columns) == 0 {
+		table.Columns = make([]dashboard.TableColumn, 0, len(columns))
+		for _, column := range columns {
+			format := "text"
+			role := ""
+			align := ""
+			if measure, err := model.ResolveMeasure(column.Field); err == nil {
+				role = "measure"
+				align = "right"
+				if measure.Format != "" {
+					format = measure.Format
+				} else {
+					format = "decimal"
+				}
+			}
+			table.Columns = append(table.Columns, dashboard.TableColumn{
+				Key:    column.Alias,
+				Label:  titleFromIdentifier(column.Alias),
+				Format: format,
+				Role:   role,
+				Align:  align,
+			})
+		}
+		return nil
+	}
+	for _, column := range table.Columns {
+		if !tableHasQueryAlias(table.DataColumns, column.Key) {
+			return fmt.Errorf("table %q column %q has no matching query column alias", name, column.Key)
+		}
+	}
+	return nil
+}
+
 func tableHasQueryAlias(columns []FieldRef, alias string) bool {
 	for _, column := range columns {
 		if column.Alias == alias {

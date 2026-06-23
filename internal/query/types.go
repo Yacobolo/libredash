@@ -1,11 +1,31 @@
 package query
 
-import "github.com/Yacobolo/libredash/internal/semantic"
-
 type Field struct {
 	Field   string
 	Alias   string
-	Measure semantic.MetricMeasure
+	Measure InlineMeasure
+}
+
+type InlineMeasure struct {
+	Field       string
+	Name        string
+	Label       string
+	Description string
+	Expr        string
+	Expression  string
+	Table       string
+	Grain       string
+	Time        string
+	Grains      []string
+	Unit        string
+	Format      string
+}
+
+func (m InlineMeasure) SQLExpression() string {
+	if m.Expression != "" {
+		return m.Expression
+	}
+	return m.Expr
 }
 
 type Time struct {

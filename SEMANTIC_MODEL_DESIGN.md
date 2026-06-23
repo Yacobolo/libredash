@@ -38,7 +38,7 @@ Each model can point directly at a source or apply light SQL. This is where cast
 ```yaml
 models:
   orders:
-    source: olist_orders
+    sources: [olist_orders]
     sql: |
       SELECT
         order_id,
@@ -51,7 +51,7 @@ models:
     source: olist_customers
 ```
 
-LibreDash is not a transformation framework. Heavy ETL and long model chains belong upstream.
+Use `source` for direct one-source tables and `sources` for SQL-backed tables that read one or more sources. LibreDash can infer simple `source.<name>` SQL references, but explicit `sources` metadata is the canonical lineage contract. LibreDash is not a transformation framework. Heavy ETL and long model chains belong upstream.
 
 ### Semantic Models
 

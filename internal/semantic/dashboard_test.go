@@ -131,6 +131,105 @@ func TestLoadOlistDashboard(t *testing.T) {
 	}
 }
 
+func TestDataTableFieldsNormalizeToDataColumns(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	table := report.Tables["orders"]
+	table.Query.Columns = nil
+	table.Query.Fields = []string{"orders.order_id", "revenue"}
+	table.Columns = nil
+	report.Tables["orders"] = table
+
+	if err := report.Validate(map[string]*Model{"olist": model}); err != nil {
+		t.Fatal(err)
+	}
+	normalized := report.Tables["orders"]
+	if got := len(normalized.DataColumns); got != 2 {
+		t.Fatalf("data columns = %d, want 2", got)
+	}
+	if got := normalized.DataColumns[0].Alias; got != "order_id" {
+		t.Fatalf("field alias = %q, want order_id", got)
+	}
+	if got := normalized.DataColumns[1].Field; got != "revenue" {
+		t.Fatalf("measure field = %q, want revenue", got)
+	}
+	if got := len(normalized.Columns); got != 2 {
+		t.Fatalf("presentation columns = %d, want generated columns", got)
+	}
+}
+
+func TestDataTableColumnsOverrideFields(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	table := report.Tables["orders"]
+	table.Query.Fields = []string{"missing.field"}
+	table.Query.Columns = []FieldRef{{Field: "orders.order_id", Alias: "order"}}
+	table.Columns = []dashboard.TableColumn{{Key: "order", Label: "Order"}}
+	report.Tables["orders"] = table
+
+	if err := report.Validate(map[string]*Model{"olist": model}); err != nil {
+		t.Fatal(err)
+	}
+	if got := report.Tables["orders"].DataColumns[0].Alias; got != "order" {
+		t.Fatalf("query column alias = %q, want order", got)
+	}
+}
+
+func TestDataTableRejectsDuplicateOutputAliases(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	table := report.Tables["orders"]
+	table.Query.Columns = nil
+	table.Query.Fields = []string{"orders.customer_id", "customers.customer_id"}
+	table.Columns = nil
+	report.Tables["orders"] = table
+
+	assertDashboardValidateError(t, report, model, "duplicate query output alias")
+}
+
+func TestGlobalFilterSkipsIncompatibleTarget(t *testing.T) {
+	model := loadOlistModel(t)
+	addIsolatedProductTable(model)
+	report := loadOlistDashboard(t, model)
+	filter := FilterDefinition{
+		Type:            "text",
+		Label:           "Product",
+		Dimension:       "products.category",
+		DefaultOperator: "contains",
+		Operators:       []string{"contains"},
+		URLParam:        "product",
+	}
+	report.Filters["product"] = filter
+
+	if err := report.Validate(map[string]*Model{"olist": model}); err != nil {
+		t.Fatal(err)
+	}
+	applies, err := report.FilterAppliesToTarget(model, filter, "visual", "revenue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applies {
+		t.Fatal("global incompatible product filter applied to orders visual")
+	}
+}
+
+func TestExplicitFilterTargetRejectsIncompatibleTarget(t *testing.T) {
+	model := loadOlistModel(t)
+	addIsolatedProductTable(model)
+	report := loadOlistDashboard(t, model)
+	report.Filters["product"] = FilterDefinition{
+		Type:            "text",
+		Label:           "Product",
+		Dimension:       "products.category",
+		DefaultOperator: "contains",
+		Operators:       []string{"contains"},
+		URLParam:        "product",
+		Targets:         InteractionTargets{Visuals: []string{"revenue"}},
+	}
+
+	assertDashboardValidateError(t, report, model, "cannot apply to visual")
+}
+
 func TestOlistDashboardChartShowcaseContract(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
@@ -545,11 +644,9 @@ func TestDashboardValidateRejectsNonObjectRendererOptions(t *testing.T) {
 
 func TestValidateRejectsUnknownModelTableSource(t *testing.T) {
 	model := loadOlistModel(t)
-	semanticModel := model.SemanticModels["olist"]
-	table := semanticModel.Tables["customers"]
-	table.Model = "missing_source"
-	semanticModel.Tables["customers"] = table
-	model.SemanticModels["olist"] = semanticModel
+	table := model.Tables["customers"]
+	table.Source = "missing_source"
+	model.Tables["customers"] = table
 
 	assertModelValidateError(t, model, "unknown source")
 }

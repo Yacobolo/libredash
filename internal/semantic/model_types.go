@@ -8,6 +8,18 @@ var (
 )
 
 type Model struct {
+	Name              string                   `yaml:"-"`
+	Title             string                   `yaml:"-"`
+	Description       string                   `yaml:"-"`
+	DefaultConnection string                   `yaml:"-"`
+	Connections       map[string]Connection    `yaml:"-"`
+	Sources           map[string]Source        `yaml:"-"`
+	Tables            map[string]ModelTable    `yaml:"-"`
+	Relationships     []Relationship           `yaml:"-"`
+	Measures          map[string]MetricMeasure `yaml:"-"`
+}
+
+type modelFile struct {
 	Name              string                       `yaml:"name"`
 	Title             string                       `yaml:"title"`
 	Description       string                       `yaml:"description"`
@@ -15,10 +27,7 @@ type Model struct {
 	Connections       map[string]Connection        `yaml:"connections"`
 	Sources           map[string]Source            `yaml:"sources"`
 	Models            map[string]ModelTable        `yaml:"models"`
-	SemanticModels    map[string]SemanticModelSpec `yaml:"semantic_models"`
-	Tables            map[string]ModelTable        `yaml:"tables"`
-	Relationships     []Relationship               `yaml:"relationships"`
-	Measures          map[string]MetricMeasure     `yaml:"-"`
+	SemanticModels    map[string]semanticModelSpec `yaml:"semantic_models"`
 }
 
 type Connection struct {
@@ -46,34 +55,36 @@ type Source struct {
 }
 
 type ModelTable struct {
-	Kind        string                     `yaml:"kind"`
-	Source      string                     `yaml:"source"`
-	SQL         string                     `yaml:"sql"`
-	Transform   ModelTransform             `yaml:"transform"`
-	PrimaryKey  string                     `yaml:"primary_key"`
-	Grain       string                     `yaml:"grain"`
-	Dimensions  map[string]MetricDimension `yaml:"dimensions"`
-	Measures    map[string]MetricMeasure   `yaml:"measures"`
-	Description string                     `yaml:"description"`
+	Kind               string                     `yaml:"kind"`
+	Source             string                     `yaml:"source"`
+	Sources            []string                   `yaml:"sources"`
+	SQL                string                     `yaml:"sql"`
+	Transform          ModelTransform             `yaml:"transform"`
+	PrimaryKey         string                     `yaml:"primary_key"`
+	Grain              string                     `yaml:"grain"`
+	Dimensions         map[string]MetricDimension `yaml:"dimensions"`
+	Measures           map[string]MetricMeasure   `yaml:"measures"`
+	Description        string                     `yaml:"description"`
+	SourceDependencies []string                   `yaml:"-"`
 }
 
 type ModelTransform struct {
 	SQL string `yaml:"sql"`
 }
 
-type SemanticModelSpec struct {
-	Tables        map[string]SemanticModelTable `yaml:"tables"`
+type semanticModelSpec struct {
+	Tables        map[string]semanticModelTable `yaml:"tables"`
 	Relationships []Relationship                `yaml:"relationships"`
-	Measures      SemanticModelMeasures         `yaml:"measures"`
+	Measures      semanticModelMeasures         `yaml:"measures"`
 }
 
-type SemanticModelTable struct {
+type semanticModelTable struct {
 	Model      string                     `yaml:"model"`
 	PrimaryKey string                     `yaml:"primary_key"`
 	Fields     map[string]MetricDimension `yaml:"fields"`
 }
 
-type SemanticModelMeasures struct {
+type semanticModelMeasures struct {
 	Defaults SemanticMeasureDefaults
 	Items    map[string]MetricMeasure
 }

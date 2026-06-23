@@ -37,6 +37,13 @@ sources:
 models:
   orders:
     description: Order-grain model table with deliberately grain-aligned category, revenue, review, and delivery fields.
+    sources:
+      - orders
+      - payments
+      - reviews
+      - order_items
+      - products
+      - translations
     transform:
       sql: |
         WITH revenue AS (

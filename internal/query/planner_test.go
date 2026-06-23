@@ -278,6 +278,29 @@ func TestPlannerRejectsCrossFactMeasures(t *testing.T) {
 	}
 }
 
+func TestPlannerInlineMeasureUsesQueryOwnedType(t *testing.T) {
+	plan, err := NewPlanner(testModel()).Plan(Request{
+		Measures: []Field{{
+			Field: "one_off_orders",
+			Alias: "orders",
+			Measure: InlineMeasure{
+				Expression: "COUNT(DISTINCT orders.order_id)",
+				Table:      "orders",
+				Grain:      "order_id",
+				Time:       "orders.purchase_timestamp",
+				Grains:     []string{"month"},
+				Format:     "integer",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan.SQL, "COUNT(DISTINCT t0.order_id) AS orders") {
+		t.Fatalf("plan SQL missing inline measure expression:\n%s", plan.SQL)
+	}
+}
+
 func TestPlannerRejectsUnsafeAliasesAndSorts(t *testing.T) {
 	planner := NewPlanner(testModel())
 	tests := []struct {
