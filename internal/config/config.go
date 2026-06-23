@@ -32,6 +32,9 @@ type Config struct {
 	Target           string `env:"LIBREDASH_TARGET"`
 	APIToken         string `env:"LIBREDASH_API_TOKEN"`
 	CLIConfig        string `env:"LIBREDASH_CLI_CONFIG"`
+	AgentAPIKey      string `env:"LIBREDASH_AGENT_API_KEY"`
+	AgentBaseURL     string `env:"LIBREDASH_AGENT_BASE_URL" envDefault:"https://api.openai.com/v1"`
+	AgentModel       string `env:"LIBREDASH_AGENT_MODEL"`
 }
 
 func Load() (Config, error) {

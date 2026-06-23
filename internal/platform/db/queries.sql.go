@@ -10,6 +10,158 @@ import (
 	"database/sql"
 )
 
+const appendAgentEvent = `-- name: AppendAgentEvent :one
+INSERT INTO agent_events (id, run_id, seq, event_type, severity, payload_json)
+SELECT
+  ?1,
+  r.id,
+  ?2,
+  ?3,
+  ?4,
+  ?5
+FROM agent_runs r
+JOIN agent_conversations c ON c.id = r.conversation_id
+WHERE r.id = ?6
+  AND c.workspace_id = ?7
+  AND c.principal_id = ?8
+RETURNING id, run_id, seq, event_type, severity, payload_json, created_at
+`
+
+type AppendAgentEventParams struct {
+	ID          string `json:"id"`
+	Seq         int64  `json:"seq"`
+	EventType   string `json:"event_type"`
+	Severity    string `json:"severity"`
+	PayloadJson string `json:"payload_json"`
+	RunID       string `json:"run_id"`
+	WorkspaceID string `json:"workspace_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) AppendAgentEvent(ctx context.Context, arg AppendAgentEventParams) (AgentEvent, error) {
+	row := q.db.QueryRowContext(ctx, appendAgentEvent,
+		arg.ID,
+		arg.Seq,
+		arg.EventType,
+		arg.Severity,
+		arg.PayloadJson,
+		arg.RunID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+	)
+	var i AgentEvent
+	err := row.Scan(
+		&i.ID,
+		&i.RunID,
+		&i.Seq,
+		&i.EventType,
+		&i.Severity,
+		&i.PayloadJson,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const appendAgentMessage = `-- name: AppendAgentMessage :one
+INSERT INTO agent_messages (id, conversation_id, run_id, seq, role, content_text, content_json, tool_call_id, tool_name, is_error)
+SELECT
+  ?1,
+  c.id,
+  NULLIF(?2, ''),
+  COALESCE((SELECT MAX(seq) + 1 FROM agent_messages WHERE conversation_id = c.id), 1),
+  ?3,
+  ?4,
+  ?5,
+  ?6,
+  ?7,
+  ?8
+FROM agent_conversations c
+WHERE c.id = ?9
+  AND c.workspace_id = ?10
+  AND c.principal_id = ?11
+RETURNING id, conversation_id, run_id, seq, role, content_text, content_json, tool_call_id, tool_name, is_error, created_at
+`
+
+type AppendAgentMessageParams struct {
+	ID             string      `json:"id"`
+	RunID          interface{} `json:"run_id"`
+	Role           string      `json:"role"`
+	ContentText    string      `json:"content_text"`
+	ContentJson    string      `json:"content_json"`
+	ToolCallID     string      `json:"tool_call_id"`
+	ToolName       string      `json:"tool_name"`
+	IsError        bool        `json:"is_error"`
+	ConversationID string      `json:"conversation_id"`
+	WorkspaceID    string      `json:"workspace_id"`
+	PrincipalID    string      `json:"principal_id"`
+}
+
+func (q *Queries) AppendAgentMessage(ctx context.Context, arg AppendAgentMessageParams) (AgentMessage, error) {
+	row := q.db.QueryRowContext(ctx, appendAgentMessage,
+		arg.ID,
+		arg.RunID,
+		arg.Role,
+		arg.ContentText,
+		arg.ContentJson,
+		arg.ToolCallID,
+		arg.ToolName,
+		arg.IsError,
+		arg.ConversationID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+	)
+	var i AgentMessage
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.RunID,
+		&i.Seq,
+		&i.Role,
+		&i.ContentText,
+		&i.ContentJson,
+		&i.ToolCallID,
+		&i.ToolName,
+		&i.IsError,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const archiveAgentConversation = `-- name: ArchiveAgentConversation :one
+UPDATE agent_conversations
+SET status = 'archived',
+    archived_at = CURRENT_TIMESTAMP,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?1
+  AND workspace_id = ?2
+  AND principal_id = ?3
+RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at
+`
+
+type ArchiveAgentConversationParams struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) ArchiveAgentConversation(ctx context.Context, arg ArchiveAgentConversationParams) (AgentConversation, error) {
+	row := q.db.QueryRowContext(ctx, archiveAgentConversation, arg.ID, arg.WorkspaceID, arg.PrincipalID)
+	var i AgentConversation
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.PrincipalID,
+		&i.Title,
+		&i.Status,
+		&i.MetadataJson,
+		&i.TranscriptJson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
 const clearAssetsForDeployment = `-- name: ClearAssetsForDeployment :exec
 DELETE FROM assets WHERE deployment_id = ?
 `
@@ -41,6 +193,101 @@ func (q *Queries) CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) 
 		arg.ExpiresAt,
 	)
 	return err
+}
+
+const createAgentConversation = `-- name: CreateAgentConversation :one
+INSERT INTO agent_conversations (id, workspace_id, principal_id, title, status, metadata_json, transcript_json)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at
+`
+
+type CreateAgentConversationParams struct {
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
+	PrincipalID    string `json:"principal_id"`
+	Title          string `json:"title"`
+	Status         string `json:"status"`
+	MetadataJson   string `json:"metadata_json"`
+	TranscriptJson string `json:"transcript_json"`
+}
+
+func (q *Queries) CreateAgentConversation(ctx context.Context, arg CreateAgentConversationParams) (AgentConversation, error) {
+	row := q.db.QueryRowContext(ctx, createAgentConversation,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+		arg.Title,
+		arg.Status,
+		arg.MetadataJson,
+		arg.TranscriptJson,
+	)
+	var i AgentConversation
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.PrincipalID,
+		&i.Title,
+		&i.Status,
+		&i.MetadataJson,
+		&i.TranscriptJson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const createAgentRun = `-- name: CreateAgentRun :one
+INSERT INTO agent_runs (id, conversation_id, status, model, metadata_json)
+SELECT
+  ?1,
+  c.id,
+  ?2,
+  ?3,
+  ?4
+FROM agent_conversations c
+WHERE c.id = ?5
+  AND c.workspace_id = ?6
+  AND c.principal_id = ?7
+RETURNING id, conversation_id, status, model, stop_reason, input_tokens, output_tokens, total_tokens, error, started_at, finished_at, metadata_json
+`
+
+type CreateAgentRunParams struct {
+	ID             string `json:"id"`
+	Status         string `json:"status"`
+	Model          string `json:"model"`
+	MetadataJson   string `json:"metadata_json"`
+	ConversationID string `json:"conversation_id"`
+	WorkspaceID    string `json:"workspace_id"`
+	PrincipalID    string `json:"principal_id"`
+}
+
+func (q *Queries) CreateAgentRun(ctx context.Context, arg CreateAgentRunParams) (AgentRun, error) {
+	row := q.db.QueryRowContext(ctx, createAgentRun,
+		arg.ID,
+		arg.Status,
+		arg.Model,
+		arg.MetadataJson,
+		arg.ConversationID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+	)
+	var i AgentRun
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.Status,
+		&i.Model,
+		&i.StopReason,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.TotalTokens,
+		&i.Error,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.MetadataJson,
+	)
+	return i, err
 }
 
 const createDeployment = `-- name: CreateDeployment :exec
@@ -111,6 +358,73 @@ func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash string
 	return err
 }
 
+const finishAgentRun = `-- name: FinishAgentRun :one
+UPDATE agent_runs
+SET status = ?1,
+    stop_reason = ?2,
+    input_tokens = ?3,
+    output_tokens = ?4,
+    total_tokens = ?5,
+    error = ?6,
+    finished_at = CURRENT_TIMESTAMP,
+    metadata_json = ?7
+WHERE agent_runs.id = ?8
+  AND conversation_id IN (
+    SELECT agent_conversations.id
+    FROM agent_conversations
+    WHERE agent_conversations.id = ?9
+      AND workspace_id = ?10
+      AND principal_id = ?11
+  )
+RETURNING id, conversation_id, status, model, stop_reason, input_tokens, output_tokens, total_tokens, error, started_at, finished_at, metadata_json
+`
+
+type FinishAgentRunParams struct {
+	Status         string `json:"status"`
+	StopReason     string `json:"stop_reason"`
+	InputTokens    int64  `json:"input_tokens"`
+	OutputTokens   int64  `json:"output_tokens"`
+	TotalTokens    int64  `json:"total_tokens"`
+	Error          string `json:"error"`
+	MetadataJson   string `json:"metadata_json"`
+	ID             string `json:"id"`
+	ConversationID string `json:"conversation_id"`
+	WorkspaceID    string `json:"workspace_id"`
+	PrincipalID    string `json:"principal_id"`
+}
+
+func (q *Queries) FinishAgentRun(ctx context.Context, arg FinishAgentRunParams) (AgentRun, error) {
+	row := q.db.QueryRowContext(ctx, finishAgentRun,
+		arg.Status,
+		arg.StopReason,
+		arg.InputTokens,
+		arg.OutputTokens,
+		arg.TotalTokens,
+		arg.Error,
+		arg.MetadataJson,
+		arg.ID,
+		arg.ConversationID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+	)
+	var i AgentRun
+	err := row.Scan(
+		&i.ID,
+		&i.ConversationID,
+		&i.Status,
+		&i.Model,
+		&i.StopReason,
+		&i.InputTokens,
+		&i.OutputTokens,
+		&i.TotalTokens,
+		&i.Error,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.MetadataJson,
+	)
+	return i, err
+}
+
 const getAPITokenByHash = `-- name: GetAPITokenByHash :one
 SELECT id, principal_id, name, token_hash, expires_at, created_at, last_used_at FROM api_tokens
 WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
@@ -151,6 +465,37 @@ func (q *Queries) GetActiveDeployment(ctx context.Context, id string) (Deploymen
 		&i.CreatedAt,
 		&i.ActivatedAt,
 		&i.Error,
+	)
+	return i, err
+}
+
+const getAgentConversation = `-- name: GetAgentConversation :one
+SELECT id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at FROM agent_conversations
+WHERE id = ?1
+  AND workspace_id = ?2
+  AND principal_id = ?3
+`
+
+type GetAgentConversationParams struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) GetAgentConversation(ctx context.Context, arg GetAgentConversationParams) (AgentConversation, error) {
+	row := q.db.QueryRowContext(ctx, getAgentConversation, arg.ID, arg.WorkspaceID, arg.PrincipalID)
+	var i AgentConversation
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.PrincipalID,
+		&i.Title,
+		&i.Status,
+		&i.MetadataJson,
+		&i.TranscriptJson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ArchivedAt,
 	)
 	return i, err
 }
@@ -451,6 +796,204 @@ func (q *Queries) InsertRoleBinding(ctx context.Context, arg InsertRoleBindingPa
 		arg.GroupID,
 	)
 	return err
+}
+
+const listAgentConversations = `-- name: ListAgentConversations :many
+SELECT id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at FROM agent_conversations
+WHERE workspace_id = ?1
+  AND principal_id = ?2
+  AND status = 'active'
+ORDER BY updated_at DESC, created_at DESC
+`
+
+type ListAgentConversationsParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) ListAgentConversations(ctx context.Context, arg ListAgentConversationsParams) ([]AgentConversation, error) {
+	rows, err := q.db.QueryContext(ctx, listAgentConversations, arg.WorkspaceID, arg.PrincipalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AgentConversation{}
+	for rows.Next() {
+		var i AgentConversation
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.PrincipalID,
+			&i.Title,
+			&i.Status,
+			&i.MetadataJson,
+			&i.TranscriptJson,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ArchivedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAgentEvents = `-- name: ListAgentEvents :many
+SELECT e.id, e.run_id, e.seq, e.event_type, e.severity, e.payload_json, e.created_at
+FROM agent_events e
+JOIN agent_runs r ON r.id = e.run_id
+JOIN agent_conversations c ON c.id = r.conversation_id
+WHERE r.id = ?1
+  AND c.workspace_id = ?2
+  AND c.principal_id = ?3
+ORDER BY e.seq
+`
+
+type ListAgentEventsParams struct {
+	RunID       string `json:"run_id"`
+	WorkspaceID string `json:"workspace_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) ListAgentEvents(ctx context.Context, arg ListAgentEventsParams) ([]AgentEvent, error) {
+	rows, err := q.db.QueryContext(ctx, listAgentEvents, arg.RunID, arg.WorkspaceID, arg.PrincipalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AgentEvent{}
+	for rows.Next() {
+		var i AgentEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.RunID,
+			&i.Seq,
+			&i.EventType,
+			&i.Severity,
+			&i.PayloadJson,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAgentMessages = `-- name: ListAgentMessages :many
+SELECT m.id, m.conversation_id, m.run_id, m.seq, m.role, m.content_text, m.content_json, m.tool_call_id, m.tool_name, m.is_error, m.created_at
+FROM agent_messages m
+JOIN agent_conversations c ON c.id = m.conversation_id
+WHERE c.id = ?1
+  AND c.workspace_id = ?2
+  AND c.principal_id = ?3
+ORDER BY m.seq
+`
+
+type ListAgentMessagesParams struct {
+	ConversationID string `json:"conversation_id"`
+	WorkspaceID    string `json:"workspace_id"`
+	PrincipalID    string `json:"principal_id"`
+}
+
+func (q *Queries) ListAgentMessages(ctx context.Context, arg ListAgentMessagesParams) ([]AgentMessage, error) {
+	rows, err := q.db.QueryContext(ctx, listAgentMessages, arg.ConversationID, arg.WorkspaceID, arg.PrincipalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AgentMessage{}
+	for rows.Next() {
+		var i AgentMessage
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.RunID,
+			&i.Seq,
+			&i.Role,
+			&i.ContentText,
+			&i.ContentJson,
+			&i.ToolCallID,
+			&i.ToolName,
+			&i.IsError,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAgentRuns = `-- name: ListAgentRuns :many
+SELECT r.id, r.conversation_id, r.status, r.model, r.stop_reason, r.input_tokens, r.output_tokens, r.total_tokens, r.error, r.started_at, r.finished_at, r.metadata_json
+FROM agent_runs r
+JOIN agent_conversations c ON c.id = r.conversation_id
+WHERE c.id = ?1
+  AND c.workspace_id = ?2
+  AND c.principal_id = ?3
+ORDER BY r.started_at DESC
+`
+
+type ListAgentRunsParams struct {
+	ConversationID string `json:"conversation_id"`
+	WorkspaceID    string `json:"workspace_id"`
+	PrincipalID    string `json:"principal_id"`
+}
+
+func (q *Queries) ListAgentRuns(ctx context.Context, arg ListAgentRunsParams) ([]AgentRun, error) {
+	rows, err := q.db.QueryContext(ctx, listAgentRuns, arg.ConversationID, arg.WorkspaceID, arg.PrincipalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AgentRun{}
+	for rows.Next() {
+		var i AgentRun
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConversationID,
+			&i.Status,
+			&i.Model,
+			&i.StopReason,
+			&i.InputTokens,
+			&i.OutputTokens,
+			&i.TotalTokens,
+			&i.Error,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.MetadataJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAssetEdgesByDeployment = `-- name: ListAssetEdgesByDeployment :many
@@ -778,6 +1321,88 @@ UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?
 func (q *Queries) TouchSession(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, touchSession, id)
 	return err
+}
+
+const updateAgentConversationTranscript = `-- name: UpdateAgentConversationTranscript :one
+UPDATE agent_conversations
+SET transcript_json = ?1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?2
+  AND workspace_id = ?3
+  AND principal_id = ?4
+RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at
+`
+
+type UpdateAgentConversationTranscriptParams struct {
+	TranscriptJson string `json:"transcript_json"`
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
+	PrincipalID    string `json:"principal_id"`
+}
+
+func (q *Queries) UpdateAgentConversationTranscript(ctx context.Context, arg UpdateAgentConversationTranscriptParams) (AgentConversation, error) {
+	row := q.db.QueryRowContext(ctx, updateAgentConversationTranscript,
+		arg.TranscriptJson,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+	)
+	var i AgentConversation
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.PrincipalID,
+		&i.Title,
+		&i.Status,
+		&i.MetadataJson,
+		&i.TranscriptJson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ArchivedAt,
+	)
+	return i, err
+}
+
+const updateDefaultAgentConversationTitle = `-- name: UpdateDefaultAgentConversationTitle :one
+UPDATE agent_conversations
+SET title = ?1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?2
+  AND workspace_id = ?3
+  AND principal_id = ?4
+  AND status = 'active'
+  AND title = 'New conversation'
+RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at
+`
+
+type UpdateDefaultAgentConversationTitleParams struct {
+	Title       string `json:"title"`
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) UpdateDefaultAgentConversationTitle(ctx context.Context, arg UpdateDefaultAgentConversationTitleParams) (AgentConversation, error) {
+	row := q.db.QueryRowContext(ctx, updateDefaultAgentConversationTitle,
+		arg.Title,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+	)
+	var i AgentConversation
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.PrincipalID,
+		&i.Title,
+		&i.Status,
+		&i.MetadataJson,
+		&i.TranscriptJson,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ArchivedAt,
+	)
+	return i, err
 }
 
 const updateDeploymentStatus = `-- name: UpdateDeploymentStatus :exec

@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "npm run build:css && npm run build:url-sync && npm run build:sidebar && npm run build:report-sidebar && npm run build:filters && npm run build:filter-panel && npm run build:filter-card && npm run build:inspector && npm run build:table && npm run build:data-grid && npm run build:workspace-access && npm run build:canvas && npm run build:footer && npm run build:charts && npm run build:visual-modal && npm run build:login-background && npm run build:asset-lineage",
+    "build": "npm run build:css && npm run build:url-sync && npm run build:sidebar && npm run build:sub-sidebar && npm run build:filters && npm run build:filter-panel && npm run build:filter-card && npm run build:inspector && npm run build:table && npm run build:data-grid && npm run build:workspace-access && npm run build:canvas && npm run build:footer && npm run build:charts && npm run build:visual-modal && npm run build:login-background && npm run build:asset-lineage && npm run build:chat",
     "build:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css",
     "build:url-sync": "esbuild web/components/url-sync.ts --bundle --format=esm --outfile=static/url-sync.js",
     "build:sidebar": "esbuild web/components/sidebar.ts --bundle --format=esm --outfile=static/sidebar.js",
-    "build:report-sidebar": "esbuild web/components/report-sidebar.ts --bundle --format=esm --outfile=static/report-sidebar.js",
+    "build:sub-sidebar": "esbuild web/components/sub-sidebar.ts --bundle --format=esm --outfile=static/sub-sidebar.js",
     "build:filters": "esbuild web/components/filter-dock.ts --bundle --format=esm --outfile=static/filter-dock.js",
     "build:filter-panel": "esbuild web/components/filter-panel.ts --bundle --format=esm --outfile=static/filter-panel.js",
     "build:filter-card": "esbuild web/components/filter-card.ts --bundle --format=esm --outfile=static/filter-card.js",
@@ -22,6 +22,7 @@
     "build:visual-modal": "esbuild web/components/visual-modal.ts --bundle --format=esm --outfile=static/visual-modal.js",
     "build:login-background": "esbuild web/components/topology-background.ts --bundle --format=esm --outfile=static/topology-background.js",
     "build:asset-lineage": "esbuild web/components/asset-lineage-graph.ts --bundle --format=esm --outfile=static/asset-lineage-graph.js",
+    "build:chat": "esbuild web/components/chat.ts --bundle --format=esm --outfile=static/chat.js",
     "watch:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css --watch"
   },
   "devDependencies": {
@@ -31,6 +32,7 @@
     "@tanstack/lit-table": "^9.0.0-beta.12",
     "@tanstack/lit-virtual": "^3.13.29",
     "@tanstack/table-core": "^9.0.0-beta.12",
+    "@types/markdown-it": "^14.1.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@xyflow/react": "^12.11.0",
@@ -42,6 +44,8 @@
     "tailwindcss": "4.3.1"
   },
   "dependencies": {
+    "dompurify": "^3.4.11",
+    "markdown-it": "^14.2.0",
     "p5": "^1.11.13"
   }
 }

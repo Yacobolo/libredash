@@ -1,0 +1,32 @@
+package agent
+
+type Role string
+
+const (
+	RoleSystem    Role = "system"
+	RoleUser      Role = "user"
+	RoleAssistant Role = "assistant"
+	RoleTool      Role = "tool"
+	RoleSummary   Role = "summary"
+)
+
+type Message struct {
+	ID           string       `json:"id,omitempty"`
+	Role         Role         `json:"role"`
+	Content      string       `json:"content,omitempty"`
+	ToolCalls    []ToolCall   `json:"tool_calls,omitempty"`
+	ToolCallID   string       `json:"tool_call_id,omitempty"`
+	ToolName     string       `json:"tool_name,omitempty"`
+	IsError      bool         `json:"is_error,omitempty"`
+	FinishReason FinishReason `json:"finish_reason,omitempty"`
+	Usage        Usage        `json:"usage,omitempty"`
+}
+
+func cloneMessages(messages []Message) []Message {
+	out := make([]Message, len(messages))
+	copy(out, messages)
+	for i := range out {
+		out[i].ToolCalls = append([]ToolCall(nil), out[i].ToolCalls...)
+	}
+	return out
+}

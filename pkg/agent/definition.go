@@ -1,0 +1,87 @@
+package agent
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
+)
+
+type Definition struct {
+	Name        string
+	Description string
+
+	SystemPrompt string
+	Model        Model
+
+	Tools             []ToolDefinition
+	Limits            Limits
+	Compaction        CompactionConfig
+	InitialTranscript []Message
+
+	Events      EventSink
+	Clock       Clock
+	IDGenerator IDGenerator
+}
+
+func (d Definition) withDefaults() Definition {
+	d.Limits = defaultLimits(d.Limits)
+	d.Compaction = defaultCompaction(d.Compaction)
+	if d.Events == nil {
+		d.Events = noopEventSink{}
+	}
+	if d.Clock == nil {
+		d.Clock = realClock{}
+	}
+	if d.IDGenerator == nil {
+		d.IDGenerator = &sequenceIDGenerator{}
+	}
+	d.InitialTranscript = cloneMessages(d.InitialTranscript)
+	return d
+}
+
+func compileTools(tools []ToolDefinition) (map[string]*compiledTool, []ToolSpec, error) {
+	registry := make(map[string]*compiledTool, len(tools))
+	specs := make([]ToolSpec, 0, len(tools))
+	for _, tool := range tools {
+		if strings.TrimSpace(tool.Name) == "" {
+			return nil, nil, NewError(ErrorCodeInvalidArgument, "tool name is required", nil)
+		}
+		if _, exists := registry[tool.Name]; exists {
+			return nil, nil, NewError(ErrorCodeInvalidArgument, fmt.Sprintf("duplicate tool %q", tool.Name), nil)
+		}
+		if tool.Handler == nil {
+			return nil, nil, NewError(ErrorCodeInvalidArgument, fmt.Sprintf("tool %q handler is required", tool.Name), nil)
+		}
+		schemaRaw := tool.InputSchema
+		if len(schemaRaw) == 0 {
+			schemaRaw = json.RawMessage(`{"type":"object"}`)
+		}
+		if !json.Valid(schemaRaw) {
+			return nil, nil, NewError(ErrorCodeInvalidArgument, fmt.Sprintf("tool %q schema is invalid JSON", tool.Name), nil)
+		}
+		schema, err := compileSchema(tool.Name, schemaRaw)
+		if err != nil {
+			return nil, nil, NewError(ErrorCodeInvalidArgument, fmt.Sprintf("tool %q schema did not compile", tool.Name), err)
+		}
+		tool.InputSchema = append(json.RawMessage(nil), schemaRaw...)
+		registry[tool.Name] = &compiledTool{def: tool, schema: schema}
+		specs = append(specs, ToolSpec{Name: tool.Name, Description: tool.Description, InputSchema: append(json.RawMessage(nil), schemaRaw...)})
+	}
+	return registry, specs, nil
+}
+
+func compileSchema(name string, raw json.RawMessage) (*jsonschema.Schema, error) {
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	compiler := jsonschema.NewCompiler()
+	loc := "tool://" + name + ".schema.json"
+	if err := compiler.AddResource(loc, doc); err != nil {
+		return nil, err
+	}
+	return compiler.Compile(loc)
+}

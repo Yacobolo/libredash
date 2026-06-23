@@ -40,3 +40,8 @@ tasks:
       - build
     cmds:
       - go test ./...
+
+  agent:e2e:
+    desc: Run opt-in DeepSeek-backed headless agent E2E
+    cmds:
+      - bash scripts/agent_e2e.sh

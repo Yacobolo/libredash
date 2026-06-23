@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Yacobolo/libredash/internal/agentapp"
 	"github.com/Yacobolo/libredash/internal/app"
 	"github.com/Yacobolo/libredash/internal/config"
 	"github.com/Yacobolo/libredash/internal/data"
@@ -104,6 +105,7 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	rateLimits.Enabled = cfg.RateLimitingEnabled()
 	server := app.NewWithOptions(manager, app.Options{
 		Store:              store,
+		Agent:              agentapp.NewService(manager, store, agentapp.Config{APIKey: cfg.AgentAPIKey, BaseURL: cfg.AgentBaseURL, Model: cfg.AgentModel}),
 		Auth:               auth,
 		Reloader:           manager,
 		ArtifactDir:        cfg.ArtifactDir(),

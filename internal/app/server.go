@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
+	"github.com/Yacobolo/libredash/internal/agentapp"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/semantic"
@@ -37,6 +39,7 @@ type Server struct {
 	metrics            queryMetrics
 	broker             *broker
 	store              *platform.Store
+	agent              *agentapp.Service
 	auth               *Auth
 	reloader           runtimeReloader
 	artifactDir        string
@@ -45,14 +48,17 @@ type Server struct {
 	securityHeaders    SecurityHeadersConfig
 	requestLogging     bool
 	logger             *slog.Logger
+	chatTitleMu        sync.Mutex
+	pendingChatTitles  map[string]struct{}
 }
 
 func New(metrics queryMetrics) *Server {
-	return &Server{metrics: metrics, broker: newBroker(), logger: slog.Default()}
+	return &Server{metrics: metrics, broker: newBroker(), logger: slog.Default(), pendingChatTitles: map[string]struct{}{}}
 }
 
 type Options struct {
 	Store              *platform.Store
+	Agent              *agentapp.Service
 	Auth               *Auth
 	Reloader           runtimeReloader
 	ArtifactDir        string
@@ -66,6 +72,7 @@ type Options struct {
 func NewWithOptions(metrics queryMetrics, options Options) *Server {
 	server := New(metrics)
 	server.store = options.Store
+	server.agent = options.Agent
 	server.auth = options.Auth
 	server.reloader = options.Reloader
 	server.artifactDir = options.ArtifactDir

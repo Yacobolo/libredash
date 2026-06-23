@@ -8,6 +8,58 @@ import (
 	"database/sql"
 )
 
+type AgentConversation struct {
+	ID             string         `json:"id"`
+	WorkspaceID    string         `json:"workspace_id"`
+	PrincipalID    string         `json:"principal_id"`
+	Title          string         `json:"title"`
+	Status         string         `json:"status"`
+	MetadataJson   string         `json:"metadata_json"`
+	TranscriptJson string         `json:"transcript_json"`
+	CreatedAt      string         `json:"created_at"`
+	UpdatedAt      string         `json:"updated_at"`
+	ArchivedAt     sql.NullString `json:"archived_at"`
+}
+
+type AgentEvent struct {
+	ID          string `json:"id"`
+	RunID       string `json:"run_id"`
+	Seq         int64  `json:"seq"`
+	EventType   string `json:"event_type"`
+	Severity    string `json:"severity"`
+	PayloadJson string `json:"payload_json"`
+	CreatedAt   string `json:"created_at"`
+}
+
+type AgentMessage struct {
+	ID             string         `json:"id"`
+	ConversationID string         `json:"conversation_id"`
+	RunID          sql.NullString `json:"run_id"`
+	Seq            int64          `json:"seq"`
+	Role           string         `json:"role"`
+	ContentText    string         `json:"content_text"`
+	ContentJson    string         `json:"content_json"`
+	ToolCallID     string         `json:"tool_call_id"`
+	ToolName       string         `json:"tool_name"`
+	IsError        bool           `json:"is_error"`
+	CreatedAt      string         `json:"created_at"`
+}
+
+type AgentRun struct {
+	ID             string         `json:"id"`
+	ConversationID string         `json:"conversation_id"`
+	Status         string         `json:"status"`
+	Model          string         `json:"model"`
+	StopReason     string         `json:"stop_reason"`
+	InputTokens    int64          `json:"input_tokens"`
+	OutputTokens   int64          `json:"output_tokens"`
+	TotalTokens    int64          `json:"total_tokens"`
+	Error          string         `json:"error"`
+	StartedAt      string         `json:"started_at"`
+	FinishedAt     sql.NullString `json:"finished_at"`
+	MetadataJson   string         `json:"metadata_json"`
+}
+
 type ApiToken struct {
 	ID          string         `json:"id"`
 	PrincipalID string         `json:"principal_id"`

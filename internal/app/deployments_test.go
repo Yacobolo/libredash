@@ -97,7 +97,38 @@ func TestCSRFMiddlewareAllowsBrowserPostWithToken(t *testing.T) {
 
 	postReq := httptest.NewRequest(http.MethodPost, "/form", nil)
 	postReq.Header.Set("X-CSRF-Token", getRec.Body.String())
-	postReq.Header.Set("Origin", "https://example.com")
+	postReq.Header.Set("Origin", "http://example.com")
+	for _, cookie := range getRec.Result().Cookies() {
+		postReq.AddCookie(cookie)
+	}
+	postRec := httptest.NewRecorder()
+	handler.ServeHTTP(postRec, postReq)
+	if postRec.Code != http.StatusNoContent {
+		t.Fatalf("POST status = %d, want %d, body=%s", postRec.Code, http.StatusNoContent, postRec.Body.String())
+	}
+}
+
+func TestCSRFMiddlewareAllowsPlainHTTPPostWithToken(t *testing.T) {
+	store := testStore(t)
+	auth := NewAuth(store, "test", AuthConfig{DevBypass: true, CookieSecure: false})
+	handler := auth.CSRFMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			_, _ = w.Write([]byte(csrf.Token(r)))
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	getReq := httptest.NewRequest(http.MethodGet, "http://localhost:8120/form", nil)
+	getRec := httptest.NewRecorder()
+	handler.ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("GET status = %d, want %d", getRec.Code, http.StatusOK)
+	}
+
+	postReq := httptest.NewRequest(http.MethodPost, "http://localhost:8120/form", nil)
+	postReq.Header.Set("X-CSRF-Token", getRec.Body.String())
+	postReq.Header.Set("Referer", "http://localhost:8120/form")
 	for _, cookie := range getRec.Result().Cookies() {
 		postReq.AddCookie(cookie)
 	}

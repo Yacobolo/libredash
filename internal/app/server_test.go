@@ -181,8 +181,11 @@ func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `<ld-report-sidebar`) {
-		t.Fatalf("report page did not render report sidebar:\n%s", body)
+	if !strings.Contains(body, `<ld-sub-sidebar`) {
+		t.Fatalf("report page did not render sub sidebar:\n%s", body)
+	}
+	if strings.Contains(body, `<ld-report-sidebar`) {
+		t.Fatalf("report page still rendered report sidebar:\n%s", body)
 	}
 	if !strings.Contains(body, `&#34;compact&#34;:true`) {
 		t.Fatalf("report page did not compact the primary sidebar:\n%s", body)
@@ -194,6 +197,9 @@ func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
 		t.Fatalf("report header still rendered page tabs:\n%s", body)
 	}
 	decoded := html.UnescapeString(body)
+	if strings.Contains(decoded, `"collapsible"`) || strings.Contains(decoded, `"numbered"`) {
+		t.Fatalf("report sidebar should use default sub-sidebar behavior without chat overrides:\n%s", decoded)
+	}
 	if !strings.Contains(decoded, `2. Operations`) {
 		t.Fatalf("report header did not include numbered active page title:\n%s", decoded)
 	}
@@ -311,8 +317,8 @@ func TestHomeRouteRendersDashboardCatalog(t *testing.T) {
 			t.Fatalf("home sidebar rendered removed navigation %q:\n%s", notWant, body)
 		}
 	}
-	if strings.Contains(body, `<ld-report-sidebar`) {
-		t.Fatalf("dashboard catalog should not render report sidebar:\n%s", body)
+	if strings.Contains(body, `<ld-sub-sidebar`) {
+		t.Fatalf("dashboard catalog should not render sub sidebar:\n%s", body)
 	}
 }
 

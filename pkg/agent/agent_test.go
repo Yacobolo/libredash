@@ -1,0 +1,413 @@
+package agent
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+func TestNewAppliesDefaultsAndValidatesDefinition(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{{Content: "ok", FinishReason: FinishReasonStop}}}
+	a, err := New(Definition{
+		Name:         "test",
+		SystemPrompt: "You help.",
+		Model:        model,
+		Tools: []ToolDefinition{{
+			Name:        "lookup",
+			Description: "Lookup a thing.",
+			InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"}},"required":["id"]}`),
+			Handler: ToolHandlerFunc(func(context.Context, ToolCall) (ToolResult, error) {
+				return ToolResult{Content: map[string]any{"ok": true}}, nil
+			}),
+		}},
+	})
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+
+	if a.def.Limits.MaxTurns != 16 {
+		t.Fatalf("MaxTurns = %d, want default 16", a.def.Limits.MaxTurns)
+	}
+	if a.def.Limits.MaxConcurrentTools != 4 {
+		t.Fatalf("MaxConcurrentTools = %d, want default 4", a.def.Limits.MaxConcurrentTools)
+	}
+	if a.def.Limits.ToolTimeout != 30*time.Second {
+		t.Fatalf("ToolTimeout = %s, want 30s", a.def.Limits.ToolTimeout)
+	}
+	if a.def.Compaction.KeepLastTurns != 8 {
+		t.Fatalf("KeepLastTurns = %d, want 8", a.def.Compaction.KeepLastTurns)
+	}
+
+	tests := []struct {
+		name string
+		def  Definition
+		want ErrorCode
+	}{
+		{
+			name: "missing model",
+			def:  Definition{Name: "bad", SystemPrompt: "x"},
+			want: ErrorCodeInvalidArgument,
+		},
+		{
+			name: "missing prompt",
+			def:  Definition{Name: "bad", Model: model},
+			want: ErrorCodeInvalidArgument,
+		},
+		{
+			name: "duplicate tools",
+			def: Definition{
+				Name:         "bad",
+				SystemPrompt: "x",
+				Model:        model,
+				Tools: []ToolDefinition{
+					{Name: "same", Description: "a", InputSchema: json.RawMessage(`{"type":"object"}`), Handler: noopTool()},
+					{Name: "same", Description: "b", InputSchema: json.RawMessage(`{"type":"object"}`), Handler: noopTool()},
+				},
+			},
+			want: ErrorCodeInvalidArgument,
+		},
+		{
+			name: "invalid schema",
+			def: Definition{
+				Name:         "bad",
+				SystemPrompt: "x",
+				Model:        model,
+				Tools: []ToolDefinition{{
+					Name:        "broken",
+					Description: "broken",
+					InputSchema: json.RawMessage(`{"type":"object"`),
+					Handler:     noopTool(),
+				}},
+			},
+			want: ErrorCodeInvalidArgument,
+		},
+		{
+			name: "bad limits",
+			def: Definition{
+				Name:         "bad",
+				SystemPrompt: "x",
+				Model:        model,
+				Limits:       Limits{MaxTurns: -1},
+			},
+			want: ErrorCodeInvalidArgument,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := New(tc.def)
+			if !IsCode(err, tc.want) {
+				t.Fatalf("New error = %v, want code %s", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestPromptSingleTurnLifecycle(t *testing.T) {
+	events := &recordingEvents{}
+	clock := &stepClock{next: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
+	ids := &sequenceIDs{}
+	model := &fakeModel{responses: []ModelResponse{{Content: "hello back", FinishReason: FinishReasonStop}}}
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "You help.",
+		Model:        model,
+		Events:       events,
+		Clock:        clock,
+		IDGenerator:  ids,
+	})
+
+	result, err := a.Prompt(context.Background(), PromptRequest{Input: "hello", CorrelationID: "req-1"})
+	if err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	if result.StopReason != StopReasonCompleted {
+		t.Fatalf("StopReason = %s, want completed", result.StopReason)
+	}
+	if result.FinalMessage.Content != "hello back" {
+		t.Fatalf("FinalMessage = %#v", result.FinalMessage)
+	}
+
+	transcript := a.Transcript()
+	if gotRoles := roles(transcript); gotRoles != "user,assistant" {
+		t.Fatalf("roles = %s, want user,assistant", gotRoles)
+	}
+	if len(model.requests) != 1 {
+		t.Fatalf("model calls = %d, want 1", len(model.requests))
+	}
+	if model.requests[0].Purpose != ModelRequestPurposeTurn {
+		t.Fatalf("purpose = %s, want turn", model.requests[0].Purpose)
+	}
+	if gotRoles := roles(model.requests[0].Messages); gotRoles != "system,user" {
+		t.Fatalf("request roles = %s, want system,user", gotRoles)
+	}
+
+	gotEvents := eventTypes(events.events)
+	want := "agent_start,turn_start,model_request,model_response,message_end,turn_end,agent_end"
+	if gotEvents != want {
+		t.Fatalf("events = %s, want %s", gotEvents, want)
+	}
+	for i, event := range events.events {
+		if event.Sequence != int64(i+1) {
+			t.Fatalf("event %d sequence = %d, want %d", i, event.Sequence, i+1)
+		}
+		if event.CorrelationID != "req-1" {
+			t.Fatalf("event %d correlation = %q, want req-1", i, event.CorrelationID)
+		}
+	}
+}
+
+func TestPromptRejectsConcurrentRunsAndAbortCancelsActiveRun(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	model := ModelFunc(func(ctx context.Context, req ModelRequest, stream ModelStream) (ModelResponse, error) {
+		close(started)
+		select {
+		case <-ctx.Done():
+			return ModelResponse{}, ctx.Err()
+		case <-release:
+			return ModelResponse{Content: "done", FinishReason: FinishReasonStop}, nil
+		}
+	})
+	a := mustAgent(t, Definition{Name: "test", SystemPrompt: "x", Model: model})
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := a.Prompt(context.Background(), PromptRequest{Input: "first"})
+		done <- err
+	}()
+	<-started
+
+	if _, err := a.Prompt(context.Background(), PromptRequest{Input: "second"}); !IsCode(err, ErrorCodeBusy) {
+		t.Fatalf("concurrent Prompt error = %v, want busy", err)
+	}
+
+	a.Abort()
+	err := <-done
+	if !IsCode(err, ErrorCodeCanceled) {
+		t.Fatalf("aborted Prompt error = %v, want canceled", err)
+	}
+	close(release)
+}
+
+func TestPromptStopsAtMaxTurns(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{
+		{Content: "again", ToolCalls: []ToolCall{{ID: "call_1", Name: "noop", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
+		{Content: "again", ToolCalls: []ToolCall{{ID: "call_2", Name: "noop", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
+	}}
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "x",
+		Model:        model,
+		Limits:       Limits{MaxTurns: 1},
+		Tools: []ToolDefinition{{
+			Name:        "noop",
+			Description: "noop",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+			Handler:     noopTool(),
+		}},
+	})
+
+	result, err := a.Prompt(context.Background(), PromptRequest{Input: "go"})
+	if err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	if result.StopReason != StopReasonMaxTurns {
+		t.Fatalf("StopReason = %s, want max_turns", result.StopReason)
+	}
+	if len(model.requests) != 1 {
+		t.Fatalf("model calls = %d, want 1", len(model.requests))
+	}
+}
+
+type fakeModel struct {
+	mu        sync.Mutex
+	responses []ModelResponse
+	errs      []error
+	requests  []ModelRequest
+}
+
+func (m *fakeModel) Complete(ctx context.Context, req ModelRequest, stream ModelStream) (ModelResponse, error) {
+	m.mu.Lock()
+	m.requests = append(m.requests, cloneModelRequest(req))
+	idx := len(m.requests) - 1
+	m.mu.Unlock()
+
+	if err := ctx.Err(); err != nil {
+		return ModelResponse{}, err
+	}
+	if idx < len(m.errs) && m.errs[idx] != nil {
+		return ModelResponse{}, m.errs[idx]
+	}
+	if idx < len(m.responses) {
+		return m.responses[idx], nil
+	}
+	return ModelResponse{Content: "ok", FinishReason: FinishReasonStop}, nil
+}
+
+type recordingEvents struct {
+	mu     sync.Mutex
+	events []Event
+}
+
+func (r *recordingEvents) Emit(ctx context.Context, event Event) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, event)
+	return nil
+}
+
+type stepClock struct {
+	mu   sync.Mutex
+	next time.Time
+}
+
+func (c *stepClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.next.IsZero() {
+		c.next = time.Unix(0, 0).UTC()
+	}
+	now := c.next
+	c.next = c.next.Add(time.Millisecond)
+	return now
+}
+
+type sequenceIDs struct {
+	mu sync.Mutex
+	n  int
+}
+
+func (s *sequenceIDs) NewID(prefix string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.n++
+	return prefix + "_test_" + strings.TrimLeft(time.Duration(s.n).String(), "0s")
+}
+
+func mustAgent(t *testing.T, def Definition) *Agent {
+	t.Helper()
+	a, err := New(def)
+	if err != nil {
+		t.Fatalf("New returned error: %v", err)
+	}
+	return a
+}
+
+func noopTool() ToolHandler {
+	return ToolHandlerFunc(func(context.Context, ToolCall) (ToolResult, error) {
+		return ToolResult{Content: map[string]any{"ok": true}}, nil
+	})
+}
+
+func roles(messages []Message) string {
+	parts := make([]string, 0, len(messages))
+	for _, message := range messages {
+		parts = append(parts, string(message.Role))
+	}
+	return strings.Join(parts, ",")
+}
+
+func eventTypes(events []Event) string {
+	parts := make([]string, 0, len(events))
+	for _, event := range events {
+		parts = append(parts, string(event.Type))
+	}
+	return strings.Join(parts, ",")
+}
+
+func cloneModelRequest(req ModelRequest) ModelRequest {
+	req.Messages = append([]Message(nil), req.Messages...)
+	req.Tools = append([]ToolSpec(nil), req.Tools...)
+	return req
+}
+
+func TestIsCode(t *testing.T) {
+	err := NewError(ErrorCodeModel, "bad model", errors.New("boom"))
+	if !IsCode(err, ErrorCodeModel) {
+		t.Fatal("IsCode did not match AgentError")
+	}
+}
+
+type failingEvents struct {
+	events []Event
+}
+
+func (f *failingEvents) Emit(ctx context.Context, event Event) error {
+	f.events = append(f.events, event)
+	return errors.New("event sink down")
+}
+
+func TestEventSinkErrorsAreBestEffort(t *testing.T) {
+	events := &failingEvents{}
+	model := &fakeModel{responses: []ModelResponse{{Content: "ok", FinishReason: FinishReasonStop}}}
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "x",
+		Model:        model,
+		Events:       events,
+	})
+
+	result, err := a.Prompt(context.Background(), PromptRequest{Input: "go"})
+	if err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	if result.StopReason != StopReasonCompleted {
+		t.Fatalf("StopReason = %s, want completed", result.StopReason)
+	}
+	if len(events.events) == 0 {
+		t.Fatal("event sink was not called")
+	}
+}
+
+func TestInitialTranscriptSeedsModelRequestsAndIsCloned(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{{Content: "done", FinishReason: FinishReasonStop}}}
+	initial := []Message{
+		{ID: "summary_1", Role: RoleSummary, Content: "The user cares about revenue."},
+		{ID: "user_1", Role: RoleUser, Content: "Earlier question"},
+		{
+			ID:      "assistant_1",
+			Role:    RoleAssistant,
+			Content: "I will inspect the dashboard.",
+			ToolCalls: []ToolCall{{
+				ID:        "call_1",
+				Name:      "list_dashboards",
+				Arguments: []byte(`{}`),
+			}},
+		},
+		{ID: "tool_1", Role: RoleTool, ToolCallID: "call_1", ToolName: "list_dashboards", Content: `{"dashboards":["sales"]}`},
+	}
+	a := mustAgent(t, Definition{
+		Name:              "test",
+		SystemPrompt:      "system",
+		Model:             model,
+		InitialTranscript: initial,
+	})
+	initial[1].Content = "mutated"
+	initial[2].ToolCalls[0].Name = "mutated_tool"
+
+	if got := a.Transcript(); got[1].Content != "Earlier question" || got[2].ToolCalls[0].Name != "list_dashboards" {
+		t.Fatalf("initial transcript was not cloned: %#v", got)
+	}
+
+	if _, err := a.Prompt(context.Background(), PromptRequest{Input: "What changed?"}); err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	if len(model.requests) != 1 {
+		t.Fatalf("model calls = %d, want 1", len(model.requests))
+	}
+	got := model.requests[0].Messages
+	if roles(got) != "system,system,user,assistant,tool,user" {
+		t.Fatalf("request roles = %s", roles(got))
+	}
+	if got[1].Content != "Conversation summary:\nThe user cares about revenue." {
+		t.Fatalf("summary message = %q", got[1].Content)
+	}
+	if got[3].ToolCalls[0].Name != "list_dashboards" {
+		t.Fatalf("tool call was mutated in request: %#v", got[3].ToolCalls)
+	}
+}
