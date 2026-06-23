@@ -106,6 +106,7 @@ models:
     source: olist_orders
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders

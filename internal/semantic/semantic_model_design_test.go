@@ -54,6 +54,65 @@ func TestSemanticModelDesignMeasureDefaultsAndOwnership(t *testing.T) {
 	}
 }
 
+func TestSemanticModelDesignRequiresBaseTable(t *testing.T) {
+	catalogPath := writeSemanticModelDesignWorkspaceWithModelFragment(t, `
+sources:
+  olist_orders:
+    connection: olist
+    path: orders.csv
+    format: csv
+models:
+  orders:
+    source: olist_orders
+semantic_models:
+  olist:
+    tables:
+      orders:
+        model: orders
+        primary_key: order_id
+        fields:
+          order_id: {expr: order_id}
+    measures:
+      defaults: {table: orders, grain: order_id}
+      order_count: {expr: COUNT(DISTINCT orders.order_id)}
+`)
+
+	_, err := LoadWorkspace(catalogPath)
+	if err == nil || !strings.Contains(err.Error(), "requires base_table") {
+		t.Fatalf("LoadWorkspace() error = %v, want missing base_table rejection", err)
+	}
+}
+
+func TestSemanticModelDesignRejectsUnknownBaseTable(t *testing.T) {
+	catalogPath := writeSemanticModelDesignWorkspaceWithModelFragment(t, `
+sources:
+  olist_orders:
+    connection: olist
+    path: orders.csv
+    format: csv
+models:
+  orders:
+    source: olist_orders
+semantic_models:
+  olist:
+    base_table: missing
+    tables:
+      orders:
+        model: orders
+        primary_key: order_id
+        fields:
+          order_id: {expr: order_id}
+    measures:
+      defaults: {table: orders, grain: order_id}
+      order_count: {expr: COUNT(DISTINCT orders.order_id)}
+`)
+
+	_, err := LoadWorkspace(catalogPath)
+	if err == nil || !strings.Contains(err.Error(), `base_table "missing" references unknown table`) {
+		t.Fatalf("LoadWorkspace() error = %v, want unknown base_table rejection", err)
+	}
+}
+
 func TestSemanticModelDesignRejectsSourceSemantics(t *testing.T) {
 	catalogPath := writeSemanticModelDesignWorkspaceWithModelFragment(t, `
 sources:
@@ -76,6 +135,7 @@ func TestSemanticModelDesignRequiresExplicitModelTable(t *testing.T) {
 	catalogPath := writeSemanticModelDesignWorkspaceWithSemanticFragment(t, `
 semantic_models:
   olist:
+    base_table: orders
     tables:
       missing:
         primary_key: id
@@ -96,6 +156,7 @@ func TestSemanticModelDesignExplicitPassThroughModelSucceeds(t *testing.T) {
 	catalogPath := writeSemanticModelDesignWorkspaceWithSemanticFragment(t, `
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -130,6 +191,7 @@ func TestSemanticModelDesignRejectsUnknownRelationshipEndpoint(t *testing.T) {
 		"table": `
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -148,6 +210,7 @@ semantic_models:
 		"field": `
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -206,6 +269,7 @@ models:
 
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -276,6 +340,7 @@ models:
     source: orders
 semantic_models:
   orders:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -303,6 +368,7 @@ models:
     source: refunds
 semantic_models:
   refunds:
+    base_table: refunds
     tables:
       refunds:
         model: refunds
@@ -355,6 +421,7 @@ models:
       sql: SELECT order_id FROM source.olist_orders
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -393,6 +460,7 @@ models:
     source: olist_customers
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -442,6 +510,7 @@ models:
     source: olist_customers
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -485,6 +554,7 @@ models:
       sql: SELECT order_id FROM raw.olist_orders
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -517,6 +587,7 @@ models:
       sql: SELECT order_id FROM "raw"."olist_orders"
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -536,9 +607,10 @@ semantic_models:
 }
 
 func TestSemanticModelDesignSQLScannerIgnoresCommentsAndStrings(t *testing.T) {
-	sourceRefs, rawRefs := modelSQLSourceRefs(`
+	model := &Model{Sources: map[string]Source{"olist_orders": {}, "order_id": {}}}
+	sourceRefs, rawRefs, unqualifiedRefs := model.modelSQLSourceRefs(`
 		-- raw.orders and source.fake are comments
-		SELECT 'raw.orders', 'source.fake', order_id
+		SELECT 'raw.orders', 'source.fake', source.order_id
 		FROM source.olist_orders
 		/* raw.other is also a comment */
 	`)
@@ -547,6 +619,9 @@ func TestSemanticModelDesignSQLScannerIgnoresCommentsAndStrings(t *testing.T) {
 	}
 	if len(rawRefs) != 0 {
 		t.Fatalf("raw refs = %#v, want comments and strings ignored", rawRefs)
+	}
+	if len(unqualifiedRefs) != 0 {
+		t.Fatalf("unqualified refs = %#v, want dotted columns outside relation contexts ignored", unqualifiedRefs)
 	}
 }
 
@@ -568,6 +643,7 @@ models:
       sql: SELECT order_id FROM source.olist_customers
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -585,10 +661,113 @@ semantic_models:
 	}
 }
 
+func TestSemanticModelDesignSQLModelRejectsUnqualifiedSourceRead(t *testing.T) {
+	catalogPath := writeSemanticModelDesignWorkspaceWithModelFragment(t, `
+sources:
+  olist_orders:
+    connection: olist
+    path: orders.csv
+    format: csv
+models:
+  orders:
+    sources: [olist_orders]
+    transform:
+      sql: SELECT order_id FROM olist_orders
+semantic_models:
+  olist:
+    base_table: orders
+    tables:
+      orders:
+        model: orders
+        primary_key: order_id
+        fields:
+          order_id: {expr: order_id}
+    measures:
+      defaults: {table: orders, grain: order_id}
+      order_count: {expr: COUNT(DISTINCT orders.order_id)}
+`)
+
+	_, err := LoadWorkspace(catalogPath)
+	if err == nil || !strings.Contains(err.Error(), "SQL must reference sources through source.<name>") {
+		t.Fatalf("LoadWorkspace() error = %v, want unqualified source rejection", err)
+	}
+}
+
+func TestSemanticModelDesignSQLModelRejectsMissingSourceRefs(t *testing.T) {
+	catalogPath := writeSemanticModelDesignWorkspaceWithModelFragment(t, `
+sources:
+  olist_orders:
+    connection: olist
+    path: orders.csv
+    format: csv
+models:
+  orders:
+    sources: [olist_orders]
+    transform:
+      sql: SELECT 1 AS order_id
+semantic_models:
+  olist:
+    base_table: orders
+    tables:
+      orders:
+        model: orders
+        primary_key: order_id
+        fields:
+          order_id: {expr: order_id}
+    measures:
+      defaults: {table: orders, grain: order_id}
+      order_count: {expr: COUNT(DISTINCT orders.order_id)}
+`)
+
+	_, err := LoadWorkspace(catalogPath)
+	if err == nil || !strings.Contains(err.Error(), "do not match declared sources") {
+		t.Fatalf("LoadWorkspace() error = %v, want missing source reference rejection", err)
+	}
+}
+
+func TestSemanticModelDesignSQLModelScansSubquerySourceRefs(t *testing.T) {
+	dir := t.TempDir()
+	modelPath := filepath.Join(dir, "model.yaml")
+	if err := os.WriteFile(modelPath, []byte(`
+name: olist
+connections:
+  olist: {kind: local}
+sources:
+  olist_orders:
+    connection: olist
+    path: orders.csv
+    format: csv
+models:
+  orders:
+    sources: [olist_orders]
+    transform:
+      sql: SELECT order_id FROM (SELECT order_id FROM source.olist_orders) orders
+semantic_models:
+  olist:
+    base_table: orders
+    tables:
+      orders:
+        model: orders
+        primary_key: order_id
+        fields:
+          order_id: {expr: order_id}
+    measures:
+      defaults: {table: orders, grain: order_id}
+      order_count: {expr: COUNT(DISTINCT orders.order_id)}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Load(modelPath); err != nil {
+		t.Fatalf("Load() error = %v, want subquery source reference to load", err)
+	}
+}
+
 func TestSemanticModelDesignRejectsIsolatedSemanticTable(t *testing.T) {
 	catalogPath := writeSemanticModelDesignWorkspaceWithSemanticFragment(t, `
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -647,6 +826,7 @@ models:
     source: warehouses
 semantic_models:
   inventory:
+    base_table: products
     tables:
       products:
         model: products
@@ -675,6 +855,7 @@ func TestSemanticModelDesignRejectsAmbiguousAndUnsafeRelationshipPaths(t *testin
 			fragment: `
 	semantic_models:
 	  olist:
+	    base_table: orders
 	    tables:
 	      orders:
 	        model: orders
@@ -701,6 +882,7 @@ func TestSemanticModelDesignRejectsAmbiguousAndUnsafeRelationshipPaths(t *testin
 			fragment: `
 	semantic_models:
 	  olist:
+	    base_table: orders
 	    tables:
 	      orders:
 	        model: orders
@@ -727,6 +909,7 @@ func TestSemanticModelDesignRejectsAmbiguousAndUnsafeRelationshipPaths(t *testin
 			fragment: `
 	semantic_models:
 	  olist:
+	    base_table: orders
 	    tables:
 	      orders:
 	        model: orders
@@ -758,6 +941,7 @@ func TestSemanticModelDesignRejectsAmbiguousAndUnsafeRelationshipPaths(t *testin
 			fragment: `
 	semantic_models:
 	  olist:
+	    base_table: orders
 	    tables:
 	      orders:
 	        model: orders
@@ -812,6 +996,7 @@ func writeSemanticModelDesignWorkspace(t *testing.T) string {
 	return writeSemanticModelDesignWorkspaceWithSemanticFragment(t, `
 	semantic_models:
 	  olist:
+	    base_table: orders
 	    tables:
 	      orders:
 	        model: orders

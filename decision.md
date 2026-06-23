@@ -58,6 +58,7 @@ models:
 
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -93,6 +94,8 @@ semantic_models:
         expr: SUM(orders.revenue)
         format: currency
 ```
+
+`base_table` is the required semantic-model root. For v1, every table in the semantic model must be reachable from that root through one safe active path.
 
 Dashboards query that model directly:
 

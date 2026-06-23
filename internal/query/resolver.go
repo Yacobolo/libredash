@@ -68,7 +68,7 @@ func (p *Planner) semanticView(table string, dimensions []Field, measures []Fiel
 			if err != nil {
 				return nil, err
 			}
-			measure = ResolvedMeasureFromSemantic(semanticMeasure)
+			measure = resolvedMeasureFromSemantic(semanticMeasure)
 		} else {
 			measure = ResolvedMeasureFromInline(item.Field, item.Measure)
 		}
@@ -132,7 +132,7 @@ func (p *Planner) semanticView(table string, dimensions []Field, measures []Fiel
 	}, nil
 }
 
-func ResolvedMeasureFromSemantic(measure semantic.MetricMeasure) ResolvedMeasure {
+func resolvedMeasureFromSemantic(measure semantic.MetricMeasure) ResolvedMeasure {
 	return ResolvedMeasure{
 		Field:       measure.Field,
 		Name:        measure.Name,

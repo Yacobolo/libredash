@@ -350,6 +350,7 @@ func testModel() *semantic.Model {
 			"customers": {Path: "customers.csv", Format: "csv", Connection: "local"},
 			"refunds":   {Path: "refunds.csv", Format: "csv", Connection: "local"},
 		},
+		BaseTable: "orders",
 		Tables: map[string]semantic.ModelTable{
 			"orders": {
 				Source: "orders", PrimaryKey: "order_id",

@@ -232,6 +232,9 @@ func (file modelFile) compile() (*Model, error) {
 	if len(spec.Tables) == 0 {
 		return nil, fmt.Errorf("semantic model %q requires tables", file.Name)
 	}
+	if spec.BaseTable == "" {
+		return nil, fmt.Errorf("semantic model %q requires base_table", file.Name)
+	}
 	if len(file.Models) == 0 {
 		return nil, fmt.Errorf("semantic model %q requires models", file.Name)
 	}
@@ -279,6 +282,9 @@ func (file modelFile) compile() (*Model, error) {
 		}
 		tables[tableName] = modelTable
 	}
+	if _, ok := tables[spec.BaseTable]; !ok {
+		return nil, fmt.Errorf("semantic model %q base_table %q references unknown table", file.Name, spec.BaseTable)
+	}
 	defaults := spec.Measures.Defaults
 	if defaults.Table == "" && len(spec.Measures.Items) > 0 {
 		return nil, fmt.Errorf("semantic model %q measure defaults require table", file.Name)
@@ -310,6 +316,7 @@ func (file modelFile) compile() (*Model, error) {
 		measures[name] = measure
 	}
 	model.Tables = tables
+	model.BaseTable = spec.BaseTable
 	model.Relationships = spec.Relationships
 	for index, relationship := range model.Relationships {
 		if relationship.ID == "" {
@@ -326,7 +333,8 @@ func (m *Model) modelTableSourceDependencies(tableName string, table ModelTable)
 	if sql == "" {
 		sql = strings.TrimSpace(table.SQL)
 	}
-	if sql != "" {
+	hasSQL := sql != ""
+	if hasSQL {
 		if table.Source != "" {
 			return nil, fmt.Errorf("model table %q uses transform.sql and must declare sources instead of source", tableName)
 		}
@@ -356,9 +364,12 @@ func (m *Model) modelTableSourceDependencies(tableName string, table ModelTable)
 			return nil, err
 		}
 	}
-	inferred, rawRefs := modelSQLSourceRefs(sql)
+	inferred, rawRefs, unqualifiedRefs := m.modelSQLSourceRefs(sql)
 	if len(rawRefs) > 0 {
 		return nil, fmt.Errorf("model table %q model SQL must reference sources through source.<name>; raw.<name> is internal", tableName)
+	}
+	if len(unqualifiedRefs) > 0 {
+		return nil, fmt.Errorf("model table %q SQL must reference sources through source.<name>; found unqualified source reference %q", tableName, unqualifiedRefs[0])
 	}
 	for _, source := range inferred {
 		if _, ok := m.Sources[source]; !ok {
@@ -370,29 +381,35 @@ func (m *Model) modelTableSourceDependencies(tableName string, table ModelTable)
 		result = append(result, source)
 	}
 	sort.Strings(result)
-	if len(inferred) > 0 && !sameStringSet(result, inferred) {
+	if hasSQL && !sameStringSet(result, inferred) {
 		return nil, fmt.Errorf("model table %q SQL source references %v do not match declared sources %v", tableName, inferred, result)
 	}
 	return result, nil
 }
 
-func modelSQLSourceRefs(sql string) ([]string, []string) {
+func (m *Model) modelSQLSourceRefs(sql string) ([]string, []string, []string) {
 	if sql == "" {
-		return nil, nil
+		return nil, nil, nil
 	}
 	sourceSeen := map[string]struct{}{}
 	rawSeen := map[string]struct{}{}
+	unqualifiedSeen := map[string]struct{}{}
 	for _, ref := range scanSQLRelationRefs(sql) {
 		switch ref.Namespace {
 		case "source":
 			sourceSeen[ref.Name] = struct{}{}
 		case "raw":
 			rawSeen[ref.Name] = struct{}{}
+		case "":
+			if _, ok := m.Sources[ref.Name]; ok {
+				unqualifiedSeen[ref.Name] = struct{}{}
+			}
 		}
 	}
 	sourceRefs := sortedStringSet(sourceSeen)
 	rawRefs := sortedStringSet(rawSeen)
-	return sourceRefs, rawRefs
+	unqualifiedRefs := sortedStringSet(unqualifiedSeen)
+	return sourceRefs, rawRefs, unqualifiedRefs
 }
 
 type sqlRelationRef struct {
@@ -407,19 +424,6 @@ func scanSQLRelationRefs(sql string) []sqlRelationRef {
 		case '\'':
 			index = skipSQLSingleQuoted(sql, index)
 			continue
-		case '"':
-			namespace, next, ok := readSQLIdentifier(sql, index)
-			if !ok {
-				index++
-				continue
-			}
-			if ref, ok := readSQLRelationRef(sql, namespace, next); ok {
-				refs = append(refs, ref)
-				index = next
-				continue
-			}
-			index = next
-			continue
 		case '-':
 			if index+1 < len(sql) && sql[index+1] == '-' {
 				index = skipSQLLineComment(sql, index+2)
@@ -432,10 +436,11 @@ func scanSQLRelationRefs(sql string) []sqlRelationRef {
 			}
 		}
 		if isSQLIdentifierStart(sql[index]) {
-			namespace, next, _ := readSQLIdentifier(sql, index)
-			if ref, ok := readSQLRelationRef(sql, namespace, next); ok {
-				refs = append(refs, ref)
-				index = next
+			keyword, next, _ := readSQLIdentifier(sql, index)
+			if relationKeyword(strings.ToLower(keyword)) {
+				relationRefs, relationNext := readSQLRelationList(sql, next)
+				refs = append(refs, relationRefs...)
+				index = relationNext
 				continue
 			}
 			index = next
@@ -446,21 +451,61 @@ func scanSQLRelationRefs(sql string) []sqlRelationRef {
 	return refs
 }
 
-func readSQLRelationRef(sql string, namespace string, next int) (sqlRelationRef, bool) {
-	normalized := strings.ToLower(namespace)
-	if normalized != "source" && normalized != "raw" {
-		return sqlRelationRef{}, false
+func relationKeyword(keyword string) bool {
+	switch keyword {
+	case "from", "join", "update", "using":
+		return true
+	default:
+		return false
+	}
+}
+
+func readSQLRelationList(sql string, index int) ([]sqlRelationRef, int) {
+	refs := []sqlRelationRef{}
+	for {
+		index = skipSQLSpaces(sql, index)
+		if index >= len(sql) {
+			return refs, index
+		}
+		if sql[index] == '(' {
+			inside, next := readSQLBalancedContent(sql, index)
+			refs = append(refs, scanSQLRelationRefs(inside)...)
+			index = next
+			return refs, index
+		}
+		ref, next, ok := readSQLRelationRef(sql, index)
+		if !ok {
+			return refs, index
+		}
+		refs = append(refs, ref)
+		index = skipSQLRelationAlias(sql, next)
+		index = skipSQLSpaces(sql, index)
+		if index >= len(sql) || sql[index] != ',' {
+			return refs, index
+		}
+		index++
+	}
+}
+
+func readSQLRelationRef(sql string, index int) (sqlRelationRef, int, bool) {
+	first, next, ok := readSQLIdentifier(sql, index)
+	if !ok {
+		return sqlRelationRef{}, index, false
 	}
 	dot := skipSQLSpaces(sql, next)
-	if dot >= len(sql) || sql[dot] != '.' {
-		return sqlRelationRef{}, false
+	if dot < len(sql) && sql[dot] == '.' {
+		nameStart := skipSQLSpaces(sql, dot+1)
+		name, afterName, ok := readSQLIdentifier(sql, nameStart)
+		if !ok {
+			return sqlRelationRef{}, index, false
+		}
+		namespace := strings.ToLower(first)
+		if namespace == "source" || namespace == "raw" {
+			return sqlRelationRef{Namespace: namespace, Name: name}, afterName, true
+		}
+		return sqlRelationRef{Name: name}, afterName, true
 	}
-	nameStart := skipSQLSpaces(sql, dot+1)
-	name, _, ok := readSQLIdentifier(sql, nameStart)
-	if !ok {
-		return sqlRelationRef{}, false
-	}
-	return sqlRelationRef{Namespace: normalized, Name: name}, true
+	return sqlRelationRef{Name: first}, next, true
 }
 
 func readSQLIdentifier(sql string, index int) (string, int, bool) {
@@ -520,6 +565,86 @@ func skipSQLBlockComment(sql string, index int) int {
 		index++
 	}
 	return len(sql)
+}
+
+func skipSQLBalanced(sql string, index int) int {
+	_, next := readSQLBalancedContent(sql, index)
+	return next
+}
+
+func readSQLBalancedContent(sql string, index int) (string, int) {
+	depth := 0
+	start := index + 1
+	for index < len(sql) {
+		switch sql[index] {
+		case '\'':
+			index = skipSQLSingleQuoted(sql, index)
+			continue
+		case '"':
+			_, next, ok := readSQLIdentifier(sql, index)
+			if ok {
+				index = next
+				continue
+			}
+		case '-':
+			if index+1 < len(sql) && sql[index+1] == '-' {
+				index = skipSQLLineComment(sql, index+2)
+				continue
+			}
+		case '/':
+			if index+1 < len(sql) && sql[index+1] == '*' {
+				index = skipSQLBlockComment(sql, index+2)
+				continue
+			}
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return sql[start:index], index + 1
+			}
+		}
+		index++
+	}
+	return sql[start:], index
+}
+
+func skipSQLRelationAlias(sql string, index int) int {
+	index = skipSQLSpaces(sql, index)
+	if index >= len(sql) {
+		return index
+	}
+	if sql[index] == '(' {
+		return skipSQLBalanced(sql, index)
+	}
+	if sql[index] == '"' {
+		_, next, ok := readSQLIdentifier(sql, index)
+		if ok {
+			return next
+		}
+		return index
+	}
+	if !isSQLIdentifierStart(sql[index]) {
+		return index
+	}
+	value, next, _ := readSQLIdentifier(sql, index)
+	lower := strings.ToLower(value)
+	if lower == "as" {
+		return skipSQLRelationAlias(sql, next)
+	}
+	if relationListTerminator(lower) {
+		return index
+	}
+	return next
+}
+
+func relationListTerminator(value string) bool {
+	switch value {
+	case "set", "where", "group", "order", "having", "limit", "offset", "qualify", "union", "except", "intersect", "join", "left", "right", "full", "inner", "outer", "cross", "on", "using":
+		return true
+	default:
+		return false
+	}
 }
 
 func skipSQLSpaces(sql string, index int) int {
@@ -587,6 +712,12 @@ func (m *Model) validateSemanticGraph() error {
 }
 
 func (m *Model) validateConnectedMeasureGraph(relationshipTables map[string]struct{}) error {
+	if m.BaseTable == "" {
+		return fmt.Errorf("semantic model %q requires base_table", m.Name)
+	}
+	if _, ok := m.Tables[m.BaseTable]; !ok {
+		return fmt.Errorf("semantic model %q base_table %q references unknown table", m.Name, m.BaseTable)
+	}
 	baseTables := map[string]struct{}{}
 	for name, measure := range m.Measures {
 		if measure.Table == "" {
@@ -598,29 +729,20 @@ func (m *Model) validateConnectedMeasureGraph(relationshipTables map[string]stru
 		baseTables[measure.Table] = struct{}{}
 	}
 	tableNames := m.TableNames()
-	if len(baseTables) == 0 {
-		if len(tableNames) == 0 {
-			return nil
+	for _, targetTable := range tableNames {
+		if targetTable == m.BaseTable {
+			continue
 		}
-		root := tableNames[0]
-		for _, targetTable := range tableNames {
-			if targetTable == root {
-				continue
-			}
-			if _, err := m.SafeRelationshipPath(root, targetTable); err != nil {
-				return fmt.Errorf("semantic model requires a connected relationship graph: %w", err)
-			}
+		if _, err := m.SafeRelationshipPath(m.BaseTable, targetTable); err != nil {
+			return fmt.Errorf("semantic model requires a connected relationship graph: %w", err)
 		}
-		return nil
 	}
 	for baseTable := range baseTables {
-		for _, targetTable := range tableNames {
-			if targetTable == baseTable {
-				continue
-			}
-			if _, err := m.SafeRelationshipPath(baseTable, targetTable); err != nil {
-				return fmt.Errorf("semantic model requires a connected relationship graph: %w", err)
-			}
+		if baseTable == m.BaseTable {
+			continue
+		}
+		if _, err := m.SafeRelationshipPath(m.BaseTable, baseTable); err != nil {
+			return fmt.Errorf("semantic model requires a connected relationship graph: %w", err)
 		}
 	}
 	return nil

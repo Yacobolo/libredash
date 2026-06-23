@@ -57,11 +57,14 @@ Use `source` for direct one-source tables and `sources` for SQL-backed tables th
 
 Semantic models define the governed data model: tables and relationships.
 
+Every semantic model declares a `base_table`. This is the analytical root for v1: all semantic tables must be reachable from it through exactly one safe active relationship path.
+
 Tables are not required to be labeled as facts or dimensions. A table becomes fact-like when a measure uses it as its base table. A table becomes dimension-like when it is reached through a safe relationship path.
 
 ```yaml
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -91,6 +94,7 @@ They live on the semantic model and reuse the same query metadata a visual can d
 ```yaml
 semantic_models:
   olist:
+    base_table: orders
     measures:
       defaults:
         table: orders

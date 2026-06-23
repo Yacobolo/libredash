@@ -499,6 +499,7 @@ func minimalSourceModel() *Model {
 		Sources: map[string]Source{
 			"orders": {Path: "orders.csv"},
 		},
+		BaseTable: "orders",
 		Tables: map[string]ModelTable{
 			"orders": {
 				Kind: "fact", Source: "orders", PrimaryKey: "order_id", Grain: "order_id",

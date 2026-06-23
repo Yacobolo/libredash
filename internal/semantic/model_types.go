@@ -15,6 +15,7 @@ type Model struct {
 	Connections       map[string]Connection    `yaml:"-"`
 	Sources           map[string]Source        `yaml:"-"`
 	Tables            map[string]ModelTable    `yaml:"-"`
+	BaseTable         string                   `yaml:"-"`
 	Relationships     []Relationship           `yaml:"-"`
 	Measures          map[string]MetricMeasure `yaml:"-"`
 }
@@ -73,6 +74,7 @@ type ModelTransform struct {
 }
 
 type semanticModelSpec struct {
+	BaseTable     string                        `yaml:"base_table"`
 	Tables        map[string]semanticModelTable `yaml:"tables"`
 	Relationships []Relationship                `yaml:"relationships"`
 	Measures      semanticModelMeasures         `yaml:"measures"`
