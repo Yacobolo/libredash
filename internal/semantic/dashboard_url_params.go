@@ -8,19 +8,23 @@ import (
 )
 
 func (d *Dashboard) validateFilterURLParams() error {
-	seen := map[string]string{}
-	for name, filter := range d.Filters {
-		for _, param := range []string{filter.URLParam, filter.FromURLParam, filter.ToURLParam, filter.OperatorURLParam} {
+	seen := map[string]struct{}{}
+	for _, filter := range d.Filters {
+		for _, param := range filterURLParams(filter) {
 			if param == "" {
 				continue
 			}
-			if owner, exists := seen[param]; exists && owner != name {
+			if _, exists := seen[param]; exists {
 				return errDuplicateFilterURLParam(param)
 			}
-			seen[param] = name
+			seen[param] = struct{}{}
 		}
 	}
 	return nil
+}
+
+func filterURLParams(filter FilterDefinition) []string {
+	return []string{filter.URLParam, filter.FromURLParam, filter.ToURLParam, filter.OperatorURLParam}
 }
 
 func errDuplicateFilterURLParam(param string) error {
@@ -38,18 +42,22 @@ func (e *duplicateFilterURLParamError) Error() string {
 func (d *Dashboard) DefaultFilters() dashboard.Filters {
 	filters := dashboard.Filters{}.WithDefaults()
 	for name, filter := range d.Filters {
-		control := dashboard.FilterControl{Type: filter.Type, Operator: filter.Operator}
-		if filter.DefaultOperator != "" {
-			control.Operator = filter.DefaultOperator
-		}
-		control.Preset = filter.Default.Preset
-		control.From = filter.Default.From
-		control.To = filter.Default.To
-		control.Value = filter.Default.Value
-		control.Values = append([]string{}, filter.Default.Values...)
-		filters.Controls[name] = control
+		filters.Controls[name] = defaultFilterControl(filter)
 	}
 	return filters
+}
+
+func defaultFilterControl(filter FilterDefinition) dashboard.FilterControl {
+	control := dashboard.FilterControl{Type: filter.Type, Operator: filter.Operator}
+	if filter.DefaultOperator != "" {
+		control.Operator = filter.DefaultOperator
+	}
+	control.Preset = filter.Default.Preset
+	control.From = filter.Default.From
+	control.To = filter.Default.To
+	control.Value = filter.Default.Value
+	control.Values = append([]string{}, filter.Default.Values...)
+	return control
 }
 
 func (d *Dashboard) DefaultFiltersForPage(pageID string) dashboard.Filters {
@@ -98,30 +106,55 @@ func (d *Dashboard) filtersFromURL(values url.Values, allowed map[string]struct{
 		control := filters.Controls[name]
 		switch filter.Type {
 		case "date_range":
-			if value := first(values, filter.URLParam); value != "" {
-				control.Preset = value
-			}
-			if value := first(values, filter.FromURLParam); value != "" {
-				control.From = value
-			}
-			if value := first(values, filter.ToURLParam); value != "" {
-				control.To = value
-			}
+			control = dateFilterFromURL(control, filter, values)
 		case "multi_select":
-			if filter.URLParam != "" {
-				control.Values = uniqueSorted(values[filter.URLParam])
-			}
+			control = multiSelectFilterFromURL(control, filter, values)
 		case "text":
-			if value := first(values, filter.URLParam); value != "" {
-				control.Value = value
-			}
-			if value := first(values, filter.OperatorURLParam); value != "" {
-				control.Operator = value
-			}
+			control = textFilterFromURL(control, filter, values)
 		}
 		filters.Controls[name] = control
 	}
 	return filters.WithDefaults()
+}
+
+func dateFilterFromURL(control dashboard.FilterControl, filter FilterDefinition, values url.Values) dashboard.FilterControl {
+	if value := first(values, filter.URLParam); value != "" {
+		control.Preset = value
+	}
+	from := first(values, filter.FromURLParam)
+	to := first(values, filter.ToURLParam)
+	if from != "" || to != "" {
+		control.Preset = "custom"
+		control.From = from
+		control.To = to
+	}
+	return control
+}
+
+func multiSelectFilterFromURL(control dashboard.FilterControl, filter FilterDefinition, values url.Values) dashboard.FilterControl {
+	if filter.URLParam != "" {
+		control.Values = uniqueSorted(values[filter.URLParam])
+	}
+	return control
+}
+
+func textFilterFromURL(control dashboard.FilterControl, filter FilterDefinition, values url.Values) dashboard.FilterControl {
+	if value := first(values, filter.URLParam); value != "" {
+		control.Value = value
+	}
+	if value := first(values, filter.OperatorURLParam); value != "" && filterAllowsOperator(filter, value) {
+		control.Operator = value
+	}
+	return control
+}
+
+func filterAllowsOperator(filter FilterDefinition, operator string) bool {
+	for _, candidate := range filter.Operators {
+		if candidate == operator {
+			return true
+		}
+	}
+	return false
 }
 
 func (d *Dashboard) URLParamsFromFilters(filters dashboard.Filters) map[string]any {
@@ -152,29 +185,41 @@ func (d *Dashboard) urlParamsFromFilters(pageID string, filters dashboard.Filter
 		def := defaults.Controls[name]
 		switch filter.Type {
 		case "date_range":
-			if control.Preset != "" && control.Preset != def.Preset {
-				params[filter.URLParam] = control.Preset
-			}
-			if control.From != "" && control.From != def.From {
-				params[filter.FromURLParam] = control.From
-			}
-			if control.To != "" && control.To != def.To {
-				params[filter.ToURLParam] = control.To
-			}
+			encodeDateFilterURLParams(params, filter, control, def)
 		case "multi_select":
-			if len(control.Values) > 0 {
-				params[filter.URLParam] = uniqueSorted(control.Values)
-			}
+			encodeMultiSelectFilterURLParams(params, filter, control)
 		case "text":
-			if control.Value != "" {
-				params[filter.URLParam] = control.Value
-			}
-			if control.Operator != "" && control.Operator != def.Operator {
-				params[filter.OperatorURLParam] = control.Operator
-			}
+			encodeTextFilterURLParams(params, filter, control, def)
 		}
 	}
 	return params
+}
+
+func encodeDateFilterURLParams(params map[string]any, filter FilterDefinition, control dashboard.FilterControl, def dashboard.FilterControl) {
+	if control.Preset != "" && control.Preset != def.Preset {
+		params[filter.URLParam] = control.Preset
+	}
+	if control.From != "" && control.From != def.From {
+		params[filter.FromURLParam] = control.From
+	}
+	if control.To != "" && control.To != def.To {
+		params[filter.ToURLParam] = control.To
+	}
+}
+
+func encodeMultiSelectFilterURLParams(params map[string]any, filter FilterDefinition, control dashboard.FilterControl) {
+	if len(control.Values) > 0 {
+		params[filter.URLParam] = uniqueSorted(control.Values)
+	}
+}
+
+func encodeTextFilterURLParams(params map[string]any, filter FilterDefinition, control dashboard.FilterControl, def dashboard.FilterControl) {
+	if control.Value != "" {
+		params[filter.URLParam] = control.Value
+	}
+	if control.Operator != "" && control.Operator != def.Operator {
+		params[filter.OperatorURLParam] = control.Operator
+	}
 }
 
 func (d *Dashboard) PageFilterIDs(pageID string) []string {

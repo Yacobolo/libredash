@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -201,6 +202,9 @@ func (m *Model) Validate() error {
 		}
 		seenRelationships[relationship.ID] = struct{}{}
 	}
+	if err := m.validateSemanticGraph(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -243,7 +247,7 @@ func (file modelFile) compile() (*Model, error) {
 		}
 		modelTable, ok := file.Models[modelName]
 		if !ok {
-			modelTable = ModelTable{Source: modelName}
+			return nil, fmt.Errorf("semantic model table %q references unknown model %q", tableName, modelName)
 		}
 		if modelTable.SQL != "" && modelTable.Transform.SQL == "" {
 			modelTable.Transform.SQL = modelTable.SQL
@@ -279,9 +283,6 @@ func (file modelFile) compile() (*Model, error) {
 	defaults := spec.Measures.Defaults
 	if defaults.Table == "" && len(spec.Measures.Items) > 0 {
 		return nil, fmt.Errorf("semantic model %q measure defaults require table", file.Name)
-	}
-	if err := validateSemanticRelationships(defaults.Table, spec.Relationships); err != nil {
-		return nil, err
 	}
 	measures := map[string]MetricMeasure{}
 	for name, measure := range spec.Measures.Items {
@@ -321,7 +322,23 @@ func (file modelFile) compile() (*Model, error) {
 	return model, nil
 }
 
+var modelSQLSourceRefPattern = regexp.MustCompile(`\bsource\.([A-Za-z_][A-Za-z0-9_]*)\b`)
+
 func (m *Model) modelTableSourceDependencies(tableName string, table ModelTable) ([]string, error) {
+	sql := strings.TrimSpace(table.Transform.SQL)
+	if sql == "" {
+		sql = strings.TrimSpace(table.SQL)
+	}
+	if sql != "" {
+		if table.Source != "" {
+			return nil, fmt.Errorf("model table %q uses transform.sql and must declare sources instead of source", tableName)
+		}
+		if len(table.Sources) == 0 {
+			return nil, fmt.Errorf("model table %q uses transform.sql and requires sources", tableName)
+		}
+	} else if table.Source == "" {
+		return nil, fmt.Errorf("model table %q requires source or transform.sql", tableName)
+	}
 	seen := map[string]struct{}{}
 	add := func(source string) error {
 		source = strings.TrimSpace(source)
@@ -342,15 +359,10 @@ func (m *Model) modelTableSourceDependencies(tableName string, table ModelTable)
 			return nil, err
 		}
 	}
-	sql := table.Transform.SQL
-	if sql == "" {
-		sql = table.SQL
-	}
-	for source := range m.Sources {
-		if strings.Contains(sql, "source."+source) {
-			if err := add(source); err != nil {
-				return nil, err
-			}
+	inferred := modelSQLSourceRefs(sql)
+	for _, source := range inferred {
+		if _, ok := m.Sources[source]; !ok {
+			return nil, fmt.Errorf("model table %q SQL references unknown source %q", tableName, source)
 		}
 	}
 	result := make([]string, 0, len(seen))
@@ -358,34 +370,103 @@ func (m *Model) modelTableSourceDependencies(tableName string, table ModelTable)
 		result = append(result, source)
 	}
 	sort.Strings(result)
+	if len(inferred) > 0 && !sameStringSet(result, inferred) {
+		return nil, fmt.Errorf("model table %q SQL source references %v do not match declared sources %v", tableName, inferred, result)
+	}
 	return result, nil
 }
 
-func validateSemanticRelationships(baseTable string, relationships []Relationship) error {
-	targetCounts := map[string]int{}
-	for _, relationship := range relationships {
+func modelSQLSourceRefs(sql string) []string {
+	if sql == "" {
+		return nil
+	}
+	matches := modelSQLSourceRefPattern.FindAllStringSubmatch(sql, -1)
+	seen := map[string]struct{}{}
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		seen[match[1]] = struct{}{}
+	}
+	result := make([]string, 0, len(seen))
+	for source := range seen {
+		result = append(result, source)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func sameStringSet(left []string, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Model) validateSemanticGraph() error {
+	relationshipTables := map[string]struct{}{}
+	for _, relationship := range m.Relationships {
 		if !relationship.Active {
 			return fmt.Errorf("unsafe relationship path: inactive relationship from %q to %q", relationship.From, relationship.To)
 		}
 		if relationship.Cardinality != "many_to_one" && relationship.Cardinality != "one_to_one" {
 			return fmt.Errorf("unsafe relationship path: cardinality %q from %q to %q", relationship.Cardinality, relationship.From, relationship.To)
 		}
-		fromTable, _, err := splitSemanticField(relationship.From)
+		fromTable, err := m.validateRelationshipEndpoint("from", relationship.From)
 		if err != nil {
-			return fmt.Errorf("relationship from %q: %w", relationship.From, err)
+			return err
 		}
-		toTable, _, err := splitSemanticField(relationship.To)
+		toTable, err := m.validateRelationshipEndpoint("to", relationship.To)
 		if err != nil {
-			return fmt.Errorf("relationship to %q: %w", relationship.To, err)
+			return err
 		}
-		if baseTable != "" && fromTable == baseTable {
-			targetCounts[toTable]++
-			if targetCounts[toTable] > 1 {
-				return fmt.Errorf("unsafe relationship path: ambiguous relationship path from %q to %q", baseTable, toTable)
+		relationshipTables[fromTable] = struct{}{}
+		relationshipTables[toTable] = struct{}{}
+	}
+	baseTables := map[string]struct{}{}
+	for name, measure := range m.Measures {
+		if measure.Table == "" {
+			return fmt.Errorf("semantic model measure %q has no base table", name)
+		}
+		if _, ok := m.Tables[measure.Table]; !ok {
+			return fmt.Errorf("semantic model measure %q references unknown table %q", name, measure.Table)
+		}
+		baseTables[measure.Table] = struct{}{}
+	}
+	for baseTable := range baseTables {
+		for targetTable := range relationshipTables {
+			if targetTable == baseTable {
+				continue
+			}
+			if _, err := m.SafeRelationshipPath(baseTable, targetTable); err != nil {
+				return fmt.Errorf("unsafe relationship path: %w", err)
 			}
 		}
 	}
 	return nil
+}
+
+func (m *Model) validateRelationshipEndpoint(role string, endpoint string) (string, error) {
+	tableName, fieldName, err := splitSemanticField(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("relationship %s %q: %w", role, endpoint, err)
+	}
+	table, ok := m.Tables[tableName]
+	if !ok {
+		return "", fmt.Errorf("relationship %s %q references unknown table %q", role, endpoint, tableName)
+	}
+	if fieldName == table.PrimaryKey {
+		return tableName, nil
+	}
+	if _, ok := table.Dimensions[fieldName]; !ok {
+		return "", fmt.Errorf("relationship %s %q references unknown field %q on table %q", role, endpoint, fieldName, tableName)
+	}
+	return tableName, nil
 }
 
 func relationshipID(relationship Relationship, index int) string {

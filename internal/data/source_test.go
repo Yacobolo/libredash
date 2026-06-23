@@ -477,7 +477,8 @@ func TestDuckDBMetricsRegistersCSVSources(t *testing.T) {
 			},
 			Tables: map[string]semantic.ModelTable{
 				"orders": {
-					Kind: "fact",
+					Kind:    "fact",
+					Sources: []string{"orders"},
 					Transform: semantic.ModelTransform{SQL: `
 						SELECT order_id, try_cast(revenue AS DOUBLE) AS revenue
 						FROM raw.orders

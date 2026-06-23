@@ -63,20 +63,7 @@ func (p *Planner) semanticView(table string, dimensions []Field, measures []Fiel
 				return nil, err
 			}
 		} else {
-			measure = semantic.MetricMeasure{
-				Field:       defaultString(item.Measure.Field, item.Field),
-				Name:        defaultString(item.Measure.Name, item.Field),
-				Label:       item.Measure.Label,
-				Description: item.Measure.Description,
-				Expr:        item.Measure.Expr,
-				Expression:  item.Measure.SQLExpression(),
-				Table:       item.Measure.Table,
-				Grain:       item.Measure.Grain,
-				Time:        item.Measure.Time,
-				Grains:      append([]string{}, item.Measure.Grains...),
-				Unit:        item.Measure.Unit,
-				Format:      item.Measure.Format,
-			}
+			measure = semanticMeasureFromInline(item.Field, item.Measure)
 		}
 		if measure.Table == "" {
 			return nil, fmt.Errorf("measure %q has no base table", item.Field)
@@ -136,6 +123,23 @@ func (p *Planner) semanticView(table string, dimensions []Field, measures []Fiel
 		Dimensions: resolvedDimensions,
 		Measures:   resolvedMeasures,
 	}, nil
+}
+
+func semanticMeasureFromInline(field string, measure InlineMeasure) semantic.MetricMeasure {
+	return semantic.MetricMeasure{
+		Field:       defaultString(measure.Field, field),
+		Name:        defaultString(measure.Name, field),
+		Label:       measure.Label,
+		Description: measure.Description,
+		Expr:        measure.Expr,
+		Expression:  measure.SQLExpression(),
+		Table:       measure.Table,
+		Grain:       measure.Grain,
+		Time:        measure.Time,
+		Grains:      append([]string{}, measure.Grains...),
+		Unit:        measure.Unit,
+		Format:      measure.Format,
+	}
 }
 
 func (p *Planner) aliases(view *semantic.QueryScope, fields []string) (map[string]tableAlias, error) {

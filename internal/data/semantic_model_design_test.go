@@ -92,8 +92,20 @@ models:
 semantic_models:
   olist:
     tables:
-      orders: {model: orders, primary_key: order_id}
-      customers: {model: customers, primary_key: customer_id}
+      orders:
+        model: orders
+        primary_key: order_id
+        fields:
+          order_id: {expr: order_id}
+          customer_id: {expr: customer_id}
+          purchase_timestamp: {expr: purchase_timestamp, type: time}
+          revenue: {expr: revenue, type: number}
+      customers:
+        model: customers
+        primary_key: customer_id
+        fields:
+          customer_id: {expr: customer_id}
+          state: {expr: state}
     relationships:
       - from: orders.customer_id
         to: customers.customer_id

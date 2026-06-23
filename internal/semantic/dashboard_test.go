@@ -779,6 +779,16 @@ func TestDashboardValidateRejectsDuplicateFilterURLParam(t *testing.T) {
 	assertDashboardValidateError(t, report, model, "duplicates")
 }
 
+func TestDashboardValidateRejectsDuplicateFilterURLParamWithinFilter(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	filter := report.Filters["category"]
+	filter.OperatorURLParam = filter.URLParam
+	report.Filters["category"] = filter
+
+	assertDashboardValidateError(t, report, model, "duplicates")
+}
+
 func TestDashboardFiltersFromURL(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
@@ -804,6 +814,38 @@ func TestDashboardFiltersFromURL(t *testing.T) {
 	category := filters.Controls["category"]
 	if category.Value != "health" || category.Operator != "starts_with" {
 		t.Fatalf("category filter = %#v, want starts_with health", category)
+	}
+}
+
+func TestDashboardFiltersFromURLDateRangeForcesCustomPreset(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+
+	filters := report.FiltersFromURL(url.Values{
+		"from": {"2018-01-01"},
+	})
+
+	date := filters.Controls["purchase_date"]
+	if date.Preset != "custom" || date.From != "2018-01-01" {
+		t.Fatalf("date filter = %#v, want custom preset from URL bound", date)
+	}
+}
+
+func TestDashboardFiltersFromURLIgnoresUnsupportedTextOperator(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+
+	filters := report.FiltersFromURL(url.Values{
+		"category":    {"health"},
+		"category_op": {"unsupported"},
+	})
+
+	category := filters.Controls["category"]
+	if category.Value != "health" {
+		t.Fatalf("category value = %q, want health", category.Value)
+	}
+	if category.Operator != "contains" {
+		t.Fatalf("category operator = %q, want default contains", category.Operator)
 	}
 }
 
