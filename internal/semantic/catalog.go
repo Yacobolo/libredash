@@ -10,10 +10,9 @@ import (
 )
 
 type Catalog struct {
-	Workspace      CatalogWorkspace    `yaml:"workspace"`
-	SemanticModels []CatalogModel      `yaml:"semantic_models"`
-	MetricViews    []CatalogMetricView `yaml:"metric_views"`
-	Dashboards     []CatalogDashboard  `yaml:"dashboards"`
+	Workspace      CatalogWorkspace   `yaml:"workspace"`
+	SemanticModels []CatalogModel     `yaml:"semantic_models"`
+	Dashboards     []CatalogDashboard `yaml:"dashboards"`
 }
 
 type CatalogWorkspace struct {
@@ -29,14 +28,6 @@ type CatalogModel struct {
 	Description string `yaml:"description"`
 }
 
-type CatalogMetricView struct {
-	ID            string `yaml:"id"`
-	Title         string `yaml:"title"`
-	Path          string `yaml:"path"`
-	Description   string `yaml:"description"`
-	SemanticModel string `yaml:"semantic_model"`
-}
-
 type CatalogDashboard struct {
 	ID          string   `yaml:"id"`
 	Title       string   `yaml:"title"`
@@ -46,11 +37,10 @@ type CatalogDashboard struct {
 }
 
 type Workspace struct {
-	Catalog     Catalog
-	Models      map[string]*Model
-	MetricViews map[string]*MetricView
-	Dashboards  map[string]*Dashboard
-	BaseDir     string
+	Catalog    Catalog
+	Models     map[string]*Model
+	Dashboards map[string]*Dashboard
+	BaseDir    string
 }
 
 func LoadWorkspace(path string) (*Workspace, error) {
@@ -73,11 +63,10 @@ func LoadWorkspace(path string) (*Workspace, error) {
 	}
 
 	workspace := &Workspace{
-		Catalog:     catalog,
-		Models:      map[string]*Model{},
-		MetricViews: map[string]*MetricView{},
-		Dashboards:  map[string]*Dashboard{},
-		BaseDir:     baseDir,
+		Catalog:    catalog,
+		Models:     map[string]*Model{},
+		Dashboards: map[string]*Dashboard{},
+		BaseDir:    baseDir,
 	}
 
 	for _, entry := range catalog.SemanticModels {
@@ -91,23 +80,8 @@ func LoadWorkspace(path string) (*Workspace, error) {
 		workspace.Models[entry.ID] = model
 	}
 
-	for _, entry := range catalog.MetricViews {
-		model := workspace.Models[entry.SemanticModel]
-		view, err := LoadMetricView(filepath.Join(baseDir, entry.Path), model)
-		if err != nil {
-			return nil, fmt.Errorf("loading metric view %q: %w", entry.ID, err)
-		}
-		if view.ID != entry.ID {
-			return nil, fmt.Errorf("catalog metric view %q path loads metric view %q", entry.ID, view.ID)
-		}
-		if view.SemanticModel != entry.SemanticModel {
-			return nil, fmt.Errorf("catalog metric view %q references model %q but file references %q", entry.ID, entry.SemanticModel, view.SemanticModel)
-		}
-		workspace.MetricViews[entry.ID] = view
-	}
-
 	for _, entry := range catalog.Dashboards {
-		report, err := LoadDashboard(filepath.Join(baseDir, entry.Path), workspace.MetricViews)
+		report, err := LoadDashboardWithModels(filepath.Join(baseDir, entry.Path), workspace.Models)
 		if err != nil {
 			return nil, fmt.Errorf("loading dashboard %q: %w", entry.ID, err)
 		}
@@ -129,8 +103,8 @@ func rejectLegacyCatalogContract(content []byte) error {
 	if root == nil {
 		return nil
 	}
-	if mappingValue(root, "metrics_views") != nil {
-		return fmt.Errorf("catalog uses legacy metrics_views; use metric_views")
+	if mappingValue(root, "metric_views") != nil || mappingValue(root, "metrics_views") != nil {
+		return fmt.Errorf("catalog uses legacy metric views; use semantic_models and dashboards")
 	}
 	return nil
 }
@@ -138,9 +112,6 @@ func rejectLegacyCatalogContract(content []byte) error {
 func (c Catalog) Validate(baseDir string) error {
 	if len(c.SemanticModels) == 0 {
 		return fmt.Errorf("catalog requires semantic_models")
-	}
-	if len(c.MetricViews) == 0 {
-		return fmt.Errorf("catalog requires metric_views")
 	}
 	if len(c.Dashboards) == 0 {
 		return fmt.Errorf("catalog requires dashboards")
@@ -156,23 +127,6 @@ func (c Catalog) Validate(baseDir string) error {
 		models[model.ID] = struct{}{}
 		if _, err := os.Stat(filepath.Join(baseDir, model.Path)); err != nil {
 			return fmt.Errorf("semantic model %q path %q: %w", model.ID, model.Path, err)
-		}
-	}
-
-	metricViews := map[string]struct{}{}
-	for index, view := range c.MetricViews {
-		if view.ID == "" || view.Title == "" || view.Path == "" || view.SemanticModel == "" {
-			return fmt.Errorf("catalog metric view %d requires id, title, path, and semantic_model", index)
-		}
-		if _, exists := metricViews[view.ID]; exists {
-			return fmt.Errorf("duplicate metric view id %q", view.ID)
-		}
-		metricViews[view.ID] = struct{}{}
-		if _, ok := models[view.SemanticModel]; !ok {
-			return fmt.Errorf("metric view %q references unknown semantic model %q", view.ID, view.SemanticModel)
-		}
-		if _, err := os.Stat(filepath.Join(baseDir, view.Path)); err != nil {
-			return fmt.Errorf("metric view %q path %q: %w", view.ID, view.Path, err)
 		}
 	}
 

@@ -3,12 +3,10 @@ package query
 import (
 	"fmt"
 	"strings"
-
-	"github.com/Yacobolo/libredash/internal/semantic"
 )
 
 func (p *Planner) Plan(request Request) (Plan, error) {
-	view, err := p.metricView(request.MetricView)
+	view, err := p.queryView(request)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -37,7 +35,7 @@ func (p *Planner) Plan(request Request) (Plan, error) {
 		if resolved.Table != view.BaseTable {
 			return Plan{}, fmt.Errorf("measure %q is not owned by base table %q", field, view.BaseTable)
 		}
-		fieldSet = append(fieldSet, field)
+		fieldSet = append(fieldSet, resolved.Table+"."+resolved.Name)
 	}
 	for _, filter := range request.Filters {
 		field, _, err := view.ResolveDimensionRef(filter.Field)
@@ -51,7 +49,7 @@ func (p *Planner) Plan(request Request) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
-	from, err := joinSQL(view.BaseTable, aliases)
+	from, err := joinSQL(p.Model, view.BaseTable, aliases)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -142,7 +140,7 @@ func (p *Planner) Plan(request Request) (Plan, error) {
 }
 
 func (p *Planner) PlanRows(request RowRequest) (Plan, error) {
-	view, err := p.metricView(request.MetricView)
+	view, err := p.rowView(request)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -162,7 +160,7 @@ func (p *Planner) PlanRows(request RowRequest) (Plan, error) {
 		if resolved.Table != view.BaseTable {
 			return Plan{}, fmt.Errorf("measure %q is not owned by base table %q", field, view.BaseTable)
 		}
-		fieldSet = append(fieldSet, field)
+		fieldSet = append(fieldSet, resolved.Table+"."+resolved.Name)
 	}
 	for _, filter := range request.Filters {
 		field, _, err := view.ResolveDimensionRef(filter.Field)
@@ -175,7 +173,7 @@ func (p *Planner) PlanRows(request RowRequest) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
-	from, err := joinSQL(view.BaseTable, aliases)
+	from, err := joinSQL(p.Model, view.BaseTable, aliases)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -231,7 +229,7 @@ func (p *Planner) PlanRows(request RowRequest) (Plan, error) {
 }
 
 func (p *Planner) PlanRawValues(request RawValueRequest) (Plan, error) {
-	view, err := p.metricView(request.MetricView)
+	view, err := p.rawValueView(request)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -250,7 +248,7 @@ func (p *Planner) PlanRawValues(request RawValueRequest) (Plan, error) {
 	if measure.Table != view.BaseTable {
 		return Plan{}, fmt.Errorf("measure %q is not owned by base table %q", measureField, view.BaseTable)
 	}
-	fieldSet = append(fieldSet, measureField)
+	fieldSet = append(fieldSet, measure.Table+"."+measure.Name)
 	for _, filter := range request.Filters {
 		field, _, err := view.ResolveDimensionRef(filter.Field)
 		if err != nil {
@@ -262,7 +260,7 @@ func (p *Planner) PlanRawValues(request RawValueRequest) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
-	from, err := joinSQL(view.BaseTable, aliases)
+	from, err := joinSQL(p.Model, view.BaseTable, aliases)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -323,7 +321,7 @@ func (p *Planner) PlanRawValues(request RawValueRequest) (Plan, error) {
 }
 
 func (p *Planner) PlanCount(request CountRequest) (Plan, error) {
-	view, err := p.metricView(request.MetricView)
+	view, err := p.countView(request)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -339,7 +337,7 @@ func (p *Planner) PlanCount(request CountRequest) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
-	from, err := joinSQL(view.BaseTable, aliases)
+	from, err := joinSQL(p.Model, view.BaseTable, aliases)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -351,7 +349,7 @@ func (p *Planner) PlanCount(request CountRequest) (Plan, error) {
 	return Plan{SQL: sql, Args: args, Columns: []string{"value"}}, nil
 }
 
-func (p *Planner) whereParts(view *semantic.MetricView, aliases map[string]tableAlias, filters []Filter) ([]string, []any, error) {
+func (p *Planner) whereParts(view *queryView, aliases map[string]tableAlias, filters []Filter) ([]string, []any, error) {
 	whereParts := []string{"1 = 1"}
 	args := []any{}
 	for _, filter := range filters {

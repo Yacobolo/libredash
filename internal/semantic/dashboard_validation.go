@@ -17,7 +17,7 @@ func rejectLegacyDashboardCollectionKeys(bytes []byte) error {
 		return nil
 	}
 	if mappingValue(root, "metrics_views") != nil {
-		return fmt.Errorf("dashboard uses legacy metrics_views; use metric_views")
+		return fmt.Errorf("dashboard uses legacy metrics_views; use semantic_model")
 	}
 	return nil
 }
@@ -31,6 +31,7 @@ func rejectLegacyDashboardQueryContract(bytes []byte) error {
 	if root == nil {
 		return nil
 	}
+	semanticFirst := mappingValue(root, "semantic_model") != nil
 	for _, section := range []string{"filters", "visuals", "tables"} {
 		items := mappingValue(root, section)
 		if items == nil || items.Kind != yaml.MappingNode {
@@ -43,10 +44,10 @@ func rejectLegacyDashboardQueryContract(bytes []byte) error {
 				continue
 			}
 			if mappingValue(item, "metrics_view") != nil {
-				return fmt.Errorf("%s %q uses legacy metrics_view; use metric_view or query.metric_view", strings.TrimSuffix(section, "s"), name)
+				return fmt.Errorf("%s %q uses legacy metrics_view; use dashboard semantic_model", strings.TrimSuffix(section, "s"), name)
 			}
 			if section == "visuals" && mappingValue(item, "metric_view") != nil {
-				return fmt.Errorf("visual %q uses top-level metric_view; use query.metric_view", name)
+				return fmt.Errorf("visual %q uses top-level metric_view; use dashboard semantic_model", name)
 			}
 			if section == "tables" {
 				if mappingValue(item, "rows") != nil || mappingValue(item, "measures") != nil {
@@ -58,11 +59,13 @@ func rejectLegacyDashboardQueryContract(bytes []byte) error {
 				continue
 			}
 			if rawSQL := mappingValue(queryNode, "sql"); rawSQL != nil {
-				return fmt.Errorf("%s %q uses raw SQL; dashboards must query metric views", strings.TrimSuffix(section, "s"), name)
+				return fmt.Errorf("%s %q uses raw SQL; dashboards must query semantic models", strings.TrimSuffix(section, "s"), name)
 			}
-			for _, key := range []string{"dimensions", "measures", "rows", "columns"} {
-				if err := rejectScalarFieldRefs(section, name, queryNode, key); err != nil {
-					return err
+			if !semanticFirst {
+				for _, key := range []string{"dimensions", "measures", "rows", "columns"} {
+					if err := rejectScalarFieldRefs(section, name, queryNode, key); err != nil {
+						return err
+					}
 				}
 			}
 			if series := mappingValue(queryNode, "series"); series != nil && series.Kind == yaml.ScalarNode {

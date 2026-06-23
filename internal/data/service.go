@@ -156,11 +156,10 @@ func (m *DuckDBMetrics) ModelIDForDashboard(dashboardID string) string {
 	if !ok {
 		return ""
 	}
-	view, ok := m.firstMetricView(report)
-	if !ok {
-		return ""
+	if report.SemanticModel != "" {
+		return report.SemanticModel
 	}
-	return view.SemanticModel
+	return ""
 }
 
 func (m *DuckDBMetrics) Report(dashboardID string) (semantic.Dashboard, *semantic.Model, bool) {
@@ -168,15 +167,14 @@ func (m *DuckDBMetrics) Report(dashboardID string) (semantic.Dashboard, *semanti
 	if !ok {
 		return semantic.Dashboard{}, nil, false
 	}
-	view, ok := m.firstMetricView(report)
-	if !ok {
-		return semantic.Dashboard{}, nil, false
+	if report.SemanticModel != "" {
+		model, ok := m.workspace.Models[report.SemanticModel]
+		if !ok {
+			return semantic.Dashboard{}, nil, false
+		}
+		return *report, model, true
 	}
-	model, ok := m.workspace.Models[view.SemanticModel]
-	if !ok {
-		return semantic.Dashboard{}, nil, false
-	}
-	return *report, model, true
+	return semantic.Dashboard{}, nil, false
 }
 
 func (m *DuckDBMetrics) NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
@@ -260,51 +258,30 @@ func (m *DuckDBMetrics) catalogView() dashboard.Catalog {
 			Title:       workspaceTitle(m.workspace.Catalog.Workspace),
 			Description: m.workspace.Catalog.Workspace.Description,
 		},
-		Models:      make([]dashboard.CatalogModel, 0, len(m.workspace.Catalog.SemanticModels)),
-		MetricViews: make([]dashboard.CatalogMetricView, 0, len(m.workspace.Catalog.MetricViews)),
-		Dashboards:  make([]dashboard.CatalogDashboard, 0, len(m.workspace.Catalog.Dashboards)),
+		Models:     make([]dashboard.CatalogModel, 0, len(m.workspace.Catalog.SemanticModels)),
+		Dashboards: make([]dashboard.CatalogDashboard, 0, len(m.workspace.Catalog.Dashboards)),
 	}
-	modelTitles := map[string]string{}
 	for _, model := range m.workspace.Catalog.SemanticModels {
-		modelTitles[model.ID] = model.Title
 		catalog.Models = append(catalog.Models, dashboard.CatalogModel{
 			ID:          model.ID,
 			Title:       model.Title,
 			Description: model.Description,
 		})
 	}
-	metricViewTitles := map[string]string{}
-	for _, view := range m.workspace.Catalog.MetricViews {
-		metricViewTitles[view.ID] = view.Title
-		catalog.MetricViews = append(catalog.MetricViews, dashboard.CatalogMetricView{
-			ID:            view.ID,
-			Title:         view.Title,
-			Description:   view.Description,
-			SemanticModel: view.SemanticModel,
-			ModelTitle:    modelTitles[view.SemanticModel],
-		})
-	}
 	for _, report := range m.workspace.Catalog.Dashboards {
 		pageCount := 0
-		metricViews := []string{}
-		metricViewNames := []string{}
+		semanticModel := ""
 		if loaded, ok := m.workspace.Dashboards[report.ID]; ok {
 			pageCount = len(loaded.Pages)
-			metricViews = append(metricViews, loaded.MetricViews...)
-			for _, viewID := range loaded.MetricViews {
-				if title := metricViewTitles[viewID]; title != "" {
-					metricViewNames = append(metricViewNames, title)
-				}
-			}
+			semanticModel = loaded.SemanticModel
 		}
 		catalog.Dashboards = append(catalog.Dashboards, dashboard.CatalogDashboard{
-			ID:               report.ID,
-			Title:            report.Title,
-			Description:      report.Description,
-			MetricViews:      metricViews,
-			MetricViewTitles: metricViewNames,
-			Tags:             append([]string{}, report.Tags...),
-			PageCount:        pageCount,
+			ID:            report.ID,
+			Title:         report.Title,
+			Description:   report.Description,
+			SemanticModel: semanticModel,
+			Tags:          append([]string{}, report.Tags...),
+			PageCount:     pageCount,
 		})
 	}
 	return catalog
@@ -329,23 +306,14 @@ func (m *DuckDBMetrics) reportRuntime(dashboardID string) (*semantic.Dashboard, 
 	if !ok {
 		return nil, nil, fmt.Errorf("unknown dashboard %q", dashboardID)
 	}
-	view, ok := m.firstMetricView(report)
-	if !ok {
-		return nil, nil, fmt.Errorf("dashboard %q has no metric views", dashboardID)
+	if report.SemanticModel == "" {
+		return nil, nil, fmt.Errorf("dashboard %q has no semantic model", dashboardID)
 	}
-	runtime, ok := m.runtimes[view.SemanticModel]
+	runtime, ok := m.runtimes[report.SemanticModel]
 	if !ok {
-		return nil, nil, fmt.Errorf("unknown semantic model %q", view.SemanticModel)
+		return nil, nil, fmt.Errorf("unknown semantic model %q", report.SemanticModel)
 	}
 	return report, runtime, nil
-}
-
-func (m *DuckDBMetrics) firstMetricView(report *semantic.Dashboard) (*semantic.MetricView, bool) {
-	if report == nil || len(report.MetricViews) == 0 {
-		return nil, false
-	}
-	view, ok := m.workspace.MetricViews[report.MetricViews[0]]
-	return view, ok
 }
 
 func (m *DuckDBMetrics) QueryDashboard(ctx context.Context, dashboardID string, filters dashboard.Filters) (dashboard.Patch, error) {
@@ -458,7 +426,7 @@ func (m *DuckDBMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID 
 		return m.queryAggregateTable(ctx, runtime, report, request, tableModel, filters)
 	}
 
-	totalRows, err := m.countRows(ctx, runtime, report, tableModel.MetricView, filters, "table", request.Table)
+	totalRows, err := m.countRows(ctx, runtime, report, tableModel.Query.Table, filters, "table", request.Table)
 	if err != nil {
 		return dashboard.EmptyTable(request, err), nil
 	}

@@ -3,7 +3,7 @@ import { property, state } from 'lit/decorators.js'
 import { unsafeHTML } from 'lit/directives/unsafe-html.js'
 import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
-import { Box, ChartColumn, ChevronRight, FileText, LayoutDashboard, LayoutPanelTop, Table2, Wrench, type IconNode } from 'lucide'
+import { Box, ChevronRight, FileText, LayoutDashboard, LayoutPanelTop, Table2, Wrench, type IconNode } from 'lucide'
 import { lucideIcon } from './lucide-icons'
 
 type ChatStatus = {
@@ -623,8 +623,7 @@ function titleFromToolName(name: string): string {
 const toolIconContent: Record<string, IconNode> = {
   list_dashboards: LayoutDashboard,
   describe_dashboard: FileText,
-  list_metric_views: ChartColumn,
-  describe_metric_view: ChartColumn,
+  list_semantic_models: Box,
   describe_model: Box,
   query_dashboard_page: LayoutPanelTop,
   query_table: Table2,

@@ -187,7 +187,7 @@ Your output must be:
 "describe executive-sales" -> Executive Sales dashboard
 "what metrics are in Orders Metrics?" -> Orders Metrics overview
 "why is delivery time so high?" -> Delivery time investigation
-"list all metric views" -> Metric views
+"list semantic models" -> Semantic models
 "compare order count and freight value" -> Orders and freight comparison
 </examples>`
 }

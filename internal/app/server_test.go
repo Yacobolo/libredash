@@ -38,11 +38,8 @@ func (fakeMetrics) Catalog() dashboard.Catalog {
 		Models: []dashboard.CatalogModel{
 			{ID: "test", Title: "Test Model", Description: "Fixture model"},
 		},
-		MetricViews: []dashboard.CatalogMetricView{
-			{ID: "orders", Title: "Orders Metrics", Description: "Fixture metric view", SemanticModel: "test", ModelTitle: "Test Model"},
-		},
 		Dashboards: []dashboard.CatalogDashboard{
-			{ID: "executive-sales", Title: "Executive Sales Dashboard", Description: "Fixture report", MetricViews: []string{"orders"}, MetricViewTitles: []string{"Orders Metrics"}, Tags: []string{"sales"}, PageCount: 2},
+			{ID: "executive-sales", Title: "Executive Sales Dashboard", Description: "Fixture report", SemanticModel: "test", Tags: []string{"sales"}, PageCount: 2},
 		},
 	}
 }
@@ -67,19 +64,19 @@ func (fakeMetrics) Report(dashboardID string) (semantic.Dashboard, *semantic.Mod
 		return semantic.Dashboard{}, nil, false
 	}
 	return semantic.Dashboard{
-			ID:          "executive-sales",
-			Title:       "Executive Sales Dashboard",
-			MetricViews: []string{"orders"},
+			ID:            "executive-sales",
+			Title:         "Executive Sales Dashboard",
+			SemanticModel: "test",
 			Filters: map[string]semantic.FilterDefinition{
-				"state":    {Type: "multi_select", Label: "State", MetricView: "orders", Dimension: "status", URLParam: "state", Operator: "in", Values: semantic.FilterValues{Source: "distinct", Limit: 50}},
-				"category": {Type: "text", Label: "Category", MetricView: "orders", Dimension: "status", URLParam: "category", DefaultOperator: "contains", Operators: []string{"contains", "equals"}},
+				"state":    {Type: "multi_select", Label: "State", Dimension: "orders.status", URLParam: "state", Operator: "in", Values: semantic.FilterValues{Source: "distinct", Limit: 50}},
+				"category": {Type: "text", Label: "Category", Dimension: "orders.status", URLParam: "category", DefaultOperator: "contains", Operators: []string{"contains", "equals"}},
 			},
 			Visuals: map[string]semantic.Visual{
-				"orders":       {Title: "Orders", Type: "donut", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: fieldRefs("status"), Measures: fieldRefs("order_count")}, Interaction: semantic.Interaction{Field: "status"}},
-				"ops_pipeline": {Title: "Ops Pipeline", Type: "bar", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: fieldRefs("status"), Measures: fieldRefs("order_count")}, Interaction: semantic.Interaction{Field: "status"}},
+				"orders":       {Title: "Orders", Type: "donut", Query: semantic.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: semantic.Interaction{Field: "orders.status"}},
+				"ops_pipeline": {Title: "Ops Pipeline", Type: "bar", Query: semantic.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: semantic.Interaction{Field: "orders.status"}},
 			},
 			Tables: map[string]semantic.TableVisual{
-				"orders": {Title: "Orders", MetricView: "orders", DefaultSort: dashboard.TableSort{Key: "purchase_date", Direction: "desc"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
+				"orders": {Title: "Orders", Query: semantic.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, DefaultSort: dashboard.TableSort{Key: "purchase_date", Direction: "desc"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
 			},
 			Pages: fakeMetrics{}.Pages(dashboardID),
 		}, &semantic.Model{
@@ -88,10 +85,10 @@ func (fakeMetrics) Report(dashboardID string) (semantic.Dashboard, *semantic.Mod
 			Tables: map[string]semantic.ModelTable{
 				"orders": {
 					Kind: "fact", Source: "orders", PrimaryKey: "order_id", Grain: "order_id",
-					Dimensions: map[string]semantic.MetricDimension{"order_id": {Expr: "order_id"}},
-					Measures:   map[string]semantic.MetricMeasure{"order_count": {Label: "Orders", Expression: "COUNT(*)"}},
+					Dimensions: map[string]semantic.MetricDimension{"order_id": {Expr: "order_id"}, "status": {Expr: "status"}},
 				},
 			},
+			Measures: map[string]semantic.MetricMeasure{"order_count": {Table: "orders", Grain: "order_id", Label: "Orders", Expression: "COUNT(*)"}},
 		}, true
 }
 

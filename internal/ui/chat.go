@@ -38,7 +38,7 @@ func ChatPage(catalog dashboard.Catalog, csrfToken, roleLabel string, signal api
 						g.Attr("data-attr:config", chatSubSidebarConfigExpression()),
 					),
 					h.Section(h.Class("grid h-svh min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-app"), h.Aria("label", "LibreDash chats"),
-						workspaceHeader("Agent", "Chats", "Ask read-only questions about dashboards, metric views, and semantic models.", nil),
+						workspaceHeader("Agent", "Chats", "Ask read-only questions about dashboards, semantic models, measures, and fields.", nil),
 						h.Div(h.Class("grid min-h-0 min-w-0 overflow-hidden bg-app"),
 							h.Div(h.Class("grid min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto] overflow-hidden bg-app"),
 								g.El("ld-chat-thread",

@@ -46,7 +46,7 @@ func WorkspacePage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, a
 				workspace.Description,
 				workspaceAccessControl(workspace.ID, access.CanManage),
 			),
-			assetToolbar(workspace.ID, activeType, query),
+			assetToolbar(workspace.ID, activeType, query, assets),
 			h.Div(h.Class(workspacePanelClass),
 				g.If(len(assets) == 0, h.Div(h.Class("p-3"), emptyState("No assets match this view."))),
 				g.If(len(assets) > 0, assetTable(workspace.ID, assets)),
@@ -56,19 +56,14 @@ func WorkspacePage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, a
 	)
 }
 
-func ConnectionsPage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, assets []api.AssetResponse, query, roleLabel string) g.Node {
+func ConnectionsPage(catalog dashboard.Catalog, workspaceID string, assets []api.AssetResponse, query, roleLabel string) g.Node {
 	return workspaceDocument("Connections", catalog, "connections", roleLabel, nil,
-		h.Section(h.Class(workspaceMainClass), h.Aria("label", "Connections"),
-			workspaceHeader(
-				"Global",
-				"Connections",
-				"Connection assets are managed globally and referenced by semantic models.",
-				nil,
-			),
+		h.Section(h.Class(workspaceMainClass), h.Aria("label", "Global connections"),
+			workspaceHeader("Global", "Connections", "Read-only connection assets used by published semantic models.", nil),
 			connectionToolbar(query),
 			h.Div(h.Class(workspacePanelClass),
 				g.If(len(assets) == 0, h.Div(h.Class("p-3"), emptyState("No connections match this view."))),
-				g.If(len(assets) > 0, assetTable(workspace.ID, assets)),
+				g.If(len(assets) > 0, assetTable(workspaceID, assets)),
 			),
 		),
 	)
@@ -272,8 +267,8 @@ func activeDeploymentLabel(workspace api.WorkspaceResponse) string {
 	return "Published deployment"
 }
 
-func assetToolbar(workspaceID, activeType, query string) g.Node {
-	types := []string{"", "dashboard", "semantic_model", "metric_view"}
+func assetToolbar(workspaceID, activeType, query string, assets []api.AssetResponse) g.Node {
+	types := []string{"", "dashboard", "semantic_model"}
 	return h.Div(h.Class("grid min-w-0 gap-3 border-b border-outline-variant bg-app px-3 pt-3"), g.Attr("data-workspace-asset-toolbar", ""),
 		h.Form(h.Method("get"), h.Action("/workspaces/"+workspaceID), h.Class("flex min-w-0 max-w-workspace-search items-center gap-2"),
 			h.Input(h.Type("search"), h.Name("q"), h.Value(query), h.Placeholder("Search workspace assets..."), h.Class("min-h-control-md w-full rounded-small border border-outline-variant bg-control px-3 text-body-sm font-medium text-fg-default placeholder:text-fg-muted")),
@@ -293,12 +288,21 @@ func assetToolbar(workspaceID, activeType, query string) g.Node {
 }
 
 func connectionToolbar(query string) g.Node {
-	return h.Div(h.Class("grid min-w-0 gap-3 border-b border-outline-variant bg-app px-3 py-3"), g.Attr("data-connection-toolbar", ""),
+	return h.Div(h.Class("grid min-w-0 gap-3 border-b border-outline-variant bg-app px-3 pt-3"), g.Attr("data-connection-toolbar", ""),
 		h.Form(h.Method("get"), h.Action("/connections"), h.Class("flex min-w-0 max-w-workspace-search items-center gap-2"),
 			h.Input(h.Type("search"), h.Name("q"), h.Value(query), h.Placeholder("Search connections..."), h.Class("min-h-control-md w-full rounded-small border border-outline-variant bg-control px-3 text-body-sm font-medium text-fg-default placeholder:text-fg-muted")),
 			h.Button(h.Type("submit"), h.Class(metricActionButtonClass), h.Title("Search"), h.Aria("label", "Search"), lucide.Search(metricActionIconAttrs()...)),
 		),
 	)
+}
+
+func hasAssetType(assets []api.AssetResponse, typ string) bool {
+	for _, asset := range assets {
+		if asset.Type == typ {
+			return true
+		}
+	}
+	return false
 }
 
 func assetTabLink(workspaceID, typ, activeType, query, label string) g.Node {
@@ -643,55 +647,39 @@ func dashboardAssetLineage(workspaceID string, selected api.AssetResponse, asset
 		addRow(depth, relation, asset)
 	}
 
-	for _, metricEdge := range outgoing[selected.ID] {
-		if metricEdge.Type != "uses_metric_view" {
+	for _, dataEdge := range outgoing[selected.ID] {
+		if dataEdge.Type != "uses_semantic_model" && dataEdge.Type != "uses_model_table" && dataEdge.Type != "uses_measure" {
 			continue
 		}
-		metricView, ok := byID[metricEdge.ToAssetID]
-		if !ok || metricView.Type != "metric_view" {
+		asset, ok := byID[dataEdge.ToAssetID]
+		if !ok {
 			continue
 		}
-		addAsset(1, labelFromKey(metricEdge.Type), metricView)
-		addEdge(metricEdge)
-
-		if semanticModel, semanticEdge, ok := semanticModelForMetricView(metricView, byID, incoming); ok {
-			addAsset(2, "Semantic model", semanticModel)
-			addEdge(semanticEdge)
+		addAsset(1, labelFromKey(dataEdge.Type), asset)
+		addEdge(dataEdge)
+		if asset.Type != "model_table" {
+			continue
 		}
-
-		for _, tableEdge := range outgoing[metricView.ID] {
-			if tableEdge.Type != "uses_model_table" {
+		for _, sourceEdge := range outgoing[asset.ID] {
+			if sourceEdge.Type != "reads_source" {
 				continue
 			}
-			modelTable, ok := byID[tableEdge.ToAssetID]
-			if !ok || modelTable.Type != "model_table" {
+			source, ok := byID[sourceEdge.ToAssetID]
+			if !ok || source.Type != "source" {
 				continue
 			}
-			addAsset(3, labelFromKey(tableEdge.Type), modelTable)
-			addEdge(tableEdge)
-
-			for _, sourceEdge := range outgoing[modelTable.ID] {
-				if sourceEdge.Type != "reads_source" {
+			addAsset(2, labelFromKey(sourceEdge.Type), source)
+			addEdge(sourceEdge)
+			for _, connectionEdge := range outgoing[source.ID] {
+				if connectionEdge.Type != "uses_connection" {
 					continue
 				}
-				source, ok := byID[sourceEdge.ToAssetID]
-				if !ok || source.Type != "source" {
+				connection, ok := byID[connectionEdge.ToAssetID]
+				if !ok || connection.Type != "connection" {
 					continue
 				}
-				addAsset(4, labelFromKey(sourceEdge.Type), source)
-				addEdge(sourceEdge)
-
-				for _, connectionEdge := range outgoing[source.ID] {
-					if connectionEdge.Type != "uses_connection" {
-						continue
-					}
-					connection, ok := byID[connectionEdge.ToAssetID]
-					if !ok || connection.Type != "connection" {
-						continue
-					}
-					addAsset(5, labelFromKey(connectionEdge.Type), connection)
-					addEdge(connectionEdge)
-				}
+				addAsset(3, labelFromKey(connectionEdge.Type), connection)
+				addEdge(connectionEdge)
 			}
 		}
 	}
@@ -725,22 +713,6 @@ func edgesByToAsset(edges []api.AssetEdgeResponse) map[string][]api.AssetEdgeRes
 		out[edge.ToAssetID] = append(out[edge.ToAssetID], edge)
 	}
 	return out
-}
-
-func semanticModelForMetricView(metricView api.AssetResponse, assets map[string]api.AssetResponse, incoming map[string][]api.AssetEdgeResponse) (api.AssetResponse, api.AssetEdgeResponse, bool) {
-	for _, edge := range incoming[metricView.ID] {
-		if edge.Type != "contains" {
-			continue
-		}
-		asset, ok := assets[edge.FromAssetID]
-		if ok && asset.Type == "semantic_model" {
-			return asset, edge, true
-		}
-	}
-	if asset, ok := assets[metricView.ParentID]; ok && asset.Type == "semantic_model" {
-		return asset, api.AssetEdgeResponse{FromAssetID: asset.ID, ToAssetID: metricView.ID, Type: "contains"}, true
-	}
-	return api.AssetResponse{}, api.AssetEdgeResponse{}, false
 }
 
 func dashboardUsedByRows(workspaceID string, selected api.AssetResponse, assets map[string]api.AssetResponse, incoming map[string][]api.AssetEdgeResponse) []map[string]any {
@@ -878,8 +850,6 @@ func assetDetailModelForAsset(workspace api.WorkspaceResponse, asset api.AssetRe
 	switch asset.Type {
 	case "semantic_model":
 		semanticModelDetailModel(&model, workspace, asset, assets, edges)
-	case "metric_view":
-		metricViewDetailModel(&model, asset, assets)
 	case "dashboard":
 		dashboardDetailModel(&model, asset, assets)
 	case "connection":
@@ -888,7 +858,7 @@ func assetDetailModelForAsset(workspace api.WorkspaceResponse, asset api.AssetRe
 		model.Overview = append(model.Overview, sourceFacts(asset)...)
 	case "measure":
 		model.Overview = append(model.Overview, metricLeafFacts(asset)...)
-	case "dimension":
+	case "field":
 		model.Overview = append(model.Overview, metricLeafFacts(asset)...)
 	default:
 		model.Overview = append(model.Overview, metaFacts(asset.Meta)...)
@@ -910,7 +880,7 @@ func commonAssetOverviewFacts(asset api.AssetResponse, assets []api.AssetRespons
 
 func shouldShowParentFact(typ string) bool {
 	switch typ {
-	case "catalog", "dashboard", "metric_view", "semantic_model":
+	case "catalog", "dashboard", "semantic_model":
 		return false
 	default:
 		return true
@@ -921,7 +891,10 @@ func semanticModelDetailModel(model *assetDetailModel, workspace api.WorkspaceRe
 	meta := asset.Meta
 	connections := sortedMapKeys(metaMap(meta, "Connections", "connections"))
 	sources := sortedMapKeys(metaMap(meta, "Sources", "sources"))
-	modelTables := sortedMapKeys(metaMap(meta, "Tables", "tables"))
+	modelTableMeta := metaMap(meta, "Tables", "tables", "Models", "models")
+	modelTables := sortedMapKeys(modelTableMeta)
+	fields := semanticFieldCount(modelTableMeta)
+	measures := sortedMapKeys(metaMap(meta, "Measures", "measures"))
 	relationships := metaSlice(meta, "Relationships", "relationships")
 
 	model.Overview = append(model.Overview,
@@ -929,14 +902,27 @@ func semanticModelDetailModel(model *assetDetailModel, workspace api.WorkspaceRe
 		definitionFact{Label: "Connections", Value: fmt.Sprint(len(connections))},
 		definitionFact{Label: "Sources", Value: fmt.Sprint(len(sources))},
 		definitionFact{Label: "Model tables", Value: fmt.Sprint(len(modelTables))},
+		definitionFact{Label: "Fields", Value: fmt.Sprint(fields)},
+		definitionFact{Label: "Measures", Value: fmt.Sprint(len(measures))},
 		definitionFact{Label: "Relationships", Value: fmt.Sprint(len(relationships))},
 	)
 	model.Sections = append(model.Sections,
 		assetDetailSection{Title: fmt.Sprintf("Connections (%d)", len(connections)), Signal: "assetDetailsSemanticConnectionsGrid", Grid: semanticConnectionsGrid(workspace.ID, asset, assets, meta)},
 		assetDetailSection{Title: fmt.Sprintf("Sources (%d)", len(sources)), Signal: "assetDetailsSemanticSourcesGrid", Grid: semanticSourcesGrid(workspace.ID, asset, assets, meta)},
 		assetDetailSection{Title: fmt.Sprintf("Model tables (%d)", len(modelTables)), Signal: "assetDetailsSemanticModelTablesGrid", Grid: semanticModelTablesGrid(workspace.ID, asset, assets, edges, meta)},
+		assetDetailSection{Title: fmt.Sprintf("Fields (%d)", fields), Signal: "assetDetailsSemanticFieldsGrid", Grid: semanticFieldsGrid(workspace.ID, asset, assets, meta)},
+		assetDetailSection{Title: fmt.Sprintf("Measures (%d)", len(measures)), Signal: "assetDetailsSemanticMeasuresGrid", Grid: semanticMeasuresGrid(workspace.ID, asset, assets, meta)},
 		assetDetailSection{Title: fmt.Sprintf("Relationships (%d)", len(relationships)), Signal: "assetDetailsSemanticRelationshipsGrid", Grid: semanticRelationshipsGrid(meta)},
 	)
+}
+
+func semanticFieldCount(tables map[string]any) int {
+	count := 0
+	for _, tableValue := range tables {
+		table := asMap(tableValue)
+		count += len(metaMap(table, "Dimensions", "dimensions", "Fields", "fields"))
+	}
+	return count
 }
 
 func assetParentTitle(parentID string, assets []api.AssetResponse) string {
@@ -949,24 +935,6 @@ func assetParentTitle(parentID string, assets []api.AssetResponse) string {
 		}
 	}
 	return parentID
-}
-
-func semanticModelDetails(asset api.AssetResponse) []g.Node {
-	meta := asset.Meta
-	connections := sortedMapKeys(metaMap(meta, "Connections", "connections"))
-	sources := sortedMapKeys(metaMap(meta, "Sources", "sources"))
-	modelTables := sortedMapKeys(metaMap(meta, "Tables", "tables"))
-	relationships := metaSlice(meta, "Relationships", "relationships")
-
-	return []g.Node{
-		definitionStats("Overview", []definitionFact{
-			{Label: "Default connection", Value: metaString(meta, "DefaultConnection", "default_connection")},
-			{Label: "Connections", Value: fmt.Sprint(len(connections))},
-			{Label: "Sources", Value: fmt.Sprint(len(sources))},
-			{Label: "Model tables", Value: fmt.Sprint(len(modelTables))},
-			{Label: "Relationships", Value: fmt.Sprint(len(relationships))},
-		}),
-	}
 }
 
 func semanticConnectionsGrid(workspaceID string, parent api.AssetResponse, assets []api.AssetResponse, meta map[string]any) metricGrid {
@@ -1024,43 +992,98 @@ func semanticSourcesGrid(workspaceID string, parent api.AssetResponse, assets []
 }
 
 func semanticModelTablesGrid(workspaceID string, parent api.AssetResponse, assets []api.AssetResponse, edges []api.AssetEdgeResponse, meta map[string]any) metricGrid {
-	tables := metaMap(meta, "Tables", "tables")
+	tables := metaMap(meta, "Tables", "tables", "Models", "models")
 	rows := make([]map[string]any, 0, len(tables))
 	for _, name := range sortedMapKeys(tables) {
 		table := asMap(tables[name])
 		child := childAssetByName(parent.ID, "model_table", name, assets)
-		source := metaString(table, "Source", "source")
-		backing := "Transform SQL"
-		if source != "" {
-			backing = source
-		}
-		transform := metaMap(table, "Transform", "transform")
+		sourceName := metaString(table, "Source", "source")
 		rows = append(rows, map[string]any{
 			"name":        name,
 			"nameHref":    childHref(workspaceID, child),
-			"kind":        metricGridBadgeValue(metaString(table, "Kind", "kind"), "muted"),
-			"grain":       emptyDash(metaString(table, "Grain", "grain")),
-			"primaryKey":  emptyDash(metaString(table, "PrimaryKey", "primary_key")),
-			"backing":     backing,
+			"source":      emptyDash(sourceName),
+			"primary_key": emptyDash(metaString(table, "PrimaryKey", "primary_key")),
 			"description": emptyDash(metaString(table, "Description", "description")),
 			"reads":       strings.Join(dependentAssetNames(child.ID, "reads_source", assets, edges), ", "),
-			"sql":         sqlPreview(metaString(transform, "SQL", "sql")),
+			"sql":         sqlPreview(firstNonEmpty(metaString(table, "SQL", "sql"), metaString(asMap(metaValue(table, "Transform", "transform")), "SQL", "sql"))),
 		})
 	}
 	return metricGrid{
 		Columns: []metricGridColumn{
 			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "180px"},
-			{ID: "kind", Header: "Kind", Kind: "badge", Width: "110px"},
-			{ID: "grain", Header: "Grain", Kind: "code", Width: "140px"},
-			{ID: "primaryKey", Header: "Primary key", Kind: "code", Width: "150px"},
-			{ID: "backing", Header: "Source / transform", Kind: "expression", Width: "190px"},
+			{ID: "source", Header: "Source", Kind: "code", Width: "160px"},
+			{ID: "primary_key", Header: "Primary key", Kind: "code", Width: "150px"},
 			{ID: "reads", Header: "Reads", Kind: "expression", Width: "220px"},
-			{ID: "description", Header: "Description", Width: "260px"},
-			{ID: "sql", Header: "SQL preview", Kind: "expression", Width: "320px"},
+			{ID: "sql", Header: "SQL preview", Kind: "expression"},
 		},
 		Rows:     rows,
 		Empty:    "No model tables are defined for this semantic model.",
-		MinWidth: "1370px",
+		MinWidth: "980px",
+	}
+}
+
+func semanticFieldsGrid(workspaceID string, parent api.AssetResponse, assets []api.AssetResponse, meta map[string]any) metricGrid {
+	tables := metaMap(meta, "Tables", "tables", "Models", "models")
+	rows := []map[string]any{}
+	for _, tableName := range sortedMapKeys(tables) {
+		table := asMap(tables[tableName])
+		fields := metaMap(table, "Dimensions", "dimensions", "Fields", "fields")
+		for _, fieldName := range sortedMapKeys(fields) {
+			field := asMap(fields[fieldName])
+			key := parent.Key + "." + tableName + "." + fieldName
+			child := assetByTypeKey("field", key, assets)
+			rows = append(rows, map[string]any{
+				"name":       fieldName,
+				"nameHref":   childHref(workspaceID, child),
+				"table":      tableName,
+				"expression": firstNonEmpty(metaString(field, "Expr", "expr", "Expression", "expression"), tableName+"."+fieldName),
+				"type":       metricGridBadgeValue(metaString(field, "Type", "type"), "muted"),
+				"filter":     emptyDash(metaString(field, "Where", "where")),
+				"order":      emptyDash(metaString(field, "OrderExpr", "order_expr")),
+			})
+		}
+	}
+	return metricGrid{
+		Columns: []metricGridColumn{
+			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "170px"},
+			{ID: "table", Header: "Model table", Kind: "code", Width: "150px"},
+			{ID: "expression", Header: "Expression", Kind: "expression", Width: "260px"},
+			{ID: "type", Header: "Type", Kind: "badge", Width: "110px"},
+			{ID: "filter", Header: "Filter", Kind: "expression", Width: "220px"},
+			{ID: "order", Header: "Order", Kind: "expression", Width: "190px"},
+		},
+		Rows:     rows,
+		Empty:    "No fields are defined for this semantic model.",
+		MinWidth: "1100px",
+	}
+}
+
+func semanticMeasuresGrid(workspaceID string, parent api.AssetResponse, assets []api.AssetResponse, meta map[string]any) metricGrid {
+	measures := metaMap(meta, "Measures", "measures")
+	rows := make([]map[string]any, 0, len(measures))
+	for _, name := range sortedMapKeys(measures) {
+		measure := asMap(measures[name])
+		child := childAssetByName(parent.ID, "measure", name, assets)
+		rows = append(rows, map[string]any{
+			"name":       name,
+			"nameHref":   childHref(workspaceID, child),
+			"table":      emptyDash(metaString(measure, "Table", "table")),
+			"expression": firstNonEmpty(metaString(measure, "Expression", "expression"), metaString(measure, "Expr", "expr")),
+			"grain":      metricGridBadgeValue(metaString(measure, "Grain", "grain"), "muted"),
+			"format":     metricGridBadgeValue(metaString(measure, "Format", "format"), "accent"),
+		})
+	}
+	return metricGrid{
+		Columns: []metricGridColumn{
+			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "160px"},
+			{ID: "table", Header: "Table", Kind: "code", Width: "140px"},
+			{ID: "expression", Header: "Expression", Kind: "expression"},
+			{ID: "grain", Header: "Grain", Kind: "badge", Width: "110px"},
+			{ID: "format", Header: "Format", Kind: "badge", Width: "100px"},
+		},
+		Rows:     rows,
+		Empty:    "No measures are defined for this semantic model.",
+		MinWidth: "900px",
 	}
 }
 
@@ -1091,91 +1114,13 @@ func semanticRelationshipsGrid(meta map[string]any) metricGrid {
 	}
 }
 
-func metricViewDetailModel(model *assetDetailModel, asset api.AssetResponse, assets []api.AssetResponse) {
-	measures := childrenByType(asset.ID, "measure", assets)
-	dimensions := childrenByType(asset.ID, "dimension", assets)
-	semanticModel := assetParentTitle(asset.ParentID, assets)
-	if semanticModel == "" {
-		semanticModel = metaString(asset.Meta, "SemanticModel", "semantic_model")
-	}
-	model.Overview = append(model.Overview,
-		definitionFact{Label: "Semantic model", Value: semanticModel},
-		definitionFact{Label: "Base table", Value: metaString(asset.Meta, "BaseTable", "base_table")},
-		definitionFact{Label: "Timeseries", Value: metaString(asset.Meta, "Timeseries", "timeseries")},
-	)
-	model.Sections = append(model.Sections,
-		assetDetailSection{Title: fmt.Sprintf("Measures (%d)", len(measures)), Signal: "assetDetailsMeasuresGrid", Grid: metricViewMeasuresGrid(asset, measures)},
-		assetDetailSection{Title: fmt.Sprintf("Dimensions (%d)", len(dimensions)), Signal: "assetDetailsDimensionsGrid", Grid: metricViewDimensionsGrid(asset, dimensions)},
-	)
-}
-
-func metricViewMeasuresGrid(parent api.AssetResponse, measures []api.AssetResponse) metricGrid {
-	sort.Slice(measures, func(i, j int) bool {
-		return metricChildName(parent, measures[i]) < metricChildName(parent, measures[j])
-	})
-	rows := make([]map[string]any, 0, len(measures))
-	for _, measure := range measures {
-		name := metricChildName(parent, measure)
-		rows = append(rows, map[string]any{
-			"name":       name,
-			"nameHref":   workspaceAssetSectionHref(parent.WorkspaceID, measure.ID, "details"),
-			"label":      displayLabel(assetTitle(measure), name),
-			"expression": metaString(measure.Meta, "Expression", "expression"),
-			"unit":       metricGridBadgeValue(metaString(measure.Meta, "Unit", "unit"), "success"),
-			"format":     metricGridBadgeValue(metaString(measure.Meta, "Format", "format"), "accent"),
-		})
-	}
-	return metricGrid{
-		Columns: []metricGridColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "150px"},
-			{ID: "label", Header: "Label", Width: "160px"},
-			{ID: "expression", Header: "Expression", Kind: "expression"},
-			{ID: "unit", Header: "Unit", Kind: "badge", Width: "82px"},
-			{ID: "format", Header: "Format", Kind: "badge", Width: "88px"},
-		},
-		Rows:     rows,
-		Empty:    "No measures are defined for this metric view.",
-		MinWidth: "100%",
-	}
-}
-
-func metricViewDimensionsGrid(parent api.AssetResponse, dimensions []api.AssetResponse) metricGrid {
-	sort.Slice(dimensions, func(i, j int) bool {
-		return metricChildName(parent, dimensions[i]) < metricChildName(parent, dimensions[j])
-	})
-	rows := make([]map[string]any, 0, len(dimensions))
-	for _, dimension := range dimensions {
-		name := metricChildName(parent, dimension)
-		rows = append(rows, map[string]any{
-			"name":       name,
-			"nameHref":   workspaceAssetSectionHref(parent.WorkspaceID, dimension.ID, "details"),
-			"label":      displayLabel(assetTitle(dimension), name),
-			"expression": metaString(dimension.Meta, "Expr", "expr", "Expression", "expression"),
-			"filter":     emptyDash(metaString(dimension.Meta, "Where", "where")),
-			"order":      emptyDash(metaString(dimension.Meta, "OrderExpr", "order_expr")),
-		})
-	}
-	return metricGrid{
-		Columns: []metricGridColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "170px"},
-			{ID: "label", Header: "Label", Width: "180px"},
-			{ID: "expression", Header: "Expression", Kind: "expression", Width: "260px"},
-			{ID: "filter", Header: "Filter", Kind: "expression", Width: "220px"},
-			{ID: "order", Header: "Order", Kind: "expression", Width: "190px"},
-		},
-		Rows:     rows,
-		Empty:    "No dimensions are defined for this metric view.",
-		MinWidth: "1020px",
-	}
-}
-
 func dashboardDetailModel(model *assetDetailModel, asset api.AssetResponse, assets []api.AssetResponse) {
 	pages := childrenByType(asset.ID, "page", assets)
 	filters := childrenByType(asset.ID, "filter", assets)
 	visuals := childrenByType(asset.ID, "visual", assets)
 	tables := childrenByType(asset.ID, "table", assets)
 	model.Overview = append(model.Overview,
-		definitionFact{Label: "Metric views", Value: strings.Join(stringSlice(metaValue(asset.Meta, "MetricViews", "metrics_views")), ", ")},
+		definitionFact{Label: "Semantic model", Value: metaString(asset.Meta, "SemanticModel", "semantic_model")},
 		definitionFact{Label: "Tags", Value: strings.Join(stringSlice(metaValue(asset.Meta, "Tags", "tags")), ", ")},
 	)
 	model.Sections = append(model.Sections,
@@ -1220,8 +1165,7 @@ func dashboardFiltersGrid(parent api.AssetResponse, filters []api.AssetResponse)
 			"filter":     assetTitle(filter),
 			"filterHref": workspaceAssetSectionHref(parent.WorkspaceID, filter.ID, "details"),
 			"key":        assetChildName(parent, filter),
-			"metricView": emptyDash(metaString(filter.Meta, "MetricView", "metric_view", "metrics_view")),
-			"dimension":  emptyDash(metaString(filter.Meta, "Dimension", "dimension")),
+			"field":      emptyDash(metaString(filter.Meta, "Dimension", "dimension", "Field", "field")),
 			"type":       emptyDash(metaString(filter.Meta, "Type", "type", "Kind", "kind")),
 		})
 	}
@@ -1229,8 +1173,7 @@ func dashboardFiltersGrid(parent api.AssetResponse, filters []api.AssetResponse)
 		Columns: []metricGridColumn{
 			{ID: "filter", Header: "Filter", Kind: "link", HrefKey: "filterHref", Width: "190px"},
 			{ID: "key", Header: "Key", Kind: "code", Width: "160px"},
-			{ID: "metricView", Header: "Metric view", Kind: "code", Width: "150px"},
-			{ID: "dimension", Header: "Dimension", Kind: "code", Width: "180px"},
+			{ID: "field", Header: "Field", Kind: "code", Width: "220px"},
 			{ID: "type", Header: "Type", Width: "120px"},
 		},
 		Rows:     rows,
@@ -1248,7 +1191,6 @@ func dashboardVisualsGrid(parent api.AssetResponse, visuals []api.AssetResponse)
 			"visual":     assetTitle(visual),
 			"visualHref": workspaceAssetSectionHref(parent.WorkspaceID, visual.ID, "details"),
 			"key":        assetChildName(parent, visual),
-			"metricView": emptyDash(metaString(visual.Meta, "MetricView", "metric_view", "metrics_view")),
 			"type":       emptyDash(firstNonEmpty(metaString(visual.Meta, "Shape", "shape"), metaString(visual.Meta, "Type", "type"), metaString(visual.Meta, "Kind", "kind"))),
 			"measures":   emptyDash(strings.Join(stringSlice(metaValue(query, "Measures", "measures")), ", ")),
 			"dimensions": emptyDash(strings.Join(stringSlice(metaValue(query, "Dimensions", "dimensions")), ", ")),
@@ -1258,7 +1200,6 @@ func dashboardVisualsGrid(parent api.AssetResponse, visuals []api.AssetResponse)
 		Columns: []metricGridColumn{
 			{ID: "visual", Header: "Visual", Kind: "link", HrefKey: "visualHref", Width: "230px"},
 			{ID: "key", Header: "Key", Kind: "code", Width: "180px"},
-			{ID: "metricView", Header: "Metric view", Kind: "code", Width: "140px"},
 			{ID: "type", Header: "Type", Width: "120px"},
 			{ID: "measures", Header: "Measures", Kind: "expression", Width: "220px"},
 			{ID: "dimensions", Header: "Dimensions", Kind: "expression"},
@@ -1274,19 +1215,19 @@ func dashboardTablesGrid(parent api.AssetResponse, tables []api.AssetResponse) m
 	rows := make([]map[string]any, 0, len(tables))
 	for _, table := range tables {
 		rows = append(rows, map[string]any{
-			"table":      assetTitle(table),
-			"tableHref":  workspaceAssetSectionHref(parent.WorkspaceID, table.ID, "details"),
-			"key":        assetChildName(parent, table),
-			"metricView": emptyDash(metaString(table.Meta, "MetricView", "metric_view", "metrics_view")),
-			"rows":       emptyDash(strings.Join(stringSlice(metaValue(table.Meta, "Rows", "rows")), ", ")),
-			"measures":   emptyDash(strings.Join(stringSlice(metaValue(table.Meta, "Measures", "measures")), ", ")),
+			"table":     assetTitle(table),
+			"tableHref": workspaceAssetSectionHref(parent.WorkspaceID, table.ID, "details"),
+			"key":       assetChildName(parent, table),
+			"baseTable": emptyDash(metaString(metaMap(table.Meta, "Query", "query"), "Table", "table")),
+			"rows":      emptyDash(strings.Join(stringSlice(metaValue(table.Meta, "Rows", "rows")), ", ")),
+			"measures":  emptyDash(strings.Join(stringSlice(metaValue(table.Meta, "Measures", "measures")), ", ")),
 		})
 	}
 	return metricGrid{
 		Columns: []metricGridColumn{
 			{ID: "table", Header: "Table", Kind: "link", HrefKey: "tableHref", Width: "220px"},
 			{ID: "key", Header: "Key", Kind: "code", Width: "170px"},
-			{ID: "metricView", Header: "Metric view", Kind: "code", Width: "140px"},
+			{ID: "baseTable", Header: "Base table", Kind: "code", Width: "140px"},
 			{ID: "rows", Header: "Rows", Kind: "expression", Width: "280px"},
 			{ID: "measures", Header: "Measures", Kind: "expression"},
 		},
@@ -1653,6 +1594,15 @@ func childAssetByName(parentID, typ, name string, assets []api.AssetResponse) ap
 	return api.AssetResponse{}
 }
 
+func assetByTypeKey(typ, key string, assets []api.AssetResponse) api.AssetResponse {
+	for _, asset := range assets {
+		if asset.Type == typ && asset.Key == key {
+			return asset
+		}
+	}
+	return api.AssetResponse{}
+}
+
 func childrenByType(parentID, typ string, assets []api.AssetResponse) []api.AssetResponse {
 	out := []api.AssetResponse{}
 	for _, asset := range assets {
@@ -1753,14 +1703,6 @@ func assetTypeLabel(typ string) string {
 	switch typ {
 	case "semantic_model":
 		return "Semantic model"
-	case "metric_view":
-		return "Metric view"
-	case "cache_table":
-		return "Materialization"
-	case "dataset":
-		// Compatibility-only deployment/API type. User-facing workspace pages use
-		// "Model table" as the semantic vocabulary.
-		return "Model table"
 	case "model_table":
 		return "Model table"
 	default:

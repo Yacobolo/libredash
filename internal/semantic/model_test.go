@@ -33,17 +33,18 @@ func TestLoadOlistModel(t *testing.T) {
 	if got := model.Sources["orders"].Path; got != "olist_orders_dataset.csv" {
 		t.Fatalf("orders source path = %q, want olist_orders_dataset.csv", got)
 	}
-	if got := model.Tables["orders"].Kind; got != "fact" {
-		t.Fatalf("orders table kind = %q, want fact", got)
+	if _, ok := model.Tables["orders"]; !ok {
+		t.Fatal("orders model table missing")
 	}
-	if len(model.Relationships) != 6 {
-		t.Fatalf("relationship count = %d, want 6", len(model.Relationships))
+	if len(model.Relationships) != 1 {
+		t.Fatalf("relationship count = %d, want 1", len(model.Relationships))
 	}
 }
 
-func TestMetricViewRejectsMeasureOutsideBaseTable(t *testing.T) {
+func TestModelValidateRejectsMeasureOnUnreachableTable(t *testing.T) {
 	model := minimalSourceModel()
 	model.Sources["customers"] = Source{Path: "customers.csv"}
+	model.Measures = map[string]MetricMeasure{}
 	model.Tables["customers"] = ModelTable{
 		Kind:       "dimension",
 		Source:     "customers",
@@ -57,22 +58,14 @@ func TestMetricViewRejectsMeasureOutsideBaseTable(t *testing.T) {
 			"customer_count": {Label: "Customers", Expression: "COUNT(DISTINCT customers.customer_id)"},
 		},
 	}
-	if err := model.Validate(); err != nil {
-		t.Fatalf("Validate() error = %v, want nil", err)
+	model.Measures["customer_count"] = MetricMeasure{
+		Table:      "customers",
+		Grain:      "customer_id",
+		Expression: "COUNT(DISTINCT customers.customer_id)",
 	}
-	view := &MetricView{
-		ID:            "orders",
-		Title:         "Orders",
-		SemanticModel: "test",
-		BaseTable:     "orders",
-		Grain:         "order_id",
-		Time:          ViewTime{DefaultField: "orders.order_id"},
-		DimensionRefs: []string{"orders.order_id", "customers.state"},
-		MeasureRefs:   []string{"orders.order_count", "customers.customer_count"},
-	}
-	err := view.Validate(model)
-	if err == nil || !strings.Contains(err.Error(), `is owned by "customers", want base table "orders"`) {
-		t.Fatalf("Validate() error = %v, want non-base measure rejection", err)
+	err := model.Validate()
+	if err == nil || !strings.Contains(err.Error(), `no safe relationship path from "orders" to "customers"`) {
+		t.Fatalf("Validate() error = %v, want unreachable measure table rejection", err)
 	}
 }
 
@@ -452,7 +445,7 @@ sources:
 cache:
   tables:
     orders_cache:
-      sql: SELECT * FROM raw.orders
+      sql: SELECT * FROM source.orders
 datasets:
   orders:
     source: orders_cache
@@ -476,18 +469,9 @@ func loadOlistModel(t *testing.T) *Model {
 	return model
 }
 
-func loadOlistMetricViews(t *testing.T, model *Model) map[string]*MetricView {
-	t.Helper()
-	view, err := LoadMetricView(filepath.Join("..", "..", "dashboards", "olist", "orders.metrics.yaml"), model)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return map[string]*MetricView{view.ID: view}
-}
-
 func loadOlistDashboard(t *testing.T, model *Model) *Dashboard {
 	t.Helper()
-	report, err := LoadDashboard(filepath.Join("..", "..", "dashboards", "olist", "executive-sales.yaml"), loadOlistMetricViews(t, model))
+	report, err := LoadDashboard(filepath.Join("..", "..", "dashboards", "olist", "executive-sales.yaml"), map[string]*Model{"olist": model})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -508,6 +492,7 @@ func minimalSourceModel() *Model {
 		Sources: map[string]Source{
 			"orders": {Path: "orders.csv"},
 		},
+		BaseTable: "orders",
 		Tables: map[string]ModelTable{
 			"orders": {
 				Kind: "fact", Source: "orders", PrimaryKey: "order_id", Grain: "order_id",
@@ -515,6 +500,21 @@ func minimalSourceModel() *Model {
 				Measures:   map[string]MetricMeasure{"order_count": {Label: "Orders", Expression: "COUNT(*)"}},
 			},
 		},
+	}
+}
+
+func addIsolatedProductTable(model *Model) {
+	model.Tables["products"] = ModelTable{
+		Kind:       "model",
+		Source:     "products",
+		PrimaryKey: "product_id",
+		Grain:      "product_id",
+		Dimensions: map[string]MetricDimension{
+			"category": {Expr: "category"},
+		},
+	}
+	if model.Sources["products"].Path == "" {
+		model.Sources["products"] = Source{Path: "products.csv", Connection: model.DefaultConnection}
 	}
 }
 
@@ -530,6 +530,14 @@ func fieldRefs(fields ...string) []FieldRef {
 			}
 		}
 		refs[i] = FieldRef{Field: qualified, Alias: displayFieldName(qualified)}
+	}
+	return refs
+}
+
+func measureRefs(fields ...string) []FieldRef {
+	refs := make([]FieldRef, len(fields))
+	for i, field := range fields {
+		refs[i] = FieldRef{Field: field, Alias: displayFieldName(field)}
 	}
 	return refs
 }
@@ -603,7 +611,7 @@ func assertModelValidateError(t *testing.T, model *Model, contains string) {
 
 func assertDashboardValidateError(t *testing.T, report *Dashboard, model *Model, contains string) {
 	t.Helper()
-	err := report.Validate(loadOlistMetricViews(t, model))
+	err := report.Validate(map[string]*Model{"olist": model})
 	if err == nil {
 		t.Fatalf("Validate() error = nil, want %q", contains)
 	}

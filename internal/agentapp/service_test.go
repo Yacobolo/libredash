@@ -26,9 +26,9 @@ func TestReadOnlyToolsExposeWorkspaceFactsAndBoundRows(t *testing.T) {
 	if !strings.Contains(list, "executive-sales") {
 		t.Fatalf("list_dashboards output = %s", list)
 	}
-	describe := runTool(t, tools, "describe_metric_view", `{"metric_view_id":"orders"}`)
-	if !strings.Contains(describe, "executive-sales") || !strings.Contains(describe, "Orders Metrics") {
-		t.Fatalf("describe_metric_view output = %s", describe)
+	describe := runTool(t, tools, "describe_model", `{"model_id":"test"}`)
+	if !strings.Contains(describe, "executive-sales") || !strings.Contains(describe, "Test Model") {
+		t.Fatalf("describe_model output = %s", describe)
 	}
 	table := runTool(t, tools, "query_table", `{"dashboard_id":"executive-sales","page_id":"overview","table_id":"orders","count":500}`)
 	var tableOut dashboard.Table
@@ -54,39 +54,35 @@ func TestReadOnlyToolPayloadShapesStayStable(t *testing.T) {
 		t.Fatalf("dashboards payload = %#v", dashboards)
 	}
 
-	var metricView struct {
-		MetricView dashboard.CatalogMetricView `json:"metric_view"`
-		Usage      []struct {
-			DashboardID string `json:"dashboard_id"`
-			Pages       int    `json:"pages"`
-		} `json:"usage"`
-		DetailTools map[string]string `json:"detail_tools"`
+	var models struct {
+		Models []dashboard.CatalogModel `json:"models"`
 	}
-	if err := json.Unmarshal([]byte(runTool(t, tools, "describe_metric_view", `{"metric_view_id":"orders"}`)), &metricView); err != nil {
-		t.Fatalf("decode metric view: %v", err)
+	if err := json.Unmarshal([]byte(runTool(t, tools, "list_semantic_models", `{}`)), &models); err != nil {
+		t.Fatalf("decode semantic models: %v", err)
 	}
-	if metricView.MetricView.ID != "orders" || len(metricView.Usage) != 1 || metricView.Usage[0].DashboardID != "executive-sales" || metricView.DetailTools["table"] != "query_table" {
-		t.Fatalf("metric view payload = %#v", metricView)
+	if len(models.Models) != 1 || models.Models[0].ID != "test" {
+		t.Fatalf("semantic models payload = %#v", models)
 	}
 
 	var model struct {
-		ID          string                        `json:"id"`
-		MetricViews []dashboard.CatalogMetricView `json:"metric_views"`
-		Dashboards  []struct {
-			ID          string   `json:"id"`
-			MetricViews []string `json:"metric_views"`
-			Pages       int      `json:"pages"`
+		ID         string `json:"id"`
+		Dashboards []struct {
+			ID            string `json:"id"`
+			SemanticModel string `json:"semantic_model"`
+			Pages         int    `json:"pages"`
 		} `json:"dashboards"`
 		Counts *struct {
 			Sources       int `json:"sources"`
 			ModelTables   int `json:"model_tables"`
+			Fields        int `json:"fields"`
+			Measures      int `json:"measures"`
 			Relationships int `json:"relationships"`
 		} `json:"counts"`
 	}
 	if err := json.Unmarshal([]byte(runTool(t, tools, "describe_model", `{"model_id":"test"}`)), &model); err != nil {
 		t.Fatalf("decode model: %v", err)
 	}
-	if model.ID != "test" || len(model.MetricViews) != 1 || len(model.Dashboards) != 1 || model.Dashboards[0].ID != "executive-sales" || model.Counts == nil {
+	if model.ID != "test" || len(model.Dashboards) != 1 || model.Dashboards[0].ID != "executive-sales" || model.Dashboards[0].SemanticModel != "test" || model.Counts == nil {
 		t.Fatalf("model payload = %#v", model)
 	}
 }
@@ -134,7 +130,7 @@ func TestDescribeDashboardReturnsCompactManifest(t *testing.T) {
 	if got.Pages[0].Components[0].Kind != "visual" || got.Pages[0].Components[0].Ref == "" || got.Pages[0].Components[0].Title == "" {
 		t.Fatalf("visual component summary = %#v", got.Pages[0].Components[0])
 	}
-	if got.DetailTools["page_data"] != "query_dashboard_page" || got.DetailTools["metric_view"] != "describe_metric_view" {
+	if got.DetailTools["page_data"] != "query_dashboard_page" || got.DetailTools["model"] != "describe_model" {
 		t.Fatalf("detail tools = %#v", got.DetailTools)
 	}
 }
@@ -375,11 +371,11 @@ func TestServiceGenerateConversationTitleIsBestEffortAndSkipsUnsafeCases(t *test
 		PrincipalID:    scope.PrincipalID,
 		ConversationID: failing.ID,
 		Role:           platform.AgentMessageRoleUser,
-		ContentText:    "list metric views",
+		ContentText:    "list semantic models",
 	}); err != nil {
 		t.Fatalf("append failing user message: %v", err)
 	}
-	if updated, err := service.GenerateConversationTitle(ctx, scope, failing.ID); err != nil || updated.Title != "List metric views" {
+	if updated, err := service.GenerateConversationTitle(ctx, scope, failing.ID); err != nil || updated.Title != "List semantic models" {
 		t.Fatalf("failing provider title changed or errored: updated=%#v err=%v", updated, err)
 	}
 	if calls.Load() != 1 {
@@ -524,11 +520,8 @@ func (fakeAgentMetrics) Catalog() dashboard.Catalog {
 		Models: []dashboard.CatalogModel{
 			{ID: "test", Title: "Test Model", Description: "Fixture model"},
 		},
-		MetricViews: []dashboard.CatalogMetricView{
-			{ID: "orders", Title: "Orders Metrics", SemanticModel: "test", ModelTitle: "Test Model"},
-		},
 		Dashboards: []dashboard.CatalogDashboard{
-			{ID: "executive-sales", Title: "Executive Sales", Description: "Sales dashboard", MetricViews: []string{"orders"}, PageCount: 1},
+			{ID: "executive-sales", Title: "Executive Sales", Description: "Sales dashboard", SemanticModel: "test", PageCount: 1},
 		},
 	}
 }
@@ -538,18 +531,42 @@ func (fakeAgentMetrics) Report(id string) (semantic.Dashboard, *semantic.Model, 
 		return semantic.Dashboard{}, nil, false
 	}
 	return semantic.Dashboard{
-		ID:          "executive-sales",
-		Title:       "Executive Sales",
-		Description: "Sales dashboard",
-		MetricViews: []string{"orders"},
+		ID:            "executive-sales",
+		Title:         "Executive Sales",
+		Description:   "Sales dashboard",
+		SemanticModel: "test",
 		Visuals: map[string]semantic.Visual{
-			"orders": {Title: "Orders", MetricView: "orders"},
+			"orders": {Title: "Orders", Query: semantic.VisualQuery{Measures: []semantic.FieldRef{{Field: "order_count"}}}},
 		},
 		Tables: map[string]semantic.TableVisual{
-			"orders": {Title: "Orders", MetricView: "orders"},
+			"orders": {Title: "Orders", Query: semantic.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}},
 		},
 		Pages: []dashboard.Page{{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{{ID: "orders", Visual: "orders"}, {ID: "orders-table", Table: "orders"}}}},
-	}, &semantic.Model{Name: "test", Title: "Test Model"}, true
+	}, fakeSemanticModel(), true
+}
+
+func fakeSemanticModel() *semantic.Model {
+	return &semantic.Model{
+		Name:      "test",
+		Title:     "Test Model",
+		BaseTable: "orders",
+		Sources: map[string]semantic.Source{
+			"orders": {Path: "orders.csv"},
+		},
+		Tables: map[string]semantic.ModelTable{
+			"orders": {
+				Kind:       "fact",
+				Source:     "orders",
+				PrimaryKey: "order_id",
+				Dimensions: map[string]semantic.MetricDimension{
+					"order_id": {Expr: "order_id"},
+				},
+			},
+		},
+		Measures: map[string]semantic.MetricMeasure{
+			"order_count": {Table: "orders", Grain: "order_id", Expression: "COUNT(DISTINCT orders.order_id)"},
+		},
+	}
 }
 
 func (fakeAgentMetrics) Pages(id string) []dashboard.Page {
@@ -610,18 +627,18 @@ func (largeDashboardMetrics) Report(id string) (semantic.Dashboard, *semantic.Mo
 		report.Visuals[chartID] = semantic.Visual{
 			Title:           fmt.Sprintf("Chart %02d", pageIndex),
 			Type:            "bar",
-			Query:           semantic.VisualQuery{MetricView: "orders"},
+			Query:           semantic.VisualQuery{Measures: []semantic.FieldRef{{Field: "order_count"}}},
 			RendererOptions: map[string]any{"large": largeDashboardPayloadMarker + strings.Repeat("x", 4096)},
 		}
 		report.Visuals[kpiID] = semantic.Visual{
 			Title:   fmt.Sprintf("KPI %02d", pageIndex),
 			Kind:    "kpi",
-			Query:   semantic.VisualQuery{MetricView: "orders"},
+			Query:   semantic.VisualQuery{Measures: []semantic.FieldRef{{Field: "order_count"}}},
 			Options: map[string]any{"large": largeDashboardPayloadMarker + strings.Repeat("y", 4096)},
 		}
 		report.Tables[tableID] = semantic.TableVisual{
 			Title: fmt.Sprintf("Table %02d", pageIndex),
-			Query: semantic.TableQuery{MetricView: "orders"},
+			Query: semantic.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}},
 			Columns: []dashboard.TableColumn{{
 				Key:   largeDashboardPayloadMarker + strings.Repeat("z", 4096),
 				Label: "Large Column",

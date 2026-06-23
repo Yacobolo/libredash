@@ -1,6 +1,6 @@
 name: olist
 title: Olist Commerce Semantic Model
-description: Brazilian ecommerce semantic model backed by DuckDB import tables.
+description: Brazilian ecommerce semantic model backed by local Olist CSVs.
 
 default_connection: olist
 
@@ -13,43 +13,56 @@ connections:
 
 sources:
   orders:
+    connection: olist
     path: olist_orders_dataset.csv
   order_items:
+    connection: olist
     path: olist_order_items_dataset.csv
   payments:
+    connection: olist
     path: olist_order_payments_dataset.csv
   products:
+    connection: olist
     path: olist_products_dataset.csv
   customers:
+    connection: olist
     path: olist_customers_dataset.csv
   reviews:
+    connection: olist
     path: olist_order_reviews_dataset.csv
   translations:
+    connection: olist
     path: product_category_name_translation.csv
 
-tables:
+models:
   orders:
-    kind: fact
-    description: One row per order with explicit order-grain derived fields for v1 metric-view measures.
+    description: Order-grain model table with deliberately grain-aligned category, revenue, review, and delivery fields.
+    sources:
+      - orders
+      - payments
+      - reviews
+      - order_items
+      - products
+      - translations
     transform:
       sql: |
         WITH revenue AS (
           SELECT order_id, SUM(try_cast(payment_value AS DOUBLE)) AS revenue
-          FROM raw.payments
+          FROM source.payments
           GROUP BY order_id
         ),
         review AS (
           SELECT order_id, AVG(try_cast(review_score AS DOUBLE)) AS review_score
-          FROM raw.reviews
+          FROM source.reviews
           GROUP BY order_id
         ),
         category AS (
           SELECT
             oi.order_id,
             MIN(COALESCE(t.product_category_name_english, p.product_category_name, 'uncategorized')) AS category
-          FROM raw.order_items oi
-          LEFT JOIN raw.products p ON p.product_id = oi.product_id
-          LEFT JOIN raw.translations t ON t.product_category_name = p.product_category_name
+          FROM source.order_items oi
+          LEFT JOIN source.products p ON p.product_id = oi.product_id
+          LEFT JOIN source.translations t ON t.product_category_name = p.product_category_name
           GROUP BY oi.order_id
         )
         SELECT
@@ -74,41 +87,82 @@ tables:
             WHEN datediff('day', CAST(o.order_purchase_timestamp AS TIMESTAMP), CAST(o.order_delivered_customer_date AS TIMESTAMP)) <= 30 THEN '15-30 days'
             ELSE '31+ days'
           END AS delivery_bucket
-        FROM raw.orders o
+        FROM source.orders o
         LEFT JOIN revenue ON revenue.order_id = o.order_id
         LEFT JOIN review ON review.order_id = o.order_id
         LEFT JOIN category ON category.order_id = o.order_id
-    primary_key: order_id
-    grain: order_id
-    dimensions:
-      order_id:
-        label: Order ID
-        expr: order_id
-      customer_id:
-        label: Customer ID
-        expr: customer_id
-      purchase_month:
-        label: Purchase month
-        expr: purchase_month
-      purchase_timestamp:
-        label: Purchase timestamp
-        expr: purchase_timestamp
-        type: time
-      purchase_date:
-        label: Purchase date
-        expr: purchase_date
-      status:
-        label: Status
-        expr: status
-      category:
-        label: Category
-        expr: category
-      delivery_bucket:
-        label: Delivery speed
-        expr: delivery_bucket
-        where: delivery_bucket IS NOT NULL
-        order_expr: MIN(delivery_days)
+  customers:
+    source: customers
+
+semantic_models:
+  olist:
+    base_table: orders
+    tables:
+      orders:
+        model: orders
+        primary_key: order_id
+        fields:
+          order_id:
+            label: Order ID
+            expr: order_id
+          customer_id:
+            label: Customer ID
+            expr: customer_id
+          purchase_month:
+            label: Purchase month
+            expr: purchase_month
+          purchase_timestamp:
+            label: Purchase timestamp
+            expr: purchase_timestamp
+            type: time
+          purchase_date:
+            label: Purchase date
+            expr: purchase_date
+          status:
+            label: Status
+            expr: status
+          category:
+            label: Category
+            expr: category
+          revenue:
+            label: Revenue
+            expr: revenue
+            type: number
+          review_score:
+            label: Review
+            expr: review_score
+            type: number
+          delivery_days:
+            label: Delivery days
+            expr: delivery_days
+            type: number
+          delivery_bucket:
+            label: Delivery speed
+            expr: delivery_bucket
+            where: delivery_bucket IS NOT NULL
+            order_expr: MIN(delivery_days)
+      customers:
+        model: customers
+        primary_key: customer_id
+        fields:
+          customer_id:
+            label: Customer ID
+            expr: customer_id
+          state:
+            label: State
+            expr: customer_state
+    relationships:
+      - id: orders_customers
+        from: orders.customer_id
+        to: customers.customer_id
+        cardinality: many_to_one
+        active: true
     measures:
+      defaults:
+        table: orders
+        grain: order_id
+        time: orders.purchase_timestamp
+        grains: [day, week, month, quarter, year]
       order_count:
         label: Orders
         expression: COUNT(DISTINCT orders.order_id)
@@ -168,47 +222,3 @@ tables:
         label: Delivery max
         expression: MAX(orders.delivery_days)
         format: decimal
-  customers:
-    kind: dimension
-    source: customers
-    primary_key: customer_id
-    grain: customer_id
-    dimensions:
-      customer_id:
-        label: Customer ID
-        expr: customer_id
-      state:
-        label: State
-        expr: customer_state
-
-relationships:
-  - id: orders_customers
-    from: orders.customer_id
-    to: customers.customer_id
-    cardinality: many_to_one
-    active: true
-  - id: order_items_orders
-    from: order_items.order_id
-    to: orders.order_id
-    cardinality: many_to_one
-    active: false
-  - id: payments_orders
-    from: payments.order_id
-    to: orders.order_id
-    cardinality: many_to_one
-    active: false
-  - id: reviews_orders
-    from: reviews.order_id
-    to: orders.order_id
-    cardinality: many_to_one
-    active: false
-  - id: order_items_products
-    from: order_items.product_id
-    to: products.product_id
-    cardinality: many_to_one
-    active: false
-  - id: products_translations
-    from: products.product_category_name
-    to: translations.product_category_name
-    cardinality: many_to_one
-    active: false

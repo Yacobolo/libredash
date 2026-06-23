@@ -386,6 +386,7 @@ func TestDuckDBMetricsResolvesSourcePlans(t *testing.T) {
 			"embeddings": {Connection: "vectors", Path: "vectors/products.lance"},
 			"schemata":   {Connection: "remote_quack", Object: "information_schema.schemata"},
 		},
+		BaseTable: "orders",
 		Tables: map[string]semantic.ModelTable{
 			"orders": {
 				Kind: "fact", Source: "orders", PrimaryKey: "order_id", Grain: "order_id",
@@ -475,12 +476,14 @@ func TestDuckDBMetricsRegistersCSVSources(t *testing.T) {
 					Connection: "local_files",
 				},
 			},
+			BaseTable: "orders",
 			Tables: map[string]semantic.ModelTable{
 				"orders": {
-					Kind: "fact",
+					Kind:    "fact",
+					Sources: []string{"orders"},
 					Transform: semantic.ModelTransform{SQL: `
 						SELECT order_id, try_cast(revenue AS DOUBLE) AS revenue
-						FROM raw.orders
+						FROM source.orders
 					`},
 					PrimaryKey: "order_id",
 					Grain:      "order_id",
@@ -594,6 +597,7 @@ func TestDuckDBMetricsRegistersDatabaseSourceTwice(t *testing.T) {
 			Sources: map[string]semantic.Source{
 				"accounts": {Connection: "crm", Object: "accounts"},
 			},
+			BaseTable: "accounts",
 			Tables: map[string]semantic.ModelTable{
 				"accounts": {
 					Kind: "dimension", Source: "accounts", PrimaryKey: "id", Grain: "id",

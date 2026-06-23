@@ -38,7 +38,7 @@ Each model can point directly at a source or apply light SQL. This is where cast
 ```yaml
 models:
   orders:
-    source: olist_orders
+    sources: [olist_orders]
     sql: |
       SELECT
         order_id,
@@ -51,17 +51,20 @@ models:
     source: olist_customers
 ```
 
-LibreDash is not a transformation framework. Heavy ETL and long model chains belong upstream.
+Use `source` for direct one-source tables and `sources` for SQL-backed tables that read one or more sources. Authored SQL must reference inputs with `source.<name>`; `raw.<name>` is an internal runtime detail. LibreDash can infer simple `source.<name>` SQL references, but explicit `sources` metadata is the canonical lineage contract. LibreDash is not a transformation framework. Heavy ETL and long model chains belong upstream.
 
 ### Semantic Models
 
 Semantic models define the governed data model: tables and relationships.
+
+Every semantic model declares a `base_table`. This is the analytical root for v1: all semantic tables must be reachable from it through exactly one safe active relationship path.
 
 Tables are not required to be labeled as facts or dimensions. A table becomes fact-like when a measure uses it as its base table. A table becomes dimension-like when it is reached through a safe relationship path.
 
 ```yaml
 semantic_models:
   olist:
+    base_table: orders
     tables:
       orders:
         model: orders
@@ -80,6 +83,8 @@ semantic_models:
 
 The semantic model owns table identity, relationships, and measures.
 
+For v1, one semantic model is one connected, safe relationship graph. Unrelated fact islands should be authored as separate semantic models, not packed into one model.
+
 ### Measures
 
 Measures are governed reusable analytics definitions.
@@ -89,6 +94,7 @@ They live on the semantic model and reuse the same query metadata a visual can d
 ```yaml
 semantic_models:
   olist:
+    base_table: orders
     measures:
       defaults:
         table: orders
@@ -130,7 +136,7 @@ visuals:
       y: revenue
 ```
 
-Dashboards do not reference SQL joins, source files, physical cache tables, or internal materialization names.
+Dashboards do not reference SQL joins, source files, or generated physical serving names.
 
 ### Inline Queries
 
@@ -218,6 +224,8 @@ tables:
 - Dimensions may come from related tables through active many-to-one or one-to-one paths.
 - One-to-many, many-to-many, circular, ambiguous, inactive, or missing paths are rejected for dashboard queries.
 - Cross-fact measures are not supported in v1.
+- One semantic model must be one connected relationship graph for its measure base tables.
+- Unrelated subject areas belong in separate semantic models.
 - Unsafe analysis requires a new model at the correct grain or an explicit future view.
 
 ## Naming
@@ -233,8 +241,7 @@ Use these names in product language:
 
 Avoid these as primary user-facing concepts:
 
-- Dataset
-- Cache table
 - OBT
+- Generated serving table
 
-Those are implementation or compatibility terms. If physical optimization is shown, call it a materialization.
+Those are implementation terms. If physical optimization is shown, call it a materialization.

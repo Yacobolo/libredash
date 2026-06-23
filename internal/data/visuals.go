@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	semanticquery "github.com/Yacobolo/libredash/internal/query"
@@ -21,9 +22,11 @@ func (m *DuckDBMetrics) visuals(ctx context.Context, runtime *modelRuntime, repo
 		if err != nil {
 			return nil, err
 		}
-		metricView := m.workspace.MetricViews[visual.MetricView]
 		measureName := visual.Query.Measures[0].Field
-		measure := metricView.Measures[measureName]
+		measure := semantic.MetricMeasure{}
+		if resolved, err := runtime.model.ResolveMeasure(measureName); err == nil {
+			measure = resolved
+		}
 		title := visual.Title
 		if title == "" {
 			title = measure.Label
@@ -101,22 +104,27 @@ func (m *DuckDBMetrics) visualData(ctx context.Context, runtime *modelRuntime, r
 }
 
 func (m *DuckDBMetrics) categoryData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, visual.MetricView, filters, "visual", visualID)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "visual", visualID)
 	if err != nil {
 		return nil, err
 	}
-	dimensions := []semanticquery.Field{fieldRef(visual.Query.Dimensions[0].Field, "label")}
-	columns := []string{"label", "value"}
+	dimensionAlias := "label"
+	measureAlias := "value"
+	dimensions := []semanticquery.Field{fieldRef(visual.Query.Dimensions[0].Field, dimensionAlias)}
+	columns := []string{dimensionAlias, measureAlias}
 	if !visual.Query.Series.IsZero() {
 		dimensions = append(dimensions, fieldRef(visual.Query.Series.Field, "series"))
-		columns = []string{"label", "series", "value"}
+		columns = []string{dimensionAlias, "series", measureAlias}
+	}
+	sorts := visualSorts(visual)
+	if len(visual.Query.Sort) == 0 {
+		sorts = []semanticquery.Sort{{Field: dimensionAlias, Direction: "asc"}}
 	}
 	data, err := m.querySemanticDatums(ctx, runtime, semanticquery.Request{
-		MetricView: visual.MetricView,
 		Dimensions: dimensions,
-		Measures:   []semanticquery.Field{fieldRef(visual.Query.Measures[0].Field, "value")},
+		Measures:   []semanticquery.Field{queryFieldRef(visual.Query.Measures[0], measureAlias)},
 		Filters:    queryFilters,
-		Sort:       visualSorts(visual),
+		Sort:       sorts,
 		Limit:      visual.Query.Limit,
 	})
 	if err != nil {
@@ -133,19 +141,29 @@ func (m *DuckDBMetrics) categoryData(ctx context.Context, runtime *modelRuntime,
 	return data, nil
 }
 
+func defaultString(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
+}
+
+func fieldAlias(field string) string {
+	parts := strings.Split(field, ".")
+	return parts[len(parts)-1]
+}
+
 func (m *DuckDBMetrics) categoryMultiMeasureData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, visual.MetricView, filters, "visual", visualID)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "visual", visualID)
 	if err != nil {
 		return nil, err
 	}
-	metricView := m.workspace.MetricViews[visual.MetricView]
 	data := []dashboard.Datum{}
 
 	for _, measureName := range visual.Query.Measures {
 		rows, err := m.querySemanticDatums(ctx, runtime, semanticquery.Request{
-			MetricView: visual.MetricView,
 			Dimensions: []semanticquery.Field{fieldRef(visual.Query.Dimensions[0].Field, "label")},
-			Measures:   []semanticquery.Field{fieldRef(measureName.Field, "value")},
+			Measures:   []semanticquery.Field{queryFieldRef(measureName, "value")},
 			Filters:    queryFilters,
 			Sort:       visualSorts(visual),
 			Limit:      visual.Query.Limit,
@@ -153,7 +171,7 @@ func (m *DuckDBMetrics) categoryMultiMeasureData(ctx context.Context, runtime *m
 		if err != nil {
 			return nil, err
 		}
-		measure := metricView.Measures[measureName.Field]
+		measure, _ := runtime.model.ResolveMeasure(measureName.Field)
 		for _, row := range rows {
 			row["series"] = measureLabel(measureName.Field, measure)
 		}
@@ -181,14 +199,13 @@ func (m *DuckDBMetrics) categoryDeltaData(ctx context.Context, runtime *modelRun
 }
 
 func (m *DuckDBMetrics) binnedMeasureData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, visual.MetricView, filters, "visual", visualID)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "visual", visualID)
 	if err != nil {
 		return nil, err
 	}
-	rawPlan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).PlanRawValues(semanticquery.RawValueRequest{
-		MetricView: visual.MetricView,
-		Measure:    fieldRef(visual.Query.Measures[0].Field, "value"),
-		Filters:    queryFilters,
+	rawPlan, err := semanticquery.NewPlanner(runtime.model).PlanRawValues(semanticquery.RawValueRequest{
+		Measure: queryFieldRef(visual.Query.Measures[0], "value"),
+		Filters: queryFilters,
 	})
 	if err != nil {
 		return nil, err
@@ -251,7 +268,7 @@ ORDER BY bucket ASC`, rawPlan.SQL, bucketExpr)
 }
 
 func (m *DuckDBMetrics) hierarchyData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, visual.MetricView, filters, "visual", visualID)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "visual", visualID)
 	if err != nil {
 		return nil, err
 	}
@@ -262,10 +279,9 @@ func (m *DuckDBMetrics) hierarchyData(ctx context.Context, runtime *modelRuntime
 		dimensions = append(dimensions, fieldRef(dimensionName.Field, alias))
 		levelAliases = append(levelAliases, alias)
 	}
-	plan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).Plan(semanticquery.Request{
-		MetricView: visual.MetricView,
+	plan, err := semanticquery.NewPlanner(runtime.model).Plan(semanticquery.Request{
 		Dimensions: dimensions,
-		Measures:   []semanticquery.Field{fieldRef(visual.Query.Measures[0].Field, "value")},
+		Measures:   []semanticquery.Field{queryFieldRef(visual.Query.Measures[0], "value")},
 		Filters:    queryFilters,
 		Sort:       visualSorts(visual),
 		Limit:      visual.Query.Limit,
@@ -306,16 +322,20 @@ func (m *DuckDBMetrics) hierarchyData(ctx context.Context, runtime *modelRuntime
 }
 
 func (m *DuckDBMetrics) singleValueData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	metricView := m.workspace.MetricViews[visual.MetricView]
-	measureName := visual.Query.Measures[0].Field
+	measureRef := visual.Query.Measures[0]
+	measureName := measureRef.Field
 	title := visual.Title
 	if title == "" {
-		title = metricView.Measures[measureName].Label
+		if measure, err := runtime.model.ResolveMeasure(measureName); err == nil {
+			title = measure.Label
+		} else if measureRef.Measure.Label != "" {
+			title = measureRef.Measure.Label
+		}
 	}
 	if title == "" {
-		title = measureName
+		title = defaultString(measureName, measureRef.Alias)
 	}
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, visual.MetricView, filters, "visual", visualID)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "visual", visualID)
 	if err != nil {
 		return nil, err
 	}
@@ -328,9 +348,8 @@ func (m *DuckDBMetrics) singleValueData(ctx context.Context, runtime *modelRunti
 		sorts = nil
 	}
 	data, err := m.querySemanticDatums(ctx, runtime, semanticquery.Request{
-		MetricView: visual.MetricView,
 		Dimensions: dimensions,
-		Measures:   []semanticquery.Field{fieldRef(measureName, "value")},
+		Measures:   []semanticquery.Field{queryFieldRef(measureRef, "value")},
 		Filters:    queryFilters,
 		Sort:       sorts,
 		Limit:      visual.Query.Limit,
@@ -361,17 +380,16 @@ func (m *DuckDBMetrics) dimensionPairData(ctx context.Context, runtime *modelRun
 	if rightAlias == "column" {
 		rightSQLAlias = "chart_column"
 	}
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, visual.MetricView, filters, "visual", visualID)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "visual", visualID)
 	if err != nil {
 		return nil, err
 	}
 	data, err := m.querySemanticDatums(ctx, runtime, semanticquery.Request{
-		MetricView: visual.MetricView,
 		Dimensions: []semanticquery.Field{
 			fieldRef(visual.Query.Dimensions[0].Field, leftAlias),
 			fieldRef(visual.Query.Dimensions[1].Field, rightSQLAlias),
 		},
-		Measures: []semanticquery.Field{fieldRef(visual.Query.Measures[0].Field, "value")},
+		Measures: []semanticquery.Field{queryFieldRef(visual.Query.Measures[0], "value")},
 		Filters:  queryFilters,
 		Sort:     visualSorts(visual),
 		Limit:    visual.Query.Limit,
@@ -392,14 +410,13 @@ func (m *DuckDBMetrics) dimensionPairData(ctx context.Context, runtime *modelRun
 }
 
 func (m *DuckDBMetrics) geoData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, visual.MetricView, filters, "visual", visualID)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "visual", visualID)
 	if err != nil {
 		return nil, err
 	}
 	data, err := m.querySemanticDatums(ctx, runtime, semanticquery.Request{
-		MetricView: visual.MetricView,
 		Dimensions: []semanticquery.Field{fieldRef(visual.Query.Dimensions[0].Field, "name")},
-		Measures:   []semanticquery.Field{fieldRef(visual.Query.Measures[0].Field, "value")},
+		Measures:   []semanticquery.Field{queryFieldRef(visual.Query.Measures[0], "value")},
 		Filters:    queryFilters,
 		Sort:       visualSorts(visual),
 		Limit:      visual.Query.Limit,
@@ -412,18 +429,17 @@ func (m *DuckDBMetrics) geoData(ctx context.Context, runtime *modelRuntime, repo
 }
 
 func (m *DuckDBMetrics) ohlcData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, visual.MetricView, filters, "visual", visualID)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "visual", visualID)
 	if err != nil {
 		return nil, err
 	}
 	return m.querySemanticDatums(ctx, runtime, semanticquery.Request{
-		MetricView: visual.MetricView,
 		Dimensions: []semanticquery.Field{fieldRef(visual.Query.Dimensions[0].Field, "label")},
 		Measures: []semanticquery.Field{
-			fieldRef(visual.Query.Measures[0].Field, "open"),
-			fieldRef(visual.Query.Measures[1].Field, "close"),
-			fieldRef(visual.Query.Measures[2].Field, "low"),
-			fieldRef(visual.Query.Measures[3].Field, "high"),
+			queryFieldRef(visual.Query.Measures[0], "open"),
+			queryFieldRef(visual.Query.Measures[1], "close"),
+			queryFieldRef(visual.Query.Measures[2], "low"),
+			queryFieldRef(visual.Query.Measures[3], "high"),
 		},
 		Filters: queryFilters,
 		Sort:    visualSorts(visual),
@@ -432,14 +448,13 @@ func (m *DuckDBMetrics) ohlcData(ctx context.Context, runtime *modelRuntime, rep
 }
 
 func (m *DuckDBMetrics) distributionData(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, visualID string, visual semantic.Visual, filters dashboard.Filters) ([]dashboard.Datum, error) {
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, visual.MetricView, filters, "visual", visualID)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "visual", visualID)
 	if err != nil {
 		return nil, err
 	}
-	rawPlan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).PlanRawValues(semanticquery.RawValueRequest{
-		MetricView: visual.MetricView,
+	rawPlan, err := semanticquery.NewPlanner(runtime.model).PlanRawValues(semanticquery.RawValueRequest{
 		Dimensions: []semanticquery.Field{fieldRef(visual.Query.Dimensions[0].Field, "label")},
-		Measure:    fieldRef(visual.Query.Measures[0].Field, "value"),
+		Measure:    queryFieldRef(visual.Query.Measures[0], "value"),
 		Filters:    queryFilters,
 	})
 	if err != nil {
@@ -496,7 +511,7 @@ func (m *DuckDBMetrics) queryDatums(ctx context.Context, runtime *modelRuntime, 
 }
 
 func (m *DuckDBMetrics) querySemanticDatums(ctx context.Context, runtime *modelRuntime, request semanticquery.Request) ([]dashboard.Datum, error) {
-	plan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).Plan(request)
+	plan, err := semanticquery.NewPlanner(runtime.model).Plan(request)
 	if err != nil {
 		return nil, err
 	}

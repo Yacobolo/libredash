@@ -34,20 +34,75 @@ go run ./cmd/libredash
 
 - `GET /` renders the file-backed dashboard catalog with gomponents.
 - `GET /dashboards/{dashboard}` opens a dashboard, and `GET /dashboards/{dashboard}/pages/{page}` renders a report page.
-- `GET /workspaces` renders published BI workspaces, and `GET /workspaces/{workspace}` renders canonical dashboard, semantic model, metric view, and connection assets.
-- `GET /workspaces/{workspace}/assets/{asset}/details` renders canonical asset details, including semantic model and metric view definitions.
+- `GET /workspaces` renders published BI workspaces, and `GET /workspaces/{workspace}` renders canonical dashboard and semantic model assets.
+- `GET /connections` renders global connection administration and inspection.
+- `GET /workspaces/{workspace}/assets/{asset}/details` renders canonical asset details, including semantic model, model table, field, measure, source, and dashboard definitions.
 - `GET /workspaces/{workspace}/assets/{asset}/lineage` renders canonical asset lineage.
 - `GET /updates?dashboard={dashboard}&page={page}` opens a long-running Datastar SSE stream and patches signals with `datastar.MarshalAndPatchSignals`.
 - DuckDB registers local CSV files as views and materializes model-scoped import tables.
-- `dashboards/catalog.yaml` discovers semantic models, metric views, and dashboards.
-- Semantic model YAML owns sources, model tables, dimensions, measures, and relationships; metric view YAML exposes curated business fields.
-- Dashboard YAML owns pages, filters, KPIs, visuals, tables, and interactions over metric views.
+- `dashboards/catalog.yaml` discovers semantic models and dashboards.
+- Semantic model YAML follows `sources -> models -> semantic model`: sources are raw physical inputs, models are light DuckDB-backed preparation tables, and semantic models own tables, fields, relationships, and measures.
+- Dashboard YAML owns pages, filters, KPIs, visuals, tables, and interactions over semantic model fields and measures.
 - Lit chart components bind to signal paths such as `charts.revenue`.
 - The bundled `datastar-inspector` web component shows live Datastar signals in the browser.
 
 ## Source Model
 
-Semantic model YAML declares user-facing `sources` and named `connections`. LibreDash compiles these declarations into DuckDB `raw.*` views and keeps DuckDB extension, secret, and scan setup behind the source contract. Each source is an object with exactly one of `path` or `object`.
+Semantic model YAML declares user-facing `sources` and named `connections`. LibreDash compiles these declarations into DuckDB `raw.*` and `source.*` views and keeps DuckDB extension, secret, and scan setup behind the source contract. Each source is an object with exactly one of `path` or `object`.
+
+Model tables live under `models` and contain light preparation SQL or direct source references. They are not a general transformation framework; they are the place to align grain, clean fields, and prepare fact/dimension tables before the governed semantic model consumes them.
+
+```yaml
+models:
+  orders:
+    sources: [orders, payments]
+    transform:
+      sql: |
+        SELECT o.order_id, o.customer_id, SUM(p.payment_value) AS revenue
+        FROM source.orders o
+        LEFT JOIN source.payments p ON p.order_id = o.order_id
+        GROUP BY o.order_id, o.customer_id
+
+  customers:
+    source: customers
+```
+
+Semantic models expose model tables, fields, safe relationships, and SQL aggregate measures. Dashboards query these directly.
+
+```yaml
+semantic_models:
+  olist:
+    base_table: orders
+    tables:
+      orders:
+        model: orders
+        primary_key: order_id
+        fields:
+          order_id: {expr: order_id}
+          customer_id: {expr: customer_id}
+          revenue: {expr: revenue, type: number}
+      customers:
+        model: customers
+        primary_key: customer_id
+        fields:
+          state: {expr: customer_state}
+    relationships:
+      - from: orders.customer_id
+        to: customers.customer_id
+        cardinality: many_to_one
+        active: true
+    measures:
+      defaults:
+        table: orders
+        grain: order_id
+        time: orders.purchase_timestamp
+        grains: [day, week, month, quarter, year]
+      revenue:
+        expression: SUM(orders.revenue)
+        format: currency
+```
+
+`base_table` is the required semantic-model root; every table in the model must be reachable from it through one safe active relationship path.
 
 Local CSV:
 

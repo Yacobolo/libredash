@@ -34,7 +34,7 @@ func (s *Service) toolDefinitions(scope Scope) []agent.ToolDefinition {
 		},
 		{
 			Name:        "describe_dashboard",
-			Description: "Return a compact dashboard manifest with page/component references. Use query_dashboard_page or describe_metric_view for details.",
+			Description: "Return a compact dashboard manifest with page/component references. Use describe_model, query_dashboard_page, or query_table for details.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"dashboard_id":{"type":"string"}},"required":["dashboard_id"],"additionalProperties":false}`),
 			Handler: s.tool(func(ctx context.Context, raw json.RawMessage) (any, error) {
 				var input struct {
@@ -51,42 +51,16 @@ func (s *Service) toolDefinitions(scope Scope) []agent.ToolDefinition {
 			}),
 		},
 		{
-			Name:        "list_metric_views",
-			Description: "List metric views available in the current workspace.",
+			Name:        "list_semantic_models",
+			Description: "List semantic models available in the current workspace.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`),
 			Handler: s.tool(func(ctx context.Context, _ json.RawMessage) (any, error) {
-				return metricViewListPayload{MetricViews: s.metrics.Catalog().MetricViews}, nil
-			}),
-		},
-		{
-			Name:        "describe_metric_view",
-			Description: "Describe a metric view catalog entry and where dashboards use it.",
-			InputSchema: json.RawMessage(`{"type":"object","properties":{"metric_view_id":{"type":"string"}},"required":["metric_view_id"],"additionalProperties":false}`),
-			Handler: s.tool(func(ctx context.Context, raw json.RawMessage) (any, error) {
-				var input struct {
-					MetricViewID string `json:"metric_view_id"`
-				}
-				if err := json.Unmarshal(raw, &input); err != nil {
-					return nil, err
-				}
-				view, ok := metricViewSummary(s.metrics.Catalog(), input.MetricViewID)
-				if !ok {
-					return nil, fmt.Errorf("metric view %q not found", input.MetricViewID)
-				}
-				return metricViewDescriptionPayload{
-					MetricView: view,
-					Usage:      metricViewUsage(s.metrics, input.MetricViewID),
-					DetailTools: map[string]string{
-						"dashboard": "describe_dashboard",
-						"page_data": "query_dashboard_page",
-						"table":     "query_table",
-					},
-				}, nil
+				return semanticModelListPayload{Models: s.metrics.Catalog().Models}, nil
 			}),
 		},
 		{
 			Name:        "describe_model",
-			Description: "Describe a semantic model summary, its model tables, metric views, and dashboard usage.",
+			Description: "Describe a semantic model summary, its model tables, measures, and dashboard usage.",
 			InputSchema: json.RawMessage(`{"type":"object","properties":{"model_id":{"type":"string"}},"required":["model_id"],"additionalProperties":false}`),
 			Handler: s.tool(func(ctx context.Context, raw json.RawMessage) (any, error) {
 				var input struct {
@@ -198,23 +172,8 @@ type dashboardListPayload struct {
 	Dashboards []dashboard.CatalogDashboard `json:"dashboards"`
 }
 
-type metricViewListPayload struct {
-	MetricViews []dashboard.CatalogMetricView `json:"metric_views"`
-}
-
-type metricViewDescriptionPayload struct {
-	MetricView  dashboard.CatalogMetricView `json:"metric_view"`
-	Usage       []metricViewUsageSummary    `json:"usage"`
-	DetailTools map[string]string           `json:"detail_tools"`
-}
-
-type metricViewUsageSummary struct {
-	DashboardID    string `json:"dashboard_id"`
-	DashboardTitle string `json:"dashboard_title"`
-	Visuals        int    `json:"visuals"`
-	Tables         int    `json:"tables"`
-	Filters        int    `json:"filters"`
-	Pages          int    `json:"pages"`
+type semanticModelListPayload struct {
+	Models []dashboard.CatalogModel `json:"models"`
 }
 
 type modelRef struct {
@@ -229,64 +188,20 @@ func modelSummary(model *semantic.Model) *modelRef {
 	return &modelRef{ID: model.Name, Title: model.Title}
 }
 
-func metricViewSummary(catalog dashboard.Catalog, id string) (dashboard.CatalogMetricView, bool) {
-	for _, view := range catalog.MetricViews {
-		if view.ID == id {
-			return view, true
-		}
-	}
-	return dashboard.CatalogMetricView{}, false
-}
-
-func metricViewUsage(metrics Metrics, id string) []metricViewUsageSummary {
-	catalog := metrics.Catalog()
-	usage := make([]metricViewUsageSummary, 0)
-	for _, dashboardSummary := range catalog.Dashboards {
-		report, _, ok := metrics.Report(dashboardSummary.ID)
-		if !ok || !containsString(report.MetricViews, id) {
-			continue
-		}
-		visuals, tables, filters := 0, 0, 0
-		for _, visual := range report.Visuals {
-			if visual.MetricView == id || visual.Query.MetricView == id {
-				visuals++
-			}
-		}
-		for _, table := range report.Tables {
-			if table.MetricView == id || table.Query.MetricView == id {
-				tables++
-			}
-		}
-		for _, filter := range report.Filters {
-			if filter.MetricView == id {
-				filters++
-			}
-		}
-		usage = append(usage, metricViewUsageSummary{
-			DashboardID:    report.ID,
-			DashboardTitle: report.Title,
-			Visuals:        visuals,
-			Tables:         tables,
-			Filters:        filters,
-			Pages:          len(metrics.Pages(report.ID)),
-		})
-	}
-	return usage
-}
-
 type modelDescriptionPayload struct {
-	ID          string                        `json:"id"`
-	Title       string                        `json:"title"`
-	Description string                        `json:"description"`
-	MetricViews []dashboard.CatalogMetricView `json:"metric_views"`
-	Dashboards  []modelDashboardUsage         `json:"dashboards"`
-	Counts      *semanticModelCounts          `json:"counts,omitempty"`
-	Tables      []semanticModelTableSummary   `json:"tables,omitempty"`
+	ID          string                      `json:"id"`
+	Title       string                      `json:"title"`
+	Description string                      `json:"description"`
+	Dashboards  []modelDashboardUsage       `json:"dashboards"`
+	Counts      *semanticModelCounts        `json:"counts,omitempty"`
+	Tables      []semanticModelTableSummary `json:"tables,omitempty"`
 }
 
 type semanticModelCounts struct {
 	Sources       int `json:"sources"`
 	ModelTables   int `json:"model_tables"`
+	Fields        int `json:"fields"`
+	Measures      int `json:"measures"`
 	Relationships int `json:"relationships"`
 }
 
@@ -295,15 +210,14 @@ type semanticModelTableSummary struct {
 	Kind        string `json:"kind"`
 	Source      string `json:"source"`
 	Description string `json:"description"`
-	Dimensions  int    `json:"dimensions"`
-	Measures    int    `json:"measures"`
+	Fields      int    `json:"fields"`
 }
 
 type modelDashboardUsage struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	MetricViews []string `json:"metric_views"`
-	Pages       int      `json:"pages"`
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	SemanticModel string `json:"semantic_model"`
+	Pages         int    `json:"pages"`
 }
 
 func modelDescription(metrics Metrics, id string) (modelDescriptionPayload, bool) {
@@ -323,13 +237,18 @@ func modelDescription(metrics Metrics, id string) (modelDescriptionPayload, bool
 		ID:          catalogModel.ID,
 		Title:       catalogModel.Title,
 		Description: catalogModel.Description,
-		MetricViews: metricViewsForModel(catalog, id),
 		Dashboards:  dashboardsForModel(metrics, id),
 	}
 	if model := semanticModelForID(metrics, id); model != nil {
+		fieldCount := 0
+		for _, table := range model.Tables {
+			fieldCount += len(table.Dimensions)
+		}
 		out.Counts = &semanticModelCounts{
 			Sources:       len(model.Sources),
 			ModelTables:   len(model.Tables),
+			Fields:        fieldCount,
+			Measures:      len(model.Measures),
 			Relationships: len(model.Relationships),
 		}
 		tables := make([]semanticModelTableSummary, 0, len(model.Tables))
@@ -339,8 +258,7 @@ func modelDescription(metrics Metrics, id string) (modelDescriptionPayload, bool
 				Kind:        table.Kind,
 				Source:      table.Source,
 				Description: table.Description,
-				Dimensions:  len(table.Dimensions),
-				Measures:    len(table.Measures),
+				Fields:      len(table.Dimensions),
 			})
 		}
 		out.Tables = tables
@@ -348,28 +266,18 @@ func modelDescription(metrics Metrics, id string) (modelDescriptionPayload, bool
 	return out, true
 }
 
-func metricViewsForModel(catalog dashboard.Catalog, modelID string) []dashboard.CatalogMetricView {
-	out := make([]dashboard.CatalogMetricView, 0)
-	for _, view := range catalog.MetricViews {
-		if view.SemanticModel == modelID {
-			out = append(out, view)
-		}
-	}
-	return out
-}
-
 func dashboardsForModel(metrics Metrics, modelID string) []modelDashboardUsage {
 	out := make([]modelDashboardUsage, 0)
 	for _, dashboardSummary := range metrics.Catalog().Dashboards {
 		report, model, ok := metrics.Report(dashboardSummary.ID)
-		if !ok || model == nil || model.Name != modelID {
+		if !ok || (report.SemanticModel != modelID && (model == nil || model.Name != modelID)) {
 			continue
 		}
 		out = append(out, modelDashboardUsage{
-			ID:          report.ID,
-			Title:       report.Title,
-			MetricViews: report.MetricViews,
-			Pages:       len(metrics.Pages(report.ID)),
+			ID:            report.ID,
+			Title:         report.Title,
+			SemanticModel: report.SemanticModel,
+			Pages:         len(metrics.Pages(report.ID)),
 		})
 	}
 	return out
@@ -385,24 +293,15 @@ func semanticModelForID(metrics Metrics, modelID string) *semantic.Model {
 	return nil
 }
 
-func containsString(values []string, value string) bool {
-	for _, candidate := range values {
-		if candidate == value {
-			return true
-		}
-	}
-	return false
-}
-
 type dashboardManifestSummary struct {
-	ID          string                  `json:"id"`
-	Title       string                  `json:"title"`
-	Description string                  `json:"description,omitempty"`
-	MetricViews []string                `json:"metric_views"`
-	Model       *modelRef               `json:"model,omitempty"`
-	Counts      dashboardManifestCounts `json:"counts"`
-	Pages       []dashboardManifestPage `json:"pages"`
-	DetailTools map[string]string       `json:"detail_tools"`
+	ID            string                  `json:"id"`
+	Title         string                  `json:"title"`
+	Description   string                  `json:"description,omitempty"`
+	SemanticModel string                  `json:"semantic_model,omitempty"`
+	Model         *modelRef               `json:"model,omitempty"`
+	Counts        dashboardManifestCounts `json:"counts"`
+	Pages         []dashboardManifestPage `json:"pages"`
+	DetailTools   map[string]string       `json:"detail_tools"`
 }
 
 type dashboardManifestCounts struct {
@@ -431,11 +330,11 @@ func dashboardManifest(report semantic.Dashboard, model *semantic.Model, pages [
 		pages = report.Pages
 	}
 	out := dashboardManifestSummary{
-		ID:          report.ID,
-		Title:       report.Title,
-		Description: report.Description,
-		MetricViews: report.MetricViews,
-		Model:       modelSummary(model),
+		ID:            report.ID,
+		Title:         report.Title,
+		Description:   report.Description,
+		SemanticModel: report.SemanticModel,
+		Model:         modelSummary(model),
 		Counts: dashboardManifestCounts{
 			Pages:   len(pages),
 			Visuals: len(report.Visuals),
@@ -444,9 +343,9 @@ func dashboardManifest(report semantic.Dashboard, model *semantic.Model, pages [
 		},
 		Pages: make([]dashboardManifestPage, 0, len(pages)),
 		DetailTools: map[string]string{
-			"metric_view": "describe_metric_view",
-			"page_data":   "query_dashboard_page",
-			"table_data":  "query_table",
+			"model":      "describe_model",
+			"page_data":  "query_dashboard_page",
+			"table_data": "query_table",
 		},
 	}
 	for _, page := range pages {

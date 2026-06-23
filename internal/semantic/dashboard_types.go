@@ -2,39 +2,40 @@ package semantic
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"gopkg.in/yaml.v3"
 )
 
 type Dashboard struct {
-	ID          string                      `yaml:"id"`
-	Title       string                      `yaml:"title"`
-	Description string                      `yaml:"description"`
-	MetricViews []string                    `yaml:"metric_views"`
-	Filters     map[string]FilterDefinition `yaml:"filters"`
-	Visuals     map[string]Visual           `yaml:"visuals"`
-	Tables      map[string]TableVisual      `yaml:"tables"`
-	Pages       []dashboard.Page            `yaml:"pages"`
+	ID            string                      `yaml:"id"`
+	Title         string                      `yaml:"title"`
+	Description   string                      `yaml:"description"`
+	SemanticModel string                      `yaml:"semantic_model"`
+	Filters       map[string]FilterDefinition `yaml:"filters"`
+	Visuals       map[string]Visual           `yaml:"visuals"`
+	Tables        map[string]TableVisual      `yaml:"tables"`
+	Pages         []dashboard.Page            `yaml:"pages"`
 }
 
 type FilterDefinition struct {
-	Type             string         `yaml:"type" json:"type"`
-	Label            string         `yaml:"label" json:"label"`
-	MetricView       string         `yaml:"metric_view" json:"metricsView"`
-	Dimension        string         `yaml:"field" json:"dimension"`
-	Default          FilterDefault  `yaml:"default" json:"default"`
-	Custom           bool           `yaml:"custom" json:"custom,omitempty"`
-	Presets          []FilterPreset `yaml:"presets" json:"presets,omitempty"`
-	Operator         string         `yaml:"operator" json:"operator,omitempty"`
-	Values           FilterValues   `yaml:"values" json:"values,omitempty"`
-	DefaultOperator  string         `yaml:"default_operator" json:"defaultOperator,omitempty"`
-	Operators        []string       `yaml:"operators" json:"operators,omitempty"`
-	Options          []FilterOption `yaml:"options" json:"options,omitempty"`
-	URLParam         string         `yaml:"url_param" json:"urlParam,omitempty"`
-	FromURLParam     string         `yaml:"from_url_param" json:"fromURLParam,omitempty"`
-	ToURLParam       string         `yaml:"to_url_param" json:"toURLParam,omitempty"`
-	OperatorURLParam string         `yaml:"operator_url_param" json:"operatorURLParam,omitempty"`
+	Type             string             `yaml:"type" json:"type"`
+	Label            string             `yaml:"label" json:"label"`
+	Dimension        string             `yaml:"field" json:"dimension"`
+	Default          FilterDefault      `yaml:"default" json:"default"`
+	Custom           bool               `yaml:"custom" json:"custom,omitempty"`
+	Presets          []FilterPreset     `yaml:"presets" json:"presets,omitempty"`
+	Operator         string             `yaml:"operator" json:"operator,omitempty"`
+	Values           FilterValues       `yaml:"values" json:"values,omitempty"`
+	DefaultOperator  string             `yaml:"default_operator" json:"defaultOperator,omitempty"`
+	Operators        []string           `yaml:"operators" json:"operators,omitempty"`
+	Options          []FilterOption     `yaml:"options" json:"options,omitempty"`
+	URLParam         string             `yaml:"url_param" json:"urlParam,omitempty"`
+	FromURLParam     string             `yaml:"from_url_param" json:"fromURLParam,omitempty"`
+	ToURLParam       string             `yaml:"to_url_param" json:"toURLParam,omitempty"`
+	OperatorURLParam string             `yaml:"operator_url_param" json:"operatorURLParam,omitempty"`
+	Targets          InteractionTargets `yaml:"targets" json:"targets,omitempty"`
 }
 
 type FilterConfig struct {
@@ -70,20 +71,19 @@ type FilterValues struct {
 }
 
 type Visual struct {
-	Title           string         `yaml:"title"`
-	Kind            string         `yaml:"kind"`
-	Shape           string         `yaml:"shape"`
-	Renderer        string         `yaml:"renderer"`
-	Type            string         `yaml:"type"`
-	MetricView      string         `yaml:"-"`
-	Query           VisualQuery    `yaml:"query"`
-	Options         map[string]any `yaml:"options"`
-	RendererOptions map[string]any `yaml:"renderer_options"`
-	Interaction     Interaction    `yaml:"interaction"`
+	Title           string            `yaml:"title"`
+	Kind            string            `yaml:"kind"`
+	Shape           string            `yaml:"shape"`
+	Renderer        string            `yaml:"renderer"`
+	Type            string            `yaml:"type"`
+	Query           VisualQuery       `yaml:"query"`
+	Options         map[string]any    `yaml:"options"`
+	RendererOptions map[string]any    `yaml:"renderer_options"`
+	Interaction     Interaction       `yaml:"interaction"`
+	Encode          map[string]string `yaml:"encode"`
 }
 
 type VisualQuery struct {
-	MetricView string     `yaml:"metric_view"`
 	Dimensions []FieldRef `yaml:"dimensions"`
 	Series     FieldRef   `yaml:"series"`
 	Measures   []FieldRef `yaml:"measures"`
@@ -93,8 +93,9 @@ type VisualQuery struct {
 }
 
 type FieldRef struct {
-	Field string `yaml:"field" json:"field"`
-	Alias string `yaml:"alias,omitempty" json:"alias,omitempty"`
+	Field   string        `yaml:"field" json:"field"`
+	Alias   string        `yaml:"alias,omitempty" json:"alias,omitempty"`
+	Measure MetricMeasure `yaml:"-" json:"-"`
 }
 
 type QueryTime struct {
@@ -104,6 +105,11 @@ type QueryTime struct {
 }
 
 func (f *FieldRef) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode {
+		f.Field = value.Value
+		f.Alias = fieldRefAlias(value.Value)
+		return nil
+	}
 	if value.Kind != yaml.MappingNode {
 		return fmt.Errorf("field ref must be a mapping with field and alias")
 	}
@@ -115,6 +121,155 @@ func (f *FieldRef) UnmarshalYAML(value *yaml.Node) error {
 		return fmt.Errorf("field ref requires field and alias")
 	}
 	return nil
+}
+
+func (q *VisualQuery) UnmarshalYAML(value *yaml.Node) error {
+	type raw VisualQuery
+	var out raw
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("visual query must be a mapping")
+	}
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		key := value.Content[index].Value
+		item := value.Content[index+1]
+		switch key {
+		case "metric_view":
+			return fmt.Errorf("metric_view is not supported; use dashboard semantic_model")
+		case "dimensions":
+			fields, err := decodeFieldRefs(item)
+			if err != nil {
+				return fmt.Errorf("dimensions: %w", err)
+			}
+			out.Dimensions = fields
+		case "series":
+			if err := item.Decode(&out.Series); err != nil {
+				return err
+			}
+		case "measures":
+			fields, err := decodeMeasureRefs(item)
+			if err != nil {
+				return fmt.Errorf("measures: %w", err)
+			}
+			out.Measures = fields
+		case "time":
+			if err := item.Decode(&out.Time); err != nil {
+				return err
+			}
+		case "sort":
+			if err := item.Decode(&out.Sort); err != nil {
+				return err
+			}
+		case "limit":
+			if err := item.Decode(&out.Limit); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("field %s not found in type semantic.VisualQuery", key)
+		}
+	}
+	*q = VisualQuery(out)
+	return nil
+}
+
+func decodeFieldRefs(node *yaml.Node) ([]FieldRef, error) {
+	switch node.Kind {
+	case yaml.SequenceNode:
+		fields := []FieldRef{}
+		if err := node.Decode(&fields); err != nil {
+			return nil, err
+		}
+		return fields, nil
+	case yaml.MappingNode:
+		fields := make([]FieldRef, 0, len(node.Content)/2)
+		for index := 0; index+1 < len(node.Content); index += 2 {
+			alias := node.Content[index].Value
+			field := ""
+			item := node.Content[index+1]
+			if item.Kind == yaml.ScalarNode {
+				field = item.Value
+			} else {
+				var payload struct {
+					Field string `yaml:"field"`
+				}
+				if err := item.Decode(&payload); err != nil {
+					return nil, err
+				}
+				field = payload.Field
+			}
+			if field == "" {
+				return nil, fmt.Errorf("field %q is empty", alias)
+			}
+			fields = append(fields, FieldRef{Field: field, Alias: alias})
+		}
+		return fields, nil
+	default:
+		return nil, fmt.Errorf("must be a sequence or mapping")
+	}
+}
+
+func decodeMeasureRefs(node *yaml.Node) ([]FieldRef, error) {
+	switch node.Kind {
+	case yaml.SequenceNode:
+		fields := []FieldRef{}
+		if err := node.Decode(&fields); err != nil {
+			return nil, err
+		}
+		return fields, nil
+	case yaml.MappingNode:
+		fields := make([]FieldRef, 0, len(node.Content)/2)
+		for index := 0; index+1 < len(node.Content); index += 2 {
+			alias := node.Content[index].Value
+			item := node.Content[index+1]
+			field := alias
+			if item.Kind != yaml.ScalarNode || item.Tag != "!!null" {
+				var payload struct {
+					Measure string   `yaml:"measure"`
+					Expr    string   `yaml:"expr"`
+					Table   string   `yaml:"table"`
+					Grain   string   `yaml:"grain"`
+					Time    string   `yaml:"time"`
+					Grains  []string `yaml:"grains"`
+					Format  string   `yaml:"format"`
+				}
+				if err := item.Decode(&payload); err != nil {
+					return nil, err
+				}
+				if payload.Measure != "" {
+					field = payload.Measure
+				} else if payload.Expr != "" {
+					field = alias
+					fields = append(fields, FieldRef{
+						Field: field,
+						Alias: alias,
+						Measure: MetricMeasure{
+							Field:      alias,
+							Name:       alias,
+							Expr:       payload.Expr,
+							Expression: payload.Expr,
+							Table:      payload.Table,
+							Grain:      payload.Grain,
+							Time:       payload.Time,
+							Grains:     payload.Grains,
+							Format:     payload.Format,
+						},
+					})
+					continue
+				}
+			}
+			fields = append(fields, FieldRef{Field: field, Alias: alias})
+		}
+		return fields, nil
+	default:
+		return nil, fmt.Errorf("must be a sequence or mapping")
+	}
+}
+
+func fieldRefAlias(field string) string {
+	if field == "" {
+		return ""
+	}
+	parts := strings.Split(field, ".")
+	return parts[len(parts)-1]
 }
 
 func (f FieldRef) IsZero() bool {
@@ -133,14 +288,13 @@ type Interaction struct {
 }
 
 type InteractionTargets struct {
-	Visuals []string `yaml:"visuals"`
-	Tables  []string `yaml:"tables"`
+	Visuals []string `yaml:"visuals" json:"visuals,omitempty"`
+	Tables  []string `yaml:"tables" json:"tables,omitempty"`
 }
 
 type TableVisual struct {
 	Kind              string                                     `yaml:"kind"`
 	Title             string                                     `yaml:"title"`
-	MetricView        string                                     `yaml:"-"`
 	Query             TableQuery                                 `yaml:"query"`
 	DefaultSort       dashboard.TableSort                        `yaml:"default_sort"`
 	Style             dashboard.TableStyle                       `yaml:"style"`
@@ -153,10 +307,57 @@ type TableVisual struct {
 }
 
 type TableQuery struct {
-	MetricView string     `yaml:"metric_view"`
-	Columns    []FieldRef `yaml:"columns"`
-	Rows       []FieldRef `yaml:"rows"`
-	Measures   []FieldRef `yaml:"measures"`
+	Table    string     `yaml:"table"`
+	Fields   []string   `yaml:"fields"`
+	Columns  []FieldRef `yaml:"columns"`
+	Rows     []FieldRef `yaml:"rows"`
+	Measures []FieldRef `yaml:"measures"`
+}
+
+func (q *TableQuery) UnmarshalYAML(value *yaml.Node) error {
+	type raw TableQuery
+	var out raw
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("table query must be a mapping")
+	}
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		key := value.Content[index].Value
+		item := value.Content[index+1]
+		switch key {
+		case "metric_view":
+			return fmt.Errorf("metric_view is not supported; use dashboard semantic_model")
+		case "table":
+			if err := item.Decode(&out.Table); err != nil {
+				return err
+			}
+		case "fields":
+			if err := item.Decode(&out.Fields); err != nil {
+				return err
+			}
+		case "columns":
+			fields, err := decodeFieldRefs(item)
+			if err != nil {
+				return fmt.Errorf("columns: %w", err)
+			}
+			out.Columns = fields
+		case "rows":
+			fields, err := decodeFieldRefs(item)
+			if err != nil {
+				return fmt.Errorf("rows: %w", err)
+			}
+			out.Rows = fields
+		case "measures":
+			fields, err := decodeMeasureRefs(item)
+			if err != nil {
+				return fmt.Errorf("measures: %w", err)
+			}
+			out.Measures = fields
+		default:
+			return fmt.Errorf("field %s not found in type semantic.TableQuery", key)
+		}
+	}
+	*q = TableQuery(out)
+	return nil
 }
 
 func (t TableVisual) KindOrDefault() string {

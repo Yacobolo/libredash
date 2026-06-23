@@ -228,7 +228,7 @@ func CatalogPage(catalog dashboard.Catalog) g.Node {
 }
 
 func dashboardCard(report dashboard.CatalogDashboard) g.Node {
-	eyebrow := strings.Join(report.MetricViewTitles, ", ")
+	eyebrow := report.SemanticModel
 	if eyebrow == "" {
 		eyebrow = "Dashboard"
 	}
@@ -244,7 +244,7 @@ func dashboardCard(report dashboard.CatalogDashboard) g.Node {
 			}),
 		),
 		h.Footer(h.Class(cardFooterClass),
-			h.Span(g.Textf("%d pages, %d views", report.PageCount, len(report.MetricViews))),
+			h.Span(g.Textf("%d pages", report.PageCount)),
 			h.A(h.Class(primaryLinkButtonClass), h.Href("/dashboards/"+report.ID),
 				lucide.ExternalLink(buttonIconAttrs()...),
 				h.Span(g.Text("Open")),
@@ -340,10 +340,9 @@ func sidebar(config map[string]any) g.Node {
 func sidebarConfigForCatalog(catalog dashboard.Catalog) map[string]any {
 	modelID := ""
 	modelTitle := ""
-	if len(catalog.MetricViews) > 0 {
-		view := catalog.MetricViews[0]
-		modelID = view.SemanticModel
-		modelTitle = view.ModelTitle
+	if len(catalog.Models) > 0 {
+		modelID = catalog.Models[0].ID
+		modelTitle = catalog.Models[0].Title
 	}
 	return sidebarConfig(catalog, "dashboards", "", workspaceDisplayTitle(catalog), "Dashboards", "Discovery", modelID, modelTitle, false)
 }

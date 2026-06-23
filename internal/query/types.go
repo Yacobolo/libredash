@@ -1,8 +1,53 @@
 package query
 
 type Field struct {
-	Field string
-	Alias string
+	Field   string
+	Alias   string
+	Measure InlineMeasure
+}
+
+type InlineMeasure struct {
+	Field       string
+	Name        string
+	Label       string
+	Description string
+	Expr        string
+	Expression  string
+	Table       string
+	Grain       string
+	Time        string
+	Grains      []string
+	Unit        string
+	Format      string
+}
+
+func (m InlineMeasure) SQLExpression() string {
+	if m.Expression != "" {
+		return m.Expression
+	}
+	return m.Expr
+}
+
+type ResolvedMeasure struct {
+	Field       string
+	Name        string
+	Label       string
+	Description string
+	Expr        string
+	Expression  string
+	Table       string
+	Grain       string
+	Time        string
+	Grains      []string
+	Unit        string
+	Format      string
+}
+
+func (m ResolvedMeasure) SQLExpression() string {
+	if m.Expression != "" {
+		return m.Expression
+	}
+	return m.Expr
 }
 
 type Time struct {
@@ -23,7 +68,7 @@ type Sort struct {
 }
 
 type Request struct {
-	MetricView string
+	Table      string
 	Dimensions []Field
 	Measures   []Field
 	Time       Time
@@ -33,7 +78,7 @@ type Request struct {
 }
 
 type RowRequest struct {
-	MetricView string
+	Table      string
 	Dimensions []Field
 	Measures   []Field
 	Filters    []Filter
@@ -43,7 +88,7 @@ type RowRequest struct {
 }
 
 type RawValueRequest struct {
-	MetricView string
+	Table      string
 	Dimensions []Field
 	Measure    Field
 	Filters    []Filter
@@ -52,8 +97,8 @@ type RawValueRequest struct {
 }
 
 type CountRequest struct {
-	MetricView string
-	Filters    []Filter
+	Table   string
+	Filters []Filter
 }
 
 type Plan struct {

@@ -19,11 +19,10 @@ var assetPresentationByType = map[string]assetPresentation{
 	"catalog":         assetPresentationFor(lucide.BookOpen, "catalog"),
 	"connection":      assetPresentationFor(lucide.Plug, "connection"),
 	"dashboard":       assetPresentationFor(lucide.LayoutDashboard, "dashboard"),
-	"dimension":       assetPresentationFor(lucide.Ruler, "dimension"),
+	"field":           assetPresentationFor(lucide.Ruler, "dimension"),
 	"filter":          assetPresentationFor(lucide.ListFilter, "filter"),
 	"measure":         assetPresentationFor(lucide.Sigma, "measure"),
 	"model_table":     assetPresentationFor(lucide.TableProperties, "model-table"),
-	"metric_view":     assetPresentationFor(lucide.ChartNoAxesCombined, "metric-view"),
 	"page":            assetPresentationFor(lucide.PanelTop, "page"),
 	"semantic_model":  assetPresentationFor(lucide.Box, "semantic-model"),
 	"source":          assetPresentationFor(lucide.Cable, "source"),
@@ -32,10 +31,6 @@ var assetPresentationByType = map[string]assetPresentation{
 	"visual_element":  assetPresentationFor(lucide.SquareDashedMousePointer, "visual"),
 	"workspace":       assetPresentationFor(lucide.Boxes, "catalog"),
 	"workspace_group": assetPresentationFor(lucide.GalleryVerticalEnd, "catalog"),
-	// Compatibility-only asset types. They should render with the model-table
-	// presentation until the legacy deployment/API vocabulary can be removed.
-	"cache_table": assetPresentationFor(lucide.TableProperties, "model-table"),
-	"dataset":     assetPresentationFor(lucide.TableProperties, "model-table"),
 }
 
 func assetTypeIcon(typ string) g.Node {

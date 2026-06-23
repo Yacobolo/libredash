@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/semantic"
@@ -10,7 +9,6 @@ import (
 
 type Planner struct {
 	Model *semantic.Model
-	Views map[string]*semantic.MetricView
 }
 
 type tableAlias struct {
@@ -19,22 +17,170 @@ type tableAlias struct {
 	Path  []semantic.Relationship
 }
 
-func NewPlanner(model *semantic.Model, views map[string]*semantic.MetricView) *Planner {
-	return &Planner{Model: model, Views: views}
+type queryView struct {
+	BaseTable  string
+	Grain      string
+	Dimensions map[string]semantic.MetricDimension
+	Measures   map[string]ResolvedMeasure
 }
 
-func (p *Planner) metricView(id string) (*semantic.MetricView, error) {
-	view, ok := p.Views[id]
-	if !ok {
-		return nil, fmt.Errorf("unknown metric view %q", id)
-	}
-	if view.SemanticModel != p.Model.Name {
-		return nil, fmt.Errorf("metric view %q belongs to model %q, want %q", id, view.SemanticModel, p.Model.Name)
-	}
-	return view, nil
+func NewPlanner(model *semantic.Model) *Planner {
+	return &Planner{Model: model}
 }
 
-func (p *Planner) aliases(view *semantic.MetricView, fields []string) (map[string]tableAlias, error) {
+func (p *Planner) queryView(request Request) (*queryView, error) {
+	return p.semanticView(request.Table, request.Dimensions, request.Measures, request.Filters, request.Time.Field)
+}
+
+func (p *Planner) rowView(request RowRequest) (*queryView, error) {
+	if request.Table == "" && len(request.Measures) == 0 {
+		return nil, fmt.Errorf("row query requires table when no measure is selected")
+	}
+	return p.semanticView(request.Table, request.Dimensions, request.Measures, request.Filters, "")
+}
+
+func (p *Planner) rawValueView(request RawValueRequest) (*queryView, error) {
+	measures := []Field{}
+	if request.Measure.Field != "" {
+		measures = append(measures, request.Measure)
+	}
+	return p.semanticView(request.Table, request.Dimensions, measures, request.Filters, "")
+}
+
+func (p *Planner) countView(request CountRequest) (*queryView, error) {
+	if request.Table == "" {
+		return nil, fmt.Errorf("count query requires table")
+	}
+	return p.semanticView(request.Table, nil, nil, request.Filters, "")
+}
+
+func (p *Planner) semanticView(table string, dimensions []Field, measures []Field, filters []Filter, timeField string) (*queryView, error) {
+	if p.Model == nil {
+		return nil, fmt.Errorf("semantic model is required")
+	}
+	baseTable := table
+	grain := ""
+	resolvedMeasures := map[string]ResolvedMeasure{}
+	for _, item := range measures {
+		measure := ResolvedMeasure{}
+		if strings.TrimSpace(item.Measure.SQLExpression()) == "" {
+			semanticMeasure, err := p.Model.ResolveMeasure(item.Field)
+			if err != nil {
+				return nil, err
+			}
+			measure = resolvedMeasureFromSemantic(semanticMeasure)
+		} else {
+			measure = ResolvedMeasureFromInline(item.Field, item.Measure)
+		}
+		if measure.Table == "" {
+			return nil, fmt.Errorf("measure %q has no base table", item.Field)
+		}
+		if baseTable == "" {
+			baseTable = measure.Table
+			grain = measure.Grain
+		}
+		if measure.Table != baseTable || (grain != "" && measure.Grain != "" && measure.Grain != grain) {
+			return nil, fmt.Errorf("cross-fact measures are not supported")
+		}
+		if grain == "" {
+			grain = measure.Grain
+		}
+		resolvedMeasures[item.Field] = measure
+	}
+	if baseTable == "" {
+		return nil, fmt.Errorf("query requires a base table")
+	}
+	if _, ok := p.Model.Tables[baseTable]; !ok {
+		return nil, fmt.Errorf("unknown table %q", baseTable)
+	}
+	resolvedDimensions := map[string]semantic.MetricDimension{}
+	for _, item := range dimensions {
+		dimension, err := p.Model.ResolveDimension(item.Field)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.relationshipPath(baseTable, dimension.Table); err != nil {
+			return nil, err
+		}
+		resolvedDimensions[item.Field] = dimension
+	}
+	for _, filter := range filters {
+		dimension, err := p.Model.ResolveDimension(filter.Field)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.relationshipPath(baseTable, dimension.Table); err != nil {
+			return nil, err
+		}
+		resolvedDimensions[filter.Field] = dimension
+	}
+	if timeField != "" {
+		dimension, err := p.Model.ResolveDimension(timeField)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.relationshipPath(baseTable, dimension.Table); err != nil {
+			return nil, err
+		}
+		resolvedDimensions[timeField] = dimension
+	}
+	return &queryView{
+		BaseTable:  baseTable,
+		Grain:      grain,
+		Dimensions: resolvedDimensions,
+		Measures:   resolvedMeasures,
+	}, nil
+}
+
+func resolvedMeasureFromSemantic(measure semantic.MetricMeasure) ResolvedMeasure {
+	return ResolvedMeasure{
+		Field:       measure.Field,
+		Name:        measure.Name,
+		Label:       measure.Label,
+		Description: measure.Description,
+		Expr:        measure.Expr,
+		Expression:  measure.Expression,
+		Table:       measure.Table,
+		Grain:       measure.Grain,
+		Time:        measure.Time,
+		Grains:      append([]string{}, measure.Grains...),
+		Unit:        measure.Unit,
+		Format:      measure.Format,
+	}
+}
+
+func ResolvedMeasureFromInline(field string, measure InlineMeasure) ResolvedMeasure {
+	return ResolvedMeasure{
+		Field:       defaultString(measure.Field, field),
+		Name:        defaultString(measure.Name, field),
+		Label:       measure.Label,
+		Description: measure.Description,
+		Expr:        measure.Expr,
+		Expression:  measure.SQLExpression(),
+		Table:       measure.Table,
+		Grain:       measure.Grain,
+		Time:        measure.Time,
+		Grains:      append([]string{}, measure.Grains...),
+		Unit:        measure.Unit,
+		Format:      measure.Format,
+	}
+}
+
+func (s *queryView) ResolveDimensionRef(ref string) (string, semantic.MetricDimension, error) {
+	if dimension, ok := s.Dimensions[ref]; ok {
+		return ref, dimension, nil
+	}
+	return "", semantic.MetricDimension{}, fmt.Errorf("field %q is not exposed", ref)
+}
+
+func (s *queryView) ResolveMeasureRef(ref string) (string, ResolvedMeasure, error) {
+	if measure, ok := s.Measures[ref]; ok {
+		return ref, measure, nil
+	}
+	return "", ResolvedMeasure{}, fmt.Errorf("field %q is not exposed", ref)
+}
+
+func (p *Planner) aliases(view *queryView, fields []string) (map[string]tableAlias, error) {
 	aliases := map[string]tableAlias{
 		view.BaseTable: {Table: view.BaseTable, Alias: "t0"},
 	}
@@ -63,82 +209,14 @@ func (p *Planner) aliases(view *semantic.MetricView, fields []string) (map[strin
 }
 
 func (p *Planner) relationshipPath(base, target string) ([]semantic.Relationship, error) {
-	if base == target {
-		return nil, nil
-	}
-
-	frontier := []pathCandidate{{Table: base, Visited: map[string]bool{base: true}}}
-	for len(frontier) > 0 {
-		next := []pathCandidate{}
-		matches := [][]semantic.Relationship{}
-		for _, candidate := range frontier {
-			for _, edge := range p.safeEdgesFrom(candidate.Table) {
-				if candidate.Visited[edge.Table] {
-					continue
-				}
-				path := append(append([]semantic.Relationship{}, candidate.Path...), edge.Relationship)
-				if edge.Table == target {
-					matches = append(matches, path)
-					continue
-				}
-				visited := copyVisited(candidate.Visited)
-				visited[edge.Table] = true
-				next = append(next, pathCandidate{Table: edge.Table, Path: path, Visited: visited})
-			}
-		}
-		if len(matches) > 1 {
-			return nil, fmt.Errorf("ambiguous relationship path from %q to %q", base, target)
-		}
-		if len(matches) == 1 {
-			return matches[0], nil
-		}
-		frontier = next
-	}
-	return nil, fmt.Errorf("no safe relationship path from %q to %q", base, target)
+	return p.Model.SafeRelationshipPath(base, target)
 }
 
-func (p *Planner) safeEdgesFrom(table string) []relationshipEdge {
-	edges := []relationshipEdge{}
-	for _, relationship := range p.Model.Relationships {
-		edge, ok := safeEdgeFrom(table, relationship)
-		if ok {
-			edges = append(edges, edge)
-		}
+func defaultString(value, fallback string) string {
+	if strings.TrimSpace(value) != "" {
+		return value
 	}
-	sort.Slice(edges, func(i, j int) bool {
-		if edges[i].Table != edges[j].Table {
-			return edges[i].Table < edges[j].Table
-		}
-		if edges[i].Relationship.ID != edges[j].Relationship.ID {
-			return edges[i].Relationship.ID < edges[j].Relationship.ID
-		}
-		if edges[i].Relationship.From != edges[j].Relationship.From {
-			return edges[i].Relationship.From < edges[j].Relationship.From
-		}
-		return edges[i].Relationship.To < edges[j].Relationship.To
-	})
-	return edges
-}
-
-func safeEdgeFrom(table string, relationship semantic.Relationship) (relationshipEdge, bool) {
-	if !relationship.Active {
-		return relationshipEdge{}, false
-	}
-	fromTable, _, err := splitField(relationship.From)
-	if err != nil {
-		return relationshipEdge{}, false
-	}
-	toTable, _, err := splitField(relationship.To)
-	if err != nil {
-		return relationshipEdge{}, false
-	}
-	if fromTable == table && safeCardinality(relationship.Cardinality) {
-		return relationshipEdge{Table: toTable, Relationship: relationship}, true
-	}
-	if relationship.Cardinality == "one_to_one" && toTable == table {
-		return relationshipEdge{Table: fromTable, Relationship: relationship}, true
-	}
-	return relationshipEdge{}, false
+	return fallback
 }
 
 func pathTables(base string, path []semantic.Relationship) []tablePath {
@@ -168,32 +246,9 @@ func pathTables(base string, path []semantic.Relationship) []tablePath {
 	return tables
 }
 
-func copyVisited(values map[string]bool) map[string]bool {
-	next := make(map[string]bool, len(values)+1)
-	for key, value := range values {
-		next[key] = value
-	}
-	return next
-}
-
-type pathCandidate struct {
-	Table   string
-	Path    []semantic.Relationship
-	Visited map[string]bool
-}
-
-type relationshipEdge struct {
-	Table        string
-	Relationship semantic.Relationship
-}
-
 type tablePath struct {
 	Table string
 	Path  []semantic.Relationship
-}
-
-func safeCardinality(cardinality string) bool {
-	return cardinality == "many_to_one" || cardinality == "one_to_one"
 }
 
 func splitField(field string) (string, string, error) {

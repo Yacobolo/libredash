@@ -65,6 +65,9 @@ func (m *DuckDBMetrics) registerSourceViews(ctx context.Context, runtime *modelR
 	if _, err := runtime.db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS raw"); err != nil {
 		return err
 	}
+	if _, err := runtime.db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS source"); err != nil {
+		return err
+	}
 	if _, err := runtime.db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS model"); err != nil {
 		return err
 	}
@@ -86,6 +89,10 @@ func (m *DuckDBMetrics) registerSourceViews(ctx context.Context, runtime *modelR
 		if _, err := runtime.db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("registering source %s: %w", name, err)
 		}
+		stmt = fmt.Sprintf("CREATE OR REPLACE VIEW source.%s AS %s", name, relation)
+		if _, err := runtime.db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("registering source %s: %w", name, err)
+		}
 	}
 	return nil
 }
@@ -101,7 +108,9 @@ func (m *DuckDBMetrics) materializeModelTables(ctx context.Context, runtime *mod
 			if err := validateIdentifier(table.Source); err != nil {
 				return err
 			}
-			sourceSQL = "SELECT * FROM raw." + table.Source
+			if sourceSQL == "" {
+				sourceSQL = "SELECT * FROM raw." + table.Source
+			}
 		}
 		stmt := fmt.Sprintf("CREATE OR REPLACE TABLE model.%s AS %s", name, sourceSQL)
 		if _, err := runtime.db.ExecContext(ctx, stmt); err != nil {

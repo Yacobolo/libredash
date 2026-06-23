@@ -1,8 +1,6 @@
 id: executive-sales
 title: Executive Sales Dashboard
 description: Sales, order, category, and delivery overview.
-metric_views:
-- orders
 filters:
   purchase_date:
     type: date_range
@@ -27,7 +25,6 @@ filters:
       label: '2017'
       from: '2017-01-01'
       to: '2018-01-01'
-    metric_view: orders
     field: orders.purchase_timestamp
   state:
     type: multi_select
@@ -37,7 +34,6 @@ filters:
     values:
       source: distinct
       limit: 50
-    metric_view: orders
     field: customers.state
   category:
     type: text
@@ -50,7 +46,6 @@ filters:
     - equals
     - starts_with
     - not_contains
-    metric_view: orders
     field: orders.category
 visuals:
   total_orders:
@@ -58,9 +53,7 @@ visuals:
     shape: single_value
     query:
       measures:
-      - field: orders.order_count
-        alias: order_count
-      metric_view: orders
+        order_count:
     options:
       note: Filtered order count
       tone: ink
@@ -69,9 +62,7 @@ visuals:
     shape: single_value
     query:
       measures:
-      - field: orders.revenue
-        alias: revenue
-      metric_view: orders
+        revenue:
     options:
       note: Payment value
       tone: green
@@ -80,9 +71,7 @@ visuals:
     shape: single_value
     query:
       measures:
-      - field: orders.aov
-        alias: aov
-      metric_view: orders
+        aov:
     options:
       note: Revenue per order
       tone: amber
@@ -91,9 +80,7 @@ visuals:
     shape: single_value
     query:
       measures:
-      - field: orders.review_score
-        alias: review_score
-      metric_view: orders
+        review_score:
     options:
       note: Average score
       tone: coral
@@ -102,16 +89,13 @@ visuals:
     type: area
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: purchase_month
         direction: asc
       limit: 30
-      metric_view: orders
     interaction:
       field: orders.purchase_month
       targets:
@@ -126,15 +110,12 @@ visuals:
     type: donut
     query:
       dimensions:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
-      metric_view: orders
     interaction:
       field: orders.status
       targets:
@@ -153,19 +134,16 @@ visuals:
       stacked: true
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       series:
         field: orders.status
         alias: status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: purchase_month
         direction: asc
       limit: 40
-      metric_view: orders
     interaction:
       field: orders.purchase_month
       targets:
@@ -180,16 +158,13 @@ visuals:
     type: bar
     query:
       dimensions:
-      - field: orders.category
-        alias: category
+        category: orders.category
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: value
         direction: desc
       limit: 10
-      metric_view: orders
     interaction:
       field: orders.category
       targets:
@@ -204,15 +179,12 @@ visuals:
     type: bar
     query:
       dimensions:
-      - field: orders.delivery_bucket
-        alias: delivery_bucket
+        delivery_bucket: orders.delivery_bucket
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: delivery_bucket
         direction: asc
-      metric_view: orders
     interaction:
       field: orders.delivery_bucket
       targets:
@@ -229,20 +201,16 @@ visuals:
     type: heatmap
     query:
       dimensions:
-      - field: customers.state
-        alias: state
-      - field: orders.status
-        alias: status
+        state: customers.state
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: state
         direction: asc
       - field: status
         direction: asc
       limit: 120
-      metric_view: orders
   status_delivery_flow:
     title: Status to delivery speed
     shape: graph
@@ -250,18 +218,14 @@ visuals:
     type: sankey
     query:
       dimensions:
-      - field: orders.status
-        alias: status
-      - field: orders.delivery_bucket
-        alias: delivery_bucket
+        status: orders.status
+        delivery_bucket: orders.delivery_bucket
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 40
-      metric_view: orders
   delivery_distribution:
     title: Delivery day distribution
     shape: distribution
@@ -269,15 +233,12 @@ visuals:
     type: boxplot
     query:
       dimensions:
-      - field: orders.delivery_bucket
-        alias: delivery_bucket
+        delivery_bucket: orders.delivery_bucket
       measures:
-      - field: orders.delivery_days
-        alias: delivery_days
+        delivery_days:
       sort:
       - field: delivery_bucket
         direction: asc
-      metric_view: orders
   state_order_map:
     title: Orders by state
     shape: geo
@@ -287,16 +248,13 @@ visuals:
       map: brazil_states
     query:
       dimensions:
-      - field: customers.state
-        alias: state
+        state: customers.state
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 27
-      metric_view: orders
   status_delivery_graph:
     title: Status and delivery network
     shape: graph
@@ -304,18 +262,14 @@ visuals:
     type: graph
     query:
       dimensions:
-      - field: orders.status
-        alias: status
-      - field: orders.delivery_bucket
-        alias: delivery_bucket
+        status: orders.status
+        delivery_bucket: orders.delivery_bucket
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 40
-      metric_view: orders
   revenue_orders_combo:
     title: Revenue and orders by month
     shape: category_multi_measure
@@ -327,18 +281,14 @@ visuals:
         Orders: column
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.revenue
-        alias: revenue
-      - field: orders.order_count
-        alias: order_count
+        revenue:
+        order_count:
       sort:
       - field: purchase_month
         direction: asc
       limit: 30
-      metric_view: orders
   revenue_waterfall:
     title: Monthly revenue contribution
     shape: category_delta
@@ -346,16 +296,13 @@ visuals:
     type: waterfall
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: purchase_month
         direction: asc
       limit: 18
-      metric_view: orders
   delivery_histogram:
     title: Delivery days histogram
     shape: binned_measure
@@ -365,9 +312,7 @@ visuals:
       bin_count: 16
     query:
       measures:
-      - field: orders.delivery_days
-        alias: delivery_days
-      metric_view: orders
+        delivery_days:
   status_radar:
     title: Order status radar
     shape: category_value
@@ -375,16 +320,13 @@ visuals:
     type: radar
     query:
       dimensions:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 8
-      metric_view: orders
   category_status_sunburst:
     title: Category and status hierarchy
     shape: hierarchy
@@ -392,18 +334,14 @@ visuals:
     type: sunburst
     query:
       dimensions:
-      - field: orders.category
-        alias: category
-      - field: orders.status
-        alias: status
+        category: orders.category
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 80
-      metric_view: orders
   state_status_tree:
     title: State and status tree
     shape: hierarchy
@@ -411,33 +349,26 @@ visuals:
     type: tree
     query:
       dimensions:
-      - field: customers.state
-        alias: state
-      - field: orders.status
-        alias: status
+        state: customers.state
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 80
-      metric_view: orders
   revenue_line:
     title: Revenue line by month
     type: line
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: purchase_month
         direction: asc
       limit: 30
-      metric_view: orders
   revenue_line_status:
     title: Revenue line by status
     shape: category_series_value
@@ -445,19 +376,16 @@ visuals:
     type: line
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       series:
         field: orders.status
         alias: status
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: purchase_month
         direction: asc
       limit: 60
-      metric_view: orders
   revenue_line_step:
     title: Stepped revenue line
     type: line
@@ -467,16 +395,13 @@ visuals:
       data_zoom: true
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: purchase_month
         direction: asc
       limit: 30
-      metric_view: orders
   revenue_area_status:
     title: Stacked revenue area
     shape: category_series_value
@@ -486,19 +411,16 @@ visuals:
       stacked: true
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       series:
         field: orders.status
         alias: status
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: purchase_month
         direction: asc
       limit: 60
-      metric_view: orders
   revenue_area_smooth:
     title: Smooth revenue area
     renderer: echarts
@@ -509,16 +431,13 @@ visuals:
       data_zoom: true
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: purchase_month
         direction: asc
       limit: 30
-      metric_view: orders
   categories_by_status_bar:
     title: Category revenue by status
     shape: category_series_value
@@ -528,34 +447,28 @@ visuals:
       stacked: true
     query:
       dimensions:
-      - field: orders.category
-        alias: category
+        category: orders.category
       series:
         field: orders.status
         alias: status
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: value
         direction: desc
       limit: 60
-      metric_view: orders
   orders_by_month_column:
     title: Orders by month
     type: column
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: purchase_month
         direction: asc
       limit: 30
-      metric_view: orders
   orders_by_month_status_grouped:
     title: Orders by month and status grouped
     shape: category_series_value
@@ -565,48 +478,39 @@ visuals:
       legend: true
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       series:
         field: orders.status
         alias: status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: purchase_month
         direction: asc
       limit: 60
-      metric_view: orders
   status_pie:
     title: Orders by status pie
     type: pie
     query:
       dimensions:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
-      metric_view: orders
   category_pie:
     title: Revenue by category pie
     type: pie
     query:
       dimensions:
-      - field: orders.category
-        alias: category
+        category: orders.category
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: value
         direction: desc
       limit: 8
-      metric_view: orders
   status_pie_rose:
     title: Orders by status rose pie
     type: pie
@@ -615,15 +519,12 @@ visuals:
       show_labels: true
     query:
       dimensions:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
-      metric_view: orders
   category_pie_inside:
     title: Compact category pie
     type: pie
@@ -632,31 +533,25 @@ visuals:
       label_position: inside
     query:
       dimensions:
-      - field: orders.category
-        alias: category
+        category: orders.category
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: value
         direction: desc
       limit: 6
-      metric_view: orders
   category_donut:
     title: Revenue by category donut
     type: donut
     query:
       dimensions:
-      - field: orders.category
-        alias: category
+        category: orders.category
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: value
         direction: desc
       limit: 8
-      metric_view: orders
   orders_donut_center:
     title: Orders donut with center label
     type: donut
@@ -667,30 +562,24 @@ visuals:
       - 76%
     query:
       dimensions:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
-      metric_view: orders
   delivery_scatter:
     title: Delivery days scatter by month
     type: scatter
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.delivery_days
-        alias: delivery_days
+        delivery_days:
       sort:
       - field: purchase_month
         direction: asc
       limit: 30
-      metric_view: orders
   delivery_scatter_status:
     title: Delivery days scatter by status
     shape: category_series_value
@@ -698,19 +587,16 @@ visuals:
     type: scatter
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       series:
         field: orders.status
         alias: status
       measures:
-      - field: orders.delivery_days
-        alias: delivery_days
+        delivery_days:
       sort:
       - field: purchase_month
         direction: asc
       limit: 60
-      metric_view: orders
   delivery_scatter_labeled:
     title: Labeled delivery scatter
     type: scatter
@@ -720,43 +606,34 @@ visuals:
       symbol_size: 12
     query:
       dimensions:
-      - field: orders.delivery_bucket
-        alias: delivery_bucket
+        delivery_bucket: orders.delivery_bucket
       measures:
-      - field: orders.delivery_days
-        alias: delivery_days
+        delivery_days:
       sort:
       - field: delivery_bucket
         direction: asc
-      metric_view: orders
   status_funnel:
     title: Orders by status funnel
     type: funnel
     query:
       dimensions:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
-      metric_view: orders
   delivery_funnel:
     title: Delivery speed funnel
     type: funnel
     query:
       dimensions:
-      - field: orders.delivery_bucket
-        alias: delivery_bucket
+        delivery_bucket: orders.delivery_bucket
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: delivery_bucket
         direction: asc
-      metric_view: orders
   status_funnel_left:
     title: Left aligned status funnel
     type: funnel
@@ -766,45 +643,36 @@ visuals:
       show_labels: true
     query:
       dimensions:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: asc
-      metric_view: orders
   category_treemap:
     title: Category revenue treemap
     type: treemap
     query:
       dimensions:
-      - field: orders.category
-        alias: category
+        category: orders.category
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: value
         direction: desc
       limit: 18
-      metric_view: orders
   state_treemap:
     title: State order treemap
     type: treemap
     query:
       dimensions:
-      - field: customers.state
-        alias: state
+        state: customers.state
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 18
-      metric_view: orders
   category_treemap_roam:
     title: Navigable category treemap
     type: treemap
@@ -813,16 +681,13 @@ visuals:
       breadcrumb: true
     query:
       dimensions:
-      - field: orders.category
-        alias: category
+        category: orders.category
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: value
         direction: desc
       limit: 18
-      metric_view: orders
   total_orders_gauge:
     title: Total orders gauge
     shape: single_value
@@ -830,9 +695,7 @@ visuals:
     type: gauge
     query:
       measures:
-      - field: orders.order_count
-        alias: order_count
-      metric_view: orders
+        order_count:
   review_gauge:
     title: Average review gauge
     shape: single_value
@@ -840,9 +703,7 @@ visuals:
     type: gauge
     query:
       measures:
-      - field: orders.review_score
-        alias: review_score
-      metric_view: orders
+        review_score:
   review_gauge_thresholds:
     title: Review gauge with thresholds
     shape: single_value
@@ -861,9 +722,7 @@ visuals:
         color: '#1a7f37'
     query:
       measures:
-      - field: orders.review_score
-        alias: review_score
-      metric_view: orders
+        review_score:
   category_status_heatmap:
     title: Category by order status
     shape: matrix
@@ -871,18 +730,14 @@ visuals:
     type: heatmap
     query:
       dimensions:
-      - field: orders.category
-        alias: category
-      - field: orders.status
-        alias: status
+        category: orders.category
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 120
-      metric_view: orders
   category_status_heatmap_labels:
     title: Labeled category status heatmap
     shape: matrix
@@ -892,18 +747,14 @@ visuals:
       show_labels: true
     query:
       dimensions:
-      - field: orders.category
-        alias: category
-      - field: orders.status
-        alias: status
+        category: orders.category
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 80
-      metric_view: orders
   category_status_flow:
     title: Category to status flow
     shape: graph
@@ -911,18 +762,14 @@ visuals:
     type: sankey
     query:
       dimensions:
-      - field: orders.category
-        alias: category
-      - field: orders.status
-        alias: status
+        category: orders.category
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 60
-      metric_view: orders
   category_status_flow_spacious:
     title: Spacious category to status flow
     shape: graph
@@ -933,18 +780,14 @@ visuals:
       curveness: 0.32
     query:
       dimensions:
-      - field: orders.category
-        alias: category
-      - field: orders.status
-        alias: status
+        category: orders.category
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 60
-      metric_view: orders
   category_status_graph:
     title: Category and status network
     shape: graph
@@ -952,18 +795,14 @@ visuals:
     type: graph
     query:
       dimensions:
-      - field: orders.category
-        alias: category
-      - field: orders.status
-        alias: status
+        category: orders.category
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 60
-      metric_view: orders
   category_status_graph_circular:
     title: Circular category and status network
     shape: graph
@@ -975,18 +814,14 @@ visuals:
       focus: adjacency
     query:
       dimensions:
-      - field: orders.category
-        alias: category
-      - field: orders.status
-        alias: status
+        category: orders.category
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 60
-      metric_view: orders
   state_revenue_map:
     title: Revenue by state
     shape: geo
@@ -996,16 +831,13 @@ visuals:
       map: brazil_states
     query:
       dimensions:
-      - field: customers.state
-        alias: state
+        state: customers.state
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: value
         direction: desc
       limit: 27
-      metric_view: orders
   state_revenue_map_labeled:
     title: Labeled revenue map
     shape: geo
@@ -1017,16 +849,13 @@ visuals:
       roam: true
     query:
       dimensions:
-      - field: customers.state
-        alias: state
+        state: customers.state
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: value
         direction: desc
       limit: 27
-      metric_view: orders
   delivery_candlestick:
     title: Delivery day candlestick by month
     shape: ohlc
@@ -1034,22 +863,16 @@ visuals:
     type: candlestick
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.delivery_days_q1
-        alias: delivery_days_q1
-      - field: orders.delivery_days_q3
-        alias: delivery_days_q3
-      - field: orders.delivery_days_min
-        alias: delivery_days_min
-      - field: orders.delivery_days_max
-        alias: delivery_days_max
+        delivery_days_q1:
+        delivery_days_q3:
+        delivery_days_min:
+        delivery_days_max:
       sort:
       - field: purchase_month
         direction: asc
       limit: 30
-      metric_view: orders
   revenue_candlestick:
     title: Revenue OHLC by month
     shape: ohlc
@@ -1059,22 +882,16 @@ visuals:
       data_zoom: true
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.revenue_q1
-        alias: revenue_q1
-      - field: orders.revenue_q3
-        alias: revenue_q3
-      - field: orders.revenue_min
-        alias: revenue_min
-      - field: orders.revenue_max
-        alias: revenue_max
+        revenue_q1:
+        revenue_q3:
+        revenue_min:
+        revenue_max:
       sort:
       - field: purchase_month
         direction: asc
       limit: 30
-      metric_view: orders
   review_distribution:
     title: Review score distribution
     shape: distribution
@@ -1082,15 +899,12 @@ visuals:
     type: boxplot
     query:
       dimensions:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.review_score
-        alias: review_score
+        review_score:
       sort:
       - field: status
         direction: asc
-      metric_view: orders
   revenue_distribution:
     title: Revenue distribution
     shape: distribution
@@ -1100,16 +914,13 @@ visuals:
       data_zoom: true
     query:
       dimensions:
-      - field: orders.category
-        alias: category
+        category: orders.category
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: category
         direction: desc
       limit: 12
-      metric_view: orders
   review_delivery_combo:
     title: Review and delivery by status
     shape: category_multi_measure
@@ -1121,17 +932,13 @@ visuals:
         Delivery days: column
     query:
       dimensions:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.review_score
-        alias: review_score
-      - field: orders.delivery_days
-        alias: delivery_days
+        review_score:
+        delivery_days:
       sort:
       - field: status
         direction: asc
-      metric_view: orders
   revenue_orders_dual_axis_combo:
     title: Revenue and orders dual-axis combo
     shape: category_multi_measure
@@ -1144,18 +951,14 @@ visuals:
         Orders: line
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.revenue
-        alias: revenue
-      - field: orders.order_count
-        alias: order_count
+        revenue:
+        order_count:
       sort:
       - field: purchase_month
         direction: asc
       limit: 60
-      metric_view: orders
   orders_waterfall:
     title: Monthly order contribution
     shape: category_delta
@@ -1163,16 +966,13 @@ visuals:
     type: waterfall
     query:
       dimensions:
-      - field: orders.purchase_month
-        alias: purchase_month
+        purchase_month: orders.purchase_month
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: purchase_month
         direction: asc
       limit: 18
-      metric_view: orders
   revenue_waterfall_labeled:
     title: Labeled revenue waterfall
     shape: category_delta
@@ -1183,16 +983,13 @@ visuals:
       data_zoom: true
     query:
       dimensions:
-      - field: orders.category
-        alias: category
+        category: orders.category
       measures:
-      - field: orders.revenue
-        alias: revenue
+        revenue:
       sort:
       - field: value
         direction: desc
       limit: 12
-      metric_view: orders
   revenue_histogram:
     title: Revenue histogram
     shape: binned_measure
@@ -1202,9 +999,7 @@ visuals:
       bin_count: 18
     query:
       measures:
-      - field: orders.revenue
-        alias: revenue
-      metric_view: orders
+        revenue:
   review_histogram:
     title: Review score histogram
     shape: binned_measure
@@ -1215,9 +1010,7 @@ visuals:
       show_labels: true
     query:
       measures:
-      - field: orders.review_score
-        alias: review_score
-      metric_view: orders
+        review_score:
   delivery_radar:
     title: Delivery speed radar
     shape: category_value
@@ -1225,15 +1018,12 @@ visuals:
     type: radar
     query:
       dimensions:
-      - field: orders.delivery_bucket
-        alias: delivery_bucket
+        delivery_bucket: orders.delivery_bucket
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: delivery_bucket
         direction: asc
-      metric_view: orders
   state_radar:
     title: State order radar
     shape: category_value
@@ -1243,16 +1033,13 @@ visuals:
       area: false
     query:
       dimensions:
-      - field: customers.state
-        alias: state
+        state: customers.state
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 8
-      metric_view: orders
   category_status_tree:
     title: Category and status tree
     shape: hierarchy
@@ -1260,18 +1047,14 @@ visuals:
     type: tree
     query:
       dimensions:
-      - field: orders.category
-        alias: category
-      - field: orders.status
-        alias: status
+        category: orders.category
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 80
-      metric_view: orders
   category_state_status_tree:
     title: Category, state, and status tree
     shape: hierarchy
@@ -1282,20 +1065,15 @@ visuals:
       initial_depth: 2
     query:
       dimensions:
-      - field: orders.category
-        alias: category
-      - field: customers.state
-        alias: state
-      - field: orders.status
-        alias: status
+        category: orders.category
+        state: customers.state
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 120
-      metric_view: orders
   state_status_sunburst:
     title: State and status sunburst
     shape: hierarchy
@@ -1303,18 +1081,14 @@ visuals:
     type: sunburst
     query:
       dimensions:
-      - field: customers.state
-        alias: state
-      - field: orders.status
-        alias: status
+        state: customers.state
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 80
-      metric_view: orders
   category_state_status_sunburst:
     title: Category, state, and status sunburst
     shape: hierarchy
@@ -1325,20 +1099,15 @@ visuals:
       roam: true
     query:
       dimensions:
-      - field: orders.category
-        alias: category
-      - field: customers.state
-        alias: state
-      - field: orders.status
-        alias: status
+        category: orders.category
+        state: customers.state
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
       sort:
       - field: value
         direction: desc
       limit: 120
-      metric_view: orders
 tables:
   orders:
     kind: data_table
@@ -1383,24 +1152,25 @@ tables:
       width: 108
       format: days
     query:
-      metric_view: orders
       columns:
-      - field: orders.order_id
-        alias: order_id
-      - field: orders.purchase_date
-        alias: purchase_date
-      - field: orders.status
-        alias: status
-      - field: customers.state
-        alias: state
-      - field: orders.category
-        alias: category
-      - field: orders.revenue
-        alias: revenue
-      - field: orders.review_score
-        alias: review_score
-      - field: orders.delivery_days
-        alias: delivery_days
+        order_id: orders.order_id
+        purchase_date: orders.purchase_date
+        status: orders.status
+        state: customers.state
+        category: orders.category
+        revenue: orders.revenue
+        review_score: orders.review_score
+        delivery_days: orders.delivery_days
+      table: orders
+      fields:
+      - orders.order_id
+      - orders.purchase_date
+      - orders.status
+      - customers.state
+      - orders.category
+      - orders.revenue
+      - orders.review_score
+      - orders.delivery_days
   orders_compact:
     kind: data_table
     title: Orders compact
@@ -1435,18 +1205,19 @@ tables:
       width: 92
       format: decimal
     query:
-      metric_view: orders
       columns:
-      - field: orders.order_id
-        alias: order_id
-      - field: orders.status
-        alias: status
-      - field: customers.state
-        alias: state
-      - field: orders.revenue
-        alias: revenue
-      - field: orders.review_score
-        alias: review_score
+        order_id: orders.order_id
+        status: orders.status
+        state: customers.state
+        revenue: orders.revenue
+        review_score: orders.review_score
+      table: orders
+      fields:
+      - orders.order_id
+      - orders.status
+      - customers.state
+      - orders.revenue
+      - orders.review_score
   orders_spacious:
     kind: data_table
     title: Orders spacious
@@ -1481,18 +1252,19 @@ tables:
       width: 116
       format: days
     query:
-      metric_view: orders
       columns:
-      - field: orders.order_id
-        alias: order_id
-      - field: orders.purchase_date
-        alias: purchase_date
-      - field: orders.category
-        alias: category
-      - field: orders.revenue
-        alias: revenue
-      - field: orders.delivery_days
-        alias: delivery_days
+        order_id: orders.order_id
+        purchase_date: orders.purchase_date
+        category: orders.category
+        revenue: orders.revenue
+        delivery_days: orders.delivery_days
+      table: orders
+      fields:
+      - orders.order_id
+      - orders.purchase_date
+      - orders.category
+      - orders.revenue
+      - orders.delivery_days
   orders_full_grid:
     kind: data_table
     title: Orders full grid
@@ -1531,20 +1303,21 @@ tables:
       width: 110
       format: days
     query:
-      metric_view: orders
       columns:
-      - field: orders.order_id
-        alias: order_id
-      - field: orders.status
-        alias: status
-      - field: customers.state
-        alias: state
-      - field: orders.category
-        alias: category
-      - field: orders.revenue
-        alias: revenue
-      - field: orders.delivery_days
-        alias: delivery_days
+        order_id: orders.order_id
+        status: orders.status
+        state: customers.state
+        category: orders.category
+        revenue: orders.revenue
+        delivery_days: orders.delivery_days
+      table: orders
+      fields:
+      - orders.order_id
+      - orders.status
+      - customers.state
+      - orders.category
+      - orders.revenue
+      - orders.delivery_days
   orders_conditional:
     kind: data_table
     title: Orders conditional formatting
@@ -1611,18 +1384,19 @@ tables:
         max: 30
         high_color: danger
     query:
-      metric_view: orders
       columns:
-      - field: orders.order_id
-        alias: order_id
-      - field: orders.status
-        alias: status
-      - field: orders.revenue
-        alias: revenue
-      - field: orders.review_score
-        alias: review_score
-      - field: orders.delivery_days
-        alias: delivery_days
+        order_id: orders.order_id
+        status: orders.status
+        revenue: orders.revenue
+        review_score: orders.review_score
+        delivery_days: orders.delivery_days
+      table: orders
+      fields:
+      - orders.order_id
+      - orders.status
+      - orders.revenue
+      - orders.review_score
+      - orders.delivery_days
   state_status_matrix:
     kind: matrix_table
     title: State status matrix
@@ -1630,18 +1404,13 @@ tables:
       key: state
       direction: asc
     query:
-      metric_view: orders
       rows:
-      - field: customers.state
-        alias: state
+        state: customers.state
       columns:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
-      - field: orders.revenue
-        alias: revenue
+        order_count:
+        revenue:
   category_status_pivot:
     kind: pivot_table
     title: Category status pivot
@@ -1649,16 +1418,12 @@ tables:
       key: category
       direction: asc
     query:
-      metric_view: orders
       rows:
-      - field: orders.category
-        alias: category
+        category: orders.category
       columns:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
   state_status_matrix_formatted:
     kind: matrix_table
     title: State/category matrix formatted
@@ -1700,17 +1465,12 @@ tables:
       key: state
       direction: asc
     query:
-      metric_view: orders
       rows:
-      - field: customers.state
-        alias: state
-      - field: orders.category
-        alias: category
+        state: customers.state
+        category: orders.category
       measures:
-      - field: orders.order_count
-        alias: order_count
-      - field: orders.revenue
-        alias: revenue
+        order_count:
+        revenue:
   category_status_pivot_heat:
     kind: pivot_table
     title: Category status pivot heat
@@ -1728,16 +1488,12 @@ tables:
       key: category
       direction: asc
     query:
-      metric_view: orders
       rows:
-      - field: orders.category
-        alias: category
+        category: orders.category
       columns:
-      - field: orders.status
-        alias: status
+        status: orders.status
       measures:
-      - field: orders.order_count
-        alias: order_count
+        order_count:
 pages:
 - id: overview
   title: Overview
@@ -3075,3 +2831,4 @@ pages:
       row: 29
       col_span: 6
       row_span: 8
+semantic_model: olist

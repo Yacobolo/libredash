@@ -1,0 +1,79 @@
+package ui
+
+import (
+	"html"
+	"strings"
+	"testing"
+
+	"github.com/Yacobolo/libredash/internal/api"
+	"github.com/Yacobolo/libredash/internal/dashboard"
+)
+
+func TestSemanticModelDesignWorkspaceVocabulary(t *testing.T) {
+	workspace, catalog, assets, access := semanticDesignUIFixtures()
+
+	var out strings.Builder
+	err := WorkspacePage(catalog, workspace, assets, "", "", "Owner", access, "csrf").Render(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := html.UnescapeString(out.String())
+
+	for _, want := range []string{"Semantic model", "Dashboard", "Olist Commerce", "Executive Sales Dashboard"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("workspace page missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Metric view", "Dataset", "Cache table"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("workspace page rendered legacy vocabulary %q:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestSemanticModelDesignDetailsVocabulary(t *testing.T) {
+	workspace, catalog, assets, _ := semanticDesignUIFixtures()
+	asset := assets[0]
+
+	var out strings.Builder
+	err := WorkspaceAssetPage(catalog, workspace, asset, assets, nil, "details", "Owner").Render(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := html.UnescapeString(out.String())
+
+	for _, want := range []string{"Model tables (1)", "Sources (1)", "Measures (1)", "Relationships (1)"} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("semantic model details missing %q:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{"Metric view", "Datasets", "Cache tables", "Cache table"} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("semantic model details rendered legacy vocabulary %q:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func semanticDesignUIFixtures() (api.WorkspaceResponse, dashboard.Catalog, []api.AssetResponse, api.WorkspaceAccessResponse) {
+	workspace := api.WorkspaceResponse{ID: "libredash", Title: "LibreDash Workspace", Description: "Local BI workspace."}
+	catalog := dashboard.Catalog{Workspace: dashboard.CatalogWorkspace{ID: workspace.ID, Title: workspace.Title, Description: workspace.Description}}
+	assets := []api.AssetResponse{
+		{
+			ID:          "model",
+			WorkspaceID: workspace.ID,
+			Type:        "semantic_model",
+			Key:         "olist",
+			Title:       "Olist Commerce",
+			Description: "Olist semantic model.",
+			Meta: map[string]any{
+				"Models":        map[string]any{"orders": map[string]any{"Source": "olist_orders"}},
+				"Sources":       map[string]any{"olist_orders": map[string]any{"Connection": "olist", "Format": "csv", "Path": "orders.csv"}},
+				"Measures":      map[string]any{"revenue": map[string]any{"Expr": "SUM(orders.revenue)", "Table": "orders", "Grain": "order_id"}},
+				"Relationships": []any{map[string]any{"From": "orders.customer_id", "To": "customers.customer_id", "Cardinality": "many_to_one", "Active": true}},
+			},
+		},
+		{ID: "dashboard", WorkspaceID: workspace.ID, Type: "dashboard", Key: "executive-sales", Title: "Executive Sales Dashboard", Description: "Sales overview."},
+	}
+	access := api.WorkspaceAccessResponse{Workspace: workspace, CanManage: false}
+	return workspace, catalog, assets, access
+}

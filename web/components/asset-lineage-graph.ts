@@ -258,7 +258,7 @@ function dashboardDataPositionFor(node: LineageNode, nodes: LineageNode[]): { x:
     source: 336,
     model_table: 576,
     semantic_model: 816,
-    metric_view: 1200,
+    measure: 1200,
   }
   const x = xByKind[node.kind] ?? 576
   if (node.kind !== 'source') return { x, y: 300 }
@@ -294,7 +294,6 @@ function nodeStyle(node: LineageNode): Record<string, string> {
     filter: ['var(--ld-asset-filter-bg)', 'var(--ld-asset-filter-accent)', 'var(--ld-asset-filter-border)'],
     measure: ['var(--ld-asset-measure-bg)', 'var(--ld-asset-measure-accent)', 'var(--ld-asset-measure-border)'],
     model_table: ['var(--ld-asset-model-table-bg)', 'var(--ld-asset-model-table-accent)', 'var(--ld-asset-model-table-border)'],
-    metric_view: ['var(--ld-asset-metric-view-bg)', 'var(--ld-asset-metric-view-accent)', 'var(--ld-asset-metric-view-border)'],
     page: ['var(--ld-asset-page-bg)', 'var(--ld-asset-page-accent)', 'var(--ld-asset-page-border)'],
     semantic_model: ['var(--ld-asset-semantic-model-bg)', 'var(--ld-asset-semantic-model-accent)', 'var(--ld-asset-semantic-model-border)'],
     source: ['var(--ld-asset-source-bg)', 'var(--ld-asset-source-accent)', 'var(--ld-asset-source-border)'],
@@ -328,8 +327,6 @@ function kindLabel(kind: string): string {
       return 'Model table'
     case 'model_table':
       return 'Model table'
-    case 'metric_view':
-      return 'Metric view'
     case 'semantic_model':
       return 'Semantic model'
     default:

@@ -16,9 +16,6 @@ func TestLoadWorkspaceCatalog(t *testing.T) {
 	if len(workspace.Catalog.SemanticModels) != 1 {
 		t.Fatalf("model catalog count = %d, want 1", len(workspace.Catalog.SemanticModels))
 	}
-	if len(workspace.Catalog.MetricViews) != 1 {
-		t.Fatalf("metric view catalog count = %d, want 1", len(workspace.Catalog.MetricViews))
-	}
 	if len(workspace.Catalog.Dashboards) != 1 {
 		t.Fatalf("dashboard catalog count = %d, want 1", len(workspace.Catalog.Dashboards))
 	}
@@ -27,9 +24,6 @@ func TestLoadWorkspaceCatalog(t *testing.T) {
 	}
 	if _, ok := workspace.Models["olist"]; !ok {
 		t.Fatal("workspace missing olist model")
-	}
-	if _, ok := workspace.MetricViews["orders"]; !ok {
-		t.Fatal("workspace missing orders metric view")
 	}
 	if _, ok := workspace.Dashboards["executive-sales"]; !ok {
 		t.Fatal("workspace missing executive-sales dashboard")
@@ -50,7 +44,7 @@ dashboards: []
 		t.Fatal(err)
 	}
 	_, err := LoadWorkspace(path)
-	if err == nil || !strings.Contains(err.Error(), "legacy metrics_views") {
+	if err == nil || !strings.Contains(err.Error(), "legacy metric views") {
 		t.Fatalf("LoadWorkspace error = %v, want legacy metrics_views rejection", err)
 	}
 }
@@ -62,9 +56,6 @@ func TestCatalogValidateRejectsDuplicateIDs(t *testing.T) {
 			{ID: "olist", Title: "Olist", Path: "olist/model.yaml"},
 			{ID: "olist", Title: "Olist Copy", Path: "olist/model.yaml"},
 		},
-		MetricViews: []CatalogMetricView{
-			{ID: "orders", Title: "Orders", Path: "olist/orders.metrics.yaml", SemanticModel: "olist"},
-		},
 		Dashboards: []CatalogDashboard{
 			{ID: "executive-sales", Title: "Executive Sales", Path: "olist/executive-sales.yaml"},
 		},
@@ -73,31 +64,11 @@ func TestCatalogValidateRejectsDuplicateIDs(t *testing.T) {
 	assertCatalogValidateError(t, catalog, baseDir, "duplicate semantic model")
 }
 
-func TestCatalogValidateRejectsUnknownMetricViewModel(t *testing.T) {
-	baseDir := filepath.Join("..", "..", "dashboards")
-	catalog := Catalog{
-		SemanticModels: []CatalogModel{
-			{ID: "olist", Title: "Olist", Path: "olist/model.yaml"},
-		},
-		MetricViews: []CatalogMetricView{
-			{ID: "orders", Title: "Orders", Path: "olist/orders.metrics.yaml", SemanticModel: "missing"},
-		},
-		Dashboards: []CatalogDashboard{
-			{ID: "executive-sales", Title: "Executive Sales", Path: "olist/executive-sales.yaml"},
-		},
-	}
-
-	assertCatalogValidateError(t, catalog, baseDir, "unknown semantic model")
-}
-
 func TestCatalogValidateRejectsMissingPath(t *testing.T) {
 	baseDir := filepath.Join("..", "..", "dashboards")
 	catalog := Catalog{
 		SemanticModels: []CatalogModel{
 			{ID: "olist", Title: "Olist", Path: "olist/missing.yaml"},
-		},
-		MetricViews: []CatalogMetricView{
-			{ID: "orders", Title: "Orders", Path: "olist/orders.metrics.yaml", SemanticModel: "olist"},
 		},
 		Dashboards: []CatalogDashboard{
 			{ID: "executive-sales", Title: "Executive Sales", Path: "olist/executive-sales.yaml"},

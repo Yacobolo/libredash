@@ -34,30 +34,97 @@ func validateTableColumn(tableName string, column dashboard.TableColumn) error {
 	return nil
 }
 
-func normalizeTableFields(name string, view *MetricView, table *TableVisual) error {
+func normalizeTableFields(name string, model *Model, table *TableVisual) error {
 	table.Rows = make([]string, len(table.Query.Rows))
 	for index, dimension := range table.Query.Rows {
-		field, _, err := view.ResolveDimensionRef(dimension.Field)
+		item, err := model.ResolveDimension(dimension.Field)
 		if err != nil {
 			return fmt.Errorf("table %q query.rows references unknown dimension %q", name, dimension.Field)
 		}
-		table.Rows[index] = field
+		table.Rows[index] = item.Field
 	}
 	table.ColumnDims = make([]string, len(table.Query.Columns))
 	for index, dimension := range table.Query.Columns {
-		field, _, err := view.ResolveDimensionRef(dimension.Field)
+		item, err := model.ResolveDimension(dimension.Field)
 		if err != nil {
 			return fmt.Errorf("table %q query.columns references unknown dimension %q", name, dimension.Field)
 		}
-		table.ColumnDims[index] = field
+		table.ColumnDims[index] = item.Field
 	}
 	table.Measures = make([]string, len(table.Query.Measures))
 	for index, measure := range table.Query.Measures {
-		field, _, err := view.ResolveMeasureRef(measure.Field)
+		item, err := model.ResolveMeasure(measure.Field)
 		if err != nil {
 			return fmt.Errorf("table %q query.measures references unknown measure %q", name, measure.Field)
 		}
-		table.Measures[index] = field
+		table.Measures[index] = item.Field
+	}
+	return nil
+}
+
+func normalizeDataTableFields(name string, model *Model, table *TableVisual) error {
+	columns := make([]FieldRef, 0, len(table.Query.Columns)+len(table.Query.Fields))
+	if len(table.Query.Columns) > 0 {
+		columns = append(columns, table.Query.Columns...)
+	} else {
+		for _, field := range table.Query.Fields {
+			columns = append(columns, FieldRef{Field: field, Alias: fieldRefAlias(field)})
+		}
+	}
+	if len(columns) == 0 {
+		return fmt.Errorf("table %q kind data_table requires query.fields or query.columns", name)
+	}
+	seenAliases := map[string]struct{}{}
+	for index, column := range columns {
+		if column.Alias == "" {
+			column.Alias = fieldRefAlias(column.Field)
+		}
+		if _, exists := seenAliases[column.Alias]; exists {
+			return fmt.Errorf("table %q has duplicate query output alias %q", name, column.Alias)
+		}
+		seenAliases[column.Alias] = struct{}{}
+		if dimension, err := model.ResolveDimension(column.Field); err == nil {
+			column.Field = dimension.Field
+			columns[index] = column
+			continue
+		}
+		measure, err := model.ResolveMeasure(column.Field)
+		if err != nil {
+			return fmt.Errorf("table %q query column %q references unknown field %q", name, column.Alias, column.Field)
+		}
+		column.Field = measure.Field
+		columns[index] = column
+	}
+	table.DataColumns = columns
+	if len(table.Columns) == 0 {
+		table.Columns = make([]dashboard.TableColumn, 0, len(columns))
+		for _, column := range columns {
+			format := "text"
+			role := ""
+			align := ""
+			if measure, err := model.ResolveMeasure(column.Field); err == nil {
+				role = "measure"
+				align = "right"
+				if measure.Format != "" {
+					format = measure.Format
+				} else {
+					format = "decimal"
+				}
+			}
+			table.Columns = append(table.Columns, dashboard.TableColumn{
+				Key:    column.Alias,
+				Label:  titleFromIdentifier(column.Alias),
+				Format: format,
+				Role:   role,
+				Align:  align,
+			})
+		}
+		return nil
+	}
+	for _, column := range table.Columns {
+		if !tableHasQueryAlias(table.DataColumns, column.Key) {
+			return fmt.Errorf("table %q column %q has no matching query column alias", name, column.Key)
+		}
 	}
 	return nil
 }
@@ -71,15 +138,15 @@ func tableHasQueryAlias(columns []FieldRef, alias string) bool {
 	return false
 }
 
-func normalizeTableFormatting(view *MetricView, table *TableVisual) {
+func normalizeTableFormatting(model *Model, table *TableVisual) {
 	if len(table.MeasureFormatting) == 0 {
 		return
 	}
 	next := map[string][]dashboard.TableFormattingRule{}
 	for measure, rules := range table.MeasureFormatting {
 		field := measure
-		if resolved, _, err := view.ResolveMeasureRef(measure); err == nil {
-			field = resolved
+		if resolved, err := model.ResolveMeasure(measure); err == nil {
+			field = resolved.Name
 		}
 		next[field] = rules
 	}

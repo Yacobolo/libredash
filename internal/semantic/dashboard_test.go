@@ -14,7 +14,7 @@ import (
 
 func TestLoadOlistDashboard(t *testing.T) {
 	model := loadOlistModel(t)
-	report, err := LoadDashboard(filepath.Join("..", "..", "dashboards", "olist", "executive-sales.yaml"), loadOlistMetricViews(t, model))
+	report, err := LoadDashboard(filepath.Join("..", "..", "dashboards", "olist", "executive-sales.yaml"), map[string]*Model{"olist": model})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,8 +22,8 @@ func TestLoadOlistDashboard(t *testing.T) {
 	if report.ID != "executive-sales" {
 		t.Fatalf("dashboard id = %q, want executive-sales", report.ID)
 	}
-	if got := report.Visuals["revenue"].MetricView; got != "orders" {
-		t.Fatalf("revenue visual dataset = %q, want orders", got)
+	if got := report.SemanticModel; got != "olist" {
+		t.Fatalf("dashboard semantic model = %q, want olist", got)
 	}
 	if got := report.Visuals["orders"].Type; got != "donut" {
 		t.Fatalf("orders visual type = %q, want donut", got)
@@ -77,7 +77,7 @@ func TestLoadOlistDashboard(t *testing.T) {
 	if !hasTableColumnFormatting(conditional.Columns, "revenue", "data_bar") {
 		t.Fatalf("orders_conditional revenue column missing data bar formatting: %#v", conditional.Columns)
 	}
-	if len(report.Tables["category_status_pivot_heat"].MeasureFormatting["orders.order_count"]) == 0 {
+	if len(report.Tables["category_status_pivot_heat"].MeasureFormatting["order_count"]) == 0 {
 		t.Fatalf("category_status_pivot_heat missing order_count measure formatting")
 	}
 	if len(report.Pages) != 24 {
@@ -129,6 +129,105 @@ func TestLoadOlistDashboard(t *testing.T) {
 	if got := report.Filters["purchase_date"].URLParam; got != "period" {
 		t.Fatalf("purchase_date url param = %q, want period", got)
 	}
+}
+
+func TestDataTableFieldsNormalizeToDataColumns(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	table := report.Tables["orders"]
+	table.Query.Columns = nil
+	table.Query.Fields = []string{"orders.order_id", "revenue"}
+	table.Columns = nil
+	report.Tables["orders"] = table
+
+	if err := report.Validate(map[string]*Model{"olist": model}); err != nil {
+		t.Fatal(err)
+	}
+	normalized := report.Tables["orders"]
+	if got := len(normalized.DataColumns); got != 2 {
+		t.Fatalf("data columns = %d, want 2", got)
+	}
+	if got := normalized.DataColumns[0].Alias; got != "order_id" {
+		t.Fatalf("field alias = %q, want order_id", got)
+	}
+	if got := normalized.DataColumns[1].Field; got != "revenue" {
+		t.Fatalf("measure field = %q, want revenue", got)
+	}
+	if got := len(normalized.Columns); got != 2 {
+		t.Fatalf("presentation columns = %d, want generated columns", got)
+	}
+}
+
+func TestDataTableColumnsOverrideFields(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	table := report.Tables["orders"]
+	table.Query.Fields = []string{"missing.field"}
+	table.Query.Columns = []FieldRef{{Field: "orders.order_id", Alias: "order"}}
+	table.Columns = []dashboard.TableColumn{{Key: "order", Label: "Order"}}
+	report.Tables["orders"] = table
+
+	if err := report.Validate(map[string]*Model{"olist": model}); err != nil {
+		t.Fatal(err)
+	}
+	if got := report.Tables["orders"].DataColumns[0].Alias; got != "order" {
+		t.Fatalf("query column alias = %q, want order", got)
+	}
+}
+
+func TestDataTableRejectsDuplicateOutputAliases(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	table := report.Tables["orders"]
+	table.Query.Columns = nil
+	table.Query.Fields = []string{"orders.customer_id", "customers.customer_id"}
+	table.Columns = nil
+	report.Tables["orders"] = table
+
+	assertDashboardValidateError(t, report, model, "duplicate query output alias")
+}
+
+func TestGlobalFilterSkipsIncompatibleTarget(t *testing.T) {
+	model := loadOlistModel(t)
+	addIsolatedProductTable(model)
+	report := loadOlistDashboard(t, model)
+	filter := FilterDefinition{
+		Type:            "text",
+		Label:           "Product",
+		Dimension:       "products.category",
+		DefaultOperator: "contains",
+		Operators:       []string{"contains"},
+		URLParam:        "product",
+	}
+	report.Filters["product"] = filter
+
+	if err := report.Validate(map[string]*Model{"olist": model}); err != nil {
+		t.Fatal(err)
+	}
+	applies, err := report.FilterAppliesToTarget(model, filter, "visual", "revenue")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applies {
+		t.Fatal("global incompatible product filter applied to orders visual")
+	}
+}
+
+func TestExplicitFilterTargetRejectsIncompatibleTarget(t *testing.T) {
+	model := loadOlistModel(t)
+	addIsolatedProductTable(model)
+	report := loadOlistDashboard(t, model)
+	report.Filters["product"] = FilterDefinition{
+		Type:            "text",
+		Label:           "Product",
+		Dimension:       "products.category",
+		DefaultOperator: "contains",
+		Operators:       []string{"contains"},
+		URLParam:        "product",
+		Targets:         InteractionTargets{Visuals: []string{"revenue"}},
+	}
+
+	assertDashboardValidateError(t, report, model, "cannot apply to visual")
 }
 
 func TestOlistDashboardChartShowcaseContract(t *testing.T) {
@@ -252,7 +351,7 @@ func TestDashboardValidateAcceptsV3VisualMetadata(t *testing.T) {
 	}
 	report.Visuals["revenue"] = visual
 
-	if err := report.Validate(loadOlistMetricViews(t, model)); err != nil {
+	if err := report.Validate(map[string]*Model{"olist": model}); err != nil {
 		t.Fatalf("validate v3 visual: %v", err)
 	}
 }
@@ -293,27 +392,27 @@ func TestLoadDashboardRejectsLegacyTopLevelStacked(t *testing.T) {
 	path := filepath.Join(dir, "dashboard.yaml")
 	content := strings.ReplaceAll(`id: executive-sales
 title: Executive Sales Dashboard
-metric_views: [orders]
+semantic_model: olist
 filters: {}
 visuals:
   total_orders:
     kind: kpi
     shape: single_value
-    metrics_view: orders
     query:
-      measures: [order_count]
+      measures: {order_count:}
   revenue:
     title: Revenue
     type: area
     stacked: true
-    metrics_view: orders
     query:
-      dimensions: [purchase_month]
-      measures: [revenue]
+      dimensions: {purchase_month: orders.purchase_month}
+      measures: {revenue:}
 tables:
   orders:
     title: Orders
-    metrics_view: orders
+    query:
+      table: orders
+      fields: [orders.order_id]
     columns:
       - key: order_id
         label: Order
@@ -329,7 +428,7 @@ pages:
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := LoadDashboard(path, loadOlistMetricViews(t, model))
+	_, err := LoadDashboard(path, map[string]*Model{"olist": model})
 	if err == nil || !strings.Contains(err.Error(), "legacy top-level stacked") {
 		t.Fatalf("LoadDashboard error = %v, want legacy stacked rejection", err)
 	}
@@ -369,7 +468,7 @@ pages:
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := LoadDashboard(path, loadOlistMetricViews(t, model))
+	_, err := LoadDashboard(path, map[string]*Model{"olist": model})
 	if err == nil || !strings.Contains(err.Error(), "legacy kpis") {
 		t.Fatalf("LoadDashboard error = %v, want legacy kpis rejection", err)
 	}
@@ -411,92 +510,81 @@ func TestDashboardValidateAcceptsAdvancedVisualShapes(t *testing.T) {
 
 	cases := map[string]Visual{
 		"heatmap": {
-			Title:      "Heatmap",
-			Shape:      "matrix",
-			Renderer:   "echarts",
-			Type:       "heatmap",
-			MetricView: "orders",
-			Query:      VisualQuery{Dimensions: fieldRefs("state", "status"), Measures: fieldRefs("order_count")},
+			Title:    "Heatmap",
+			Shape:    "matrix",
+			Renderer: "echarts",
+			Type:     "heatmap",
+			Query:    VisualQuery{Dimensions: fieldRefs("state", "status"), Measures: measureRefs("order_count")},
 		},
 		"sankey": {
-			Title:      "Flow",
-			Shape:      "graph",
-			Renderer:   "echarts",
-			Type:       "sankey",
-			MetricView: "orders",
-			Query:      VisualQuery{Dimensions: fieldRefs("status", "delivery_bucket"), Measures: fieldRefs("order_count")},
+			Title:    "Flow",
+			Shape:    "graph",
+			Renderer: "echarts",
+			Type:     "sankey",
+			Query:    VisualQuery{Dimensions: fieldRefs("status", "delivery_bucket"), Measures: measureRefs("order_count")},
 		},
 		"geo": {
-			Title:      "Map",
-			Shape:      "geo",
-			Renderer:   "echarts",
-			Type:       "map",
-			MetricView: "orders",
-			Options:    map[string]any{"map": "brazil_states"},
-			Query:      VisualQuery{Dimensions: fieldRefs("state"), Measures: fieldRefs("order_count")},
+			Title:    "Map",
+			Shape:    "geo",
+			Renderer: "echarts",
+			Type:     "map",
+			Options:  map[string]any{"map": "brazil_states"},
+			Query:    VisualQuery{Dimensions: fieldRefs("state"), Measures: measureRefs("order_count")},
 		},
 		"boxplot": {
-			Title:      "Distribution",
-			Shape:      "distribution",
-			Renderer:   "echarts",
-			Type:       "boxplot",
-			MetricView: "orders",
-			Query:      VisualQuery{Dimensions: fieldRefs("delivery_bucket"), Measures: fieldRefs("delivery_days")},
+			Title:    "Distribution",
+			Shape:    "distribution",
+			Renderer: "echarts",
+			Type:     "boxplot",
+			Query:    VisualQuery{Dimensions: fieldRefs("delivery_bucket"), Measures: measureRefs("delivery_days")},
 		},
 		"combo": {
-			Title:      "Combo",
-			Shape:      "category_multi_measure",
-			Renderer:   "echarts",
-			Type:       "combo",
-			MetricView: "orders",
-			Query:      VisualQuery{Dimensions: fieldRefs("purchase_month"), Measures: fieldRefs("revenue", "order_count")},
+			Title:    "Combo",
+			Shape:    "category_multi_measure",
+			Renderer: "echarts",
+			Type:     "combo",
+			Query:    VisualQuery{Dimensions: fieldRefs("purchase_month"), Measures: measureRefs("revenue", "order_count")},
 		},
 		"waterfall": {
-			Title:      "Waterfall",
-			Shape:      "category_delta",
-			Renderer:   "echarts",
-			Type:       "waterfall",
-			MetricView: "orders",
-			Query:      VisualQuery{Dimensions: fieldRefs("purchase_month"), Measures: fieldRefs("revenue")},
+			Title:    "Waterfall",
+			Shape:    "category_delta",
+			Renderer: "echarts",
+			Type:     "waterfall",
+			Query:    VisualQuery{Dimensions: fieldRefs("purchase_month"), Measures: measureRefs("revenue")},
 		},
 		"histogram": {
-			Title:      "Histogram",
-			Shape:      "binned_measure",
-			Renderer:   "echarts",
-			Type:       "histogram",
-			MetricView: "orders",
-			Query:      VisualQuery{Measures: fieldRefs("delivery_days")},
+			Title:    "Histogram",
+			Shape:    "binned_measure",
+			Renderer: "echarts",
+			Type:     "histogram",
+			Query:    VisualQuery{Measures: measureRefs("delivery_days")},
 		},
 		"radar": {
-			Title:      "Radar",
-			Shape:      "category_value",
-			Renderer:   "echarts",
-			Type:       "radar",
-			MetricView: "orders",
-			Query:      VisualQuery{Dimensions: fieldRefs("status"), Measures: fieldRefs("order_count")},
+			Title:    "Radar",
+			Shape:    "category_value",
+			Renderer: "echarts",
+			Type:     "radar",
+			Query:    VisualQuery{Dimensions: fieldRefs("status"), Measures: measureRefs("order_count")},
 		},
 		"tree": {
-			Title:      "Tree",
-			Shape:      "hierarchy",
-			Renderer:   "echarts",
-			Type:       "tree",
-			MetricView: "orders",
-			Query:      VisualQuery{Dimensions: fieldRefs("state", "status"), Measures: fieldRefs("order_count")},
+			Title:    "Tree",
+			Shape:    "hierarchy",
+			Renderer: "echarts",
+			Type:     "tree",
+			Query:    VisualQuery{Dimensions: fieldRefs("state", "status"), Measures: measureRefs("order_count")},
 		},
 		"sunburst": {
-			Title:      "Sunburst",
-			Shape:      "hierarchy",
-			Renderer:   "echarts",
-			Type:       "sunburst",
-			MetricView: "orders",
-			Query:      VisualQuery{Dimensions: fieldRefs("category", "status"), Measures: fieldRefs("order_count")},
+			Title:    "Sunburst",
+			Shape:    "hierarchy",
+			Renderer: "echarts",
+			Type:     "sunburst",
+			Query:    VisualQuery{Dimensions: fieldRefs("category", "status"), Measures: measureRefs("order_count")},
 		},
 	}
 	for name, visual := range cases {
-		visual.Query.MetricView = "orders"
 		report.Visuals = map[string]Visual{name: visual}
 		report.Pages = []dashboard.Page{{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{{ID: name, Kind: visual.Type + "_chart", Visual: name, Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 1, RowSpan: 1}}}}}
-		if err := report.Validate(loadOlistMetricViews(t, model)); err != nil {
+		if err := report.Validate(map[string]*Model{"olist": model}); err != nil {
 			t.Fatalf("validate advanced shape %s: %v", name, err)
 		}
 	}
@@ -507,7 +595,7 @@ func TestDashboardValidateRejectsAdvancedShapeMismatch(t *testing.T) {
 	report := loadOlistDashboard(t, model)
 
 	visual := report.Visuals["revenue_orders_combo"]
-	visual.Query.Measures = fieldRefs("revenue")
+	visual.Query.Measures = measureRefs("revenue")
 	report.Visuals["revenue_orders_combo"] = visual
 	assertDashboardValidateError(t, report, model, "at least two query measures")
 
@@ -656,6 +744,68 @@ func TestDashboardValidateRejectsInvalidDatePreset(t *testing.T) {
 	assertDashboardValidateError(t, report, model, "requires both from and to")
 }
 
+func TestDashboardValidateRejectsDuplicateDatePreset(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	filter := report.Filters["purchase_date"]
+	filter.Presets = append(filter.Presets, filter.Presets[0])
+	report.Filters["purchase_date"] = filter
+
+	assertDashboardValidateError(t, report, model, "duplicate preset")
+}
+
+func TestDashboardValidateRejectsNegativeRelativeDatePreset(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	filter := report.Filters["purchase_date"]
+	filter.Presets = append(filter.Presets, FilterPreset{Value: "future", Label: "Future", RelativeDays: -7})
+	report.Filters["purchase_date"] = filter
+
+	assertDashboardValidateError(t, report, model, "negative relative_days")
+}
+
+func TestDashboardValidateRejectsUnknownDefaultDatePreset(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	filter := report.Filters["purchase_date"]
+	filter.Default.Preset = "missing"
+	report.Filters["purchase_date"] = filter
+
+	assertDashboardValidateError(t, report, model, "default preset")
+}
+
+func TestDashboardValidateRejectsUnsupportedFilterValuesSource(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	filter := report.Filters["state"]
+	filter.Values.Source = "static"
+	report.Filters["state"] = filter
+
+	assertDashboardValidateError(t, report, model, "unsupported values.source")
+}
+
+func TestDashboardValidateRejectsTextOperatorURLParamWithoutValueParam(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	filter := report.Filters["category"]
+	filter.URLParam = ""
+	filter.OperatorURLParam = "category_op"
+	report.Filters["category"] = filter
+
+	assertDashboardValidateError(t, report, model, "operator_url_param requires url_param")
+}
+
+func TestDashboardValidateRejectsDefaultTextOperatorOutsideAllowedSet(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	filter := report.Filters["category"]
+	filter.DefaultOperator = "starts_with"
+	filter.Operators = []string{"contains", "equals"}
+	report.Filters["category"] = filter
+
+	assertDashboardValidateError(t, report, model, "default_operator")
+}
+
 func TestDashboardValidateRejectsInvalidPagePlacement(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
@@ -691,6 +841,26 @@ func TestDashboardValidateRejectsDuplicateFilterURLParam(t *testing.T) {
 	assertDashboardValidateError(t, report, model, "duplicates")
 }
 
+func TestDashboardValidateRejectsDuplicateFilterURLParamWithinFilter(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	filter := report.Filters["category"]
+	filter.OperatorURLParam = filter.URLParam
+	report.Filters["category"] = filter
+
+	assertDashboardValidateError(t, report, model, "duplicates")
+}
+
+func TestDashboardValidateRejectsDataTableWithoutQueryTable(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+	table := report.Tables["orders"]
+	table.Query.Table = ""
+	report.Tables["orders"] = table
+
+	assertDashboardValidateError(t, report, model, "kind data_table requires query.table")
+}
+
 func TestDashboardFiltersFromURL(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
@@ -716,6 +886,38 @@ func TestDashboardFiltersFromURL(t *testing.T) {
 	category := filters.Controls["category"]
 	if category.Value != "health" || category.Operator != "starts_with" {
 		t.Fatalf("category filter = %#v, want starts_with health", category)
+	}
+}
+
+func TestDashboardFiltersFromURLDateRangeForcesCustomPreset(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+
+	filters := report.FiltersFromURL(url.Values{
+		"from": {"2018-01-01"},
+	})
+
+	date := filters.Controls["purchase_date"]
+	if date.Preset != "custom" || date.From != "2018-01-01" {
+		t.Fatalf("date filter = %#v, want custom preset from URL bound", date)
+	}
+}
+
+func TestDashboardFiltersFromURLIgnoresUnsupportedTextOperator(t *testing.T) {
+	model := loadOlistModel(t)
+	report := loadOlistDashboard(t, model)
+
+	filters := report.FiltersFromURL(url.Values{
+		"category":    {"health"},
+		"category_op": {"unsupported"},
+	})
+
+	category := filters.Controls["category"]
+	if category.Value != "health" {
+		t.Fatalf("category value = %q, want health", category.Value)
+	}
+	if category.Operator != "contains" {
+		t.Fatalf("category operator = %q, want default contains", category.Operator)
 	}
 }
 

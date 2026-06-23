@@ -34,7 +34,7 @@ func applyAliases(expr string, aliases map[string]tableAlias, fallbackAlias stri
 	return expr
 }
 
-func joinSQL(base string, aliases map[string]tableAlias) (string, error) {
+func joinSQL(model *semantic.Model, base string, aliases map[string]tableAlias) (string, error) {
 	baseIdent, err := quoteIdent(base)
 	if err != nil {
 		return "", err
@@ -57,11 +57,11 @@ func joinSQL(base string, aliases map[string]tableAlias) (string, error) {
 			continue
 		}
 		relationship := alias.Path[len(alias.Path)-1]
-		fromTable, fromField, err := splitField(relationship.From)
+		fromEndpoint, err := model.ResolveRelationshipEndpoint(relationship.From)
 		if err != nil {
 			return "", err
 		}
-		toTable, toField, err := splitField(relationship.To)
+		toEndpoint, err := model.ResolveRelationshipEndpoint(relationship.To)
 		if err != nil {
 			return "", err
 		}
@@ -69,25 +69,26 @@ func joinSQL(base string, aliases map[string]tableAlias) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		leftTable := fromTable
-		rightTable := toTable
-		if alias.Table == fromTable && relationship.Cardinality == "one_to_one" {
-			leftTable = toTable
-			rightTable = fromTable
-			fromField, toField = toField, fromField
+		leftEndpoint := fromEndpoint
+		rightEndpoint := toEndpoint
+		if alias.Table == fromEndpoint.Table && relationship.Cardinality == "one_to_one" {
+			leftEndpoint = toEndpoint
+			rightEndpoint = fromEndpoint
 		}
-		left, ok := aliases[leftTable]
+		left, ok := aliases[leftEndpoint.Table]
 		if !ok {
-			return "", fmt.Errorf("missing relationship alias for %q", leftTable)
+			return "", fmt.Errorf("missing relationship alias for %q", leftEndpoint.Table)
 		}
-		right, ok := aliases[rightTable]
+		right, ok := aliases[rightEndpoint.Table]
 		if !ok {
-			return "", fmt.Errorf("missing relationship alias for %q", rightTable)
+			return "", fmt.Errorf("missing relationship alias for %q", rightEndpoint.Table)
 		}
 		if right.Table != alias.Table {
 			return "", fmt.Errorf("relationship path to %q ends at %q", alias.Table, right.Table)
 		}
-		parts = append(parts, fmt.Sprintf("LEFT JOIN model.%s %s ON %s.%s = %s.%s", rightIdent, alias.Alias, left.Alias, fromField, right.Alias, toField))
+		leftExpr := applyAliases(leftEndpoint.SQLExpression(), aliases, left.Alias)
+		rightExpr := applyAliases(rightEndpoint.SQLExpression(), aliases, right.Alias)
+		parts = append(parts, fmt.Sprintf("LEFT JOIN model.%s %s ON %s = %s", rightIdent, alias.Alias, leftExpr, rightExpr))
 	}
 	return strings.Join(parts, "\n"), nil
 }
@@ -105,13 +106,13 @@ func dimensionWhereExpr(dimension semantic.MetricDimension, aliases map[string]t
 	return applyAliases(dimension.Where, aliases, alias)
 }
 
-func measureExpr(measure semantic.MetricMeasure, aliases map[string]tableAlias) string {
+func measureExpr(measure ResolvedMeasure, aliases map[string]tableAlias) string {
 	alias := aliases[measure.Table].Alias
-	return applyAliases(measure.Expression, aliases, alias)
+	return applyAliases(measure.SQLExpression(), aliases, alias)
 }
 
-func rawMeasureExpr(measure semantic.MetricMeasure, aliases map[string]tableAlias) (string, error) {
-	expr := strings.TrimSpace(measure.Expression)
+func rawMeasureExpr(measure ResolvedMeasure, aliases map[string]tableAlias) (string, error) {
+	expr := strings.TrimSpace(measure.SQLExpression())
 	if expr == "" {
 		return "", fmt.Errorf("measure %q is missing expression", measure.Label)
 	}

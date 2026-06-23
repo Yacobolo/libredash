@@ -16,16 +16,79 @@ func Load(path string) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	var model Model
+	if err := rejectSourceBusinessSemantics(content); err != nil {
+		return nil, err
+	}
+	var file modelFile
 	decoder := yaml.NewDecoder(bytes.NewReader(content))
 	decoder.KnownFields(true)
-	if err := decoder.Decode(&model); err != nil {
+	if err := decoder.Decode(&file); err != nil {
+		return nil, err
+	}
+	model, err := file.compile()
+	if err != nil {
 		return nil, err
 	}
 	if err := model.Validate(); err != nil {
 		return nil, err
 	}
-	return &model, nil
+	return model, nil
+}
+
+func (m *semanticModelMeasures) UnmarshalYAML(value *yaml.Node) error {
+	m.Items = map[string]MetricMeasure{}
+	if value == nil || value.Kind == yaml.ScalarNode && value.Tag == "!!null" {
+		return nil
+	}
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("semantic model measures must be a mapping")
+	}
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		key := value.Content[index].Value
+		item := value.Content[index+1]
+		if key == "defaults" {
+			if err := item.Decode(&m.Defaults); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := validateSemanticIdentifier(key); err != nil {
+			return fmt.Errorf("measure %q is invalid: %w", key, err)
+		}
+		measure := MetricMeasure{}
+		if item.Kind != yaml.ScalarNode || item.Tag != "!!null" {
+			if err := item.Decode(&measure); err != nil {
+				return err
+			}
+		}
+		m.Items[key] = measure
+	}
+	return nil
+}
+
+func rejectSourceBusinessSemantics(content []byte) error {
+	var node yaml.Node
+	if err := yaml.Unmarshal(content, &node); err != nil {
+		return err
+	}
+	root := mappingNode(&node)
+	sources := mappingValue(root, "sources")
+	if sources == nil || sources.Kind != yaml.MappingNode {
+		return nil
+	}
+	for index := 1; index < len(sources.Content); index += 2 {
+		source := sources.Content[index]
+		if source.Kind != yaml.MappingNode {
+			continue
+		}
+		for child := 0; child+1 < len(source.Content); child += 2 {
+			switch source.Content[child].Value {
+			case "dimensions", "measures", "relationships", "primary_key", "grain":
+				return fmt.Errorf("sources do not define business semantics")
+			}
+		}
+	}
+	return nil
 }
 
 func (m *Model) Validate() error {
@@ -67,19 +130,33 @@ func (m *Model) Validate() error {
 		if err := validateSemanticIdentifier(name); err != nil {
 			return fmt.Errorf("model table %q has invalid name: %w", name, err)
 		}
+		if table.SQL != "" && table.Transform.SQL == "" {
+			table.Transform.SQL = table.SQL
+		}
+		if table.Kind == "" {
+			table.Kind = "model"
+		}
 		if table.Kind == "" {
 			return fmt.Errorf("model table %q requires kind", name)
 		}
-		if (table.Source == "") == (table.Transform.SQL == "") {
-			return fmt.Errorf("model table %q requires exactly one of source or transform.sql", name)
+		if table.Source == "" && table.Transform.SQL == "" {
+			return fmt.Errorf("model table %q requires source or transform.sql", name)
 		}
 		if table.Source != "" {
 			if _, ok := m.Sources[table.Source]; !ok {
 				return fmt.Errorf("model table %q references unknown source %q", name, table.Source)
 			}
 		}
+		dependencies, err := m.modelTableSourceDependencies(name, table)
+		if err != nil {
+			return err
+		}
+		table.SourceDependencies = dependencies
 		if table.PrimaryKey == "" {
 			return fmt.Errorf("model table %q requires primary_key", name)
+		}
+		if table.Grain == "" {
+			table.Grain = table.PrimaryKey
 		}
 		if table.Grain == "" {
 			return fmt.Errorf("model table %q requires grain", name)
@@ -96,10 +173,23 @@ func (m *Model) Validate() error {
 			if err := validateSemanticIdentifier(field); err != nil {
 				return fmt.Errorf("model table %q measure %q is invalid: %w", name, field, err)
 			}
+			if measure.Expression == "" {
+				measure.Expression = measure.Expr
+			}
+			if measure.Label == "" {
+				measure.Label = titleFromIdentifier(field)
+			}
+			if measure.Table == "" {
+				measure.Table = name
+			}
+			measure.Field = field
+			measure.Name = field
+			table.Measures[field] = measure
 			if measure.Label == "" || strings.TrimSpace(measure.Expression) == "" {
 				return fmt.Errorf("model table %q measure %q requires label and expression", name, field)
 			}
 		}
+		m.Tables[name] = table
 	}
 	seenRelationships := map[string]struct{}{}
 	for index, relationship := range m.Relationships {
@@ -111,7 +201,685 @@ func (m *Model) Validate() error {
 		}
 		seenRelationships[relationship.ID] = struct{}{}
 	}
+	if err := m.validateSemanticGraph(); err != nil {
+		return err
+	}
 	return nil
+}
+
+func (file modelFile) compile() (*Model, error) {
+	model := &Model{
+		Name:              file.Name,
+		Title:             file.Title,
+		Description:       file.Description,
+		DefaultConnection: file.DefaultConnection,
+		Connections:       file.Connections,
+		Sources:           file.Sources,
+	}
+	if len(file.SemanticModels) == 0 {
+		return nil, fmt.Errorf("semantic model %q is not defined under semantic_models", file.Name)
+	}
+	spec, ok := file.SemanticModels[file.Name]
+	if !ok && len(file.SemanticModels) == 1 {
+		for _, candidate := range file.SemanticModels {
+			spec = candidate
+			ok = true
+		}
+	}
+	if !ok {
+		return nil, fmt.Errorf("semantic model %q is not defined under semantic_models", file.Name)
+	}
+	if len(spec.Tables) == 0 {
+		return nil, fmt.Errorf("semantic model %q requires tables", file.Name)
+	}
+	if spec.BaseTable == "" {
+		return nil, fmt.Errorf("semantic model %q requires base_table", file.Name)
+	}
+	if len(file.Models) == 0 {
+		return nil, fmt.Errorf("semantic model %q requires models", file.Name)
+	}
+	tables := map[string]ModelTable{}
+	for tableName, tableRef := range spec.Tables {
+		if err := validateSemanticIdentifier(tableName); err != nil {
+			return nil, fmt.Errorf("semantic model table %q is invalid: %w", tableName, err)
+		}
+		modelName := tableRef.Model
+		if modelName == "" {
+			modelName = tableName
+		}
+		modelTable, ok := file.Models[modelName]
+		if !ok {
+			return nil, fmt.Errorf("semantic model table %q references unknown model %q", tableName, modelName)
+		}
+		if modelTable.SQL != "" && modelTable.Transform.SQL == "" {
+			modelTable.Transform.SQL = modelTable.SQL
+		}
+		modelTable.PrimaryKey = tableRef.PrimaryKey
+		modelTable.Kind = defaultString(modelTable.Kind, "model")
+		if modelTable.Grain == "" {
+			modelTable.Grain = modelTable.PrimaryKey
+		}
+		if modelTable.Dimensions == nil {
+			modelTable.Dimensions = map[string]MetricDimension{}
+		}
+		for field, dimension := range tableRef.Fields {
+			if err := validateSemanticIdentifier(field); err != nil {
+				return nil, fmt.Errorf("semantic model table %q field %q is invalid: %w", tableName, field, err)
+			}
+			if dimension.Expr == "" && dimension.Expression == "" {
+				dimension.Expr = field
+			}
+			dimension.Table = tableName
+			dimension.Name = field
+			dimension.Field = tableName + "." + field
+			if dimension.Label == "" {
+				dimension.Label = titleFromIdentifier(field)
+			}
+			modelTable.Dimensions[field] = dimension
+		}
+		if modelTable.Measures == nil {
+			modelTable.Measures = map[string]MetricMeasure{}
+		}
+		tables[tableName] = modelTable
+	}
+	if _, ok := tables[spec.BaseTable]; !ok {
+		return nil, fmt.Errorf("semantic model %q base_table %q references unknown table", file.Name, spec.BaseTable)
+	}
+	defaults := spec.Measures.Defaults
+	if defaults.Table == "" && len(spec.Measures.Items) > 0 {
+		return nil, fmt.Errorf("semantic model %q measure defaults require table", file.Name)
+	}
+	measures := map[string]MetricMeasure{}
+	for name, measure := range spec.Measures.Items {
+		tableName := defaultString(measure.Table, defaults.Table)
+		table, ok := tables[tableName]
+		if !ok {
+			return nil, fmt.Errorf("semantic model measure %q references unknown table %q", name, tableName)
+		}
+		if measure.Expression == "" {
+			measure.Expression = measure.Expr
+		}
+		if measure.Expression == "" {
+			return nil, fmt.Errorf("semantic model measure %q requires expr", name)
+		}
+		measure.Field = name
+		measure.Name = name
+		measure.Table = tableName
+		measure.Label = defaultString(measure.Label, titleFromIdentifier(name))
+		measure.Grain = defaultString(measure.Grain, defaults.Grain)
+		measure.Time = defaultString(measure.Time, defaults.Time)
+		if len(measure.Grains) == 0 {
+			measure.Grains = append([]string{}, defaults.Grains...)
+		}
+		table.Measures[name] = measure
+		tables[tableName] = table
+		measures[name] = measure
+	}
+	model.Tables = tables
+	model.BaseTable = spec.BaseTable
+	model.Relationships = spec.Relationships
+	for index, relationship := range model.Relationships {
+		if relationship.ID == "" {
+			relationship.ID = relationshipID(relationship, index)
+			model.Relationships[index] = relationship
+		}
+	}
+	model.Measures = measures
+	return model, nil
+}
+
+func (m *Model) modelTableSourceDependencies(tableName string, table ModelTable) ([]string, error) {
+	sql := strings.TrimSpace(table.Transform.SQL)
+	if sql == "" {
+		sql = strings.TrimSpace(table.SQL)
+	}
+	hasSQL := sql != ""
+	if hasSQL {
+		if table.Source != "" {
+			return nil, fmt.Errorf("model table %q uses transform.sql and must declare sources instead of source", tableName)
+		}
+		if len(table.Sources) == 0 {
+			return nil, fmt.Errorf("model table %q uses transform.sql and requires sources", tableName)
+		}
+		if err := validateModelSQLQuery(tableName, sql); err != nil {
+			return nil, err
+		}
+	} else if table.Source == "" {
+		return nil, fmt.Errorf("model table %q requires source or transform.sql", tableName)
+	}
+	seen := map[string]struct{}{}
+	add := func(source string) error {
+		source = strings.TrimSpace(source)
+		if source == "" {
+			return nil
+		}
+		if _, ok := m.Sources[source]; !ok {
+			return fmt.Errorf("model table %q references unknown source %q", tableName, source)
+		}
+		seen[source] = struct{}{}
+		return nil
+	}
+	if err := add(table.Source); err != nil {
+		return nil, err
+	}
+	for _, source := range table.Sources {
+		if err := add(source); err != nil {
+			return nil, err
+		}
+	}
+	inferred, rawRefs, unqualifiedRefs := m.modelSQLSourceRefs(sql)
+	if len(rawRefs) > 0 {
+		return nil, fmt.Errorf("model table %q model SQL must reference sources through source.<name>; raw.<name> is internal", tableName)
+	}
+	if len(unqualifiedRefs) > 0 {
+		return nil, fmt.Errorf("model table %q SQL must reference sources through source.<name>; found unqualified relation %q", tableName, unqualifiedRefs[0])
+	}
+	for _, source := range inferred {
+		if _, ok := m.Sources[source]; !ok {
+			return nil, fmt.Errorf("model table %q SQL references unknown source %q", tableName, source)
+		}
+	}
+	result := make([]string, 0, len(seen))
+	for source := range seen {
+		result = append(result, source)
+	}
+	sort.Strings(result)
+	if hasSQL && !sameStringSet(result, inferred) {
+		return nil, fmt.Errorf("model table %q SQL source references %v do not match declared sources %v", tableName, inferred, result)
+	}
+	return result, nil
+}
+
+func (m *Model) modelSQLSourceRefs(sql string) ([]string, []string, []string) {
+	if sql == "" {
+		return nil, nil, nil
+	}
+	sourceSeen := map[string]struct{}{}
+	rawSeen := map[string]struct{}{}
+	unqualifiedSeen := map[string]struct{}{}
+	for _, ref := range scanSQLRelationRefs(sql) {
+		switch ref.Namespace {
+		case "source":
+			sourceSeen[ref.Name] = struct{}{}
+		case "raw":
+			rawSeen[ref.Name] = struct{}{}
+		case "":
+			unqualifiedSeen[ref.Name] = struct{}{}
+		}
+	}
+	sourceRefs := sortedStringSet(sourceSeen)
+	rawRefs := sortedStringSet(rawSeen)
+	unqualifiedRefs := sortedStringSet(unqualifiedSeen)
+	return sourceRefs, rawRefs, unqualifiedRefs
+}
+
+func validateModelSQLQuery(tableName string, sql string) error {
+	keyword, _, ok := firstSQLKeyword(sql)
+	if !ok || (keyword != "select" && keyword != "with") {
+		return fmt.Errorf("model table %q transform.sql must be a read-only SELECT or WITH query", tableName)
+	}
+	if keyword == "with" {
+		start := scanSQLCTEs(sql, map[string]struct{}{}, &[]sqlRelationRef{})
+		nextKeyword, _, ok := firstSQLKeyword(sql[start:])
+		if !ok || nextKeyword != "select" {
+			return fmt.Errorf("model table %q transform.sql must be a read-only SELECT or WITH query", tableName)
+		}
+	}
+	return nil
+}
+
+func firstSQLKeyword(sql string) (string, int, bool) {
+	for index := 0; index < len(sql); {
+		switch sql[index] {
+		case '\'':
+			index = skipSQLSingleQuoted(sql, index)
+			continue
+		case '-':
+			if index+1 < len(sql) && sql[index+1] == '-' {
+				index = skipSQLLineComment(sql, index+2)
+				continue
+			}
+		case '/':
+			if index+1 < len(sql) && sql[index+1] == '*' {
+				index = skipSQLBlockComment(sql, index+2)
+				continue
+			}
+		}
+		if isSQLIdentifierStart(sql[index]) {
+			keyword, next, _ := readSQLIdentifier(sql, index)
+			return strings.ToLower(keyword), next, true
+		}
+		index++
+	}
+	return "", len(sql), false
+}
+
+type sqlRelationRef struct {
+	Namespace string
+	Name      string
+}
+
+func scanSQLRelationRefs(sql string) []sqlRelationRef {
+	return scanSQLRelationRefsWithLocals(sql, nil)
+}
+
+func scanSQLRelationRefsWithLocals(sql string, locals map[string]struct{}) []sqlRelationRef {
+	refs := []sqlRelationRef{}
+	localRefs := map[string]struct{}{}
+	for name := range locals {
+		localRefs[strings.ToLower(name)] = struct{}{}
+	}
+	start := scanSQLCTEs(sql, localRefs, &refs)
+	for index := start; index < len(sql); {
+		switch sql[index] {
+		case '\'':
+			index = skipSQLSingleQuoted(sql, index)
+			continue
+		case '-':
+			if index+1 < len(sql) && sql[index+1] == '-' {
+				index = skipSQLLineComment(sql, index+2)
+				continue
+			}
+		case '/':
+			if index+1 < len(sql) && sql[index+1] == '*' {
+				index = skipSQLBlockComment(sql, index+2)
+				continue
+			}
+		}
+		if isSQLIdentifierStart(sql[index]) {
+			keyword, next, _ := readSQLIdentifier(sql, index)
+			if relationKeyword(strings.ToLower(keyword)) {
+				relationRefs, relationNext := readSQLRelationList(sql, next, localRefs)
+				refs = append(refs, relationRefs...)
+				index = relationNext
+				continue
+			}
+			index = next
+			continue
+		}
+		index++
+	}
+	return refs
+}
+
+func scanSQLCTEs(sql string, locals map[string]struct{}, refs *[]sqlRelationRef) int {
+	keyword, next, ok := firstSQLKeyword(sql)
+	if !ok || keyword != "with" {
+		return 0
+	}
+	index := skipSQLSpaces(sql, next)
+	if recursive, afterRecursive, ok := readSQLIdentifier(sql, index); ok && strings.EqualFold(recursive, "recursive") {
+		index = skipSQLSpaces(sql, afterRecursive)
+	}
+	for {
+		name, afterName, ok := readSQLIdentifier(sql, index)
+		if !ok {
+			return index
+		}
+		locals[strings.ToLower(name)] = struct{}{}
+		index = skipSQLSpaces(sql, afterName)
+		if index < len(sql) && sql[index] == '(' {
+			index = skipSQLBalanced(sql, index)
+			index = skipSQLSpaces(sql, index)
+		}
+		asKeyword, afterAS, ok := readSQLIdentifier(sql, index)
+		if !ok || !strings.EqualFold(asKeyword, "as") {
+			return index
+		}
+		index = skipSQLSpaces(sql, afterAS)
+		if index >= len(sql) || sql[index] != '(' {
+			return index
+		}
+		inside, afterBody := readSQLBalancedContent(sql, index)
+		*refs = append(*refs, scanSQLRelationRefsWithLocals(inside, locals)...)
+		index = skipSQLSpaces(sql, afterBody)
+		if index >= len(sql) || sql[index] != ',' {
+			return index
+		}
+		index = skipSQLSpaces(sql, index+1)
+	}
+}
+
+func relationKeyword(keyword string) bool {
+	switch keyword {
+	case "from", "join":
+		return true
+	default:
+		return false
+	}
+}
+
+func readSQLRelationList(sql string, index int, locals map[string]struct{}) ([]sqlRelationRef, int) {
+	refs := []sqlRelationRef{}
+	for {
+		index = skipSQLSpaces(sql, index)
+		if index >= len(sql) {
+			return refs, index
+		}
+		if sql[index] == '(' {
+			inside, next := readSQLBalancedContent(sql, index)
+			refs = append(refs, scanSQLRelationRefsWithLocals(inside, locals)...)
+			index = next
+			return refs, index
+		}
+		ref, next, ok := readSQLRelationRef(sql, index, locals)
+		if !ok {
+			return refs, index
+		}
+		refs = append(refs, ref)
+		index = skipSQLRelationAlias(sql, next)
+		index = skipSQLSpaces(sql, index)
+		if index >= len(sql) || sql[index] != ',' {
+			return refs, index
+		}
+		index++
+	}
+}
+
+func readSQLRelationRef(sql string, index int, locals map[string]struct{}) (sqlRelationRef, int, bool) {
+	first, next, ok := readSQLIdentifier(sql, index)
+	if !ok {
+		return sqlRelationRef{}, index, false
+	}
+	dot := skipSQLSpaces(sql, next)
+	if dot < len(sql) && sql[dot] == '.' {
+		nameStart := skipSQLSpaces(sql, dot+1)
+		name, afterName, ok := readSQLIdentifier(sql, nameStart)
+		if !ok {
+			return sqlRelationRef{}, index, false
+		}
+		namespace := strings.ToLower(first)
+		if namespace == "source" || namespace == "raw" {
+			return sqlRelationRef{Namespace: namespace, Name: name}, afterName, true
+		}
+		return sqlRelationRef{Name: name}, afterName, true
+	}
+	if _, ok := locals[strings.ToLower(first)]; ok {
+		return sqlRelationRef{Namespace: "local", Name: first}, next, true
+	}
+	return sqlRelationRef{Name: first}, next, true
+}
+
+func readSQLIdentifier(sql string, index int) (string, int, bool) {
+	if index >= len(sql) {
+		return "", index, false
+	}
+	if sql[index] == '"' {
+		var builder strings.Builder
+		for cursor := index + 1; cursor < len(sql); cursor++ {
+			if sql[cursor] == '"' {
+				if cursor+1 < len(sql) && sql[cursor+1] == '"' {
+					builder.WriteByte('"')
+					cursor++
+					continue
+				}
+				return builder.String(), cursor + 1, true
+			}
+			builder.WriteByte(sql[cursor])
+		}
+		return "", len(sql), false
+	}
+	if !isSQLIdentifierStart(sql[index]) {
+		return "", index, false
+	}
+	cursor := index + 1
+	for cursor < len(sql) && isSQLIdentifierPart(sql[cursor]) {
+		cursor++
+	}
+	return sql[index:cursor], cursor, true
+}
+
+func skipSQLSingleQuoted(sql string, index int) int {
+	for cursor := index + 1; cursor < len(sql); cursor++ {
+		if sql[cursor] == '\'' {
+			if cursor+1 < len(sql) && sql[cursor+1] == '\'' {
+				cursor++
+				continue
+			}
+			return cursor + 1
+		}
+	}
+	return len(sql)
+}
+
+func skipSQLLineComment(sql string, index int) int {
+	for index < len(sql) && sql[index] != '\n' && sql[index] != '\r' {
+		index++
+	}
+	return index
+}
+
+func skipSQLBlockComment(sql string, index int) int {
+	for index+1 < len(sql) {
+		if sql[index] == '*' && sql[index+1] == '/' {
+			return index + 2
+		}
+		index++
+	}
+	return len(sql)
+}
+
+func skipSQLBalanced(sql string, index int) int {
+	_, next := readSQLBalancedContent(sql, index)
+	return next
+}
+
+func readSQLBalancedContent(sql string, index int) (string, int) {
+	depth := 0
+	start := index + 1
+	for index < len(sql) {
+		switch sql[index] {
+		case '\'':
+			index = skipSQLSingleQuoted(sql, index)
+			continue
+		case '"':
+			_, next, ok := readSQLIdentifier(sql, index)
+			if ok {
+				index = next
+				continue
+			}
+		case '-':
+			if index+1 < len(sql) && sql[index+1] == '-' {
+				index = skipSQLLineComment(sql, index+2)
+				continue
+			}
+		case '/':
+			if index+1 < len(sql) && sql[index+1] == '*' {
+				index = skipSQLBlockComment(sql, index+2)
+				continue
+			}
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return sql[start:index], index + 1
+			}
+		}
+		index++
+	}
+	return sql[start:], index
+}
+
+func skipSQLRelationAlias(sql string, index int) int {
+	index = skipSQLSpaces(sql, index)
+	if index >= len(sql) {
+		return index
+	}
+	if sql[index] == '(' {
+		return skipSQLBalanced(sql, index)
+	}
+	if sql[index] == '"' {
+		_, next, ok := readSQLIdentifier(sql, index)
+		if ok {
+			return next
+		}
+		return index
+	}
+	if !isSQLIdentifierStart(sql[index]) {
+		return index
+	}
+	value, next, _ := readSQLIdentifier(sql, index)
+	lower := strings.ToLower(value)
+	if lower == "as" {
+		return skipSQLRelationAlias(sql, next)
+	}
+	if relationListTerminator(lower) {
+		return index
+	}
+	return next
+}
+
+func relationListTerminator(value string) bool {
+	switch value {
+	case "set", "where", "group", "order", "having", "limit", "offset", "qualify", "union", "except", "intersect", "join", "left", "right", "full", "inner", "outer", "cross", "on", "using":
+		return true
+	default:
+		return false
+	}
+}
+
+func skipSQLSpaces(sql string, index int) int {
+	for index < len(sql) {
+		switch sql[index] {
+		case ' ', '\n', '\r', '\t', '\f':
+			index++
+		default:
+			return index
+		}
+	}
+	return index
+}
+
+func isSQLIdentifierStart(char byte) bool {
+	return char == '_' || (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z')
+}
+
+func isSQLIdentifierPart(char byte) bool {
+	return isSQLIdentifierStart(char) || (char >= '0' && char <= '9')
+}
+
+func sortedStringSet(values map[string]struct{}) []string {
+	result := make([]string, 0, len(values))
+	for value := range values {
+		result = append(result, value)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func sameStringSet(left []string, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func (m *Model) validateSemanticGraph() error {
+	relationshipTables := map[string]struct{}{}
+	for _, relationship := range m.Relationships {
+		if !relationship.Active {
+			return fmt.Errorf("unsafe relationship path: inactive relationship from %q to %q", relationship.From, relationship.To)
+		}
+		if relationship.Cardinality != "many_to_one" && relationship.Cardinality != "one_to_one" {
+			return fmt.Errorf("unsafe relationship path: cardinality %q from %q to %q", relationship.Cardinality, relationship.From, relationship.To)
+		}
+		fromTable, err := m.validateRelationshipEndpoint("from", relationship.From)
+		if err != nil {
+			return err
+		}
+		toTable, err := m.validateRelationshipEndpoint("to", relationship.To)
+		if err != nil {
+			return err
+		}
+		relationshipTables[fromTable] = struct{}{}
+		relationshipTables[toTable] = struct{}{}
+	}
+	return m.validateConnectedMeasureGraph(relationshipTables)
+}
+
+func (m *Model) validateConnectedMeasureGraph(relationshipTables map[string]struct{}) error {
+	if m.BaseTable == "" {
+		return fmt.Errorf("semantic model %q requires base_table", m.Name)
+	}
+	if _, ok := m.Tables[m.BaseTable]; !ok {
+		return fmt.Errorf("semantic model %q base_table %q references unknown table", m.Name, m.BaseTable)
+	}
+	baseTables := map[string]struct{}{}
+	for name, measure := range m.Measures {
+		if measure.Table == "" {
+			return fmt.Errorf("semantic model measure %q has no base table", name)
+		}
+		if _, ok := m.Tables[measure.Table]; !ok {
+			return fmt.Errorf("semantic model measure %q references unknown table %q", name, measure.Table)
+		}
+		baseTables[measure.Table] = struct{}{}
+	}
+	tableNames := m.TableNames()
+	for _, targetTable := range tableNames {
+		if targetTable == m.BaseTable {
+			continue
+		}
+		if _, err := m.SafeRelationshipPath(m.BaseTable, targetTable); err != nil {
+			return fmt.Errorf("semantic model requires a connected relationship graph: %w", err)
+		}
+	}
+	for baseTable := range baseTables {
+		if baseTable == m.BaseTable {
+			continue
+		}
+		if _, err := m.SafeRelationshipPath(m.BaseTable, baseTable); err != nil {
+			return fmt.Errorf("semantic model requires a connected relationship graph: %w", err)
+		}
+	}
+	return nil
+}
+
+func (m *Model) validateRelationshipEndpoint(role string, endpoint string) (string, error) {
+	tableName, fieldName, err := splitSemanticField(endpoint)
+	if err != nil {
+		return "", fmt.Errorf("relationship %s %q: %w", role, endpoint, err)
+	}
+	table, ok := m.Tables[tableName]
+	if !ok {
+		return "", fmt.Errorf("relationship %s %q references unknown table %q", role, endpoint, tableName)
+	}
+	if fieldName == table.PrimaryKey {
+		return tableName, nil
+	}
+	if _, ok := table.Dimensions[fieldName]; !ok {
+		return "", fmt.Errorf("relationship %s %q references unknown field %q on table %q", role, endpoint, fieldName, tableName)
+	}
+	return tableName, nil
+}
+
+func relationshipID(relationship Relationship, index int) string {
+	from := strings.ReplaceAll(relationship.From, ".", "_")
+	to := strings.ReplaceAll(relationship.To, ".", "_")
+	if from == "" || to == "" {
+		return fmt.Sprintf("relationship_%d", index+1)
+	}
+	return from + "__" + to
+}
+
+func defaultString(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
+}
+
+func titleFromIdentifier(value string) string {
+	value = strings.ReplaceAll(value, "_", " ")
+	if value == "" {
+		return value
+	}
+	return strings.ToUpper(value[:1]) + value[1:]
 }
 
 func (m *Model) resolveSource(source Source) (Source, error) {
@@ -150,60 +918,6 @@ func (m *Model) resolveSource(source Source) (Source, error) {
 	default:
 		return source, nil
 	}
-}
-
-func (v *MetricView) Validate(model *Model) error {
-	if v.ID == "" || v.Title == "" || v.SemanticModel == "" || v.BaseTable == "" {
-		return fmt.Errorf("metric view requires id, title, semantic_model, and base_table")
-	}
-	if model == nil {
-		return fmt.Errorf("metric view %q requires semantic model %q", v.ID, v.SemanticModel)
-	}
-	if v.SemanticModel != model.Name {
-		return fmt.Errorf("metric view %q semantic_model %q does not match model %q", v.ID, v.SemanticModel, model.Name)
-	}
-	base, ok := model.Tables[v.BaseTable]
-	if !ok {
-		return fmt.Errorf("metric view %q references unknown base table %q", v.ID, v.BaseTable)
-	}
-	if v.Grain == "" {
-		v.Grain = base.Grain
-	}
-	if v.Grain == "" {
-		return fmt.Errorf("metric view %q requires grain", v.ID)
-	}
-	if v.Time.DefaultField == "" {
-		return fmt.Errorf("metric view %q requires time.default_field", v.ID)
-	}
-	if len(v.DimensionRefs) == 0 {
-		return fmt.Errorf("metric view %q requires dimensions", v.ID)
-	}
-	if len(v.MeasureRefs) == 0 {
-		return fmt.Errorf("metric view %q requires measures", v.ID)
-	}
-	v.Dimensions = map[string]MetricDimension{}
-	for _, ref := range v.DimensionRefs {
-		dimension, err := model.ResolveDimension(ref)
-		if err != nil {
-			return fmt.Errorf("metric view %q dimension %q: %w", v.ID, ref, err)
-		}
-		v.Dimensions[ref] = dimension
-	}
-	v.Measures = map[string]MetricMeasure{}
-	for _, ref := range v.MeasureRefs {
-		measure, err := model.ResolveMeasure(ref)
-		if err != nil {
-			return fmt.Errorf("metric view %q measure %q: %w", v.ID, ref, err)
-		}
-		if measure.Table != v.BaseTable {
-			return fmt.Errorf("metric view %q measure %q is owned by %q, want base table %q", v.ID, ref, measure.Table, v.BaseTable)
-		}
-		v.Measures[ref] = measure
-	}
-	if _, ok := v.Dimensions[v.Time.DefaultField]; !ok {
-		return fmt.Errorf("metric view %q time.default_field %q is not an exposed dimension", v.ID, v.Time.DefaultField)
-	}
-	return nil
 }
 
 func (s Source) Validate(name string, connections map[string]Connection) error {

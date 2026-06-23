@@ -8,10 +8,9 @@ type Signals struct {
 }
 
 type Catalog struct {
-	Workspace   CatalogWorkspace    `json:"workspace"`
-	Models      []CatalogModel      `json:"models"`
-	MetricViews []CatalogMetricView `json:"metricViews"`
-	Dashboards  []CatalogDashboard  `json:"dashboards"`
+	Workspace  CatalogWorkspace   `json:"workspace"`
+	Models     []CatalogModel     `json:"models"`
+	Dashboards []CatalogDashboard `json:"dashboards"`
 }
 
 type CatalogWorkspace struct {
@@ -26,22 +25,13 @@ type CatalogModel struct {
 	Description string `json:"description"`
 }
 
-type CatalogMetricView struct {
-	ID            string `json:"id"`
-	Title         string `json:"title"`
-	Description   string `json:"description"`
-	SemanticModel string `json:"semanticModel"`
-	ModelTitle    string `json:"modelTitle"`
-}
-
 type CatalogDashboard struct {
-	ID               string   `json:"id"`
-	Title            string   `json:"title"`
-	Description      string   `json:"description"`
-	MetricViews      []string `json:"metricViews"`
-	MetricViewTitles []string `json:"metricViewTitles"`
-	Tags             []string `json:"tags"`
-	PageCount        int      `json:"pageCount"`
+	ID            string   `json:"id"`
+	Title         string   `json:"title"`
+	Description   string   `json:"description"`
+	SemanticModel string   `json:"semanticModel"`
+	Tags          []string `json:"tags"`
+	PageCount     int      `json:"pageCount"`
 }
 
 type Page struct {

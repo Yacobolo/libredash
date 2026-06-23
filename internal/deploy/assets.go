@@ -1,8 +1,7 @@
 package deploy
 
 import (
-	"regexp"
-	"sort"
+	"fmt"
 
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/semantic"
@@ -12,6 +11,7 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 	assets := []platform.Asset{}
 	edges := []platform.AssetEdge{}
 	byKey := map[string]string{}
+	seenEdges := map[string]struct{}{}
 	add := func(typ, key, parentID, title, description string, content any) (string, error) {
 		asset, err := platform.NewAsset(workspaceID, deploymentID, typ, key, parentID, title, description, content)
 		if err != nil {
@@ -25,7 +25,19 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 		if fromID == "" || toID == "" {
 			return
 		}
+		key := fromID + "|" + toID + "|" + typ
+		if _, ok := seenEdges[key]; ok {
+			return
+		}
+		seenEdges[key] = struct{}{}
 		edges = append(edges, platform.NewAssetEdge(workspaceID, deploymentID, fromID, toID, typ))
+	}
+	assetID := func(typ, key string) (string, error) {
+		id := byKey[typ+":"+key]
+		if id == "" {
+			return "", fmt.Errorf("missing extracted %s asset %q", typ, key)
+		}
+		return id, nil
 	}
 
 	catalogID, err := add("catalog", workspaceID, "", workspaceTitle(workspace.Catalog.Workspace.Title), workspace.Catalog.Workspace.Description, workspace.Catalog)
@@ -52,7 +64,11 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 				return nil, nil, err
 			}
 			edge(modelID, id, "contains")
-			edge(id, byKey["connection:"+modelEntry.ID+"."+source.Connection], "uses_connection")
+			connectionID, err := assetID("connection", modelEntry.ID+"."+source.Connection)
+			if err != nil {
+				return nil, nil, err
+			}
+			edge(id, connectionID, "uses_connection")
 		}
 		for tableName, table := range model.Tables {
 			id, err := add("model_table", modelEntry.ID+"."+tableName, modelID, tableName, table.Description, table)
@@ -60,36 +76,32 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 				return nil, nil, err
 			}
 			edge(modelID, id, "contains")
-			if table.Source != "" {
-				edge(id, byKey["source:"+modelEntry.ID+"."+table.Source], "reads_source")
-			} else {
-				for _, sourceName := range transformSourceRefs(table.Transform.SQL, model.Sources) {
-					edge(id, byKey["source:"+modelEntry.ID+"."+sourceName], "reads_source")
+			for _, sourceName := range table.SourceDependencies {
+				sourceID, err := assetID("source", modelEntry.ID+"."+sourceName)
+				if err != nil {
+					return nil, nil, err
 				}
+				edge(id, sourceID, "reads_source")
+			}
+			for fieldName, field := range table.Dimensions {
+				fieldID, err := add("field", modelEntry.ID+"."+tableName+"."+fieldName, id, dimensionLabel(fieldName, field.Label), "", field)
+				if err != nil {
+					return nil, nil, err
+				}
+				edge(id, fieldID, "contains")
 			}
 		}
-	}
-	for _, viewEntry := range workspace.Catalog.MetricViews {
-		view := workspace.MetricViews[viewEntry.ID]
-		viewID, err := add("metric_view", viewEntry.ID, byKey["semantic_model:"+view.SemanticModel], viewEntry.Title, viewEntry.Description, view)
-		if err != nil {
-			return nil, nil, err
-		}
-		edge(byKey["semantic_model:"+view.SemanticModel], viewID, "contains")
-		edge(viewID, byKey["model_table:"+view.SemanticModel+"."+view.BaseTable], "uses_model_table")
-		for dimensionName, dimension := range view.Dimensions {
-			id, err := add("dimension", view.ID+"."+dimensionName, viewID, dimensionLabel(dimensionName, dimension.Label), "", dimension)
+		for measureName, measure := range model.Measures {
+			id, err := add("measure", modelEntry.ID+"."+measureName, modelID, measureLabel(measureName, measure.Label), measure.Description, measure)
 			if err != nil {
 				return nil, nil, err
 			}
-			edge(viewID, id, "contains")
-		}
-		for measureName, measure := range view.Measures {
-			id, err := add("measure", view.ID+"."+measureName, viewID, measureLabel(measureName, measure.Label), "", measure)
+			edge(modelID, id, "contains")
+			tableID, err := assetID("model_table", modelEntry.ID+"."+measure.Table)
 			if err != nil {
 				return nil, nil, err
 			}
-			edge(viewID, id, "contains")
+			edge(id, tableID, "uses_model_table")
 		}
 	}
 	for _, reportEntry := range workspace.Catalog.Dashboards {
@@ -98,8 +110,81 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 		if err != nil {
 			return nil, nil, err
 		}
-		for _, viewID := range report.MetricViews {
-			edge(reportID, byKey["metric_view:"+viewID], "uses_metric_view")
+		modelID, err := assetID("semantic_model", report.SemanticModel)
+		if err != nil {
+			return nil, nil, err
+		}
+		edge(reportID, modelID, "uses_semantic_model")
+		model := workspace.Models[report.SemanticModel]
+		usedTables := map[string]bool{}
+		addTableUse := func(tableName string) error {
+			if tableName == "" || usedTables[tableName] {
+				return nil
+			}
+			tableID, err := assetID("model_table", report.SemanticModel+"."+tableName)
+			if err != nil {
+				return err
+			}
+			edge(reportID, tableID, "uses_model_table")
+			usedTables[tableName] = true
+			return nil
+		}
+		addMeasureUse := func(ref semantic.FieldRef) error {
+			if ref.Measure.Expression != "" || ref.Measure.Expr != "" {
+				return addTableUse(ref.Measure.Table)
+			}
+			measure, err := model.ResolveMeasure(ref.Field)
+			if err != nil {
+				return err
+			}
+			measureID, err := assetID("measure", report.SemanticModel+"."+measure.Name)
+			if err != nil {
+				return err
+			}
+			edge(reportID, measureID, "uses_measure")
+			return addTableUse(measure.Table)
+		}
+		addFieldUse := func(fromID string, ref string, edgeType string) error {
+			if ref == "" {
+				return nil
+			}
+			if dimension, err := model.ResolveDimension(ref); err == nil {
+				fieldID, err := assetID("field", report.SemanticModel+"."+dimension.Field)
+				if err != nil {
+					return err
+				}
+				edge(fromID, fieldID, edgeType)
+				return addTableUse(dimension.Table)
+			}
+			measure, err := model.ResolveMeasure(ref)
+			if err != nil {
+				return err
+			}
+			measureID, err := assetID("measure", report.SemanticModel+"."+measure.Name)
+			if err != nil {
+				return err
+			}
+			edge(fromID, measureID, "uses_measure")
+			return addTableUse(measure.Table)
+		}
+		for _, visual := range report.Visuals {
+			for _, measureRef := range visual.Query.Measures {
+				if err := addMeasureUse(measureRef); err != nil {
+					return nil, nil, err
+				}
+			}
+		}
+		for _, table := range report.Tables {
+			for _, column := range table.DataColumns {
+				if err := addFieldUse(reportID, column.Field, "uses_field"); err != nil {
+					return nil, nil, err
+				}
+			}
+			for _, measureRef := range table.Query.Measures {
+				if err := addMeasureUse(measureRef); err != nil {
+					return nil, nil, err
+				}
+			}
 		}
 		for _, page := range report.Pages {
 			pageID, err := add("page", report.ID+"."+page.ID, reportID, page.Title, page.Description, page)
@@ -113,22 +198,41 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 			if err != nil {
 				return nil, nil, err
 			}
-			edge(filterID, byKey["dimension:"+filter.MetricView+"."+filter.Dimension], "filters_dimension")
+			if err := addFieldUse(filterID, filter.Dimension, "filters_field"); err != nil {
+				return nil, nil, err
+			}
 		}
 		for visualName, visual := range report.Visuals {
 			visualID, err := add("visual", report.ID+"."+visualName, reportID, visual.Title, "", visual)
 			if err != nil {
 				return nil, nil, err
 			}
-			edge(visualID, byKey["metric_view:"+visual.MetricView], "uses_metric_view")
 			for _, measure := range visual.Query.Measures {
-				edge(visualID, byKey["measure:"+visual.MetricView+"."+measure.Field], "uses_measure")
+				if measure.Measure.Expression != "" || measure.Measure.Expr != "" {
+					if err := addTableUse(measure.Measure.Table); err != nil {
+						return nil, nil, err
+					}
+					continue
+				}
+				resolved, err := model.ResolveMeasure(measure.Field)
+				if err != nil {
+					return nil, nil, err
+				}
+				measureID, err := assetID("measure", report.SemanticModel+"."+resolved.Name)
+				if err != nil {
+					return nil, nil, err
+				}
+				edge(visualID, measureID, "uses_measure")
 			}
 			for _, dimension := range visual.Query.Dimensions {
-				edge(visualID, byKey["dimension:"+visual.MetricView+"."+dimension.Field], "uses_dimension")
+				if err := addFieldUse(visualID, dimension.Field, "uses_field"); err != nil {
+					return nil, nil, err
+				}
 			}
 			if !visual.Query.Series.IsZero() {
-				edge(visualID, byKey["dimension:"+visual.MetricView+"."+visual.Query.Series.Field], "uses_dimension")
+				if err := addFieldUse(visualID, visual.Query.Series.Field, "uses_field"); err != nil {
+					return nil, nil, err
+				}
 			}
 		}
 		for tableName, table := range report.Tables {
@@ -136,38 +240,35 @@ func ExtractAssets(workspaceID, deploymentID string, workspace *semantic.Workspa
 			if err != nil {
 				return nil, nil, err
 			}
-			edge(tableID, byKey["metric_view:"+table.MetricView], "uses_metric_view")
+			for _, column := range table.DataColumns {
+				if err := addFieldUse(tableID, column.Field, "uses_field"); err != nil {
+					return nil, nil, err
+				}
+			}
 			for _, row := range table.Rows {
-				edge(tableID, byKey["dimension:"+table.MetricView+"."+row], "uses_dimension")
+				if err := addFieldUse(tableID, row, "uses_field"); err != nil {
+					return nil, nil, err
+				}
 			}
 			for _, dimension := range table.ColumnDims {
-				edge(tableID, byKey["dimension:"+table.MetricView+"."+dimension], "uses_dimension")
+				if err := addFieldUse(tableID, dimension, "uses_field"); err != nil {
+					return nil, nil, err
+				}
 			}
 			for _, measure := range table.Measures {
-				edge(tableID, byKey["measure:"+table.MetricView+"."+measure], "uses_measure")
+				resolved, err := model.ResolveMeasure(measure)
+				if err != nil {
+					return nil, nil, err
+				}
+				measureID, err := assetID("measure", report.SemanticModel+"."+resolved.Name)
+				if err != nil {
+					return nil, nil, err
+				}
+				edge(tableID, measureID, "uses_measure")
 			}
 		}
 	}
 	return assets, edges, nil
-}
-
-func transformSourceRefs(sql string, sources map[string]semantic.Source) []string {
-	if sql == "" || len(sources) == 0 {
-		return nil
-	}
-	names := make([]string, 0, len(sources))
-	for name := range sources {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	out := make([]string, 0, len(names))
-	for _, name := range names {
-		pattern := regexp.MustCompile(`(?i)\braw\.` + regexp.QuoteMeta(name) + `\b`)
-		if pattern.MatchString(sql) {
-			out = append(out, name)
-		}
-	}
-	return out
 }
 
 func connectionDescription(connection semantic.Connection) string {

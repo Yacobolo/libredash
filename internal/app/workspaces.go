@@ -35,15 +35,11 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) workspaceAssets(w http.ResponseWriter, r *http.Request) {
+	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
 	if r.URL.Query().Get("type") == "connection" {
-		target := "/connections"
-		if query := strings.TrimSpace(r.URL.Query().Get("q")); query != "" {
-			target += "?q=" + url.QueryEscape(query)
-		}
-		http.Redirect(w, r, target, http.StatusFound)
+		http.Redirect(w, r, connectionsHref(r.URL.Query().Get("q")), http.StatusFound)
 		return
 	}
-	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
 	assets, _, err := s.workspaceAssetsAndEdges(r, workspaceID)
 	if err != nil {
 		http.Error(w, err.Error(), statusForNotFound(err))
@@ -67,11 +63,10 @@ func (s *Server) connections(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), statusForNotFound(err))
 		return
 	}
-	connections := filterAssets(assets, "connection", r.URL.Query().Get("q"))
-	workspace := s.workspaceResponse(r, workspaceID)
+	filtered := filterAssets(assets, "connection", r.URL.Query().Get("q"))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionsPage(s.metrics.Catalog(), workspace, connections, r.URL.Query().Get("q"), s.currentRoleLabel(r)).Render(w); err != nil {
+	if err := ui.ConnectionsPage(s.metrics.Catalog(), workspaceID, filtered, r.URL.Query().Get("q"), s.currentRoleLabel(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -250,7 +245,7 @@ func (s *Server) apiWorkspaceAssets(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, filterAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q")))
+	writeJSON(w, http.StatusOK, filterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q")))
 }
 
 func (s *Server) apiWorkspaceAssetEdges(w http.ResponseWriter, r *http.Request) {
@@ -550,14 +545,14 @@ func safeAssetMeta(assetType, raw string) map[string]any {
 		content["credentials_configured"] = authConfigured
 	case "source":
 		return pickMeta(content, "format", "Format", "path", "Path", "connection", "Connection", "object", "Object", "options", "Options")
-	case "metric_view":
-		return pickMeta(content, "semantic_model", "SemanticModel", "base_table", "BaseTable", "timeseries", "Timeseries")
+	case "model_table":
+		return pickMeta(content, "source", "Source", "primary_key", "PrimaryKey", "grain", "Grain")
 	case "measure":
 		return pickMeta(content, "expression", "Expression", "unit", "Unit", "format", "Format")
-	case "dimension":
+	case "field":
 		return pickMeta(content, "expr", "Expr", "where", "Where", "order_expr", "OrderExpr")
 	case "dashboard":
-		return pickMeta(content, "metrics_views", "MetricViews", "tags", "Tags")
+		return pickMeta(content, "semantic_model", "SemanticModel", "tags", "Tags")
 	}
 	return content
 }
@@ -639,30 +634,32 @@ func filterAssets(assets []api.AssetResponse, typ, query string) []api.AssetResp
 
 func filterWorkspaceAssets(assets []api.AssetResponse, typ, query string) []api.AssetResponse {
 	typ = strings.TrimSpace(typ)
-	query = strings.ToLower(strings.TrimSpace(query))
-	if typ != "" && !isWorkspaceLandingAsset(typ) {
-		return nil
+	query = strings.TrimSpace(query)
+	if typ != "" || query != "" {
+		return filterAssets(assets, typ, query)
 	}
 	out := make([]api.AssetResponse, 0, len(assets))
 	for _, asset := range assets {
-		if !isWorkspaceLandingAsset(asset.Type) {
-			continue
+		if isWorkspaceLandingAsset(asset.Type) {
+			out = append(out, asset)
 		}
-		if typ != "" && asset.Type != typ {
-			continue
-		}
-		haystack := strings.ToLower(asset.Type + " " + asset.Key + " " + asset.Title + " " + asset.Description)
-		if query != "" && !strings.Contains(haystack, query) {
-			continue
-		}
-		out = append(out, asset)
 	}
 	return out
 }
 
+func connectionsHref(query string) string {
+	href := "/connections"
+	if strings.TrimSpace(query) == "" {
+		return href
+	}
+	values := url.Values{}
+	values.Set("q", query)
+	return href + "?" + values.Encode()
+}
+
 func isWorkspaceLandingAsset(typ string) bool {
 	switch typ {
-	case "dashboard", "semantic_model", "metric_view":
+	case "dashboard", "semantic_model":
 		return true
 	default:
 		return false
@@ -676,9 +673,6 @@ func fallbackAssets(catalog dashboard.Catalog, workspaceID string) []api.AssetRe
 	}
 	for _, model := range catalog.Models {
 		assets = append(assets, api.AssetResponse{ID: "semantic_model:" + model.ID, WorkspaceID: workspaceID, Type: "semantic_model", Key: model.ID, Title: model.Title, Description: model.Description})
-	}
-	for _, view := range catalog.MetricViews {
-		assets = append(assets, api.AssetResponse{ID: "metric_view:" + view.ID, WorkspaceID: workspaceID, Type: "metric_view", Key: view.ID, Title: view.Title, Description: view.Description})
 	}
 	return assets
 }

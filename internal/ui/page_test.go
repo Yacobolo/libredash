@@ -19,23 +19,23 @@ func fieldRefs(fields ...string) []semantic.FieldRef {
 
 func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	report := semantic.Dashboard{
-		ID:          "report",
-		Title:       "Report",
-		MetricViews: []string{"orders"},
+		ID:            "report",
+		Title:         "Report",
+		SemanticModel: "test",
 		Filters: map[string]semantic.FilterDefinition{
-			"state":    {Type: "multi_select", Label: "State", MetricView: "orders", Dimension: "state", URLParam: "state", Operator: "in"},
-			"category": {Type: "text", Label: "Category", MetricView: "orders", Dimension: "category", URLParam: "category", DefaultOperator: "contains"},
+			"state":    {Type: "multi_select", Label: "State", Dimension: "orders.state", URLParam: "state", Operator: "in"},
+			"category": {Type: "text", Label: "Category", Dimension: "orders.category", URLParam: "category", DefaultOperator: "contains"},
 		},
 		Visuals: map[string]semantic.Visual{
-			"active_chart":   {Title: "Active", Type: "bar", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: fieldRefs("status"), Measures: fieldRefs("order_count")}},
-			"active_kpi":     {Kind: "kpi", Shape: "single_value", MetricView: "orders", Query: semantic.VisualQuery{Measures: fieldRefs("order_count")}, Options: map[string]any{"note": "Filtered", "tone": "ink"}},
-			"off_page_chart": {Title: "Off Page", Type: "bar", MetricView: "orders", Query: semantic.VisualQuery{Dimensions: fieldRefs("status"), Measures: fieldRefs("order_count")}},
+			"active_chart":   {Title: "Active", Type: "bar", Query: semantic.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}},
+			"active_kpi":     {Kind: "kpi", Shape: "single_value", Query: semantic.VisualQuery{Measures: fieldRefs("order_count")}, Options: map[string]any{"note": "Filtered", "tone": "ink"}},
+			"off_page_chart": {Title: "Off Page", Type: "bar", Query: semantic.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}},
 		},
 		Tables: map[string]semantic.TableVisual{
-			"orders":   {Title: "Orders", MetricView: "orders", Style: dashboard.TableStyle{Density: "compact", Grid: "full"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order", Width: 220, Format: "text"}}},
-			"matrix":   {Title: "Matrix", Kind: "matrix_table", MetricView: "orders", Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
-			"pivot":    {Title: "Pivot", Kind: "pivot_table", MetricView: "orders", Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
-			"off_page": {Title: "Off Page", MetricView: "orders", Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
+			"orders":   {Title: "Orders", Query: semantic.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, Style: dashboard.TableStyle{Density: "compact", Grid: "full"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order", Width: 220, Format: "text"}}},
+			"matrix":   {Title: "Matrix", Kind: "matrix_table", Query: semantic.TableQuery{Rows: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
+			"pivot":    {Title: "Pivot", Kind: "pivot_table", Query: semantic.TableQuery{Rows: fieldRefs("orders.status"), Columns: fieldRefs("orders.category"), Measures: fieldRefs("order_count")}, Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
+			"off_page": {Title: "Off Page", Query: semantic.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
 		},
 		Pages: []dashboard.Page{
 			{
@@ -66,10 +66,10 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 		Tables: map[string]semantic.ModelTable{
 			"orders": {
 				Kind: "fact", Source: "orders", PrimaryKey: "order_id", Grain: "order_id",
-				Dimensions: map[string]semantic.MetricDimension{"order_id": {Expr: "order_id"}},
-				Measures:   map[string]semantic.MetricMeasure{"order_count": {Label: "Orders", Expression: "COUNT(*)"}},
+				Dimensions: map[string]semantic.MetricDimension{"order_id": {Expr: "order_id"}, "status": {Expr: "status"}, "state": {Expr: "state"}, "category": {Expr: "category"}},
 			},
 		},
+		Measures: map[string]semantic.MetricMeasure{"order_count": {Table: "orders", Grain: "order_id", Label: "Orders", Expression: "COUNT(*)"}},
 	}
 
 	showcase := renderPageForTest(t, report, model, report.Pages[0])

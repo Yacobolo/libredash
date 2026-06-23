@@ -311,7 +311,7 @@ func TestWorkspacePageDefaultsToTopLevelAssets(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Executive Sales Dashboard", "Olist Commerce", "Orders Metrics"} {
+	for _, want := range []string{"Executive Sales Dashboard", "Olist Commerce"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("workspace page missing top-level asset %q:\n%s", want, body)
 		}

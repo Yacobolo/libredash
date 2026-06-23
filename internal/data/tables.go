@@ -106,25 +106,24 @@ func (m *DuckDBMetrics) matrixTableRows(ctx context.Context, runtime *modelRunti
 	if len(table.ColumnDims) == 1 {
 		return m.crossTabTableRows(ctx, runtime, report, table, filters, request, false)
 	}
-	metricView := m.workspace.MetricViews[table.MetricView]
 	columns := make([]dashboard.TableColumn, 0, len(table.Rows)+len(table.Measures))
 	dimensions := make([]semanticquery.Field, 0, len(table.Rows))
 	measures := make([]semanticquery.Field, 0, len(table.Measures))
 	for _, dimensionName := range table.Rows {
-		dimension := metricView.Dimensions[dimensionName]
+		dimension, _ := runtime.model.ResolveDimension(dimensionName)
 		key := displayField(dimensionName)
 		dimensions = append(dimensions, fieldRef(dimensionName, key))
 		column := dashboard.TableColumn{Key: key, Label: dimensionLabel(key, dimension), Role: "row_header", Format: "text"}
 		columns = append(columns, mergeTableColumn(column, tableColumnOverride(table, dimensionName)))
 	}
 	for _, measureName := range table.Measures {
-		measure := metricView.Measures[measureName]
+		measure, _ := runtime.model.ResolveMeasure(measureName)
 		key := displayField(measureName)
 		measures = append(measures, fieldRef(measureName, key))
 		column := dashboard.TableColumn{Key: key, Label: measureLabel(key, measure), Align: "right", Role: "measure", Measure: key, Format: tableMeasureFormat(measure), Formatting: tableMeasureFormatting(table, measureName)}
 		columns = append(columns, mergeTableColumn(column, tableColumnOverride(table, measureName)))
 	}
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, table.MetricView, filters, "table", request.Table)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "table", request.Table)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -135,8 +134,7 @@ func (m *DuckDBMetrics) matrixTableRows(ctx context.Context, runtime *modelRunti
 	if request.Sort.Key != "" && tableHasColumn(columns, request.Sort.Key) {
 		sorts = []semanticquery.Sort{{Field: request.Sort.Key, Direction: request.Sort.Direction}}
 	}
-	plan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).Plan(semanticquery.Request{
-		MetricView: table.MetricView,
+	plan, err := semanticquery.NewPlanner(runtime.model).Plan(semanticquery.Request{
 		Dimensions: dimensions,
 		Measures:   measures,
 		Filters:    queryFilters,
@@ -155,11 +153,10 @@ func (m *DuckDBMetrics) pivotTableRows(ctx context.Context, runtime *modelRuntim
 }
 
 func (m *DuckDBMetrics) crossTabTableRows(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, table semantic.TableVisual, filters dashboard.Filters, request dashboard.TableRequest, pivotMode bool) ([]dashboard.TableColumn, []map[string]any, error) {
-	metricView := m.workspace.MetricViews[table.MetricView]
 	dimensions := make([]semanticquery.Field, 0, len(table.Rows)+1)
 	baseColumns := make([]dashboard.TableColumn, 0, len(table.Rows))
 	for _, dimensionName := range table.Rows {
-		dimension := metricView.Dimensions[dimensionName]
+		dimension, _ := runtime.model.ResolveDimension(dimensionName)
 		key := displayField(dimensionName)
 		dimensions = append(dimensions, fieldRef(dimensionName, key))
 		column := dashboard.TableColumn{Key: key, Label: dimensionLabel(key, dimension), Role: "row_header", Format: "text"}
@@ -174,7 +171,7 @@ func (m *DuckDBMetrics) crossTabTableRows(ctx context.Context, runtime *modelRun
 		measures = append(measures, fieldRef(measureName, key))
 		valueColumns = append(valueColumns, key)
 	}
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, table.MetricView, filters, "table", request.Table)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "table", request.Table)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -182,8 +179,7 @@ func (m *DuckDBMetrics) crossTabTableRows(ctx context.Context, runtime *modelRun
 	for _, dimension := range dimensions {
 		sorts = append(sorts, semanticquery.Sort{Field: dimension.Alias, Direction: "asc"})
 	}
-	plan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).Plan(semanticquery.Request{
-		MetricView: table.MetricView,
+	plan, err := semanticquery.NewPlanner(runtime.model).Plan(semanticquery.Request{
 		Dimensions: dimensions,
 		Measures:   measures,
 		Filters:    queryFilters,
@@ -225,7 +221,8 @@ func (m *DuckDBMetrics) crossTabTableRows(ctx context.Context, runtime *modelRun
 		label := fmt.Sprint(raw["pivot_label"])
 		groupLabel := label
 		if pivotMode {
-			groupLabel = measureLabel(displayField(table.Measures[0]), metricView.Measures[table.Measures[0]])
+			measure, _ := runtime.model.ResolveMeasure(table.Measures[0])
+			groupLabel = measureLabel(displayField(table.Measures[0]), measure)
 		}
 		pivotKey, exists := pivotKeys[label]
 		if !exists {
@@ -233,7 +230,7 @@ func (m *DuckDBMetrics) crossTabTableRows(ctx context.Context, runtime *modelRun
 			pivotKeys[label] = pivotKey
 		}
 		for _, measureName := range table.Measures {
-			measure := metricView.Measures[measureName]
+			measure, _ := runtime.model.ResolveMeasure(measureName)
 			measureKey := displayField(measureName)
 			columnIdentity := label + "\x00" + measureName
 			columnKey, columnExists := columnKeys[columnIdentity]
@@ -485,17 +482,16 @@ func (m *DuckDBMetrics) tableRows(ctx context.Context, runtime *modelRuntime, re
 	if start+count > availableRows {
 		count = availableRows - start
 	}
-	metricView := m.workspace.MetricViews[table.MetricView]
 	dimensions := []semanticquery.Field{}
 	measures := []semanticquery.Field{}
 	for _, column := range table.DataColumns {
-		if _, ok := metricView.Dimensions[column.Field]; ok {
+		if _, err := runtime.model.ResolveDimension(column.Field); err == nil {
 			dimensions = append(dimensions, fieldRef(column.Field, column.Alias))
 			continue
 		}
 		measures = append(measures, fieldRef(column.Field, column.Alias))
 	}
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, table.MetricView, filters, "table", request.Table)
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, "table", request.Table)
 	if err != nil {
 		return nil, err
 	}
@@ -511,8 +507,8 @@ func (m *DuckDBMetrics) tableRows(ctx context.Context, runtime *modelRuntime, re
 	if sortKey != "order_id" && tableHasQueryAlias(table.DataColumns, "order_id") {
 		sorts = append(sorts, semanticquery.Sort{Field: "order_id", Direction: "asc"})
 	}
-	plan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).PlanRows(semanticquery.RowRequest{
-		MetricView: table.MetricView,
+	plan, err := semanticquery.NewPlanner(runtime.model).PlanRows(semanticquery.RowRequest{
+		Table:      table.Query.Table,
 		Dimensions: dimensions,
 		Measures:   measures,
 		Filters:    queryFilters,

@@ -26,8 +26,8 @@ func (m *DuckDBMetrics) filterOptions(ctx context.Context, runtime *modelRuntime
 		if limit > 500 {
 			limit = 500
 		}
-		plan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).Plan(semanticquery.Request{
-			MetricView: filter.MetricView,
+		plan, err := semanticquery.NewPlanner(runtime.model).Plan(semanticquery.Request{
+			Table:      tableForField(filter.Dimension),
 			Dimensions: []semanticquery.Field{{Field: filter.Dimension, Alias: "value"}},
 			Sort:       []semanticquery.Sort{{Field: "value", Direction: "asc"}},
 			Limit:      limit,
@@ -58,16 +58,20 @@ func (m *DuckDBMetrics) filterOptions(ctx context.Context, runtime *modelRuntime
 	return options, nil
 }
 
-func (m *DuckDBMetrics) semanticFilters(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, metricViewID string, filters dashboard.Filters, targetKind, targetID string) ([]semanticquery.Filter, error) {
+func (m *DuckDBMetrics) semanticFilters(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, filters dashboard.Filters, targetKind, targetID string) ([]semanticquery.Filter, error) {
 	filters = filters.WithDefaults()
 	result := []semanticquery.Filter{}
 	for _, name := range sortedKeys(report.Filters) {
 		filter := report.Filters[name]
-		if filter.MetricView != metricViewID {
-			continue
-		}
 		control, ok := filters.Controls[name]
 		if !ok {
+			continue
+		}
+		applies, err := report.FilterAppliesToTarget(runtime.model, filter, targetKind, targetID)
+		if err != nil {
+			return nil, err
+		}
+		if !applies {
 			continue
 		}
 		switch filter.Type {
@@ -109,11 +113,7 @@ func (m *DuckDBMetrics) semanticFilters(ctx context.Context, runtime *modelRunti
 		if selection.Operator != "" && selection.Operator != "in" {
 			continue
 		}
-		metricView, ok := m.workspace.MetricViews[metricViewID]
-		if !ok {
-			continue
-		}
-		field, _, err := metricView.ResolveDimensionRef(selection.Field)
+		dimension, err := runtime.model.ResolveDimension(selection.Field)
 		if err != nil {
 			continue
 		}
@@ -121,7 +121,7 @@ func (m *DuckDBMetrics) semanticFilters(ctx context.Context, runtime *modelRunti
 		for i, value := range selection.Values {
 			values[i] = value
 		}
-		result = append(result, semanticquery.Filter{Field: field, Operator: "in", Values: values})
+		result = append(result, semanticquery.Filter{Field: dimension.Field, Operator: "in", Values: values})
 	}
 	return result, nil
 }
@@ -159,14 +159,14 @@ func (m *DuckDBMetrics) dateSemanticFilters(runtime *modelRuntime, filter semant
 	return nil
 }
 
-func (m *DuckDBMetrics) countRows(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, metricViewID string, filters dashboard.Filters, targetKind, targetID string) (int, error) {
-	queryFilters, err := m.semanticFilters(ctx, runtime, report, metricViewID, filters, targetKind, targetID)
+func (m *DuckDBMetrics) countRows(ctx context.Context, runtime *modelRuntime, report *semantic.Dashboard, table string, filters dashboard.Filters, targetKind, targetID string) (int, error) {
+	queryFilters, err := m.semanticFilters(ctx, runtime, report, filters, targetKind, targetID)
 	if err != nil {
 		return 0, err
 	}
-	plan, err := semanticquery.NewPlanner(runtime.model, m.workspace.MetricViews).PlanCount(semanticquery.CountRequest{
-		MetricView: metricViewID,
-		Filters:    queryFilters,
+	plan, err := semanticquery.NewPlanner(runtime.model).PlanCount(semanticquery.CountRequest{
+		Table:   table,
+		Filters: queryFilters,
 	})
 	if err != nil {
 		return 0, err
@@ -177,6 +177,13 @@ func (m *DuckDBMetrics) countRows(ctx context.Context, runtime *modelRuntime, re
 		return 0, err
 	}
 	return total, nil
+}
+
+func tableForField(field string) string {
+	if index := strings.IndexByte(field, '.'); index > 0 {
+		return field[:index]
+	}
+	return ""
 }
 
 func targetsSelection(targets semantic.InteractionTargets, targetKind, targetID string) bool {
