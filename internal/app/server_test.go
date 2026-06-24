@@ -12,6 +12,7 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
 )
 
 func fieldRefs(fields ...string) []reportdef.FieldRef {
@@ -468,14 +469,42 @@ func TestUpdatesStreamsDatastarPatchSignals(t *testing.T) {
 	}
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "event: datastar-patch-signals") {
+	patches := ssetest.PatchSignals(t, body)
+	if len(patches) == 0 {
 		t.Fatalf("body does not contain Datastar patch signal event:\n%s", body)
 	}
-	if !strings.Contains(body, `"values":["SP"]`) {
-		t.Fatalf("body does not include decoded filter state:\n%s", body)
-	}
-	if strings.Contains(body, `"category"`) {
-		t.Fatalf("body streamed off-page category filter:\n%s", body)
+	ssetest.RequirePatchSignal(t, body, func(patch map[string]any) bool {
+		status, ok := patch["status"].(map[string]any)
+		return ok && status["loading"] == true
+	})
+	ssetest.RequirePatchSignal(t, body, func(patch map[string]any) bool {
+		filters, ok := patch["filters"].(map[string]any)
+		if !ok {
+			return false
+		}
+		controls, ok := filters["controls"].(map[string]any)
+		if !ok {
+			return false
+		}
+		state, ok := controls["state"].(map[string]any)
+		if !ok {
+			return false
+		}
+		values, ok := state["values"].([]any)
+		return ok && len(values) == 1 && values[0] == "SP"
+	})
+	for _, patch := range patches {
+		filters, ok := patch["filters"].(map[string]any)
+		if !ok {
+			continue
+		}
+		controls, ok := filters["controls"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if _, ok := controls["category"]; ok {
+			t.Fatalf("patch streamed off-page category filter: %#v", patch)
+		}
 	}
 }
 
