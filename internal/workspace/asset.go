@@ -7,16 +7,17 @@ import (
 )
 
 type Asset struct {
-	ID           AssetID
-	WorkspaceID  WorkspaceID
-	DeploymentID DeploymentID
-	Type         AssetType
-	Key          string
-	ParentID     AssetID
-	Title        string
-	Description  string
-	ContentJSON  string
-	ContentHash  string
+	ID             AssetID
+	WorkspaceID    WorkspaceID
+	DeploymentID   DeploymentID
+	Type           AssetType
+	Key            string
+	ParentID       AssetID
+	Title          string
+	Description    string
+	ContentJSON    string
+	ContentHash    string
+	ContentVersion int
 }
 
 type AssetEdge struct {
@@ -33,6 +34,8 @@ type AssetGraph struct {
 	Edges  []AssetEdge
 }
 
+const CurrentAssetContentVersion = 2
+
 func NewAsset(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType, key string, parentID AssetID, title, description string, content any) (Asset, error) {
 	bytes, err := json.Marshal(content)
 	if err != nil {
@@ -40,16 +43,17 @@ func NewAsset(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType,
 	}
 	sum := sha256.Sum256(bytes)
 	return Asset{
-		ID:           NewAssetID(deploymentID, typ, key),
-		WorkspaceID:  workspaceID,
-		DeploymentID: deploymentID,
-		Type:         typ,
-		Key:          key,
-		ParentID:     parentID,
-		Title:        title,
-		Description:  description,
-		ContentJSON:  string(bytes),
-		ContentHash:  hex.EncodeToString(sum[:]),
+		ID:             NewAssetID(deploymentID, typ, key),
+		WorkspaceID:    workspaceID,
+		DeploymentID:   deploymentID,
+		Type:           typ,
+		Key:            key,
+		ParentID:       parentID,
+		Title:          title,
+		Description:    description,
+		ContentJSON:    string(bytes),
+		ContentHash:    hex.EncodeToString(sum[:]),
+		ContentVersion: CurrentAssetContentVersion,
 	}, nil
 }
 

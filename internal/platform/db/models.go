@@ -71,17 +71,18 @@ type ApiToken struct {
 }
 
 type Asset struct {
-	ID            string         `json:"id"`
-	WorkspaceID   string         `json:"workspace_id"`
-	DeploymentID  string         `json:"deployment_id"`
-	AssetType     string         `json:"asset_type"`
-	AssetKey      string         `json:"asset_key"`
-	ParentAssetID sql.NullString `json:"parent_asset_id"`
-	Title         string         `json:"title"`
-	Description   string         `json:"description"`
-	ContentJson   string         `json:"content_json"`
-	ContentHash   string         `json:"content_hash"`
-	CreatedAt     string         `json:"created_at"`
+	ID             string         `json:"id"`
+	WorkspaceID    string         `json:"workspace_id"`
+	DeploymentID   string         `json:"deployment_id"`
+	AssetType      string         `json:"asset_type"`
+	AssetKey       string         `json:"asset_key"`
+	ParentAssetID  sql.NullString `json:"parent_asset_id"`
+	Title          string         `json:"title"`
+	Description    string         `json:"description"`
+	ContentJson    string         `json:"content_json"`
+	ContentHash    string         `json:"content_hash"`
+	ContentVersion int64          `json:"content_version"`
+	CreatedAt      string         `json:"created_at"`
 }
 
 type AssetEdge struct {

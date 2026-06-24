@@ -38,15 +38,14 @@ type ConnectionDefaults struct {
 type ConnectionAuth map[string]any
 
 type Source struct {
-	Format       string                     `yaml:"format"`
-	Description  string                     `yaml:"description"`
-	Path         string                     `yaml:"path"`
-	Connection   string                     `yaml:"connection"`
-	Object       string                     `yaml:"object"`
-	Options      map[string]any             `yaml:"options"`
-	Fields       map[string]MetricDimension `yaml:"fields"`
-	Schema       TableSchema                `yaml:"-"`
-	AssetVersion int                        `yaml:"-" json:"assetVersion,omitempty"`
+	Format      string                     `yaml:"format"`
+	Description string                     `yaml:"description"`
+	Path        string                     `yaml:"path"`
+	Connection  string                     `yaml:"connection"`
+	Object      string                     `yaml:"object"`
+	Options     map[string]any             `yaml:"options"`
+	Fields      map[string]MetricDimension `yaml:"fields"`
+	Schema      TableSchema                `yaml:"-"`
 }
 
 type Table struct {
@@ -93,7 +92,7 @@ type ColumnSchema struct {
 	Name         string `json:"name"`
 	Ordinal      int    `json:"ordinal"`
 	PhysicalType string `json:"physicalType"`
-	Nullable     bool   `json:"nullable"`
+	Nullable     *bool  `json:"nullable,omitempty"`
 	Default      string `json:"default,omitempty"`
 	Comment      string `json:"comment,omitempty"`
 	PrimaryKey   bool   `json:"primaryKey,omitempty"`

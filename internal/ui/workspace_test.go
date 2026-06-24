@@ -233,6 +233,33 @@ func TestWorkspaceAssetDetailSignalsIncludeModelTableDefinition(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAssetDetailsRenderUnknownNullableAsDash(t *testing.T) {
+	workspace, _, assets, edges := testWorkspaceAssetFixtures()
+
+	source := testAssetByID(t, assets, "source-payments")
+	source.Meta["Fields"] = map[string]any{
+		"order_id": map[string]any{"Label": "Order ID"},
+	}
+	signals := workspaceAssetSignals(workspace, source, assets, edges, assetLineage(workspace.ID, source, assets, edges), "details")
+	sourceGrid := signalMetricGrid(t, signals, "assetDetailsSourceFieldsGrid")
+	if len(sourceGrid.Rows) != 1 {
+		t.Fatalf("source fallback rows = %#v, want 1", sourceGrid.Rows)
+	}
+	if got := fmt.Sprint(sourceGrid.Rows[0]["nullable"]); got != "-" {
+		t.Fatalf("source fallback nullable = %q, want -", got)
+	}
+
+	modelTable := testAssetByID(t, assets, "table-model")
+	modelTable.Meta["Schema"] = map[string]any{"columns": []any{
+		map[string]any{"name": "order_id", "ordinal": float64(1), "physicalType": "VARCHAR", "primaryKey": true},
+	}}
+	signals = workspaceAssetSignals(workspace, modelTable, assets, edges, assetLineage(workspace.ID, modelTable, assets, edges), "details")
+	modelGrid := signalMetricGrid(t, signals, "assetDetailsModelTableFieldsGrid")
+	if got := fmt.Sprint(modelGrid.Rows[0]["nullable"]); got != "-" {
+		t.Fatalf("model table missing nullable = %q, want -", got)
+	}
+}
+
 func TestAssetLineageProjectsRecursiveDependenciesAndContext(t *testing.T) {
 	workspace, _, assets, edges := testWorkspaceAssetFixtures()
 	asset := testAssetByID(t, assets, "page-item")

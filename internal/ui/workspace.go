@@ -1574,7 +1574,7 @@ func modelTableFieldsGrid(workspaceID, modelKey, tableName string, fields, schem
 			"nameHref":      childHref(workspaceID, child),
 			"label":         firstNonEmpty(metaString(field, "Label", "label"), labelFromKey(name)),
 			"physical_type": metricGridBadgeValue(metaString(column, "PhysicalType", "physicalType"), "muted"),
-			"nullable":      boolLabel(metaBool(column, "Nullable", "nullable")),
+			"nullable":      nullableLabel(column, "Nullable", "nullable"),
 			"key":           key,
 			"description":   emptyDash(metaString(field, "Description", "description")),
 		})
@@ -1608,7 +1608,7 @@ func sourceFieldsGrid(fields, schema map[string]any) metricGrid {
 			"name":          name,
 			"label":         firstNonEmpty(metaString(field, "Label", "label"), labelFromKey(name)),
 			"physical_type": metricGridBadgeValue(metaString(column, "PhysicalType", "physicalType"), "muted"),
-			"nullable":      boolLabel(metaBool(column, "Nullable", "nullable")),
+			"nullable":      nullableLabel(column, "Nullable", "nullable"),
 			"key":           key,
 			"description":   emptyDash(metaString(field, "Description", "description")),
 		})
@@ -2264,6 +2264,25 @@ func boolLabel(value bool) string {
 		return "Yes"
 	}
 	return "No"
+}
+
+func nullableLabel(meta map[string]any, keys ...string) string {
+	value := metaValue(meta, keys...)
+	if value == nil {
+		return "-"
+	}
+	switch typed := value.(type) {
+	case bool:
+		return boolLabel(typed)
+	case string:
+		if strings.EqualFold(typed, "true") || strings.EqualFold(typed, "yes") {
+			return "Yes"
+		}
+		if strings.EqualFold(typed, "false") || strings.EqualFold(typed, "no") {
+			return "No"
+		}
+	}
+	return "-"
 }
 
 func firstNonEmpty(values ...string) string {

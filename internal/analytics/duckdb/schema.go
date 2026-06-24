@@ -16,11 +16,15 @@ func DiscoverSchemas(ctx context.Context, db *Database, model *semanticmodel.Mod
 	if model == nil {
 		return fmt.Errorf("schema discovery requires a semantic model")
 	}
+	var databaseName string
+	if err := db.SQLDB().QueryRowContext(ctx, `SELECT current_database()`).Scan(&databaseName); err != nil {
+		return err
+	}
 	rows, err := db.SQLDB().QueryContext(ctx, `
 SELECT schema_name, table_name, column_name, column_index, data_type, is_nullable, column_default, comment
 FROM duckdb_columns()
-WHERE schema_name IN ('source', 'model')
-ORDER BY schema_name, table_name, column_index`)
+WHERE database_name = ? AND schema_name IN ('source', 'model')
+ORDER BY schema_name, table_name, column_index`, databaseName)
 	if err != nil {
 		return err
 	}
@@ -31,16 +35,21 @@ ORDER BY schema_name, table_name, column_index`)
 	for rows.Next() {
 		var schemaName, tableName, columnName, dataType string
 		var ordinal int
-		var nullable bool
+		var nullable sql.NullBool
 		var defaultValue, comment sql.NullString
 		if err := rows.Scan(&schemaName, &tableName, &columnName, &ordinal, &dataType, &nullable, &defaultValue, &comment); err != nil {
 			return err
+		}
+		var nullableValue *bool
+		if nullable.Valid {
+			value := nullable.Bool
+			nullableValue = &value
 		}
 		column := semanticmodel.ColumnSchema{
 			Name:         columnName,
 			Ordinal:      ordinal,
 			PhysicalType: dataType,
-			Nullable:     nullable,
+			Nullable:     nullableValue,
 			Default:      defaultValue.String,
 			Comment:      comment.String,
 		}

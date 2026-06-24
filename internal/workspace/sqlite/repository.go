@@ -103,16 +103,17 @@ func (r *Repository) ReplaceActiveDeploymentGraph(ctx context.Context, id worksp
 			continue
 		}
 		if err := q.InsertAsset(ctx, platformdb.InsertAssetParams{
-			ID:            string(asset.ID),
-			WorkspaceID:   string(asset.WorkspaceID),
-			DeploymentID:  string(asset.DeploymentID),
-			AssetType:     string(asset.Type),
-			AssetKey:      asset.Key,
-			ParentAssetID: sql.NullString{String: string(asset.ParentID), Valid: asset.ParentID != ""},
-			Title:         asset.Title,
-			Description:   asset.Description,
-			ContentJson:   asset.ContentJSON,
-			ContentHash:   asset.ContentHash,
+			ID:             string(asset.ID),
+			WorkspaceID:    string(asset.WorkspaceID),
+			DeploymentID:   string(asset.DeploymentID),
+			AssetType:      string(asset.Type),
+			AssetKey:       asset.Key,
+			ParentAssetID:  sql.NullString{String: string(asset.ParentID), Valid: asset.ParentID != ""},
+			Title:          asset.Title,
+			Description:    asset.Description,
+			ContentJson:    asset.ContentJSON,
+			ContentHash:    asset.ContentHash,
+			ContentVersion: int64(asset.ContentVersion),
 		}); err != nil {
 			return err
 		}
@@ -155,16 +156,17 @@ func mapAsset(row platformdb.Asset) workspace.Asset {
 		parentID = workspace.AssetID(row.ParentAssetID.String)
 	}
 	return workspace.Asset{
-		ID:           workspace.AssetID(row.ID),
-		WorkspaceID:  workspace.WorkspaceID(row.WorkspaceID),
-		DeploymentID: workspace.DeploymentID(row.DeploymentID),
-		Type:         workspace.AssetType(row.AssetType),
-		Key:          row.AssetKey,
-		ParentID:     parentID,
-		Title:        row.Title,
-		Description:  row.Description,
-		ContentJSON:  row.ContentJson,
-		ContentHash:  row.ContentHash,
+		ID:             workspace.AssetID(row.ID),
+		WorkspaceID:    workspace.WorkspaceID(row.WorkspaceID),
+		DeploymentID:   workspace.DeploymentID(row.DeploymentID),
+		Type:           workspace.AssetType(row.AssetType),
+		Key:            row.AssetKey,
+		ParentID:       parentID,
+		Title:          row.Title,
+		Description:    row.Description,
+		ContentJSON:    row.ContentJson,
+		ContentHash:    row.ContentHash,
+		ContentVersion: int(row.ContentVersion),
 	}
 }
 

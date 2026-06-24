@@ -72,11 +72,75 @@ func TestDiscoverSchemasCapturesSourceAndModelColumns(t *testing.T) {
 	if len(columns) != 2 {
 		t.Fatalf("model schema column count = %d, want 2: %#v", len(columns), columns)
 	}
-	if columns[0].Name != "order_id" || columns[0].PhysicalType == "" || !columns[0].PrimaryKey {
+	if columns[0].Name != "order_id" || columns[0].PhysicalType == "" || !columns[0].PrimaryKey || columns[0].Nullable == nil {
 		t.Fatalf("model order_id column = %#v, want physical type and primary key marker", columns[0])
 	}
-	if columns[1].Name != "revenue" || columns[1].PhysicalType == "" {
+	if columns[1].Name != "revenue" || columns[1].PhysicalType == "" || columns[1].Nullable == nil {
 		t.Fatalf("model revenue column = %#v, want physical type", columns[1])
+	}
+}
+
+func TestDiscoverSchemasIgnoresAttachedDatabaseSchemas(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "orders.csv"), []byte("order_id,revenue\n1,10.5\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	db, err := Open(ctx, filepath.Join(dir, "test.duckdb"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	model := &semanticmodel.Model{
+		Name:              "olist",
+		DefaultConnection: "local",
+		Connections:       map[string]semanticmodel.Connection{"local": {Kind: "local"}},
+		Sources: map[string]semanticmodel.Source{"orders": {
+			Connection: "local",
+			Path:       "orders.csv",
+			Format:     "csv",
+		}},
+		Tables: map[string]semanticmodel.Table{
+			"orders": {
+				Source:     "orders",
+				PrimaryKey: "order_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{
+					"order_id": {Label: "Order ID"},
+					"revenue":  {Label: "Revenue"},
+				},
+			},
+		},
+		BaseTable: "orders",
+		Measures:  map[string]semanticmodel.MetricMeasure{},
+	}
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := analyticsmaterialize.Refresh(ctx, db, NewSourceRuntime(db, dir), model); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.SQLDB().ExecContext(ctx, `
+ATTACH ':memory:' AS attached_catalog;
+CREATE SCHEMA attached_catalog.source;
+CREATE TABLE attached_catalog.source.orders (attached_only INTEGER);
+CREATE SCHEMA attached_catalog.model;
+CREATE TABLE attached_catalog.model.orders (attached_only INTEGER);`); err != nil {
+		t.Fatal(err)
+	}
+	if err := DiscoverSchemas(ctx, db, model); err != nil {
+		t.Fatal(err)
+	}
+	sourceColumns := model.Sources["orders"].Schema.Columns
+	for _, column := range sourceColumns {
+		if column.Name == "attached_only" {
+			t.Fatalf("source schema included attached database column: %#v", sourceColumns)
+		}
+	}
+	tableColumns := model.Tables["orders"].Schema.Columns
+	for _, column := range tableColumns {
+		if column.Name == "attached_only" {
+			t.Fatalf("model schema included attached database column: %#v", tableColumns)
+		}
 	}
 }
 

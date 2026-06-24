@@ -651,21 +651,22 @@ func (q *Queries) GetWorkspace(ctx context.Context, id string) (Workspace, error
 }
 
 const insertAsset = `-- name: InsertAsset :exec
-INSERT INTO assets (id, workspace_id, deployment_id, asset_type, asset_key, parent_asset_id, title, description, content_json, content_hash)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO assets (id, workspace_id, deployment_id, asset_type, asset_key, parent_asset_id, title, description, content_json, content_hash, content_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertAssetParams struct {
-	ID            string         `json:"id"`
-	WorkspaceID   string         `json:"workspace_id"`
-	DeploymentID  string         `json:"deployment_id"`
-	AssetType     string         `json:"asset_type"`
-	AssetKey      string         `json:"asset_key"`
-	ParentAssetID sql.NullString `json:"parent_asset_id"`
-	Title         string         `json:"title"`
-	Description   string         `json:"description"`
-	ContentJson   string         `json:"content_json"`
-	ContentHash   string         `json:"content_hash"`
+	ID             string         `json:"id"`
+	WorkspaceID    string         `json:"workspace_id"`
+	DeploymentID   string         `json:"deployment_id"`
+	AssetType      string         `json:"asset_type"`
+	AssetKey       string         `json:"asset_key"`
+	ParentAssetID  sql.NullString `json:"parent_asset_id"`
+	Title          string         `json:"title"`
+	Description    string         `json:"description"`
+	ContentJson    string         `json:"content_json"`
+	ContentHash    string         `json:"content_hash"`
+	ContentVersion int64          `json:"content_version"`
 }
 
 func (q *Queries) InsertAsset(ctx context.Context, arg InsertAssetParams) error {
@@ -680,6 +681,7 @@ func (q *Queries) InsertAsset(ctx context.Context, arg InsertAssetParams) error 
 		arg.Description,
 		arg.ContentJson,
 		arg.ContentHash,
+		arg.ContentVersion,
 	)
 	return err
 }
@@ -1032,7 +1034,7 @@ func (q *Queries) ListAssetEdgesByDeployment(ctx context.Context, deploymentID s
 }
 
 const listAssetsByDeployment = `-- name: ListAssetsByDeployment :many
-SELECT id, workspace_id, deployment_id, asset_type, asset_key, parent_asset_id, title, description, content_json, content_hash, created_at FROM assets WHERE deployment_id = ? ORDER BY asset_type, asset_key
+SELECT id, workspace_id, deployment_id, asset_type, asset_key, parent_asset_id, title, description, content_json, content_hash, content_version, created_at FROM assets WHERE deployment_id = ? ORDER BY asset_type, asset_key
 `
 
 func (q *Queries) ListAssetsByDeployment(ctx context.Context, deploymentID string) ([]Asset, error) {
@@ -1055,6 +1057,7 @@ func (q *Queries) ListAssetsByDeployment(ctx context.Context, deploymentID strin
 			&i.Description,
 			&i.ContentJson,
 			&i.ContentHash,
+			&i.ContentVersion,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

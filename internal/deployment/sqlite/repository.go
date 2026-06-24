@@ -90,16 +90,17 @@ func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.
 	}
 	for _, asset := range validation.Assets {
 		if err := q.InsertAsset(ctx, platformdb.InsertAssetParams{
-			ID:            asset.ID,
-			WorkspaceID:   string(asset.WorkspaceID),
-			DeploymentID:  string(asset.DeploymentID),
-			AssetType:     asset.Type,
-			AssetKey:      asset.Key,
-			ParentAssetID: sql.NullString{String: asset.ParentID, Valid: asset.ParentID != ""},
-			Title:         asset.Title,
-			Description:   asset.Description,
-			ContentJson:   asset.ContentJSON,
-			ContentHash:   asset.ContentHash,
+			ID:             asset.ID,
+			WorkspaceID:    string(asset.WorkspaceID),
+			DeploymentID:   string(asset.DeploymentID),
+			AssetType:      asset.Type,
+			AssetKey:       asset.Key,
+			ParentAssetID:  sql.NullString{String: asset.ParentID, Valid: asset.ParentID != ""},
+			Title:          asset.Title,
+			Description:    asset.Description,
+			ContentJson:    asset.ContentJSON,
+			ContentHash:    asset.ContentHash,
+			ContentVersion: int64(asset.ContentVersion),
 		}); err != nil {
 			return deployment.Deployment{}, err
 		}

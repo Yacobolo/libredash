@@ -489,10 +489,13 @@ func staleActiveLineageGraph(graph workspace.AssetGraph) bool {
 	assets := map[workspace.AssetID]workspace.Asset{}
 	for _, asset := range graph.Assets {
 		assets[asset.ID] = asset
+		if asset.ContentVersion < workspace.CurrentAssetContentVersion {
+			return true
+		}
 		if assetHasLegacyGeneratedDescription(asset) {
 			return true
 		}
-		if assetHasStaleSourceMetadata(asset) {
+		if assetHasDocumentedFieldsWithoutSchema(asset) {
 			return true
 		}
 		switch asset.Type {
@@ -537,24 +540,17 @@ func staleActiveLineageGraph(graph workspace.AssetGraph) bool {
 	return false
 }
 
-func assetHasStaleSourceMetadata(asset workspace.Asset) bool {
-	if asset.Type != workspace.AssetTypeSource {
+func assetHasDocumentedFieldsWithoutSchema(asset workspace.Asset) bool {
+	if asset.Type != workspace.AssetTypeSource && asset.Type != workspace.AssetTypeModelTable {
 		return false
 	}
-	var content map[string]any
-	if err := json.Unmarshal([]byte(asset.ContentJSON), &content); err != nil {
+	if assetContentHasItems(asset.ContentJSON, "Schema", "schema") {
 		return false
 	}
-	if !assetContentHasItems(asset.ContentJSON, "Schema", "schema") {
-		return assetContentHasItems(asset.ContentJSON, "Fields", "fields")
+	if asset.Type == workspace.AssetTypeModelTable {
+		return assetContentHasItems(asset.ContentJSON, "Dimensions", "dimensions", "Fields", "fields")
 	}
-	if _, ok := content["AssetVersion"]; ok {
-		return false
-	}
-	if _, ok := content["assetVersion"]; ok {
-		return false
-	}
-	return true
+	return assetContentHasItems(asset.ContentJSON, "Fields", "fields")
 }
 
 func assetHasLegacyGeneratedDescription(asset workspace.Asset) bool {

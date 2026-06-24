@@ -187,16 +187,17 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 	assets := make([]deployment.Asset, 0, len(compiled.Workspace.Graph.Assets))
 	for _, asset := range compiled.Workspace.Graph.Assets {
 		assets = append(assets, deployment.Asset{
-			ID:           string(asset.ID),
-			WorkspaceID:  deployment.WorkspaceID(asset.WorkspaceID),
-			DeploymentID: deployment.ID(asset.DeploymentID),
-			Type:         string(asset.Type),
-			Key:          asset.Key,
-			ParentID:     string(asset.ParentID),
-			Title:        asset.Title,
-			Description:  asset.Description,
-			ContentJSON:  asset.ContentJSON,
-			ContentHash:  asset.ContentHash,
+			ID:             string(asset.ID),
+			WorkspaceID:    deployment.WorkspaceID(asset.WorkspaceID),
+			DeploymentID:   deployment.ID(asset.DeploymentID),
+			Type:           string(asset.Type),
+			Key:            asset.Key,
+			ParentID:       string(asset.ParentID),
+			Title:          asset.Title,
+			Description:    asset.Description,
+			ContentJSON:    asset.ContentJSON,
+			ContentHash:    asset.ContentHash,
+			ContentVersion: asset.ContentVersion,
 		})
 	}
 	edges := make([]deployment.AssetEdge, 0, len(compiled.Workspace.Graph.Edges))

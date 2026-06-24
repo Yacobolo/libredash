@@ -74,6 +74,9 @@ func TestRepositoryReplaceActiveDeploymentGraph(t *testing.T) {
 		if asset.ContentHash != "new" {
 			t.Fatalf("asset %s content hash = %q, want replacement graph only", asset.ID, asset.ContentHash)
 		}
+		if asset.ContentVersion != workspace.CurrentAssetContentVersion {
+			t.Fatalf("asset %s content version = %d, want %d", asset.ID, asset.ContentVersion, workspace.CurrentAssetContentVersion)
+		}
 	}
 	after, err := deploymentRepo.ByID(ctx, created.ID)
 	if err != nil {
@@ -87,14 +90,15 @@ func TestRepositoryReplaceActiveDeploymentGraph(t *testing.T) {
 func mustAsset(t *testing.T, id workspace.AssetID, typ workspace.AssetType, key string, parent workspace.AssetID, deploymentID deployment.ID) workspace.Asset {
 	t.Helper()
 	return workspace.Asset{
-		ID:           id,
-		WorkspaceID:  "test",
-		DeploymentID: workspace.DeploymentID(deploymentID),
-		Type:         typ,
-		Key:          key,
-		ParentID:     parent,
-		Title:        key,
-		ContentJSON:  "{}",
-		ContentHash:  "new",
+		ID:             id,
+		WorkspaceID:    "test",
+		DeploymentID:   workspace.DeploymentID(deploymentID),
+		Type:           typ,
+		Key:            key,
+		ParentID:       parent,
+		Title:          key,
+		ContentJSON:    "{}",
+		ContentHash:    "new",
+		ContentVersion: workspace.CurrentAssetContentVersion,
 	}
 }

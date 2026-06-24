@@ -72,8 +72,8 @@ SELECT * FROM deployment_artifacts WHERE deployment_id = ?;
 DELETE FROM assets WHERE deployment_id = ?;
 
 -- name: InsertAsset :exec
-INSERT INTO assets (id, workspace_id, deployment_id, asset_type, asset_key, parent_asset_id, title, description, content_json, content_hash)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO assets (id, workspace_id, deployment_id, asset_type, asset_key, parent_asset_id, title, description, content_json, content_hash, content_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertAssetEdge :exec
 INSERT INTO asset_edges (id, workspace_id, deployment_id, from_asset_id, to_asset_id, edge_type)

@@ -58,16 +58,17 @@ type Artifact struct {
 }
 
 type Asset struct {
-	ID           string
-	WorkspaceID  WorkspaceID
-	DeploymentID ID
-	Type         string
-	Key          string
-	ParentID     string
-	Title        string
-	Description  string
-	ContentJSON  string
-	ContentHash  string
+	ID             string
+	WorkspaceID    WorkspaceID
+	DeploymentID   ID
+	Type           string
+	Key            string
+	ParentID       string
+	Title          string
+	Description    string
+	ContentJSON    string
+	ContentHash    string
+	ContentVersion int
 }
 
 type AssetEdge struct {

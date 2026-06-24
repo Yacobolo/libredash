@@ -62,7 +62,6 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.De
 		}
 		for _, sourceName := range sortedMapKeys(model.Sources) {
 			source := model.Sources[sourceName]
-			source.AssetVersion = 1
 			id, err := add(workspace.AssetTypeSource, modelEntry.ID+"."+sourceName, catalogID, sourceName, source.Description, source)
 			if err != nil {
 				return workspace.AssetGraph{}, err
