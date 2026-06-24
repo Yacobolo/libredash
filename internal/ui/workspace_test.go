@@ -198,12 +198,12 @@ func TestWorkspaceAssetDetailsRenderSourceSchema(t *testing.T) {
 	}
 	signals := workspaceAssetSignals(workspace, asset, assets, edges, assetLineage(workspace.ID, asset, assets, edges), "details")
 	grid := signalMetricGrid(t, signals, "assetDetailsSourceFieldsGrid")
-	assertGridHeaders(t, grid, []string{"Name", "Label", "Physical type", "Nullable", "Key", "Description"})
+	assertGridHeaders(t, grid, []string{"Name", "Description", "Physical type", "Nullable"})
 	if len(grid.Rows) != 2 {
 		t.Fatalf("source field rows = %#v, want 2 rows", grid.Rows)
 	}
 	state := grid.Rows[1]
-	if state["name"] != "customer_id" || state["label"] != "Customer ID" || fmt.Sprint(state["description"]) != "Raw customer identifier." {
+	if state["name"] != "customer_id" || fmt.Sprint(state["description"]) != "Raw customer identifier." {
 		t.Fatalf("unexpected source field row: %#v", state)
 	}
 }
@@ -238,7 +238,7 @@ func TestWorkspaceAssetDetailsRenderUnknownNullableAsDash(t *testing.T) {
 
 	source := testAssetByID(t, assets, "source-payments")
 	source.Meta["Fields"] = map[string]any{
-		"order_id": map[string]any{"Label": "Order ID"},
+		"order_id": map[string]any{"Description": "Raw order identifier."},
 	}
 	signals := workspaceAssetSignals(workspace, source, assets, edges, assetLineage(workspace.ID, source, assets, edges), "details")
 	sourceGrid := signalMetricGrid(t, signals, "assetDetailsSourceFieldsGrid")
@@ -993,8 +993,8 @@ func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []a
 			"Format":     "csv",
 			"Path":       "orders.csv",
 			"Fields": map[string]any{
-				"order_id":    map[string]any{"Label": "Order ID", "Description": "Raw order identifier."},
-				"customer_id": map[string]any{"Label": "Customer ID", "Description": "Raw customer identifier."},
+				"order_id":    map[string]any{"Description": "Raw order identifier."},
+				"customer_id": map[string]any{"Description": "Raw customer identifier."},
 			},
 			"Schema": map[string]any{"columns": []any{
 				map[string]any{"name": "order_id", "ordinal": float64(1), "physicalType": "VARCHAR", "nullable": false},

@@ -37,17 +37,14 @@ func (m *Model) Validate() error {
 		if err := resolved.Validate(name, m.Connections); err != nil {
 			return err
 		}
-		for field, dimension := range resolved.Fields {
+		for field, sourceField := range resolved.Fields {
 			if err := validateSemanticIdentifier(field); err != nil {
 				return fmt.Errorf("source %q field %q is invalid: %w", name, field, err)
 			}
-			dimension.Field = name + "." + field
-			dimension.Table = name
-			dimension.Name = field
-			if dimension.Label == "" {
-				dimension.Label = titleFromIdentifier(field)
-			}
-			resolved.Fields[field] = dimension
+			sourceField.Field = name + "." + field
+			sourceField.Table = name
+			sourceField.Name = field
+			resolved.Fields[field] = sourceField
 		}
 		m.Sources[name] = resolved
 	}

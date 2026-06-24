@@ -19,28 +19,20 @@ sources:
     path: olist_orders_dataset.csv
     fields:
       order_id:
-        label: Order ID
         description: Raw order identifier.
       customer_id:
-        label: Customer ID
         description: Customer identifier attached to the order.
       order_status:
-        label: Order status
         description: Raw lifecycle status from the order system.
       order_purchase_timestamp:
-        label: Purchase timestamp
         description: Timestamp when the order was placed.
       order_approved_at:
-        label: Approved at
         description: Timestamp when the order was approved.
       order_delivered_carrier_date:
-        label: Delivered to carrier
         description: Timestamp when the order was handed to the carrier.
       order_delivered_customer_date:
-        label: Delivered to customer
         description: Timestamp when the order reached the customer.
       order_estimated_delivery_date:
-        label: Estimated delivery
         description: Estimated delivery timestamp.
   order_items:
     description: Raw order item records with product and seller identifiers.
@@ -48,25 +40,18 @@ sources:
     path: olist_order_items_dataset.csv
     fields:
       order_id:
-        label: Order ID
         description: Order identifier for the item row.
       order_item_id:
-        label: Order item ID
         description: Item sequence within the order.
       product_id:
-        label: Product ID
         description: Product identifier purchased in the order.
       seller_id:
-        label: Seller ID
         description: Seller identifier for the item.
       shipping_limit_date:
-        label: Shipping limit date
         description: Deadline for seller shipment.
       price:
-        label: Price
         description: Item price before freight.
       freight_value:
-        label: Freight value
         description: Freight value charged for the item.
   payments:
     description: Raw payment transactions by order.
@@ -74,19 +59,14 @@ sources:
     path: olist_order_payments_dataset.csv
     fields:
       order_id:
-        label: Order ID
         description: Order identifier for the payment.
       payment_sequential:
-        label: Payment sequence
         description: Payment sequence number within the order.
       payment_type:
-        label: Payment type
         description: Payment method used for the transaction.
       payment_installments:
-        label: Payment installments
         description: Number of installments for the payment.
       payment_value:
-        label: Payment value
         description: Payment amount for the transaction.
   products:
     description: Raw product catalog records.
@@ -94,31 +74,22 @@ sources:
     path: olist_products_dataset.csv
     fields:
       product_id:
-        label: Product ID
         description: Stable product identifier.
       product_category_name:
-        label: Product category
         description: Product category name in the source language.
       product_name_lenght:
-        label: Product name length
         description: Source-provided product name length.
       product_description_lenght:
-        label: Product description length
         description: Source-provided product description length.
       product_photos_qty:
-        label: Product photos
         description: Number of product photos.
       product_weight_g:
-        label: Product weight
         description: Product weight in grams.
       product_length_cm:
-        label: Product length
         description: Product length in centimeters.
       product_height_cm:
-        label: Product height
         description: Product height in centimeters.
       product_width_cm:
-        label: Product width
         description: Product width in centimeters.
   customers:
     description: Raw customer records with customer geography.
@@ -126,19 +97,14 @@ sources:
     path: olist_customers_dataset.csv
     fields:
       customer_id:
-        label: Customer ID
         description: Customer identifier used by orders.
       customer_unique_id:
-        label: Unique customer ID
         description: Stable unique customer identifier.
       customer_zip_code_prefix:
-        label: ZIP code prefix
         description: Customer ZIP code prefix.
       customer_city:
-        label: City
         description: Customer city.
       customer_state:
-        label: State
         description: Customer state.
   reviews:
     description: Raw customer review scores by order.
@@ -146,25 +112,18 @@ sources:
     path: olist_order_reviews_dataset.csv
     fields:
       review_id:
-        label: Review ID
         description: Stable review identifier.
       order_id:
-        label: Order ID
         description: Order identifier associated with the review.
       review_score:
-        label: Review score
         description: Customer review score.
       review_comment_title:
-        label: Review title
         description: Optional review comment title.
       review_comment_message:
-        label: Review message
         description: Optional review comment body.
       review_creation_date:
-        label: Review creation date
         description: Date when the review was created.
       review_answer_timestamp:
-        label: Review answer timestamp
         description: Timestamp when the review was answered.
   translations:
     description: Product category translations from Portuguese to English.
@@ -172,10 +131,8 @@ sources:
     path: product_category_name_translation.csv
     fields:
       product_category_name:
-        label: Product category
         description: Product category name in Portuguese.
       product_category_name_english:
-        label: Product category English
         description: English product category name.
 
 models:

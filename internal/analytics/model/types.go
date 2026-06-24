@@ -38,14 +38,14 @@ type ConnectionDefaults struct {
 type ConnectionAuth map[string]any
 
 type Source struct {
-	Format      string                     `yaml:"format"`
-	Description string                     `yaml:"description"`
-	Path        string                     `yaml:"path"`
-	Connection  string                     `yaml:"connection"`
-	Object      string                     `yaml:"object"`
-	Options     map[string]any             `yaml:"options"`
-	Fields      map[string]MetricDimension `yaml:"fields"`
-	Schema      TableSchema                `yaml:"-"`
+	Format      string                 `yaml:"format"`
+	Description string                 `yaml:"description"`
+	Path        string                 `yaml:"path"`
+	Connection  string                 `yaml:"connection"`
+	Object      string                 `yaml:"object"`
+	Options     map[string]any         `yaml:"options"`
+	Fields      map[string]SourceField `yaml:"fields"`
+	Schema      TableSchema            `yaml:"-"`
 }
 
 type Table struct {
@@ -65,6 +65,13 @@ type Table struct {
 
 type Transform struct {
 	SQL string `yaml:"sql"`
+}
+
+type SourceField struct {
+	Field       string `yaml:"-"`
+	Table       string `yaml:"-"`
+	Name        string `yaml:"-"`
+	Description string `yaml:"description"`
 }
 
 type MeasureDefaults struct {

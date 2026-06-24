@@ -33,8 +33,8 @@ func TestDiscoverSchemasCapturesSourceAndModelColumns(t *testing.T) {
 			Connection: "local",
 			Path:       "orders.csv",
 			Format:     "csv",
-			Fields: map[string]semanticmodel.MetricDimension{
-				"order_id": {Label: "Order ID", Description: "Raw order identifier."},
+			Fields: map[string]semanticmodel.SourceField{
+				"order_id": {Description: "Raw order identifier."},
 			},
 		}},
 		Tables: map[string]semanticmodel.Table{
@@ -163,8 +163,8 @@ func TestDiscoverSchemasRejectsMissingDocumentedSourceField(t *testing.T) {
 			Connection: "local",
 			Path:       "orders.csv",
 			Format:     "csv",
-			Fields: map[string]semanticmodel.MetricDimension{
-				"missing": {Label: "Missing"},
+			Fields: map[string]semanticmodel.SourceField{
+				"missing": {Description: "Missing source field."},
 			},
 		}},
 		Tables: map[string]semanticmodel.Table{

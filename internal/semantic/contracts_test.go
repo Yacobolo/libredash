@@ -7,6 +7,7 @@ import (
 
 type Model = semanticmodel.Model
 type Source = semanticmodel.Source
+type SourceField = semanticmodel.SourceField
 type Connection = semanticmodel.Connection
 type ConnectionAuth = semanticmodel.ConnectionAuth
 type ConnectionDefaults = semanticmodel.ConnectionDefaults

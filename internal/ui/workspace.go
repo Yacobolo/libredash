@@ -1600,27 +1600,19 @@ func sourceFieldsGrid(fields, schema map[string]any) metricGrid {
 	for _, column := range schemaColumns {
 		name := metaString(column, "Name", "name")
 		field := asMap(fields[name])
-		key := ""
-		if metaBool(column, "PrimaryKey", "primaryKey") {
-			key = "Primary key"
-		}
 		rows = append(rows, map[string]any{
 			"name":          name,
-			"label":         firstNonEmpty(metaString(field, "Label", "label"), labelFromKey(name)),
+			"description":   emptyDash(metaString(field, "Description", "description")),
 			"physical_type": metricGridBadgeValue(metaString(column, "PhysicalType", "physicalType"), "muted"),
 			"nullable":      nullableLabel(column, "Nullable", "nullable"),
-			"key":           key,
-			"description":   emptyDash(metaString(field, "Description", "description")),
 		})
 	}
 	return metricGrid{
 		Columns: []metricGridColumn{
 			{ID: "name", Header: "Name", Kind: "code", Width: "170px"},
-			{ID: "label", Header: "Label", Width: "180px"},
+			{ID: "description", Header: "Description"},
 			{ID: "physical_type", Header: "Physical type", Kind: "badge", Width: "140px"},
 			{ID: "nullable", Header: "Nullable", Width: "100px"},
-			{ID: "key", Header: "Key", Width: "130px"},
-			{ID: "description", Header: "Description"},
 		},
 		Rows:     rows,
 		Empty:    "No schema is available for this source.",

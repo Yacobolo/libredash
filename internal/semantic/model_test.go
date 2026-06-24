@@ -465,6 +465,14 @@ sources:
 sources:
   orders: orders.csv
 `,
+		"source_field_label": `
+sources:
+  orders:
+    path: orders.csv
+    fields:
+      order_id:
+        label: Order ID
+`,
 	}
 	for name, fragment := range cases {
 		t.Run(name, func(t *testing.T) {
