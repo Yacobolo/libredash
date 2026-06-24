@@ -28,6 +28,12 @@ type LineageNode = {
   side?: 'upstream' | 'selected' | 'downstream'
   rank?: number
   selected?: boolean
+  visibleUpstreamCount?: number
+  visibleDownstreamCount?: number
+  usesCount?: number
+  usedByCount?: number
+  containedCount?: number
+  containedSummary?: string
 }
 
 type LineageEdge = {
@@ -41,26 +47,37 @@ type LineageEdge = {
 type LineageLayout = {
   rankIndex: Map<number, number>
   nodeIndex: Map<string, number>
-  rankSizes: Map<number, number>
+}
+
+type LineagePathState = {
+  selectedID?: string
+  upstream: Set<string>
+  downstream: Set<string>
+  connectedEdges: Set<string>
+}
+
+type LineageNodeData = LineageNode & {
+  pathState: 'selected' | 'upstream' | 'downstream' | 'unrelated'
+  onSelect: (id: string) => void
 }
 
 const NODE_GAP_X = 260
 const NODE_GAP_Y = 124
 const NODE_OFFSET_X = 96
-const NODE_OFFSET_Y = 240
 const NODE_MIN_Y = 48
 
 class AssetLineageGraph extends LitElement {
   @property({ type: Object }) graph: LineageGraph | null = null
   private root?: Root
   private mount?: HTMLDivElement
+  private selectedNodeID?: string
 
   createRenderRoot(): HTMLElement {
     return this
   }
 
   firstUpdated(): void {
-    this.mount = this.renderRoot.querySelector('.asset-lineage-flow') as HTMLDivElement | null ?? undefined
+    this.mount = this.renderRoot.querySelector('.asset-lineage-root') as HTMLDivElement | null ?? undefined
     if (this.mount) {
       this.root = createRoot(this.mount)
       this.renderFlow()
@@ -81,7 +98,7 @@ class AssetLineageGraph extends LitElement {
       <style>
         ${assetLineageGraphStyles}
       </style>
-      <div class="asset-lineage-flow" aria-label="Asset lineage graph"></div>
+      <div class="asset-lineage-root"></div>
     `
   }
 
@@ -89,26 +106,41 @@ class AssetLineageGraph extends LitElement {
     if (!this.root) return
     const graph = this.resolvedGraph
     const layout = createLineageLayout(graph.nodes)
+    const selectedNode = selectedLineageNode(graph.nodes, this.selectedNodeID)
+    this.selectedNodeID = selectedNode?.id
+    const pathState = createPathState(graph, this.selectedNodeID)
     this.root.render(
-      React.createElement(ReactFlow, {
-        nodes: graph.nodes.map((node) => toFlowNode(node, layout)),
-        edges: graph.edges.map(toFlowEdge),
-        nodeTypes: { lineageNode: LineageNodeComponent },
-        fitView: true,
-        fitViewOptions: { padding: 0.12 },
-        minZoom: 0.15,
-        maxZoom: 1.35,
-        nodesDraggable: false,
-        nodesConnectable: false,
-        elementsSelectable: false,
-        panOnDrag: true,
-        zoomOnScroll: false,
-        preventScrolling: false,
-        children: [
-          React.createElement(Background, { key: 'background', gap: 18, size: 1 }),
-          React.createElement(Controls, { key: 'controls', showInteractive: false }),
-        ],
-      }),
+      React.createElement(
+        'div',
+        { className: 'asset-lineage-layout' },
+        React.createElement(
+          'div',
+          { className: 'asset-lineage-flow', 'aria-label': 'Asset lineage graph' },
+          React.createElement(ReactFlow, {
+            nodes: graph.nodes.map((node) => toFlowNode(node, layout, pathState, (id) => {
+              this.selectedNodeID = id
+              this.renderFlow()
+            })),
+            edges: graph.edges.map((edge) => toFlowEdge(edge, pathState)),
+            nodeTypes: { lineageNode: LineageNodeComponent },
+            fitView: true,
+            fitViewOptions: { padding: 0.12 },
+            minZoom: 0.15,
+            maxZoom: 1.35,
+            nodesDraggable: false,
+            nodesConnectable: false,
+            elementsSelectable: true,
+            panOnDrag: true,
+            zoomOnScroll: false,
+            preventScrolling: false,
+            children: [
+              React.createElement(Background, { key: 'background', gap: 18, size: 1 }),
+              React.createElement(Controls, { key: 'controls', showInteractive: false }),
+            ],
+          }),
+        ),
+        React.createElement(LineageInspectorPanel, { key: selectedNode?.id ?? 'empty', node: selectedNode }),
+      ),
     )
   }
 
@@ -124,6 +156,18 @@ class AssetLineageGraph extends LitElement {
 }
 
 const assetLineageGraphStyles = `
+  ld-asset-lineage-graph .asset-lineage-root,
+  ld-asset-lineage-graph .asset-lineage-layout {
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  ld-asset-lineage-graph .asset-lineage-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(17rem, 20rem);
+  }
+
   ld-asset-lineage-graph .asset-lineage-flow {
     height: 100%;
     min-height: 0;
@@ -132,6 +176,101 @@ const assetLineageGraphStyles = `
       linear-gradient(var(--ld-bg-page), var(--ld-bg-page)),
       radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ld-fg-muted), transparent 87%) 1px, transparent 0);
     background-size: auto, 18px 18px;
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel {
+    display: grid;
+    align-content: start;
+    gap: var(--base-size-16);
+    min-width: 0;
+    border-left: var(--borderWidth-thin) solid var(--ld-line-muted);
+    background: var(--ld-bg-panel);
+    padding: var(--base-size-16);
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel-eyebrow {
+    color: var(--ld-fg-muted);
+    font-size: var(--ld-font-size-caption);
+    font-weight: var(--ld-font-weight-strong);
+    line-height: var(--ld-line-height-tight);
+    text-transform: uppercase;
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel-title {
+    overflow: hidden;
+    margin: var(--base-size-4) 0 0;
+    color: var(--ld-fg-default);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--ld-font-size-body-md);
+    font-weight: var(--ld-font-weight-strong);
+    line-height: var(--ld-line-height-tight);
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel-key {
+    overflow: hidden;
+    margin-top: var(--base-size-6);
+    color: var(--ld-fg-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--ld-font-family-mono);
+    font-size: var(--ld-font-size-caption);
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--base-size-8);
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel-stat {
+    display: grid;
+    gap: var(--base-size-4);
+    min-width: 0;
+    border: var(--borderWidth-thin) solid var(--ld-line-muted);
+    border-radius: var(--borderRadius-default);
+    background: var(--ld-bg-panel-muted);
+    padding: var(--base-size-8);
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel-stat span {
+    color: var(--ld-fg-muted);
+    font-size: var(--ld-font-size-caption);
+    font-weight: var(--ld-font-weight-medium);
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel-stat strong {
+    color: var(--ld-fg-default);
+    font-size: var(--ld-font-size-body-md);
+    line-height: var(--ld-line-height-tight);
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel-summary {
+    min-width: 0;
+    color: var(--ld-fg-muted);
+    font-size: var(--ld-font-size-body-sm);
+    line-height: var(--ld-line-height-default);
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+    border: var(--borderWidth-thin) solid var(--ld-line-accent);
+    border-radius: var(--borderRadius-default);
+    background: var(--ld-line-accent);
+    color: var(--ld-fg-on-emphasis);
+    padding: 0 var(--base-size-12);
+    font-size: var(--ld-font-size-body-sm);
+    font-weight: var(--ld-font-weight-strong);
+    text-decoration: none;
+  }
+
+  ld-asset-lineage-graph .asset-lineage-panel-action:hover,
+  ld-asset-lineage-graph .asset-lineage-panel-action:focus-visible {
+    outline: 0;
+    filter: brightness(1.06);
   }
 
   ld-asset-lineage-graph .react-flow {
@@ -163,11 +302,26 @@ const assetLineageGraphStyles = `
     box-shadow: var(--shadow-resting-small);
     color: var(--ld-fg-default);
     padding: var(--base-size-8) var(--base-size-12);
+    cursor: pointer;
   }
 
   ld-asset-lineage-graph .asset-lineage-node-selected {
     border-color: var(--ld-line-accent);
     box-shadow: 0 0 0 var(--borderWidth-default) color-mix(in srgb, var(--ld-line-accent), transparent 28%), var(--shadow-resting-small);
+  }
+
+  ld-asset-lineage-graph .asset-lineage-node:focus-visible {
+    outline: var(--borderWidth-thicker) solid var(--ld-line-accent);
+    outline-offset: var(--base-size-2);
+  }
+
+  ld-asset-lineage-graph .asset-lineage-node-unrelated {
+    opacity: 0.34;
+  }
+
+  ld-asset-lineage-graph .asset-lineage-node-upstream,
+  ld-asset-lineage-graph .asset-lineage-node-downstream {
+    box-shadow: 0 0 0 var(--borderWidth-thin) color-mix(in srgb, var(--ld-line-accent), transparent 58%), var(--shadow-resting-small);
   }
 
   ld-asset-lineage-graph .asset-lineage-node-kind {
@@ -206,9 +360,21 @@ const assetLineageGraphStyles = `
     font-size: var(--ld-font-size-caption);
     font-weight: var(--ld-font-weight-medium);
   }
+
+  @media (max-width: 860px) {
+    ld-asset-lineage-graph .asset-lineage-layout {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(26rem, 1fr) auto;
+    }
+
+    ld-asset-lineage-graph .asset-lineage-panel {
+      border-top: var(--borderWidth-thin) solid var(--ld-line-muted);
+      border-left: 0;
+    }
+  }
 `
 
-function toFlowNode(node: LineageNode, layout: LineageLayout): Node {
+function toFlowNode(node: LineageNode, layout: LineageLayout, pathState: LineagePathState, onSelect: (id: string) => void): Node<LineageNodeData> {
   const { x, y } = positionFor(node, layout)
   return {
     id: node.id,
@@ -216,12 +382,20 @@ function toFlowNode(node: LineageNode, layout: LineageLayout): Node {
     position: { x, y },
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
-    data: node,
+    className: `asset-lineage-flow-node asset-lineage-flow-node-${nodePathState(node.id, pathState)}`,
+    data: {
+      ...node,
+      selected: node.id === pathState.selectedID,
+      pathState: nodePathState(node.id, pathState),
+      onSelect,
+    },
   }
 }
 
-function toFlowEdge(edge: LineageEdge): Edge {
+function toFlowEdge(edge: LineageEdge, pathState: LineagePathState): Edge {
   const context = edge.kind === 'contains'
+  const connected = edge.source === pathState.selectedID || edge.target === pathState.selectedID || pathState.connectedEdges.has(edge.id)
+  const muted = pathState.selectedID ? !connected : false
   return {
     id: edge.id,
     source: edge.source,
@@ -232,9 +406,9 @@ function toFlowEdge(edge: LineageEdge): Edge {
     interactionWidth: context ? 8 : 14,
     style: {
       stroke: edgeStroke(edge.kind),
-      strokeWidth: context ? 1 : 1.8,
+      strokeWidth: connected && !context ? 2.4 : context ? 1 : 1.8,
       strokeDasharray: context ? '4 7' : undefined,
-      opacity: context ? 0.28 : 0.9,
+      opacity: muted ? 0.18 : context ? 0.28 : 0.9,
     },
     labelStyle: {
       fill: context ? 'color-mix(in srgb, var(--ld-fg-muted), transparent 12%)' : 'var(--ld-fg-muted)',
@@ -248,34 +422,78 @@ function toFlowEdge(edge: LineageEdge): Edge {
   }
 }
 
+function selectedLineageNode(nodes: LineageNode[], selectedID?: string): LineageNode | undefined {
+  return nodes.find((node) => node.id === selectedID) ?? nodes.find((node) => node.selected) ?? nodes[0]
+}
+
+function createPathState(graph: LineageGraph, selectedID?: string): LineagePathState {
+  const state: LineagePathState = {
+    selectedID,
+    upstream: new Set<string>(),
+    downstream: new Set<string>(),
+    connectedEdges: new Set<string>(),
+  }
+  if (!selectedID) return state
+  const incoming = new Map<string, LineageEdge[]>()
+  const outgoing = new Map<string, LineageEdge[]>()
+  for (const edge of graph.edges) {
+    if (!incoming.has(edge.target)) incoming.set(edge.target, [])
+    incoming.get(edge.target)?.push(edge)
+    if (!outgoing.has(edge.source)) outgoing.set(edge.source, [])
+    outgoing.get(edge.source)?.push(edge)
+  }
+  walkLineagePath(selectedID, incoming, 'source', state.upstream, state.connectedEdges)
+  walkLineagePath(selectedID, outgoing, 'target', state.downstream, state.connectedEdges)
+  return state
+}
+
+function walkLineagePath(
+  nodeID: string,
+  edgesByNode: Map<string, LineageEdge[]>,
+  peerKey: 'source' | 'target',
+  seenNodes: Set<string>,
+  seenEdges: Set<string>,
+): void {
+  for (const edge of edgesByNode.get(nodeID) ?? []) {
+    const peerID = edge[peerKey]
+    seenEdges.add(edge.id)
+    if (seenNodes.has(peerID)) continue
+    seenNodes.add(peerID)
+    walkLineagePath(peerID, edgesByNode, peerKey, seenNodes, seenEdges)
+  }
+}
+
+function nodePathState(id: string, pathState: LineagePathState): 'selected' | 'upstream' | 'downstream' | 'unrelated' {
+  if (!pathState.selectedID || id === pathState.selectedID) return 'selected'
+  if (pathState.upstream.has(id)) return 'upstream'
+  if (pathState.downstream.has(id)) return 'downstream'
+  return 'unrelated'
+}
+
 function createLineageLayout(nodes: LineageNode[]): LineageLayout {
   const ranks = Array.from(new Set(nodes.map(nodeRank))).sort((left, right) => left - right)
   const rankIndex = new Map(ranks.map((rank, index) => [rank, index]))
   const nodeIndex = new Map<string, number>()
-  const rankSizes = new Map<number, number>()
 
   for (const rank of ranks) {
     const rankNodes = nodes
       .filter((candidate) => nodeRank(candidate) === rank)
       .sort((left, right) => nodeSortKey(left).localeCompare(nodeSortKey(right)))
-    rankSizes.set(rank, rankNodes.length)
     rankNodes.forEach((candidate, index) => {
       if (!nodeIndex.has(candidate.id)) nodeIndex.set(candidate.id, index)
     })
   }
 
-  return { rankIndex, nodeIndex, rankSizes }
+  return { rankIndex, nodeIndex }
 }
 
 function positionFor(node: LineageNode, layout: LineageLayout): { x: number; y: number } {
   const rank = nodeRank(node)
   const rankIndex = layout.rankIndex.get(rank) ?? 0
-  const rankSize = layout.rankSizes.get(rank) ?? 1
   const index = layout.nodeIndex.get(node.id) ?? 0
-  const centeredOffset = (index - (rankSize - 1) / 2) * NODE_GAP_Y
   return {
     x: NODE_OFFSET_X + rankIndex * NODE_GAP_X,
-    y: Math.max(NODE_MIN_Y, NODE_OFFSET_Y + centeredOffset),
+    y: NODE_MIN_Y + index * NODE_GAP_Y,
   }
 }
 
@@ -290,19 +508,78 @@ function nodeSortKey(node: LineageNode): string {
   return `${node.kind}:${node.label}:${node.id}`
 }
 
-function LineageNodeComponent({ data }: { data: LineageNode }) {
+function LineageNodeComponent({ data }: { data: LineageNodeData }) {
   const styles = nodeStyle(data)
-  const className = data.selected ? 'asset-lineage-node asset-lineage-node-selected' : 'asset-lineage-node'
+  const className = [
+    'asset-lineage-node',
+    data.selected ? 'asset-lineage-node-selected' : '',
+    `asset-lineage-node-${data.pathState}`,
+  ].filter(Boolean).join(' ')
+  const select = () => data.onSelect(data.id)
   return React.createElement(
     'div',
-    { className, style: styles },
+    {
+      className,
+      style: styles,
+      role: 'button',
+      tabIndex: 0,
+      'aria-pressed': data.selected ? 'true' : 'false',
+      'aria-label': `${kindLabel(data.kind)} ${data.label}`,
+      onClick: select,
+      onKeyDown: (event: React.KeyboardEvent) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
+        select()
+      },
+    },
     React.createElement(Handle, { type: 'target', position: Position.Left }),
     React.createElement('div', { className: 'asset-lineage-node-kind' }, kindLabel(data.kind)),
-    data.href
-      ? React.createElement('a', { className: 'asset-lineage-node-title', href: data.href, title: data.label }, data.label)
-      : React.createElement('div', { className: 'asset-lineage-node-title', title: data.label }, data.label),
+    React.createElement('div', { className: 'asset-lineage-node-title', title: data.label }, data.label),
     data.meta ? React.createElement('div', { className: 'asset-lineage-node-meta' }, data.meta) : null,
     React.createElement(Handle, { type: 'source', position: Position.Right }),
+  )
+}
+
+function LineageInspectorPanel({ node }: { node?: LineageNode }) {
+  if (!node) {
+    return React.createElement(
+      'aside',
+      { className: 'asset-lineage-panel', 'aria-label': 'Selected lineage asset' },
+      React.createElement('div', null,
+        React.createElement('div', { className: 'asset-lineage-panel-eyebrow' }, 'Lineage'),
+        React.createElement('p', { className: 'asset-lineage-panel-summary' }, 'Select a node to inspect its lineage context.'),
+      ),
+    )
+  }
+  return React.createElement(
+    'aside',
+    { className: 'asset-lineage-panel', 'aria-label': 'Selected lineage asset' },
+    React.createElement('div', null,
+      React.createElement('div', { className: 'asset-lineage-panel-eyebrow' }, kindLabel(node.kind)),
+      React.createElement('h2', { className: 'asset-lineage-panel-title', title: node.label }, node.label),
+      node.meta ? React.createElement('div', { className: 'asset-lineage-panel-key', title: node.meta }, node.meta) : null,
+    ),
+    React.createElement('div', { className: 'asset-lineage-panel-stats' },
+      panelStat('Visible upstream', node.visibleUpstreamCount ?? 0),
+      panelStat('Visible downstream', node.visibleDownstreamCount ?? 0),
+      panelStat('Uses', node.usesCount ?? 0),
+      panelStat('Used by', node.usedByCount ?? 0),
+    ),
+    React.createElement(
+      'div',
+      { className: 'asset-lineage-panel-summary' },
+      node.containedCount
+        ? `${node.containedCount} contained assets: ${node.containedSummary ?? 'mixed assets'}`
+        : 'No directly contained assets.',
+    ),
+    node.href ? React.createElement('a', { className: 'asset-lineage-panel-action', href: node.href }, 'Open details') : null,
+  )
+}
+
+function panelStat(label: string, value: number) {
+  return React.createElement('div', { className: 'asset-lineage-panel-stat' },
+    React.createElement('span', null, label),
+    React.createElement('strong', null, String(value)),
   )
 }
 

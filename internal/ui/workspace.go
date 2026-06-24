@@ -466,14 +466,20 @@ type assetLineageGraph struct {
 }
 
 type assetLineageNode struct {
-	ID       string `json:"id"`
-	Label    string `json:"label"`
-	Kind     string `json:"kind"`
-	Meta     string `json:"meta,omitempty"`
-	Href     string `json:"href,omitempty"`
-	Side     string `json:"side"`
-	Rank     int    `json:"rank"`
-	Selected bool   `json:"selected,omitempty"`
+	ID                string `json:"id"`
+	Label             string `json:"label"`
+	Kind              string `json:"kind"`
+	Meta              string `json:"meta,omitempty"`
+	Href              string `json:"href,omitempty"`
+	Side              string `json:"side"`
+	Rank              int    `json:"rank"`
+	Selected          bool   `json:"selected,omitempty"`
+	VisibleUpstream   int    `json:"visibleUpstreamCount,omitempty"`
+	VisibleDownstream int    `json:"visibleDownstreamCount,omitempty"`
+	UsesCount         int    `json:"usesCount,omitempty"`
+	UsedByCount       int    `json:"usedByCount,omitempty"`
+	ContainedCount    int    `json:"containedCount,omitempty"`
+	ContainedSummary  string `json:"containedSummary,omitempty"`
 }
 
 type assetLineageEdge struct {
@@ -680,12 +686,91 @@ func assetLineage(workspaceID string, selected api.AssetResponse, assets []api.A
 	sortLineageGraphEdges(graph.Edges)
 	sortLineageRows(usesRows)
 	sortLineageRows(usedByRows)
+	collapsedGraph := collapsedAssetLineageGraph(workspaceID, selected, graph, byID)
+	enrichAssetLineageGraph(collapsedGraph, byID, edges)
 	return assetLineageModel{
 		Count:  len(usesRows) + len(usedByRows),
-		Graph:  collapsedAssetLineageGraph(workspaceID, selected, graph, byID),
+		Graph:  collapsedGraph,
 		Uses:   lineageTable(usesRows, "This asset does not reference other assets."),
 		UsedBy: lineageTable(usedByRows, "No assets reference this asset."),
 	}
+}
+
+func enrichAssetLineageGraph(graph assetLineageGraph, assets map[string]api.AssetResponse, edges []api.AssetEdgeResponse) {
+	nodeIndex := map[string]int{}
+	for index, node := range graph.Nodes {
+		nodeIndex[node.ID] = index
+	}
+	for _, edge := range graph.Edges {
+		if sourceIndex, ok := nodeIndex[edge.Source]; ok {
+			graph.Nodes[sourceIndex].VisibleDownstream++
+		}
+		if targetIndex, ok := nodeIndex[edge.Target]; ok {
+			graph.Nodes[targetIndex].VisibleUpstream++
+		}
+	}
+
+	containsByParent := map[string]map[string]int{}
+	for _, edge := range edges {
+		if isLineageDependencyEdge(edge) {
+			if index, ok := nodeIndex[edge.FromAssetID]; ok {
+				graph.Nodes[index].UsesCount++
+			}
+			if index, ok := nodeIndex[edge.ToAssetID]; ok {
+				graph.Nodes[index].UsedByCount++
+			}
+			continue
+		}
+		if !isContainsEdge(edge) {
+			continue
+		}
+		child, ok := assets[edge.ToAssetID]
+		if !ok {
+			continue
+		}
+		if _, ok := containsByParent[edge.FromAssetID]; !ok {
+			containsByParent[edge.FromAssetID] = map[string]int{}
+		}
+		containsByParent[edge.FromAssetID][child.Type]++
+	}
+	for index, node := range graph.Nodes {
+		contains := containsByParent[node.ID]
+		if len(contains) == 0 {
+			continue
+		}
+		count := 0
+		for _, value := range contains {
+			count += value
+		}
+		graph.Nodes[index].ContainedCount = count
+		graph.Nodes[index].ContainedSummary = lineageContainedSummary(contains)
+	}
+}
+
+func lineageContainedSummary(counts map[string]int) string {
+	types := make([]string, 0, len(counts))
+	for typ := range counts {
+		types = append(types, typ)
+	}
+	sort.Slice(types, func(i, j int) bool {
+		return assetTypeLabel(types[i]) < assetTypeLabel(types[j])
+	})
+	parts := make([]string, 0, len(types))
+	for _, typ := range types {
+		parts = append(parts, fmt.Sprintf("%d %s", counts[typ], pluralAssetTypeLabel(typ, counts[typ])))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func pluralAssetTypeLabel(typ string, count int) string {
+	label := strings.ToLower(assetTypeLabel(typ))
+	if count == 1 {
+		return label
+	}
+	if strings.HasSuffix(label, "y") && len(label) > 1 {
+		return strings.TrimSuffix(label, "y") + "ies"
+	}
+	return label + "s"
 }
 
 func collapsedAssetLineageGraph(workspaceID string, selected api.AssetResponse, graph assetLineageGraph, assets map[string]api.AssetResponse) assetLineageGraph {

@@ -185,6 +185,16 @@ func TestAssetLineageDashboardDerivesMeasureConsumers(t *testing.T) {
 			t.Fatalf("semantic model dashboard shortcut should be suppressed when measure usage exists: %#v", lineage.Graph.Edges)
 		}
 	}
+	node := assertLineageNode(t, lineage.Graph, "dashboard")
+	if node.VisibleUpstream != 1 || node.VisibleDownstream != 0 {
+		t.Fatalf("dashboard visible counts = upstream %d downstream %d, want 1/0: %#v", node.VisibleUpstream, node.VisibleDownstream, node)
+	}
+	if node.UsesCount != 1 || node.UsedByCount != 0 {
+		t.Fatalf("dashboard full-fidelity counts = uses %d usedBy %d, want 1/0: %#v", node.UsesCount, node.UsedByCount, node)
+	}
+	if node.ContainedCount != 4 || node.ContainedSummary != "1 filter, 1 page, 1 table, 1 visual" {
+		t.Fatalf("dashboard contained summary = %d %q, want 4 dashboard children: %#v", node.ContainedCount, node.ContainedSummary, node)
+	}
 }
 
 func TestAssetLineageSemanticModelDerivesMeasureDashboardPath(t *testing.T) {
@@ -207,6 +217,16 @@ func TestAssetLineageSemanticModelDerivesMeasureDashboardPath(t *testing.T) {
 		if edge.Source == "model" && edge.Target == "dashboard" {
 			t.Fatalf("semantic model dashboard shortcut should be suppressed when measure usage exists: %#v", lineage.Graph.Edges)
 		}
+	}
+	node := assertLineageNode(t, lineage.Graph, "model")
+	if node.VisibleUpstream != 1 || node.VisibleDownstream != 1 {
+		t.Fatalf("semantic model visible counts = upstream %d downstream %d, want 1/1: %#v", node.VisibleUpstream, node.VisibleDownstream, node)
+	}
+	if node.UsesCount != 0 || node.UsedByCount != 1 {
+		t.Fatalf("semantic model full-fidelity counts = uses %d usedBy %d, want 0/1: %#v", node.UsesCount, node.UsedByCount, node)
+	}
+	if node.ContainedCount != 3 || node.ContainedSummary != "1 measure, 1 relationship, 1 semantic table" {
+		t.Fatalf("semantic model contained summary = %d %q, want 3 semantic children: %#v", node.ContainedCount, node.ContainedSummary, node)
 	}
 }
 
@@ -631,6 +651,17 @@ func assertLineageSelectedNode(t *testing.T, graph assetLineageGraph, wantKind s
 		}
 	}
 	t.Fatalf("lineage graph has no selected node: %#v", graph.Nodes)
+}
+
+func assertLineageNode(t *testing.T, graph assetLineageGraph, id string) assetLineageNode {
+	t.Helper()
+	for _, node := range graph.Nodes {
+		if node.ID == id {
+			return node
+		}
+	}
+	t.Fatalf("lineage graph missing node %q: %#v", id, graph.Nodes)
+	return assetLineageNode{}
 }
 
 func assertLineageHasEdge(t *testing.T, graph assetLineageGraph, source, target, kind string) {
