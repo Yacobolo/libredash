@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/access"
@@ -37,7 +38,7 @@ func (s *Server) listAgentConversations(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	conversations, err := service.ListConversations(r.Context(), scope)
+	conversations, err := service.ListConversationsPage(r.Context(), scope, agentPageFromRequest(r))
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
@@ -46,7 +47,51 @@ func (s *Server) listAgentConversations(w http.ResponseWriter, r *http.Request) 
 	for _, conversation := range conversations {
 		out = append(out, agentConversationDTO(conversation))
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, pagedResponse(out))
+}
+
+func (s *Server) getAgentConversation(w http.ResponseWriter, r *http.Request) {
+	service, scope, ok := s.agentRequest(w, r)
+	if !ok {
+		return
+	}
+	conversation, err := service.GetConversation(r.Context(), scope, chi.URLParam(r, "conversation"))
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, agentConversationDTO(conversation))
+}
+
+func (s *Server) updateAgentConversation(w http.ResponseWriter, r *http.Request) {
+	service, scope, ok := s.agentRequest(w, r)
+	if !ok {
+		return
+	}
+	var input api.AgentConversationUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSONError(w, err, http.StatusBadRequest)
+		return
+	}
+	conversation, err := service.UpdateConversation(r.Context(), scope, chi.URLParam(r, "conversation"), input.Title)
+	if err != nil {
+		writeJSONError(w, err, statusForBadRequestOrNotFound(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, agentConversationDTO(conversation))
+}
+
+func (s *Server) archiveAgentConversation(w http.ResponseWriter, r *http.Request) {
+	service, scope, ok := s.agentRequest(w, r)
+	if !ok {
+		return
+	}
+	conversation, err := service.ArchiveConversation(r.Context(), scope, chi.URLParam(r, "conversation"))
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, agentConversationDTO(conversation))
 }
 
 func (s *Server) listAgentMessages(w http.ResponseWriter, r *http.Request) {
@@ -54,7 +99,7 @@ func (s *Server) listAgentMessages(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	messages, err := service.ListMessages(r.Context(), scope, chi.URLParam(r, "conversation"))
+	messages, err := service.ListMessagesPage(r.Context(), scope, chi.URLParam(r, "conversation"), agentPageFromRequest(r))
 	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
@@ -63,7 +108,48 @@ func (s *Server) listAgentMessages(w http.ResponseWriter, r *http.Request) {
 	for _, message := range messages {
 		out = append(out, agentMessageDTO(message))
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, pagedResponse(out))
+}
+
+func (s *Server) listAgentRuns(w http.ResponseWriter, r *http.Request) {
+	service, scope, ok := s.agentRequest(w, r)
+	if !ok {
+		return
+	}
+	runs, err := service.ListRunsPage(r.Context(), scope, chi.URLParam(r, "conversation"), agentPageFromRequest(r))
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	out := make([]api.AgentRunResponse, 0, len(runs))
+	for _, run := range runs {
+		out = append(out, agentRunDTO(run))
+	}
+	writeJSON(w, http.StatusOK, pagedResponse(out))
+}
+
+func (s *Server) getAgentRun(w http.ResponseWriter, r *http.Request) {
+	service, scope, ok := s.agentRequest(w, r)
+	if !ok {
+		return
+	}
+	conversationID := chi.URLParam(r, "conversation")
+	runID := chi.URLParam(r, "run")
+	if conversationID == "" {
+		run, err := service.GetRunByID(r.Context(), scope, runID)
+		if err != nil {
+			writeJSONError(w, err, statusForNotFound(err))
+			return
+		}
+		writeJSON(w, http.StatusOK, agentRunDTO(run))
+		return
+	}
+	run, err := service.GetRun(r.Context(), scope, conversationID, runID)
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, agentRunDTO(run))
 }
 
 func (s *Server) createAgentTurn(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +197,18 @@ func (s *Server) listAgentEvents(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	events, err := service.ListEvents(r.Context(), scope, chi.URLParam(r, "run"))
+	var (
+		events []agentapp.Event
+		err    error
+	)
+	if conversationID := chi.URLParam(r, "conversation"); conversationID != "" {
+		events, err = service.ListRunEventsPage(r.Context(), scope, conversationID, chi.URLParam(r, "run"), agentPageFromRequest(r))
+	} else {
+		events, err = service.ListEvents(r.Context(), scope, chi.URLParam(r, "run"))
+		if err == nil {
+			events = pageAgentEvents(events, agentPageFromRequest(r))
+		}
+	}
 	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
@@ -120,7 +217,7 @@ func (s *Server) listAgentEvents(w http.ResponseWriter, r *http.Request) {
 	for _, event := range events {
 		out = append(out, agentEventDTO(event))
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeJSON(w, http.StatusOK, pagedResponse(out))
 }
 
 func (s *Server) agentRequest(w http.ResponseWriter, r *http.Request) (*agentapp.Service, agentapp.Scope, bool) {
@@ -165,6 +262,23 @@ func agentConversationDTO(row agentapp.Conversation) api.AgentConversationRespon
 	return out
 }
 
+func agentRunDTO(row agentapp.Run) api.AgentRunResponse {
+	return api.AgentRunResponse{
+		ID:             row.ID,
+		ConversationID: row.ConversationID,
+		Status:         row.Status,
+		Model:          row.Model,
+		StopReason:     row.StopReason,
+		InputTokens:    row.InputTokens,
+		OutputTokens:   row.OutputTokens,
+		TotalTokens:    row.TotalTokens,
+		Error:          row.Error,
+		StartedAt:      row.StartedAt,
+		FinishedAt:     row.FinishedAt,
+		CreatedAt:      row.CreatedAt,
+	}
+}
+
 func agentMessageDTO(row agentapp.Message) api.AgentMessageResponse {
 	return api.AgentMessageResponse{
 		ID:          row.ID,
@@ -172,7 +286,7 @@ func agentMessageDTO(row agentapp.Message) api.AgentMessageResponse {
 		Seq:         row.Seq,
 		Role:        row.Role,
 		ContentText: row.ContentText,
-		ContentJSON: row.ContentJSON,
+		Content:     jsonObject(row.ContentJSON),
 		ToolCallID:  row.ToolCallID,
 		ToolName:    row.ToolName,
 		IsError:     row.IsError,
@@ -180,14 +294,64 @@ func agentMessageDTO(row agentapp.Message) api.AgentMessageResponse {
 	}
 }
 
+func agentPageFromRequest(r *http.Request) agentapp.Page {
+	query := r.URL.Query()
+	limit, _ := strconv.Atoi(query.Get("limit"))
+	return agentapp.Page{Limit: limit, After: firstNonEmpty(query.Get("pageToken"), query.Get("after"))}
+}
+
+func statusForBadRequestOrNotFound(err error) int {
+	if errors.Is(err, sql.ErrNoRows) {
+		return http.StatusNotFound
+	}
+	return http.StatusBadRequest
+}
+
+func pageAgentEvents(events []agentapp.Event, page agentapp.Page) []agentapp.Event {
+	limit := page.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	start := 0
+	after := strings.TrimSpace(page.After)
+	if after != "" {
+		start = len(events)
+		for i, event := range events {
+			if event.ID == after {
+				start = i + 1
+				break
+			}
+		}
+	}
+	if start >= len(events) {
+		return []agentapp.Event{}
+	}
+	end := start + limit
+	if end > len(events) {
+		end = len(events)
+	}
+	return append([]agentapp.Event(nil), events[start:end]...)
+}
+
 func agentEventDTO(row agentapp.Event) api.AgentEventResponse {
 	return api.AgentEventResponse{
-		ID:          row.ID,
-		RunID:       row.RunID,
-		Seq:         row.Seq,
-		EventType:   row.EventType,
-		Severity:    row.Severity,
-		PayloadJSON: row.PayloadJSON,
-		CreatedAt:   row.CreatedAt,
+		ID:        row.ID,
+		RunID:     row.RunID,
+		Seq:       row.Seq,
+		EventType: row.EventType,
+		Severity:  row.Severity,
+		Payload:   jsonObject(row.PayloadJSON),
+		CreatedAt: row.CreatedAt,
 	}
+}
+
+func jsonObject(raw string) map[string]any {
+	var out map[string]any
+	if strings.TrimSpace(raw) != "" {
+		_ = json.Unmarshal([]byte(raw), &out)
+	}
+	if out == nil {
+		return map[string]any{}
+	}
+	return out
 }

@@ -116,47 +116,144 @@ INSERT INTO roles (id, name, permissions_json)
 VALUES (?, ?, ?)
 ON CONFLICT(name) DO UPDATE SET permissions_json = excluded.permissions_json;
 
+-- name: UpsertPermission :exec
+INSERT INTO permissions (name)
+VALUES (?)
+ON CONFLICT(name) DO NOTHING;
+
+-- name: ClearRolePermissions :exec
+DELETE FROM role_permissions WHERE role_id = ?;
+
+-- name: InsertRolePermission :exec
+INSERT OR IGNORE INTO role_permissions (role_id, permission_name)
+VALUES (?, ?);
+
 -- name: GetRoleByName :one
 SELECT * FROM roles WHERE name = ?;
 
 -- name: ListRoles :many
 SELECT * FROM roles ORDER BY name;
 
+-- name: ListPermissions :many
+SELECT * FROM permissions ORDER BY name;
+
+-- name: UpsertGroup :exec
+INSERT INTO groups (id, workspace_id, provider, external_id, name)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(workspace_id, provider, external_id) DO UPDATE SET
+  name = excluded.name;
+
+-- name: GetGroup :one
+SELECT * FROM groups
+WHERE workspace_id = ? AND id = ?;
+
+-- name: GetGroupByProviderExternalID :one
+SELECT * FROM groups
+WHERE workspace_id = ? AND provider = ? AND external_id = ?;
+
+-- name: ListGroupsByWorkspace :many
+SELECT * FROM groups
+WHERE workspace_id = ?
+ORDER BY name, id;
+
+-- name: InsertGroupMember :exec
+INSERT OR IGNORE INTO group_members (workspace_id, group_id, principal_id)
+VALUES (?, ?, ?);
+
+-- name: DeleteGroupMember :exec
+DELETE FROM group_members
+WHERE workspace_id = ? AND group_id = ? AND principal_id = ?;
+
+-- name: ListGroupMembers :many
+SELECT
+  gm.group_id,
+  gm.workspace_id,
+  gm.principal_id,
+  p.email,
+  p.display_name,
+  gm.created_at
+FROM group_members gm
+JOIN principals p ON p.id = gm.principal_id
+WHERE gm.workspace_id = ? AND gm.group_id = ?
+ORDER BY p.email, p.display_name, gm.principal_id;
+
 -- name: InsertRoleBinding :exec
 INSERT OR IGNORE INTO role_bindings (id, workspace_id, role_id, principal_id, group_id)
 VALUES (?, ?, ?, ?, ?);
 
--- name: ListRoleBindingsByWorkspace :many
+-- name: GetRoleBindingByID :one
 SELECT
   rb.id,
   rb.workspace_id,
+  CASE WHEN rb.principal_id IS NOT NULL THEN 'principal' ELSE 'group' END AS subject_type,
+  COALESCE(rb.principal_id, rb.group_id, '') AS subject_id,
   rb.principal_id,
+  rb.group_id,
   p.email,
   p.display_name,
+  g.name AS group_name,
   r.name AS role_name,
   rb.created_at
 FROM role_bindings rb
 JOIN roles r ON r.id = rb.role_id
 LEFT JOIN principals p ON p.id = rb.principal_id
-WHERE rb.workspace_id = ? AND rb.principal_id IS NOT NULL
-ORDER BY p.email, r.name;
+LEFT JOIN groups g ON g.id = rb.group_id
+WHERE rb.workspace_id = ? AND rb.id = ?;
+
+-- name: UpdateRoleBindingByID :exec
+UPDATE role_bindings
+SET role_id = ?, principal_id = ?, group_id = ?
+WHERE workspace_id = ? AND id = ?;
+
+-- name: DeleteRoleBindingByID :exec
+DELETE FROM role_bindings
+WHERE workspace_id = ? AND id = ?;
+
+-- name: ListRoleBindingsByWorkspace :many
+SELECT
+  rb.id,
+  rb.workspace_id,
+  CASE WHEN rb.principal_id IS NOT NULL THEN 'principal' ELSE 'group' END AS subject_type,
+  COALESCE(rb.principal_id, rb.group_id, '') AS subject_id,
+  rb.principal_id,
+  rb.group_id,
+  p.email,
+  p.display_name,
+  g.name AS group_name,
+  r.name AS role_name,
+  rb.created_at
+FROM role_bindings rb
+JOIN roles r ON r.id = rb.role_id
+LEFT JOIN principals p ON p.id = rb.principal_id
+LEFT JOIN groups g ON g.id = rb.group_id
+WHERE rb.workspace_id = ?
+ORDER BY subject_type, p.email, g.name, r.name;
 
 -- name: DeletePrincipalRoleBindings :exec
 DELETE FROM role_bindings
 WHERE workspace_id = ? AND principal_id = ?;
 
 -- name: ListPrincipalRolePermissions :many
-SELECT r.permissions_json
+SELECT DISTINCT rp.permission_name
 FROM role_bindings rb
-JOIN roles r ON r.id = rb.role_id
-WHERE rb.workspace_id = ? AND rb.principal_id = ?;
+JOIN role_permissions rp ON rp.role_id = rb.role_id
+LEFT JOIN group_members gm
+  ON gm.workspace_id = rb.workspace_id
+ AND gm.group_id = rb.group_id
+WHERE rb.workspace_id = ?
+  AND (
+    rb.principal_id = ?
+    OR gm.principal_id = ?
+  )
+ORDER BY rp.permission_name;
 
 -- name: CreateSession :exec
 INSERT INTO sessions (id, principal_id, token_hash, expires_at)
 VALUES (?, ?, ?, ?);
 
 -- name: GetSessionByTokenHash :one
-SELECT * FROM sessions WHERE token_hash = ? AND expires_at > CURRENT_TIMESTAMP;
+SELECT * FROM sessions
+WHERE token_hash = ? AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL;
 
 -- name: TouchSession :exec
 UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?;
@@ -164,20 +261,50 @@ UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?;
 -- name: DeleteSessionByTokenHash :exec
 DELETE FROM sessions WHERE token_hash = ?;
 
+-- name: ListSessionsByPrincipal :many
+SELECT * FROM sessions
+WHERE principal_id = ?
+ORDER BY created_at DESC;
+
+-- name: RevokeSession :exec
+UPDATE sessions
+SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+WHERE id = ?;
+
 -- name: CreateAPIToken :exec
-INSERT INTO api_tokens (id, principal_id, name, token_hash, expires_at)
-VALUES (?, ?, ?, ?, ?);
+INSERT INTO api_tokens (id, principal_id, workspace_id, name, token_hash, permissions_json, expires_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetAPITokenByHash :one
 SELECT * FROM api_tokens
-WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP);
+WHERE token_hash = ?
+  AND revoked_at IS NULL
+  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP);
 
 -- name: TouchAPIToken :exec
 UPDATE api_tokens SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?;
 
+-- name: ListAPITokensByPrincipal :many
+SELECT * FROM api_tokens
+WHERE principal_id = ?
+ORDER BY created_at DESC;
+
+-- name: RevokeAPIToken :exec
+UPDATE api_tokens
+SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+WHERE id = ?;
+
 -- name: InsertAuditEvent :exec
 INSERT INTO audit_events (id, workspace_id, principal_id, action, target_type, target_id, metadata_json)
 VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- name: ListAuditEvents :many
+SELECT * FROM audit_events
+WHERE (? = '' OR workspace_id = ?)
+  AND (? = '' OR principal_id = ?)
+  AND (? = '' OR action = ?)
+ORDER BY created_at DESC, id DESC
+LIMIT ?;
 
 -- name: CreateAgentConversation :one
 INSERT INTO agent_conversations (id, workspace_id, principal_id, title, status, metadata_json, transcript_json)

@@ -755,6 +755,10 @@ func (s *testAgentStore) CreateConversation(_ context.Context, input Conversatio
 }
 
 func (s *testAgentStore) ListConversations(_ context.Context, workspaceID, principalID string) ([]Conversation, error) {
+	return s.ListConversationsPage(context.Background(), workspaceID, principalID, Page{})
+}
+
+func (s *testAgentStore) ListConversationsPage(_ context.Context, workspaceID, principalID string, page Page) ([]Conversation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []Conversation
@@ -763,13 +767,43 @@ func (s *testAgentStore) ListConversations(_ context.Context, workspaceID, princ
 			out = append(out, conversation)
 		}
 	}
-	return out, nil
+	return pageTestRows(out, page, func(row Conversation) string { return row.ID }), nil
 }
 
 func (s *testAgentStore) GetConversation(_ context.Context, workspaceID, principalID, conversationID string) (Conversation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.conversationLocked(workspaceID, principalID, conversationID)
+}
+
+func (s *testAgentStore) UpdateConversation(_ context.Context, input ConversationUpdate) (Conversation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	conversation, err := s.conversationLocked(input.WorkspaceID, input.PrincipalID, input.ConversationID)
+	if err != nil {
+		return Conversation{}, err
+	}
+	if conversation.Status != ConversationStatusActive {
+		return Conversation{}, sql.ErrNoRows
+	}
+	conversation.Title = strings.TrimSpace(input.Title)
+	conversation.UpdatedAt = testNow()
+	s.conversations[conversation.ID] = conversation
+	return conversation, nil
+}
+
+func (s *testAgentStore) ArchiveConversation(_ context.Context, workspaceID, principalID, conversationID string) (Conversation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	conversation, err := s.conversationLocked(workspaceID, principalID, conversationID)
+	if err != nil {
+		return Conversation{}, err
+	}
+	conversation.Status = ConversationStatusArchived
+	conversation.ArchivedAt = testNow()
+	conversation.UpdatedAt = testNow()
+	s.conversations[conversation.ID] = conversation
+	return conversation, nil
 }
 
 func (s *testAgentStore) UpdateDefaultConversationTitle(_ context.Context, workspaceID, principalID, conversationID, title string) (Conversation, error) {
@@ -825,12 +859,16 @@ func (s *testAgentStore) AppendMessage(_ context.Context, input MessageInput) (M
 }
 
 func (s *testAgentStore) ListMessages(_ context.Context, workspaceID, principalID, conversationID string) ([]Message, error) {
+	return s.ListMessagesPage(context.Background(), workspaceID, principalID, conversationID, Page{})
+}
+
+func (s *testAgentStore) ListMessagesPage(_ context.Context, workspaceID, principalID, conversationID string, page Page) ([]Message, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, err := s.conversationLocked(workspaceID, principalID, conversationID); err != nil {
 		return nil, err
 	}
-	return append([]Message(nil), s.messages[conversationID]...), nil
+	return pageTestRows(s.messages[conversationID], page, func(row Message) string { return row.ID }), nil
 }
 
 func (s *testAgentStore) CreateRun(_ context.Context, input RunInput) (Run, error) {
@@ -843,7 +881,7 @@ func (s *testAgentStore) CreateRun(_ context.Context, input RunInput) (Run, erro
 	if runID == "" {
 		runID = s.id("agentrun")
 	}
-	run := Run{ID: runID, Status: RunStatusRunning, Model: input.Model, CreatedAt: testNow()}
+	run := Run{ID: runID, ConversationID: input.ConversationID, Status: RunStatusRunning, Model: input.Model, StartedAt: testNow(), CreatedAt: testNow()}
 	s.runs[run.ID] = run
 	s.runConversation[run.ID] = input.ConversationID
 	return run, nil
@@ -860,11 +898,21 @@ func (s *testAgentStore) FinishRun(_ context.Context, input RunFinish) (Run, err
 		return Run{}, sql.ErrNoRows
 	}
 	run.Status = input.Status
+	run.StopReason = input.StopReason
+	run.InputTokens = input.InputTokens
+	run.OutputTokens = input.OutputTokens
+	run.TotalTokens = input.TotalTokens
+	run.Error = input.Error
+	run.FinishedAt = testNow()
 	s.runs[run.ID] = run
 	return run, nil
 }
 
 func (s *testAgentStore) ListRuns(_ context.Context, workspaceID, principalID, conversationID string) ([]Run, error) {
+	return s.ListRunsPage(context.Background(), workspaceID, principalID, conversationID, Page{})
+}
+
+func (s *testAgentStore) ListRunsPage(_ context.Context, workspaceID, principalID, conversationID string, page Page) ([]Run, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, err := s.conversationLocked(workspaceID, principalID, conversationID); err != nil {
@@ -876,7 +924,33 @@ func (s *testAgentStore) ListRuns(_ context.Context, workspaceID, principalID, c
 			out = append(out, candidate)
 		}
 	}
-	return out, nil
+	return pageTestRows(out, page, func(row Run) string { return row.ID }), nil
+}
+
+func (s *testAgentStore) GetRun(_ context.Context, workspaceID, principalID, conversationID, runID string) (Run, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, err := s.conversationLocked(workspaceID, principalID, conversationID); err != nil {
+		return Run{}, err
+	}
+	run, ok := s.runs[runID]
+	if !ok || s.runConversation[runID] != conversationID {
+		return Run{}, sql.ErrNoRows
+	}
+	return run, nil
+}
+
+func (s *testAgentStore) GetRunByID(_ context.Context, workspaceID, principalID, runID string) (Run, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	conversationID, ok := s.runConversation[runID]
+	if !ok {
+		return Run{}, sql.ErrNoRows
+	}
+	if _, err := s.conversationLocked(workspaceID, principalID, conversationID); err != nil {
+		return Run{}, err
+	}
+	return s.runs[runID], nil
 }
 
 func (s *testAgentStore) AppendEvent(_ context.Context, input EventInput) (Event, error) {
@@ -903,6 +977,10 @@ func (s *testAgentStore) AppendEvent(_ context.Context, input EventInput) (Event
 }
 
 func (s *testAgentStore) ListEvents(_ context.Context, workspaceID, principalID, runID string) ([]Event, error) {
+	return s.ListEventsPage(context.Background(), workspaceID, principalID, runID, Page{})
+}
+
+func (s *testAgentStore) ListEventsPage(_ context.Context, workspaceID, principalID, runID string, page Page) ([]Event, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	conversationID, ok := s.runConversation[runID]
@@ -912,7 +990,7 @@ func (s *testAgentStore) ListEvents(_ context.Context, workspaceID, principalID,
 	if _, err := s.conversationLocked(workspaceID, principalID, conversationID); err != nil {
 		return nil, err
 	}
-	return append([]Event(nil), s.events[runID]...), nil
+	return pageTestRows(s.events[runID], page, func(row Event) string { return row.ID }), nil
 }
 
 func (s *testAgentStore) conversationLocked(workspaceID, principalID, conversationID string) (Conversation, error) {
@@ -939,6 +1017,31 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func pageTestRows[T any](rows []T, page Page, id func(T) string) []T {
+	limit := page.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	start := 0
+	if page.After != "" {
+		start = len(rows)
+		for i, row := range rows {
+			if id(row) == page.After {
+				start = i + 1
+				break
+			}
+		}
+	}
+	if start >= len(rows) {
+		return []T{}
+	}
+	end := start + limit
+	if end > len(rows) {
+		end = len(rows)
+	}
+	return append([]T(nil), rows[start:end]...)
 }
 
 func testConversation(id, workspaceID, principalID, title, status, metadataJSON, transcriptJSON, createdAt, updatedAt string) Conversation {

@@ -164,7 +164,7 @@ func (a *Auth) Middleware(permission string, next http.Handler) http.Handler {
 			return
 		}
 		if permission != "" && !principal.DevBypass {
-			allowed, err := a.repo.HasPermission(r.Context(), a.workspaceID, principal.ID, permission)
+			allowed, err := a.repo.HasPermission(r.Context(), a.permissionWorkspaceID(r), principal.ID, permission)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -177,6 +177,16 @@ func (a *Auth) Middleware(permission string, next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), principalContextKey{}, principal)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (a *Auth) permissionWorkspaceID(r *http.Request) string {
+	if workspaceID := strings.TrimSpace(chi.URLParam(r, "workspace")); workspaceID != "" {
+		return workspaceID
+	}
+	if workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace")); workspaceID != "" {
+		return workspaceID
+	}
+	return a.workspaceID
 }
 
 func (a *Auth) CSRFMiddleware(next http.Handler) http.Handler {

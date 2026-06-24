@@ -4,6 +4,10 @@ type AgentConversationCreateRequest struct {
 	Title string `json:"title"`
 }
 
+type AgentConversationUpdateRequest struct {
+	Title string `json:"title"`
+}
+
 type AgentConversationResponse struct {
 	ID              string `json:"id"`
 	WorkspaceID     string `json:"workspaceId"`
@@ -18,17 +22,32 @@ type AgentConversationResponse struct {
 	TitlePending    bool   `json:"titlePending,omitempty"`
 }
 
+type AgentRunResponse struct {
+	ID             string `json:"id"`
+	ConversationID string `json:"conversationId"`
+	Status         string `json:"status"`
+	Model          string `json:"model,omitempty"`
+	StopReason     string `json:"stopReason,omitempty"`
+	InputTokens    int64  `json:"inputTokens,omitempty"`
+	OutputTokens   int64  `json:"outputTokens,omitempty"`
+	TotalTokens    int64  `json:"totalTokens,omitempty"`
+	Error          string `json:"error,omitempty"`
+	StartedAt      string `json:"startedAt"`
+	FinishedAt     string `json:"finishedAt,omitempty"`
+	CreatedAt      string `json:"createdAt"`
+}
+
 type AgentMessageResponse struct {
-	ID          string `json:"id"`
-	RunID       string `json:"runId,omitempty"`
-	Seq         int64  `json:"seq"`
-	Role        string `json:"role"`
-	ContentText string `json:"contentText,omitempty"`
-	ContentJSON string `json:"contentJson,omitempty"`
-	ToolCallID  string `json:"toolCallId,omitempty"`
-	ToolName    string `json:"toolName,omitempty"`
-	IsError     bool   `json:"isError,omitempty"`
-	CreatedAt   string `json:"createdAt"`
+	ID          string         `json:"id"`
+	RunID       string         `json:"runId,omitempty"`
+	Seq         int64          `json:"seq"`
+	Role        string         `json:"role"`
+	ContentText string         `json:"contentText,omitempty"`
+	Content     map[string]any `json:"content,omitempty"`
+	ToolCallID  string         `json:"toolCallId,omitempty"`
+	ToolName    string         `json:"toolName,omitempty"`
+	IsError     bool           `json:"isError,omitempty"`
+	CreatedAt   string         `json:"createdAt"`
 }
 
 type AgentTurnRequest struct {
@@ -44,13 +63,13 @@ type AgentTurnResponse struct {
 }
 
 type AgentEventResponse struct {
-	ID          string `json:"id"`
-	RunID       string `json:"runId"`
-	Seq         int64  `json:"seq"`
-	EventType   string `json:"eventType"`
-	Severity    string `json:"severity"`
-	PayloadJSON string `json:"payloadJson"`
-	CreatedAt   string `json:"createdAt"`
+	ID        string         `json:"id"`
+	RunID     string         `json:"runId"`
+	Seq       int64          `json:"seq"`
+	EventType string         `json:"eventType"`
+	Severity  string         `json:"severity"`
+	Payload   map[string]any `json:"payload"`
+	CreatedAt string         `json:"createdAt"`
 }
 
 type AgentChatSignal struct {

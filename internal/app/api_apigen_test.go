@@ -18,29 +18,46 @@ func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 	}
 
 	for _, path := range []string{
-		"/api/workspaces",
-		"/api/workspaces/{workspace}/assets",
-		"/api/workspaces/{workspace}/asset-edges",
-		"/api/workspaces/{workspace}/agent/conversations",
-		"/api/workspaces/{workspace}/agent/conversations/{conversation}/messages",
-		"/api/workspaces/{workspace}/agent/conversations/{conversation}/turns",
-		"/api/workspaces/{workspace}/agent/runs/{run}/events",
-		"/api/workspaces/{workspace}/roles",
-		"/api/workspaces/{workspace}/role-bindings",
-		"/api/workspaces/{workspace}/role-bindings/{principal}",
-		"/api/deployments",
-		"/api/deployments/{deployment}",
-		"/api/deployments/{deployment}/artifact",
-		"/api/deployments/{deployment}/validate",
-		"/api/deployments/{deployment}/activate",
-		"/api/deployments/{deployment}/rollback",
+		"/api/v1/me",
+		"/api/v1/me/permissions",
+		"/api/v1/me/api-tokens",
+		"/api/v1/me/api-tokens/{token}",
+		"/api/v1/me/sessions",
+		"/api/v1/me/sessions/{session}",
+		"/api/v1/principals",
+		"/api/v1/principals/{principal}",
+		"/api/v1/workspaces",
+		"/api/v1/workspaces/{workspace}/assets",
+		"/api/v1/workspaces/{workspace}/asset-edges",
+		"/api/v1/workspaces/{workspace}/deployments",
+		"/api/v1/workspaces/{workspace}/deployments/{deployment}",
+		"/api/v1/workspaces/{workspace}/deployments/{deployment}/artifact",
+		"/api/v1/workspaces/{workspace}/deployments/{deployment}/validate",
+		"/api/v1/workspaces/{workspace}/deployments/{deployment}/activate",
+		"/api/v1/workspaces/{workspace}/materialization-runs",
+		"/api/v1/workspaces/{workspace}/materialization-runs/{run}",
+		"/api/v1/workspaces/{workspace}/agent/conversations",
+		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}",
+		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/messages",
+		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/turns",
+		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/runs",
+		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/runs/{run}",
+		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/runs/{run}/events",
+		"/api/v1/workspaces/{workspace}/roles",
+		"/api/v1/workspaces/{workspace}/groups",
+		"/api/v1/workspaces/{workspace}/groups/{group}",
+		"/api/v1/workspaces/{workspace}/groups/{group}/members",
+		"/api/v1/workspaces/{workspace}/groups/{group}/members/{principal}",
+		"/api/v1/workspaces/{workspace}/role-bindings",
+		"/api/v1/workspaces/{workspace}/role-bindings/{binding}",
+		"/api/v1/workspaces/{workspace}/audit-events",
 	} {
 		if _, ok := paths[path]; !ok {
 			t.Fatalf("generated OpenAPI missing path %s", path)
 		}
 	}
 
-	for _, path := range []string{"/updates", "/commands/select", "/chat/updates", "/dashboards/{dashboard}"} {
+	for _, path := range []string{"/api/workspaces", "/api/deployments", "/api/v1/workspaces/{workspace}/deployments/{deployment}/rollback", "/updates", "/commands/select", "/chat/updates", "/dashboards/{dashboard}"} {
 		if _, ok := paths[path]; ok {
 			t.Fatalf("generated OpenAPI should not include UI transport path %s", path)
 		}

@@ -34,6 +34,125 @@ func TestRepositoryChecksRBAC(t *testing.T) {
 	}
 }
 
+func TestRepositoryChecksGroupRolePermissions(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "principal_group_member",
+		Email:       "member@example.com",
+		DisplayName: "Group Member",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	group, err := repo.UpsertGroup(ctx, access.GroupInput{
+		WorkspaceID: "test",
+		Provider:    "azureadv2",
+		ExternalID:  "group-object-id",
+		Name:        "Deployers",
+	})
+	if err != nil {
+		t.Fatalf("upsert group: %v", err)
+	}
+	if err := repo.AddGroupMember(ctx, "test", group.ID, principal.ID); err != nil {
+		t.Fatalf("add group member: %v", err)
+	}
+	binding, err := repo.CreateRoleBinding(ctx, access.RoleBindingInput{
+		WorkspaceID: "test",
+		SubjectType: access.SubjectGroup,
+		SubjectID:   group.ID,
+		Role:        access.RoleDeployer,
+	})
+	if err != nil {
+		t.Fatalf("create group role binding: %v", err)
+	}
+	if binding.SubjectType != access.SubjectGroup || binding.SubjectID != group.ID {
+		t.Fatalf("binding subject = %q/%q, want group/%q", binding.SubjectType, binding.SubjectID, group.ID)
+	}
+
+	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	if err != nil {
+		t.Fatalf("check permission: %v", err)
+	}
+	if !allowed {
+		t.Fatal("group member missing deployment activation permission")
+	}
+	if err := repo.RemoveGroupMember(ctx, "test", group.ID, principal.ID); err != nil {
+		t.Fatalf("remove group member: %v", err)
+	}
+	allowed, err = repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	if err != nil {
+		t.Fatalf("check permission after remove: %v", err)
+	}
+	if allowed {
+		t.Fatal("removed group member still has deployment activation permission")
+	}
+}
+
+func TestRepositoryManagesRoleBindingsByID(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "principal_binding_subject",
+		Email:       "subject@example.com",
+		DisplayName: "Subject",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	created, err := repo.CreateRoleBinding(ctx, access.RoleBindingInput{
+		WorkspaceID: "test",
+		SubjectType: access.SubjectPrincipal,
+		SubjectID:   principal.ID,
+		Role:        access.RoleViewer,
+	})
+	if err != nil {
+		t.Fatalf("create role binding: %v", err)
+	}
+	if created.ID == "" {
+		t.Fatal("created binding id is empty")
+	}
+	if created.Role != access.RoleViewer {
+		t.Fatalf("created role = %q, want viewer", created.Role)
+	}
+
+	updated, err := repo.UpdateRoleBinding(ctx, "test", created.ID, access.RoleBindingInput{
+		SubjectType: access.SubjectPrincipal,
+		SubjectID:   principal.ID,
+		Role:        access.RoleEditor,
+	})
+	if err != nil {
+		t.Fatalf("update role binding: %v", err)
+	}
+	if updated.ID != created.ID {
+		t.Fatalf("updated binding id = %q, want %q", updated.ID, created.ID)
+	}
+	if updated.Role != access.RoleEditor {
+		t.Fatalf("updated role = %q, want editor", updated.Role)
+	}
+	got, err := repo.GetRoleBinding(ctx, "test", created.ID)
+	if err != nil {
+		t.Fatalf("get role binding: %v", err)
+	}
+	if got.SubjectType != access.SubjectPrincipal || got.SubjectID != principal.ID {
+		t.Fatalf("got subject = %q/%q, want principal/%q", got.SubjectType, got.SubjectID, principal.ID)
+	}
+	if err := repo.DeleteRoleBinding(ctx, "test", created.ID); err != nil {
+		t.Fatalf("delete role binding: %v", err)
+	}
+	bindings, err := repo.ListRoleBindings(ctx, "test")
+	if err != nil {
+		t.Fatalf("list role bindings: %v", err)
+	}
+	for _, binding := range bindings {
+		if binding.ID == created.ID {
+			t.Fatal("deleted role binding was listed")
+		}
+	}
+}
+
 func TestRepositoryResolveExternalPrincipalAttachesBootstrappedEmail(t *testing.T) {
 	ctx := context.Background()
 	_, repo := openAccessRepo(t, ctx)
@@ -158,6 +277,150 @@ func TestRepositorySessionsAndAPITokensResolvePrincipals(t *testing.T) {
 	}
 	if apiPrincipal.ID != principal.ID {
 		t.Fatalf("api token principal = %q, want %q", apiPrincipal.ID, principal.ID)
+	}
+}
+
+func TestRepositoryListsAndRevokesSessionsByID(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "principal_session_owner",
+		Email:       "sessions@example.com",
+		DisplayName: "Sessions",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	token, err := repo.CreateSession(ctx, principal.ID, time.Hour)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	sessions, err := repo.ListSessions(ctx, principal.ID)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("sessions len = %d, want 1", len(sessions))
+	}
+	if sessions[0].ID == "" || sessions[0].RevokedAt != "" {
+		t.Fatalf("session metadata = id %q revoked %q, want id and no revocation", sessions[0].ID, sessions[0].RevokedAt)
+	}
+	if err := repo.RevokeSession(ctx, sessions[0].ID); err != nil {
+		t.Fatalf("revoke session: %v", err)
+	}
+	sessions, err = repo.ListSessions(ctx, principal.ID)
+	if err != nil {
+		t.Fatalf("list sessions after revoke: %v", err)
+	}
+	if sessions[0].RevokedAt == "" {
+		t.Fatal("revoked session missing revoked_at")
+	}
+	if _, err := repo.PrincipalForToken(ctx, token); err == nil {
+		t.Fatal("revoked session token still resolves")
+	}
+}
+
+func TestRepositoryListsAndRevokesAPITokens(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "principal_api_token_owner",
+		Email:       "tokens@example.com",
+		DisplayName: "Tokens",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	expiresAt := time.Now().Add(time.Hour).UTC()
+	secret, created, err := repo.CreateAPITokenWithMetadata(ctx, access.APITokenInput{
+		PrincipalID: principal.ID,
+		WorkspaceID: "test",
+		Name:        "production",
+		Permissions: []string{access.PermissionDashboardView},
+		ExpiresAt:   expiresAt,
+	})
+	if err != nil {
+		t.Fatalf("create api token: %v", err)
+	}
+	if secret == "" || created.ID == "" {
+		t.Fatal("api token secret or id is empty")
+	}
+	tokens, err := repo.ListAPITokens(ctx, principal.ID)
+	if err != nil {
+		t.Fatalf("list api tokens: %v", err)
+	}
+	if len(tokens) != 1 {
+		t.Fatalf("tokens len = %d, want 1", len(tokens))
+	}
+	token := tokens[0]
+	if token.WorkspaceID != "test" || token.ExpiresAt == "" || token.RevokedAt != "" {
+		t.Fatalf("token metadata = workspace %q expires %q revoked %q", token.WorkspaceID, token.ExpiresAt, token.RevokedAt)
+	}
+	if len(token.Permissions) != 1 || token.Permissions[0] != access.PermissionDashboardView {
+		t.Fatalf("token permissions = %#v, want dashboard view", token.Permissions)
+	}
+	if _, err := repo.PrincipalForAPIToken(ctx, secret); err != nil {
+		t.Fatalf("principal for api token: %v", err)
+	}
+	if err := repo.RevokeAPIToken(ctx, token.ID); err != nil {
+		t.Fatalf("revoke api token: %v", err)
+	}
+	tokens, err = repo.ListAPITokens(ctx, principal.ID)
+	if err != nil {
+		t.Fatalf("list api tokens after revoke: %v", err)
+	}
+	if tokens[0].RevokedAt == "" {
+		t.Fatal("revoked api token missing revoked_at")
+	}
+	if _, err := repo.PrincipalForAPIToken(ctx, secret); err == nil {
+		t.Fatal("revoked api token still resolves")
+	}
+}
+
+func TestRepositoryListsAuditEvents(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "principal_audit_actor",
+		Email:       "audit@example.com",
+		DisplayName: "Audit",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	if err := repo.RecordAuditEvent(ctx, access.AuditEventInput{
+		WorkspaceID:  "test",
+		PrincipalID:  principal.ID,
+		Action:       "role_binding.created",
+		TargetType:   "role_binding",
+		TargetID:     "binding_1",
+		MetadataJSON: `{"role":"viewer"}`,
+	}); err != nil {
+		t.Fatalf("record audit event: %v", err)
+	}
+	if err := repo.RecordAuditEvent(ctx, access.AuditEventInput{
+		WorkspaceID:  "test",
+		PrincipalID:  principal.ID,
+		Action:       "session.revoked",
+		TargetType:   "session",
+		TargetID:     "session_1",
+		MetadataJSON: `{}`,
+	}); err != nil {
+		t.Fatalf("record audit event 2: %v", err)
+	}
+	events, err := repo.ListAuditEvents(ctx, access.AuditEventFilter{
+		WorkspaceID: "test",
+		Action:      "role_binding.created",
+		Limit:       10,
+	})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events len = %d, want 1", len(events))
+	}
+	if events[0].PrincipalID != principal.ID || events[0].MetadataJSON != `{"role":"viewer"}` {
+		t.Fatalf("event = %#v, want recorded role binding event", events[0])
 	}
 }
 

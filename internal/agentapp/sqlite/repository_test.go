@@ -61,6 +61,18 @@ func TestRepositoryPersistsConversationRunMessagesAndEvents(t *testing.T) {
 	if _, err := repo.GetConversation(ctx, "test", owner.ID, hidden.ID); err != sql.ErrNoRows {
 		t.Fatalf("get other principal conversation error = %v, want sql.ErrNoRows", err)
 	}
+	conversation, err = repo.UpdateConversation(ctx, agentapp.ConversationUpdate{
+		WorkspaceID:    "test",
+		PrincipalID:    owner.ID,
+		ConversationID: conversation.ID,
+		Title:          "Updated title",
+	})
+	if err != nil {
+		t.Fatalf("update conversation: %v", err)
+	}
+	if conversation.Title != "Updated title" {
+		t.Fatalf("updated title = %q", conversation.Title)
+	}
 
 	userMessage, err := repo.AppendMessage(ctx, agentapp.MessageInput{
 		WorkspaceID:    "test",
@@ -156,12 +168,47 @@ func TestRepositoryPersistsConversationRunMessagesAndEvents(t *testing.T) {
 	if run.Status != agentapp.RunStatusCompleted {
 		t.Fatalf("finished run = %#v", run)
 	}
+	gotRun, err := repo.GetRun(ctx, "test", owner.ID, conversation.ID, run.ID)
+	if err != nil {
+		t.Fatalf("get run: %v", err)
+	}
+	if gotRun.ID != run.ID || gotRun.ConversationID != conversation.ID || gotRun.TotalTokens != 30 || gotRun.FinishedAt == "" {
+		t.Fatalf("got run = %#v", gotRun)
+	}
+	runs, err := repo.ListRunsPage(ctx, "test", owner.ID, conversation.ID, agentapp.Page{Limit: 1})
+	if err != nil {
+		t.Fatalf("list runs page: %v", err)
+	}
+	if len(runs) != 1 || runs[0].ID != run.ID {
+		t.Fatalf("runs page = %#v", runs)
+	}
 	events, err := repo.ListEvents(ctx, "test", owner.ID, run.ID)
 	if err != nil {
 		t.Fatalf("list events: %v", err)
 	}
 	if len(events) != 2 || events[0].Seq != 7 || events[1].Seq != 8 {
 		t.Fatalf("events = %#v", events)
+	}
+	events, err = repo.ListEventsPage(ctx, "test", owner.ID, run.ID, agentapp.Page{Limit: 1, After: eventOne.ID})
+	if err != nil {
+		t.Fatalf("list events page: %v", err)
+	}
+	if len(events) != 1 || events[0].ID != eventTwo.ID {
+		t.Fatalf("events page = %#v", events)
+	}
+	archived, err := repo.ArchiveConversation(ctx, "test", owner.ID, conversation.ID)
+	if err != nil {
+		t.Fatalf("archive conversation: %v", err)
+	}
+	if archived.Status != agentapp.ConversationStatusArchived || archived.ArchivedAt == "" {
+		t.Fatalf("archived conversation = %#v", archived)
+	}
+	conversations, err = repo.ListConversations(ctx, "test", owner.ID)
+	if err != nil {
+		t.Fatalf("list after archive: %v", err)
+	}
+	if len(conversations) != 0 {
+		t.Fatalf("archived conversation should be hidden from active list: %#v", conversations)
 	}
 }
 

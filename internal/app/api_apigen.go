@@ -9,25 +9,52 @@ import (
 )
 
 var apigenOperationPermissions = map[string]string{
-	"listWorkspaces":           access.PermissionDashboardView,
-	"listWorkspaceAssets":      access.PermissionDashboardView,
-	"listWorkspaceAssetEdges":  access.PermissionDashboardView,
-	"createAgentConversation":  access.PermissionDashboardView,
-	"listAgentConversations":   access.PermissionDashboardView,
-	"listAgentMessages":        access.PermissionDashboardView,
-	"createAgentTurn":          access.PermissionDashboardView,
-	"listAgentEvents":          access.PermissionDashboardView,
-	"listWorkspaceRoles":       access.PermissionRBACManage,
-	"listRoleBindings":         access.PermissionRBACManage,
-	"upsertRoleBinding":        access.PermissionRBACManage,
-	"deleteRoleBinding":        access.PermissionRBACManage,
-	"createDeployment":         access.PermissionDeploymentCreate,
-	"listDeployments":          access.PermissionDeploymentCreate,
-	"getDeployment":            access.PermissionDeploymentCreate,
-	"uploadDeploymentArtifact": access.PermissionDeploymentCreate,
-	"validateDeployment":       access.PermissionDeploymentCreate,
+	"getCurrentPrincipal":      access.PermissionWorkspaceRead,
+	"listCurrentPermissions":   access.PermissionWorkspaceRead,
+	"listCurrentAPITokens":     access.PermissionTokenManage,
+	"createCurrentAPIToken":    access.PermissionTokenManage,
+	"revokeCurrentAPIToken":    access.PermissionTokenManage,
+	"listCurrentSessions":      access.PermissionWorkspaceRead,
+	"revokeCurrentSession":     access.PermissionWorkspaceRead,
+	"listWorkspaces":           access.PermissionWorkspaceRead,
+	"listWorkspaceAssets":      access.PermissionAssetRead,
+	"listWorkspaceAssetEdges":  access.PermissionAssetRead,
+	"createDeployment":         access.PermissionDeploymentWrite,
+	"listDeployments":          access.PermissionDeploymentRead,
+	"getDeployment":            access.PermissionDeploymentRead,
+	"uploadDeploymentArtifact": access.PermissionDeploymentWrite,
+	"validateDeployment":       access.PermissionDeploymentWrite,
 	"activateDeployment":       access.PermissionDeploymentActivate,
-	"rollbackDeployment":       access.PermissionDeploymentRollback,
+	"createMaterializationRun": access.PermissionMaterializationRun,
+	"listMaterializationRuns":  access.PermissionMaterializationRun,
+	"getMaterializationRun":    access.PermissionMaterializationRun,
+	"createAgentConversation":  access.PermissionAgentUse,
+	"listAgentConversations":   access.PermissionAgentRead,
+	"getAgentConversation":     access.PermissionAgentRead,
+	"updateAgentConversation":  access.PermissionAgentUse,
+	"archiveAgentConversation": access.PermissionAgentUse,
+	"listAgentMessages":        access.PermissionAgentRead,
+	"createAgentTurn":          access.PermissionAgentUse,
+	"listAgentRuns":            access.PermissionAgentRead,
+	"getAgentRun":              access.PermissionAgentRead,
+	"listAgentEvents":          access.PermissionAgentRead,
+	"listPrincipals":           access.PermissionRBACRead,
+	"getPrincipal":             access.PermissionRBACRead,
+	"updatePrincipal":          access.PermissionRBACWrite,
+	"listWorkspaceRoles":       access.PermissionRBACRead,
+	"listGroups":               access.PermissionRBACRead,
+	"createGroup":              access.PermissionRBACWrite,
+	"getGroup":                 access.PermissionRBACRead,
+	"updateGroup":              access.PermissionRBACWrite,
+	"deleteGroup":              access.PermissionRBACWrite,
+	"listGroupMembers":         access.PermissionRBACRead,
+	"addGroupMember":           access.PermissionRBACWrite,
+	"removeGroupMember":        access.PermissionRBACWrite,
+	"listRoleBindings":         access.PermissionRBACRead,
+	"createRoleBinding":        access.PermissionRBACWrite,
+	"updateRoleBinding":        access.PermissionRBACWrite,
+	"deleteRoleBinding":        access.PermissionRBACWrite,
+	"listAuditEvents":          access.PermissionAuditRead,
 }
 
 func (s *Server) registerAPIGenRoutes(r chi.Router) {
@@ -51,39 +78,83 @@ func (a apiGenAdapter) HandleAPIGen(operationID string, w http.ResponseWriter, r
 	})).ServeHTTP(w, r)
 }
 
-func (a apiGenAdapter) ListDeployments(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListDeploymentsParams) {
-	a.server.listDeployments(w, r)
+func (a apiGenAdapter) GetCurrentPrincipal(w http.ResponseWriter, r *http.Request) {
+	a.server.apiGetCurrentPrincipal(w, r)
 }
 
-func (a apiGenAdapter) CreateDeployment(w http.ResponseWriter, r *http.Request) {
-	a.server.createDeployment(w, r)
+func (a apiGenAdapter) ListCurrentPermissions(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListCurrentPermissionsParams) {
+	a.server.apiListCurrentPermissions(w, r)
 }
 
-func (a apiGenAdapter) GetDeployment(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.getDeployment(w, r)
+func (a apiGenAdapter) ListCurrentAPITokens(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListCurrentAPITokensParams) {
+	a.server.apiListCurrentAPITokens(w, r)
 }
 
-func (a apiGenAdapter) UploadDeploymentArtifact(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.uploadDeploymentArtifact(w, r)
+func (a apiGenAdapter) CreateCurrentAPIToken(w http.ResponseWriter, r *http.Request) {
+	a.server.apiCreateCurrentAPIToken(w, r)
 }
 
-func (a apiGenAdapter) ActivateDeployment(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.activateDeployment(w, r)
+func (a apiGenAdapter) RevokeCurrentAPIToken(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiRevokeCurrentAPIToken(w, r)
 }
 
-func (a apiGenAdapter) RollbackDeployment(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.rollbackDeployment(w, r)
+func (a apiGenAdapter) ListCurrentSessions(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListCurrentSessionsParams) {
+	a.server.apiListCurrentSessions(w, r)
 }
 
-func (a apiGenAdapter) ValidateDeployment(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.validateDeployment(w, r)
+func (a apiGenAdapter) RevokeCurrentSession(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiRevokeCurrentSession(w, r)
 }
 
-func (a apiGenAdapter) ListWorkspaces(w http.ResponseWriter, r *http.Request) {
+func (a apiGenAdapter) ListWorkspaces(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListWorkspacesParams) {
 	a.server.apiWorkspaces(w, r)
 }
 
-func (a apiGenAdapter) ListAgentConversations(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) ListWorkspaceAssets(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListWorkspaceAssetsParams) {
+	a.server.apiWorkspaceAssets(w, r)
+}
+
+func (a apiGenAdapter) ListWorkspaceAssetEdges(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListWorkspaceAssetEdgesParams) {
+	a.server.apiWorkspaceAssetEdges(w, r)
+}
+
+func (a apiGenAdapter) ListDeployments(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListDeploymentsParams) {
+	a.server.listDeployments(w, r)
+}
+
+func (a apiGenAdapter) CreateDeployment(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.createDeployment(w, r)
+}
+
+func (a apiGenAdapter) GetDeployment(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.getDeployment(w, r)
+}
+
+func (a apiGenAdapter) UploadDeploymentArtifact(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.uploadDeploymentArtifact(w, r)
+}
+
+func (a apiGenAdapter) ActivateDeployment(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.activateDeployment(w, r)
+}
+
+func (a apiGenAdapter) ValidateDeployment(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.validateDeployment(w, r)
+}
+
+func (a apiGenAdapter) CreateMaterializationRun(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.createMaterializationRun(w, r)
+}
+
+func (a apiGenAdapter) ListMaterializationRuns(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListMaterializationRunsParams) {
+	a.server.listMaterializationRuns(w, r)
+}
+
+func (a apiGenAdapter) GetMaterializationRun(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.getMaterializationRun(w, r)
+}
+
+func (a apiGenAdapter) ListAgentConversations(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListAgentConversationsParams) {
 	a.server.listAgentConversations(w, r)
 }
 
@@ -91,7 +162,19 @@ func (a apiGenAdapter) CreateAgentConversation(w http.ResponseWriter, r *http.Re
 	a.server.createAgentConversation(w, r)
 }
 
-func (a apiGenAdapter) ListAgentMessages(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) GetAgentConversation(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.getAgentConversation(w, r)
+}
+
+func (a apiGenAdapter) UpdateAgentConversation(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.updateAgentConversation(w, r)
+}
+
+func (a apiGenAdapter) ArchiveAgentConversation(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.archiveAgentConversation(w, r)
+}
+
+func (a apiGenAdapter) ListAgentMessages(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenListAgentMessagesParams) {
 	a.server.listAgentMessages(w, r)
 }
 
@@ -99,30 +182,82 @@ func (a apiGenAdapter) CreateAgentTurn(w http.ResponseWriter, r *http.Request, _
 	a.server.createAgentTurn(w, r)
 }
 
-func (a apiGenAdapter) ListAgentEvents(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) ListAgentRuns(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenListAgentRunsParams) {
+	a.server.listAgentRuns(w, r)
+}
+
+func (a apiGenAdapter) GetAgentRun(w http.ResponseWriter, r *http.Request, _, _, _ string) {
+	a.server.getAgentRun(w, r)
+}
+
+func (a apiGenAdapter) ListAgentEvents(w http.ResponseWriter, r *http.Request, _, _, _ string, _ apigenapi.GenListAgentEventsParams) {
 	a.server.listAgentEvents(w, r)
 }
 
-func (a apiGenAdapter) ListWorkspaceAssetEdges(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.apiWorkspaceAssetEdges(w, r)
+func (a apiGenAdapter) ListPrincipals(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListPrincipalsParams) {
+	a.server.apiListPrincipals(w, r)
 }
 
-func (a apiGenAdapter) ListWorkspaceAssets(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListWorkspaceAssetsParams) {
-	a.server.apiWorkspaceAssets(w, r)
+func (a apiGenAdapter) GetPrincipal(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiGetPrincipal(w, r)
 }
 
-func (a apiGenAdapter) ListRoleBindings(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) UpdatePrincipal(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiUpdatePrincipal(w, r)
+}
+
+func (a apiGenAdapter) ListWorkspaceRoles(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListWorkspaceRolesParams) {
+	a.server.apiWorkspaceRoles(w, r)
+}
+
+func (a apiGenAdapter) ListGroups(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListGroupsParams) {
+	a.server.apiListGroups(w, r)
+}
+
+func (a apiGenAdapter) CreateGroup(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiCreateGroup(w, r)
+}
+
+func (a apiGenAdapter) GetGroup(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.apiGetGroup(w, r)
+}
+
+func (a apiGenAdapter) UpdateGroup(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.apiUpdateGroup(w, r)
+}
+
+func (a apiGenAdapter) DeleteGroup(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.apiDeleteGroup(w, r)
+}
+
+func (a apiGenAdapter) ListGroupMembers(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenListGroupMembersParams) {
+	a.server.apiListGroupMembers(w, r)
+}
+
+func (a apiGenAdapter) AddGroupMember(w http.ResponseWriter, r *http.Request, _, _, _ string) {
+	a.server.apiAddGroupMember(w, r)
+}
+
+func (a apiGenAdapter) RemoveGroupMember(w http.ResponseWriter, r *http.Request, _, _, _ string) {
+	a.server.apiRemoveGroupMember(w, r)
+}
+
+func (a apiGenAdapter) ListRoleBindings(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListRoleBindingsParams) {
 	a.server.apiRoleBindings(w, r)
 }
 
-func (a apiGenAdapter) UpsertRoleBinding(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.apiUpsertRoleBinding(w, r)
+func (a apiGenAdapter) CreateRoleBinding(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiCreateRoleBinding(w, r)
+}
+
+func (a apiGenAdapter) UpdateRoleBinding(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.apiUpdateRoleBinding(w, r)
 }
 
 func (a apiGenAdapter) DeleteRoleBinding(w http.ResponseWriter, r *http.Request, _, _ string) {
 	a.server.apiDeleteRoleBinding(w, r)
 }
 
-func (a apiGenAdapter) ListWorkspaceRoles(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.apiWorkspaceRoles(w, r)
+func (a apiGenAdapter) ListAuditEvents(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListAuditEventsParams) {
+	a.server.apiListAuditEvents(w, r)
 }

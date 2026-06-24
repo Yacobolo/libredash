@@ -48,7 +48,7 @@ func TestDeploymentAPIRateLimitPreservesAuth(t *testing.T) {
 	handler := server.Routes()
 
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/api/deployments?workspace=test", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/deployments?workspace=test", nil)
 		req.RemoteAddr = "192.0.2.20:1234"
 		req.Header.Set("Authorization", "Bearer dev")
 		req.Header.Set("Accept", "application/json")

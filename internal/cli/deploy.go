@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"text/tabwriter"
@@ -80,18 +79,18 @@ func runDeploy(ctx context.Context, opts *rootOptions) error {
 		return err
 	}
 	createBody, _ := json.Marshal(map[string]any{
-		"workspaceId": opts.workspaceID,
-		"title":       manifest.WorkspaceTitle,
+		"title": manifest.WorkspaceTitle,
 	})
 	var created api.DeploymentResponse
-	createURL, err := apiOperationURL(target, "createDeployment", nil, nil)
+	workspacePathParams := map[string]string{"workspace": opts.workspaceID}
+	createURL, err := apiOperationURL(target, "createDeployment", workspacePathParams, nil)
 	if err != nil {
 		return err
 	}
 	if err := doJSON(ctx, http.MethodPost, createURL, token, bytes.NewReader(createBody), &created); err != nil {
 		return err
 	}
-	uploadURL, err := apiOperationURL(target, "uploadDeploymentArtifact", map[string]string{"deployment": created.ID}, nil)
+	uploadURL, err := apiOperationURL(target, "uploadDeploymentArtifact", map[string]string{"workspace": opts.workspaceID, "deployment": created.ID}, nil)
 	if err != nil {
 		return err
 	}
@@ -99,7 +98,7 @@ func runDeploy(ctx context.Context, opts *rootOptions) error {
 		return err
 	}
 	var validated api.DeploymentResponse
-	validateURL, err := apiOperationURL(target, "validateDeployment", map[string]string{"deployment": created.ID}, nil)
+	validateURL, err := apiOperationURL(target, "validateDeployment", map[string]string{"workspace": opts.workspaceID, "deployment": created.ID}, nil)
 	if err != nil {
 		return err
 	}
@@ -107,7 +106,7 @@ func runDeploy(ctx context.Context, opts *rootOptions) error {
 		return err
 	}
 	var activated api.DeploymentResponse
-	activateURL, err := apiOperationURL(target, "activateDeployment", map[string]string{"deployment": created.ID}, nil)
+	activateURL, err := apiOperationURL(target, "activateDeployment", map[string]string{"workspace": opts.workspaceID, "deployment": created.ID}, nil)
 	if err != nil {
 		return err
 	}
@@ -123,9 +122,7 @@ func runDeploymentsList(ctx context.Context, opts *rootOptions) error {
 	if err != nil {
 		return err
 	}
-	q := url.Values{}
-	q.Set("workspace", opts.workspaceID)
-	listURL, err := apiOperationURL(target, "listDeployments", nil, q)
+	listURL, err := apiOperationURL(target, "listDeployments", map[string]string{"workspace": opts.workspaceID}, nil)
 	if err != nil {
 		return err
 	}
@@ -150,7 +147,7 @@ func runRollback(ctx context.Context, opts *rootOptions) error {
 		return err
 	}
 	var row api.DeploymentResponse
-	rollbackURL, err := apiOperationURL(target, "rollbackDeployment", map[string]string{"deployment": opts.deployment}, nil)
+	rollbackURL, err := apiOperationURL(target, "activateDeployment", map[string]string{"workspace": opts.workspaceID, "deployment": opts.deployment}, nil)
 	if err != nil {
 		return err
 	}

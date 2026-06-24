@@ -171,25 +171,38 @@ func (q *Queries) ClearAssetsForDeployment(ctx context.Context, deploymentID str
 	return err
 }
 
+const clearRolePermissions = `-- name: ClearRolePermissions :exec
+DELETE FROM role_permissions WHERE role_id = ?
+`
+
+func (q *Queries) ClearRolePermissions(ctx context.Context, roleID string) error {
+	_, err := q.db.ExecContext(ctx, clearRolePermissions, roleID)
+	return err
+}
+
 const createAPIToken = `-- name: CreateAPIToken :exec
-INSERT INTO api_tokens (id, principal_id, name, token_hash, expires_at)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO api_tokens (id, principal_id, workspace_id, name, token_hash, permissions_json, expires_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateAPITokenParams struct {
-	ID          string         `json:"id"`
-	PrincipalID string         `json:"principal_id"`
-	Name        string         `json:"name"`
-	TokenHash   string         `json:"token_hash"`
-	ExpiresAt   sql.NullString `json:"expires_at"`
+	ID              string         `json:"id"`
+	PrincipalID     string         `json:"principal_id"`
+	WorkspaceID     sql.NullString `json:"workspace_id"`
+	Name            string         `json:"name"`
+	TokenHash       string         `json:"token_hash"`
+	PermissionsJson string         `json:"permissions_json"`
+	ExpiresAt       sql.NullString `json:"expires_at"`
 }
 
 func (q *Queries) CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) error {
 	_, err := q.db.ExecContext(ctx, createAPIToken,
 		arg.ID,
 		arg.PrincipalID,
+		arg.WorkspaceID,
 		arg.Name,
 		arg.TokenHash,
+		arg.PermissionsJson,
 		arg.ExpiresAt,
 	)
 	return err
@@ -334,6 +347,22 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) er
 	return err
 }
 
+const deleteGroupMember = `-- name: DeleteGroupMember :exec
+DELETE FROM group_members
+WHERE workspace_id = ? AND group_id = ? AND principal_id = ?
+`
+
+type DeleteGroupMemberParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	GroupID     string `json:"group_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) DeleteGroupMember(ctx context.Context, arg DeleteGroupMemberParams) error {
+	_, err := q.db.ExecContext(ctx, deleteGroupMember, arg.WorkspaceID, arg.GroupID, arg.PrincipalID)
+	return err
+}
+
 const deletePrincipalRoleBindings = `-- name: DeletePrincipalRoleBindings :exec
 DELETE FROM role_bindings
 WHERE workspace_id = ? AND principal_id = ?
@@ -346,6 +375,21 @@ type DeletePrincipalRoleBindingsParams struct {
 
 func (q *Queries) DeletePrincipalRoleBindings(ctx context.Context, arg DeletePrincipalRoleBindingsParams) error {
 	_, err := q.db.ExecContext(ctx, deletePrincipalRoleBindings, arg.WorkspaceID, arg.PrincipalID)
+	return err
+}
+
+const deleteRoleBindingByID = `-- name: DeleteRoleBindingByID :exec
+DELETE FROM role_bindings
+WHERE workspace_id = ? AND id = ?
+`
+
+type DeleteRoleBindingByIDParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
+}
+
+func (q *Queries) DeleteRoleBindingByID(ctx context.Context, arg DeleteRoleBindingByIDParams) error {
+	_, err := q.db.ExecContext(ctx, deleteRoleBindingByID, arg.WorkspaceID, arg.ID)
 	return err
 }
 
@@ -426,8 +470,10 @@ func (q *Queries) FinishAgentRun(ctx context.Context, arg FinishAgentRunParams) 
 }
 
 const getAPITokenByHash = `-- name: GetAPITokenByHash :one
-SELECT id, principal_id, name, token_hash, expires_at, created_at, last_used_at FROM api_tokens
-WHERE token_hash = ? AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+SELECT id, principal_id, workspace_id, name, token_hash, permissions_json, expires_at, created_at, last_used_at, revoked_at FROM api_tokens
+WHERE token_hash = ?
+  AND revoked_at IS NULL
+  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
 `
 
 func (q *Queries) GetAPITokenByHash(ctx context.Context, tokenHash string) (ApiToken, error) {
@@ -436,11 +482,14 @@ func (q *Queries) GetAPITokenByHash(ctx context.Context, tokenHash string) (ApiT
 	err := row.Scan(
 		&i.ID,
 		&i.PrincipalID,
+		&i.WorkspaceID,
 		&i.Name,
 		&i.TokenHash,
+		&i.PermissionsJson,
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.LastUsedAt,
+		&i.RevokedAt,
 	)
 	return i, err
 }
@@ -569,6 +618,55 @@ func (q *Queries) GetExternalIdentity(ctx context.Context, arg GetExternalIdenti
 	return i, err
 }
 
+const getGroup = `-- name: GetGroup :one
+SELECT id, workspace_id, provider, external_id, name, created_at FROM groups
+WHERE workspace_id = ? AND id = ?
+`
+
+type GetGroupParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
+}
+
+func (q *Queries) GetGroup(ctx context.Context, arg GetGroupParams) (Group, error) {
+	row := q.db.QueryRowContext(ctx, getGroup, arg.WorkspaceID, arg.ID)
+	var i Group
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Provider,
+		&i.ExternalID,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getGroupByProviderExternalID = `-- name: GetGroupByProviderExternalID :one
+SELECT id, workspace_id, provider, external_id, name, created_at FROM groups
+WHERE workspace_id = ? AND provider = ? AND external_id = ?
+`
+
+type GetGroupByProviderExternalIDParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	Provider    string `json:"provider"`
+	ExternalID  string `json:"external_id"`
+}
+
+func (q *Queries) GetGroupByProviderExternalID(ctx context.Context, arg GetGroupByProviderExternalIDParams) (Group, error) {
+	row := q.db.QueryRowContext(ctx, getGroupByProviderExternalID, arg.WorkspaceID, arg.Provider, arg.ExternalID)
+	var i Group
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Provider,
+		&i.ExternalID,
+		&i.Name,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getPrincipal = `-- name: GetPrincipal :one
 SELECT id, email, display_name, created_at, updated_at FROM principals WHERE id = ?
 `
@@ -603,6 +701,64 @@ func (q *Queries) GetPrincipalByEmail(ctx context.Context, lower string) (Princi
 	return i, err
 }
 
+const getRoleBindingByID = `-- name: GetRoleBindingByID :one
+SELECT
+  rb.id,
+  rb.workspace_id,
+  CASE WHEN rb.principal_id IS NOT NULL THEN 'principal' ELSE 'group' END AS subject_type,
+  COALESCE(rb.principal_id, rb.group_id, '') AS subject_id,
+  rb.principal_id,
+  rb.group_id,
+  p.email,
+  p.display_name,
+  g.name AS group_name,
+  r.name AS role_name,
+  rb.created_at
+FROM role_bindings rb
+JOIN roles r ON r.id = rb.role_id
+LEFT JOIN principals p ON p.id = rb.principal_id
+LEFT JOIN groups g ON g.id = rb.group_id
+WHERE rb.workspace_id = ? AND rb.id = ?
+`
+
+type GetRoleBindingByIDParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	ID          string `json:"id"`
+}
+
+type GetRoleBindingByIDRow struct {
+	ID          string         `json:"id"`
+	WorkspaceID string         `json:"workspace_id"`
+	SubjectType string         `json:"subject_type"`
+	SubjectID   string         `json:"subject_id"`
+	PrincipalID sql.NullString `json:"principal_id"`
+	GroupID     sql.NullString `json:"group_id"`
+	Email       sql.NullString `json:"email"`
+	DisplayName sql.NullString `json:"display_name"`
+	GroupName   sql.NullString `json:"group_name"`
+	RoleName    string         `json:"role_name"`
+	CreatedAt   string         `json:"created_at"`
+}
+
+func (q *Queries) GetRoleBindingByID(ctx context.Context, arg GetRoleBindingByIDParams) (GetRoleBindingByIDRow, error) {
+	row := q.db.QueryRowContext(ctx, getRoleBindingByID, arg.WorkspaceID, arg.ID)
+	var i GetRoleBindingByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.SubjectType,
+		&i.SubjectID,
+		&i.PrincipalID,
+		&i.GroupID,
+		&i.Email,
+		&i.DisplayName,
+		&i.GroupName,
+		&i.RoleName,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getRoleByName = `-- name: GetRoleByName :one
 SELECT id, name, permissions_json FROM roles WHERE name = ?
 `
@@ -615,7 +771,8 @@ func (q *Queries) GetRoleByName(ctx context.Context, name string) (Role, error) 
 }
 
 const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
-SELECT id, principal_id, token_hash, expires_at, created_at, last_seen_at FROM sessions WHERE token_hash = ? AND expires_at > CURRENT_TIMESTAMP
+SELECT id, principal_id, token_hash, expires_at, created_at, last_seen_at, revoked_at FROM sessions
+WHERE token_hash = ? AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL
 `
 
 func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash string) (Session, error) {
@@ -628,6 +785,7 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash string) (
 		&i.ExpiresAt,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+		&i.RevokedAt,
 	)
 	return i, err
 }
@@ -774,6 +932,22 @@ func (q *Queries) InsertDeploymentArtifact(ctx context.Context, arg InsertDeploy
 	return err
 }
 
+const insertGroupMember = `-- name: InsertGroupMember :exec
+INSERT OR IGNORE INTO group_members (workspace_id, group_id, principal_id)
+VALUES (?, ?, ?)
+`
+
+type InsertGroupMemberParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	GroupID     string `json:"group_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) InsertGroupMember(ctx context.Context, arg InsertGroupMemberParams) error {
+	_, err := q.db.ExecContext(ctx, insertGroupMember, arg.WorkspaceID, arg.GroupID, arg.PrincipalID)
+	return err
+}
+
 const insertRoleBinding = `-- name: InsertRoleBinding :exec
 INSERT OR IGNORE INTO role_bindings (id, workspace_id, role_id, principal_id, group_id)
 VALUES (?, ?, ?, ?, ?)
@@ -796,6 +970,61 @@ func (q *Queries) InsertRoleBinding(ctx context.Context, arg InsertRoleBindingPa
 		arg.GroupID,
 	)
 	return err
+}
+
+const insertRolePermission = `-- name: InsertRolePermission :exec
+INSERT OR IGNORE INTO role_permissions (role_id, permission_name)
+VALUES (?, ?)
+`
+
+type InsertRolePermissionParams struct {
+	RoleID         string `json:"role_id"`
+	PermissionName string `json:"permission_name"`
+}
+
+func (q *Queries) InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error {
+	_, err := q.db.ExecContext(ctx, insertRolePermission, arg.RoleID, arg.PermissionName)
+	return err
+}
+
+const listAPITokensByPrincipal = `-- name: ListAPITokensByPrincipal :many
+SELECT id, principal_id, workspace_id, name, token_hash, permissions_json, expires_at, created_at, last_used_at, revoked_at FROM api_tokens
+WHERE principal_id = ?
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListAPITokensByPrincipal(ctx context.Context, principalID string) ([]ApiToken, error) {
+	rows, err := q.db.QueryContext(ctx, listAPITokensByPrincipal, principalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ApiToken{}
+	for rows.Next() {
+		var i ApiToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.PrincipalID,
+			&i.WorkspaceID,
+			&i.Name,
+			&i.TokenHash,
+			&i.PermissionsJson,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.LastUsedAt,
+			&i.RevokedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAgentConversations = `-- name: ListAgentConversations :many
@@ -1070,6 +1299,65 @@ func (q *Queries) ListAssetsByDeployment(ctx context.Context, deploymentID strin
 	return items, nil
 }
 
+const listAuditEvents = `-- name: ListAuditEvents :many
+SELECT id, workspace_id, principal_id, "action", target_type, target_id, metadata_json, created_at FROM audit_events
+WHERE (? = '' OR workspace_id = ?)
+  AND (? = '' OR principal_id = ?)
+  AND (? = '' OR action = ?)
+ORDER BY created_at DESC, id DESC
+LIMIT ?
+`
+
+type ListAuditEventsParams struct {
+	Column1     interface{}    `json:"column_1"`
+	WorkspaceID sql.NullString `json:"workspace_id"`
+	Column3     interface{}    `json:"column_3"`
+	PrincipalID sql.NullString `json:"principal_id"`
+	Column5     interface{}    `json:"column_5"`
+	Action      string         `json:"action"`
+	Limit       int64          `json:"limit"`
+}
+
+func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams) ([]AuditEvent, error) {
+	rows, err := q.db.QueryContext(ctx, listAuditEvents,
+		arg.Column1,
+		arg.WorkspaceID,
+		arg.Column3,
+		arg.PrincipalID,
+		arg.Column5,
+		arg.Action,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditEvent{}
+	for rows.Next() {
+		var i AuditEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.PrincipalID,
+			&i.Action,
+			&i.TargetType,
+			&i.TargetID,
+			&i.MetadataJson,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDeployments = `-- name: ListDeployments :many
 SELECT id, workspace_id, status, digest, manifest_json, created_by, created_at, activated_at, error FROM deployments
 WHERE workspace_id = ?
@@ -1109,31 +1397,161 @@ func (q *Queries) ListDeployments(ctx context.Context, workspaceID string) ([]De
 	return items, nil
 }
 
+const listGroupMembers = `-- name: ListGroupMembers :many
+SELECT
+  gm.group_id,
+  gm.workspace_id,
+  gm.principal_id,
+  p.email,
+  p.display_name,
+  gm.created_at
+FROM group_members gm
+JOIN principals p ON p.id = gm.principal_id
+WHERE gm.workspace_id = ? AND gm.group_id = ?
+ORDER BY p.email, p.display_name, gm.principal_id
+`
+
+type ListGroupMembersParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	GroupID     string `json:"group_id"`
+}
+
+type ListGroupMembersRow struct {
+	GroupID     string `json:"group_id"`
+	WorkspaceID string `json:"workspace_id"`
+	PrincipalID string `json:"principal_id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+	CreatedAt   string `json:"created_at"`
+}
+
+func (q *Queries) ListGroupMembers(ctx context.Context, arg ListGroupMembersParams) ([]ListGroupMembersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupMembers, arg.WorkspaceID, arg.GroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGroupMembersRow{}
+	for rows.Next() {
+		var i ListGroupMembersRow
+		if err := rows.Scan(
+			&i.GroupID,
+			&i.WorkspaceID,
+			&i.PrincipalID,
+			&i.Email,
+			&i.DisplayName,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGroupsByWorkspace = `-- name: ListGroupsByWorkspace :many
+SELECT id, workspace_id, provider, external_id, name, created_at FROM groups
+WHERE workspace_id = ?
+ORDER BY name, id
+`
+
+func (q *Queries) ListGroupsByWorkspace(ctx context.Context, workspaceID string) ([]Group, error) {
+	rows, err := q.db.QueryContext(ctx, listGroupsByWorkspace, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Group{}
+	for rows.Next() {
+		var i Group
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Provider,
+			&i.ExternalID,
+			&i.Name,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPermissions = `-- name: ListPermissions :many
+SELECT name, created_at FROM permissions ORDER BY name
+`
+
+func (q *Queries) ListPermissions(ctx context.Context) ([]Permission, error) {
+	rows, err := q.db.QueryContext(ctx, listPermissions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Permission{}
+	for rows.Next() {
+		var i Permission
+		if err := rows.Scan(&i.Name, &i.CreatedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPrincipalRolePermissions = `-- name: ListPrincipalRolePermissions :many
-SELECT r.permissions_json
+SELECT DISTINCT rp.permission_name
 FROM role_bindings rb
-JOIN roles r ON r.id = rb.role_id
-WHERE rb.workspace_id = ? AND rb.principal_id = ?
+JOIN role_permissions rp ON rp.role_id = rb.role_id
+LEFT JOIN group_members gm
+  ON gm.workspace_id = rb.workspace_id
+ AND gm.group_id = rb.group_id
+WHERE rb.workspace_id = ?
+  AND (
+    rb.principal_id = ?
+    OR gm.principal_id = ?
+  )
+ORDER BY rp.permission_name
 `
 
 type ListPrincipalRolePermissionsParams struct {
-	WorkspaceID string         `json:"workspace_id"`
-	PrincipalID sql.NullString `json:"principal_id"`
+	WorkspaceID   string         `json:"workspace_id"`
+	PrincipalID   sql.NullString `json:"principal_id"`
+	PrincipalID_2 string         `json:"principal_id_2"`
 }
 
 func (q *Queries) ListPrincipalRolePermissions(ctx context.Context, arg ListPrincipalRolePermissionsParams) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listPrincipalRolePermissions, arg.WorkspaceID, arg.PrincipalID)
+	rows, err := q.db.QueryContext(ctx, listPrincipalRolePermissions, arg.WorkspaceID, arg.PrincipalID, arg.PrincipalID_2)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	items := []string{}
 	for rows.Next() {
-		var permissions_json string
-		if err := rows.Scan(&permissions_json); err != nil {
+		var permission_name string
+		if err := rows.Scan(&permission_name); err != nil {
 			return nil, err
 		}
-		items = append(items, permissions_json)
+		items = append(items, permission_name)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1148,24 +1566,33 @@ const listRoleBindingsByWorkspace = `-- name: ListRoleBindingsByWorkspace :many
 SELECT
   rb.id,
   rb.workspace_id,
+  CASE WHEN rb.principal_id IS NOT NULL THEN 'principal' ELSE 'group' END AS subject_type,
+  COALESCE(rb.principal_id, rb.group_id, '') AS subject_id,
   rb.principal_id,
+  rb.group_id,
   p.email,
   p.display_name,
+  g.name AS group_name,
   r.name AS role_name,
   rb.created_at
 FROM role_bindings rb
 JOIN roles r ON r.id = rb.role_id
 LEFT JOIN principals p ON p.id = rb.principal_id
-WHERE rb.workspace_id = ? AND rb.principal_id IS NOT NULL
-ORDER BY p.email, r.name
+LEFT JOIN groups g ON g.id = rb.group_id
+WHERE rb.workspace_id = ?
+ORDER BY subject_type, p.email, g.name, r.name
 `
 
 type ListRoleBindingsByWorkspaceRow struct {
 	ID          string         `json:"id"`
 	WorkspaceID string         `json:"workspace_id"`
+	SubjectType string         `json:"subject_type"`
+	SubjectID   string         `json:"subject_id"`
 	PrincipalID sql.NullString `json:"principal_id"`
+	GroupID     sql.NullString `json:"group_id"`
 	Email       sql.NullString `json:"email"`
 	DisplayName sql.NullString `json:"display_name"`
+	GroupName   sql.NullString `json:"group_name"`
 	RoleName    string         `json:"role_name"`
 	CreatedAt   string         `json:"created_at"`
 }
@@ -1182,9 +1609,13 @@ func (q *Queries) ListRoleBindingsByWorkspace(ctx context.Context, workspaceID s
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
+			&i.SubjectType,
+			&i.SubjectID,
 			&i.PrincipalID,
+			&i.GroupID,
 			&i.Email,
 			&i.DisplayName,
+			&i.GroupName,
 			&i.RoleName,
 			&i.CreatedAt,
 		); err != nil {
@@ -1215,6 +1646,43 @@ func (q *Queries) ListRoles(ctx context.Context) ([]Role, error) {
 	for rows.Next() {
 		var i Role
 		if err := rows.Scan(&i.ID, &i.Name, &i.PermissionsJson); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSessionsByPrincipal = `-- name: ListSessionsByPrincipal :many
+SELECT id, principal_id, token_hash, expires_at, created_at, last_seen_at, revoked_at FROM sessions
+WHERE principal_id = ?
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListSessionsByPrincipal(ctx context.Context, principalID string) ([]Session, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionsByPrincipal, principalID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Session{}
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.PrincipalID,
+			&i.TokenHash,
+			&i.ExpiresAt,
+			&i.CreatedAt,
+			&i.LastSeenAt,
+			&i.RevokedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1286,6 +1754,28 @@ type MarkOtherDeploymentsInactiveParams struct {
 
 func (q *Queries) MarkOtherDeploymentsInactive(ctx context.Context, arg MarkOtherDeploymentsInactiveParams) error {
 	_, err := q.db.ExecContext(ctx, markOtherDeploymentsInactive, arg.WorkspaceID, arg.ID)
+	return err
+}
+
+const revokeAPIToken = `-- name: RevokeAPIToken :exec
+UPDATE api_tokens
+SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+WHERE id = ?
+`
+
+func (q *Queries) RevokeAPIToken(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, revokeAPIToken, id)
+	return err
+}
+
+const revokeSession = `-- name: RevokeSession :exec
+UPDATE sessions
+SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+WHERE id = ?
+`
+
+func (q *Queries) RevokeSession(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, revokeSession, id)
 	return err
 }
 
@@ -1445,6 +1935,31 @@ func (q *Queries) UpdateDeploymentValidated(ctx context.Context, arg UpdateDeplo
 	return err
 }
 
+const updateRoleBindingByID = `-- name: UpdateRoleBindingByID :exec
+UPDATE role_bindings
+SET role_id = ?, principal_id = ?, group_id = ?
+WHERE workspace_id = ? AND id = ?
+`
+
+type UpdateRoleBindingByIDParams struct {
+	RoleID      string         `json:"role_id"`
+	PrincipalID sql.NullString `json:"principal_id"`
+	GroupID     sql.NullString `json:"group_id"`
+	WorkspaceID string         `json:"workspace_id"`
+	ID          string         `json:"id"`
+}
+
+func (q *Queries) UpdateRoleBindingByID(ctx context.Context, arg UpdateRoleBindingByIDParams) error {
+	_, err := q.db.ExecContext(ctx, updateRoleBindingByID,
+		arg.RoleID,
+		arg.PrincipalID,
+		arg.GroupID,
+		arg.WorkspaceID,
+		arg.ID,
+	)
+	return err
+}
+
 const upsertExternalIdentity = `-- name: UpsertExternalIdentity :exec
 INSERT INTO external_identities (id, principal_id, provider, tenant_id, subject, email, updated_at)
 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -1472,6 +1987,43 @@ func (q *Queries) UpsertExternalIdentity(ctx context.Context, arg UpsertExternal
 		arg.Subject,
 		arg.Email,
 	)
+	return err
+}
+
+const upsertGroup = `-- name: UpsertGroup :exec
+INSERT INTO groups (id, workspace_id, provider, external_id, name)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(workspace_id, provider, external_id) DO UPDATE SET
+  name = excluded.name
+`
+
+type UpsertGroupParams struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	Provider    string `json:"provider"`
+	ExternalID  string `json:"external_id"`
+	Name        string `json:"name"`
+}
+
+func (q *Queries) UpsertGroup(ctx context.Context, arg UpsertGroupParams) error {
+	_, err := q.db.ExecContext(ctx, upsertGroup,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Provider,
+		arg.ExternalID,
+		arg.Name,
+	)
+	return err
+}
+
+const upsertPermission = `-- name: UpsertPermission :exec
+INSERT INTO permissions (name)
+VALUES (?)
+ON CONFLICT(name) DO NOTHING
+`
+
+func (q *Queries) UpsertPermission(ctx context.Context, name string) error {
+	_, err := q.db.ExecContext(ctx, upsertPermission, name)
 	return err
 }
 

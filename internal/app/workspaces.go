@@ -313,7 +313,7 @@ func (s *Server) apiWorkspaces(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, workspaces)
+	writeJSON(w, http.StatusOK, pagedResponse(workspaces))
 }
 
 func (s *Server) apiWorkspaceAssets(w http.ResponseWriter, r *http.Request) {
@@ -323,7 +323,7 @@ func (s *Server) apiWorkspaceAssets(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, filterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q")))
+	writeJSON(w, http.StatusOK, pagedResponse(filterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q"))))
 }
 
 func (s *Server) apiWorkspaceAssetEdges(w http.ResponseWriter, r *http.Request) {
@@ -333,7 +333,7 @@ func (s *Server) apiWorkspaceAssetEdges(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, edges)
+	writeJSON(w, http.StatusOK, pagedResponse(edges))
 }
 
 func (s *Server) apiWorkspaceRoles(w http.ResponseWriter, r *http.Request) {
@@ -342,7 +342,7 @@ func (s *Server) apiWorkspaceRoles(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, roles)
+	writeJSON(w, http.StatusOK, pagedResponse(roles))
 }
 
 func (s *Server) apiRoleBindings(w http.ResponseWriter, r *http.Request) {
@@ -351,7 +351,20 @@ func (s *Server) apiRoleBindings(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, bindings)
+	out := make([]map[string]any, 0, len(bindings))
+	for _, binding := range bindings {
+		out = append(out, map[string]any{
+			"id":          binding.ID,
+			"workspaceId": binding.WorkspaceID,
+			"subjectType": "principal",
+			"subjectId":   binding.PrincipalID,
+			"email":       binding.Email,
+			"displayName": binding.DisplayName,
+			"role":        binding.Role,
+			"createdAt":   binding.CreatedAt,
+		})
+	}
+	writeJSON(w, http.StatusOK, pagedResponse(out))
 }
 
 func (s *Server) apiUpsertRoleBinding(w http.ResponseWriter, r *http.Request) {
@@ -389,7 +402,11 @@ func (s *Server) apiDeleteRoleBinding(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, errWorkspaceRBACNotConfigured, http.StatusInternalServerError)
 		return
 	}
-	if err := repo.RemovePrincipalRoles(r.Context(), workspaceID, chi.URLParam(r, "principal")); err != nil {
+	bindingID := chi.URLParam(r, "binding")
+	if bindingID == "" {
+		bindingID = chi.URLParam(r, "principal")
+	}
+	if err := repo.DeleteRoleBinding(r.Context(), workspaceID, bindingID); err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
 	}

@@ -71,12 +71,56 @@ func (s *Service) ListConversations(ctx context.Context, scope Scope) ([]Convers
 	return s.repo.ListConversations(ctx, scope.WorkspaceID, scope.PrincipalID)
 }
 
+func (s *Service) ListConversationsPage(ctx context.Context, scope Scope, page Page) ([]Conversation, error) {
+	return s.repo.ListConversationsPage(ctx, scope.WorkspaceID, scope.PrincipalID, normalizePage(page))
+}
+
+func (s *Service) GetConversation(ctx context.Context, scope Scope, conversationID string) (Conversation, error) {
+	return s.repo.GetConversation(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID)
+}
+
+func (s *Service) UpdateConversation(ctx context.Context, scope Scope, conversationID, title string) (Conversation, error) {
+	return s.repo.UpdateConversation(ctx, ConversationUpdate{
+		WorkspaceID:    scope.WorkspaceID,
+		PrincipalID:    scope.PrincipalID,
+		ConversationID: conversationID,
+		Title:          title,
+	})
+}
+
+func (s *Service) ArchiveConversation(ctx context.Context, scope Scope, conversationID string) (Conversation, error) {
+	return s.repo.ArchiveConversation(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID)
+}
+
 func (s *Service) ListMessages(ctx context.Context, scope Scope, conversationID string) ([]Message, error) {
 	return s.repo.ListMessages(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID)
 }
 
+func (s *Service) ListMessagesPage(ctx context.Context, scope Scope, conversationID string, page Page) ([]Message, error) {
+	return s.repo.ListMessagesPage(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID, normalizePage(page))
+}
+
+func (s *Service) ListRunsPage(ctx context.Context, scope Scope, conversationID string, page Page) ([]Run, error) {
+	return s.repo.ListRunsPage(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID, normalizePage(page))
+}
+
+func (s *Service) GetRun(ctx context.Context, scope Scope, conversationID, runID string) (Run, error) {
+	return s.repo.GetRun(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID, runID)
+}
+
+func (s *Service) GetRunByID(ctx context.Context, scope Scope, runID string) (Run, error) {
+	return s.repo.GetRunByID(ctx, scope.WorkspaceID, scope.PrincipalID, runID)
+}
+
 func (s *Service) ListEvents(ctx context.Context, scope Scope, runID string) ([]Event, error) {
 	return s.repo.ListEvents(ctx, scope.WorkspaceID, scope.PrincipalID, runID)
+}
+
+func (s *Service) ListRunEventsPage(ctx context.Context, scope Scope, conversationID, runID string, page Page) ([]Event, error) {
+	if _, err := s.repo.GetRun(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID, runID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListEventsPage(ctx, scope.WorkspaceID, scope.PrincipalID, runID, normalizePage(page))
 }
 
 func (s *Service) ConversationEvents(ctx context.Context, scope Scope, conversationID string) ([]api.AgentEventEnvelope, error) {
@@ -111,6 +155,13 @@ func (s *Service) ConversationEvents(ctx context.Context, scope Scope, conversat
 		return events[i].CreatedAt < events[j].CreatedAt
 	})
 	return events, nil
+}
+
+func normalizePage(page Page) Page {
+	if page.Limit <= 0 || page.Limit > 100 {
+		page.Limit = 100
+	}
+	return page
 }
 
 func (s *Service) ConversationTranscript(ctx context.Context, scope Scope, conversationID string) ([]api.AgentChatTranscriptItem, error) {

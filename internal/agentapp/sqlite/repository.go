@@ -53,6 +53,10 @@ func (r *Repository) CreateConversation(ctx context.Context, input agentapp.Conv
 }
 
 func (r *Repository) ListConversations(ctx context.Context, workspaceID, principalID string) ([]agentapp.Conversation, error) {
+	return r.ListConversationsPage(ctx, workspaceID, principalID, agentapp.Page{})
+}
+
+func (r *Repository) ListConversationsPage(ctx context.Context, workspaceID, principalID string, page agentapp.Page) ([]agentapp.Conversation, error) {
 	workspaceID, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return nil, err
@@ -68,7 +72,7 @@ func (r *Repository) ListConversations(ctx context.Context, workspaceID, princip
 	for _, row := range rows {
 		out = append(out, mapConversation(row))
 	}
-	return out, nil
+	return pageByID(out, page, func(row agentapp.Conversation) string { return row.ID }), nil
 }
 
 func (r *Repository) GetConversation(ctx context.Context, workspaceID, principalID, conversationID string) (agentapp.Conversation, error) {
@@ -80,6 +84,61 @@ func (r *Repository) GetConversation(ctx context.Context, workspaceID, principal
 		return agentapp.Conversation{}, fmt.Errorf("conversation id is required")
 	}
 	row, err := r.q.GetAgentConversation(ctx, platformdb.GetAgentConversationParams{
+		ID:          conversationID,
+		WorkspaceID: workspaceID,
+		PrincipalID: principalID,
+	})
+	if err != nil {
+		return agentapp.Conversation{}, err
+	}
+	return mapConversation(row), nil
+}
+
+func (r *Repository) UpdateConversation(ctx context.Context, input agentapp.ConversationUpdate) (agentapp.Conversation, error) {
+	workspaceID, principalID, err := agentScope(input.WorkspaceID, input.PrincipalID)
+	if err != nil {
+		return agentapp.Conversation{}, err
+	}
+	if strings.TrimSpace(input.ConversationID) == "" {
+		return agentapp.Conversation{}, fmt.Errorf("conversation id is required")
+	}
+	title := strings.TrimSpace(input.Title)
+	if title == "" {
+		return agentapp.Conversation{}, fmt.Errorf("conversation title is required")
+	}
+	row := platformdb.AgentConversation{ID: input.ConversationID}
+	err = r.db.QueryRowContext(ctx, `
+		UPDATE agent_conversations
+		SET title = ?, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ? AND workspace_id = ? AND principal_id = ? AND status = 'active'
+		RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at
+	`, title, input.ConversationID, workspaceID, principalID).Scan(
+		&row.ID,
+		&row.WorkspaceID,
+		&row.PrincipalID,
+		&row.Title,
+		&row.Status,
+		&row.MetadataJson,
+		&row.TranscriptJson,
+		&row.CreatedAt,
+		&row.UpdatedAt,
+		&row.ArchivedAt,
+	)
+	if err != nil {
+		return agentapp.Conversation{}, err
+	}
+	return mapConversation(row), nil
+}
+
+func (r *Repository) ArchiveConversation(ctx context.Context, workspaceID, principalID, conversationID string) (agentapp.Conversation, error) {
+	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	if err != nil {
+		return agentapp.Conversation{}, err
+	}
+	if strings.TrimSpace(conversationID) == "" {
+		return agentapp.Conversation{}, fmt.Errorf("conversation id is required")
+	}
+	row, err := r.q.ArchiveAgentConversation(ctx, platformdb.ArchiveAgentConversationParams{
 		ID:          conversationID,
 		WorkspaceID: workspaceID,
 		PrincipalID: principalID,
@@ -170,6 +229,10 @@ func (r *Repository) AppendMessage(ctx context.Context, input agentapp.MessageIn
 }
 
 func (r *Repository) ListMessages(ctx context.Context, workspaceID, principalID, conversationID string) ([]agentapp.Message, error) {
+	return r.ListMessagesPage(ctx, workspaceID, principalID, conversationID, agentapp.Page{})
+}
+
+func (r *Repository) ListMessagesPage(ctx context.Context, workspaceID, principalID, conversationID string, page agentapp.Page) ([]agentapp.Message, error) {
 	workspaceID, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return nil, err
@@ -189,7 +252,7 @@ func (r *Repository) ListMessages(ctx context.Context, workspaceID, principalID,
 	for _, row := range rows {
 		out = append(out, mapMessage(row))
 	}
-	return out, nil
+	return pageByID(out, page, func(row agentapp.Message) string { return row.ID }), nil
 }
 
 func (r *Repository) CreateRun(ctx context.Context, input agentapp.RunInput) (agentapp.Run, error) {
@@ -255,6 +318,10 @@ func (r *Repository) FinishRun(ctx context.Context, input agentapp.RunFinish) (a
 }
 
 func (r *Repository) ListRuns(ctx context.Context, workspaceID, principalID, conversationID string) ([]agentapp.Run, error) {
+	return r.ListRunsPage(ctx, workspaceID, principalID, conversationID, agentapp.Page{})
+}
+
+func (r *Repository) ListRunsPage(ctx context.Context, workspaceID, principalID, conversationID string, page agentapp.Page) ([]agentapp.Run, error) {
 	workspaceID, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return nil, err
@@ -274,7 +341,78 @@ func (r *Repository) ListRuns(ctx context.Context, workspaceID, principalID, con
 	for _, row := range rows {
 		out = append(out, mapRun(row))
 	}
-	return out, nil
+	return pageByID(out, page, func(row agentapp.Run) string { return row.ID }), nil
+}
+
+func (r *Repository) GetRun(ctx context.Context, workspaceID, principalID, conversationID, runID string) (agentapp.Run, error) {
+	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	if err != nil {
+		return agentapp.Run{}, err
+	}
+	if strings.TrimSpace(conversationID) == "" {
+		return agentapp.Run{}, fmt.Errorf("conversation id is required")
+	}
+	if strings.TrimSpace(runID) == "" {
+		return agentapp.Run{}, fmt.Errorf("run id is required")
+	}
+	var row platformdb.AgentRun
+	err = r.db.QueryRowContext(ctx, `
+		SELECT r.id, r.conversation_id, r.status, r.model, r.stop_reason, r.input_tokens, r.output_tokens, r.total_tokens, r.error, r.started_at, r.finished_at, r.metadata_json
+		FROM agent_runs r
+		JOIN agent_conversations c ON c.id = r.conversation_id
+		WHERE r.id = ? AND c.id = ? AND c.workspace_id = ? AND c.principal_id = ?
+	`, runID, conversationID, workspaceID, principalID).Scan(
+		&row.ID,
+		&row.ConversationID,
+		&row.Status,
+		&row.Model,
+		&row.StopReason,
+		&row.InputTokens,
+		&row.OutputTokens,
+		&row.TotalTokens,
+		&row.Error,
+		&row.StartedAt,
+		&row.FinishedAt,
+		&row.MetadataJson,
+	)
+	if err != nil {
+		return agentapp.Run{}, err
+	}
+	return mapRun(row), nil
+}
+
+func (r *Repository) GetRunByID(ctx context.Context, workspaceID, principalID, runID string) (agentapp.Run, error) {
+	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	if err != nil {
+		return agentapp.Run{}, err
+	}
+	if strings.TrimSpace(runID) == "" {
+		return agentapp.Run{}, fmt.Errorf("run id is required")
+	}
+	var row platformdb.AgentRun
+	err = r.db.QueryRowContext(ctx, `
+		SELECT r.id, r.conversation_id, r.status, r.model, r.stop_reason, r.input_tokens, r.output_tokens, r.total_tokens, r.error, r.started_at, r.finished_at, r.metadata_json
+		FROM agent_runs r
+		JOIN agent_conversations c ON c.id = r.conversation_id
+		WHERE r.id = ? AND c.workspace_id = ? AND c.principal_id = ?
+	`, runID, workspaceID, principalID).Scan(
+		&row.ID,
+		&row.ConversationID,
+		&row.Status,
+		&row.Model,
+		&row.StopReason,
+		&row.InputTokens,
+		&row.OutputTokens,
+		&row.TotalTokens,
+		&row.Error,
+		&row.StartedAt,
+		&row.FinishedAt,
+		&row.MetadataJson,
+	)
+	if err != nil {
+		return agentapp.Run{}, err
+	}
+	return mapRun(row), nil
 }
 
 func (r *Repository) AppendEvent(ctx context.Context, input agentapp.EventInput) (agentapp.Event, error) {
@@ -314,6 +452,10 @@ func (r *Repository) AppendEvent(ctx context.Context, input agentapp.EventInput)
 }
 
 func (r *Repository) ListEvents(ctx context.Context, workspaceID, principalID, runID string) ([]agentapp.Event, error) {
+	return r.ListEventsPage(ctx, workspaceID, principalID, runID, agentapp.Page{})
+}
+
+func (r *Repository) ListEventsPage(ctx context.Context, workspaceID, principalID, runID string, page agentapp.Page) ([]agentapp.Event, error) {
 	workspaceID, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return nil, err
@@ -339,7 +481,7 @@ func (r *Repository) ListEvents(ctx context.Context, workspaceID, principalID, r
 	for _, row := range rows {
 		out = append(out, mapEvent(row))
 	}
-	return out, nil
+	return pageByID(out, page, func(row agentapp.Event) string { return row.ID }), nil
 }
 
 func (r *Repository) agentRunExists(ctx context.Context, workspaceID, principalID, runID string) (bool, error) {
@@ -393,7 +535,24 @@ func mapMessage(row platformdb.AgentMessage) agentapp.Message {
 }
 
 func mapRun(row platformdb.AgentRun) agentapp.Run {
-	return agentapp.Run{ID: row.ID, Status: row.Status, Model: row.Model, CreatedAt: row.StartedAt}
+	out := agentapp.Run{
+		ID:             row.ID,
+		ConversationID: row.ConversationID,
+		Status:         row.Status,
+		Model:          row.Model,
+		StopReason:     row.StopReason,
+		InputTokens:    row.InputTokens,
+		OutputTokens:   row.OutputTokens,
+		TotalTokens:    row.TotalTokens,
+		Error:          row.Error,
+		StartedAt:      row.StartedAt,
+		MetadataJSON:   row.MetadataJson,
+		CreatedAt:      row.StartedAt,
+	}
+	if row.FinishedAt.Valid {
+		out.FinishedAt = row.FinishedAt.String
+	}
+	return out
 }
 
 func mapEvent(row platformdb.AgentEvent) agentapp.Event {
@@ -472,6 +631,32 @@ func validRunStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+func pageByID[T any](rows []T, page agentapp.Page, id func(T) string) []T {
+	limit := page.Limit
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	start := 0
+	after := strings.TrimSpace(page.After)
+	if after != "" {
+		start = len(rows)
+		for i, row := range rows {
+			if id(row) == after {
+				start = i + 1
+				break
+			}
+		}
+	}
+	if start >= len(rows) {
+		return []T{}
+	}
+	end := start + limit
+	if end > len(rows) {
+		end = len(rows)
+	}
+	return append([]T(nil), rows[start:end]...)
 }
 
 func newID(prefix string) string {

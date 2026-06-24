@@ -137,7 +137,7 @@ func TestDeploymentAPIRequiresAuthentication(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/deployments", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/deployments", nil)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -153,7 +153,7 @@ func TestDeploymentAPIRejectsBrowserPostWithoutCSRF(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/deployments", bytes.NewBufferString(`{"workspaceId":"test"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/deployments", bytes.NewBufferString(`{"title":"Test"}`))
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -242,7 +242,7 @@ func TestDeploymentAPIRejectsViewer(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/deployments", bytes.NewBufferString(`{"workspaceId":"test"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/deployments", bytes.NewBufferString(`{"title":"Test"}`))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
@@ -250,6 +250,74 @@ func TestDeploymentAPIRejectsViewer(t *testing.T) {
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	}
+}
+
+func TestDeploymentAPIV1CreateUsesPathWorkspaceAndRejectsMalformedJSON(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	malformedReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/path-workspace/deployments", bytes.NewBufferString(`{"workspaceId":`))
+	malformedReq.Header.Set("Authorization", "Bearer dev")
+	malformedReq.Header.Set("Accept", "application/json")
+	malformedRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(malformedRec, malformedReq)
+	if malformedRec.Code != http.StatusBadRequest {
+		t.Fatalf("malformed status = %d, want %d body=%s", malformedRec.Code, http.StatusBadRequest, malformedRec.Body.String())
+	}
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/path-workspace/deployments", bytes.NewBufferString(`{"title":"Path wins"}`))
+	createReq.Header.Set("Authorization", "Bearer dev")
+	createReq.Header.Set("Accept", "application/json")
+	createRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d body=%s", createRec.Code, createRec.Body.String())
+	}
+	var created api.DeploymentResponse
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+	if created.WorkspaceID != "path-workspace" {
+		t.Fatalf("workspaceID = %q, want path-workspace", created.WorkspaceID)
+	}
+}
+
+func TestDeploymentAPIV1WrongWorkspaceDeploymentReturnsNotFound(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	ctx := context.Background()
+	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
+	created, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create deployment: %v", err)
+	}
+	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, deployment.Validation{Digest: "digest", ManifestJSON: "{}"}, zeroArtifact(created.ID, "test")); err != nil {
+		t.Fatalf("validate deployment: %v", err)
+	}
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Reloader: &fakeReloader{}, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	for _, tc := range []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "get", method: http.MethodGet, path: "/api/v1/workspaces/other/deployments/" + string(created.ID)},
+		{name: "activate", method: http.MethodPost, path: "/api/v1/workspaces/other/deployments/" + string(created.ID) + "/activate"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			req.Header.Set("Authorization", "Bearer dev")
+			req.Header.Set("Accept", "application/json")
+			rec := httptest.NewRecorder()
+			server.Routes().ServeHTTP(rec, req)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
+			}
+		})
 	}
 }
 
@@ -261,7 +329,7 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Reloader: reloader, ArtifactDir: artifactDir, DefaultWorkspaceID: "test"})
 
-	createReq := httptest.NewRequest(http.MethodPost, "/api/deployments", bytes.NewBufferString(`{"workspaceId":"test","title":"Test"}`))
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/deployments", bytes.NewBufferString(`{"title":"Test"}`))
 	createReq.Header.Set("Authorization", "Bearer dev")
 	createReq.Header.Set("Accept", "application/json")
 	createRec := httptest.NewRecorder()
@@ -278,7 +346,7 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 	if _, _, err := deploymentfs.PackCatalog(filepath.Join("..", "..", "dashboards", "catalog.yaml"), &bundle); err != nil {
 		t.Fatalf("pack catalog: %v", err)
 	}
-	uploadReq := httptest.NewRequest(http.MethodPut, "/api/deployments/"+created.ID+"/artifact", bytes.NewReader(bundle.Bytes()))
+	uploadReq := httptest.NewRequest(http.MethodPut, "/api/v1/workspaces/test/deployments/"+created.ID+"/artifact", bytes.NewReader(bundle.Bytes()))
 	uploadReq.Header.Set("Authorization", "Bearer dev")
 	uploadReq.Header.Set("Accept", "application/json")
 	uploadRec := httptest.NewRecorder()
@@ -287,7 +355,7 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 		t.Fatalf("upload status = %d body=%s", uploadRec.Code, uploadRec.Body.String())
 	}
 
-	validateReq := httptest.NewRequest(http.MethodPost, "/api/deployments/"+created.ID+"/validate", nil)
+	validateReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/deployments/"+created.ID+"/validate", nil)
 	validateReq.Header.Set("Authorization", "Bearer dev")
 	validateReq.Header.Set("Accept", "application/json")
 	validateRec := httptest.NewRecorder()
@@ -296,7 +364,7 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 		t.Fatalf("validate status = %d body=%s", validateRec.Code, validateRec.Body.String())
 	}
 
-	activateReq := httptest.NewRequest(http.MethodPost, "/api/deployments/"+created.ID+"/activate", nil)
+	activateReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/deployments/"+created.ID+"/activate", nil)
 	activateReq.Header.Set("Authorization", "Bearer dev")
 	activateReq.Header.Set("Accept", "application/json")
 	activateRec := httptest.NewRecorder()
@@ -328,7 +396,7 @@ func TestDeploymentActivationPrepareFailureLeavesDeploymentInactive(t *testing.T
 	reloader := &fakeReloader{prepareErr: errors.New("runtime load failed")}
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Reloader: reloader, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/deployments/"+string(created.ID)+"/activate", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/deployments/"+string(created.ID)+"/activate", nil)
 	req.Header.Set("Authorization", "Bearer dev")
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
@@ -356,7 +424,7 @@ func TestWorkspaceAssetAPIListsActiveDeploymentAssets(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/workspaces/test/assets?type=connection", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/assets?type=connection", nil)
 	req.Header.Set("Authorization", "Bearer dev")
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
@@ -772,19 +840,29 @@ func TestWorkspaceRoleBindingAPIUpsertsPrincipalRole(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", "owner")
+	analyst, err := testAccessRepository(store).UpsertPrincipal(ctx, access.PrincipalInput{ID: access.PrincipalIDForEmail("analyst@example.com"), Email: "analyst@example.com", DisplayName: "Analyst"})
+	if err != nil {
+		t.Fatalf("seed analyst: %v", err)
+	}
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/workspaces/test/role-bindings", bytes.NewBufferString(`{"email":"analyst@example.com","displayName":"Analyst","role":"viewer"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/role-bindings", bytes.NewBufferString(`{"subjectType":"principal","subjectId":"`+analyst.ID+`","role":"viewer"}`))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("upsert status = %d body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d body=%s", rec.Code, rec.Body.String())
 	}
-	updateReq := httptest.NewRequest(http.MethodPost, "/api/workspaces/test/role-bindings", bytes.NewBufferString(`{"email":"analyst@example.com","displayName":"Analyst","role":"editor"}`))
+	var createdBinding struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &createdBinding); err != nil {
+		t.Fatalf("decode binding: %v", err)
+	}
+	updateReq := httptest.NewRequest(http.MethodPatch, "/api/v1/workspaces/test/role-bindings/"+createdBinding.ID, bytes.NewBufferString(`{"subjectType":"principal","subjectId":"`+analyst.ID+`","role":"editor"}`))
 	updateReq.Header.Set("Authorization", "Bearer "+token)
 	updateReq.Header.Set("Accept", "application/json")
 	updateRec := httptest.NewRecorder()
@@ -793,7 +871,7 @@ func TestWorkspaceRoleBindingAPIUpsertsPrincipalRole(t *testing.T) {
 		t.Fatalf("update status = %d body=%s", updateRec.Code, updateRec.Body.String())
 	}
 
-	listReq := httptest.NewRequest(http.MethodGet, "/api/workspaces/test/role-bindings", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/role-bindings", nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
 	listReq.Header.Set("Accept", "application/json")
 	listRec := httptest.NewRecorder()
@@ -833,7 +911,7 @@ func TestWorkspaceAccessCommandUpsertsAndPatchesSignals(t *testing.T) {
 		}
 	}
 
-	listReq := httptest.NewRequest(http.MethodGet, "/api/workspaces/test/role-bindings", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/role-bindings", nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
 	listReq.Header.Set("Accept", "application/json")
 	listRec := httptest.NewRecorder()
@@ -857,7 +935,7 @@ func TestWorkspaceAccessCommandUpsertsAndPatchesSignals(t *testing.T) {
 		t.Fatalf("workspace access remove did not patch success:\n%s", removeRec.Body.String())
 	}
 
-	removedListReq := httptest.NewRequest(http.MethodGet, "/api/workspaces/test/role-bindings", nil)
+	removedListReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/role-bindings", nil)
 	removedListReq.Header.Set("Authorization", "Bearer "+token)
 	removedListReq.Header.Set("Accept", "application/json")
 	removedListRec := httptest.NewRecorder()
@@ -907,7 +985,7 @@ func TestWorkspaceAccessCommandPatchesInvalidInput(t *testing.T) {
 		t.Fatalf("invalid access command did not patch validation error:\n%s", body)
 	}
 
-	listReq := httptest.NewRequest(http.MethodGet, "/api/workspaces/test/role-bindings", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/role-bindings", nil)
 	listReq.Header.Set("Authorization", "Bearer "+token)
 	listReq.Header.Set("Accept", "application/json")
 	listRec := httptest.NewRecorder()

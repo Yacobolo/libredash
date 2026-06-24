@@ -10,6 +10,9 @@ import (
 	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
 	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	"github.com/Yacobolo/libredash/internal/platform"
+	"github.com/Yacobolo/libredash/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
 
 func TestRegistersCSVSourcesAndMaterializesModelTables(t *testing.T) {
@@ -158,6 +161,62 @@ func TestValidateFilesUsesLocalConnectionRoot(t *testing.T) {
 	}
 }
 
+func TestRunServicePersistsQueuedRunningAndSucceededStates(t *testing.T) {
+	ctx := context.Background()
+	store := openMaterializationStore(t, ctx)
+	defer store.Close()
+	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
+	runner := &recordingRefreshRunner{}
+	service := analyticsmaterialize.RunService{Repo: repo, Runner: runner}
+
+	queued, err := service.Enqueue(ctx, analyticsmaterialize.RunInput{
+		WorkspaceID:  "test",
+		ModelID:      "model.orders",
+		DeploymentID: "dep_1",
+	})
+	if err != nil {
+		t.Fatalf("enqueue run: %v", err)
+	}
+	if queued.Status != analyticsmaterialize.RunStatusQueued || queued.ModelID != "model.orders" || queued.DeploymentID != "dep_1" {
+		t.Fatalf("queued run = %#v", queued)
+	}
+
+	finished, err := service.Execute(ctx, "test", queued.ID)
+	if err != nil {
+		t.Fatalf("execute run: %v", err)
+	}
+	if finished.Status != analyticsmaterialize.RunStatusSucceeded || finished.FinishedAt == "" || runner.modelID != "model.orders" {
+		t.Fatalf("finished run = %#v runner=%#v", finished, runner)
+	}
+	stored, err := repo.GetRun(ctx, "test", queued.ID)
+	if err != nil {
+		t.Fatalf("get run: %v", err)
+	}
+	if stored.Status != analyticsmaterialize.RunStatusSucceeded || stored.ModelID != "model.orders" || stored.DeploymentID != "dep_1" {
+		t.Fatalf("stored run = %#v", stored)
+	}
+}
+
+func TestRunServicePersistsFailedStateWithError(t *testing.T) {
+	ctx := context.Background()
+	store := openMaterializationStore(t, ctx)
+	defer store.Close()
+	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
+	service := analyticsmaterialize.RunService{Repo: repo, Runner: failingRefreshRunner{}}
+	queued, err := service.Enqueue(ctx, analyticsmaterialize.RunInput{WorkspaceID: "test", ModelID: "model.orders"})
+	if err != nil {
+		t.Fatalf("enqueue run: %v", err)
+	}
+
+	failed, err := service.Execute(ctx, "test", queued.ID)
+	if err == nil {
+		t.Fatal("execute run unexpectedly succeeded")
+	}
+	if failed.Status != analyticsmaterialize.RunStatusFailed || failed.Error == "" || failed.FinishedAt == "" {
+		t.Fatalf("failed run = %#v err=%v", failed, err)
+	}
+}
+
 func writeFixture(t *testing.T, dir, name, content string) {
 	t.Helper()
 	path := filepath.Join(dir, name)
@@ -167,4 +226,37 @@ func writeFixture(t *testing.T, dir, name, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+type recordingRefreshRunner struct {
+	modelID string
+}
+
+func (r *recordingRefreshRunner) RefreshMaterializations(_ context.Context, modelID string) error {
+	r.modelID = modelID
+	return nil
+}
+
+type failingRefreshRunner struct{}
+
+func (failingRefreshRunner) RefreshMaterializations(context.Context, string) error {
+	return errors.New("refresh failed")
+}
+
+func openMaterializationStore(t *testing.T, ctx context.Context) *platform.Store {
+	t.Helper()
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, `
+		INSERT INTO deployments (id, workspace_id, status, digest, manifest_json, created_by)
+		VALUES ('dep_1', 'test', 'active', 'sha256:test', '{}', 'test')
+	`); err != nil {
+		t.Fatalf("seed deployment: %v", err)
+	}
+	return store
 }

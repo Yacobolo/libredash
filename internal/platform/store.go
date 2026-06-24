@@ -102,12 +102,27 @@ func (s *Store) seedDefaults(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
+		roleID := "role_" + role.Name
 		if err := s.q.UpsertRole(ctx, db.UpsertRoleParams{
-			ID:              "role_" + role.Name,
+			ID:              roleID,
 			Name:            role.Name,
 			PermissionsJson: string(bytes),
 		}); err != nil {
 			return err
+		}
+		if err := s.q.ClearRolePermissions(ctx, roleID); err != nil {
+			return err
+		}
+		for _, permission := range role.Permissions {
+			if err := s.q.UpsertPermission(ctx, permission); err != nil {
+				return err
+			}
+			if err := s.q.InsertRolePermission(ctx, db.InsertRolePermissionParams{
+				RoleID:         roleID,
+				PermissionName: permission,
+			}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
