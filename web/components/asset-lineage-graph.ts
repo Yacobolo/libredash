@@ -76,10 +76,11 @@ class AssetLineageGraph extends LitElement {
   private renderFlow(): void {
     if (!this.root) return
     const graph = this.resolvedGraph
+    const layout = lineageLayout(graph)
     this.root.render(
       React.createElement(ReactFlow, {
-        nodes: graph.nodes.map((node) => toFlowNode(node, graph.nodes)),
-        edges: graph.edges.map(toFlowEdge),
+        nodes: graph.nodes.map((node) => toFlowNode(node, layout)),
+        edges: graph.edges.map((edge) => toFlowEdge(edge, layout)),
         nodeTypes: { lineageNode: LineageNodeComponent },
         fitView: true,
         fitViewOptions: { padding: 0.12 },
@@ -108,6 +109,11 @@ class AssetLineageGraph extends LitElement {
     }
     return { nodes: [], edges: [] }
   }
+}
+
+type LineageLayout = {
+  nodes: LineageNode[]
+  ranks: Map<string, number>
 }
 
 const assetLineageGraphStyles = `
@@ -195,8 +201,15 @@ const assetLineageGraphStyles = `
   }
 `
 
-function toFlowNode(node: LineageNode, nodes: LineageNode[]): Node {
-  const { x, y } = positionFor(node, nodes)
+function lineageLayout(graph: LineageGraph): LineageLayout {
+  return {
+    nodes: graph.nodes,
+    ranks: visualRanks(graph.nodes, graph.edges),
+  }
+}
+
+function toFlowNode(node: LineageNode, layout: LineageLayout): Node {
+  const { x, y } = positionFor(node, layout)
   return {
     id: node.id,
     type: 'lineageNode',
@@ -207,12 +220,13 @@ function toFlowNode(node: LineageNode, nodes: LineageNode[]): Node {
   }
 }
 
-function toFlowEdge(edge: LineageEdge): Edge {
+function toFlowEdge(edge: LineageEdge, layout: LineageLayout): Edge {
   const context = edge.kind === 'contains'
+  const { source, target } = visualEdgeEndpoints(edge, layout)
   return {
     id: edge.id,
-    source: edge.source,
-    target: edge.target,
+    source,
+    target,
     label: context ? '' : edge.label ?? '',
     type: context ? 'smoothstep' : 'default',
     markerEnd: context ? undefined : { type: MarkerType.ArrowClosed },
@@ -235,12 +249,44 @@ function toFlowEdge(edge: LineageEdge): Edge {
   }
 }
 
-function positionFor(node: LineageNode, nodes: LineageNode[]): { x: number; y: number } {
-  const ranks = Array.from(new Set(nodes.map(nodeRank))).sort((left, right) => left - right)
-  const rank = nodeRank(node)
+function visualRanks(nodes: LineageNode[], edges: LineageEdge[]): Map<string, number> {
+  const ranks = new Map(nodes.map((node) => [node.id, nodeRank(node)]))
+  const layout: LineageLayout = { nodes, ranks }
+  for (let pass = 0; pass < nodes.length; pass += 1) {
+    let changed = false
+    for (const edge of edges) {
+      const { source, target } = visualEdgeEndpoints(edge, layout)
+      const sourceRank = ranks.get(source) ?? 0
+      const targetRank = ranks.get(target) ?? 0
+      if (targetRank <= sourceRank) {
+        ranks.set(target, sourceRank + 1)
+        changed = true
+      }
+    }
+    if (!changed) break
+  }
+  return ranks
+}
+
+function visualEdgeEndpoints(edge: LineageEdge, layout: LineageLayout): { source: string; target: string } {
+  const byID = new Map(layout.nodes.map((node) => [node.id, node]))
+  const source = byID.get(edge.source)
+  const target = byID.get(edge.target)
+  if (!source || !target) return { source: edge.source, target: edge.target }
+  const sourceRank = layout.ranks.get(source.id) ?? nodeRank(source)
+  const targetRank = layout.ranks.get(target.id) ?? nodeRank(target)
+  if (sourceRank > targetRank || (sourceRank === targetRank && nodeSortKey(source) > nodeSortKey(target))) {
+    return { source: edge.target, target: edge.source }
+  }
+  return { source: edge.source, target: edge.target }
+}
+
+function positionFor(node: LineageNode, layout: LineageLayout): { x: number; y: number } {
+  const ranks = Array.from(new Set(layout.nodes.map((candidate) => visualRank(candidate, layout)))).sort((left, right) => left - right)
+  const rank = visualRank(node, layout)
   const rankIndex = Math.max(0, ranks.indexOf(rank))
-  const rankNodes = nodes
-    .filter((candidate) => nodeRank(candidate) === rank)
+  const rankNodes = layout.nodes
+    .filter((candidate) => visualRank(candidate, layout) === rank)
     .sort((left, right) => nodeSortKey(left).localeCompare(nodeSortKey(right)))
   const index = Math.max(0, rankNodes.findIndex((candidate) => candidate.id === node.id))
   const centeredOffset = (index - (rankNodes.length - 1) / 2) * 124
@@ -248,6 +294,10 @@ function positionFor(node: LineageNode, nodes: LineageNode[]): { x: number; y: n
     x: 96 + rankIndex * 260,
     y: Math.max(48, 240 + centeredOffset),
   }
+}
+
+function visualRank(node: LineageNode, layout: LineageLayout): number {
+  return layout.ranks.get(node.id) ?? nodeRank(node)
 }
 
 function nodeRank(node: LineageNode): number {
