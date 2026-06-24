@@ -630,11 +630,35 @@ func assetLineage(workspaceID string, selected api.AssetResponse, assets []api.A
 		}
 	}
 
+	var walkDownstreamGraphOnly func(assetID string, depth int, visiting map[string]struct{})
+	walkDownstreamGraphOnly = func(assetID string, depth int, visiting map[string]struct{}) {
+		if _, ok := visiting[assetID]; ok {
+			return
+		}
+		visiting[assetID] = struct{}{}
+		defer delete(visiting, assetID)
+		for _, edge := range sortedLineageEdges(incoming[assetID], byID) {
+			if !isLineageDependencyEdge(edge) {
+				continue
+			}
+			asset, ok := byID[edge.FromAssetID]
+			if !ok {
+				continue
+			}
+			addNode(asset, depth, false)
+			addEdge(edge)
+			walkDownstreamGraphOnly(asset.ID, depth+1, visiting)
+		}
+	}
+
 	for _, rootID := range lineageDependencyRootIDs(selected, outgoing, byID) {
 		if rootID != selected.ID {
 			addNode(byID[rootID], 1, false)
 		}
 		walkUpstream(rootID, 1, map[string]struct{}{})
+		if rootID != selected.ID {
+			walkDownstreamGraphOnly(rootID, 1, map[string]struct{}{})
+		}
 	}
 	walkDownstream(selected.ID, 1, map[string]struct{}{})
 	addContainsContext(selected.ID, &graph, nodeIndex, byID, edges, addNode, addEdge)
@@ -666,10 +690,110 @@ func assetLineage(workspaceID string, selected api.AssetResponse, assets []api.A
 	sortLineageRows(usedByRows)
 	return assetLineageModel{
 		Count:  len(usesRows) + len(usedByRows),
-		Graph:  graph,
+		Graph:  collapsedAssetLineageGraph(workspaceID, selected, graph, byID),
 		Uses:   lineageTable(usesRows, "This asset does not reference other assets."),
 		UsedBy: lineageTable(usedByRows, "No assets reference this asset."),
 	}
+}
+
+func collapsedAssetLineageGraph(workspaceID string, selected api.AssetResponse, graph assetLineageGraph, assets map[string]api.AssetResponse) assetLineageGraph {
+	if selected.Type == "catalog" {
+		return graph
+	}
+	selectedAnchor, selectedAnchorOK := lineageVisibleAnchor(selected, assets)
+	out := assetLineageGraph{}
+	nodeIndex := map[string]int{}
+	addNode := func(asset api.AssetResponse) {
+		if asset.ID == "" {
+			return
+		}
+		if _, ok := nodeIndex[asset.ID]; ok {
+			return
+		}
+		selectedNode := selectedAnchorOK && asset.ID == selectedAnchor.ID
+		nodeIndex[asset.ID] = len(out.Nodes)
+		out.Nodes = append(out.Nodes, lineageNode(workspaceID, asset, lineageVisualLayer(asset.Type), selectedNode))
+	}
+
+	type collapsedEdge struct {
+		source string
+		target string
+		kind   string
+		label  string
+	}
+	candidates := []collapsedEdge{}
+	for _, node := range graph.Nodes {
+		asset, ok := assets[node.ID]
+		if !ok {
+			continue
+		}
+		if anchor, ok := lineageVisibleAnchor(asset, assets); ok {
+			addNode(anchor)
+		}
+	}
+	for _, edge := range graph.Edges {
+		if !isLineageDependencyEdge(api.AssetEdgeResponse{Type: edge.Kind}) {
+			continue
+		}
+		consumer, consumerOK := assets[edge.Source]
+		provider, providerOK := assets[edge.Target]
+		if !consumerOK || !providerOK {
+			continue
+		}
+		source, sourceOK := lineageVisibleAnchor(provider, assets)
+		target, targetOK := lineageVisibleAnchor(consumer, assets)
+		if !sourceOK || !targetOK || source.ID == target.ID {
+			continue
+		}
+		addNode(source)
+		addNode(target)
+		candidates = append(candidates, collapsedEdge{
+			source: source.ID,
+			target: target.ID,
+			kind:   lineageCollapsedEdgeKind(source.Type, target.Type, edge.Kind),
+			label:  lineageCollapsedEdgeLabel(source.Type, target.Type, edge.Kind),
+		})
+	}
+
+	hasMeasureDashboard := false
+	for _, edge := range candidates {
+		if edge.source == "" || edge.target == "" {
+			continue
+		}
+		source := assets[edge.source]
+		target := assets[edge.target]
+		if source.Type == "measure" && target.Type == "dashboard" {
+			hasMeasureDashboard = true
+			break
+		}
+	}
+
+	seenEdges := map[string]struct{}{}
+	for _, edge := range candidates {
+		source := assets[edge.source]
+		target := assets[edge.target]
+		if hasMeasureDashboard && source.Type == "semantic_model" && target.Type == "dashboard" {
+			continue
+		}
+		if lineageVisualLayer(source.Type) >= lineageVisualLayer(target.Type) {
+			continue
+		}
+		key := edge.source + "|" + edge.target + "|" + edge.kind
+		if _, ok := seenEdges[key]; ok {
+			continue
+		}
+		seenEdges[key] = struct{}{}
+		out.Edges = append(out.Edges, assetLineageEdge{
+			ID:     key,
+			Source: edge.source,
+			Target: edge.target,
+			Label:  edge.label,
+			Kind:   edge.kind,
+		})
+	}
+	sortLineageNodes(out.Nodes)
+	sortLineageGraphEdges(out.Edges)
+	return out
 }
 
 func edgesByFromAsset(edges []api.AssetEdgeResponse) map[string][]api.AssetEdgeResponse {
@@ -771,6 +895,87 @@ func lineageDependencyRootIDs(selected api.AssetResponse, outgoing map[string][]
 
 func isLineageHiddenContextAsset(asset api.AssetResponse) bool {
 	return asset.Type == "catalog"
+}
+
+func lineageVisibleAnchor(asset api.AssetResponse, assets map[string]api.AssetResponse) (api.AssetResponse, bool) {
+	current := asset
+	seen := map[string]struct{}{}
+	for current.ID != "" {
+		if isLineageVisibleGraphAsset(current.Type) {
+			return current, true
+		}
+		if _, ok := seen[current.ID]; ok {
+			return api.AssetResponse{}, false
+		}
+		seen[current.ID] = struct{}{}
+		parent, ok := assets[current.ParentID]
+		if !ok {
+			return api.AssetResponse{}, false
+		}
+		current = parent
+	}
+	return api.AssetResponse{}, false
+}
+
+func isLineageVisibleGraphAsset(typ string) bool {
+	return lineageVisualLayer(typ) >= 0
+}
+
+func lineageVisualLayer(typ string) int {
+	switch typ {
+	case "connection":
+		return 0
+	case "source":
+		return 1
+	case "model_table":
+		return 2
+	case "semantic_model":
+		return 3
+	case "measure":
+		return 4
+	case "dashboard":
+		return 5
+	default:
+		return -1
+	}
+}
+
+func lineageCollapsedEdgeKind(sourceType, targetType, fallback string) string {
+	switch {
+	case sourceType == "connection" && targetType == "source":
+		return "lineage_connection_source"
+	case sourceType == "source" && targetType == "model_table":
+		return "lineage_source_model_table"
+	case sourceType == "model_table" && targetType == "semantic_model":
+		return "lineage_model_table_semantic_model"
+	case sourceType == "semantic_model" && targetType == "measure":
+		return "lineage_semantic_model_measure"
+	case sourceType == "measure" && targetType == "dashboard":
+		return "lineage_measure_dashboard"
+	case sourceType == "semantic_model" && targetType == "dashboard":
+		return "lineage_semantic_model_dashboard"
+	default:
+		return fallback
+	}
+}
+
+func lineageCollapsedEdgeLabel(sourceType, targetType, fallback string) string {
+	switch {
+	case sourceType == "connection" && targetType == "source":
+		return "Provides source"
+	case sourceType == "source" && targetType == "model_table":
+		return "Feeds model table"
+	case sourceType == "model_table" && targetType == "semantic_model":
+		return "Feeds semantic model"
+	case sourceType == "semantic_model" && targetType == "measure":
+		return "Defines measure"
+	case sourceType == "measure" && targetType == "dashboard":
+		return "Used in dashboard"
+	case sourceType == "semantic_model" && targetType == "dashboard":
+		return "Powers dashboard"
+	default:
+		return labelFromKey(fallback)
+	}
 }
 
 func isRollupLineageAsset(typ string) bool {

@@ -96,30 +96,23 @@ func TestAssetLineageProjectsRecursiveDependenciesAndContext(t *testing.T) {
 
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 
-	assertLineageNodeKinds(t, lineage.Graph, []string{
+	assertLineageNodeKindsExact(t, lineage.Graph, []string{
 		"connection",
-		"field",
 		"measure",
 		"model_table",
-		"page",
-		"page_item",
-		"semantic_table",
+		"dashboard",
+		"semantic_model",
 		"source",
-		"table",
-		"visual",
 	})
 	assertLineageEdgeKinds(t, lineage.Graph, []string{
-		"contains",
-		"reads_source",
-		"uses_connection",
-		"uses_field",
-		"uses_filter",
-		"uses_measure",
-		"uses_model_table",
-		"uses_semantic_table",
-		"uses_table",
-		"uses_visual",
+		"lineage_connection_source",
+		"lineage_source_model_table",
+		"lineage_model_table_semantic_model",
+		"lineage_semantic_model_measure",
+		"lineage_measure_dashboard",
 	})
+	assertLineageEdgesMoveLeftToRight(t, lineage.Graph)
+	assertLineageSelectedNode(t, lineage.Graph, "dashboard")
 	assertGridRelations(t, lineage.Uses, []string{
 		"Reads source",
 		"Uses connection",
@@ -146,18 +139,16 @@ func TestAssetLineageProjectsRecursiveConsumers(t *testing.T) {
 
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 
-	assertLineageNodeKinds(t, lineage.Graph, []string{
+	assertLineageNodeKindsExact(t, lineage.Graph, []string{
 		"connection",
-		"field",
+		"dashboard",
+		"measure",
 		"model_table",
-		"page",
-		"page_item",
 		"semantic_model",
-		"semantic_table",
 		"source",
-		"table",
-		"visual",
 	})
+	assertLineageEdgesMoveLeftToRight(t, lineage.Graph)
+	assertLineageSelectedNode(t, lineage.Graph, "semantic_model")
 	assertGridRelations(t, lineage.Uses, []string{
 		"Reads source",
 		"Uses connection",
@@ -170,6 +161,52 @@ func TestAssetLineageProjectsRecursiveConsumers(t *testing.T) {
 	})
 	if gridHasRelation(lineage.Uses, "Contains") || gridHasRelation(lineage.UsedBy, "Contains") {
 		t.Fatalf("consumer/dependency grids included contains edges: uses=%#v usedBy=%#v", lineage.Uses.Rows, lineage.UsedBy.Rows)
+	}
+}
+
+func TestAssetLineageDashboardDerivesMeasureConsumers(t *testing.T) {
+	workspace, _, assets, edges := testWorkspaceAssetFixtures()
+	asset := testAssetByID(t, assets, "dashboard")
+
+	lineage := assetLineage(workspace.ID, asset, assets, edges)
+
+	assertLineageNodeKindsExact(t, lineage.Graph, []string{
+		"connection",
+		"dashboard",
+		"measure",
+		"model_table",
+		"semantic_model",
+		"source",
+	})
+	assertLineageEdgeKinds(t, lineage.Graph, []string{"lineage_measure_dashboard"})
+	assertLineageEdgesMoveLeftToRight(t, lineage.Graph)
+	for _, edge := range lineage.Graph.Edges {
+		if edge.Source == "model" && edge.Target == "dashboard" {
+			t.Fatalf("semantic model dashboard shortcut should be suppressed when measure usage exists: %#v", lineage.Graph.Edges)
+		}
+	}
+}
+
+func TestAssetLineageSemanticModelDerivesMeasureDashboardPath(t *testing.T) {
+	workspace, _, assets, edges := testWorkspaceAssetFixtures()
+	asset := testAssetByID(t, assets, "model")
+
+	lineage := assetLineage(workspace.ID, asset, assets, edges)
+
+	assertLineageNodeKindsExact(t, lineage.Graph, []string{
+		"connection",
+		"dashboard",
+		"measure",
+		"model_table",
+		"semantic_model",
+		"source",
+	})
+	assertLineageEdgeKinds(t, lineage.Graph, []string{"lineage_measure_dashboard"})
+	assertLineageEdgesMoveLeftToRight(t, lineage.Graph)
+	for _, edge := range lineage.Graph.Edges {
+		if edge.Source == "model" && edge.Target == "dashboard" {
+			t.Fatalf("semantic model dashboard shortcut should be suppressed when measure usage exists: %#v", lineage.Graph.Edges)
+		}
 	}
 }
 
@@ -377,6 +414,22 @@ func assertLineageNodeKinds(t *testing.T, graph assetLineageGraph, expected []st
 	}
 }
 
+func assertLineageNodeKindsExact(t *testing.T, graph assetLineageGraph, expected []string) {
+	t.Helper()
+	got := map[string]int{}
+	for _, node := range graph.Nodes {
+		got[node.Kind]++
+	}
+	if len(got) != len(expected) {
+		t.Fatalf("lineage graph node kinds = %#v, want exactly %#v; nodes=%#v", got, expected, graph.Nodes)
+	}
+	for _, kind := range expected {
+		if got[kind] == 0 {
+			t.Fatalf("lineage graph missing node kind %q: %#v", kind, graph.Nodes)
+		}
+	}
+}
+
 func assertLineageEdgeKinds(t *testing.T, graph assetLineageGraph, expected []string) {
 	t.Helper()
 	got := map[string]struct{}{}
@@ -388,6 +441,32 @@ func assertLineageEdgeKinds(t *testing.T, graph assetLineageGraph, expected []st
 			t.Fatalf("lineage graph missing edge kind %q: %#v", kind, graph.Edges)
 		}
 	}
+}
+
+func assertLineageEdgesMoveLeftToRight(t *testing.T, graph assetLineageGraph) {
+	t.Helper()
+	ranks := map[string]int{}
+	for _, node := range graph.Nodes {
+		ranks[node.ID] = node.Rank
+	}
+	for _, edge := range graph.Edges {
+		if ranks[edge.Source] >= ranks[edge.Target] {
+			t.Fatalf("lineage edge does not move left-to-right: edge=%#v ranks=%#v nodes=%#v", edge, ranks, graph.Nodes)
+		}
+	}
+}
+
+func assertLineageSelectedNode(t *testing.T, graph assetLineageGraph, wantKind string) {
+	t.Helper()
+	for _, node := range graph.Nodes {
+		if node.Selected {
+			if node.Kind != wantKind {
+				t.Fatalf("selected lineage node kind = %q, want %q: %#v", node.Kind, wantKind, graph.Nodes)
+			}
+			return
+		}
+	}
+	t.Fatalf("lineage graph has no selected node: %#v", graph.Nodes)
 }
 
 func assertGridRelations(t *testing.T, grid metricGrid, expected []string) {
