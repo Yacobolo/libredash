@@ -45,8 +45,11 @@ The current product goal is to feel like a small Power BI-style workspace: dashb
 
 - `task dev`
 - `task bootstrap`
+- `task ci`
 - `task test`
 - `task build`
 - `task dev:stop`
 - `task dev:status`
 - `task dev:logs`
+
+Use `task ci` as the default full verification command before handing off substantial changes.

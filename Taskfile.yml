@@ -64,6 +64,11 @@ tasks:
       - npm run test:table-selection
       - go test ./...
 
+  ci:
+    desc: Run the full CI test suite
+    deps:
+      - test
+
   agent:e2e:
     desc: Run opt-in DeepSeek-backed headless agent E2E
     cmds:
