@@ -294,7 +294,6 @@ type FilterTargets struct {
 }
 
 type SelectionInteraction struct {
-	Mode     string             `yaml:"mode" json:"mode,omitempty"`
 	Toggle   bool               `yaml:"toggle" json:"toggle,omitempty"`
 	Mappings []SelectionMapping `yaml:"mappings" json:"mappings,omitempty"`
 	Targets  []string           `yaml:"targets" json:"targets,omitempty"`
@@ -314,10 +313,6 @@ func (s *SelectionInteraction) UnmarshalYAML(value *yaml.Node) error {
 		key := value.Content[index].Value
 		item := value.Content[index+1]
 		switch key {
-		case "mode":
-			if err := item.Decode(&s.Mode); err != nil {
-				return err
-			}
 		case "toggle":
 			if err := item.Decode(&s.Toggle); err != nil {
 				return err
@@ -364,7 +359,7 @@ func (i *Interaction) UnmarshalYAML(value *yaml.Node) error {
 }
 
 func (s SelectionInteraction) IsZero() bool {
-	return s.Mode == "" && !s.Toggle && len(s.Mappings) == 0 && len(s.Targets) == 0
+	return !s.Toggle && len(s.Mappings) == 0 && len(s.Targets) == 0
 }
 
 type TableVisual struct {

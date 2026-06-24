@@ -182,7 +182,6 @@ type InteractionSelection struct {
 	SourceKind      string                      `json:"sourceKind"`
 	SourceID        string                      `json:"sourceId"`
 	InteractionKind string                      `json:"interactionKind"`
-	Mode            string                      `json:"mode"`
 	Entries         []InteractionSelectionEntry `json:"entries"`
 	Label           string                      `json:"label"`
 	Order           int                         `json:"order"`
@@ -204,7 +203,6 @@ type InteractionCommand struct {
 	SourceID        string                      `json:"sourceId"`
 	InteractionKind string                      `json:"interactionKind"`
 	Action          string                      `json:"action"`
-	Mode            string                      `json:"mode"`
 	Toggle          bool                        `json:"toggle"`
 	Mappings        []InteractionCommandMapping `json:"mappings"`
 }
@@ -242,10 +240,6 @@ func (f Filters) ApplyInteraction(command InteractionCommand) Filters {
 	selectionID := command.SourceKind + ":" + command.SourceID + ":" + command.InteractionKind
 	next := make([]InteractionSelection, 0, len(f.Selections)+1)
 	maxOrder := 0
-	mode := command.Mode
-	if mode == "" {
-		mode = "single"
-	}
 	changed := false
 
 	for _, selection := range f.Selections {
@@ -258,8 +252,11 @@ func (f Filters) ApplyInteraction(command InteractionCommand) Filters {
 				continue
 			}
 			selection.ID = selectionID
-			selection.Mode = mode
-			selection.Entries = updateSelectionEntries(selection.Entries, command.Mappings, mode, command.Toggle)
+			if command.Action == "replace" {
+				selection.Entries = updateSelectionEntries(nil, command.Mappings, false)
+			} else {
+				selection.Entries = updateSelectionEntries(selection.Entries, command.Mappings, command.Toggle)
+			}
 			selection.Label = interactionSelectionLabel(selection.Entries)
 			if len(selection.Entries) > 0 {
 				next = append(next, selection)
@@ -270,14 +267,13 @@ func (f Filters) ApplyInteraction(command InteractionCommand) Filters {
 	}
 
 	if !changed && command.Action != "clear" {
-		entries := updateSelectionEntries(nil, command.Mappings, mode, false)
+		entries := updateSelectionEntries(nil, command.Mappings, false)
 		if len(entries) > 0 {
 			next = append(next, InteractionSelection{
 				ID:              selectionID,
 				SourceKind:      command.SourceKind,
 				SourceID:        command.SourceID,
 				InteractionKind: command.InteractionKind,
-				Mode:            mode,
 				Entries:         entries,
 				Label:           interactionSelectionLabel(entries),
 				Order:           maxOrder + 1,
@@ -289,16 +285,10 @@ func (f Filters) ApplyInteraction(command InteractionCommand) Filters {
 	return f
 }
 
-func updateSelectionEntries(existing []InteractionSelectionEntry, incoming []InteractionCommandMapping, mode string, toggle bool) []InteractionSelectionEntry {
+func updateSelectionEntries(existing []InteractionSelectionEntry, incoming []InteractionCommandMapping, toggle bool) []InteractionSelectionEntry {
 	entry := interactionSelectionEntry(incoming)
 	if len(entry.Mappings) == 0 {
 		return nil
-	}
-	if mode != "multi" {
-		if toggle && selectionEntriesContain(existing, entry) {
-			return nil
-		}
-		return []InteractionSelectionEntry{entry}
 	}
 
 	out := make([]InteractionSelectionEntry, 0, len(existing)+1)
@@ -472,7 +462,6 @@ type Datum map[string]any
 
 type InteractionConfig struct {
 	Kind     string                     `json:"kind"`
-	Mode     string                     `json:"mode"`
 	Toggle   bool                       `json:"toggle"`
 	Mappings []InteractionConfigMapping `json:"mappings"`
 	Targets  []string                   `json:"targets,omitempty"`

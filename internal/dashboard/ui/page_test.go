@@ -28,12 +28,12 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 			"category": {Type: "text", Label: "Category", Dimension: "orders.category", URLParam: "category", DefaultOperator: "contains"},
 		},
 		Visuals: map[string]reportdef.Visual{
-			"active_chart":   {Title: "Active", Type: "bar", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}},
+			"active_chart":   {Title: "Active", Type: "bar", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: reportdef.Interaction{PointSelection: reportdef.SelectionInteraction{Mappings: []reportdef.SelectionMapping{{Field: "orders.status", Value: "label"}}, Targets: []string{"orders"}}}},
 			"active_kpi":     {Kind: "kpi", Shape: "single_value", Query: reportdef.VisualQuery{Measures: fieldRefs("order_count")}, Options: map[string]any{"note": "Filtered", "tone": "ink"}},
 			"off_page_chart": {Title: "Off Page", Type: "bar", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}},
 		},
 		Tables: map[string]reportdef.TableVisual{
-			"orders":   {Title: "Orders", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, Style: dashboard.TableStyle{Density: "compact", Grid: "full"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order", Width: 220, Format: "text"}}},
+			"orders":   {Title: "Orders", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, Interaction: reportdef.Interaction{RowSelection: reportdef.SelectionInteraction{Mappings: []reportdef.SelectionMapping{{Field: "orders.order_id", Value: "order_id"}}, Targets: []string{"active_chart"}}}, Style: dashboard.TableStyle{Density: "compact", Grid: "full"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order", Width: 220, Format: "text"}}},
 			"matrix":   {Title: "Matrix", Kind: "matrix_table", Query: reportdef.TableQuery{Rows: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
 			"pivot":    {Title: "Pivot", Kind: "pivot_table", Query: reportdef.TableQuery{Rows: fieldRefs("orders.status"), Columns: fieldRefs("orders.category"), Measures: fieldRefs("order_count")}, Columns: []dashboard.TableColumn{{Key: "status", Label: "Status"}}},
 			"off_page": {Title: "Off Page", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
@@ -105,6 +105,12 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	}
 	if !strings.Contains(tables, `"style":{"density":"compact"`) || !strings.Contains(tables, `"rowHeight":28`) || !strings.Contains(tables, `"width":220`) {
 		t.Fatalf("tables page did not seed table style and column display metadata:\n%s", tables)
+	}
+	if !strings.Contains(showcase, `"interaction":{"kind":"point_selection","mappings":[{"field":"orders.status","label":"","value":"label"}]`) || strings.Contains(showcase, `"mode":"multi"`) {
+		t.Fatalf("showcase page did not seed point selection without mode:\n%s", showcase)
+	}
+	if !strings.Contains(tables, `"interaction":{"kind":"row_selection","mappings":[{"field":"orders.order_id","label":"","value":"order_id"}]`) || strings.Contains(tables, `"mode":"multi"`) {
+		t.Fatalf("tables page did not seed row selection without mode:\n%s", tables)
 	}
 	if strings.Contains(tables, `"off_page"`) {
 		t.Fatalf("tables page seeded off-page table:\n%s", tables)

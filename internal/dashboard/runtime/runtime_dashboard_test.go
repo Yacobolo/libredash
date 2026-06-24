@@ -525,6 +525,34 @@ relogios_presentes,watches_gifts
 		t.Fatalf("selected source table total rows = %d, want self selection not applied to source table total %d", selectedRowTable.TotalRows, table.TotalRows)
 	}
 
+	multiRowSelection := dashboard.Filters{
+		Selections: []dashboard.InteractionSelection{
+			interactionSelection("table", "orders_table", "row_selection", "orders.order_id", "o1", "o2"),
+		},
+	}
+	multiRowPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", multiRowSelection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := datumInt(multiRowPatch.Visuals["total_orders"].Data[0], "value"); got != 2 {
+		t.Fatalf("multi-row selected orders KPI value = %d, want 2", got)
+	}
+	if len(multiRowPatch.Visuals["orders"].Data) != 2 {
+		t.Fatalf("orders chart points under multi-row table selection = %d, want 2", len(multiRowPatch.Visuals["orders"].Data))
+	}
+	andMultiRowPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", dashboard.Filters{
+		Controls: map[string]dashboard.FilterControl{
+			"state": {Type: "multi_select", Operator: "in", Values: []string{"SP"}},
+		},
+		Selections: multiRowSelection.Selections,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := datumInt(andMultiRowPatch.Visuals["total_orders"].Data[0], "value"); got != 1 {
+		t.Fatalf("page filter AND multi-row selected orders KPI value = %d, want 1", got)
+	}
+
 	matrixTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
 		Table:      "state_status_matrix",
 		Block:      "all",
@@ -825,7 +853,6 @@ func interactionSelection(sourceKind, sourceID, interactionKind, field string, v
 		SourceKind:      sourceKind,
 		SourceID:        sourceID,
 		InteractionKind: interactionKind,
-		Mode:            "multi",
 		Entries:         entries,
 		Label:           strings.Join(values, ", "),
 	}
@@ -858,7 +885,6 @@ func compositeInteractionSelection(sourceKind, sourceID, interactionKind string,
 		SourceKind:      sourceKind,
 		SourceID:        sourceID,
 		InteractionKind: interactionKind,
-		Mode:            "multi",
 		Entries:         entries,
 	}
 }

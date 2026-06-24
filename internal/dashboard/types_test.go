@@ -54,7 +54,7 @@ func TestTableRequestResetRequestsInitialBlocks(t *testing.T) {
 	}
 }
 
-func TestApplyInteractionReplacesOnlySourceSelection(t *testing.T) {
+func TestApplyInteractionReplaceUpdatesOnlySourceSelection(t *testing.T) {
 	filters := Filters{
 		Selections: []InteractionSelection{
 			interactionSelectionFixture("visual", "orders", "point_selection", entryFixture("orders.status", "delivered")),
@@ -66,9 +66,7 @@ func TestApplyInteractionReplacesOnlySourceSelection(t *testing.T) {
 		SourceKind:      "visual",
 		SourceID:        "orders",
 		InteractionKind: "point_selection",
-		Action:          "set",
-		Mode:            "single",
-		Toggle:          true,
+		Action:          "replace",
 		Mappings:        []InteractionCommandMapping{{Field: "orders.status", Value: "shipped", Label: "shipped"}},
 	})
 
@@ -106,14 +104,12 @@ func TestApplyInteractionClearsOnlySourceSelection(t *testing.T) {
 	}
 }
 
-func TestApplyInteractionStoresSingleSelectionAsFullTupleEntry(t *testing.T) {
+func TestApplyInteractionReplaceStoresSingleSelectionAsFullTupleEntry(t *testing.T) {
 	next := Filters{}.ApplyInteraction(InteractionCommand{
 		SourceKind:      "visual",
 		SourceID:        "state_status",
 		InteractionKind: "point_selection",
-		Action:          "set",
-		Mode:            "single",
-		Toggle:          true,
+		Action:          "replace",
 		Mappings: []InteractionCommandMapping{
 			{Field: "customers.state", Value: "SP", Label: "Sao Paulo"},
 			{Field: "orders.status", Value: "delivered", Label: "Delivered"},
@@ -173,13 +169,78 @@ func TestApplyInteractionMultiTogglesExactTupleEntries(t *testing.T) {
 	}
 }
 
+func TestApplyInteractionSetAccumulatesEntries(t *testing.T) {
+	filters := Filters{}
+	filters = filters.ApplyInteraction(InteractionCommand{
+		SourceKind:      "visual",
+		SourceID:        "orders",
+		InteractionKind: "point_selection",
+		Action:          "set",
+		Toggle:          true,
+		Mappings:        []InteractionCommandMapping{{Field: "orders.status", Value: "delivered", Label: "delivered"}},
+	})
+	filters = filters.ApplyInteraction(InteractionCommand{
+		SourceKind:      "visual",
+		SourceID:        "orders",
+		InteractionKind: "point_selection",
+		Action:          "set",
+		Toggle:          true,
+		Mappings:        []InteractionCommandMapping{{Field: "orders.status", Value: "shipped", Label: "shipped"}},
+	})
+
+	if len(filters.Selections) != 1 {
+		t.Fatalf("selection count = %d, want 1: %#v", len(filters.Selections), filters.Selections)
+	}
+	if got := selectionValues(filters, "visual", "orders", "orders.status"); len(got) != 2 || got[0] != "delivered" || got[1] != "shipped" {
+		t.Fatalf("set values = %#v, want [delivered shipped]", got)
+	}
+}
+
+func TestApplyInteractionReplaceReplacesEntries(t *testing.T) {
+	filters := Filters{}.ApplyInteraction(InteractionCommand{
+		SourceKind:      "table",
+		SourceID:        "orders_table",
+		InteractionKind: "row_selection",
+		Action:          "set",
+		Toggle:          true,
+		Mappings:        []InteractionCommandMapping{{Field: "orders.order_id", Value: "o1", Label: "o1"}},
+	})
+	filters = filters.ApplyInteraction(InteractionCommand{
+		SourceKind:      "table",
+		SourceID:        "orders_table",
+		InteractionKind: "row_selection",
+		Action:          "set",
+		Toggle:          true,
+		Mappings:        []InteractionCommandMapping{{Field: "orders.order_id", Value: "o2", Label: "o2"}},
+	})
+
+	if got := selectionValues(filters, "table", "orders_table", "orders.order_id"); len(got) != 2 || got[0] != "o1" || got[1] != "o2" {
+		t.Fatalf("multi toggle table values = %#v, want [o1 o2]", got)
+	}
+
+	filters = filters.ApplyInteraction(InteractionCommand{
+		SourceKind:      "table",
+		SourceID:        "orders_table",
+		InteractionKind: "row_selection",
+		Action:          "replace",
+		Toggle:          false,
+		Mappings:        []InteractionCommandMapping{{Field: "orders.order_id", Value: "o3", Label: "o3"}},
+	})
+
+	if len(filters.Selections) != 1 {
+		t.Fatalf("selection count = %d, want 1: %#v", len(filters.Selections), filters.Selections)
+	}
+	if got := selectionValues(filters, "table", "orders_table", "orders.order_id"); len(got) != 1 || got[0] != "o3" {
+		t.Fatalf("replace table values = %#v, want [o3]", got)
+	}
+}
+
 func interactionCommandFixture(mappings []InteractionCommandMapping) InteractionCommand {
 	return InteractionCommand{
 		SourceKind:      "visual",
 		SourceID:        "state_status",
 		InteractionKind: "point_selection",
 		Action:          "set",
-		Mode:            "multi",
 		Toggle:          true,
 		Mappings:        mappings,
 	}
@@ -191,7 +252,6 @@ func interactionSelectionFixture(sourceKind, sourceID, interactionKind string, e
 		SourceKind:      sourceKind,
 		SourceID:        sourceID,
 		InteractionKind: interactionKind,
-		Mode:            "single",
 		Entries:         append([]InteractionSelectionEntry{}, entries...),
 	}
 }

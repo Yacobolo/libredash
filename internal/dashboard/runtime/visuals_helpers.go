@@ -221,10 +221,6 @@ func tableInteractionConfig(selection reportdef.SelectionInteraction) dashboard.
 }
 
 func interactionConfig(kind string, selection reportdef.SelectionInteraction) dashboard.InteractionConfig {
-	mode := selection.Mode
-	if mode == "" {
-		mode = "single"
-	}
 	mappings := make([]dashboard.InteractionConfigMapping, 0, len(selection.Mappings))
 	for _, mapping := range selection.Mappings {
 		mappings = append(mappings, dashboard.InteractionConfigMapping{
@@ -235,7 +231,6 @@ func interactionConfig(kind string, selection reportdef.SelectionInteraction) da
 	}
 	return dashboard.InteractionConfig{
 		Kind:     kind,
-		Mode:     mode,
 		Toggle:   selection.Toggle,
 		Mappings: mappings,
 		Targets:  append([]string{}, selection.Targets...),

@@ -24,7 +24,7 @@ export const emptyTable: TableSignal = {
   kind: 'data_table',
   title: 'Orders',
   style: defaultTableStyle,
-  interaction: { kind: 'row_selection', mode: 'single', toggle: true, mappings: [] },
+  interaction: { kind: 'row_selection', toggle: true, mappings: [] },
   columns: [],
   totalRows: 0,
   availableRows: 0,

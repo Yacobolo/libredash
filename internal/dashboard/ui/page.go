@@ -358,7 +358,6 @@ func initialSignals(dataDir, clientID, csrfToken string, report reportdef.Dashbo
 			"sourceId":        "",
 			"interactionKind": "",
 			"action":          "",
-			"mode":            "single",
 			"toggle":          true,
 			"mappings":        []any{},
 		},
@@ -536,10 +535,6 @@ func visualSignal(id string, visual reportdef.Visual, title, unit, format, measu
 }
 
 func interactionSignal(kind string, selection reportdef.SelectionInteraction) map[string]any {
-	mode := selection.Mode
-	if mode == "" {
-		mode = "single"
-	}
 	mappings := make([]map[string]any, 0, len(selection.Mappings))
 	for _, mapping := range selection.Mappings {
 		mappings = append(mappings, map[string]any{
@@ -550,7 +545,6 @@ func interactionSignal(kind string, selection reportdef.SelectionInteraction) ma
 	}
 	return map[string]any{
 		"kind":     kind,
-		"mode":     mode,
 		"toggle":   selection.Toggle,
 		"mappings": mappings,
 		"targets":  append([]string{}, selection.Targets...),

@@ -98,7 +98,6 @@ visuals:
       limit: 30
     interaction:
       point_selection:
-        mode: multi
         toggle: true
         mappings:
         - field: orders.purchase_month
@@ -122,7 +121,6 @@ visuals:
         direction: desc
     interaction:
       point_selection:
-        mode: multi
         toggle: true
         mappings:
         - field: orders.status
@@ -154,7 +152,6 @@ visuals:
       limit: 40
     interaction:
       point_selection:
-        mode: multi
         toggle: true
         mappings:
         - field: orders.purchase_month
@@ -179,7 +176,6 @@ visuals:
       limit: 10
     interaction:
       point_selection:
-        mode: multi
         toggle: true
         mappings:
         - field: orders.category
@@ -203,7 +199,6 @@ visuals:
         direction: asc
     interaction:
       point_selection:
-        mode: multi
         toggle: true
         mappings:
         - field: orders.delivery_bucket
@@ -1134,7 +1129,6 @@ tables:
     title: Orders
     interaction:
       row_selection:
-        mode: single
         toggle: true
         mappings:
         - field: orders.order_id

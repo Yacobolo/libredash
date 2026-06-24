@@ -39,7 +39,6 @@ export interface TableStyle {
 
 export interface InteractionConfig {
   kind?: string
-  mode?: 'single' | 'multi' | string
   toggle?: boolean
   mappings?: InteractionMapping[]
   targets?: string[]

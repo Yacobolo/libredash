@@ -106,7 +106,6 @@ func (fakeMetrics) DefaultFilters(_ string) dashboard.Filters {
 func pointInteraction(field string, targets ...string) reportdef.Interaction {
 	return reportdef.Interaction{
 		PointSelection: reportdef.SelectionInteraction{
-			Mode:   "multi",
 			Toggle: true,
 			Mappings: []reportdef.SelectionMapping{{
 				Field: field,
@@ -518,7 +517,7 @@ func TestRefreshMaterializationsCommandAcceptsDatastarSignals(t *testing.T) {
 }
 
 func TestSelectCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[]},"runtime":{"clientId":"test-client"},"interactionCommand":{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","action":"set","mode":"multi","toggle":true,"mappings":[{"field":"orders.status","value":"delivered","label":"delivered"}]},"tableCommand":{"table":"orders","block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[]},"runtime":{"clientId":"test-client"},"interactionCommand":{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","value":"delivered","label":"delivered"}]},"tableCommand":{"table":"orders","block":"all","start":0,"count":50}}`)
 	req := httptest.NewRequest(http.MethodPost, "/commands/select", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -539,7 +538,7 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 		{
 			name: "interaction select",
 			path: "/commands/select",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","mode":"multi","toggle":true,"mappings":[{"field":"orders.status","value":"delivered","label":"delivered"}]},"tableCommand":{"block":"all","start":0,"count":50}}`,
+			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","value":"delivered","label":"delivered"}]},"tableCommand":{"block":"all","start":0,"count":50}}`,
 		},
 		{
 			name: "clear selection",

@@ -87,7 +87,6 @@ func TestSelectReturnsReloadEventsForActivePage(t *testing.T) {
 			SourceID:        "chart",
 			InteractionKind: "point_selection",
 			Action:          "set",
-			Mode:            "multi",
 			Toggle:          true,
 			Mappings: []dashboard.InteractionCommandMapping{{
 				Field: "state",

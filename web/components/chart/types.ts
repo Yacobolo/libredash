@@ -41,7 +41,6 @@ export type ChartDatum = Record<string, unknown>
 
 export type InteractionConfig = {
   kind?: string
-  mode?: 'single' | 'multi' | string
   toggle?: boolean
   mappings?: InteractionMapping[]
   targets?: string[]

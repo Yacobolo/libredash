@@ -354,7 +354,6 @@ class ChartVisual extends LitElement {
             sourceId: payload.id || this.visualId,
             interactionKind: payload.interaction?.kind || 'point_selection',
             action: 'clear',
-            mode: payload.interaction?.mode || 'multi',
             toggle: payload.interaction?.toggle !== false,
             mappings: [],
           },

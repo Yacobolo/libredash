@@ -533,7 +533,7 @@ pages:
 	}
 }
 
-func TestLoadDashboardRejectsUnknownSelectionKey(t *testing.T) {
+func TestLoadDashboardRejectsSelectionMode(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dashboard.yaml")
 	content := `id: test
@@ -551,7 +551,6 @@ visuals:
     interaction:
       point_selection:
         mode: multi
-        bogus: true
         mappings:
         - field: orders.status
           value: label
@@ -569,8 +568,8 @@ pages:
 		t.Fatal(err)
 	}
 	_, err := semantic.LoadDashboard(path)
-	if err == nil || !strings.Contains(err.Error(), "SelectionInteraction") {
-		t.Fatalf("LoadDashboard error = %v, want unknown selection key rejection", err)
+	if err == nil || !strings.Contains(err.Error(), "field mode not found") {
+		t.Fatalf("LoadDashboard error = %v, want mode key rejection", err)
 	}
 }
 
@@ -797,7 +796,6 @@ func TestDashboardValidateRejectsHierarchyPointSelection(t *testing.T) {
 	report := loadOlistDashboard(t, model)
 	visual := report.Visuals["category_status_sunburst"]
 	visual.Interaction.PointSelection = reportdef.SelectionInteraction{
-		Mode:   "single",
 		Toggle: true,
 		Mappings: []reportdef.SelectionMapping{{
 			Field: "orders.category",
@@ -811,14 +809,13 @@ func TestDashboardValidateRejectsHierarchyPointSelection(t *testing.T) {
 	assertDashboardValidateError(t, report, model, "does not support point_selection")
 }
 
-func TestDashboardValidateRejectsDataTableMultiRowSelection(t *testing.T) {
+func TestDashboardValidateAcceptsDataTableRowSelection(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
-	table := report.Tables["orders_table"]
-	table.Interaction.RowSelection.Mode = "multi"
-	report.Tables["orders_table"] = table
 
-	assertDashboardValidateError(t, report, model, "row_selection mode multi is not supported")
+	if err := workspacecompiler.ValidateDashboard(report, map[string]*Model{"olist": model}); err != nil {
+		t.Fatalf("ValidateDashboard with data table row selection: %v", err)
+	}
 }
 
 func TestDashboardValidateRejectsRadarPointSelection(t *testing.T) {
@@ -826,7 +823,6 @@ func TestDashboardValidateRejectsRadarPointSelection(t *testing.T) {
 	report := loadOlistDashboard(t, model)
 	visual := report.Visuals["status_radar"]
 	visual.Interaction.PointSelection = reportdef.SelectionInteraction{
-		Mode:   "single",
 		Toggle: true,
 		Mappings: []reportdef.SelectionMapping{{
 			Field: "orders.status",

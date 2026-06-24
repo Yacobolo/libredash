@@ -5,7 +5,6 @@ export type ChartInteractionDetail = {
   sourceId: string
   interactionKind: string
   action: 'set'
-  mode: string
   toggle: boolean
   mappings: Array<{ field: string; value: string; label: string }>
 }
@@ -28,7 +27,6 @@ export function chartInteractionDetailForDatum(payload: ChartPayload, datum: Cha
     sourceId: payload.id,
     interactionKind: interaction?.kind || 'point_selection',
     action: 'set',
-    mode: interaction?.mode || 'multi',
     toggle: interaction?.toggle !== false,
     mappings: commandMappings,
   }

@@ -199,7 +199,6 @@ class DataTable extends LitElement {
   static properties = {
     tableId: { attribute: 'table-id' },
     table: { attribute: 'table', converter: tableConverter },
-    selectedRowId: { state: true },
     selectedCellKey: { state: true },
     viewportTop: { state: true },
     viewportHeight: { state: true },
@@ -212,7 +211,6 @@ class DataTable extends LitElement {
 
   tableId = ''
   table: TableSignal = emptyTable
-  private selectedRowId = ''
   private selectedCellKey = ''
   private viewportTop = 0
   private viewportHeight = 0
@@ -1018,8 +1016,7 @@ class DataTable extends LitElement {
       this.expectedBlocks.clear()
       this.latestAcceptedSeq.clear()
       this.clearJumpTimer()
-      this.selectedRowId = ''
-      this.selectedCellKey = ''
+      this.clearLocalSelection()
     }
     this.mergeIncomingBlocks()
     if (changedProperties.has('table')) {
@@ -1172,7 +1169,7 @@ class DataTable extends LitElement {
         manualFiltering: true,
         manualPagination: true,
         enableRowSelection: true,
-        enableMultiRowSelection: false,
+        enableMultiRowSelection: true,
         columnResizeMode: 'onEnd',
         renderFallbackValue: '-',
         state: {
@@ -1190,8 +1187,7 @@ class DataTable extends LitElement {
         },
         onRowSelectionChange: (updater: unknown) => {
           this.rowSelection = applyUpdater(updater, this.rowSelection)
-          this.selectedRowId = Object.keys(this.rowSelection).find((key) => this.rowSelection[key]) ?? ''
-          if (!this.selectedRowId) this.selectedCellKey = ''
+          if (!this.hasLocalSelection()) this.selectedCellKey = ''
         },
       } as any,
     ) as any
@@ -1216,16 +1212,16 @@ class DataTable extends LitElement {
     return this.tableId.trim()
   }
 
-  selectCell(row: TableRow, _column: TableColumn, absoluteIndex: number): void {
+  selectCell(row: TableRow, _column: TableColumn, absoluteIndex: number, event: MouseEvent): void {
     const key = rowKey(row, absoluteIndex)
-    this.selectRow(key, row)
+    this.selectRow(key, row, event)
   }
 
-  private selectRow(key: string, row: TableRow): void {
-    this.selectedRowId = key
-    this.rowSelection = { [key]: true }
+  private selectRow(key: string, row: TableRow, event: MouseEvent): void {
+    const toggleGesture = event.metaKey || event.ctrlKey
+    this.rowSelection = toggleGesture ? this.toggledRowSelection(key) : { [key]: true }
     this.selectedCellKey = ''
-    this.emitRowSelection(row)
+    this.emitRowSelection(row, toggleGesture)
   }
 
   private syncSelectedRowFromTableSelection(): void {
@@ -1234,16 +1230,13 @@ class DataTable extends LitElement {
       this.clearLocalSelection()
       return
     }
-    const selected = this.loadedRows.find((item) => this.rowMatchesSelection(item.row, selection))
-    if (!selected) {
-      this.selectedRowId = ''
-      this.selectedCellKey = ''
-      this.rowSelection = {}
-      return
+    const next: RowSelectionState = {}
+    for (const item of this.loadedRows) {
+      if (this.rowMatchesSelection(item.row, selection)) {
+        next[rowKey(item.row, item.index)] = true
+      }
     }
-    const key = rowKey(selected.row, selected.index)
-    this.selectedRowId = key
-    this.rowSelection = { [key]: true }
+    this.rowSelection = next
     this.selectedCellKey = ''
   }
 
@@ -1257,22 +1250,48 @@ class DataTable extends LitElement {
   }
 
   private clearLocalSelection(): void {
-    this.selectedRowId = ''
     this.selectedCellKey = ''
     this.rowSelection = {}
   }
 
-  private hasActiveSelection(): boolean {
-    return Boolean((this.table?.selection ?? []).length || this.selectedRowId)
+  private hasLocalSelection(): boolean {
+    return Object.values(this.rowSelection).some(Boolean)
+  }
+
+  private selectedRowCount(): number {
+    const selection = this.table?.selection ?? []
+    if (selection.length > 0) return selection.length
+    return Object.values(this.rowSelection).filter(Boolean).length
+  }
+
+  private selectionLabels(): string[] {
+    const selection = this.table?.selection ?? []
+    if (selection.length > 0) {
+      return selection.map((entry) => {
+        if (entry.label) return entry.label
+        return (entry.mappings ?? []).map((mapping) => mapping.label || mapping.value || '').filter(Boolean).join(', ')
+      }).filter(Boolean)
+    }
+    return Object.keys(this.rowSelection).filter((key) => this.rowSelection[key])
   }
 
   private rowIsSelected(row: TableRow, key: string): boolean {
     const selection = this.table?.selection ?? []
     if (selection.length > 0) return this.rowMatchesSelection(row, selection)
-    return key === this.selectedRowId
+    return Boolean(this.rowSelection[key])
   }
 
-  private emitRowSelection(row: TableRow): void {
+  private toggledRowSelection(key: string): RowSelectionState {
+    const next: RowSelectionState = { ...this.rowSelection }
+    if (next[key]) {
+      delete next[key]
+    } else {
+      next[key] = true
+    }
+    return next
+  }
+
+  private emitRowSelection(row: TableRow, toggleGesture: boolean): void {
     const sourceId = this.resolvedTableId()
     const interaction = this.table?.interaction
     const mappings = interaction?.mappings ?? []
@@ -1291,9 +1310,8 @@ class DataTable extends LitElement {
           sourceKind: 'table',
           sourceId,
           interactionKind: interaction.kind || 'row_selection',
-          action: 'set',
-          mode: interaction.mode || 'single',
-          toggle: interaction.toggle !== false,
+          action: toggleGesture ? 'set' : 'replace',
+          toggle: toggleGesture,
           mappings: commandMappings,
         },
       }),
@@ -1510,7 +1528,7 @@ class DataTable extends LitElement {
         style=${`top:${index * this.rowHeight}px`}
         @mouseenter=${() => { this.hoveredRowId = key }}
         @mouseleave=${() => { if (this.hoveredRowId === key) this.hoveredRowId = '' }}
-        @click=${() => this.selectRow(key, row)}
+        @click=${(event: MouseEvent) => this.selectRow(key, row, event)}
       >
         ${cells.map((cell: any) => {
           const column = cell.column.columnDef.meta?.column ?? this.columns.find((item) => item.key === cell.column.id)
@@ -1523,9 +1541,9 @@ class DataTable extends LitElement {
               role="cell"
               title=${String(row[cell.column.id] ?? '')}
               style=${this.cellStyle(row, column, cell.column)}
-              @click=${(event: Event) => {
+              @click=${(event: MouseEvent) => {
                 event.stopPropagation()
-                this.selectCell(row, column, index)
+                this.selectCell(row, column, index, event)
               }}
             >
               ${dataBarRule(column) ? html`<span class="cell-data-bar" aria-hidden="true"></span>` : nothing}
@@ -1547,8 +1565,9 @@ class DataTable extends LitElement {
     const totalHeight = this.availableRows * this.rowHeight
     const hasGroupHeaderRow = headers.some((header: any) => header.column.columnDef.meta?.column?.group)
     const rowRange = this.rowRangeText()
-    const hasSelection = this.hasActiveSelection()
-    const selectedText = hasSelection ? '1 row selected' : 'No selection'
+    const selectedCount = this.selectedRowCount()
+    const hasSelection = selectedCount > 0
+    const selectedText = selectedCount === 0 ? 'No selection' : selectedCount === 1 ? '1 row selected' : `${selectedCount} rows selected`
     const loading = Boolean(this.table.loadingBlock) || this.visibleLoading
     const gridTemplate = this.gridTemplateFor(columns)
     const tableWidth = this.tableWidthFor(columns)
@@ -1792,10 +1811,8 @@ class DataTable extends LitElement {
     const tableId = this.resolvedTableId()
     this.renderRoot.querySelector<HTMLDetailsElement>('.visual-options')?.removeAttribute('open')
     if (action === 'clear-selection') {
-      this.selectedRowId = ''
-      this.selectedCellKey = ''
-      this.rowSelection = {}
-      if (tableId) {
+      this.clearLocalSelection()
+      if (tableId && (this.table?.interaction?.mappings ?? []).length > 0) {
         this.dispatchEvent(
           new CustomEvent('ld-interaction-select', {
             bubbles: true,
@@ -1805,7 +1822,6 @@ class DataTable extends LitElement {
               sourceId: tableId,
               interactionKind: this.table?.interaction?.kind || 'row_selection',
               action: 'clear',
-              mode: this.table?.interaction?.mode || 'single',
               toggle: this.table?.interaction?.toggle !== false,
               mappings: [],
             },
@@ -1824,7 +1840,7 @@ class DataTable extends LitElement {
           title: this.table?.title ?? 'Orders',
           columns: this.columns,
           rows: this.exportRows(),
-          selection: this.hasActiveSelection() ? [this.selectedRowId || 'active'] : [],
+          selection: this.selectionLabels(),
           table: {
             ...(this.table ?? emptyTable),
             blocks: this.blocks,
