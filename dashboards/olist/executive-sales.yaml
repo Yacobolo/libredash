@@ -97,14 +97,18 @@ visuals:
         direction: asc
       limit: 30
     interaction:
-      field: orders.purchase_month
-      targets:
-        visuals:
+      point_selection:
+        mode: multi
+        toggle: true
+        mappings:
+        - field: orders.purchase_month
+          value: label
+          label: label
+        targets:
         - orders
         - categories
         - delivery
-        tables:
-        - orders
+        - orders_table
   orders:
     title: Orders by status
     type: donut
@@ -117,14 +121,18 @@ visuals:
       - field: value
         direction: desc
     interaction:
-      field: orders.status
-      targets:
-        visuals:
+      point_selection:
+        mode: multi
+        toggle: true
+        mappings:
+        - field: orders.status
+          value: label
+          label: label
+        targets:
         - revenue
         - categories
         - delivery
-        tables:
-        - orders
+        - orders_table
   orders_by_month_status:
     title: Orders by month and status
     shape: category_series_value
@@ -145,14 +153,18 @@ visuals:
         direction: asc
       limit: 40
     interaction:
-      field: orders.purchase_month
-      targets:
-        visuals:
+      point_selection:
+        mode: multi
+        toggle: true
+        mappings:
+        - field: orders.purchase_month
+          value: label
+          label: label
+        targets:
         - orders
         - categories
         - delivery
-        tables:
-        - orders
+        - orders_table
   categories:
     title: Top product categories
     type: bar
@@ -166,14 +178,18 @@ visuals:
         direction: desc
       limit: 10
     interaction:
-      field: orders.category
-      targets:
-        visuals:
+      point_selection:
+        mode: multi
+        toggle: true
+        mappings:
+        - field: orders.category
+          value: label
+          label: label
+        targets:
         - revenue
         - orders
         - delivery
-        tables:
-        - orders
+        - orders_table
   delivery:
     title: Delivery speed
     type: bar
@@ -186,14 +202,18 @@ visuals:
       - field: delivery_bucket
         direction: asc
     interaction:
-      field: orders.delivery_bucket
-      targets:
-        visuals:
+      point_selection:
+        mode: multi
+        toggle: true
+        mappings:
+        - field: orders.delivery_bucket
+          value: label
+          label: label
+        targets:
         - revenue
         - orders
         - categories
-        tables:
-        - orders
+        - orders_table
   state_status_heatmap:
     title: State by order status
     shape: matrix
@@ -1109,9 +1129,25 @@ visuals:
         direction: desc
       limit: 120
 tables:
-  orders:
+  orders_table:
     kind: data_table
     title: Orders
+    interaction:
+      row_selection:
+        mode: single
+        toggle: true
+        mappings:
+        - field: orders.order_id
+          value: order_id
+          label: order_id
+        targets:
+        - total_orders
+        - revenue_kpi
+        - review_kpi
+        - revenue
+        - orders
+        - delivery
+        - categories
     default_sort:
       key: purchase_date
       direction: desc
@@ -1589,7 +1625,7 @@ pages:
       row_span: 6
   - id: orders-table
     kind: table
-    table: orders
+    table: orders_table
     placement:
       col: 7
       row: 9
@@ -2761,7 +2797,7 @@ pages:
       row_span: 1
   - id: orders-table
     kind: table
-    table: orders
+    table: orders_table
     placement:
       col: 1
       row: 2

@@ -38,7 +38,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/dashboards/{dashboard}/pages/{page}", s.protected(access.PermissionDashboardView, dashboardHTTP.Page))
 		r.With(s.rateLimits.updatesMiddleware()).Get("/updates", s.protected(access.PermissionDashboardView, dashboardHTTP.Updates))
 		r.Post("/commands/table-window", s.protected(access.PermissionDashboardView, dashboardHTTP.TableWindow))
-		r.Post("/commands/chart-select", s.protected(access.PermissionDashboardView, dashboardHTTP.ChartSelect))
+		r.Post("/commands/select", s.protected(access.PermissionDashboardView, dashboardHTTP.Select))
 		r.Post("/commands/clear-selection", s.protected(access.PermissionDashboardView, dashboardHTTP.ClearSelection))
 		r.Post("/commands/reset-filters", s.protected(access.PermissionDashboardView, dashboardHTTP.ResetFilters))
 		r.Post("/commands/refresh-materializations", s.protected(access.PermissionMaterializationsRefresh, dashboardHTTP.RefreshMaterializations))

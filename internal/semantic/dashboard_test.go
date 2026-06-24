@@ -55,11 +55,17 @@ func TestLoadOlistDashboard(t *testing.T) {
 	if got := report.Visuals["revenue"].RendererOrDefault(); got != "echarts" {
 		t.Fatalf("revenue visual renderer = %q, want echarts", got)
 	}
-	if got := report.Tables["orders"].DefaultSort.Key; got != "purchase_date" {
+	if got := report.Tables["orders_table"].DefaultSort.Key; got != "purchase_date" {
 		t.Fatalf("orders table default sort = %q, want purchase_date", got)
 	}
-	if got := report.Tables["orders"].KindOrDefault(); got != "data_table" {
+	if got := report.Tables["orders_table"].KindOrDefault(); got != "data_table" {
 		t.Fatalf("orders table kind = %q, want data_table", got)
+	}
+	if got := report.Visuals["orders"].Interaction.PointSelection.Mappings[0].Field; got != "orders.status" {
+		t.Fatalf("orders point selection field = %q, want orders.status", got)
+	}
+	if got := report.Tables["orders_table"].Interaction.RowSelection.Mappings[0].Value; got != "order_id" {
+		t.Fatalf("orders table row selection value = %q, want order_id", got)
 	}
 	if got := report.Tables["state_status_matrix"].KindOrDefault(); got != "matrix_table" {
 		t.Fatalf("state_status_matrix table kind = %q, want matrix_table", got)
@@ -134,16 +140,16 @@ func TestLoadOlistDashboard(t *testing.T) {
 func TestDataTableFieldsNormalizeToDataColumns(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
-	table := report.Tables["orders"]
+	table := report.Tables["orders_table"]
 	table.Query.Columns = nil
 	table.Query.Fields = []string{"orders.order_id", "revenue"}
 	table.Columns = nil
-	report.Tables["orders"] = table
+	report.Tables["orders_table"] = table
 
 	if err := workspacecompiler.ValidateDashboard(report, map[string]*Model{"olist": model}); err != nil {
 		t.Fatal(err)
 	}
-	normalized := report.Tables["orders"]
+	normalized := report.Tables["orders_table"]
 	if got := len(normalized.DataColumns); got != 2 {
 		t.Fatalf("data columns = %d, want 2", got)
 	}
@@ -161,16 +167,18 @@ func TestDataTableFieldsNormalizeToDataColumns(t *testing.T) {
 func TestDataTableColumnsOverrideFields(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
-	table := report.Tables["orders"]
+	table := report.Tables["orders_table"]
 	table.Query.Fields = []string{"missing.field"}
 	table.Query.Columns = []FieldRef{{Field: "orders.order_id", Alias: "order"}}
 	table.Columns = []dashboard.TableColumn{{Key: "order", Label: "Order"}}
-	report.Tables["orders"] = table
+	table.Interaction.RowSelection.Mappings[0].Value = "order"
+	table.Interaction.RowSelection.Mappings[0].Label = "order"
+	report.Tables["orders_table"] = table
 
 	if err := workspacecompiler.ValidateDashboard(report, map[string]*Model{"olist": model}); err != nil {
 		t.Fatal(err)
 	}
-	if got := report.Tables["orders"].DataColumns[0].Alias; got != "order" {
+	if got := report.Tables["orders_table"].DataColumns[0].Alias; got != "order" {
 		t.Fatalf("query column alias = %q, want order", got)
 	}
 }
@@ -178,11 +186,11 @@ func TestDataTableColumnsOverrideFields(t *testing.T) {
 func TestDataTableRejectsDuplicateOutputAliases(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
-	table := report.Tables["orders"]
+	table := report.Tables["orders_table"]
 	table.Query.Columns = nil
 	table.Query.Fields = []string{"orders.customer_id", "customers.customer_id"}
 	table.Columns = nil
-	report.Tables["orders"] = table
+	report.Tables["orders_table"] = table
 
 	assertDashboardValidateError(t, report, model, "duplicate query output alias")
 }
@@ -292,11 +300,11 @@ func TestOlistDashboardChartShowcaseContract(t *testing.T) {
 	wantTables := []string{
 		"category_status_pivot",
 		"category_status_pivot_heat",
-		"orders",
 		"orders_compact",
 		"orders_conditional",
 		"orders_full_grid",
 		"orders_spacious",
+		"orders_table",
 		"state_status_matrix",
 		"state_status_matrix_formatted",
 	}
@@ -472,6 +480,93 @@ pages:
 	}
 }
 
+func TestLoadDashboardRejectsLegacyInteractionField(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dashboard.yaml")
+	content := `id: test
+title: Test
+semantic_model: olist
+visuals:
+  orders:
+    title: Orders
+    type: bar
+    query:
+      dimensions:
+        status: orders.status
+      measures:
+        order_count:
+    interaction:
+      field: orders.status
+      targets:
+        visuals:
+        - revenue
+  revenue:
+    title: Revenue
+    type: bar
+    query:
+      dimensions:
+        status: orders.status
+      measures:
+        revenue:
+pages:
+- id: overview
+  title: Overview
+  visuals:
+  - id: orders
+    kind: bar_chart
+    visual: orders
+    placement: {col: 1, row: 1, col_span: 1, row_span: 1}
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := semantic.LoadDashboard(path)
+	if err == nil || !strings.Contains(err.Error(), "interaction.field is not supported") {
+		t.Fatalf("LoadDashboard error = %v, want legacy interaction.field rejection", err)
+	}
+}
+
+func TestLoadDashboardRejectsUnknownSelectionKey(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dashboard.yaml")
+	content := `id: test
+title: Test
+semantic_model: olist
+visuals:
+  orders:
+    title: Orders
+    type: bar
+    query:
+      dimensions:
+        status: orders.status
+      measures:
+        order_count:
+    interaction:
+      point_selection:
+        mode: multi
+        bogus: true
+        mappings:
+        - field: orders.status
+          value: label
+        targets: []
+pages:
+- id: overview
+  title: Overview
+  visuals:
+  - id: orders
+    kind: bar_chart
+    visual: orders
+    placement: {col: 1, row: 1, col_span: 1, row_span: 1}
+`
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := semantic.LoadDashboard(path)
+	if err == nil || !strings.Contains(err.Error(), "SelectionInteraction") {
+		t.Fatalf("LoadDashboard error = %v, want unknown selection key rejection", err)
+	}
+}
+
 func TestDashboardValidateRejectsInvalidVisualKind(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
@@ -581,6 +676,7 @@ func TestDashboardValidateAcceptsAdvancedVisualShapes(t *testing.T) {
 	}
 	for name, visual := range cases {
 		report.Visuals = map[string]Visual{name: visual}
+		report.Tables = nil
 		report.Pages = []dashboard.Page{{ID: "overview", Title: "Overview", Visuals: []dashboard.PageVisual{{ID: name, Kind: visual.Type + "_chart", Visual: name, Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 1, RowSpan: 1}}}}}
 		if err := workspacecompiler.ValidateDashboard(report, map[string]*Model{"olist": model}); err != nil {
 			t.Fatalf("validate advanced shape %s: %v", name, err)
@@ -663,10 +759,10 @@ func TestDashboardValidateRejectsUnknownInteractionTarget(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
 	visual := report.Visuals["orders"]
-	visual.Interaction.Targets.Visuals = append(visual.Interaction.Targets.Visuals, "missing_visual")
+	visual.Interaction.PointSelection.Targets = append(visual.Interaction.PointSelection.Targets, "missing_visual")
 	report.Visuals["orders"] = visual
 
-	assertDashboardValidateError(t, report, model, "unknown target visual")
+	assertDashboardValidateError(t, report, model, "unknown target")
 }
 
 func TestDashboardValidateRejectsSeriesOnUnsupportedChart(t *testing.T) {
@@ -852,9 +948,9 @@ func TestDashboardValidateRejectsDuplicateFilterURLParamWithinFilter(t *testing.
 func TestDashboardValidateRejectsDataTableWithoutQueryTable(t *testing.T) {
 	model := loadOlistModel(t)
 	report := loadOlistDashboard(t, model)
-	table := report.Tables["orders"]
+	table := report.Tables["orders_table"]
 	table.Query.Table = ""
-	report.Tables["orders"] = table
+	report.Tables["orders_table"] = table
 
 	assertDashboardValidateError(t, report, model, "kind data_table requires query.table")
 }

@@ -77,7 +77,7 @@ func (d *Dashboard) NormalizeFiltersForPage(pageID string, filters dashboard.Fil
 			next.Controls[id] = control
 		}
 	}
-	next.VisualSelections = append([]dashboard.VisualSelection{}, filters.VisualSelections...)
+	next.Selections = append([]dashboard.InteractionSelection{}, filters.Selections...)
 	return next
 }
 

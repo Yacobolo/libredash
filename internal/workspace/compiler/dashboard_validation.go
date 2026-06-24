@@ -45,9 +45,9 @@ func ValidateDashboard(d *report.Dashboard, models map[string]*semanticmodel.Mod
 				return fmt.Errorf("visual %q references unknown measure %q", name, measure.Field)
 			}
 		}
-		if visual.Interaction.Field != "" {
-			if _, err := model.ResolveDimension(visual.Interaction.Field); err != nil {
-				return fmt.Errorf("visual %q interaction references unknown field %q", name, visual.Interaction.Field)
+		for _, mapping := range visual.Interaction.PointSelection.Mappings {
+			if _, err := model.ResolveDimension(mapping.Field); err != nil {
+				return fmt.Errorf("visual %q interaction references unknown field %q", name, mapping.Field)
 			}
 		}
 	}
@@ -68,9 +68,54 @@ func ValidateDashboard(d *report.Dashboard, models map[string]*semanticmodel.Mod
 				return err
 			}
 		}
+		for _, mapping := range table.Interaction.RowSelection.Mappings {
+			if _, err := model.ResolveDimension(mapping.Field); err != nil {
+				return fmt.Errorf("table %q interaction references unknown field %q", name, mapping.Field)
+			}
+			if !tableHasOutputColumn(table, mapping.Value) {
+				return fmt.Errorf("table %q interaction references unknown value column %q", name, mapping.Value)
+			}
+			if mapping.Label != "" && !tableHasOutputColumn(table, mapping.Label) {
+				return fmt.Errorf("table %q interaction references unknown label column %q", name, mapping.Label)
+			}
+		}
 		d.Tables[name] = table
 	}
 	return validateFilterTargets(d, model)
+}
+
+func tableHasOutputColumn(table report.TableVisual, key string) bool {
+	if key == "" {
+		return false
+	}
+	for _, column := range table.DataColumns {
+		if column.Alias == key {
+			return true
+		}
+	}
+	for _, column := range table.Columns {
+		if column.Key == key {
+			return true
+		}
+	}
+	for _, row := range table.Rows {
+		if displayField(row) == key {
+			return true
+		}
+	}
+	for _, measure := range table.Measures {
+		if displayField(measure) == key {
+			return true
+		}
+	}
+	return false
+}
+
+func displayField(field string) string {
+	if index := strings.LastIndex(field, "."); index >= 0 && index+1 < len(field) {
+		return field[index+1:]
+	}
+	return field
 }
 
 func normalizeTableFields(name string, model *semanticmodel.Model, table *report.TableVisual) error {

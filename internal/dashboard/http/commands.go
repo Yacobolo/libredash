@@ -14,9 +14,9 @@ func (h Handler) TableWindow(w nethttp.ResponseWriter, r *nethttp.Request) {
 	})
 }
 
-func (h Handler) ChartSelect(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (h Handler) Select(w nethttp.ResponseWriter, r *nethttp.Request) {
 	h.handleCommand(w, r, func(ctx command.Service, request command.Request) []command.Event {
-		return ctx.ChartSelect(r.Context(), request)
+		return ctx.Select(r.Context(), request)
 	})
 }
 
@@ -49,12 +49,12 @@ func (h Handler) handleCommand(w nethttp.ResponseWriter, r *nethttp.Request, run
 	clientID := lddatastar.ClientStreamID(r, signals, dashboardID, pageID)
 
 	events := run(command.Service{Metrics: h.Metrics}, command.Request{
-		DashboardID:   dashboardID,
-		PageID:        pageID,
-		ModelID:       modelID,
-		Filters:       signals.Filters,
-		TableCommand:  signals.TableCommand,
-		VisualCommand: signals.VisualCommand,
+		DashboardID:        dashboardID,
+		PageID:             pageID,
+		ModelID:            modelID,
+		Filters:            signals.Filters,
+		TableCommand:       signals.TableCommand,
+		InteractionCommand: signals.InteractionCommand,
 	})
 	for _, event := range events {
 		h.Broker.Publish(clientID, lddatastar.CommandEventPatch(event))

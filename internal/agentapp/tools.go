@@ -91,7 +91,7 @@ func (s *Service) toolDefinitions(scope Scope) []agent.ToolDefinition {
 					return nil, err
 				}
 				filters := input.Filters
-				if filters.Controls == nil && filters.VisualSelections == nil {
+				if filters.Controls == nil && filters.Selections == nil {
 					filters = s.metrics.DefaultFilters(input.DashboardID)
 				}
 				patch, err := s.metrics.QueryDashboardPage(ctx, input.DashboardID, input.PageID, filters)
@@ -121,7 +121,7 @@ func (s *Service) toolDefinitions(scope Scope) []agent.ToolDefinition {
 					count = maxAgentRows
 				}
 				filters := input.Filters
-				if filters.Controls == nil && filters.VisualSelections == nil {
+				if filters.Controls == nil && filters.Selections == nil {
 					filters = s.metrics.DefaultFilters(input.DashboardID)
 				}
 				request := s.metrics.NormalizeTableRequest(input.DashboardID, dashboard.TableRequest{Table: input.TableID, Block: "a", Count: count})

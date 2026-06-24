@@ -1,10 +1,10 @@
 package dashboard
 
 type Signals struct {
-	Filters       Filters       `json:"filters"`
-	Runtime       Runtime       `json:"runtime"`
-	TableCommand  TableRequest  `json:"tableCommand"`
-	VisualCommand VisualCommand `json:"visualCommand"`
+	Filters            Filters            `json:"filters"`
+	Runtime            Runtime            `json:"runtime"`
+	TableCommand       TableRequest       `json:"tableCommand"`
+	InteractionCommand InteractionCommand `json:"interactionCommand"`
 }
 
 type Catalog struct {
@@ -146,8 +146,8 @@ type PageVisual struct {
 }
 
 type Filters struct {
-	Controls         map[string]FilterControl `json:"controls"`
-	VisualSelections []VisualSelection        `json:"visualSelections"`
+	Controls   map[string]FilterControl `json:"controls"`
+	Selections []InteractionSelection   `json:"selections"`
 }
 
 type FilterControl struct {
@@ -171,81 +171,237 @@ func (f Filters) WithDefaults() Filters {
 	if f.Controls == nil {
 		f.Controls = map[string]FilterControl{}
 	}
-	if f.VisualSelections == nil {
-		f.VisualSelections = []VisualSelection{}
+	if f.Selections == nil {
+		f.Selections = []InteractionSelection{}
 	}
 	return f
 }
 
-type VisualSelection struct {
-	ID       string   `json:"id"`
-	VisualID string   `json:"visualId"`
-	Field    string   `json:"field"`
-	Operator string   `json:"operator"`
-	Values   []string `json:"values"`
-	Label    string   `json:"label"`
-	Order    int      `json:"order"`
+type InteractionSelection struct {
+	ID              string                        `json:"id"`
+	SourceKind      string                        `json:"sourceKind"`
+	SourceID        string                        `json:"sourceId"`
+	InteractionKind string                        `json:"interactionKind"`
+	Mode            string                        `json:"mode"`
+	Mappings        []InteractionSelectionMapping `json:"mappings"`
+	Label           string                        `json:"label"`
+	Order           int                           `json:"order"`
 }
 
-type VisualCommand struct {
-	VisualID string `json:"visualId"`
-	Field    string `json:"field"`
-	Value    string `json:"value"`
-	Label    string `json:"label"`
-	Mode     string `json:"mode"`
+type InteractionSelectionMapping struct {
+	Field  string   `json:"field"`
+	Values []string `json:"values"`
+	Label  string   `json:"label,omitempty"`
 }
 
-func (c VisualCommand) IsEmpty() bool {
-	return c.VisualID == "" || c.Field == "" || c.Value == ""
+type InteractionCommand struct {
+	SourceKind      string                      `json:"sourceKind"`
+	SourceID        string                      `json:"sourceId"`
+	InteractionKind string                      `json:"interactionKind"`
+	Action          string                      `json:"action"`
+	Mode            string                      `json:"mode"`
+	Toggle          bool                        `json:"toggle"`
+	Mappings        []InteractionCommandMapping `json:"mappings"`
 }
 
-func (f Filters) ToggleSelection(command VisualCommand) Filters {
+type InteractionCommandMapping struct {
+	Field string `json:"field"`
+	Value string `json:"value"`
+	Label string `json:"label,omitempty"`
+}
+
+func (c InteractionCommand) IsEmpty() bool {
+	if c.SourceKind == "" || c.SourceID == "" || c.InteractionKind == "" {
+		return true
+	}
+	if c.Action == "clear" {
+		return false
+	}
+	if len(c.Mappings) == 0 {
+		return true
+	}
+	for _, mapping := range c.Mappings {
+		if mapping.Field == "" || mapping.Value == "" {
+			return true
+		}
+	}
+	return false
+}
+
+func (f Filters) ApplyInteraction(command InteractionCommand) Filters {
 	f = f.WithDefaults()
 	if command.IsEmpty() {
 		return f
 	}
 
-	selectionID := command.VisualID + ":" + command.Field
-	next := make([]VisualSelection, 0, len(f.VisualSelections)+1)
-	toggled := false
+	selectionID := command.SourceKind + ":" + command.SourceID + ":" + command.InteractionKind
+	next := make([]InteractionSelection, 0, len(f.Selections)+1)
 	maxOrder := 0
+	mode := command.Mode
+	if mode == "" {
+		mode = "single"
+	}
+	changed := false
 
-	for _, selection := range f.VisualSelections {
+	for _, selection := range f.Selections {
 		if selection.Order > maxOrder {
 			maxOrder = selection.Order
 		}
-		if selection.ID == selectionID || (selection.VisualID == command.VisualID && selection.Field == command.Field) {
-			values, removed := toggleValue(selection.Values, command.Value)
-			if len(values) > 0 {
-				selection.ID = selectionID
-				selection.Operator = "in"
-				selection.Values = values
-				selection.Label = selectionLabel(command.Field, values)
-				next = append(next, selection)
-			}
-			toggled = true
-			if removed && command.Mode != "replace" {
+		if selection.ID == selectionID || (selection.SourceKind == command.SourceKind && selection.SourceID == command.SourceID && selection.InteractionKind == command.InteractionKind) {
+			changed = true
+			if command.Action == "clear" {
 				continue
+			}
+			selection.ID = selectionID
+			selection.Mode = mode
+			selection.Mappings = updateSelectionMappings(selection.Mappings, command.Mappings, mode, command.Toggle)
+			selection.Label = interactionSelectionLabel(selection.Mappings)
+			if len(selection.Mappings) > 0 {
+				next = append(next, selection)
 			}
 			continue
 		}
 		next = append(next, selection)
 	}
 
-	if !toggled {
-		next = append(next, VisualSelection{
-			ID:       selectionID,
-			VisualID: command.VisualID,
-			Field:    command.Field,
-			Operator: "in",
-			Values:   []string{command.Value},
-			Label:    selectionLabel(command.Field, []string{command.Value}),
-			Order:    maxOrder + 1,
-		})
+	if !changed && command.Action != "clear" {
+		mappings := updateSelectionMappings(nil, command.Mappings, mode, false)
+		if len(mappings) > 0 {
+			next = append(next, InteractionSelection{
+				ID:              selectionID,
+				SourceKind:      command.SourceKind,
+				SourceID:        command.SourceID,
+				InteractionKind: command.InteractionKind,
+				Mode:            mode,
+				Mappings:        mappings,
+				Label:           interactionSelectionLabel(mappings),
+				Order:           maxOrder + 1,
+			})
+		}
 	}
 
-	f.VisualSelections = next
+	f.Selections = next
 	return f
+}
+
+func updateSelectionMappings(existing []InteractionSelectionMapping, incoming []InteractionCommandMapping, mode string, toggle bool) []InteractionSelectionMapping {
+	if mode != "multi" {
+		if toggle && selectionMappingsContain(existing, incoming) {
+			return nil
+		}
+		mappings := make([]InteractionSelectionMapping, 0, len(incoming))
+		for _, mapping := range incoming {
+			mappings = append(mappings, InteractionSelectionMapping{
+				Field:  mapping.Field,
+				Values: []string{mapping.Value},
+				Label:  defaultString(mapping.Label, mapping.Value),
+			})
+		}
+		return mappings
+	}
+
+	byField := map[string]InteractionSelectionMapping{}
+	for _, mapping := range existing {
+		byField[mapping.Field] = InteractionSelectionMapping{
+			Field:  mapping.Field,
+			Values: append([]string{}, mapping.Values...),
+			Label:  mapping.Label,
+		}
+	}
+	for _, mapping := range incoming {
+		current := byField[mapping.Field]
+		current.Field = mapping.Field
+		values := current.Values
+		if toggle {
+			var removed bool
+			values, removed = toggleValue(values, mapping.Value)
+			if !removed && mapping.Label != "" {
+				current.Label = mapping.Label
+			}
+		} else if !containsString(values, mapping.Value) {
+			values = append(values, mapping.Value)
+			if mapping.Label != "" {
+				current.Label = mapping.Label
+			}
+		}
+		current.Values = values
+		if len(current.Values) == 0 {
+			delete(byField, mapping.Field)
+			continue
+		}
+		if current.Label == "" {
+			current.Label = joinValues(current.Values)
+		}
+		byField[mapping.Field] = current
+	}
+
+	out := make([]InteractionSelectionMapping, 0, len(byField))
+	for _, incoming := range incoming {
+		if mapping, ok := byField[incoming.Field]; ok {
+			out = append(out, mapping)
+			delete(byField, incoming.Field)
+		}
+	}
+	for _, mapping := range existing {
+		if item, ok := byField[mapping.Field]; ok {
+			out = append(out, item)
+			delete(byField, mapping.Field)
+		}
+	}
+	return out
+}
+
+func selectionMappingsContain(existing []InteractionSelectionMapping, incoming []InteractionCommandMapping) bool {
+	if len(existing) == 0 || len(incoming) == 0 {
+		return false
+	}
+	for _, item := range incoming {
+		found := false
+		for _, mapping := range existing {
+			if mapping.Field == item.Field && containsString(mapping.Values, item.Value) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func interactionSelectionLabel(mappings []InteractionSelectionMapping) string {
+	if len(mappings) == 0 {
+		return ""
+	}
+	labels := make([]string, 0, len(mappings))
+	for _, mapping := range mappings {
+		label := mapping.Label
+		if label == "" {
+			label = joinValues(mapping.Values)
+		}
+		if label == "" {
+			label = selectionLabel(mapping.Field, mapping.Values)
+		}
+		labels = append(labels, label)
+	}
+	return joinValues(labels)
+}
+
+func defaultString(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
+}
+
+func containsString(values []string, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
 }
 
 func toggleValue(values []string, value string) ([]string, bool) {
@@ -313,6 +469,7 @@ type Visual struct {
 	Unit            string                    `json:"unit"`
 	Format          string                    `json:"format,omitempty"`
 	Field           string                    `json:"field"`
+	Interaction     InteractionConfig         `json:"interaction"`
 	Dimensions      []string                  `json:"dimensions"`
 	Measure         string                    `json:"measure"`
 	Measures        []string                  `json:"measures"`
@@ -324,6 +481,20 @@ type Visual struct {
 }
 
 type Datum map[string]any
+
+type InteractionConfig struct {
+	Kind     string                     `json:"kind"`
+	Mode     string                     `json:"mode"`
+	Toggle   bool                       `json:"toggle"`
+	Mappings []InteractionConfigMapping `json:"mappings"`
+	Targets  []string                   `json:"targets,omitempty"`
+}
+
+type InteractionConfigMapping struct {
+	Field string `json:"field"`
+	Value string `json:"value"`
+	Label string `json:"label,omitempty"`
+}
 
 type TableRequest struct {
 	Table        string    `json:"table"`
@@ -436,6 +607,7 @@ type Table struct {
 	Kind          string                `json:"kind"`
 	Title         string                `json:"title"`
 	Style         TableStyle            `json:"style"`
+	Interaction   InteractionConfig     `json:"interaction"`
 	Columns       []TableColumn         `json:"columns"`
 	TotalRows     int                   `json:"totalRows"`
 	AvailableRows int                   `json:"availableRows"`

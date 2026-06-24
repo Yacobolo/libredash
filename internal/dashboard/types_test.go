@@ -53,3 +53,84 @@ func TestTableRequestResetRequestsInitialBlocks(t *testing.T) {
 		t.Fatalf("reset sort = %#v, want preserved revenue asc", request.Sort)
 	}
 }
+
+func TestApplyInteractionReplacesOnlySourceSelection(t *testing.T) {
+	filters := Filters{
+		Selections: []InteractionSelection{
+			interactionSelectionFixture("visual", "orders", "point_selection", "orders.status", "delivered"),
+			interactionSelectionFixture("table", "orders_table", "row_selection", "orders.order_id", "o1"),
+		},
+	}
+
+	next := filters.ApplyInteraction(InteractionCommand{
+		SourceKind:      "visual",
+		SourceID:        "orders",
+		InteractionKind: "point_selection",
+		Action:          "set",
+		Mode:            "single",
+		Toggle:          true,
+		Mappings:        []InteractionCommandMapping{{Field: "orders.status", Value: "shipped", Label: "shipped"}},
+	})
+
+	if len(next.Selections) != 2 {
+		t.Fatalf("selection count = %d, want 2: %#v", len(next.Selections), next.Selections)
+	}
+	if got := selectionValues(next, "visual", "orders", "orders.status"); len(got) != 1 || got[0] != "shipped" {
+		t.Fatalf("orders visual values = %#v, want [shipped]", got)
+	}
+	if got := selectionValues(next, "table", "orders_table", "orders.order_id"); len(got) != 1 || got[0] != "o1" {
+		t.Fatalf("orders table values = %#v, want [o1]", got)
+	}
+}
+
+func TestApplyInteractionClearsOnlySourceSelection(t *testing.T) {
+	filters := Filters{
+		Selections: []InteractionSelection{
+			interactionSelectionFixture("visual", "orders", "point_selection", "orders.status", "delivered"),
+			interactionSelectionFixture("table", "orders_table", "row_selection", "orders.order_id", "o1"),
+		},
+	}
+
+	next := filters.ApplyInteraction(InteractionCommand{
+		SourceKind:      "visual",
+		SourceID:        "orders",
+		InteractionKind: "point_selection",
+		Action:          "clear",
+	})
+
+	if len(next.Selections) != 1 {
+		t.Fatalf("selection count = %d, want 1: %#v", len(next.Selections), next.Selections)
+	}
+	if got := selectionValues(next, "table", "orders_table", "orders.order_id"); len(got) != 1 || got[0] != "o1" {
+		t.Fatalf("remaining table values = %#v, want [o1]", got)
+	}
+}
+
+func interactionSelectionFixture(sourceKind, sourceID, interactionKind, field string, values ...string) InteractionSelection {
+	return InteractionSelection{
+		ID:              sourceKind + ":" + sourceID + ":" + interactionKind,
+		SourceKind:      sourceKind,
+		SourceID:        sourceID,
+		InteractionKind: interactionKind,
+		Mode:            "single",
+		Mappings: []InteractionSelectionMapping{{
+			Field:  field,
+			Values: append([]string{}, values...),
+			Label:  values[0],
+		}},
+	}
+}
+
+func selectionValues(filters Filters, sourceKind, sourceID, field string) []string {
+	for _, selection := range filters.Selections {
+		if selection.SourceKind != sourceKind || selection.SourceID != sourceID {
+			continue
+		}
+		for _, mapping := range selection.Mappings {
+			if mapping.Field == field {
+				return mapping.Values
+			}
+		}
+	}
+	return nil
+}

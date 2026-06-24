@@ -83,6 +83,7 @@ func (s *TableQueryService) queryAggregateTable(ctx context.Context, runtime *mo
 		Kind:          table.KindOrDefault(),
 		Title:         table.Title,
 		Style:         style,
+		Interaction:   tableInteractionConfig(table.Interaction.RowSelection),
 		Columns:       columns,
 		TotalRows:     totalRows,
 		AvailableRows: len(rows),

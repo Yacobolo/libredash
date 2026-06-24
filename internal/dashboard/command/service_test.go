@@ -74,15 +74,27 @@ func TestTableWindowSkipsCanceledTableEvent(t *testing.T) {
 	}
 }
 
-func TestChartSelectReturnsReloadEventsForActivePage(t *testing.T) {
+func TestSelectReturnsReloadEventsForActivePage(t *testing.T) {
 	metrics := &fakeMetrics{}
 
-	events := Service{Metrics: metrics}.ChartSelect(context.Background(), Request{
-		DashboardID:   "dash",
-		PageID:        "overview",
-		Filters:       dashboard.Filters{VisualSelections: []dashboard.VisualSelection{}},
-		VisualCommand: dashboard.VisualCommand{VisualID: "chart", Field: "state", Value: "SP", Label: "SP"},
-		TableCommand:  dashboard.TableRequest{Table: "orders", Block: "a", Start: 50, Count: 50},
+	events := Service{Metrics: metrics}.Select(context.Background(), Request{
+		DashboardID:  "dash",
+		PageID:       "overview",
+		Filters:      dashboard.Filters{Selections: []dashboard.InteractionSelection{}},
+		TableCommand: dashboard.TableRequest{Table: "orders", Block: "a", Start: 50, Count: 50},
+		InteractionCommand: dashboard.InteractionCommand{
+			SourceKind:      "visual",
+			SourceID:        "chart",
+			InteractionKind: "point_selection",
+			Action:          "set",
+			Mode:            "multi",
+			Toggle:          true,
+			Mappings: []dashboard.InteractionCommandMapping{{
+				Field: "state",
+				Value: "SP",
+				Label: "SP",
+			}},
+		},
 	})
 
 	if len(events) != 3 {

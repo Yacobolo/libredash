@@ -284,13 +284,89 @@ type Sort struct {
 }
 
 type Interaction struct {
-	Field   string             `yaml:"field"`
-	Targets InteractionTargets `yaml:"targets"`
+	PointSelection SelectionInteraction `yaml:"point_selection" json:"pointSelection,omitempty"`
+	RowSelection   SelectionInteraction `yaml:"row_selection" json:"rowSelection,omitempty"`
 }
 
 type InteractionTargets struct {
 	Visuals []string `yaml:"visuals" json:"visuals,omitempty"`
 	Tables  []string `yaml:"tables" json:"tables,omitempty"`
+}
+
+type SelectionInteraction struct {
+	Mode     string             `yaml:"mode" json:"mode,omitempty"`
+	Toggle   bool               `yaml:"toggle" json:"toggle,omitempty"`
+	Mappings []SelectionMapping `yaml:"mappings" json:"mappings,omitempty"`
+	Targets  []string           `yaml:"targets" json:"targets,omitempty"`
+}
+
+type SelectionMapping struct {
+	Field string `yaml:"field" json:"field"`
+	Value string `yaml:"value" json:"value"`
+	Label string `yaml:"label" json:"label,omitempty"`
+}
+
+func (s *SelectionInteraction) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("selection interaction must be a mapping")
+	}
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		key := value.Content[index].Value
+		item := value.Content[index+1]
+		switch key {
+		case "mode":
+			if err := item.Decode(&s.Mode); err != nil {
+				return err
+			}
+		case "toggle":
+			if err := item.Decode(&s.Toggle); err != nil {
+				return err
+			}
+		case "mappings":
+			if err := item.Decode(&s.Mappings); err != nil {
+				return err
+			}
+		case "targets":
+			if err := item.Decode(&s.Targets); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("field %s not found in type report.SelectionInteraction", key)
+		}
+	}
+	return nil
+}
+
+func (i *Interaction) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.ScalarNode && value.Tag == "!!null" {
+		return nil
+	}
+	if value.Kind != yaml.MappingNode {
+		return fmt.Errorf("interaction must be a mapping")
+	}
+	for index := 0; index+1 < len(value.Content); index += 2 {
+		key := value.Content[index].Value
+		item := value.Content[index+1]
+		switch key {
+		case "point_selection":
+			if err := item.Decode(&i.PointSelection); err != nil {
+				return err
+			}
+		case "row_selection":
+			if err := item.Decode(&i.RowSelection); err != nil {
+				return err
+			}
+		case "field", "targets":
+			return fmt.Errorf("interaction.%s is not supported; use point_selection or row_selection", key)
+		default:
+			return fmt.Errorf("field %s not found in type report.Interaction", key)
+		}
+	}
+	return nil
+}
+
+func (s SelectionInteraction) IsZero() bool {
+	return s.Mode == "" && !s.Toggle && len(s.Mappings) == 0 && len(s.Targets) == 0
 }
 
 type TableVisual struct {
@@ -300,6 +376,7 @@ type TableVisual struct {
 	DefaultSort       dashboard.TableSort                        `yaml:"default_sort"`
 	Style             dashboard.TableStyle                       `yaml:"style"`
 	Columns           []dashboard.TableColumn                    `yaml:"columns"`
+	Interaction       Interaction                                `yaml:"interaction"`
 	Rows              []string                                   `yaml:"-"`
 	Measures          []string                                   `yaml:"-"`
 	MeasureFormatting map[string][]dashboard.TableFormattingRule `yaml:"measure_formatting"`

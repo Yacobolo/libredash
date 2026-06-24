@@ -78,7 +78,7 @@ func NormalizeFilters(metrics Metrics, dashboardID, pageID string, filters dashb
 	for name, control := range filters.Controls {
 		defaults.Controls[name] = control
 	}
-	defaults.VisualSelections = append([]dashboard.VisualSelection{}, filters.VisualSelections...)
+	defaults.Selections = append([]dashboard.InteractionSelection{}, filters.Selections...)
 	return defaults.WithDefaults()
 }
 

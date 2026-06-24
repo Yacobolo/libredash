@@ -37,6 +37,20 @@ export interface TableStyle {
   grid: 'none' | 'rows' | 'columns' | 'full'
 }
 
+export interface InteractionConfig {
+  kind?: string
+  mode?: 'single' | 'multi' | string
+  toggle?: boolean
+  mappings?: InteractionMapping[]
+  targets?: string[]
+}
+
+export interface InteractionMapping {
+  field: string
+  value: string
+  label?: string
+}
+
 export type TableRow = Record<string, unknown>
 
 export interface TableBlock {
@@ -52,6 +66,7 @@ export interface TableSignal {
   kind: TableKind
   title: string
   style: TableStyle
+  interaction: InteractionConfig
   columns: TableColumn[]
   totalRows: number
   availableRows: number

@@ -353,12 +353,14 @@ func initialSignals(dataDir, clientID, csrfToken string, report reportdef.Dashbo
 		"urlParams":     report.URLParamsFromFiltersForPage(activePage.ID, initialFilters),
 		"urlParamShape": report.URLParamShapeForPage(activePage.ID),
 		"filterOptions": map[string]any{},
-		"visualCommand": map[string]any{
-			"visualId": "",
-			"field":    "",
-			"value":    "",
-			"label":    "",
-			"mode":     "toggle",
+		"interactionCommand": map[string]any{
+			"sourceKind":      "",
+			"sourceId":        "",
+			"interactionKind": "",
+			"action":          "",
+			"mode":            "single",
+			"toggle":          true,
+			"mappings":        []any{},
 		},
 		"tableCommand": map[string]any{
 			"table":        tableRequest.Table,
@@ -411,6 +413,7 @@ func tableSignals(report reportdef.Dashboard, page dashboard.Page, request dashb
 			"kind":          table.KindOrDefault(),
 			"title":         table.Title,
 			"style":         style,
+			"interaction":   interactionSignal("row_selection", table.Interaction.RowSelection),
 			"columns":       table.Columns,
 			"version":       2,
 			"totalRows":     0,
@@ -515,7 +518,8 @@ func visualSignal(id string, visual reportdef.Visual, title, unit, format, measu
 		"title":           title,
 		"unit":            unit,
 		"format":          format,
-		"field":           visual.Interaction.Field,
+		"field":           firstInteractionSignalField(visual.Interaction.PointSelection),
+		"interaction":     interactionSignal("point_selection", visual.Interaction.PointSelection),
 		"dimensions":      displayFieldRefs(visual.Query.Dimensions),
 		"measure":         measure,
 		"measures":        displayFieldRefs(visual.Query.Measures),
@@ -529,6 +533,35 @@ func visualSignal(id string, visual reportdef.Visual, title, unit, format, measu
 		signal["rendererOptions"] = visual.RendererOptions
 	}
 	return signal
+}
+
+func interactionSignal(kind string, selection reportdef.SelectionInteraction) map[string]any {
+	mode := selection.Mode
+	if mode == "" {
+		mode = "single"
+	}
+	mappings := make([]map[string]any, 0, len(selection.Mappings))
+	for _, mapping := range selection.Mappings {
+		mappings = append(mappings, map[string]any{
+			"field": mapping.Field,
+			"value": mapping.Value,
+			"label": mapping.Label,
+		})
+	}
+	return map[string]any{
+		"kind":     kind,
+		"mode":     mode,
+		"toggle":   selection.Toggle,
+		"mappings": mappings,
+		"targets":  append([]string{}, selection.Targets...),
+	}
+}
+
+func firstInteractionSignalField(selection reportdef.SelectionInteraction) string {
+	if len(selection.Mappings) == 0 {
+		return ""
+	}
+	return selection.Mappings[0].Field
 }
 
 func displayFieldRefs(refs []reportdef.FieldRef) []string {
@@ -746,7 +779,7 @@ func filtersPane(report reportdef.Dashboard, pageID string, action string) g.Nod
 			g.Attr("data-on:ld-filters-change", "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); "+tableReset+action),
 			g.Attr("data-on:ld-filters-reset", "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); "+tableReset+postAction("/commands/reset-filters")),
 			g.Attr("data-on:ld-filters-refresh", action),
-			g.Attr("data-on:ld-visual-selection-clear", "$filters.visualSelections = []; "+postAction("/commands/clear-selection")),
+			g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+postAction("/commands/clear-selection")),
 		),
 	)
 }
@@ -766,8 +799,8 @@ func chartPanel(visualID string) g.Node {
 		g.El("ld-echart",
 			g.Attr("visual-id", visualID),
 			g.Attr("data-attr:chart", "$"+signal),
-			g.Attr("data-on:ld-chart-select", "$visualCommand = evt.detail; "+postAction("/commands/chart-select")),
-			g.Attr("data-on:ld-chart-clear-selection", "$filters.visualSelections = []; "+postAction("/commands/clear-selection")),
+			g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+postAction("/commands/select")),
+			g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+postAction("/commands/clear-selection")),
 		),
 	)
 }
@@ -790,6 +823,8 @@ func tablePanel(tableName string) g.Node {
 			g.Attr("table-id", tableName),
 			g.Attr("data-attr:table", "$tables."+tableName),
 			g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; "+postAction("/commands/table-window")),
+			g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+postAction("/commands/select")),
+			g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+postAction("/commands/clear-selection")),
 		),
 	)
 }

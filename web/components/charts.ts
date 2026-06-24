@@ -301,6 +301,7 @@ class ChartVisual extends LitElement {
       unit: chart.unit ?? this.unit,
       format: chart.format ?? '',
       field: chart.field || this.field,
+      interaction: chart.interaction ?? {},
       dimensions: chart.dimensions ?? [],
       measure: chart.measure ?? '',
       measures: chart.measures ?? (chart.measure ? [chart.measure] : []),
@@ -314,17 +315,27 @@ class ChartVisual extends LitElement {
 
   private selectLabel(label: string): void {
     const payload = this.payload
-    if (!payload.id || !payload.field || !label) return
+    const interaction = payload.interaction
+    const mappings = interaction?.mappings ?? []
+    if (!payload.id || mappings.length === 0 || !label) return
+    const selectedRow = (payload.data ?? []).find((row) => mappings.some((mapping) => String(row[mapping.value]) === label))
+    if (!selectedRow) return
     this.dispatchEvent(
-      new CustomEvent('ld-chart-select', {
+      new CustomEvent('ld-interaction-select', {
         bubbles: true,
         composed: true,
         detail: {
-          visualId: payload.id,
-          field: payload.field,
-          value: label,
-          label,
-          mode: 'toggle',
+          sourceKind: 'visual',
+          sourceId: payload.id,
+          interactionKind: interaction?.kind || 'point_selection',
+          action: 'set',
+          mode: interaction?.mode || 'multi',
+          toggle: interaction?.toggle !== false,
+          mappings: mappings.map((mapping) => ({
+            field: mapping.field,
+            value: String(selectedRow[mapping.value] ?? ''),
+            label: String(selectedRow[mapping.label || mapping.value] ?? selectedRow[mapping.value] ?? ''),
+          })),
         },
       }),
     )
@@ -350,7 +361,21 @@ class ChartVisual extends LitElement {
       }),
     )
     if (action === 'clear-selection') {
-      this.dispatchEvent(new CustomEvent('ld-chart-clear-selection', { bubbles: true, composed: true }))
+      this.dispatchEvent(
+        new CustomEvent('ld-interaction-select', {
+          bubbles: true,
+          composed: true,
+          detail: {
+            sourceKind: 'visual',
+            sourceId: payload.id || this.visualId,
+            interactionKind: payload.interaction?.kind || 'point_selection',
+            action: 'clear',
+            mode: payload.interaction?.mode || 'multi',
+            toggle: payload.interaction?.toggle !== false,
+            mappings: [],
+          },
+        }),
+      )
     }
   }
 

@@ -145,14 +145,15 @@ func (d *Dashboard) validateContract() error {
 				return fmt.Errorf("visual %q has sort missing field or expr", name)
 			}
 		}
-		for _, target := range visual.Interaction.Targets.Visuals {
-			if _, ok := d.Visuals[target]; !ok {
-				return fmt.Errorf("visual %q interaction references unknown target visual %q", name, target)
-			}
+		if !visual.Interaction.RowSelection.IsZero() {
+			return fmt.Errorf("visual %q does not support row_selection", name)
 		}
-		for _, target := range visual.Interaction.Targets.Tables {
-			if _, ok := d.Tables[target]; !ok {
-				return fmt.Errorf("visual %q interaction references unknown target table %q", name, target)
+		if !visual.Interaction.PointSelection.IsZero() {
+			if kind == "kpi" {
+				return fmt.Errorf("visual %q kind kpi does not support point_selection", name)
+			}
+			if err := d.validateSelectionInteraction("visual", name, "point_selection", visual.Interaction.PointSelection); err != nil {
+				return err
 			}
 		}
 		d.Visuals[name] = visual
@@ -185,6 +186,9 @@ func (d *Dashboard) validateContract() error {
 				return fmt.Errorf("table %q kind data_table requires query.fields or query.columns", name)
 			}
 		case "matrix_table":
+			if !table.Interaction.RowSelection.IsZero() {
+				return fmt.Errorf("table %q kind matrix_table does not support row_selection", name)
+			}
 			if len(table.Query.Rows) == 0 || len(table.Query.Measures) == 0 {
 				return fmt.Errorf("table %q kind matrix_table requires query.rows and query.measures", name)
 			}
@@ -192,11 +196,22 @@ func (d *Dashboard) validateContract() error {
 				return fmt.Errorf("table %q kind matrix_table supports at most one column dimension", name)
 			}
 		case "pivot_table":
+			if !table.Interaction.RowSelection.IsZero() {
+				return fmt.Errorf("table %q kind pivot_table does not support row_selection", name)
+			}
 			if len(table.Query.Rows) == 0 || len(table.Query.Columns) != 1 || len(table.Query.Measures) != 1 {
 				return fmt.Errorf("table %q kind pivot_table requires query.rows, one query column dimension, and one query measure", name)
 			}
 		default:
 			return fmt.Errorf("table %q has unsupported kind %q", name, table.Kind)
+		}
+		if !table.Interaction.PointSelection.IsZero() {
+			return fmt.Errorf("table %q does not support point_selection", name)
+		}
+		if !table.Interaction.RowSelection.IsZero() {
+			if err := d.validateSelectionInteraction("table", name, "row_selection", table.Interaction.RowSelection); err != nil {
+				return err
+			}
 		}
 		d.Tables[name] = table
 	}
@@ -204,6 +219,43 @@ func (d *Dashboard) validateContract() error {
 		return err
 	}
 	return d.validatePages()
+}
+
+func (d *Dashboard) validateSelectionInteraction(sourceKind, sourceID, kind string, selection SelectionInteraction) error {
+	switch selection.Mode {
+	case "", "single", "multi":
+	default:
+		return fmt.Errorf("%s %q %s has unsupported mode %q", sourceKind, sourceID, kind, selection.Mode)
+	}
+	if len(selection.Mappings) == 0 {
+		return fmt.Errorf("%s %q %s requires mappings", sourceKind, sourceID, kind)
+	}
+	for index, mapping := range selection.Mappings {
+		if mapping.Field == "" || mapping.Value == "" {
+			return fmt.Errorf("%s %q %s mapping %d requires field and value", sourceKind, sourceID, kind, index)
+		}
+	}
+	for _, target := range selection.Targets {
+		if err := d.validateInteractionTarget(sourceKind, sourceID, kind, target); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (d *Dashboard) validateInteractionTarget(sourceKind, sourceID, kind, target string) error {
+	if target == "" {
+		return fmt.Errorf("%s %q %s has empty target", sourceKind, sourceID, kind)
+	}
+	_, visualOK := d.Visuals[target]
+	_, tableOK := d.Tables[target]
+	if visualOK && tableOK {
+		return fmt.Errorf("%s %q %s target %q is ambiguous across visuals and tables", sourceKind, sourceID, kind, target)
+	}
+	if !visualOK && !tableOK {
+		return fmt.Errorf("%s %q %s references unknown target %q", sourceKind, sourceID, kind, target)
+	}
+	return nil
 }
 
 func (d *Dashboard) validateFilterTargetReferences() error {

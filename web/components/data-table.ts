@@ -210,7 +210,7 @@ class DataTable extends LitElement {
     resizeGuideX: { state: true },
   }
 
-  tableId = 'orders'
+  tableId = ''
   table: TableSignal = emptyTable
   private selectedRowId = ''
   private selectedCellKey = ''
@@ -1205,16 +1205,47 @@ class DataTable extends LitElement {
     this.emitBlock('all', 0, { key: column.key, direction }, this.table.resetVersion + 1)
   }
 
-  selectCell(row: TableRow, column: TableColumn, absoluteIndex: number): void {
-    const key = rowKey(row, absoluteIndex)
-    this.selectedRowId = key
-    this.selectedCellKey = `${key}:${column.key}`
+  private resolvedTableId(): string {
+    return this.tableId.trim()
   }
 
-  private selectRow(key: string): void {
-    this.selectedRowId = key
-    this.rowSelection = { [key]: true }
+  selectCell(row: TableRow, _column: TableColumn, absoluteIndex: number): void {
+    const key = rowKey(row, absoluteIndex)
+    this.selectRow(key, row)
+  }
+
+  private selectRow(key: string, row: TableRow): void {
+    const clearing = this.selectedRowId === key
+    this.selectedRowId = clearing ? '' : key
+    this.rowSelection = clearing ? {} : { [key]: true }
     this.selectedCellKey = ''
+    this.emitRowSelection(row, clearing)
+  }
+
+  private emitRowSelection(row: TableRow, clearing: boolean): void {
+    const sourceId = this.resolvedTableId()
+    const interaction = this.table?.interaction
+    const mappings = interaction?.mappings ?? []
+    if (!sourceId || !interaction || mappings.length === 0) return
+    this.dispatchEvent(
+      new CustomEvent('ld-interaction-select', {
+        bubbles: true,
+        composed: true,
+        detail: {
+          sourceKind: 'table',
+          sourceId,
+          interactionKind: interaction.kind || 'row_selection',
+          action: clearing ? 'clear' : 'set',
+          mode: interaction.mode || 'single',
+          toggle: interaction.toggle !== false,
+          mappings: clearing ? [] : mappings.map((mapping) => ({
+            field: mapping.field,
+            value: String(row[mapping.value] ?? ''),
+            label: String(row[mapping.label || mapping.value] ?? row[mapping.value] ?? ''),
+          })).filter((mapping) => mapping.value !== ''),
+        },
+      }),
+    )
   }
 
   private columnPinPosition(column: any): false | 'left' | 'right' {
@@ -1427,7 +1458,7 @@ class DataTable extends LitElement {
         style=${`top:${index * this.rowHeight}px`}
         @mouseenter=${() => { this.hoveredRowId = key }}
         @mouseleave=${() => { if (this.hoveredRowId === key) this.hoveredRowId = '' }}
-        @click=${() => this.selectRow(key)}
+        @click=${() => this.selectRow(key, row)}
       >
         ${cells.map((cell: any) => {
           const column = cell.column.columnDef.meta?.column ?? this.columns.find((item) => item.key === cell.column.id)
@@ -1616,6 +1647,8 @@ class DataTable extends LitElement {
   }
 
   private emitBlock(block: BlockID | 'all', start: number, sort = this.table.sort, resetVersion = this.table.resetVersion): void {
+    const tableId = this.resolvedTableId()
+    if (!tableId) return
     const count = this.chunkSize
     const requestSeq = ++this.requestSeq
     if (block === 'all') {
@@ -1633,7 +1666,7 @@ class DataTable extends LitElement {
       bubbles: true,
       composed: true,
       detail: {
-        table: this.tableId || 'orders',
+        table: tableId,
         block,
         start,
         count,
@@ -1703,10 +1736,29 @@ class DataTable extends LitElement {
   }
 
   private runAction(action: VisualAction): void {
+    const tableId = this.resolvedTableId()
     this.renderRoot.querySelector<HTMLDetailsElement>('.visual-options')?.removeAttribute('open')
     if (action === 'clear-selection') {
       this.selectedRowId = ''
       this.selectedCellKey = ''
+      this.rowSelection = {}
+      if (tableId) {
+        this.dispatchEvent(
+          new CustomEvent('ld-interaction-select', {
+            bubbles: true,
+            composed: true,
+            detail: {
+              sourceKind: 'table',
+              sourceId: tableId,
+              interactionKind: this.table?.interaction?.kind || 'row_selection',
+              action: 'clear',
+              mode: this.table?.interaction?.mode || 'single',
+              toggle: this.table?.interaction?.toggle !== false,
+              mappings: [],
+            },
+          }),
+        )
+      }
     }
     this.dispatchEvent(
       new CustomEvent('ld-visual-action', {
@@ -1715,7 +1767,7 @@ class DataTable extends LitElement {
         detail: {
           action,
           visualType: 'table',
-          visualId: this.tableId || 'orders',
+          visualId: tableId,
           title: this.table?.title ?? 'Orders',
           columns: this.columns,
           rows: this.exportRows(),

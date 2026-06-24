@@ -39,6 +39,20 @@ export type ChartShape =
 
 export type ChartDatum = Record<string, unknown>
 
+export type InteractionConfig = {
+  kind?: string
+  mode?: 'single' | 'multi' | string
+  toggle?: boolean
+  mappings?: InteractionMapping[]
+  targets?: string[]
+}
+
+export type InteractionMapping = {
+  field: string
+  value: string
+  label?: string
+}
+
 export type ChartPayload = {
   version?: number
   id?: string
@@ -50,6 +64,7 @@ export type ChartPayload = {
   unit?: string
   format?: string
   field?: string
+  interaction?: InteractionConfig
   dimensions?: string[]
   measure?: string
   measures?: string[]

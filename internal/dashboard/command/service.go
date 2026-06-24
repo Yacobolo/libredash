@@ -20,12 +20,12 @@ type Service struct {
 }
 
 type Request struct {
-	DashboardID   string
-	PageID        string
-	ModelID       string
-	Filters       dashboard.Filters
-	TableCommand  dashboard.TableRequest
-	VisualCommand dashboard.VisualCommand
+	DashboardID        string
+	PageID             string
+	ModelID            string
+	Filters            dashboard.Filters
+	TableCommand       dashboard.TableRequest
+	InteractionCommand dashboard.InteractionCommand
 }
 
 type EventType string
@@ -60,15 +60,15 @@ func (s Service) TableWindow(ctx context.Context, request Request) []Event {
 	}}
 }
 
-func (s Service) ChartSelect(ctx context.Context, request Request) []Event {
-	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, request.Filters).ToggleSelection(request.VisualCommand)
+func (s Service) Select(ctx context.Context, request Request) []Event {
+	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, request.Filters).ApplyInteraction(request.InteractionCommand)
 	filters = report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, filters)
 	return s.reload(ctx, request, filters)
 }
 
 func (s Service) ClearSelection(ctx context.Context, request Request) []Event {
 	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, request.Filters)
-	filters.VisualSelections = nil
+	filters.Selections = nil
 	return s.reload(ctx, request, filters)
 }
 

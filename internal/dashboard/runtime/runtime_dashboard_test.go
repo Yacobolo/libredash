@@ -69,7 +69,7 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	}
 	defer metrics.Close()
 
-	table, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders", Block: "all", RequestSeq: 9})
+	table, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "all", RequestSeq: 9})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,8 +230,8 @@ relogios_presentes,watches_gifts
 	metrics.reports.workspace.Dashboards["executive-sales"] = report
 
 	selectedFilters := dashboard.Filters{
-		VisualSelections: []dashboard.VisualSelection{
-			{VisualID: "orders", Field: "orders.status", Operator: "in", Values: []string{"delivered"}},
+		Selections: []dashboard.InteractionSelection{
+			interactionSelection("visual", "orders", "point_selection", "orders.status", "delivered"),
 		},
 	}
 	selectedPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", selectedFilters)
@@ -242,7 +242,7 @@ relogios_presentes,watches_gifts
 		t.Fatalf("selected orders KPI value = %d, want 2", got)
 	}
 	if len(selectedPatch.Visuals["orders"].Data) != 2 {
-		t.Fatalf("orders chart points with self-selection = %d, want 2", len(selectedPatch.Visuals["orders"].Data))
+		t.Fatalf("orders chart points without explicit self-target = %d, want 2", len(selectedPatch.Visuals["orders"].Data))
 	}
 	if !pointSelected(selectedPatch.Visuals["orders"].Data, "delivered") {
 		t.Fatalf("orders chart did not mark delivered as selected: %#v", selectedPatch.Visuals["orders"].Data)
@@ -253,6 +253,26 @@ relogios_presentes,watches_gifts
 	if got := datumString(selectedPatch.Visuals["revenue"].Data[0], "series"); got != "" {
 		t.Fatalf("single-series chart row series = %q, want empty", got)
 	}
+
+	report = metrics.reports.workspace.Dashboards["executive-sales"]
+	ordersVisual := report.Visuals["orders"]
+	ordersVisual.Interaction.PointSelection.Targets = append(ordersVisual.Interaction.PointSelection.Targets, "orders")
+	report.Visuals["orders"] = ordersVisual
+	metrics.reports.workspace.Dashboards["executive-sales"] = report
+	selfTargetPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", selectedFilters)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selfTargetPatch.Visuals["orders"].Data) != 1 {
+		t.Fatalf("orders chart points with explicit self-target = %d, want 1", len(selfTargetPatch.Visuals["orders"].Data))
+	}
+	if !pointSelected(selfTargetPatch.Visuals["orders"].Data, "delivered") {
+		t.Fatalf("self-targeted orders chart did not mark delivered as selected: %#v", selfTargetPatch.Visuals["orders"].Data)
+	}
+	report = metrics.reports.workspace.Dashboards["executive-sales"]
+	ordersVisual.Interaction.PointSelection.Targets = removeString(ordersVisual.Interaction.PointSelection.Targets, "orders")
+	report.Visuals["orders"] = ordersVisual
+	metrics.reports.workspace.Dashboards["executive-sales"] = report
 
 	columnPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "chart-column", selectedFilters)
 	if err != nil {
@@ -405,7 +425,7 @@ relogios_presentes,watches_gifts
 	}
 
 	table, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{
-		Table:      "orders",
+		Table:      "orders_table",
 		Block:      "a",
 		Start:      0,
 		Count:      1,
@@ -456,10 +476,10 @@ relogios_presentes,watches_gifts
 	}
 
 	filteredTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{
-		VisualSelections: []dashboard.VisualSelection{
-			{VisualID: "orders", Field: "orders.status", Operator: "in", Values: []string{"delivered"}},
+		Selections: []dashboard.InteractionSelection{
+			interactionSelection("visual", "orders", "point_selection", "orders.status", "delivered"),
 		},
-	}, dashboard.TableRequest{Table: "orders", Block: "all", Count: 10, RequestSeq: 8})
+	}, dashboard.TableRequest{Table: "orders_table", Block: "all", Count: 10, RequestSeq: 8})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,6 +488,19 @@ relogios_presentes,watches_gifts
 	}
 	if filteredTable.AvailableRows != 1 {
 		t.Fatalf("targeted table available rows = %d, want 1", filteredTable.AvailableRows)
+	}
+
+	andFilteredTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{
+		Selections: []dashboard.InteractionSelection{
+			interactionSelection("visual", "orders", "point_selection", "orders.status", "delivered"),
+			interactionSelection("visual", "categories", "point_selection", "orders.category", "watches_gifts"),
+		},
+	}, dashboard.TableRequest{Table: "orders_table", Block: "all", Count: 10, RequestSeq: 9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if andFilteredTable.TotalRows != 0 {
+		t.Fatalf("AND-filtered table total rows = %d, want 0", andFilteredTable.TotalRows)
 	}
 	if got := filteredTable.Blocks["a"].RequestSeq; got != 8 {
 		t.Fatalf("all block request seq = %d, want 8", got)
@@ -656,4 +689,29 @@ relogios_presentes,watches_gifts
 			}
 		})
 	}
+}
+
+func interactionSelection(sourceKind, sourceID, interactionKind, field string, values ...string) dashboard.InteractionSelection {
+	return dashboard.InteractionSelection{
+		ID:              sourceKind + ":" + sourceID + ":" + interactionKind,
+		SourceKind:      sourceKind,
+		SourceID:        sourceID,
+		InteractionKind: interactionKind,
+		Mode:            "multi",
+		Mappings: []dashboard.InteractionSelectionMapping{{
+			Field:  field,
+			Values: append([]string{}, values...),
+			Label:  strings.Join(values, ", "),
+		}},
+	}
+}
+
+func removeString(values []string, value string) []string {
+	next := make([]string, 0, len(values))
+	for _, candidate := range values {
+		if candidate != value {
+			next = append(next, candidate)
+		}
+	}
+	return next
 }

@@ -436,7 +436,7 @@ class FilterCard extends HTMLElement {
     const filtersSignal = this.currentFilters()
     const filters: FiltersSignal = {
       controls: { ...(filtersSignal.controls ?? {}), [this.currentFilterId()]: control },
-      visualSelections: [...(filtersSignal.visualSelections ?? [])],
+      selections: [...(filtersSignal.selections ?? [])],
     }
     const config = this.currentFilterConfig()
     this.dispatchEvent(new CustomEvent('ld-filters-change', {

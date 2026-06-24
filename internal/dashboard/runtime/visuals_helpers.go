@@ -212,12 +212,54 @@ func dimensionSortColumn(shape string, index int) string {
 	}
 }
 
-func selectedValues(filters dashboard.Filters, visualID string) []string {
-	for _, selection := range filters.VisualSelections {
-		if selection.VisualID == visualID {
-			values := make([]string, len(selection.Values))
-			copy(values, selection.Values)
-			return values
+func visualInteractionConfig(selection reportdef.SelectionInteraction) dashboard.InteractionConfig {
+	return interactionConfig("point_selection", selection)
+}
+
+func tableInteractionConfig(selection reportdef.SelectionInteraction) dashboard.InteractionConfig {
+	return interactionConfig("row_selection", selection)
+}
+
+func interactionConfig(kind string, selection reportdef.SelectionInteraction) dashboard.InteractionConfig {
+	mode := selection.Mode
+	if mode == "" {
+		mode = "single"
+	}
+	mappings := make([]dashboard.InteractionConfigMapping, 0, len(selection.Mappings))
+	for _, mapping := range selection.Mappings {
+		mappings = append(mappings, dashboard.InteractionConfigMapping{
+			Field: mapping.Field,
+			Value: mapping.Value,
+			Label: mapping.Label,
+		})
+	}
+	return dashboard.InteractionConfig{
+		Kind:     kind,
+		Mode:     mode,
+		Toggle:   selection.Toggle,
+		Mappings: mappings,
+		Targets:  append([]string{}, selection.Targets...),
+	}
+}
+
+func firstInteractionField(interaction dashboard.InteractionConfig) string {
+	if len(interaction.Mappings) == 0 {
+		return ""
+	}
+	return interaction.Mappings[0].Field
+}
+
+func selectedValues(filters dashboard.Filters, sourceKind, sourceID, field string) []string {
+	for _, selection := range filters.Selections {
+		if selection.SourceKind != sourceKind || selection.SourceID != sourceID {
+			continue
+		}
+		for _, mapping := range selection.Mappings {
+			if field == "" || mapping.Field == field {
+				values := make([]string, len(mapping.Values))
+				copy(values, mapping.Values)
+				return values
+			}
 		}
 	}
 	return []string{}

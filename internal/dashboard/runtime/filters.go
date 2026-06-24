@@ -93,29 +93,27 @@ func (s *FilterService) semanticFilters(ctx context.Context, runtime *modelRunti
 			result = append(result, reportdef.QueryFilter{Field: filter.Dimension, Operator: operator, Values: []any{value}})
 		}
 	}
-	for _, selection := range filters.VisualSelections {
-		if selection.VisualID == "" || len(selection.Values) == 0 {
+	for _, selection := range filters.Selections {
+		if selection.SourceKind == "" || selection.SourceID == "" || len(selection.Mappings) == 0 {
 			continue
 		}
-		if targetKind == "visual" && selection.VisualID == targetID {
+		if !targetsInteractionSelection(report, selection, targetKind, targetID) {
 			continue
 		}
-		sourceVisual, ok := report.Visuals[selection.VisualID]
-		if !ok || !targetsSelection(sourceVisual.Interaction.Targets, targetKind, targetID) {
-			continue
+		for _, mapping := range selection.Mappings {
+			if len(mapping.Values) == 0 {
+				continue
+			}
+			dimension, err := runtime.model.ResolveDimension(mapping.Field)
+			if err != nil {
+				continue
+			}
+			values := make([]any, len(mapping.Values))
+			for i, value := range mapping.Values {
+				values[i] = value
+			}
+			result = append(result, reportdef.QueryFilter{Field: dimension.Field, Operator: "in", Values: values})
 		}
-		if selection.Operator != "" && selection.Operator != "in" {
-			continue
-		}
-		dimension, err := runtime.model.ResolveDimension(selection.Field)
-		if err != nil {
-			continue
-		}
-		values := make([]any, len(selection.Values))
-		for i, value := range selection.Values {
-			values[i] = value
-		}
-		result = append(result, reportdef.QueryFilter{Field: dimension.Field, Operator: "in", Values: values})
 	}
 	return result, nil
 }
@@ -175,12 +173,20 @@ func tableForField(field string) string {
 	return ""
 }
 
-func targetsSelection(targets reportdef.InteractionTargets, targetKind, targetID string) bool {
-	switch targetKind {
+func targetsInteractionSelection(report *reportdef.Dashboard, selection dashboard.InteractionSelection, targetKind, targetID string) bool {
+	switch selection.SourceKind {
 	case "visual":
-		return contains(targets.Visuals, targetID)
+		visual, ok := report.Visuals[selection.SourceID]
+		if !ok || selection.InteractionKind != "point_selection" {
+			return false
+		}
+		return contains(visual.Interaction.PointSelection.Targets, targetID)
 	case "table":
-		return contains(targets.Tables, targetID)
+		table, ok := report.Tables[selection.SourceID]
+		if !ok || selection.InteractionKind != "row_selection" {
+			return false
+		}
+		return contains(table.Interaction.RowSelection.Targets, targetID)
 	default:
 		return false
 	}

@@ -475,7 +475,7 @@ class FilterPanel extends LitElement {
           <button class="close" type="button" aria-label="Collapse filters" title="Collapse filters" @click=${this.close}>${lucideIcon(X)}</button>
         </header>
         ${entries.map(([name, definition]) => this.renderFilter(name, definition))}
-        ${this.renderVisualSelections()}
+        ${this.renderInteractionSelections()}
         <div class="summary">
           <span>${activeCount} total filter${activeCount === 1 ? '' : 's'} applied</span>
           <button class="reset" type="button" ?disabled=${this.loading || activeCount === 0} @click=${this.reset}>Reset</button>
@@ -617,17 +617,17 @@ class FilterPanel extends LitElement {
     `
   }
 
-  private renderVisualSelections() {
-    const selections = this.filters.visualSelections ?? []
+  private renderInteractionSelections() {
+    const selections = this.filters.selections ?? []
     if (selections.length === 0) return nothing
     return html`
       <article class="card">
         <div class="card-head">
-          <h3>Visual selections</h3>
-          <button class="clear" type="button" @click=${this.clearVisualSelections}>Clear</button>
+          <h3>Selections</h3>
+          <button class="clear" type="button" @click=${this.clearSelections}>Clear</button>
         </div>
         <div class="chips">
-          ${selections.map((selection) => html`<span class="chip">${selection.label || (selection.values ?? []).join(', ')}</span>`)}
+          ${selections.map((selection) => html`<span class="chip">${selection.label || selection.mappings?.map((mapping) => mapping.label || (mapping.values ?? []).join(', ')).join(', ')}</span>`)}
         </div>
       </article>
     `
@@ -640,7 +640,7 @@ class FilterPanel extends LitElement {
   private nextFilters(): FiltersSignal {
     return {
       controls: { ...(this.filters.controls ?? {}) },
-      visualSelections: [...(this.filters.visualSelections ?? [])],
+      selections: [...(this.filters.selections ?? [])],
     }
   }
 
@@ -812,12 +812,12 @@ class FilterPanel extends LitElement {
     this.updateControl(name, defaultControl(definition))
   }
 
-  private clearVisualSelections = (): void => {
-    this.dispatchEvent(new CustomEvent('ld-visual-selection-clear', { bubbles: true, composed: true }))
+  private clearSelections = (): void => {
+    this.dispatchEvent(new CustomEvent('ld-selection-clear', { bubbles: true, composed: true }))
   }
 
   private reset = (): void => {
-    const filters: FiltersSignal = { controls: {}, visualSelections: [] }
+    const filters: FiltersSignal = { controls: {}, selections: [] }
     for (const [name, definition] of filterConfigEntries(this.config)) {
       filters.controls[name] = defaultControl(definition)
     }
@@ -835,7 +835,7 @@ class FilterPanel extends LitElement {
   }
 
   private activeCount(): number {
-    let count = this.filters.visualSelections?.length ?? 0
+    let count = this.filters.selections?.length ?? 0
     for (const [name, definition] of filterConfigEntries(this.config)) {
       if (this.isActive(name, definition)) count += 1
     }
