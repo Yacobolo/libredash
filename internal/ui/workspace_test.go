@@ -408,7 +408,7 @@ func TestCollapsedAssetLineageSuppressesSemanticDashboardShortcutByPair(t *testi
 	assertLineageHasEdge(t, lineage, "model-b", "dashboard-b", "lineage_semantic_model_dashboard")
 }
 
-func TestWorkspaceAssetDetailsRenderSharedShapeForLeafAsset(t *testing.T) {
+func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 	workspace, catalog, assets, edges := testWorkspaceAssetFixtures()
 	var connection api.AssetResponse
 	for _, asset := range assets {
@@ -419,7 +419,7 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForLeafAsset(t *testing.T) {
 	}
 
 	var out strings.Builder
-	err := WorkspaceAssetPage(catalog, workspace, connection, assets, edges, "details", "Owner").Render(&out)
+	err := ConnectionAssetPage(catalog, workspace, connection, assets, edges, "details", "Owner").Render(&out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,17 +431,54 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForLeafAsset(t *testing.T) {
 		"Overview",
 		"Type",
 		"Connection",
-		"Parent",
-		"LibreDash Workspace",
 		"Kind",
 		"Credentials",
+		"Sources",
+		`Back to connections`,
+		`href="/connections/connection/lineage"`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("connection details did not render %q:\n%s", want, rendered)
 		}
 	}
-	if strings.Contains(rendered, "Published from Git/YAML") {
-		t.Fatalf("connection details rendered hardcoded publication source:\n%s", rendered)
+	for _, notWant := range []string{
+		"Published from Git/YAML",
+		">Parent</span>",
+		"Back to workspace",
+		`href="/workspaces/libredash/assets/connection/details"`,
+	} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("connection details rendered workspace-only content %q:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestWorkspaceAssetTabsUseWorkspaceAssetTypes(t *testing.T) {
+	workspace, catalog, assets, _ := testWorkspaceAssetFixtures()
+
+	var out strings.Builder
+	err := WorkspacePage(catalog, workspace, assets, "", "", "Owner", testWorkspaceAccess(workspace, true), "csrf").Render(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := html.UnescapeString(out.String())
+
+	for _, want := range []string{
+		`href="/workspaces/libredash"`,
+		`>All</a>`,
+		`href="/workspaces/libredash?type=model_table"`,
+		`>Model table</a>`,
+		`href="/workspaces/libredash?type=semantic_model"`,
+		`>Semantic model</a>`,
+		`href="/workspaces/libredash?type=dashboard"`,
+		`>Dashboard</a>`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("workspace tabs did not render %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, `type=connection`) {
+		t.Fatalf("workspace tabs rendered connection filter:\n%s", rendered)
 	}
 }
 

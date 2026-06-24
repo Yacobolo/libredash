@@ -389,7 +389,7 @@ func TestWorkspacePageDefaultsToTopLevelAssets(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Executive Sales Dashboard", "Olist Commerce"} {
+	for _, want := range []string{"Executive Sales Dashboard", "Olist Commerce", "orders"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("workspace page missing top-level asset %q:\n%s", want, body)
 		}
@@ -464,8 +464,85 @@ func TestConnectionsPageRendersGlobalConnectionSurface(t *testing.T) {
 			t.Fatalf("connections page missing %q:\n%s", want, body)
 		}
 	}
+	if !strings.Contains(body, `/connections/asset_`) || !strings.Contains(body, `/details`) {
+		t.Fatalf("connections page did not link to canonical connection details:\n%s", body)
+	}
+	if strings.Contains(body, `/workspaces/test/assets/asset_`) {
+		t.Fatalf("connections page linked to workspace asset details:\n%s", body)
+	}
 	if strings.Contains(body, `data-workspace-asset-toolbar`) {
 		t.Fatalf("connections page rendered workspace asset toolbar:\n%s", body)
+	}
+}
+
+func TestConnectionAssetRoutesUseConnectionSurface(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+	connectionID := activeAssetID(t, store, "test", "connection", "olist.olist")
+
+	redirectReq := httptest.NewRequest(http.MethodGet, "/connections/"+connectionID, nil)
+	redirectReq.Header.Set("Authorization", "Bearer dev")
+	redirectRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(redirectRec, redirectReq)
+	if redirectRec.Code != http.StatusFound {
+		t.Fatalf("connection canonical redirect status = %d body=%s", redirectRec.Code, redirectRec.Body.String())
+	}
+	if got := redirectRec.Header().Get("Location"); got != "/connections/"+connectionID+"/details" {
+		t.Fatalf("connection redirect Location = %q, want /connections/%s/details", got, connectionID)
+	}
+
+	detailReq := httptest.NewRequest(http.MethodGet, "/connections/"+connectionID+"/details", nil)
+	detailReq.Header.Set("Authorization", "Bearer dev")
+	detailRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(detailRec, detailReq)
+	if detailRec.Code != http.StatusOK {
+		t.Fatalf("connection detail status = %d body=%s", detailRec.Code, detailRec.Body.String())
+	}
+	detailBody := detailRec.Body.String()
+	for _, want := range []string{"Connections", "olist", "Sources", "order_items", "Lineage"} {
+		if !strings.Contains(detailBody, want) {
+			t.Fatalf("connection detail missing %q:\n%s", want, detailBody)
+		}
+	}
+	for _, notWant := range []string{`Workspaces /`, `Back to workspace`} {
+		if strings.Contains(detailBody, notWant) {
+			t.Fatalf("connection detail rendered workspace chrome %q:\n%s", notWant, detailBody)
+		}
+	}
+
+	lineageReq := httptest.NewRequest(http.MethodGet, "/connections/"+connectionID+"/lineage", nil)
+	lineageReq.Header.Set("Authorization", "Bearer dev")
+	lineageRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(lineageRec, lineageReq)
+	if lineageRec.Code != http.StatusOK {
+		t.Fatalf("connection lineage status = %d body=%s", lineageRec.Code, lineageRec.Body.String())
+	}
+	if !strings.Contains(lineageRec.Body.String(), "ld-asset-lineage-graph") {
+		t.Fatalf("connection lineage did not render lineage graph:\n%s", lineageRec.Body.String())
+	}
+}
+
+func TestWorkspaceConnectionAssetRedirectsToConnectionSurface(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+	connectionID := activeAssetID(t, store, "test", "connection", "olist.olist")
+
+	req := httptest.NewRequest(http.MethodGet, "/workspaces/test/assets/"+connectionID+"/details", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("workspace connection detail status = %d, want redirect body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "/connections/"+connectionID+"/details" {
+		t.Fatalf("workspace connection detail Location = %q, want /connections/%s/details", got, connectionID)
 	}
 }
 
@@ -916,6 +993,25 @@ func seedActiveDeployment(t *testing.T, store *platform.Store, workspaceID strin
 	if _, err := deploymentRepo.Activate(ctx, deployment.WorkspaceID(workspaceID), created.ID); err != nil {
 		t.Fatalf("activate deployment: %v", err)
 	}
+}
+
+func activeAssetID(t *testing.T, store *platform.Store, workspaceID, typ, key string) string {
+	t.Helper()
+	repo := workspacesqlite.NewRepository(store.SQLDB())
+	graph, ok, err := repo.ActiveDeploymentGraph(context.Background(), workspace.WorkspaceID(workspaceID))
+	if err != nil {
+		t.Fatalf("active deployment graph: %v", err)
+	}
+	if !ok {
+		t.Fatalf("workspace %q has no active deployment graph", workspaceID)
+	}
+	for _, asset := range graph.Assets {
+		if string(asset.Type) == typ && asset.Key == key {
+			return string(asset.ID)
+		}
+	}
+	t.Fatalf("asset %s %q not found in active graph", typ, key)
+	return ""
 }
 
 func zeroArtifact(deploymentID deployment.ID, workspaceID string) deployment.Artifact {

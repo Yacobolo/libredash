@@ -135,6 +135,35 @@ func WorkspaceAssetPage(catalog dashboard.Catalog, workspace api.WorkspaceRespon
 	)
 }
 
+func ConnectionAssetPage(catalog dashboard.Catalog, workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse, edges []api.AssetEdgeResponse, activeSection, roleLabel string) g.Node {
+	activeSection = normalizeWorkspaceAssetSection(activeSection)
+	lineage := assetLineage(workspace.ID, asset, assets, edges)
+	extraHead := []g.Node{
+		h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
+	}
+	if activeSection == "lineage" {
+		extraHead = append(extraHead,
+			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/asset-lineage-graph.css"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/asset-lineage-graph.js"))),
+		)
+	}
+	return workspaceDocument(asset.Title, catalog, "connections", roleLabel, workspaceAssetSignals(workspace, asset, assets, edges, lineage, activeSection),
+		h.Section(h.Class(metricMainClass), h.Aria("label", "Connection asset detail"),
+			connectionBreadcrumbHeader(asset),
+			h.Div(h.Class(metricContentColumnClass),
+				connectionAssetDetailTabs(asset.ID, activeSection, lineage.Count),
+				h.Div(h.Class(assetDetailBodyClass(activeSection)),
+					g.If(activeSection == "details",
+						assetDetailsSection(workspace, asset, assets, edges),
+					),
+					g.If(activeSection == "lineage", assetLineageSection(lineage)),
+				),
+			),
+		),
+		extraHead...,
+	)
+}
+
 func assetBreadcrumbHeader(workspace api.WorkspaceResponse, asset api.AssetResponse) g.Node {
 	return h.Header(h.Class("grid min-w-0 grid-cols-workspace-header items-center gap-2 border-b border-outline-muted px-4 py-2.5"),
 		h.Nav(h.Class("min-w-0"), h.Aria("label", "Breadcrumb"),
@@ -147,6 +176,19 @@ func assetBreadcrumbHeader(workspace api.WorkspaceResponse, asset api.AssetRespo
 			),
 		),
 		h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"), assetActions(workspace.ID, asset)),
+	)
+}
+
+func connectionBreadcrumbHeader(asset api.AssetResponse) g.Node {
+	return h.Header(h.Class("grid min-w-0 grid-cols-workspace-header items-center gap-2 border-b border-outline-muted px-4 py-2.5"),
+		h.Nav(h.Class("min-w-0"), h.Aria("label", "Breadcrumb"),
+			h.Ol(h.Class("flex min-w-0 flex-wrap items-center gap-1.5 text-body-sm font-medium leading-snug"),
+				breadcrumbLink("Connections", "/connections"),
+				breadcrumbSeparator(),
+				assetBreadcrumbCurrent(asset),
+			),
+		),
+		h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"), connectionAssetActions()),
 	)
 }
 
@@ -268,7 +310,7 @@ func activeDeploymentLabel(workspace api.WorkspaceResponse) string {
 }
 
 func assetToolbar(workspaceID, activeType, query string, assets []api.AssetResponse) g.Node {
-	types := []string{"", "dashboard", "semantic_model"}
+	types := []string{"", "model_table", "semantic_model", "dashboard"}
 	return h.Div(h.Class("grid min-w-0 gap-3 border-b border-outline-variant bg-app px-3 pt-3"), g.Attr("data-workspace-asset-toolbar", ""),
 		h.Form(h.Method("get"), h.Action("/workspaces/"+workspaceID), h.Class("flex min-w-0 max-w-workspace-search items-center gap-2"),
 			h.Input(h.Type("search"), h.Name("q"), h.Value(query), h.Placeholder("Search workspace assets..."), h.Class("min-h-control-md w-full rounded-small border border-outline-variant bg-control px-3 text-body-sm font-medium text-fg-default placeholder:text-fg-muted")),
@@ -383,7 +425,7 @@ func assetCell(className string, children ...g.Node) g.Node {
 }
 
 func assetRow(workspaceID string, asset api.AssetResponse, assetIndex map[string]api.AssetResponse) g.Node {
-	detailHref := workspaceAssetSectionHref(workspaceID, asset.ID, "details")
+	detailHref := assetCanonicalSectionHref(workspaceID, asset, "details")
 	openHref := detailHref
 	if asset.Href != "" {
 		openHref = asset.Href
@@ -429,10 +471,23 @@ func assetActions(workspaceID string, asset api.AssetResponse) g.Node {
 	)
 }
 
+func connectionAssetActions() g.Node {
+	return h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"),
+		h.A(h.Class(metricActionButtonClass), h.Href("/connections"), h.Title("Back to connections"), h.Aria("label", "Back to connections"), lucide.ArrowLeft(metricActionIconAttrs()...)),
+	)
+}
+
 func assetDetailTabs(workspaceID, assetID, activeSection string, relatedCount int) g.Node {
 	return h.Nav(h.Class("flex min-w-0 gap-6 border-b border-outline-variant bg-app px-3"), h.Aria("label", "Workspace asset sections"),
 		assetDetailTabLink(workspaceAssetSectionHref(workspaceID, assetID, "details"), activeSection == "details", "Details", nil),
 		assetDetailTabLink(workspaceAssetSectionHref(workspaceID, assetID, "lineage"), activeSection == "lineage", "Lineage", metricTabCount(relatedCount)),
+	)
+}
+
+func connectionAssetDetailTabs(assetID, activeSection string, relatedCount int) g.Node {
+	return h.Nav(h.Class("flex min-w-0 gap-6 border-b border-outline-variant bg-app px-3"), h.Aria("label", "Connection asset sections"),
+		assetDetailTabLink(connectionAssetSectionHref(assetID, "details"), activeSection == "details", "Details", nil),
+		assetDetailTabLink(connectionAssetSectionHref(assetID, "lineage"), activeSection == "lineage", "Lineage", metricTabCount(relatedCount)),
 	)
 }
 
@@ -1218,11 +1273,22 @@ func absInt(value int) int {
 }
 
 func lineageAssetHref(workspaceID string, asset api.AssetResponse) string {
-	return workspaceAssetSectionHref(workspaceID, asset.ID, "details")
+	return assetCanonicalSectionHref(workspaceID, asset, "details")
 }
 
 func workspaceAssetSectionHref(workspaceID, assetID, section string) string {
 	return "/workspaces/" + workspaceID + "/assets/" + assetID + "/" + section
+}
+
+func connectionAssetSectionHref(assetID, section string) string {
+	return "/connections/" + assetID + "/" + section
+}
+
+func assetCanonicalSectionHref(workspaceID string, asset api.AssetResponse, section string) string {
+	if asset.Type == "connection" {
+		return connectionAssetSectionHref(asset.ID, section)
+	}
+	return workspaceAssetSectionHref(workspaceID, asset.ID, section)
 }
 
 type assetDetailModel struct {
@@ -1262,7 +1328,7 @@ func assetDetailModelForAsset(workspace api.WorkspaceResponse, asset api.AssetRe
 	case "dashboard":
 		dashboardDetailModel(&model, asset, assets)
 	case "connection":
-		model.Overview = append(model.Overview, connectionFacts(asset)...)
+		connectionDetailModel(&model, workspace, asset, assets, edges)
 	case "source":
 		model.Overview = append(model.Overview, sourceFacts(asset)...)
 	case "measure":
@@ -1289,7 +1355,7 @@ func commonAssetOverviewFacts(asset api.AssetResponse, assets []api.AssetRespons
 
 func shouldShowParentFact(typ string) bool {
 	switch typ {
-	case "catalog", "dashboard", "semantic_model":
+	case "catalog", "connection", "dashboard", "semantic_model":
 		return false
 	default:
 		return true
@@ -1649,6 +1715,43 @@ func dashboardTablesGrid(parent api.AssetResponse, tables []api.AssetResponse) m
 	}
 }
 
+func connectionDetailModel(model *assetDetailModel, workspace api.WorkspaceResponse, asset api.AssetResponse, assets []api.AssetResponse, edges []api.AssetEdgeResponse) {
+	sources := sourcesUsingConnection(asset.ID, assets, edges)
+	model.Overview = append(model.Overview, connectionFacts(asset)...)
+	model.Overview = append(model.Overview, definitionFact{Label: "Sources", Value: fmt.Sprint(len(sources))})
+	model.Sections = append(model.Sections,
+		assetDetailSection{
+			Title:  fmt.Sprintf("Sources (%d)", len(sources)),
+			Signal: "assetDetailsConnectionSourcesGrid",
+			Grid:   childAssetGrid(workspace.ID, sources, "No sources use this connection."),
+		},
+	)
+}
+
+func sourcesUsingConnection(connectionID string, assets []api.AssetResponse, edges []api.AssetEdgeResponse) []api.AssetResponse {
+	byID := assetsByID(assets)
+	sources := []api.AssetResponse{}
+	seen := map[string]struct{}{}
+	for _, edge := range edges {
+		if edge.Type != "uses_connection" || edge.ToAssetID != connectionID {
+			continue
+		}
+		source, ok := byID[edge.FromAssetID]
+		if !ok || source.Type != "source" {
+			continue
+		}
+		if _, ok := seen[source.ID]; ok {
+			continue
+		}
+		seen[source.ID] = struct{}{}
+		sources = append(sources, source)
+	}
+	sort.Slice(sources, func(i, j int) bool {
+		return assetTitle(sources[i]) < assetTitle(sources[j])
+	})
+	return sources
+}
+
 func connectionFacts(asset api.AssetResponse) []definitionFact {
 	return []definitionFact{
 		{Label: "Kind", Value: metaString(asset.Meta, "Kind", "kind")},
@@ -1768,7 +1871,7 @@ func childAssetGrid(workspaceID string, assets []api.AssetResponse, empty string
 	for _, asset := range assets {
 		rows = append(rows, map[string]any{
 			"name":        assetTitle(asset),
-			"nameHref":    workspaceAssetSectionHref(workspaceID, asset.ID, "details"),
+			"nameHref":    assetCanonicalSectionHref(workspaceID, asset, "details"),
 			"key":         asset.Key,
 			"type":        assetTypeLabel(asset.Type),
 			"description": emptyDash(asset.Description),
@@ -1808,7 +1911,7 @@ func childDependencyGrid(workspaceID, assetID string, assets []api.AssetResponse
 			"direction": direction,
 			"relation":  labelFromKey(edge.Type),
 			"asset":     assetTitle(peer),
-			"assetHref": workspaceAssetSectionHref(workspaceID, peer.ID, "details"),
+			"assetHref": assetCanonicalSectionHref(workspaceID, peer, "details"),
 			"type":      assetTypeLabel(peer.Type),
 		})
 	}
@@ -2071,7 +2174,7 @@ func childHref(workspaceID string, asset api.AssetResponse) string {
 	if asset.ID == "" {
 		return ""
 	}
-	return workspaceAssetSectionHref(workspaceID, asset.ID, "details")
+	return assetCanonicalSectionHref(workspaceID, asset, "details")
 }
 
 func assetsByID(assets []api.AssetResponse) map[string]api.AssetResponse {
