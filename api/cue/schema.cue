@@ -6,13 +6,13 @@ package api
 		base_path: string
 	}
 	info: {
-		title: string
-		version: string
+		title:        string
+		version:      string
 		description?: string
 	}
 	openapi?: _
-	servers?: [..._]
-	tags?: [..._]
+	servers?: [...]
+	tags?: [...]
 	schemas: [string]: _
-	endpoints: [..._]
+	endpoints: [...]
 }

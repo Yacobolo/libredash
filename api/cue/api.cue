@@ -15,7 +15,7 @@ info: {
 }
 
 openapi: {
-	version:   "3.0.0"
+	version: "3.0.0"
 	tag_order: ["Current User", "Workspaces", "Deployments", "Materializations", "Agent", "Access", "Audit"]
 	security_schemes: {
 		BearerAuth: {
