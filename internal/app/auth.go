@@ -21,6 +21,8 @@ import (
 type principalContextKey struct{}
 type apiCredentialContextKey struct{}
 
+const csrfCookieName = "ld_csrf"
+
 var (
 	errUnauthorized = errors.New("unauthorized")
 	errForbidden    = errors.New("forbidden")
@@ -73,6 +75,8 @@ func NewAuth(repo access.Repository, workspaceID string, cfg AuthConfig) *Auth {
 	}
 	auth.csrf = csrf.Protect(
 		csrfKey(cfg.CSRFKey),
+		csrf.CookieName(csrfCookieName),
+		csrf.Path("/"),
 		csrf.Secure(cfg.CookieSecure),
 		csrf.SameSite(csrf.SameSiteLaxMode),
 		csrf.ErrorHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

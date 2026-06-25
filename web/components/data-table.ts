@@ -305,7 +305,7 @@ class DataTable extends LitElement {
       pointer-events: none;
     }
 
-    .toolbar > div {
+    .toolbar-title {
       position: relative;
       z-index: calc(var(--zIndex-default) + 2);
       flex: 1 1 auto;
@@ -328,6 +328,31 @@ class DataTable extends LitElement {
       position: relative;
       z-index: calc(var(--zIndex-default) + 2);
       flex: 0 0 auto;
+    }
+
+    .visual-actions {
+      position: relative;
+      z-index: calc(var(--zIndex-default) + 2);
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: var(--base-size-4);
+    }
+
+    .icon-action {
+      display: grid;
+      width: var(--control-xsmall-size);
+      height: var(--control-xsmall-size);
+      min-height: var(--control-xsmall-size);
+      place-items: center;
+      border: var(--ld-border-transparent);
+      border-radius: var(--ld-radius-tight);
+      background: transparent;
+      color: var(--ld-fg-muted);
+      cursor: pointer;
+      padding: 0;
+      font: inherit;
+      line-height: var(--ld-line-height-none);
     }
 
     .visual-options summary {
@@ -355,6 +380,13 @@ class DataTable extends LitElement {
       height: var(--base-size-16);
     }
 
+    .icon-action svg {
+      width: var(--base-size-16);
+      height: var(--base-size-16);
+    }
+
+    .icon-action:hover,
+    .icon-action:focus-visible,
     .visual-options summary:hover,
     .visual-options summary:focus-visible,
     .visual-options[open] summary {
@@ -993,11 +1025,17 @@ class DataTable extends LitElement {
     super.connectedCallback()
     document.addEventListener('pointerdown', this.handleOutsidePointerDown)
     document.addEventListener('keydown', this.handleDocumentKeyDown)
+    if (this.hasUpdated) queueMicrotask(() => this.startViewportObserver())
   }
 
   firstUpdated(): void {
+    this.startViewportObserver()
+  }
+
+  private startViewportObserver(): void {
     const viewport = this.bodyViewportRef.value
     if (!viewport) return
+    this.resizeObserver?.disconnect()
     this.viewportHeight = viewport.clientHeight
     this.resizeObserver = new ResizeObserver(() => {
       this.viewportHeight = viewport.clientHeight
@@ -1011,7 +1049,10 @@ class DataTable extends LitElement {
     document.removeEventListener('pointerdown', this.handleOutsidePointerDown)
     document.removeEventListener('keydown', this.handleDocumentKeyDown)
     this.resizeObserver?.disconnect()
-    if (this.scrollFrame) cancelAnimationFrame(this.scrollFrame)
+    if (this.scrollFrame) {
+      cancelAnimationFrame(this.scrollFrame)
+      this.scrollFrame = 0
+    }
     this.clearResizeGuide()
     this.clearJumpTimer()
     super.disconnectedCallback()
@@ -1556,39 +1597,41 @@ class DataTable extends LitElement {
     return html`
       <section class=${shellClass} style=${shellStyle}>
         <div class="toolbar">
-          <div>
+          <div class="toolbar-title">
             <h2>${this.table?.title ?? 'Orders'}</h2>
           </div>
-          <details class="visual-options">
-            <summary aria-label="Visual options" title="Visual options">${lucideIcon(EllipsisVertical)}</summary>
-            <div class="menu" role="menu">
-              <button type="button" role="menuitem" @click=${() => this.runAction('focus')}>${visualMenuIcon('focus')}<span>Focus mode</span></button>
-              <button type="button" role="menuitem" @click=${() => this.runAction('show-data')}>${visualMenuIcon('show-data')}<span>Show data</span></button>
-              <button type="button" role="menuitem" @click=${() => this.runAction('copy-data')}>${visualMenuIcon('copy-data')}<span>Copy data</span></button>
-              <button type="button" role="menuitem" @click=${() => this.runAction('export-csv')}>${visualMenuIcon('export-csv')}<span>Export CSV</span></button>
-              <button type="button" role="menuitem" ?disabled=${!hasSelection} @click=${() => this.runAction('clear-selection')}>${visualMenuIcon('clear-selection')}<span>Clear selection</span></button>
-              <div class="menu-divider"></div>
-              <div class="column-menu" @click=${(event: Event) => event.stopPropagation()}>
-                <span>Columns</span>
-                ${columnModels.map((column: any) => {
-                  const checked = columnIsVisible(column, this.columnVisibility)
-                  return html`
-                    <label>
-                      <input
-                        type="checkbox"
-                        .checked=${checked}
-                        ?disabled=${!columnCanHide(column) || checked && columns.length <= 1}
-                        @change=${columnVisibilityHandler(column, (next) => {
-                          this.columnVisibility = { ...this.columnVisibility, [column.id]: next }
-                        })}
-                      />
-                      ${column.columnDef.header}
-                    </label>
-                  `
-                })}
+          <div class="visual-actions">
+            <button class="icon-action" type="button" aria-label="Expand table" title="Expand table" @click=${() => this.runAction('focus')}>${visualMenuIcon('focus')}</button>
+            <details class="visual-options">
+              <summary aria-label="Visual options" title="Visual options">${lucideIcon(EllipsisVertical)}</summary>
+              <div class="menu" role="menu">
+                <button type="button" role="menuitem" @click=${() => this.runAction('show-data')}>${visualMenuIcon('show-data')}<span>Show data</span></button>
+                <button type="button" role="menuitem" @click=${() => this.runAction('copy-data')}>${visualMenuIcon('copy-data')}<span>Copy data</span></button>
+                <button type="button" role="menuitem" @click=${() => this.runAction('export-csv')}>${visualMenuIcon('export-csv')}<span>Export CSV</span></button>
+                <button type="button" role="menuitem" ?disabled=${!hasSelection} @click=${() => this.runAction('clear-selection')}>${visualMenuIcon('clear-selection')}<span>Clear selection</span></button>
+                <div class="menu-divider"></div>
+                <div class="column-menu" @click=${(event: Event) => event.stopPropagation()}>
+                  <span>Columns</span>
+                  ${columnModels.map((column: any) => {
+                    const checked = columnIsVisible(column, this.columnVisibility)
+                    return html`
+                      <label>
+                        <input
+                          type="checkbox"
+                          .checked=${checked}
+                          ?disabled=${!columnCanHide(column) || checked && columns.length <= 1}
+                          @change=${columnVisibilityHandler(column, (next) => {
+                            this.columnVisibility = { ...this.columnVisibility, [column.id]: next }
+                          })}
+                        />
+                        ${column.columnDef.header}
+                      </label>
+                    `
+                  })}
+                </div>
               </div>
-            </div>
-          </details>
+            </details>
+          </div>
         </div>
         ${this.table?.error ? html`<div class="error">${this.table.error}</div>` : nothing}
         <div class="table-frame" role="table" aria-label=${this.table?.title ?? 'Orders'}>

@@ -82,6 +82,7 @@ tasks:
       - build
     cmds:
       - npm run test:table-selection
+      - npm run test:visual-modal
       - go test ./...
 
   ci:

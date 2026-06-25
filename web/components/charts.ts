@@ -67,6 +67,29 @@ const chartStyles = css`
     flex: 0 0 auto;
   }
 
+  .visual-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--base-size-4);
+  }
+
+  .icon-action {
+    display: grid;
+    width: var(--control-xsmall-size);
+    height: var(--control-xsmall-size);
+    min-height: var(--control-xsmall-size);
+    place-items: center;
+    border: var(--ld-border-transparent);
+    border-radius: var(--ld-radius-tight);
+    background: transparent;
+    color: var(--ld-icon-muted);
+    cursor: pointer;
+    padding: 0;
+    font: inherit;
+    line-height: var(--ld-line-height-none);
+  }
+
   .options summary {
     display: grid;
     width: var(--control-xsmall-size);
@@ -91,6 +114,13 @@ const chartStyles = css`
     height: var(--base-size-16);
   }
 
+  .icon-action svg {
+    width: var(--base-size-16);
+    height: var(--base-size-16);
+  }
+
+  .icon-action:hover,
+  .icon-action:focus-visible,
   .options summary:hover,
   .options summary:focus-visible,
   .options[open] summary {
@@ -210,6 +240,12 @@ class ChartVisual extends LitElement {
     this.observer = new ResizeObserver(() => this.rendererHandle?.resize())
     document.addEventListener('pointerdown', this.handleOutsidePointerDown)
     document.addEventListener('keydown', this.handleDocumentKeyDown)
+    if (this.hasUpdated) {
+      queueMicrotask(() => {
+        this.observer?.observe(this)
+        this.renderChart()
+      })
+    }
   }
 
   firstUpdated(): void {
@@ -226,6 +262,8 @@ class ChartVisual extends LitElement {
     document.removeEventListener('keydown', this.handleDocumentKeyDown)
     this.observer?.disconnect()
     this.rendererHandle?.dispose()
+    this.rendererHandle = undefined
+    this.rendererName = ''
     super.disconnectedCallback()
   }
 
@@ -239,16 +277,18 @@ class ChartVisual extends LitElement {
             <h2>${payload.title ?? 'Chart'}</h2>
             <span class="unit">${payload.unit ?? ''}</span>
           </div>
-          <details class="options">
-            <summary aria-label="Visual options" title="Visual options">${lucideIcon(EllipsisVertical)}</summary>
-            <div class="menu" role="menu">
-              <button type="button" role="menuitem" @click=${() => this.runAction('focus')}>${visualMenuIcon('focus')}<span>Focus mode</span></button>
-              <button type="button" role="menuitem" @click=${() => this.runAction('show-data')}>${visualMenuIcon('show-data')}<span>Show data</span></button>
-              <button type="button" role="menuitem" @click=${() => this.runAction('copy-data')}>${visualMenuIcon('copy-data')}<span>Copy data</span></button>
-              <button type="button" role="menuitem" @click=${() => this.runAction('export-csv')}>${visualMenuIcon('export-csv')}<span>Export CSV</span></button>
-              <button type="button" role="menuitem" ?disabled=${!this.hasSelection(payload)} @click=${() => this.runAction('clear-selection')}>${visualMenuIcon('clear-selection')}<span>Clear selection</span></button>
-            </div>
-          </details>
+          <div class="visual-actions">
+            <button class="icon-action" type="button" aria-label="Expand visual" title="Expand visual" @click=${() => this.runAction('focus')}>${visualMenuIcon('focus')}</button>
+            <details class="options">
+              <summary aria-label="Visual options" title="Visual options">${lucideIcon(EllipsisVertical)}</summary>
+              <div class="menu" role="menu">
+                <button type="button" role="menuitem" @click=${() => this.runAction('show-data')}>${visualMenuIcon('show-data')}<span>Show data</span></button>
+                <button type="button" role="menuitem" @click=${() => this.runAction('copy-data')}>${visualMenuIcon('copy-data')}<span>Copy data</span></button>
+                <button type="button" role="menuitem" @click=${() => this.runAction('export-csv')}>${visualMenuIcon('export-csv')}<span>Export CSV</span></button>
+                <button type="button" role="menuitem" ?disabled=${!this.hasSelection(payload)} @click=${() => this.runAction('clear-selection')}>${visualMenuIcon('clear-selection')}<span>Clear selection</span></button>
+              </div>
+            </details>
+          </div>
         </header>
         <div class=${data.length === 0 ? 'canvas idle' : 'canvas'}></div>
         ${data.length === 0 ? html`<div class="empty">Waiting for signal data</div>` : null}
