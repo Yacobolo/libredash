@@ -31,6 +31,7 @@ import {
   table_getAllLeafColumns,
 } from '@tanstack/table-core/static-functions'
 import { visualMenuIcon } from './visual-menu-icons'
+import { visualActionStyles } from './visual-action-styles'
 import { defaultDirection, formatCell, rowKey } from './table/format'
 import { blockStartsForAll, emptyBlocks, emptyTable, sameSort, sortedBlockRows, tableConverter } from './table/block-source'
 import {
@@ -258,7 +259,7 @@ class DataTable extends LitElement {
     this.clearResizeGuide()
   }
 
-  static styles = css`
+  static styles = [visualActionStyles, css`
     :host {
       display: block;
       height: 100%;
@@ -333,26 +334,6 @@ class DataTable extends LitElement {
     .visual-actions {
       position: relative;
       z-index: calc(var(--zIndex-default) + 2);
-      display: flex;
-      flex: 0 0 auto;
-      align-items: center;
-      gap: var(--base-size-4);
-    }
-
-    .icon-action {
-      display: grid;
-      width: var(--control-xsmall-size);
-      height: var(--control-xsmall-size);
-      min-height: var(--control-xsmall-size);
-      place-items: center;
-      border: var(--ld-border-transparent);
-      border-radius: var(--ld-radius-tight);
-      background: transparent;
-      color: var(--ld-fg-muted);
-      cursor: pointer;
-      padding: 0;
-      font: inherit;
-      line-height: var(--ld-line-height-none);
     }
 
     .visual-options summary {
@@ -380,13 +361,6 @@ class DataTable extends LitElement {
       height: var(--base-size-16);
     }
 
-    .icon-action svg {
-      width: var(--base-size-16);
-      height: var(--base-size-16);
-    }
-
-    .icon-action:hover,
-    .icon-action:focus-visible,
     .visual-options summary:hover,
     .visual-options summary:focus-visible,
     .visual-options[open] summary {
@@ -1019,7 +993,7 @@ class DataTable extends LitElement {
         min-height: 360px;
       }
     }
-  `
+  `]
 
   connectedCallback(): void {
     super.connectedCallback()

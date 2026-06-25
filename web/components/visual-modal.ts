@@ -34,6 +34,7 @@ class VisualModal extends LitElement {
   @state() private notice = ''
   private focusMount: VisualFocusMount<HTMLElement> | null = null
   private focusSource: HTMLElement | null = null
+  private restoreFocusTo: HTMLElement | null = null
 
   static styles = css`
     :host {
@@ -276,7 +277,7 @@ class VisualModal extends LitElement {
   disconnectedCallback(): void {
     window.removeEventListener('ld-visual-action', this.handleVisualAction as EventListener)
     window.removeEventListener('keydown', this.handleKeydown)
-    this.restoreFocusedVisual()
+    this.restoreFocusedVisual(false)
     super.disconnectedCallback()
   }
 
@@ -365,14 +366,18 @@ class VisualModal extends LitElement {
       return
     }
     if (detail.action === 'show-data') {
-      this.restoreFocusedVisual()
+      this.restoreFocusedVisual(false)
       this.detail = detail
       this.mode = 'show-data'
     }
   }
 
   private handleKeydown = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape') this.close()
+    if (event.key === 'Escape') {
+      this.close()
+      return
+    }
+    if (event.key === 'Tab' && this.mode === 'focus') this.trapFocus(event)
   }
 
   private closeFromBackdrop = (event: Event): void => {
@@ -380,7 +385,7 @@ class VisualModal extends LitElement {
   }
 
   private close = (): void => {
-    this.restoreFocusedVisual()
+    this.restoreFocusedVisual(true)
     this.mode = ''
     this.detail = null
   }
@@ -390,11 +395,16 @@ class VisualModal extends LitElement {
     if (!source) return
     if (this.mode === 'focus' && this.focusMount?.element === source) return
 
-    this.restoreFocusedVisual()
+    const focusToRestore = this.deepActiveElement()
+    this.restoreFocusedVisual(false)
+    this.restoreFocusTo = focusToRestore
     this.detail = detail
     this.mode = 'focus'
     this.focusSource = source
-    void this.updateComplete.then(() => this.mountFocusedVisual(source))
+    void this.updateComplete.then(() => {
+      this.mountFocusedVisual(source)
+      this.focusInitialControl()
+    })
   }
 
   private mountFocusedVisual(source: HTMLElement): void {
@@ -404,12 +414,76 @@ class VisualModal extends LitElement {
     this.focusMount = mount
   }
 
-  private restoreFocusedVisual(): void {
+  private restoreFocusedVisual(restoreFocus: boolean): void {
+    const focusToRestore = this.restoreFocusTo
     if (this.focusMount) {
       restoreVisualFocus(this.focusMount)
     }
     this.focusMount = null
     this.focusSource = null
+    this.restoreFocusTo = null
+    if (restoreFocus && focusToRestore?.isConnected) {
+      queueMicrotask(() => focusToRestore.focus({ preventScroll: true }))
+    }
+  }
+
+  private focusInitialControl(): void {
+    this.renderRoot.querySelector<HTMLButtonElement>('.focus-close')?.focus({ preventScroll: true })
+  }
+
+  private trapFocus(event: KeyboardEvent): void {
+    const focusable = this.focusableElements()
+    if (focusable.length === 0) {
+      event.preventDefault()
+      return
+    }
+
+    const active = this.deepActiveElement()
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    const activeInsideModal = Boolean(active && focusable.includes(active))
+    if (event.shiftKey && (!activeInsideModal || active === first)) {
+      event.preventDefault()
+      last.focus({ preventScroll: true })
+      return
+    }
+    if (!event.shiftKey && (!activeInsideModal || active === last)) {
+      event.preventDefault()
+      first.focus({ preventScroll: true })
+    }
+  }
+
+  private focusableElements(): HTMLElement[] {
+    return [
+      ...this.deepFocusableElements(this.renderRoot),
+      ...(this.focusMount ? this.deepFocusableElements(this.focusMount.element) : []),
+    ]
+  }
+
+  private deepFocusableElements(root: ParentNode): HTMLElement[] {
+    const selector = [
+      'button:not([disabled])',
+      'a[href]',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      'textarea:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])',
+    ].join(',')
+    const elements: HTMLElement[] = []
+    root.querySelectorAll<HTMLElement>(selector).forEach((element) => {
+      elements.push(element)
+      if (element.shadowRoot) elements.push(...this.deepFocusableElements(element.shadowRoot))
+    })
+    root.querySelectorAll<HTMLElement>('*').forEach((element) => {
+      if (element.shadowRoot) elements.push(...this.deepFocusableElements(element.shadowRoot))
+    })
+    return [...new Set(elements)]
+  }
+
+  private deepActiveElement(): HTMLElement | null {
+    let active = document.activeElement
+    while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement
+    return active instanceof HTMLElement ? active : null
   }
 
   private async copy(detail: VisualActionDetail): Promise<void> {

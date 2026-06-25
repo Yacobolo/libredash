@@ -26,10 +26,11 @@
     "build:chat": "esbuild web/components/chat.ts --bundle --format=esm --outfile=static/chat.js",
     "watch:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css --watch",
     "test:table-selection": "mkdir -p .tmp && esbuild web/components/table/selection.test.ts --bundle --platform=node --format=esm --outfile=.tmp/table-selection.test.mjs && node --test .tmp/table-selection.test.mjs",
-    "test:visual-modal": "mkdir -p .tmp && esbuild web/components/visual-modal-focus.test.ts --bundle --platform=node --format=esm --outfile=.tmp/visual-modal-focus.test.mjs && node --test .tmp/visual-modal-focus.test.mjs"
+    "test:visual-modal": "mkdir -p .tmp && npx playwright install chromium && esbuild web/components/visual-modal.ts --bundle --format=esm --outfile=.tmp/visual-modal-under-test.js && esbuild web/components/visual-modal-focus.test.ts --bundle --platform=node --format=esm --outfile=.tmp/visual-modal-focus.test.mjs && esbuild web/components/visual-modal.dom.test.ts --bundle --platform=node --format=esm --external:@playwright/test --outfile=.tmp/visual-modal.dom.test.mjs && node --test .tmp/visual-modal-focus.test.mjs .tmp/visual-modal.dom.test.mjs"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.2.8",
+    "@playwright/test": "^1.61.1",
     "@primer/primitives": "11.9.0",
     "@tailwindcss/cli": "4.3.1",
     "@tanstack/lit-table": "^9.0.0-beta.12",

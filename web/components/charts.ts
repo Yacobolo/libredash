@@ -3,6 +3,7 @@ import { property } from 'lit/decorators.js'
 import { EllipsisVertical } from 'lucide'
 import { lucideIcon } from './lucide-icons'
 import { visualMenuIcon } from './visual-menu-icons'
+import { visualActionStyles } from './visual-action-styles'
 import './chart/renderers'
 import { chartInteractionDetailForDatum } from './chart/interactions'
 import { chartRenderer } from './chart/registry'
@@ -67,29 +68,6 @@ const chartStyles = css`
     flex: 0 0 auto;
   }
 
-  .visual-actions {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: var(--base-size-4);
-  }
-
-  .icon-action {
-    display: grid;
-    width: var(--control-xsmall-size);
-    height: var(--control-xsmall-size);
-    min-height: var(--control-xsmall-size);
-    place-items: center;
-    border: var(--ld-border-transparent);
-    border-radius: var(--ld-radius-tight);
-    background: transparent;
-    color: var(--ld-icon-muted);
-    cursor: pointer;
-    padding: 0;
-    font: inherit;
-    line-height: var(--ld-line-height-none);
-  }
-
   .options summary {
     display: grid;
     width: var(--control-xsmall-size);
@@ -114,13 +92,6 @@ const chartStyles = css`
     height: var(--base-size-16);
   }
 
-  .icon-action svg {
-    width: var(--base-size-16);
-    height: var(--base-size-16);
-  }
-
-  .icon-action:hover,
-  .icon-action:focus-visible,
   .options summary:hover,
   .options summary:focus-visible,
   .options[open] summary {
@@ -220,7 +191,7 @@ class ChartVisual extends LitElement {
   @property({ type: String }) type: ChartType | string = 'bar'
   @property({ type: Array }) selection: string[] = []
 
-  static styles = chartStyles
+  static styles = [visualActionStyles, chartStyles]
 
   private rendererHandle?: ChartRendererHandle
   private rendererName = ''
