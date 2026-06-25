@@ -636,6 +636,26 @@ func TestWorkspaceConnectionFilterRedirectsToGlobalConnections(t *testing.T) {
 	}
 }
 
+func TestWorkspaceSourceFilterRedirectsToConnectionSources(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	req := httptest.NewRequest(http.MethodGet, "/workspaces/test?type=source&q=orders", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusFound, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "/connections?type=source&q=orders" {
+		t.Fatalf("Location = %q, want /connections?type=source&q=orders", got)
+	}
+}
+
 func TestConnectionsPageRendersGlobalConnectionSurface(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
@@ -652,7 +672,7 @@ func TestConnectionsPageRendersGlobalConnectionSurface(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Connections", "Global", "data-connection-toolbar", "Local CSV files for the Olist ecommerce demo dataset."} {
+	for _, want := range []string{"Connections", "Connection", "Source", "data-connection-toolbar", "Local CSV files for the Olist ecommerce demo dataset.", "Raw Olist order lifecycle records."} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("connections page missing %q:\n%s", want, body)
 		}
@@ -660,11 +680,40 @@ func TestConnectionsPageRendersGlobalConnectionSurface(t *testing.T) {
 	if !strings.Contains(body, `/connections/asset_`) || !strings.Contains(body, `/details`) {
 		t.Fatalf("connections page did not link to canonical connection details:\n%s", body)
 	}
+	if !strings.Contains(body, `/sources/asset_`) {
+		t.Fatalf("connections page did not link to canonical source details:\n%s", body)
+	}
 	if strings.Contains(body, `/workspaces/test/assets/asset_`) {
 		t.Fatalf("connections page linked to workspace asset details:\n%s", body)
 	}
 	if strings.Contains(body, `data-workspace-asset-toolbar`) {
 		t.Fatalf("connections page rendered workspace asset toolbar:\n%s", body)
+	}
+}
+
+func TestConnectionsPageFiltersSources(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	req := httptest.NewRequest(http.MethodGet, "/connections?type=source&q=orders", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"Source", "orders", `/connections/`, `/sources/`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("source-filtered connections page missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "Local CSV files for the Olist ecommerce demo dataset.") {
+		t.Fatalf("source-filtered connections page included connection row:\n%s", body)
 	}
 }
 
@@ -718,6 +767,73 @@ func TestConnectionAssetRoutesUseConnectionSurface(t *testing.T) {
 	}
 }
 
+func TestConnectionSourceAssetRoutesUseConnectionScopedSurface(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+	connectionID := activeAssetID(t, store, "test", "connection", "olist.olist")
+	sourceID := activeAssetID(t, store, "test", "source", "olist.orders")
+
+	redirectReq := httptest.NewRequest(http.MethodGet, "/connections/"+connectionID+"/sources/"+sourceID, nil)
+	redirectReq.Header.Set("Authorization", "Bearer dev")
+	redirectRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(redirectRec, redirectReq)
+	if redirectRec.Code != http.StatusFound {
+		t.Fatalf("source canonical redirect status = %d body=%s", redirectRec.Code, redirectRec.Body.String())
+	}
+	if got := redirectRec.Header().Get("Location"); got != "/connections/"+connectionID+"/sources/"+sourceID+"/details" {
+		t.Fatalf("source redirect Location = %q, want canonical source details", got)
+	}
+
+	detailReq := httptest.NewRequest(http.MethodGet, "/connections/"+connectionID+"/sources/"+sourceID+"/details", nil)
+	detailReq.Header.Set("Authorization", "Bearer dev")
+	detailRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(detailRec, detailReq)
+	if detailRec.Code != http.StatusOK {
+		t.Fatalf("source detail status = %d body=%s", detailRec.Code, detailRec.Body.String())
+	}
+	detailBody := detailRec.Body.String()
+	for _, want := range []string{"Connections", "Sources", "orders", "Fields", "Physical type", "Lineage"} {
+		if !strings.Contains(detailBody, want) {
+			t.Fatalf("source detail missing %q:\n%s", want, detailBody)
+		}
+	}
+	for _, notWant := range []string{`Workspaces /`, `Back to workspace`, `/workspaces/test/assets/` + sourceID + `/details`} {
+		if strings.Contains(detailBody, notWant) {
+			t.Fatalf("source detail rendered workspace chrome %q:\n%s", notWant, detailBody)
+		}
+	}
+
+	lineageReq := httptest.NewRequest(http.MethodGet, "/connections/"+connectionID+"/sources/"+sourceID+"/lineage", nil)
+	lineageReq.Header.Set("Authorization", "Bearer dev")
+	lineageRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(lineageRec, lineageReq)
+	if lineageRec.Code != http.StatusOK {
+		t.Fatalf("source lineage status = %d body=%s", lineageRec.Code, lineageRec.Body.String())
+	}
+	if !strings.Contains(lineageRec.Body.String(), "ld-asset-lineage-graph") {
+		t.Fatalf("source lineage did not render lineage graph:\n%s", lineageRec.Body.String())
+	}
+
+	invalidReq := httptest.NewRequest(http.MethodGet, "/connections/"+sourceID+"/sources/"+sourceID+"/details", nil)
+	invalidReq.Header.Set("Authorization", "Bearer dev")
+	invalidRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(invalidRec, invalidReq)
+	if invalidRec.Code != http.StatusNotFound {
+		t.Fatalf("invalid source/connection pair status = %d, want 404 body=%s", invalidRec.Code, invalidRec.Body.String())
+	}
+
+	invalidRedirectReq := httptest.NewRequest(http.MethodGet, "/connections/"+sourceID+"/sources/"+sourceID, nil)
+	invalidRedirectReq.Header.Set("Authorization", "Bearer dev")
+	invalidRedirectRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(invalidRedirectRec, invalidRedirectReq)
+	if invalidRedirectRec.Code != http.StatusNotFound {
+		t.Fatalf("invalid source/connection redirect status = %d, want 404 body=%s", invalidRedirectRec.Code, invalidRedirectRec.Body.String())
+	}
+}
+
 func TestWorkspaceConnectionAssetRedirectsToConnectionSurface(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
@@ -736,6 +852,28 @@ func TestWorkspaceConnectionAssetRedirectsToConnectionSurface(t *testing.T) {
 	}
 	if got := rec.Header().Get("Location"); got != "/connections/"+connectionID+"/details" {
 		t.Fatalf("workspace connection detail Location = %q, want /connections/%s/details", got, connectionID)
+	}
+}
+
+func TestWorkspaceSourceAssetRedirectsToConnectionScopedSourceSurface(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+	connectionID := activeAssetID(t, store, "test", "connection", "olist.olist")
+	sourceID := activeAssetID(t, store, "test", "source", "olist.orders")
+
+	req := httptest.NewRequest(http.MethodGet, "/workspaces/test/assets/"+sourceID+"/details", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("workspace source detail status = %d, want redirect body=%s", rec.Code, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "/connections/"+connectionID+"/sources/"+sourceID+"/details" {
+		t.Fatalf("workspace source detail Location = %q, want canonical source route", got)
 	}
 }
 

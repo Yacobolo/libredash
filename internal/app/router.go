@@ -33,6 +33,8 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/workspaces/{workspace}/permissions", s.protected(access.PermissionRBACManage, s.updateWorkspacePermission))
 		r.Post("/workspaces/{workspace}/permissions/remove", s.protected(access.PermissionRBACManage, s.removeWorkspacePermission))
 		r.Get("/connections", s.protected(access.PermissionDashboardView, s.connections))
+		r.Get("/connections/{connection}/sources/{source}", s.protected(access.PermissionDashboardView, s.connectionSourceAsset))
+		r.Get("/connections/{connection}/sources/{source}/{section}", s.protected(access.PermissionDashboardView, s.connectionSourceAssetSection))
 		r.Get("/connections/{asset}", s.protected(access.PermissionDashboardView, s.connectionAsset))
 		r.Get("/connections/{asset}/{section}", s.protected(access.PermissionDashboardView, s.connectionAssetSection))
 		dashboardHTTP := s.dashboardHTTP()

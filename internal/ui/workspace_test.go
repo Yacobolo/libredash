@@ -532,7 +532,7 @@ func TestCollapsedAssetLineageCollapsesMeasureUsageToSemanticModel(t *testing.T)
 		},
 	}
 
-	lineage := collapsedAssetLineageGraph(workspaceID, assets["dashboard-b"], graph, assets)
+	lineage := collapsedAssetLineageGraph(workspaceID, assets["dashboard-b"], graph, assets, nil)
 
 	assertLineageHasEdge(t, lineage, "model-a", "dashboard-a", "lineage_semantic_model_dashboard")
 	assertLineageMissingNode(t, lineage, "measure-a")
@@ -567,6 +567,7 @@ func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 		"Sources",
 		`Back to connections`,
 		`href="/connections/connection/lineage"`,
+		`/connections/connection/sources/source/details`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("connection details did not render %q:\n%s", want, rendered)
@@ -580,6 +581,76 @@ func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("connection details rendered workspace-only content %q:\n%s", notWant, rendered)
+		}
+	}
+}
+
+func TestConnectionsPageUsesConnectionAssetTabs(t *testing.T) {
+	workspace, catalog, assets, edges := testWorkspaceAssetFixtures()
+	visibleAssets := []api.AssetResponse{}
+	for _, asset := range assets {
+		if asset.Type == "connection" || asset.Type == "source" {
+			visibleAssets = append(visibleAssets, asset)
+		}
+	}
+
+	var out strings.Builder
+	err := ConnectionsPage(catalog, workspace.ID, visibleAssets, edges, "source", "", "Owner").Render(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := html.UnescapeString(out.String())
+
+	for _, want := range []string{
+		`data-connection-toolbar`,
+		`href="/connections"`,
+		`href="/connections?type=connection"`,
+		`href="/connections?type=source" aria-current="page"`,
+		`href="/connections/connection/sources/source/details"`,
+		`href="/connections/connection/details">Olist connection</a>`,
+		`>Source<`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("connections page did not render %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, `data-workspace-asset-toolbar`) {
+		t.Fatalf("connections page rendered workspace toolbar:\n%s", rendered)
+	}
+}
+
+func TestConnectionSourceAssetDetailsRenderConnectionChrome(t *testing.T) {
+	workspace, catalog, assets, edges := testWorkspaceAssetFixtures()
+	source := testAssetByID(t, assets, "source")
+	connection := testAssetByID(t, assets, "connection")
+
+	var out strings.Builder
+	err := ConnectionSourceAssetPage(catalog, workspace, connection, source, assets, edges, "details", "Owner").Render(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := html.UnescapeString(out.String())
+
+	for _, want := range []string{
+		"Connections",
+		"Olist connection",
+		"Sources",
+		"orders",
+		"Fields",
+		`href="/connections?type=source"`,
+		`href="/connections/connection/sources/source/lineage"`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("connection-scoped source details did not render %q:\n%s", want, rendered)
+		}
+	}
+	for _, notWant := range []string{
+		"Workspaces /",
+		"Back to workspace",
+		`href="/workspaces/libredash/assets/source/details"`,
+	} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("connection-scoped source details rendered workspace content %q:\n%s", notWant, rendered)
 		}
 	}
 }
@@ -626,7 +697,7 @@ func TestWorkspaceAssetRowsUseDetailLinksForModelAndMetricAssets(t *testing.T) {
 
 	for _, typ := range []string{"semantic_model", "dashboard"} {
 		var out strings.Builder
-		if err := assetRow(workspace.ID, byType[typ], byID).Render(&out); err != nil {
+		if err := assetRow(workspace.ID, byType[typ], byID, nil).Render(&out); err != nil {
 			t.Fatal(err)
 		}
 		rendered := html.UnescapeString(out.String())
