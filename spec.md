@@ -380,6 +380,69 @@ Gomponents renderers are also edge adapters. Prefer colocating renderers with th
 - No cross-contract validation.
 - No mutation of domain state.
 
+## Product Interfaces
+
+LibreDash has four major product interfaces:
+
+```text
+REST API / APIGen
+CLI
+agent tools
+UI / HTML / Datastar
+        -> capability use cases
+        -> capability domain types and ports
+```
+
+These interfaces are peers. None of them should own product behavior.
+
+Long-term rules:
+
+- TypeSpec/APIGen owns the canonical headless REST contract and generator metadata.
+- Friendly CLI commands should use generated APIGen operation metadata where possible, with small UX wrappers only when they improve ergonomics.
+- Agent tools should be derived from APIGen operation metadata, then filtered by LibreDash policy such as risk, permission, workspace scope, and credential constraints.
+- UI routes may render HTML, gomponents, and Datastar patches, but they should call the same capability use cases as API, CLI, and agent interfaces.
+- Datastar signal shapes are UI-private adapter contracts. They should not become headless API DTOs.
+- API DTOs live in `internal/api` only as framework-neutral wire contracts. They should not contain HTTP routing, Datastar, repositories, gomponents, or use-case orchestration.
+
+The desired shape for a mature capability is:
+
+```text
+internal/workspace/
+  search.go          capability use case / domain language
+  http/              REST JSON adapter
+  cli/               optional friendly CLI adapter
+  agent/             optional tool adapter or policy mapping
+  ui/                optional HTML adapter
+
+internal/dashboard/
+  visual_data.go
+  http/
+  datastar/
+  agent/
+  ui/
+
+internal/analytics/query/
+  service.go
+  http/
+  cli/
+  agent/
+```
+
+Do not create every adapter subpackage upfront. Start flat inside a capability and split when workflows, dependencies, or tests diverge.
+
+Avoid a single cross-capability `internal/api/http` package. It would become the new monolith. Prefer capability-owned adapters:
+
+```text
+workspace/http.Handler
+dashboard/http.Handler
+analytics/query/http.Handler
+deployment/http.Handler
+access/http.Handler
+agent/http.Handler
+```
+
+The composition root wires these adapters together. It should not absorb their product behavior.
+
 ## Control-Plane Infrastructure
 
 SQLite/sqlc is control-plane infrastructure, not a product capability.
@@ -426,6 +489,7 @@ The composition root may:
 - Register routes.
 - Manage lifecycle, logging, shutdown, and health checks.
 - Wire adapters into use cases.
+- Mount generated APIGen routing and delegate operations to capability-owned adapters.
 
 The composition root should not:
 
@@ -434,6 +498,9 @@ The composition root should not:
 - Contain domain validation.
 - Reach around use cases by calling generated sqlc queries directly.
 - Become the place where unrelated product behavior accumulates.
+- Become the long-term owner of every REST, CLI, agent, and UI adapter.
+
+For a small surface, `internal/app` may temporarily contain thin handlers. As an interface grows, move handlers and translation logic toward the owning capability adapter while keeping application bootstrapping and route mounting in `internal/app`.
 
 ## HTTP and Datastar
 
@@ -447,6 +514,12 @@ HTTP handlers should be thin:
 Handlers should not own business workflows such as deployment activation, workspace access mutation, artifact validation, or dashboard query orchestration.
 
 Datastar-specific logic should live in adapter code near dashboard/workspace capabilities rather than leaking across domain or analytics code.
+
+REST JSON handlers and UI/Datastar handlers may live beside the same capability, but they should keep their transport contracts separate:
+
+- REST handlers translate API DTOs and status codes.
+- UI handlers translate HTML, forms, redirects, and Datastar signals.
+- Both should call the same capability use cases when they represent the same product behavior.
 
 Dashboard domain code should own:
 
