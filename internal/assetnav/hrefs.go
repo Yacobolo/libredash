@@ -4,7 +4,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
@@ -38,7 +37,7 @@ func ConnectionSourceAssetSectionHref(connectionID, sourceID, section string) st
 	return "/connections/" + connectionID + "/sources/" + sourceID + "/" + section
 }
 
-func CanonicalAssetSectionHref(workspaceID string, asset api.AssetResponse, section string, edges []api.AssetEdgeResponse) string {
+func CanonicalAssetSectionHref(workspaceID string, asset workspace.AssetView, section string, edges []workspace.AssetEdgeView) string {
 	switch asset.Type {
 	case "connection":
 		return ConnectionAssetSectionHref(asset.ID, section)
@@ -49,18 +48,13 @@ func CanonicalAssetSectionHref(workspaceID string, asset api.AssetResponse, sect
 	}
 }
 
-func CanonicalSourceAssetSectionHref(workspaceID, sourceID, section string, edges []api.AssetEdgeResponse) string {
+func CanonicalSourceAssetSectionHref(workspaceID, sourceID, section string, edges []workspace.AssetEdgeView) string {
 	if connectionID := SourceConnectionID(sourceID, edges); connectionID != "" {
 		return ConnectionSourceAssetSectionHref(connectionID, sourceID, section)
 	}
 	return WorkspaceAssetSectionHref(workspaceID, sourceID, section)
 }
 
-func SourceConnectionID(sourceID string, edges []api.AssetEdgeResponse) string {
-	for _, edge := range edges {
-		if edge.Type == string(workspace.AssetEdgeUsesConnection) && edge.FromAssetID == sourceID {
-			return edge.ToAssetID
-		}
-	}
-	return ""
+func SourceConnectionID(sourceID string, edges []workspace.AssetEdgeView) string {
+	return workspace.SourceConnectionID(sourceID, edges)
 }

@@ -1,9 +1,13 @@
 package app
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/Yacobolo/libredash/internal/workspace"
+)
 
 func TestSafeAssetMetaKeepsModelTableDefinition(t *testing.T) {
-	meta := safeAssetMeta("model_table", `{
+	meta := workspace.SafeAssetMeta("model_table", `{
 		"Source": "orders",
 		"Sources": ["orders", "payments"],
 		"SourceDependencies": ["orders", "payments"],
