@@ -3,7 +3,7 @@ module github.com/Yacobolo/libredash
 go 1.25.8
 
 require (
-	github.com/Yacobolo/toolbelt/apigen v0.2.0
+	github.com/Yacobolo/toolbelt/apigen v0.3.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/duckdb/duckdb-go/v2 v2.10504.0
 	github.com/eduardolat/gomponents-lucide v1.5.0
