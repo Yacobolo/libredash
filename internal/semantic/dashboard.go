@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 
+	"github.com/Yacobolo/libredash/internal/configschema"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
 	"gopkg.in/yaml.v3"
 )
@@ -23,6 +24,9 @@ func LoadDashboard(path string) (*report.Dashboard, error) {
 		return nil, err
 	}
 	if err := rejectLegacyDashboardQueryContract(content); err != nil {
+		return nil, err
+	}
+	if err := configschema.ValidateBytes(configschema.KindDashboard, path, content); err != nil {
 		return nil, err
 	}
 	var dashboard report.Dashboard

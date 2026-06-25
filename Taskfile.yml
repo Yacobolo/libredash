@@ -60,14 +60,20 @@ tasks:
 
   generate:
     desc: Generate all checked-out derived code needed for local development
-    deps:
-      - api:generate
+    cmds:
+      - task api:generate
+      - task schema:generate
 
   api:generate:
     desc: Generate headless API contract artifacts and APIGen Go surfaces
     cmds:
       - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.2.0 cue-compile -manifest api/apigen.yaml -target libredash-v1
       - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.2.0 all -manifest api/apigen.yaml -target libredash-v1
+
+  schema:generate:
+    desc: Generate JSON Schema artifacts for LibreDash YAML contracts
+    cmds:
+      - go run ./cmd/libredash schema export --format json-schema --out schemas/json
 
   test:
     desc: Run tests

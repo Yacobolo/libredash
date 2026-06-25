@@ -1,0 +1,976 @@
+{
+  "$defs": {
+    "#AnyObject": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "#FieldRef": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$",
+      "type": "string"
+    },
+    "#FieldRefObject": {
+      "additionalProperties": false,
+      "properties": {
+        "alias": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "field": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/%23FieldRef"
+            },
+            {
+              "$ref": "#/$defs/%23Identifier"
+            }
+          ]
+        }
+      },
+      "required": [
+        "alias",
+        "field"
+      ],
+      "type": "object"
+    },
+    "#FieldRefValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/%23FieldRef"
+        },
+        {
+          "$ref": "#/$defs/%23FieldRefObject"
+        }
+      ]
+    },
+    "#FieldRefs": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/%23FieldRefValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/%23FieldRef"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "field": {
+                      "$ref": "#/$defs/%23FieldRef"
+                    }
+                  },
+                  "required": [
+                    "field"
+                  ],
+                  "type": "object"
+                }
+              ]
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "#Filter": {
+      "additionalProperties": false,
+      "properties": {
+        "custom": {
+          "type": "boolean"
+        },
+        "default": {
+          "$ref": "#/$defs/%23FilterDefault"
+        },
+        "default_operator": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "field": {
+          "$ref": "#/$defs/%23FieldRef"
+        },
+        "from_url_param": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "operator_url_param": {
+          "type": "string"
+        },
+        "operators": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "options": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "label",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "presets": {
+          "items": {
+            "$ref": "#/$defs/%23FilterPreset"
+          },
+          "type": "array"
+        },
+        "targets": {
+          "additionalProperties": false,
+          "properties": {
+            "tables": {
+              "items": {
+                "$ref": "#/$defs/%23Identifier"
+              },
+              "type": "array"
+            },
+            "visuals": {
+              "items": {
+                "$ref": "#/$defs/%23Identifier"
+              },
+              "type": "array"
+            }
+          },
+          "type": "object"
+        },
+        "to_url_param": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "date_range",
+            "multi_select",
+            "text"
+          ]
+        },
+        "url_param": {
+          "type": "string"
+        },
+        "values": {
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "type": "integer"
+            },
+            "source": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "field",
+        "label",
+        "type"
+      ],
+      "type": "object"
+    },
+    "#FilterDefault": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "preset": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "#FilterPreset": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "relative_days": {
+          "type": "integer"
+        },
+        "to": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "type": "object"
+    },
+    "#Identifier": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "type": "string"
+    },
+    "#Interaction": {
+      "additionalProperties": false,
+      "properties": {
+        "point_selection": {
+          "$ref": "#/$defs/%23SelectionInteraction"
+        },
+        "row_selection": {
+          "$ref": "#/$defs/%23SelectionInteraction"
+        }
+      },
+      "type": "object"
+    },
+    "#MeasureRefs": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/%23FieldRefValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "expr": {
+                      "type": "string"
+                    },
+                    "format": {
+                      "type": "string"
+                    },
+                    "grain": {
+                      "$ref": "#/$defs/%23Identifier"
+                    },
+                    "grains": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "measure": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/%23Identifier"
+                        },
+                        {
+                          "$ref": "#/$defs/%23FieldRef"
+                        }
+                      ]
+                    },
+                    "table": {
+                      "$ref": "#/$defs/%23Identifier"
+                    },
+                    "time": {
+                      "$ref": "#/$defs/%23FieldRef"
+                    }
+                  },
+                  "type": "object"
+                }
+              ]
+            }
+          },
+          "type": "object"
+        }
+      ]
+    },
+    "#ObjectID": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$",
+      "type": "string"
+    },
+    "#Page": {
+      "additionalProperties": false,
+      "properties": {
+        "canvas": {
+          "additionalProperties": false,
+          "properties": {
+            "height": {
+              "type": "integer"
+            },
+            "width": {
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "description": {
+          "type": "string"
+        },
+        "grid": {
+          "additionalProperties": false,
+          "properties": {
+            "columns": {
+              "type": "integer"
+            },
+            "gap": {
+              "type": "integer"
+            },
+            "padding": {
+              "type": "integer"
+            },
+            "row_height": {
+              "type": "integer"
+            }
+          },
+          "type": "object"
+        },
+        "id": {
+          "$ref": "#/$defs/%23ObjectID"
+        },
+        "title": {
+          "type": "string"
+        },
+        "visuals": {
+          "items": {
+            "$ref": "#/$defs/%23PageVisual"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "visuals"
+      ],
+      "type": "object"
+    },
+    "#PageVisual": {
+      "additionalProperties": false,
+      "properties": {
+        "badges": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eyebrow": {
+          "type": "string"
+        },
+        "filter": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "id": {
+          "$ref": "#/$defs/%23ObjectID"
+        },
+        "kind": {
+          "enum": [
+            "header",
+            "filter_card",
+            "kpi_card",
+            "line_chart",
+            "area_chart",
+            "bar_chart",
+            "column_chart",
+            "pie_chart",
+            "donut_chart",
+            "scatter_chart",
+            "funnel_chart",
+            "treemap_chart",
+            "gauge_chart",
+            "heatmap_chart",
+            "sankey_chart",
+            "graph_chart",
+            "map_chart",
+            "candlestick_chart",
+            "boxplot_chart",
+            "combo_chart",
+            "waterfall_chart",
+            "histogram_chart",
+            "radar_chart",
+            "tree_chart",
+            "sunburst_chart",
+            "table"
+          ]
+        },
+        "placement": {
+          "additionalProperties": false,
+          "properties": {
+            "col": {
+              "type": "integer"
+            },
+            "col_span": {
+              "type": "integer"
+            },
+            "row": {
+              "type": "integer"
+            },
+            "row_span": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "col",
+            "col_span",
+            "row",
+            "row_span"
+          ],
+          "type": "object"
+        },
+        "subtitle": {
+          "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "title": {
+          "type": "string"
+        },
+        "visual": {
+          "$ref": "#/$defs/%23Identifier"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "placement"
+      ],
+      "type": "object"
+    },
+    "#SelectionInteraction": {
+      "additionalProperties": false,
+      "properties": {
+        "mappings": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "field": {
+                "$ref": "#/$defs/%23FieldRef"
+              },
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "field",
+              "value"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "$ref": "#/$defs/%23Identifier"
+          },
+          "type": "array"
+        },
+        "toggle": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "#Sort": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "anyOf": [
+            {
+              "const": "asc"
+            },
+            {
+              "const": "desc"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "expr": {
+          "type": "string"
+        },
+        "field": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "#Table": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/%23TableColumn"
+          },
+          "type": "array"
+        },
+        "default_sort": {
+          "additionalProperties": false,
+          "properties": {
+            "direction": {
+              "anyOf": [
+                {
+                  "const": "asc"
+                },
+                {
+                  "const": "desc"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "key": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "description": {
+          "type": "string"
+        },
+        "interaction": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/%23Interaction"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "data_table",
+            "matrix_table",
+            "pivot_table"
+          ]
+        },
+        "measure_formatting": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/%23TableFormattingRule"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        },
+        "query": {
+          "$ref": "#/$defs/%23TableQuery"
+        },
+        "style": {
+          "additionalProperties": false,
+          "properties": {
+            "density": {
+              "anyOf": [
+                {
+                  "const": "compact"
+                },
+                {
+                  "const": "comfortable"
+                },
+                {
+                  "const": "spacious"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "grid": {
+              "anyOf": [
+                {
+                  "const": "none"
+                },
+                {
+                  "const": "rows"
+                },
+                {
+                  "const": "columns"
+                },
+                {
+                  "const": "full"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "zebra": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "query",
+        "title"
+      ],
+      "type": "object"
+    },
+    "#TableColumn": {
+      "additionalProperties": false,
+      "properties": {
+        "align": {
+          "type": "string"
+        },
+        "column_value": {
+          "type": "string"
+        },
+        "format": {
+          "anyOf": [
+            {
+              "const": "text"
+            },
+            {
+              "const": "integer"
+            },
+            {
+              "const": "decimal"
+            },
+            {
+              "const": "currency"
+            },
+            {
+              "const": "days"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "formatting": {
+          "items": {
+            "$ref": "#/$defs/%23TableFormattingRule"
+          },
+          "type": "array"
+        },
+        "group": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "measure": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "type": "object"
+    },
+    "#TableFormattingRule": {
+      "additionalProperties": false,
+      "properties": {
+        "background": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "high_color": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "badge",
+            "text_color",
+            "background_scale",
+            "data_bar"
+          ]
+        },
+        "low_color": {
+          "type": "string"
+        },
+        "max": {
+          "type": "number"
+        },
+        "min": {
+          "type": "number"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "#TableQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "$ref": "#/$defs/%23FieldRefs"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/%23FieldRef"
+          },
+          "type": "array"
+        },
+        "measures": {
+          "$ref": "#/$defs/%23MeasureRefs"
+        },
+        "rows": {
+          "$ref": "#/$defs/%23FieldRefs"
+        },
+        "table": {
+          "$ref": "#/$defs/%23Identifier"
+        }
+      },
+      "type": "object"
+    },
+    "#Visual": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "encode": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "interaction": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/%23Interaction"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "chart",
+            "kpi"
+          ]
+        },
+        "options": {
+          "$ref": "#/$defs/%23AnyObject"
+        },
+        "query": {
+          "$ref": "#/$defs/%23VisualQuery"
+        },
+        "renderer": {
+          "enum": [
+            "echarts",
+            "html"
+          ]
+        },
+        "renderer_options": {
+          "$ref": "#/$defs/%23AnyObject"
+        },
+        "shape": {
+          "enum": [
+            "category_value",
+            "category_series_value",
+            "category_multi_measure",
+            "category_delta",
+            "single_value",
+            "matrix",
+            "graph",
+            "geo",
+            "ohlc",
+            "distribution",
+            "binned_measure",
+            "hierarchy"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "line",
+            "area",
+            "bar",
+            "column",
+            "pie",
+            "donut",
+            "scatter",
+            "funnel",
+            "treemap",
+            "gauge",
+            "heatmap",
+            "sankey",
+            "graph",
+            "map",
+            "candlestick",
+            "boxplot",
+            "combo",
+            "waterfall",
+            "histogram",
+            "radar",
+            "tree",
+            "sunburst",
+            "kpi"
+          ]
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "#VisualQuery": {
+      "additionalProperties": false,
+      "properties": {
+        "dimensions": {
+          "$ref": "#/$defs/%23FieldRefs"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "measures": {
+          "$ref": "#/$defs/%23MeasureRefs"
+        },
+        "series": {
+          "$ref": "#/$defs/%23FieldRefObject"
+        },
+        "sort": {
+          "items": {
+            "$ref": "#/$defs/%23Sort"
+          },
+          "type": "array"
+        },
+        "time": {
+          "additionalProperties": false,
+          "properties": {
+            "alias": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "field": {
+              "$ref": "#/$defs/%23FieldRef"
+            },
+            "grain": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "type": "string"
+    },
+    "filters": {
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": {
+          "$ref": "#/$defs/%23Filter"
+        }
+      },
+      "type": "object"
+    },
+    "id": {
+      "$ref": "#/$defs/%23ObjectID"
+    },
+    "pages": {
+      "items": {
+        "$ref": "#/$defs/%23Page"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "semantic_model": {
+      "$ref": "#/$defs/%23Identifier"
+    },
+    "tables": {
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": {
+          "$ref": "#/$defs/%23Table"
+        }
+      },
+      "type": "object"
+    },
+    "title": {
+      "type": "string"
+    },
+    "visuals": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": {
+          "$ref": "#/$defs/%23Visual"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "pages",
+    "semantic_model",
+    "title",
+    "visuals"
+  ],
+  "type": "object"
+}

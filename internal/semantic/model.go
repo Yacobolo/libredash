@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/analytics/model"
+	"github.com/Yacobolo/libredash/internal/configschema"
 	"gopkg.in/yaml.v3"
 )
 
@@ -16,6 +17,9 @@ func Load(path string) (*model.Model, error) {
 		return nil, err
 	}
 	if err := rejectSourceBusinessSemantics(content); err != nil {
+		return nil, err
+	}
+	if err := configschema.ValidateBytes(configschema.KindSemanticModel, path, content); err != nil {
 		return nil, err
 	}
 	var file modelFile

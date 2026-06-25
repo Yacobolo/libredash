@@ -20,6 +20,8 @@ type rootOptions struct {
 	deployment   string
 	conversation string
 	jsonOutput   bool
+	schemaFormat string
+	schemaOut    string
 }
 
 func Execute(ctx context.Context) error {
@@ -34,6 +36,8 @@ func Execute(ctx context.Context) error {
 	root.PersistentFlags().StringVar(&opts.workspaceID, "workspace", platform.DefaultWorkspaceID, "workspace id")
 	root.AddCommand(serveCommand(ctx, opts))
 	root.AddCommand(deployCommand(ctx, opts))
+	root.AddCommand(validateCommand(ctx, opts))
+	root.AddCommand(schemaCommand(opts))
 	root.AddCommand(agentCommand(ctx, opts))
 	root.AddCommand(loginCommand(opts))
 	root.AddCommand(deploymentsCommand(ctx, opts))

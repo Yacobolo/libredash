@@ -1,0 +1,373 @@
+{
+  "$defs": {
+    "#AnyObject": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "#Connection": {
+      "additionalProperties": false,
+      "properties": {
+        "auth": {
+          "$ref": "#/$defs/%23AnyObject"
+        },
+        "defaults": {
+          "additionalProperties": false,
+          "properties": {
+            "options": {
+              "$ref": "#/$defs/%23AnyObject"
+            }
+          },
+          "type": "object"
+        },
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/$defs/%23AnyObject"
+        },
+        "path": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "#FieldRef": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.[A-Za-z_][A-Za-z0-9_]*$",
+      "type": "string"
+    },
+    "#Identifier": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "type": "string"
+    },
+    "#Measure": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "expr": {
+          "type": "string"
+        },
+        "expression": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "grain": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "grains": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "label": {
+          "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "time": {
+          "$ref": "#/$defs/%23FieldRef"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "#MeasureDefaults": {
+      "additionalProperties": false,
+      "properties": {
+        "grain": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "grains": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "table": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "time": {
+          "$ref": "#/$defs/%23FieldRef"
+        }
+      },
+      "type": "object"
+    },
+    "#ModelTable": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "fields": {
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "additionalProperties": false,
+              "properties": {
+                "description": {
+                  "type": "string"
+                },
+                "expr": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "grain": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "measures": {
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "$ref": "#/$defs/%23Measure"
+            }
+          },
+          "type": "object"
+        },
+        "primary_key": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "source": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/%23Identifier"
+          },
+          "type": "array"
+        },
+        "sql": {
+          "type": "string"
+        },
+        "transform": {
+          "additionalProperties": false,
+          "properties": {
+            "sql": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "primary_key"
+      ],
+      "type": "object"
+    },
+    "#Relationship": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "cardinality": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "from": {
+          "$ref": "#/$defs/%23FieldRef"
+        },
+        "id": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "to": {
+          "$ref": "#/$defs/%23FieldRef"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "#SemanticModelSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "base_table": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "measures": {
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/%23Measure"
+                },
+                {
+                  "$ref": "#/$defs/%23MeasureDefaults"
+                }
+              ]
+            }
+          },
+          "properties": {
+            "defaults": {
+              "$ref": "#/$defs/%23MeasureDefaults"
+            }
+          },
+          "type": "object"
+        },
+        "relationships": {
+          "items": {
+            "$ref": "#/$defs/%23Relationship"
+          },
+          "type": "array"
+        },
+        "tables": {
+          "items": {
+            "$ref": "#/$defs/%23Identifier"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "base_table"
+      ],
+      "type": "object"
+    },
+    "#Source": {
+      "additionalProperties": false,
+      "properties": {
+        "connection": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "description": {
+          "type": "string"
+        },
+        "fields": {
+          "additionalProperties": false,
+          "patternProperties": {
+            "^[A-Za-z_][A-Za-z0-9_]*$": {
+              "additionalProperties": false,
+              "properties": {
+                "description": {
+                  "type": "string"
+                }
+              },
+              "type": "object"
+            }
+          },
+          "type": "object"
+        },
+        "format": {
+          "enum": [
+            "csv",
+            "json",
+            "parquet",
+            "excel",
+            "text",
+            "blob",
+            "vortex",
+            "delta",
+            "iceberg",
+            "lance"
+          ]
+        },
+        "object": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/$defs/%23AnyObject"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "connections": {
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": {
+          "$ref": "#/$defs/%23Connection"
+        }
+      },
+      "type": "object"
+    },
+    "default_connection": {
+      "$ref": "#/$defs/%23Identifier"
+    },
+    "description": {
+      "type": "string"
+    },
+    "models": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": {
+          "$ref": "#/$defs/%23ModelTable"
+        }
+      },
+      "type": "object"
+    },
+    "name": {
+      "$ref": "#/$defs/%23Identifier"
+    },
+    "semantic_models": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": {
+          "$ref": "#/$defs/%23SemanticModelSpec"
+        }
+      },
+      "type": "object"
+    },
+    "sources": {
+      "additionalProperties": false,
+      "minProperties": 1,
+      "patternProperties": {
+        "^[A-Za-z_][A-Za-z0-9_]*$": {
+          "$ref": "#/$defs/%23Source"
+        }
+      },
+      "type": "object"
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "models",
+    "name",
+    "semantic_models",
+    "sources"
+  ],
+  "type": "object"
+}

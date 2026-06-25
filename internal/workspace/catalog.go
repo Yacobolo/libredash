@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/Yacobolo/libredash/internal/analytics/model"
+	"github.com/Yacobolo/libredash/internal/configschema"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
 	"gopkg.in/yaml.v3"
 )
@@ -51,6 +52,9 @@ func LoadCatalog(path string) (Catalog, string, error) {
 		return Catalog{}, "", err
 	}
 	if err := rejectLegacyCatalogContract(content); err != nil {
+		return Catalog{}, "", err
+	}
+	if err := configschema.ValidateBytes(configschema.KindCatalog, path, content); err != nil {
 		return Catalog{}, "", err
 	}
 	var catalog Catalog

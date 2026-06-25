@@ -1,0 +1,102 @@
+{
+  "$defs": {
+    "#CatalogAsset": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "path": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "title"
+      ],
+      "type": "object"
+    },
+    "#CatalogDashboard": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/%23ObjectID"
+        },
+        "path": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "title"
+      ],
+      "type": "object"
+    },
+    "#Identifier": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+      "type": "string"
+    },
+    "#ObjectID": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$",
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "dashboards": {
+      "items": {
+        "$ref": "#/$defs/%23CatalogDashboard"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "semantic_models": {
+      "items": {
+        "$ref": "#/$defs/%23CatalogAsset"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "workspace": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "dashboards",
+    "semantic_models"
+  ],
+  "type": "object"
+}
