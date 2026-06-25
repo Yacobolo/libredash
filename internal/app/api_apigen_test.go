@@ -1,11 +1,48 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 )
+
+func TestAPIGenUsesTypeSpecV030(t *testing.T) {
+	root := projectRoot(t)
+	manifest, err := os.ReadFile(filepath.Join(root, "api", "apigen.yaml"))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	manifestText := string(manifest)
+	if !strings.Contains(manifestText, "typespec_dir: typespec") {
+		t.Fatalf("manifest should use TypeSpec source, got:\n%s", manifestText)
+	}
+	if strings.Contains(manifestText, "cue_dir:") {
+		t.Fatalf("manifest should not use cue_dir after APIGen v0.3.0 migration")
+	}
+
+	taskfile, err := os.ReadFile(filepath.Join(root, "Taskfile.yml"))
+	if err != nil {
+		t.Fatalf("read Taskfile.yml: %v", err)
+	}
+	taskText := string(taskfile)
+	for _, want := range []string{
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.0 typespec-compile",
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.0 all",
+	} {
+		if !strings.Contains(taskText, want) {
+			t.Fatalf("Taskfile.yml missing generation command %q", want)
+		}
+	}
+	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0"} {
+		if strings.Contains(taskText, forbidden) {
+			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.3.0 migration", forbidden)
+		}
+	}
+}
 
 func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 	spec, err := apigenapi.GetEmbeddedOpenAPISpec()
@@ -84,5 +121,55 @@ func TestAPIGenOperationAuthCoverage(t *testing.T) {
 	}
 	if got := apigenOperationPermissions["uploadDeploymentArtifact"]; got != access.PermissionDeploymentCreate {
 		t.Fatalf("uploadDeploymentArtifact permission = %q, want %q", got, access.PermissionDeploymentCreate)
+	}
+}
+
+func TestAPIGenOperationExtensions(t *testing.T) {
+	contracts := apigenapi.GetAPIGenOperationContracts()
+	for operationID, contract := range contracts {
+		if _, ok := contract.Extensions["x-agent"]; ok {
+			t.Fatalf("%s should not have x-agent metadata in the TypeSpec migration", operationID)
+		}
+		authz, ok := contract.Extensions["x-authz"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s missing generated x-authz extension: %#v", operationID, contract.Extensions["x-authz"])
+		}
+		if got := authz["mode"]; got != "permission" {
+			t.Fatalf("%s x-authz mode = %#v, want permission", operationID, got)
+		}
+		if got := authz["permission"]; got != apigenOperationPermissions[operationID] {
+			t.Fatalf("%s x-authz permission = %#v, want %q", operationID, got, apigenOperationPermissions[operationID])
+		}
+		if operationID != "uploadDeploymentArtifact" {
+			if _, ok := contract.Extensions["x-libredash-dispatch"]; ok {
+				t.Fatalf("%s should not have raw-body dispatch extension", operationID)
+			}
+		}
+	}
+
+	upload, ok := contracts["uploadDeploymentArtifact"]
+	if !ok {
+		t.Fatal("uploadDeploymentArtifact contract missing")
+	}
+	if got := upload.Extensions["x-libredash-dispatch"]; got != "raw-body" {
+		t.Fatalf("uploadDeploymentArtifact x-libredash-dispatch = %#v, want raw-body", got)
+	}
+}
+
+func projectRoot(t *testing.T) string {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		next := filepath.Dir(dir)
+		if next == dir {
+			t.Fatalf("could not find project root from %s", dir)
+		}
+		dir = next
 	}
 }
