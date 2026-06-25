@@ -23,6 +23,35 @@
       ],
       "type": "object"
     },
+    "#CatalogDashboard": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/%23ObjectID"
+        },
+        "path": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "title"
+      ],
+      "type": "object"
+    },
     "#Identifier": {
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
       "type": "string"
@@ -37,40 +66,16 @@
   "properties": {
     "dashboards": {
       "items": {
-        "additionalProperties": false,
-        "properties": {
-          "description": {
-            "type": "string"
-          },
-          "id": {
-            "$ref": "#/$defs/%23ObjectID"
-          },
-          "path": {
-            "type": "string"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "title": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "path",
-          "title"
-        ],
-        "type": "object"
+        "$ref": "#/$defs/%23CatalogDashboard"
       },
+      "minItems": 1,
       "type": "array"
     },
     "semantic_models": {
       "items": {
         "$ref": "#/$defs/%23CatalogAsset"
       },
+      "minItems": 1,
       "type": "array"
     },
     "workspace": {
@@ -89,5 +94,9 @@
       "type": "object"
     }
   },
+  "required": [
+    "dashboards",
+    "semantic_models"
+  ],
   "type": "object"
 }

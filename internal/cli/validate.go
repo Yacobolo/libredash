@@ -16,9 +16,18 @@ import (
 
 func validateCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "validate",
+		Use:   "validate [catalog]",
 		Short: "Validate a dashboard-as-code catalog",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 1 {
+				return fmt.Errorf("validate accepts at most one positional catalog")
+			}
+			if len(args) == 1 {
+				if cmd.Flags().Changed("catalog") {
+					return fmt.Errorf("choose either --catalog or positional catalog, not both")
+				}
+				opts.catalog = args[0]
+			}
 			return runValidate(ctx, opts, cmd.OutOrStdout())
 		},
 	}
@@ -35,6 +44,7 @@ func schemaCommand(opts *rootOptions) *cobra.Command {
 	export := &cobra.Command{
 		Use:   "export",
 		Short: "Export generated schema artifacts",
+		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runSchemaExport(opts)
 		},
@@ -82,17 +92,21 @@ func validateCatalog(ctx context.Context, catalogPath string) []configschema.Dia
 	if err != nil {
 		return configschema.Diagnostics(err)
 	}
+	var diagnostics []configschema.Diagnostic
 	for _, entry := range catalog.SemanticModels {
 		path := filepath.Join(baseDir, entry.Path)
 		if err := configschema.ValidateFile(configschema.KindSemanticModel, path); err != nil {
-			return configschema.Diagnostics(err)
+			diagnostics = append(diagnostics, configschema.Diagnostics(err)...)
 		}
 	}
 	for _, entry := range catalog.Dashboards {
 		path := filepath.Join(baseDir, entry.Path)
 		if err := configschema.ValidateFile(configschema.KindDashboard, path); err != nil {
-			return configschema.Diagnostics(err)
+			diagnostics = append(diagnostics, configschema.Diagnostics(err)...)
 		}
+	}
+	if len(diagnostics) > 0 {
+		return diagnostics
 	}
 	if _, err := workspacecompiler.CompileDefinition(catalogPath); err != nil {
 		return configschema.Diagnostics(err)

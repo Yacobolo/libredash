@@ -13,44 +13,46 @@ package contracts
 		title?:       string
 		description?: string
 	})
-	semantic_models: [...#CatalogAsset]
-	dashboards: [...close({
-		id:           #ObjectID
-		title:        string
-		path:         string
-		description?: string
-		tags?: [...string]
-	})]
+	semantic_models!: [...#CatalogAsset]
+	dashboards!: [...#CatalogDashboard]
 })
 
 #CatalogAsset: close({
-	id:           #Identifier
-	title:        string
-	path:         string
+	id!:          #Identifier
+	title!:       string
+	path!:        string
 	description?: string
 })
 
+#CatalogDashboard: close({
+	id!:          #ObjectID
+	title!:       string
+	path!:        string
+	description?: string
+	tags?: [...string]
+})
+
 #SemanticModel: close({
-	name:                #Identifier
+	name!:               #Identifier
 	title?:              string
 	description?:        string
 	default_connection?: #Identifier
-	connections?: {
+	connections?: close({
 		[#Identifier]: #Connection
-	}
-	sources: {
+	})
+	sources!: close({
 		[#Identifier]: #Source
-	}
-	models: {
+	})
+	models!: close({
 		[#Identifier]: #ModelTable
-	}
-	semantic_models: {
+	})
+	semantic_models!: close({
 		[#Identifier]: #SemanticModelSpec
-	}
+	})
 })
 
 #Connection: close({
-	kind:         string
+	kind!:        string
 	description?: string
 	path?:        string
 	root?:        string
@@ -69,11 +71,11 @@ package contracts
 	connection?:  #Identifier
 	object?:      string
 	options?:     #AnyObject
-	fields?: {
+	fields?: close({
 		[#Identifier]: close({
 			description?: string
 		})
-	}
+	})
 })
 
 #ModelTable: close({
@@ -84,18 +86,18 @@ package contracts
 	transform?: close({
 		sql?: string
 	})
-	primary_key: #Identifier
-	grain?:      #Identifier
-	fields?: {
+	primary_key!: #Identifier
+	grain?:       #Identifier
+	fields?: close({
 		[#Identifier]: close({
 			label?:       string
 			description?: string
 			expr?:        string
 		})
-	}
-	measures?: {
+	})
+	measures?: close({
 		[#Identifier]: #Measure
-	}
+	})
 	description?: string
 })
 
@@ -132,34 +134,34 @@ package contracts
 #Relationship: close({
 	id?:          #Identifier
 	description?: string
-	from:         #FieldRef
-	to:           #FieldRef
+	from!:        #FieldRef
+	to!:          #FieldRef
 	cardinality?: string
 	active?:      bool
 })
 
 #Dashboard: close({
-	id:              #ObjectID
-	title:           string
+	id!:             #ObjectID
+	title!:          string
 	description?:    string
-	semantic_model?: #Identifier
-	filters?: {
+	semantic_model!: #Identifier
+	filters?: close({
 		[#Identifier]: #Filter
-	}
-	visuals: {
+	})
+	visuals!: close({
 		[#Identifier]: #Visual
-	}
-	tables?: {
+	})
+	tables?: close({
 		[#Identifier]: #Table
-	}
-	pages: [...#Page]
+	})
+	pages!: [...#Page]
 })
 
 #Filter: close({
-	type:         "date_range" | "multi_select" | "text"
-	label:        string
+	type!:        "date_range" | "multi_select" | "text"
+	label!:       string
 	description?: string
-	field:        #FieldRef
+	field!:       #FieldRef
 	default?:     #FilterDefault
 	custom?:      bool
 	presets?: [...#FilterPreset]
@@ -188,8 +190,8 @@ package contracts
 })
 
 #FilterPreset: close({
-	value:          string
-	label:          string
+	value!:         string
+	label!:         string
 	from?:          string
 	to?:            string
 	relative_days?: int
@@ -202,13 +204,13 @@ package contracts
 	shape?:            "category_value" | "category_series_value" | "category_multi_measure" | "category_delta" | "single_value" | "matrix" | "graph" | "geo" | "ohlc" | "distribution" | "binned_measure" | "hierarchy"
 	renderer?:         "echarts" | "html"
 	type?:             "line" | "area" | "bar" | "column" | "pie" | "donut" | "scatter" | "funnel" | "treemap" | "gauge" | "heatmap" | "sankey" | "graph" | "map" | "candlestick" | "boxplot" | "combo" | "waterfall" | "histogram" | "radar" | "tree" | "sunburst" | "kpi"
-	query:             #VisualQuery
+	query!:            #VisualQuery
 	options?:          #AnyObject
 	renderer_options?: #AnyObject
 	interaction?:      null | #Interaction
-	encode?: {
+	encode?: close({
 		[string]: string
-	}
+	})
 })
 
 #VisualQuery: close({
@@ -224,11 +226,11 @@ package contracts
 	limit?: int
 })
 
-#FieldRefs: [...#FieldRefValue] | {
+#FieldRefs: [...#FieldRefValue] | close({
 	[#Identifier]: #FieldRef | close({field: #FieldRef})
-}
+})
 
-#MeasureRefs: [...#FieldRefValue] | {
+#MeasureRefs: [...#FieldRefValue] | close({
 	[#Identifier]: null | close({
 		measure?: #Identifier | #FieldRef
 		expr?:    string
@@ -238,13 +240,13 @@ package contracts
 		grains?: [...string]
 		format?: string
 	})
-}
+})
 
 #FieldRefValue: #FieldRef | #FieldRefObject
 
 #FieldRefObject: close({
-	field: #FieldRef | #Identifier
-	alias: #Identifier
+	field!: #FieldRef | #Identifier
+	alias!: #Identifier
 })
 
 #Sort: close({
@@ -262,8 +264,8 @@ package contracts
 	toggle?: bool
 	mode?:   string
 	mappings?: [...close({
-		field:  #FieldRef
-		value:  string
+		field!: #FieldRef
+		value!: string
 		label?: string
 	})]
 	targets?: [...#Identifier]
@@ -271,9 +273,9 @@ package contracts
 
 #Table: close({
 	kind?:        "data_table" | "matrix_table" | "pivot_table"
-	title:        string
+	title!:       string
 	description?: string
-	query:        #TableQuery
+	query!:       #TableQuery
 	default_sort?: close({
 		key?:       string
 		direction?: "asc" | "desc" | string
@@ -299,7 +301,7 @@ package contracts
 })
 
 #TableColumn: close({
-	key:           string
+	key!:          string
 	label?:        string
 	width?:        int
 	format?:       "text" | "integer" | "decimal" | "currency" | "days" | string
@@ -312,7 +314,7 @@ package contracts
 })
 
 #TableFormattingRule: close({
-	kind: "badge" | "text_color" | "background_scale" | "data_bar"
+	kind!: "badge" | "text_color" | "background_scale" | "data_bar"
 	values?: {[string]: string}
 	min?:        number
 	max?:        number
@@ -323,8 +325,8 @@ package contracts
 })
 
 #Page: close({
-	id:           #ObjectID
-	title:        string
+	id!:          #ObjectID
+	title!:       string
 	description?: string
 	canvas?: close({
 		width?:  int
@@ -336,21 +338,21 @@ package contracts
 		gap?:        int
 		padding?:    int
 	})
-	visuals: [...#PageVisual]
+	visuals!: [...#PageVisual]
 })
 
 #PageVisual: close({
-	id:           #ObjectID
-	kind:         "header" | "filter_card" | "kpi_card" | "line_chart" | "area_chart" | "bar_chart" | "column_chart" | "pie_chart" | "donut_chart" | "scatter_chart" | "funnel_chart" | "treemap_chart" | "gauge_chart" | "heatmap_chart" | "sankey_chart" | "graph_chart" | "map_chart" | "candlestick_chart" | "boxplot_chart" | "combo_chart" | "waterfall_chart" | "histogram_chart" | "radar_chart" | "tree_chart" | "sunburst_chart" | "table"
+	id!:          #ObjectID
+	kind!:        "header" | "filter_card" | "kpi_card" | "line_chart" | "area_chart" | "bar_chart" | "column_chart" | "pie_chart" | "donut_chart" | "scatter_chart" | "funnel_chart" | "treemap_chart" | "gauge_chart" | "heatmap_chart" | "sankey_chart" | "graph_chart" | "map_chart" | "candlestick_chart" | "boxplot_chart" | "combo_chart" | "waterfall_chart" | "histogram_chart" | "radar_chart" | "tree_chart" | "sunburst_chart" | "table"
 	visual?:      #Identifier
 	table?:       #Identifier
 	filter?:      #Identifier
 	description?: string
-	placement: close({
-		col:      int
-		row:      int
-		col_span: int
-		row_span: int
+	placement!: close({
+		col!:      int
+		row!:      int
+		col_span!: int
+		row_span!: int
 	})
 	eyebrow?:  string
 	title?:    string

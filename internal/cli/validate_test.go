@@ -59,6 +59,94 @@ func TestRunValidateJSONReportsCompilerDiagnostic(t *testing.T) {
 	}
 }
 
+func TestRunValidateCollectsReferencedFileSchemaDiagnostics(t *testing.T) {
+	dir := t.TempDir()
+	writeValidateFixture(t, filepath.Join(dir, "catalog.yaml"), `
+semantic_models:
+  - id: bad_model
+    title: Bad Model
+    path: model.yaml
+dashboards:
+  - id: bad_dashboard
+    title: Bad Dashboard
+    path: dashboard.yaml
+`)
+	writeValidateFixture(t, filepath.Join(dir, "model.yaml"), `
+name: bad_model
+sources: {}
+models: {}
+semantic_models: {}
+`)
+	writeValidateFixture(t, filepath.Join(dir, "dashboard.yaml"), `
+id: bad_dashboard
+title: Bad Dashboard
+semantic_model: bad_model
+visuals: {}
+pages: []
+`)
+	var out bytes.Buffer
+	err := runValidate(context.Background(), &rootOptions{catalog: filepath.Join(dir, "catalog.yaml"), jsonOutput: true}, &out)
+	if err == nil {
+		t.Fatal("runValidate() error = nil, want validation failure")
+	}
+	var response validateResponse
+	if err := json.Unmarshal(out.Bytes(), &response); err != nil {
+		t.Fatalf("json output: %v\n%s", err, out.String())
+	}
+	if len(response.Diagnostics) < 2 {
+		t.Fatalf("diagnostics len = %d, want diagnostics from multiple files: %#v", len(response.Diagnostics), response.Diagnostics)
+	}
+	files := map[string]bool{}
+	for _, diagnostic := range response.Diagnostics {
+		files[filepath.Base(diagnostic.File)] = true
+	}
+	if !files["model.yaml"] || !files["dashboard.yaml"] {
+		t.Fatalf("diagnostic files = %#v, want model.yaml and dashboard.yaml", files)
+	}
+}
+
+func TestValidateCommandAcceptsPositionalCatalog(t *testing.T) {
+	catalog := writeValidateWorkspace(t, validValidateDashboardYAML())
+	opts := &rootOptions{}
+	cmd := validateCommand(context.Background(), opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{catalog})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("validate command error = %v", err)
+	}
+	if !strings.Contains(out.String(), "ok "+catalog) {
+		t.Fatalf("output = %q, want positional catalog path", out.String())
+	}
+}
+
+func TestValidateCommandRejectsAmbiguousCatalogArgs(t *testing.T) {
+	catalog := writeValidateWorkspace(t, validValidateDashboardYAML())
+	opts := &rootOptions{}
+	cmd := validateCommand(context.Background(), opts)
+	cmd.SetArgs([]string{"--catalog", catalog, catalog})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("validate command error = nil, want ambiguity error")
+	}
+	if !strings.Contains(err.Error(), "either --catalog or positional catalog") {
+		t.Fatalf("error = %v, want ambiguity message", err)
+	}
+}
+
+func TestSchemaExportRejectsUnexpectedArgs(t *testing.T) {
+	opts := &rootOptions{schemaOut: t.TempDir()}
+	cmd := schemaCommand(opts)
+	cmd.SetArgs([]string{"export", "unexpected"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("schema export error = nil, want unexpected arg error")
+	}
+	if !strings.Contains(err.Error(), "unknown command") && !strings.Contains(err.Error(), "accepts 0 arg") {
+		t.Fatalf("error = %v, want argument error", err)
+	}
+}
+
 func TestRunSchemaExportWritesJSONSchemas(t *testing.T) {
 	outDir := t.TempDir()
 	err := runSchemaExport(&rootOptions{schemaFormat: "json-schema", schemaOut: outDir})

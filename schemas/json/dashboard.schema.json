@@ -50,6 +50,7 @@
           "type": "array"
         },
         {
+          "additionalProperties": false,
           "patternProperties": {
             "^[A-Za-z_][A-Za-z0-9_]*$": {
               "anyOf": [
@@ -264,6 +265,7 @@
           "type": "array"
         },
         {
+          "additionalProperties": false,
           "patternProperties": {
             "^[A-Za-z_][A-Za-z0-9_]*$": {
               "anyOf": [
@@ -369,7 +371,8 @@
       },
       "required": [
         "id",
-        "title"
+        "title",
+        "visuals"
       ],
       "type": "object"
     },
@@ -645,6 +648,7 @@
         }
       },
       "required": [
+        "query",
         "title"
       ],
       "type": "object"
@@ -865,6 +869,9 @@
           ]
         }
       },
+      "required": [
+        "query"
+      ],
       "type": "object"
     },
     "#VisualQuery": {
@@ -914,6 +921,7 @@
       "type": "string"
     },
     "filters": {
+      "additionalProperties": false,
       "patternProperties": {
         "^[A-Za-z_][A-Za-z0-9_]*$": {
           "$ref": "#/$defs/%23Filter"
@@ -928,12 +936,14 @@
       "items": {
         "$ref": "#/$defs/%23Page"
       },
+      "minItems": 1,
       "type": "array"
     },
     "semantic_model": {
       "$ref": "#/$defs/%23Identifier"
     },
     "tables": {
+      "additionalProperties": false,
       "patternProperties": {
         "^[A-Za-z_][A-Za-z0-9_]*$": {
           "$ref": "#/$defs/%23Table"
@@ -945,6 +955,8 @@
       "type": "string"
     },
     "visuals": {
+      "additionalProperties": false,
+      "minProperties": 1,
       "patternProperties": {
         "^[A-Za-z_][A-Za-z0-9_]*$": {
           "$ref": "#/$defs/%23Visual"
@@ -955,7 +967,10 @@
   },
   "required": [
     "id",
-    "title"
+    "pages",
+    "semantic_model",
+    "title",
+    "visuals"
   ],
   "type": "object"
 }

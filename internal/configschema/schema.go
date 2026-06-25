@@ -15,6 +15,7 @@ import (
 	cueerrors "cuelang.org/go/cue/errors"
 	cuejsonschema "cuelang.org/go/encoding/jsonschema"
 	cueyaml "cuelang.org/go/encoding/yaml"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed contracts/contracts.cue
@@ -100,6 +101,9 @@ func ValidateBytes(kind Kind, filename string, content []byte) error {
 	if err := value.Validate(cue.Final()); err != nil {
 		return &Error{Diagnostics: diagnosticsForCUEError(filename, definition, err)}
 	}
+	if diagnostics := requiredCollectionDiagnostics(kind, filename, content); len(diagnostics) > 0 {
+		return &Error{Diagnostics: diagnostics}
+	}
 	return nil
 }
 
@@ -126,6 +130,7 @@ func JSONSchema(kind Kind) ([]byte, error) {
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, err
 	}
+	hardenJSONSchema(kind, payload)
 	pretty, err := json.MarshalIndent(payload, "", "  ")
 	if err != nil {
 		return nil, err
@@ -302,4 +307,199 @@ func cleanMessage(definition, message string) string {
 
 func readFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
+}
+
+func hardenJSONSchema(kind Kind, payload any) {
+	normalizeGeneratedSchema(payload)
+	root, ok := payload.(map[string]any)
+	if !ok {
+		return
+	}
+	switch kind {
+	case KindCatalog:
+		addRequired(root, "semantic_models", "dashboards")
+		addMinItems(propertySchema(root, "semantic_models"), 1)
+		addMinItems(propertySchema(root, "dashboards"), 1)
+	case KindSemanticModel:
+		addRequired(root, "name", "sources", "models", "semantic_models")
+		addMinProperties(propertySchema(root, "sources"), 1)
+		addMinProperties(propertySchema(root, "models"), 1)
+		addMinProperties(propertySchema(root, "semantic_models"), 1)
+		addMinItems(propertySchema(definitionSchema(root, "#SemanticModelSpec"), "tables"), 1)
+	case KindDashboard:
+		addRequired(root, "id", "title", "semantic_model", "visuals", "pages")
+		addMinProperties(propertySchema(root, "visuals"), 1)
+		addMinItems(propertySchema(root, "pages"), 1)
+	}
+}
+
+func normalizeGeneratedSchema(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if _, hasPatterns := typed["patternProperties"]; hasPatterns {
+			if _, exists := typed["additionalProperties"]; !exists {
+				typed["additionalProperties"] = false
+			}
+		}
+		if typed["type"] == "array" {
+			if minLength, ok := typed["minLength"]; ok {
+				if _, exists := typed["minItems"]; !exists {
+					typed["minItems"] = minLength
+				}
+				delete(typed, "minLength")
+			}
+		}
+		for _, item := range typed {
+			normalizeGeneratedSchema(item)
+		}
+	case []any:
+		for _, item := range typed {
+			normalizeGeneratedSchema(item)
+		}
+	}
+}
+
+func addRequired(schema map[string]any, fields ...string) {
+	if schema == nil {
+		return
+	}
+	seen := map[string]bool{}
+	required := []any{}
+	if existing, ok := schema["required"].([]any); ok {
+		for _, item := range existing {
+			value, ok := item.(string)
+			if !ok || seen[value] {
+				continue
+			}
+			seen[value] = true
+			required = append(required, value)
+		}
+	}
+	for _, field := range fields {
+		if seen[field] {
+			continue
+		}
+		seen[field] = true
+		required = append(required, field)
+	}
+	sort.Slice(required, func(i, j int) bool {
+		return required[i].(string) < required[j].(string)
+	})
+	schema["required"] = required
+}
+
+func addMinItems(schema map[string]any, min int) {
+	if schema != nil {
+		schema["minItems"] = min
+	}
+}
+
+func addMinProperties(schema map[string]any, min int) {
+	if schema != nil {
+		schema["minProperties"] = min
+	}
+}
+
+func propertySchema(schema map[string]any, name string) map[string]any {
+	if schema == nil {
+		return nil
+	}
+	properties, ok := schema["properties"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	property, ok := properties[name].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return property
+}
+
+func definitionSchema(schema map[string]any, name string) map[string]any {
+	if schema == nil {
+		return nil
+	}
+	definitions, ok := schema["$defs"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	definition, ok := definitions[name].(map[string]any)
+	if !ok {
+		return nil
+	}
+	return definition
+}
+
+func requiredCollectionDiagnostics(kind Kind, filename string, content []byte) []Diagnostic {
+	var document yaml.Node
+	if err := yaml.Unmarshal(content, &document); err != nil {
+		return nil
+	}
+	root := yamlMappingNode(&document)
+	if root == nil {
+		return nil
+	}
+	var diagnostics []Diagnostic
+	switch kind {
+	case KindCatalog:
+		requireNonEmptyYAMLSequence(&diagnostics, filename, root, "semantic_models")
+		requireNonEmptyYAMLSequence(&diagnostics, filename, root, "dashboards")
+	case KindSemanticModel:
+		requireNonEmptyYAMLMapping(&diagnostics, filename, root, "sources")
+		requireNonEmptyYAMLMapping(&diagnostics, filename, root, "models")
+		requireNonEmptyYAMLMapping(&diagnostics, filename, root, "semantic_models")
+	case KindDashboard:
+		requireNonEmptyYAMLMapping(&diagnostics, filename, root, "visuals")
+		requireNonEmptyYAMLSequence(&diagnostics, filename, root, "pages")
+	}
+	return diagnostics
+}
+
+func requireNonEmptyYAMLMapping(diagnostics *[]Diagnostic, filename string, root *yaml.Node, key string) {
+	node := yamlMappingValue(root, key)
+	if node == nil || node.Kind != yaml.MappingNode || len(node.Content) > 0 {
+		return
+	}
+	*diagnostics = append(*diagnostics, collectionDiagnostic(filename, node, key))
+}
+
+func requireNonEmptyYAMLSequence(diagnostics *[]Diagnostic, filename string, root *yaml.Node, key string) {
+	node := yamlMappingValue(root, key)
+	if node == nil || node.Kind != yaml.SequenceNode || len(node.Content) > 0 {
+		return
+	}
+	*diagnostics = append(*diagnostics, collectionDiagnostic(filename, node, key))
+}
+
+func collectionDiagnostic(filename string, node *yaml.Node, key string) Diagnostic {
+	return Diagnostic{
+		File:     filename,
+		Line:     node.Line,
+		Column:   node.Column,
+		Severity: SeverityError,
+		Code:     "schema.contract",
+		Message:  fmt.Sprintf("%s requires at least one item", key),
+	}
+}
+
+func yamlMappingNode(node *yaml.Node) *yaml.Node {
+	if node.Kind == yaml.DocumentNode && len(node.Content) > 0 {
+		return node.Content[0]
+	}
+	if node.Kind == yaml.MappingNode {
+		return node
+	}
+	return nil
+}
+
+func yamlMappingValue(node *yaml.Node, key string) *yaml.Node {
+	if node == nil || node.Kind != yaml.MappingNode {
+		return nil
+	}
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		if node.Content[index].Value == key {
+			return node.Content[index+1]
+		}
+	}
+	return nil
 }

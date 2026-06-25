@@ -248,6 +248,7 @@
           "items": {
             "$ref": "#/$defs/%23Identifier"
           },
+          "minItems": 1,
           "type": "array"
         }
       },
@@ -311,6 +312,7 @@
   "additionalProperties": false,
   "properties": {
     "connections": {
+      "additionalProperties": false,
       "patternProperties": {
         "^[A-Za-z_][A-Za-z0-9_]*$": {
           "$ref": "#/$defs/%23Connection"
@@ -325,6 +327,8 @@
       "type": "string"
     },
     "models": {
+      "additionalProperties": false,
+      "minProperties": 1,
       "patternProperties": {
         "^[A-Za-z_][A-Za-z0-9_]*$": {
           "$ref": "#/$defs/%23ModelTable"
@@ -336,6 +340,8 @@
       "$ref": "#/$defs/%23Identifier"
     },
     "semantic_models": {
+      "additionalProperties": false,
+      "minProperties": 1,
       "patternProperties": {
         "^[A-Za-z_][A-Za-z0-9_]*$": {
           "$ref": "#/$defs/%23SemanticModelSpec"
@@ -344,6 +350,8 @@
       "type": "object"
     },
     "sources": {
+      "additionalProperties": false,
+      "minProperties": 1,
       "patternProperties": {
         "^[A-Za-z_][A-Za-z0-9_]*$": {
           "$ref": "#/$defs/%23Source"
@@ -356,7 +364,10 @@
     }
   },
   "required": [
-    "name"
+    "models",
+    "name",
+    "semantic_models",
+    "sources"
   ],
   "type": "object"
 }
