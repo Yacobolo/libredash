@@ -67,7 +67,7 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 	}
 }
 
-func TestAPIGenAgentToolsExposeLegacyBIArgumentNamesAndBodyFields(t *testing.T) {
+func TestAPIGenAgentToolsExposeTypeSpecArgumentNamesAndBodyFields(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
 	tools := server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"})
 	names := map[string]agent.ToolDefinition{}
@@ -75,10 +75,10 @@ func TestAPIGenAgentToolsExposeLegacyBIArgumentNamesAndBodyFields(t *testing.T) 
 		names[tool.Name] = tool
 	}
 	for toolName, wantProps := range map[string][]string{
-		"describe_dashboard":   {"dashboard_id"},
-		"describe_model":       {"model_id"},
-		"query_dashboard_page": {"dashboard_id", "page_id", "filters"},
-		"query_table":          {"dashboard_id", "page_id", "table_id", "count", "filters"},
+		"describe_dashboard":   {"dashboard"},
+		"describe_model":       {"model"},
+		"query_dashboard_page": {"dashboard", "page", "filters"},
+		"query_table":          {"dashboard", "table", "count", "filters", "pageId"},
 	} {
 		var schema struct {
 			Properties map[string]any `json:"properties"`
@@ -91,9 +91,9 @@ func TestAPIGenAgentToolsExposeLegacyBIArgumentNamesAndBodyFields(t *testing.T) 
 				t.Fatalf("%s schema missing %q: %s", toolName, want, names[toolName].InputSchema)
 			}
 		}
-		for _, forbidden := range []string{"dashboard", "model", "page", "table", "pageId"} {
+		for _, forbidden := range []string{"dashboard_id", "model_id", "page_id", "table_id"} {
 			if _, ok := schema.Properties[forbidden]; ok {
-				t.Fatalf("%s schema exposes canonical API arg %q: %s", toolName, forbidden, names[toolName].InputSchema)
+				t.Fatalf("%s schema exposes rewritten arg %q: %s", toolName, forbidden, names[toolName].InputSchema)
 			}
 		}
 	}
@@ -159,7 +159,7 @@ func TestAPIGenAgentToolDispatchesJSONBodyOperation(t *testing.T) {
 	result, err := queryTable.Handler.Run(context.Background(), agent.ToolCall{
 		ID:        "call_1",
 		Name:      "query_table",
-		Arguments: json.RawMessage(`{"dashboard_id":"executive-sales","page_id":"overview","table_id":"orders","count":500}`),
+		Arguments: json.RawMessage(`{"dashboard":"executive-sales","pageId":"overview","table":"orders","count":500}`),
 	})
 	if err != nil {
 		t.Fatalf("run tool: %v", err)

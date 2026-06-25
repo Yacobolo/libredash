@@ -258,17 +258,15 @@ func apigenAgentInputSchema(operation apigenAgentOperation) json.RawMessage {
 		if parameter.Name == "" || parameter.Name == "workspace" {
 			continue
 		}
-		name := apigenAgentArgumentName(operation, parameter.Name)
-		properties[name] = parameter.Schema
-		if apigenAgentParameterRequired(operation, parameter) {
-			required = append(required, name)
+		properties[parameter.Name] = parameter.Schema
+		if parameter.Required {
+			required = append(required, parameter.Name)
 		}
 	}
 	for name, schema := range operation.BodyProperties {
-		argName := apigenAgentArgumentName(operation, name)
-		properties[argName] = schema
+		properties[name] = schema
 		if agentStringSliceHas(operation.BodyRequiredFields, name) {
-			required = append(required, argName)
+			required = append(required, name)
 		}
 	}
 	schema := map[string]any{
@@ -301,10 +299,6 @@ func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, o
 		return errResult
 	}
 	args, err := decodeAPIGenAgentToolArguments(rawArgs)
-	if err != nil {
-		return apigenAgentToolError("invalid_arguments", err.Error())
-	}
-	args, err = s.normalizeAPIGenAgentToolArguments(operation, args)
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
 	}
@@ -452,7 +446,7 @@ func apigenAgentRequestBody(operation apigenAgentOperation, args map[string]any)
 	}
 	for _, name := range operation.BodyRequiredFields {
 		if _, ok := body[name]; !ok {
-			return nil, fmt.Errorf("%s is required", apigenAgentArgumentName(operation, name))
+			return nil, fmt.Errorf("%s is required", name)
 		}
 	}
 	encoded, err := json.Marshal(body)
@@ -460,82 +454,6 @@ func apigenAgentRequestBody(operation apigenAgentOperation, args map[string]any)
 		return nil, err
 	}
 	return bytes.NewReader(encoded), nil
-}
-
-func (s *Server) normalizeAPIGenAgentToolArguments(operation apigenAgentOperation, args map[string]any) (map[string]any, error) {
-	out := cloneStringAnyMap(args)
-	copyAgentArgumentAlias(out, "dashboard_id", "dashboard")
-	copyAgentArgumentAlias(out, "model_id", "model")
-	copyAgentArgumentAlias(out, "table_id", "table")
-	copyAgentArgumentAlias(out, "page_id", "page")
-	copyAgentArgumentAlias(out, "page_id", "pageId")
-	if operation.Contract.OperationID == "queryDashboardPage" {
-		if _, ok, err := apigenAgentStringArgument("page", out); err != nil {
-			return nil, err
-		} else if !ok {
-			dashboardID, _, err := apigenAgentStringArgument("dashboard", out)
-			if err != nil {
-				return nil, err
-			}
-			pageID := firstDashboardPageID(s.metrics, dashboardID)
-			if pageID == "" {
-				return nil, fmt.Errorf("page_id is required when the dashboard has no default page")
-			}
-			out["page"] = pageID
-		}
-	}
-	return out, nil
-}
-
-func copyAgentArgumentAlias(args map[string]any, alias, canonical string) {
-	if _, ok := args[canonical]; ok {
-		return
-	}
-	if value, ok := args[alias]; ok {
-		args[canonical] = value
-	}
-}
-
-func firstDashboardPageID(metrics queryMetrics, dashboardID string) string {
-	if metrics == nil {
-		return ""
-	}
-	for _, page := range metrics.Pages(dashboardID) {
-		if page.ID != "" {
-			return page.ID
-		}
-	}
-	return ""
-}
-
-func apigenAgentArgumentName(operation apigenAgentOperation, name string) string {
-	switch operation.Extension.Name {
-	case "describe_dashboard", "query_dashboard_page", "query_table":
-		if name == "dashboard" {
-			return "dashboard_id"
-		}
-	case "describe_model":
-		if name == "model" {
-			return "model_id"
-		}
-	}
-	switch name {
-	case "page":
-		return "page_id"
-	case "table":
-		return "table_id"
-	case "pageId":
-		return "page_id"
-	default:
-		return name
-	}
-}
-
-func apigenAgentParameterRequired(operation apigenAgentOperation, parameter apigenAgentParameter) bool {
-	if operation.Contract.OperationID == "queryDashboardPage" && parameter.Name == "page" {
-		return false
-	}
-	return parameter.Required
 }
 
 func apigenAgentStringArgument(name string, args map[string]any) (string, bool, error) {
