@@ -349,7 +349,7 @@ func TestCompileSourceRelation(t *testing.T) {
 		kind:   "path",
 		format: "csv",
 		path:   "/data/orders.csv",
-		columns: []analyticsmaterialize.SourceReadColumn{
+		columns: []sourceReadColumn{
 			{SourceField: "raw_order_id", OutputField: "order_id"},
 			{SourceField: "gross_revenue", OutputField: "revenue"},
 		},

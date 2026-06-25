@@ -19,22 +19,20 @@ type Executor interface {
 
 type SourceRegistrar interface {
 	PrepareSourceRuntime(ctx context.Context, model *semanticmodel.Model) error
-	PlanSourceReads(ctx context.Context, model *semanticmodel.Model, tableName string, table semanticmodel.Table) ([]SourceReadPlan, error)
-	RegisterSourceReads(ctx context.Context, model *semanticmodel.Model, reads []SourceReadPlan) error
-	DropSourceReads(ctx context.Context, model *semanticmodel.Model, reads []SourceReadPlan) error
+	PlanModelTable(ctx context.Context, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (ModelTablePlan, error)
 }
 
-type SourceReadPlan struct {
-	Source          string
-	Fields          []string
-	Columns         []SourceReadColumn
-	RowPresenceOnly bool
+type ModelTablePlan struct {
+	Mode string
+	SQL  string
 }
 
-type SourceReadColumn struct {
-	SourceField string
-	OutputField string
-}
+const (
+	PlanModeDirectSourceRead      = "direct_source_read"
+	PlanModeProjectedSourceInline = "projected_source_inline"
+	PlanModeWholeQueryPushdown    = "whole_query_pushdown"
+	PlanModeModelSQL              = "model_sql"
+)
 
 type SourcePathResolver interface {
 	ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error)
@@ -148,6 +146,9 @@ func ModelTables(ctx context.Context, executor Executor, sources SourceRegistrar
 	if err != nil {
 		return err
 	}
+	if err := executor.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS model"); err != nil {
+		return err
+	}
 	for _, name := range order {
 		if err := validateIdentifier(name); err != nil {
 			return err
@@ -161,37 +162,16 @@ func ModelTables(ctx context.Context, executor Executor, sources SourceRegistrar
 
 func materializeModelTable(ctx context.Context, executor Executor, sources SourceRegistrar, model *semanticmodel.Model, name string) error {
 	table := model.Tables[name]
-	reads, err := sourceReadPlans(ctx, sources, model, name, table)
+	plan, err := sources.PlanModelTable(ctx, model, name, table)
 	if err != nil {
 		return err
 	}
-	if err := sources.RegisterSourceReads(ctx, model, reads); err != nil {
-		_ = sources.DropSourceReads(ctx, model, reads)
-		return err
+	if plan.SQL == "" {
+		return fmt.Errorf("model table %q produced empty materialization SQL", name)
 	}
-	cleanup := true
-	defer func() {
-		if cleanup {
-			_ = sources.DropSourceReads(ctx, model, reads)
-		}
-	}()
-	sourceSQL := table.Transform.SQL
-	if table.Source != "" {
-		if err := validateIdentifier(table.Source); err != nil {
-			return err
-		}
-		if sourceSQL == "" {
-			sourceSQL = "SELECT * FROM source." + table.Source
-		}
-	}
-	stmt := fmt.Sprintf("CREATE OR REPLACE TABLE model.%s AS %s", name, sourceSQL)
-	if err := executor.Exec(ctx, stmt); err != nil {
+	if err := executor.Exec(ctx, plan.SQL); err != nil {
 		return fmt.Errorf("materializing model.%s: %w", name, err)
 	}
-	if err := sources.DropSourceReads(ctx, model, reads); err != nil {
-		return err
-	}
-	cleanup = false
 	return nil
 }
 
@@ -231,44 +211,6 @@ func materializationOrder(model *semanticmodel.Model) ([]string, error) {
 		}
 	}
 	return order, nil
-}
-
-func sourceReadPlans(ctx context.Context, sources SourceRegistrar, model *semanticmodel.Model, tableName string, table semanticmodel.Table) ([]SourceReadPlan, error) {
-	plans := []SourceReadPlan{}
-	if table.Source != "" && table.Transform.SQL == "" {
-		plans = append(plans, SourceReadPlan{Source: table.Source, Columns: modelTableReadColumns(tableName, table)})
-		return plans, nil
-	}
-	if len(table.SourceDependencies) == 0 {
-		return plans, nil
-	}
-	planned, err := sources.PlanSourceReads(ctx, model, tableName, table)
-	if err != nil {
-		return nil, err
-	}
-	return planned, nil
-}
-
-func modelTableReadColumns(tableName string, table semanticmodel.Table) []SourceReadColumn {
-	columns := make([]SourceReadColumn, 0, len(table.Columns))
-	for name, column := range table.Columns {
-		output := column.Name
-		if output == "" {
-			output = name
-		}
-		source := column.SourceField
-		if source == "" {
-			source = output
-		}
-		columns = append(columns, SourceReadColumn{SourceField: source, OutputField: output})
-	}
-	sort.Slice(columns, func(i, j int) bool {
-		if columns[i].OutputField == columns[j].OutputField {
-			return columns[i].SourceField < columns[j].SourceField
-		}
-		return columns[i].OutputField < columns[j].OutputField
-	})
-	return columns
 }
 
 func validateIdentifier(value string) error {

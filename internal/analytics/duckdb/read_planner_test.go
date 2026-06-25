@@ -3,7 +3,6 @@ package duckdb
 import (
 	"context"
 	"database/sql"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -12,7 +11,7 @@ import (
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
-func TestPlanSourceReadsInfersJoinAndFilterColumns(t *testing.T) {
+func TestPlanModelTableCompilesCSVSQLModelToInlineRelations(t *testing.T) {
 	ctx := context.Background()
 	db := openPlanningRuntimeDB(t)
 	defer db.Close()
@@ -35,50 +34,61 @@ func TestPlanSourceReadsInfersJoinAndFilterColumns(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	plans, err := PlanSourceReads(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []analyticsmaterialize.SourceReadPlan{
-		{Source: "orders", Fields: []string{"customer_id", "order_id", "status"}},
-		{Source: "payments", Fields: []string{"order_id", "payment_value"}},
+	if plan.Mode != analyticsmaterialize.PlanModeProjectedSourceInline {
+		t.Fatalf("mode = %q, want inline", plan.Mode)
 	}
-	if !reflect.DeepEqual(plans, want) {
-		t.Fatalf("plans = %#v, want %#v", plans, want)
+	for _, want := range []string{
+		"CREATE OR REPLACE TABLE model.orders AS",
+		"FROM (SELECT customer_id, order_id, status FROM read_csv('orders.csv')) o",
+		"JOIN (SELECT order_id, payment_value FROM read_csv('payments.csv')) p",
+	} {
+		if !strings.Contains(plan.SQL, want) {
+			t.Fatalf("plan SQL = %s, want %q", plan.SQL, want)
+		}
+	}
+	if strings.Contains(plan.SQL, "source.orders") || strings.Contains(plan.SQL, "source.payments") {
+		t.Fatalf("plan SQL still contains source refs: %s", plan.SQL)
 	}
 }
 
-func TestPlanSourceReadsExpandsStar(t *testing.T) {
+func TestPlanModelTableCompilesDirectSourceFromColumns(t *testing.T) {
 	ctx := context.Background()
 	db := openPlanningRuntimeDB(t)
 	defer db.Close()
 	model := planningModel(map[string][]string{
-		"orders": {"order_id", "customer_id", "status"},
+		"orders": {"raw_order_id", "gross_revenue", "status"},
 	}, semanticmodel.Table{
-		Sources:    []string{"orders"},
+		Source:     "orders",
 		PrimaryKey: "order_id",
-		Dimensions: map[string]semanticmodel.MetricDimension{
-			"order_id":    {Label: "Order ID"},
-			"customer_id": {Label: "Customer ID"},
-			"status":      {Label: "Status"},
+		Columns: map[string]semanticmodel.ModelColumn{
+			"order_id": {SourceField: "raw_order_id"},
+			"revenue":  {SourceField: "gross_revenue"},
+			"status":   {},
 		},
-		Transform: semanticmodel.Transform{SQL: `SELECT * FROM source.orders`},
+		Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Label: "Order ID"}, "status": {Label: "Status"}},
 	})
 	if err := model.Validate(); err != nil {
 		t.Fatal(err)
 	}
 
-	plans, err := PlanSourceReads(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []analyticsmaterialize.SourceReadPlan{{Source: "orders", Fields: []string{"customer_id", "order_id", "status"}}}
-	if !reflect.DeepEqual(plans, want) {
-		t.Fatalf("plans = %#v, want %#v", plans, want)
+	if plan.Mode != analyticsmaterialize.PlanModeDirectSourceRead {
+		t.Fatalf("mode = %q, want direct", plan.Mode)
+	}
+	want := "CREATE OR REPLACE TABLE model.orders AS SELECT raw_order_id AS order_id, gross_revenue AS revenue, status FROM read_csv('orders.csv')"
+	if plan.SQL != want {
+		t.Fatalf("plan SQL = %q, want %q", plan.SQL, want)
 	}
 }
 
-func TestPlanSourceReadsUsesRowPresenceForCountStar(t *testing.T) {
+func TestPlanModelTableCompilesCountStarToInlineRowPresence(t *testing.T) {
 	ctx := context.Background()
 	db := openPlanningRuntimeDB(t)
 	defer db.Close()
@@ -96,31 +106,153 @@ func TestPlanSourceReadsUsesRowPresenceForCountStar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	plans, err := PlanSourceReads(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []analyticsmaterialize.SourceReadPlan{{Source: "orders", Fields: []string{}, RowPresenceOnly: true}}
-	if !reflect.DeepEqual(plans, want) {
-		t.Fatalf("plans = %#v, want %#v", plans, want)
+	if !strings.Contains(plan.SQL, "FROM (SELECT 1 AS __libredash_row_present FROM read_csv('orders.csv'))") {
+		t.Fatalf("plan SQL = %s, want row-presence inline relation", plan.SQL)
 	}
 }
 
-func TestPlanSourceReadsRejectsUndeclaredSource(t *testing.T) {
+func TestPlanModelTableCompilesEligibleQuackModelToWholeQuery(t *testing.T) {
+	ctx := context.Background()
+	db := openPlanningRuntimeDB(t)
+	defer db.Close()
+	model := planningQuackModel()
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Mode != analyticsmaterialize.PlanModeWholeQueryPushdown {
+		t.Fatalf("mode = %q, want whole query pushdown", plan.Mode)
+	}
+	for _, want := range []string{
+		"FROM quack_query('quack:quack.example.com:443'",
+		"FROM main.orders o",
+		"JOIN main.payments p USING (order_id)",
+	} {
+		if !strings.Contains(plan.SQL, want) {
+			t.Fatalf("plan SQL = %s, want %q", plan.SQL, want)
+		}
+	}
+	if strings.Contains(plan.SQL, "source.") || strings.Contains(plan.SQL, "secret-token") {
+		t.Fatalf("plan SQL contains source namespace or secret: %s", plan.SQL)
+	}
+}
+
+func TestPlanModelTablePushesDownQuackBeforeEmptyExplainPlan(t *testing.T) {
+	ctx := context.Background()
+	db := openPlanningRuntimeDB(t)
+	defer db.Close()
+	model := planningQuackModel()
+	table := model.Tables["orders"]
+	table.Sources = []string{"orders"}
+	table.SourceDependencies = []string{"orders"}
+	table.Transform.SQL = `SELECT * FROM source.orders WHERE 1=0`
+	model.Tables["orders"] = table
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Mode != analyticsmaterialize.PlanModeWholeQueryPushdown {
+		t.Fatalf("mode = %q, want whole query pushdown", plan.Mode)
+	}
+	if !strings.Contains(plan.SQL, "FROM main.orders WHERE 1=0") {
+		t.Fatalf("plan SQL = %s, want rewritten empty-result transform", plan.SQL)
+	}
+	if strings.Contains(plan.SQL, "source.orders") || strings.Contains(plan.SQL, "secret-token") {
+		t.Fatalf("plan SQL contains source namespace or secret: %s", plan.SQL)
+	}
+}
+
+func TestPlanModelTableFailsClosedWhenInlineExplainOmitsSourceScan(t *testing.T) {
+	ctx := context.Background()
+	db := openPlanningRuntimeDB(t)
+	defer db.Close()
+	model := planningModel(map[string][]string{
+		"orders": {"order_id", "customer_id"},
+	}, semanticmodel.Table{
+		Sources:    []string{"orders"},
+		PrimaryKey: "order_id",
+		Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Label: "Order ID"}},
+		Transform:  semanticmodel.Transform{SQL: `SELECT * FROM source.orders WHERE 1=0`},
+	})
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	if err == nil || !strings.Contains(err.Error(), `SQL plan did not expose projections for source "orders"`) {
+		t.Fatalf("PlanModelTable error = %v, want fail-closed missing projection error", err)
+	}
+}
+
+func TestPlanModelTableFailsClosedForUnusedCTESourceRef(t *testing.T) {
+	ctx := context.Background()
 	db := openPlanningRuntimeDB(t)
 	defer db.Close()
 	model := planningModel(map[string][]string{
 		"orders":   {"order_id"},
 		"payments": {"order_id"},
 	}, semanticmodel.Table{
-		Sources:    []string{"orders"},
+		Sources:    []string{"orders", "payments"},
 		PrimaryKey: "order_id",
 		Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Label: "Order ID"}},
-		Transform:  semanticmodel.Transform{SQL: `SELECT order_id FROM source.payments`},
+		Transform: semanticmodel.Transform{SQL: `
+			WITH unused_payments AS (SELECT order_id FROM source.payments)
+			SELECT order_id FROM source.orders
+		`},
 	})
-	err := model.Validate()
-	if err == nil || !strings.Contains(err.Error(), "do not match declared sources") {
-		t.Fatalf("Validate() error = %v, want source mismatch", err)
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	if err == nil || !strings.Contains(err.Error(), `SQL plan did not expose projections for source "payments"`) {
+		t.Fatalf("PlanModelTable error = %v, want fail-closed unused source error", err)
+	}
+}
+
+func TestPlanModelTableFallsBackToInlineQuackForModelDependency(t *testing.T) {
+	ctx := context.Background()
+	db := openPlanningRuntimeDB(t)
+	defer db.Close()
+	model := planningQuackModel()
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	summary := model.Tables["orders"]
+	summary.SourceDependencies = []string{"orders"}
+	summary.ModelDependencies = []string{"previous_orders"}
+	summary.Transform.SQL = `SELECT o.order_id FROM source.orders o JOIN model.previous_orders p USING (order_id)`
+	model.Tables["orders"] = summary
+	model.Tables["previous_orders"] = semanticmodel.Table{
+		PrimaryKey:  "order_id",
+		Columns:     map[string]semanticmodel.ModelColumn{"order_id": {Name: "order_id", Field: "previous_orders.order_id", SourceField: "order_id", Type: "VARCHAR"}},
+		Dimensions:  map[string]semanticmodel.MetricDimension{"order_id": {Label: "Order ID"}},
+		Grain:       "order_id",
+		Kind:        "model",
+		Description: "stub",
+	}
+
+	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Mode != analyticsmaterialize.PlanModeProjectedSourceInline {
+		t.Fatalf("mode = %q, want inline fallback", plan.Mode)
+	}
+	if !strings.Contains(plan.SQL, "FROM (SELECT * FROM quack_query") || strings.Contains(plan.SQL, "source.orders") {
+		t.Fatalf("plan SQL = %s, want inline quack relation without source refs", plan.SQL)
 	}
 }
 
@@ -154,5 +286,51 @@ func planningModel(sourceColumns map[string][]string, table semanticmodel.Table)
 		BaseTable:   "orders",
 		Tables:      map[string]semanticmodel.Table{"orders": table},
 		Measures:    map[string]semanticmodel.MetricMeasure{},
+	}
+}
+
+func planningQuackModel() *semanticmodel.Model {
+	return &semanticmodel.Model{
+		Name: "test",
+		Connections: map[string]semanticmodel.Connection{
+			"remote_quack": {
+				Kind: "quack",
+				Path: "quack:quack.example.com:443",
+				Auth: semanticmodel.ConnectionAuth{"token": "secret-token"},
+			},
+		},
+		Sources: map[string]semanticmodel.Source{
+			"orders": {
+				Connection: "remote_quack",
+				Object:     "main.orders",
+				Schema: semanticmodel.TableSchema{Columns: []semanticmodel.ColumnSchema{
+					{Name: "order_id", Ordinal: 1, PhysicalType: "VARCHAR"},
+					{Name: "customer_id", Ordinal: 2, PhysicalType: "VARCHAR"},
+				}},
+			},
+			"payments": {
+				Connection: "remote_quack",
+				Object:     "main.payments",
+				Schema: semanticmodel.TableSchema{Columns: []semanticmodel.ColumnSchema{
+					{Name: "order_id", Ordinal: 1, PhysicalType: "VARCHAR"},
+					{Name: "payment_value", Ordinal: 2, PhysicalType: "DOUBLE"},
+				}},
+			},
+		},
+		BaseTable: "orders",
+		Tables: map[string]semanticmodel.Table{
+			"orders": {
+				Sources:    []string{"orders", "payments"},
+				PrimaryKey: "order_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Label: "Order ID"}},
+				Transform: semanticmodel.Transform{SQL: `
+					SELECT o.order_id, SUM(p.payment_value) AS revenue
+					FROM source.orders o
+					JOIN source.payments p USING (order_id)
+					GROUP BY o.order_id
+				`},
+			},
+		},
+		Measures: map[string]semanticmodel.MetricMeasure{},
 	}
 }

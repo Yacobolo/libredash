@@ -353,28 +353,28 @@ The safe rewrite scope:
 
 ## Execution Strategies
 
-### Projected Source Views
+### Source-Reference Rewrite
 
 Default strategy:
 
 1. Derive projected source reads from the bound model SQL.
-2. Create transient `source.<name>` views using adapter-compiled projected reads.
-3. Materialize `model.<table>`.
-4. Drop transient `source.<name>` views.
+2. Compile each `source.<name>` ref to an adapter relation expression.
+3. Rewrite only executable source table refs in the model SQL.
+4. Materialize `model.<table>` from the rewritten SQL.
 
-For Quack:
+For local files:
 
 ```sql
-CREATE TEMP VIEW source.orders AS
-SELECT *
-FROM quack_query(uri, 'SELECT order_id, customer_id FROM remote_orders');
+CREATE TABLE model.orders AS
+SELECT order_id, customer_id
+FROM (SELECT order_id, customer_id FROM read_csv('orders.csv')) o;
 ```
 
-This keeps model SQL stable while ensuring Quack never receives avoidable `SELECT *` reads for wide facts.
+The `source.*` namespace is only an authoring and planning namespace. It is not an execution view namespace.
 
 ### Whole-Query Pushdown
 
-When all source dependencies share one adapter and connection, and the adapter declares SQL pushdown support, LibreDash may compile the entire model transform into one remote query.
+When all source dependencies share one adapter and connection, and the adapter declares SQL pushdown support, LibreDash may compile the entire model transform into one remote query. Eligibility is decided from the serialized SQL AST and adapter capabilities before projected source-read inference, so valid transforms do not depend on `EXPLAIN` exposing scan projections.
 
 For Quack, author SQL:
 
@@ -396,9 +396,9 @@ FROM quack_query(uri, '
 ');
 ```
 
-This should be opt-in per adapter capability because the remote side must support the SQL dialect and functions used by the model transform.
+This is opt-in per adapter capability because the remote side must support the SQL dialect and functions used by the model transform.
 
-Fallback remains projected source views.
+Fallback remains inline source-reference rewrite.
 
 ## Adapter Contract
 
@@ -411,15 +411,17 @@ CompileRead(read_plan) -> DuckDB SQL relation
 CompileTransform?(transform_plan) -> DuckDB SQL relation
 ```
 
-`CompileRead` handles projected reads for one source asset.
+`CompileRead` handles inline relation compilation for one source asset.
 
-`CompileTransform` is optional and handles whole-query pushdown when supported.
+`CompileTransform` handles whole-query pushdown when supported.
 
 Generated SQL must not contain secret tokens. Credentials belong in DuckDB secrets or adapter-managed credential state.
 
 ## Current Source Read Inference
 
-SQL model tables declare source dependencies with `sources: [...]` and write `transform.sql` against `source.<asset>` names. During materialization, LibreDash binds and explains that SQL against synthetic planning tables, derives the required source projections, then creates transient projected source views.
+SQL model tables declare source dependencies with `sources: [...]` and write `transform.sql` against `source.<asset>` names. For adapter-capable whole-query pushdown, LibreDash validates and rewrites executable source refs from DuckDB's serialized SQL AST without requiring `EXPLAIN` projections. Otherwise, LibreDash binds and explains the SQL against synthetic planning tables, derives the required source projections, and rewrites executable source refs to adapter relation SQL.
+
+If inline source-reference rewrite needs projections and DuckDB optimizes a declared source scan away, planning fails closed with a clear error instead of emitting a broad `SELECT *` read.
 
 Authored `source_reads` is no longer part of the normal model contract. If it appears in YAML, validation fails and asks the author to rely on inferred reads from `transform.sql`.
 
@@ -441,5 +443,5 @@ Runtime query planning should keep the same checks as defense in depth.
 - Which DuckDB JSON plan nodes provide the most stable source projection details?
 - Can DuckDB expose bound base-column lineage directly through a C API in the future?
 - How should LibreDash represent `SELECT *` in model SQL: expand from source metadata, reject for remote/wide sources, or allow only for local adapters?
-- Which SQL constructs should block whole-query pushdown and force projected source views?
+- Which SQL constructs should block whole-query pushdown and force inline source-reference rewrite?
 - Should model output column/type discovery come from prepared statements, `DESCRIBE`, or post-materialization schema inspection?

@@ -73,8 +73,11 @@ func TestRegistrySpecializedCapabilities(t *testing.T) {
 	}
 
 	quack, _ := LookupConnection("quack")
-	if quack.RequiredExtension != "quack" || quack.SecretType != "quack" || quack.ObjectRelation != ObjectRelationQuackQuery || !quack.AllowsObjectSource || quack.AllowsPathSource {
+	if quack.RequiredExtension != "quack" || quack.SecretType != "quack" || quack.ObjectRelation != ObjectRelationQuackQuery || !quack.TransformPushdown || !quack.AllowsObjectSource || quack.AllowsPathSource {
 		t.Fatalf("quack registry = %#v, want quack object source", quack)
+	}
+	if postgres.TransformPushdown || s3.TransformPushdown {
+		t.Fatalf("non-pushdown connections should not advertise transform pushdown: postgres=%#v s3=%#v", postgres, s3)
 	}
 }
 

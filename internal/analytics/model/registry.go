@@ -44,6 +44,7 @@ type ConnectionSpec struct {
 	AllowNoAuth        bool
 	AttachKind         string
 	ObjectRelation     string
+	TransformPushdown  bool
 }
 
 var formats = map[string]Format{
@@ -226,6 +227,7 @@ var connections = map[string]ConnectionSpec{
 		AuthKeys:           []string{"token"},
 		RequiredAuthSets:   [][]string{{"token"}},
 		ObjectRelation:     ObjectRelationQuackQuery,
+		TransformPushdown:  true,
 	},
 }
 

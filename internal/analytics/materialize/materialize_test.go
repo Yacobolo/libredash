@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 
@@ -18,7 +17,7 @@ import (
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
 
-func TestDirectModelTableRegistersProjectedSourceRead(t *testing.T) {
+func TestModelTableExecutesPlannedSQL(t *testing.T) {
 	model := &semanticmodel.Model{
 		Name: "test",
 		Connections: map[string]semanticmodel.Connection{
@@ -45,18 +44,20 @@ func TestDirectModelTableRegistersProjectedSourceRead(t *testing.T) {
 	if err := model.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	sources := &recordingSourceRegistrar{}
-	if _, err := analyticsmaterialize.Refresh(context.Background(), recordingExecutor{}, sources, model); err != nil {
+	sources := &recordingSourceRegistrar{plan: analyticsmaterialize.ModelTablePlan{Mode: analyticsmaterialize.PlanModeDirectSourceRead, SQL: "CREATE OR REPLACE TABLE model.orders AS SELECT 1 AS order_id"}}
+	executor := &recordingStatementsExecutor{}
+	if _, err := analyticsmaterialize.Refresh(context.Background(), executor, sources, model); err != nil {
 		t.Fatal(err)
 	}
-	want := []analyticsmaterialize.SourceReadPlan{{Source: "orders", Fields: []string{"order_id", "revenue", "status"}}}
-	got := normalizeReadPlansForTest(sources.reads)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("source reads = %#v, want %#v", got, want)
+	if !reflect.DeepEqual(sources.ops, []string{"prepare", "plan:orders"}) {
+		t.Fatalf("source ops = %#v, want prepare/plan", sources.ops)
+	}
+	if !reflect.DeepEqual(executor.statements, []string{"CREATE SCHEMA IF NOT EXISTS model", "CREATE OR REPLACE TABLE model.orders AS SELECT 1 AS order_id"}) {
+		t.Fatalf("statements = %#v, want planned SQL", executor.statements)
 	}
 }
 
-func TestDirectModelTableUsesColumnSourceMappings(t *testing.T) {
+func TestModelTablePlannerErrorStopsMaterialization(t *testing.T) {
 	model := &semanticmodel.Model{
 		Name:        "test",
 		Connections: map[string]semanticmodel.Connection{"local_files": {Kind: "local"}},
@@ -84,21 +85,17 @@ func TestDirectModelTableUsesColumnSourceMappings(t *testing.T) {
 	if err := model.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	sources := &recordingSourceRegistrar{}
-	if _, err := analyticsmaterialize.Refresh(context.Background(), recordingExecutor{}, sources, model); err != nil {
-		t.Fatal(err)
+	sources := &recordingSourceRegistrar{planErr: errors.New("plan failed")}
+	executor := &recordingStatementsExecutor{}
+	if _, err := analyticsmaterialize.Refresh(context.Background(), executor, sources, model); err == nil || !strings.Contains(err.Error(), "plan failed") {
+		t.Fatalf("Refresh() error = %v, want plan failed", err)
 	}
-	want := []analyticsmaterialize.SourceReadColumn{
-		{SourceField: "raw_order_id", OutputField: "order_id"},
-		{SourceField: "gross_revenue", OutputField: "revenue"},
-		{SourceField: "status", OutputField: "status"},
-	}
-	if !reflect.DeepEqual(sources.reads[0].Columns, want) {
-		t.Fatalf("source read columns = %#v, want %#v", sources.reads[0].Columns, want)
+	if !reflect.DeepEqual(executor.statements, []string{"CREATE SCHEMA IF NOT EXISTS model"}) {
+		t.Fatalf("statements = %#v, want only schema setup", executor.statements)
 	}
 }
 
-func TestSQLModelTableUsesModelOwnedSourceReads(t *testing.T) {
+func TestSQLModelTableUsesPlannedSQL(t *testing.T) {
 	model := &semanticmodel.Model{
 		Name: "test",
 		Connections: map[string]semanticmodel.Connection{
@@ -130,18 +127,17 @@ func TestSQLModelTableUsesModelOwnedSourceReads(t *testing.T) {
 	if err := model.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	sources := &recordingSourceRegistrar{planned: []analyticsmaterialize.SourceReadPlan{{Source: "orders", Fields: []string{"order_id", "revenue"}}}}
-	if _, err := analyticsmaterialize.Refresh(context.Background(), recordingExecutor{}, sources, model); err != nil {
+	sources := &recordingSourceRegistrar{plan: analyticsmaterialize.ModelTablePlan{Mode: analyticsmaterialize.PlanModeProjectedSourceInline, SQL: "CREATE OR REPLACE TABLE model.orders AS SELECT order_id, revenue FROM read_csv('orders.csv')"}}
+	executor := &recordingStatementsExecutor{}
+	if _, err := analyticsmaterialize.Refresh(context.Background(), executor, sources, model); err != nil {
 		t.Fatal(err)
 	}
-	want := []analyticsmaterialize.SourceReadPlan{{Source: "orders", Fields: []string{"order_id", "revenue"}}}
-	got := normalizeReadPlansForTest(sources.reads)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("source reads = %#v, want %#v", got, want)
+	if len(executor.statements) != 2 || !strings.Contains(executor.statements[1], "read_csv") {
+		t.Fatalf("statements = %#v, want planned inline SQL", executor.statements)
 	}
 }
 
-func TestModelTableDropsSourceReadsOnMaterializationError(t *testing.T) {
+func TestModelTableExecutionErrorReturnsMaterializationError(t *testing.T) {
 	model := &semanticmodel.Model{
 		Name:        "test",
 		Connections: map[string]semanticmodel.Connection{"local_files": {Kind: "local"}},
@@ -158,11 +154,11 @@ func TestModelTableDropsSourceReadsOnMaterializationError(t *testing.T) {
 	if err := model.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	sources := &recordingSourceRegistrar{}
+	sources := &recordingSourceRegistrar{plan: analyticsmaterialize.ModelTablePlan{Mode: analyticsmaterialize.PlanModeDirectSourceRead, SQL: "CREATE OR REPLACE TABLE model.orders AS SELECT 1"}}
 	if _, err := analyticsmaterialize.Refresh(context.Background(), failingExecutor{}, sources, model); err == nil {
 		t.Fatal("refresh unexpectedly succeeded")
 	}
-	want := []string{"prepare", "register:orders", "drop:orders"}
+	want := []string{"prepare"}
 	if !reflect.DeepEqual(sources.ops, want) {
 		t.Fatalf("source ops = %#v, want %#v", sources.ops, want)
 	}
@@ -209,10 +205,10 @@ func TestModelTablesMaterializeAfterModelDependencies(t *testing.T) {
 	if _, err := analyticsmaterialize.Refresh(context.Background(), executor, &recordingSourceRegistrar{}, model); err != nil {
 		t.Fatal(err)
 	}
-	if len(executor.statements) != 2 {
-		t.Fatalf("statements = %#v, want two materializations", executor.statements)
+	if len(executor.statements) != 3 {
+		t.Fatalf("statements = %#v, want schema setup and two materializations", executor.statements)
 	}
-	if !strings.Contains(executor.statements[0], "model.orders") || !strings.Contains(executor.statements[1], "model.order_summary") {
+	if !strings.Contains(executor.statements[1], "model.orders") || !strings.Contains(executor.statements[2], "model.order_summary") {
 		t.Fatalf("materialization order = %#v, want orders before order_summary", executor.statements)
 	}
 }
@@ -284,8 +280,8 @@ func TestRegistersCSVSourcesAndMaterializesModelTables(t *testing.T) {
 }
 
 type recordingSourceRegistrar struct {
-	planned []analyticsmaterialize.SourceReadPlan
-	reads   []analyticsmaterialize.SourceReadPlan
+	plan    analyticsmaterialize.ModelTablePlan
+	planErr error
 	ops     []string
 }
 
@@ -294,36 +290,15 @@ func (r *recordingSourceRegistrar) PrepareSourceRuntime(_ context.Context, _ *se
 	return nil
 }
 
-func (r *recordingSourceRegistrar) PlanSourceReads(_ context.Context, _ *semanticmodel.Model, _ string, _ semanticmodel.Table) ([]analyticsmaterialize.SourceReadPlan, error) {
-	return append([]analyticsmaterialize.SourceReadPlan{}, r.planned...), nil
-}
-
-func (r *recordingSourceRegistrar) RegisterSourceReads(_ context.Context, _ *semanticmodel.Model, reads []analyticsmaterialize.SourceReadPlan) error {
-	r.reads = append(r.reads, reads...)
-	for _, read := range reads {
-		r.ops = append(r.ops, "register:"+read.Source)
+func (r *recordingSourceRegistrar) PlanModelTable(_ context.Context, _ *semanticmodel.Model, tableName string, _ semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
+	r.ops = append(r.ops, "plan:"+tableName)
+	if r.planErr != nil {
+		return analyticsmaterialize.ModelTablePlan{}, r.planErr
 	}
-	return nil
-}
-
-func (r *recordingSourceRegistrar) DropSourceReads(_ context.Context, _ *semanticmodel.Model, reads []analyticsmaterialize.SourceReadPlan) error {
-	for _, read := range reads {
-		r.ops = append(r.ops, "drop:"+read.Source)
+	if r.plan.SQL != "" {
+		return r.plan, nil
 	}
-	return nil
-}
-
-func normalizeReadPlansForTest(reads []analyticsmaterialize.SourceReadPlan) []analyticsmaterialize.SourceReadPlan {
-	out := make([]analyticsmaterialize.SourceReadPlan, len(reads))
-	for index, read := range reads {
-		fields := append([]string{}, read.Fields...)
-		for _, column := range read.Columns {
-			fields = append(fields, column.SourceField)
-		}
-		sort.Strings(fields)
-		out[index] = analyticsmaterialize.SourceReadPlan{Source: read.Source, Fields: fields}
-	}
-	return out
+	return analyticsmaterialize.ModelTablePlan{Mode: analyticsmaterialize.PlanModeModelSQL, SQL: "CREATE OR REPLACE TABLE model." + tableName + " AS SELECT 1"}, nil
 }
 
 type recordingExecutor struct{}

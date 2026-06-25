@@ -83,96 +83,6 @@ func PrepareSourceRuntime(ctx context.Context, db *sql.DB, model *semanticmodel.
 	return nil
 }
 
-func RegisterSourceViews(ctx context.Context, db *sql.DB, model *semanticmodel.Model, dataDir string, attachedConnections map[string]struct{}) error {
-	if err := PrepareSourceRuntime(ctx, db, model, dataDir, attachedConnections); err != nil {
-		return err
-	}
-	if _, err := db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS raw"); err != nil {
-		return err
-	}
-	if _, err := db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS source"); err != nil {
-		return err
-	}
-	if _, err := db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS model"); err != nil {
-		return err
-	}
-
-	for _, name := range sortedKeys(model.Sources) {
-		source := model.Sources[name]
-		if err := validateIdentifier(name); err != nil {
-			return err
-		}
-		relation, err := SourceRelation(model, source, dataDir)
-		if err != nil {
-			return fmt.Errorf("compiling source %s: %w", name, err)
-		}
-		stmt := fmt.Sprintf("CREATE OR REPLACE VIEW raw.%s AS %s", name, relation)
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("registering source %s: %w", name, err)
-		}
-		stmt = fmt.Sprintf("CREATE OR REPLACE VIEW source.%s AS %s", name, relation)
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("registering source %s: %w", name, err)
-		}
-	}
-	return nil
-}
-
-func RegisterSourceReads(ctx context.Context, db *sql.DB, model *semanticmodel.Model, dataDir string, reads []analyticsmaterialize.SourceReadPlan, attachedConnections map[string]struct{}) error {
-	if _, err := db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS source"); err != nil {
-		return err
-	}
-	if _, err := db.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS model"); err != nil {
-		return err
-	}
-	for _, read := range reads {
-		if err := validateIdentifier(read.Source); err != nil {
-			return err
-		}
-		source, ok := model.Sources[read.Source]
-		if !ok {
-			return fmt.Errorf("unknown source %q", read.Source)
-		}
-		if len(source.Schema.Columns) == 0 {
-			if columns, err := discoverSourceSchemaWithDataDir(ctx, db, model, source, dataDir); err != nil {
-				return fmt.Errorf("discovering source %s schema: %w", read.Source, err)
-			} else if len(columns) > 0 {
-				source.Schema = semanticmodel.TableSchema{Columns: columns}
-				model.Sources[read.Source] = source
-			}
-		}
-		if _, err := db.ExecContext(ctx, fmt.Sprintf("DROP VIEW IF EXISTS source.%s", read.Source)); err != nil {
-			return fmt.Errorf("dropping stale source %s: %w", read.Source, err)
-		}
-		relation, err := SourceReadRelation(model, source, dataDir, read.Fields, read.Columns, read.RowPresenceOnly)
-		if err != nil {
-			return fmt.Errorf("compiling source %s: %w", read.Source, err)
-		}
-		stmt := fmt.Sprintf("CREATE OR REPLACE VIEW source.%s AS %s", read.Source, relation)
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("registering source %s: %w", read.Source, err)
-		}
-	}
-	return nil
-}
-
-func DropSourceReads(ctx context.Context, db *sql.DB, _ *semanticmodel.Model, reads []analyticsmaterialize.SourceReadPlan) error {
-	seen := map[string]struct{}{}
-	for _, read := range reads {
-		if err := validateIdentifier(read.Source); err != nil {
-			return err
-		}
-		if _, ok := seen[read.Source]; ok {
-			continue
-		}
-		seen[read.Source] = struct{}{}
-		if _, err := db.ExecContext(ctx, fmt.Sprintf("DROP VIEW IF EXISTS source.%s", read.Source)); err != nil {
-			return fmt.Errorf("dropping source %s: %w", read.Source, err)
-		}
-	}
-	return nil
-}
-
 type sourcePlan struct {
 	kind             string
 	format           string
@@ -182,22 +92,34 @@ type sourcePlan struct {
 	connectionSpec   semanticmodel.ConnectionSpec
 	object           string
 	fields           []string
-	columns          []analyticsmaterialize.SourceReadColumn
+	columns          []sourceReadColumn
 	rowPresenceOnly  bool
 	options          map[string]any
+}
+
+type sourceReadPlan struct {
+	Source          string
+	Fields          []string
+	Columns         []sourceReadColumn
+	RowPresenceOnly bool
+}
+
+type sourceReadColumn struct {
+	SourceField string
+	OutputField string
 }
 
 func SourceRelation(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error) {
 	return SourceReadRelation(model, source, dataDir, nil, nil, false)
 }
 
-func SourceReadRelation(model *semanticmodel.Model, source semanticmodel.Source, dataDir string, fields []string, columns []analyticsmaterialize.SourceReadColumn, rowPresenceOnly bool) (string, error) {
+func SourceReadRelation(model *semanticmodel.Model, source semanticmodel.Source, dataDir string, fields []string, columns []sourceReadColumn, rowPresenceOnly bool) (string, error) {
 	plan, err := ResolveSourcePlan(model, source, dataDir)
 	if err != nil {
 		return "", err
 	}
 	plan.fields = append([]string{}, fields...)
-	plan.columns = append([]analyticsmaterialize.SourceReadColumn{}, columns...)
+	plan.columns = append([]sourceReadColumn{}, columns...)
 	plan.rowPresenceOnly = rowPresenceOnly
 	return compileSourceRelation(plan)
 }
@@ -314,7 +236,7 @@ func connectionRequiresObjectAttach(connection semanticmodel.ConnectionSpec) boo
 	return connection.ObjectRelation == semanticmodel.ObjectRelationAttach
 }
 
-func quackQueryRelation(uri, object string, fields []string, columns []analyticsmaterialize.SourceReadColumn, rowPresenceOnly bool, options map[string]any) (string, error) {
+func quackQueryRelation(uri, object string, fields []string, columns []sourceReadColumn, rowPresenceOnly bool, options map[string]any) (string, error) {
 	projection := "*"
 	if rowPresenceOnly {
 		projection = "1 AS " + rowPresenceColumn
@@ -372,7 +294,7 @@ func scanRelationSource(function, location string, options map[string]any) (stri
 	return fmt.Sprintf("%s('%s'%s)", function, sqlString(location), optionSQL), nil
 }
 
-func projectedRelation(source string, fields []string, columns []analyticsmaterialize.SourceReadColumn, rowPresenceOnly bool) (string, error) {
+func projectedRelation(source string, fields []string, columns []sourceReadColumn, rowPresenceOnly bool) (string, error) {
 	projection, err := projectionSQL(fields, columns, rowPresenceOnly)
 	if err != nil {
 		return "", err
@@ -380,7 +302,7 @@ func projectedRelation(source string, fields []string, columns []analyticsmateri
 	return "SELECT " + projection + " FROM " + source, nil
 }
 
-func projectionSQL(fields []string, columns []analyticsmaterialize.SourceReadColumn, rowPresenceOnly bool) (string, error) {
+func projectionSQL(fields []string, columns []sourceReadColumn, rowPresenceOnly bool) (string, error) {
 	if rowPresenceOnly {
 		return "1 AS " + rowPresenceColumn, nil
 	}

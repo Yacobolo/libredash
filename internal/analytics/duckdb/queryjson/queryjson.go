@@ -13,12 +13,14 @@ type SQLAnalysis struct {
 	RawRefs    []string
 	CTEs       []string
 	Aliases    map[string]TableRef
+	TableRefs  []TableRef
 }
 
 type TableRef struct {
-	Schema string
-	Table  string
-	Alias  string
+	Schema        string
+	Table         string
+	Alias         string
+	QueryLocation int
 }
 
 type ExplainAnalysis struct {
@@ -94,6 +96,9 @@ func walkSQL(value any, analysis *SQLAnalysis, sourceRefs, rawRefs, ctes map[str
 			schema, _ := typed["schema_name"].(string)
 			table, _ := typed["table_name"].(string)
 			alias, _ := typed["alias"].(string)
+			location := queryLocation(typed["query_location"])
+			ref := TableRef{Schema: schema, Table: table, Alias: alias, QueryLocation: location}
+			analysis.TableRefs = append(analysis.TableRefs, ref)
 			switch strings.ToLower(schema) {
 			case "source":
 				sourceRefs[table] = struct{}{}
@@ -101,7 +106,7 @@ func walkSQL(value any, analysis *SQLAnalysis, sourceRefs, rawRefs, ctes map[str
 				rawRefs[table] = struct{}{}
 			}
 			if alias != "" {
-				analysis.Aliases[alias] = TableRef{Schema: schema, Table: table, Alias: alias}
+				analysis.Aliases[alias] = ref
 			}
 		}
 		for _, child := range typed {
@@ -112,6 +117,24 @@ func walkSQL(value any, analysis *SQLAnalysis, sourceRefs, rawRefs, ctes map[str
 			walkSQL(child, analysis, sourceRefs, rawRefs, ctes)
 		}
 	}
+}
+
+func queryLocation(value any) int {
+	switch typed := value.(type) {
+	case float64:
+		if typed > float64(lenSentinel()) {
+			return -1
+		}
+		return int(typed)
+	case int:
+		return typed
+	default:
+		return -1
+	}
+}
+
+func lenSentinel() int {
+	return int(^uint(0) >> 1)
 }
 
 type planNode struct {
