@@ -185,6 +185,10 @@ ORDER BY p.email, p.display_name, gm.principal_id;
 INSERT OR IGNORE INTO role_bindings (id, workspace_id, role_id, principal_id, group_id)
 VALUES (?, ?, ?, ?, ?);
 
+-- name: InsertPlatformRoleBinding :exec
+INSERT OR IGNORE INTO platform_role_bindings (id, role_id, principal_id)
+VALUES (?, ?, ?);
+
 -- name: GetRoleBindingByID :one
 SELECT
   rb.id,
@@ -238,18 +242,26 @@ DELETE FROM role_bindings
 WHERE workspace_id = ? AND principal_id = ?;
 
 -- name: ListPrincipalRolePermissions :many
-SELECT DISTINCT rp.permission_name
-FROM role_bindings rb
-JOIN role_permissions rp ON rp.role_id = rb.role_id
-LEFT JOIN group_members gm
-  ON gm.workspace_id = rb.workspace_id
- AND gm.group_id = rb.group_id
-WHERE rb.workspace_id = ?
-  AND (
-    rb.principal_id = ?
-    OR gm.principal_id = ?
-  )
-ORDER BY rp.permission_name;
+SELECT DISTINCT permission_name
+FROM (
+  SELECT rp.permission_name
+  FROM role_bindings rb
+  JOIN role_permissions rp ON rp.role_id = rb.role_id
+  LEFT JOIN group_members gm
+    ON gm.workspace_id = rb.workspace_id
+   AND gm.group_id = rb.group_id
+  WHERE rb.workspace_id = ?
+    AND (
+      rb.principal_id = ?
+      OR gm.principal_id = ?
+    )
+  UNION
+  SELECT rp.permission_name
+  FROM platform_role_bindings prb
+  JOIN role_permissions rp ON rp.role_id = prb.role_id
+  WHERE prb.principal_id = ?
+)
+ORDER BY permission_name;
 
 -- name: CreateSession :exec
 INSERT INTO sessions (id, principal_id, token_hash, expires_at)

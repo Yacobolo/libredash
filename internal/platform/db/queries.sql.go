@@ -965,6 +965,22 @@ func (q *Queries) InsertGroupMember(ctx context.Context, arg InsertGroupMemberPa
 	return err
 }
 
+const insertPlatformRoleBinding = `-- name: InsertPlatformRoleBinding :exec
+INSERT OR IGNORE INTO platform_role_bindings (id, role_id, principal_id)
+VALUES (?, ?, ?)
+`
+
+type InsertPlatformRoleBindingParams struct {
+	ID          string `json:"id"`
+	RoleID      string `json:"role_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) InsertPlatformRoleBinding(ctx context.Context, arg InsertPlatformRoleBindingParams) error {
+	_, err := q.db.ExecContext(ctx, insertPlatformRoleBinding, arg.ID, arg.RoleID, arg.PrincipalID)
+	return err
+}
+
 const insertRoleBinding = `-- name: InsertRoleBinding :exec
 INSERT OR IGNORE INTO role_bindings (id, workspace_id, role_id, principal_id, group_id)
 VALUES (?, ?, ?, ?, ?)
@@ -1566,28 +1582,42 @@ func (q *Queries) ListPermissions(ctx context.Context) ([]Permission, error) {
 }
 
 const listPrincipalRolePermissions = `-- name: ListPrincipalRolePermissions :many
-SELECT DISTINCT rp.permission_name
-FROM role_bindings rb
-JOIN role_permissions rp ON rp.role_id = rb.role_id
-LEFT JOIN group_members gm
-  ON gm.workspace_id = rb.workspace_id
- AND gm.group_id = rb.group_id
-WHERE rb.workspace_id = ?
-  AND (
-    rb.principal_id = ?
-    OR gm.principal_id = ?
-  )
-ORDER BY rp.permission_name
+SELECT DISTINCT permission_name
+FROM (
+  SELECT rp.permission_name
+  FROM role_bindings rb
+  JOIN role_permissions rp ON rp.role_id = rb.role_id
+  LEFT JOIN group_members gm
+    ON gm.workspace_id = rb.workspace_id
+   AND gm.group_id = rb.group_id
+  WHERE rb.workspace_id = ?
+    AND (
+      rb.principal_id = ?
+      OR gm.principal_id = ?
+    )
+  UNION
+  SELECT rp.permission_name
+  FROM platform_role_bindings prb
+  JOIN role_permissions rp ON rp.role_id = prb.role_id
+  WHERE prb.principal_id = ?
+)
+ORDER BY permission_name
 `
 
 type ListPrincipalRolePermissionsParams struct {
 	WorkspaceID   string         `json:"workspace_id"`
 	PrincipalID   sql.NullString `json:"principal_id"`
 	PrincipalID_2 string         `json:"principal_id_2"`
+	PrincipalID_3 string         `json:"principal_id_3"`
 }
 
 func (q *Queries) ListPrincipalRolePermissions(ctx context.Context, arg ListPrincipalRolePermissionsParams) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listPrincipalRolePermissions, arg.WorkspaceID, arg.PrincipalID, arg.PrincipalID_2)
+	rows, err := q.db.QueryContext(ctx, listPrincipalRolePermissions,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+		arg.PrincipalID_2,
+		arg.PrincipalID_3,
+	)
 	if err != nil {
 		return nil, err
 	}

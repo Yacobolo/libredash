@@ -157,6 +157,10 @@ func localDevServer(ctx context.Context, metrics *dashboardruntime.Service, cfg 
 		return nil, nil, err
 	}
 	accessRepo := accesssqlite.NewRepository(store.SQLDB())
+	if err := app.SeedLocalDeveloperPlatformAdmin(ctx, accessRepo); err != nil {
+		cleanup()
+		return nil, nil, err
+	}
 	auth := app.NewAuth(accessRepo, workspaceID, app.AuthConfig{
 		DevBypass:    true,
 		CSRFKey:      cfg.CSRFKey,

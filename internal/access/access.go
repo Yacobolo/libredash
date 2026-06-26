@@ -153,6 +153,13 @@ type PrincipalRoleInput struct {
 	Role        string
 }
 
+type PlatformRoleInput struct {
+	PrincipalID string
+	Email       string
+	DisplayName string
+	Role        string
+}
+
 type PrincipalInput struct {
 	ID          string
 	Email       string
@@ -265,6 +272,7 @@ type Repository interface {
 	PrincipalByID(ctx context.Context, id string) (Principal, error)
 	UpsertPrincipal(ctx context.Context, input PrincipalInput) (Principal, error)
 	SetPrincipalRole(ctx context.Context, input PrincipalRoleInput) (Principal, error)
+	SetPlatformRole(ctx context.Context, input PlatformRoleInput) (Principal, error)
 	RemovePrincipalRoles(ctx context.Context, workspaceID, principalID string) error
 	CreateRoleBinding(ctx context.Context, input RoleBindingInput) (RoleBinding, error)
 	GetRoleBinding(ctx context.Context, workspaceID, id string) (RoleBinding, error)

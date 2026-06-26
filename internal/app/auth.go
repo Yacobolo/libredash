@@ -185,7 +185,7 @@ func (a *Auth) Middleware(permission string, next http.Handler) http.Handler {
 			http.Redirect(w, r, "/auth/azureadv2", http.StatusFound)
 			return
 		}
-		if permission != "" && !principal.DevBypass {
+		if permission != "" {
 			workspaceID := a.permissionWorkspaceID(r)
 			if credential != nil && !apiTokenAllows((*credential).Token, workspaceID, permission) {
 				writeAuthError(w, r, errForbidden, http.StatusForbidden)

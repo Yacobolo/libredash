@@ -929,7 +929,7 @@ func TestWorkspaceSourceAssetRedirectsToConnectionScopedSourceSurface(t *testing
 func TestConnectionsPageFallsBackToRuntimeAssetsWithoutActiveDeployment(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
-	auth := NewAuth(accesssqlite.NewRepository(store.SQLDB()), "test", AuthConfig{DevBypass: true})
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(runtimeAssetMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
 	req := httptest.NewRequest(http.MethodGet, "/connections", nil)
@@ -1159,7 +1159,7 @@ func TestWorkspaceAssetsDoesNotRefreshCleanGraphWithoutPageItems(t *testing.T) {
 	if _, err := deploymentRepo.Activate(ctx, "test", created.ID); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
-	auth := NewAuth(accesssqlite.NewRepository(store.SQLDB()), "test", AuthConfig{DevBypass: true})
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(emptyPageRuntimeAssetMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
 	req := httptest.NewRequest(http.MethodGet, "/workspaces/test", nil)

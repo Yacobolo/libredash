@@ -235,12 +235,8 @@ func (s *Server) workspaceAssetUpdates(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) refreshWorkspaceAssetWithPatches(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
 	repo := materialize.NewSQLRunRepository(s.store.SQLDB())
-	principal, principalOK := currentPrincipal(s, r)
-	principalID, err := s.materializationPrincipalID(r.Context(), principal, principalOK)
-	if err != nil {
-		return err
-	}
-	run, err := repo.CreateRun(r.Context(), materialize.RunInput{WorkspaceID: workspaceID, ModelID: asset.Key, PrincipalID: principalID})
+	principal, _ := currentPrincipal(s, r)
+	run, err := repo.CreateRun(r.Context(), materialize.RunInput{WorkspaceID: workspaceID, ModelID: asset.Key, PrincipalID: principal.ID})
 	if err != nil {
 		return err
 	}
@@ -1050,9 +1046,6 @@ func (s *Server) canManageWorkspaceAccess(r *http.Request, workspaceID string) b
 	if !ok {
 		return false
 	}
-	if principal.DevBypass {
-		return true
-	}
 	allowed, err := repo.HasPermission(r.Context(), workspaceID, principal.ID, access.PermissionRBACManage)
 	return err == nil && allowed
 }
@@ -1191,7 +1184,7 @@ func (s *Server) currentRoleLabel(r *http.Request) string {
 		return "Workspace access"
 	}
 	if principal.DevBypass {
-		return "Developer access"
+		return "Platform admin"
 	}
 	repo, err := s.accessRepository()
 	if err != nil || repo == nil {

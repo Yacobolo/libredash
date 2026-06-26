@@ -124,25 +124,6 @@ func (s *Server) accessRepository() (access.Repository, error) {
 	return s.accessRepo, nil
 }
 
-func (s *Server) upsertAuthenticatedPrincipal(ctx context.Context, principal Principal) error {
-	repo, err := s.accessRepository()
-	if err != nil || repo == nil {
-		return err
-	}
-	_, err = repo.UpsertPrincipal(ctx, accessPrincipalInput(principal))
-	return err
-}
-
-func (s *Server) materializationPrincipalID(ctx context.Context, principal Principal, ok bool) (string, error) {
-	if !ok || principal.ID == "" {
-		return "", nil
-	}
-	if err := s.upsertAuthenticatedPrincipal(ctx, principal); err != nil {
-		return "", err
-	}
-	return principal.ID, nil
-}
-
 func principalFromContext(ctx context.Context) (Principal, bool) {
 	principal, ok := ctx.Value(principalContextKey{}).(Principal)
 	return principal, ok
@@ -150,6 +131,20 @@ func principalFromContext(ctx context.Context) (Principal, bool) {
 
 func localDeveloperPrincipal() Principal {
 	return Principal{ID: "dev", Email: "dev@localhost", DisplayName: "Local Developer", DevBypass: true}
+}
+
+func SeedLocalDeveloperPlatformAdmin(ctx context.Context, repo access.Repository) error {
+	if repo == nil {
+		return nil
+	}
+	principal := localDeveloperPrincipal()
+	_, err := repo.SetPlatformRole(ctx, access.PlatformRoleInput{
+		PrincipalID: principal.ID,
+		Email:       principal.Email,
+		DisplayName: principal.DisplayName,
+		Role:        access.RoleAdmin,
+	})
+	return err
 }
 
 func (s *Server) home(w http.ResponseWriter, r *http.Request) {
@@ -213,15 +208,11 @@ func (s *Server) refreshMaterializationsWithRunForWorkspace(ctx context.Context,
 		return s.metrics.RefreshMaterializations(ctx, modelID)
 	}
 	repo := materialize.NewSQLRunRepository(s.store.SQLDB())
-	principal, principalOK := principalFromContext(ctx)
-	principalID, err := s.materializationPrincipalID(ctx, principal, principalOK)
-	if err != nil {
-		return err
-	}
+	principal, _ := principalFromContext(ctx)
 	run, err := repo.CreateRun(ctx, materialize.RunInput{
 		WorkspaceID: workspaceID,
 		ModelID:     modelID,
-		PrincipalID: principalID,
+		PrincipalID: principal.ID,
 	})
 	if err != nil {
 		return err

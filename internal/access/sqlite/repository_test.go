@@ -36,6 +36,42 @@ func TestRepositoryChecksRBAC(t *testing.T) {
 	}
 }
 
+func TestRepositoryChecksPlatformRolePermissions(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.SetPlatformRole(ctx, access.PlatformRoleInput{
+		PrincipalID: "dev",
+		Email:       "dev@localhost",
+		DisplayName: "Local Developer",
+		Role:        access.RoleAdmin,
+	})
+	if err != nil {
+		t.Fatalf("set platform role: %v", err)
+	}
+	for _, workspaceID := range []string{"test", "other"} {
+		allowed, err := repo.HasPermission(ctx, workspaceID, principal.ID, access.PermissionTokenManage)
+		if err != nil {
+			t.Fatalf("check permission for %s: %v", workspaceID, err)
+		}
+		if !allowed {
+			t.Fatalf("platform admin missing token manage permission for workspace %s", workspaceID)
+		}
+	}
+
+	limited, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "limited", Email: "limited@example.com", DisplayName: "Limited"})
+	if err != nil {
+		t.Fatalf("upsert limited principal: %v", err)
+	}
+	allowed, err := repo.HasPermission(ctx, "test", limited.ID, access.PermissionTokenManage)
+	if err != nil {
+		t.Fatalf("check limited permission: %v", err)
+	}
+	if allowed {
+		t.Fatal("principal without platform or workspace role unexpectedly has permission")
+	}
+}
+
 func TestRepositoryChecksGroupRolePermissions(t *testing.T) {
 	ctx := context.Background()
 	_, repo := openAccessRepo(t, ctx)

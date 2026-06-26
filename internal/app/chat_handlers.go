@@ -194,9 +194,6 @@ func (s *Server) chatScope(r *http.Request) agentapp.Scope {
 		if principal, ok := s.auth.Principal(r); ok {
 			principalID = principal.ID
 			devBypass = principal.DevBypass
-			if principal.DevBypass {
-				_ = s.upsertAuthenticatedPrincipal(r.Context(), principal)
-			}
 		}
 	}
 	return agentapp.Scope{WorkspaceID: s.workspaceID(""), PrincipalID: principalID, DevAuthBypass: devBypass}

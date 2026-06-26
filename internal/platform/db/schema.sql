@@ -122,6 +122,13 @@ CREATE TABLE IF NOT EXISTS role_bindings (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS platform_role_bindings (
+  id TEXT PRIMARY KEY,
+  role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+  principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
@@ -250,6 +257,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS role_bindings_principal_unique_idx
 CREATE UNIQUE INDEX IF NOT EXISTS role_bindings_group_unique_idx
   ON role_bindings(workspace_id, role_id, group_id)
   WHERE group_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS platform_role_bindings_principal_unique_idx
+  ON platform_role_bindings(role_id, principal_id);
 CREATE INDEX IF NOT EXISTS sessions_token_hash_idx ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS api_tokens_principal_idx ON api_tokens(principal_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS audit_events_workspace_created_idx ON audit_events(workspace_id, created_at DESC);

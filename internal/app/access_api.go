@@ -82,10 +82,6 @@ func (s *Server) apiListCurrentPermissions(w http.ResponseWriter, r *http.Reques
 	permissions := knownPermissions()
 	allowed := make([]string, 0, len(permissions))
 	for _, permission := range permissions {
-		if principal.DevBypass {
-			allowed = append(allowed, permission)
-			continue
-		}
 		if credential, ok := currentAPICredential(s, r); ok && !apiTokenAllows(credential.Token, workspaceID, permission) {
 			continue
 		}

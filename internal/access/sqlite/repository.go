@@ -88,6 +88,40 @@ func (r *Repository) SetPrincipalRole(ctx context.Context, input access.Principa
 	return principal, nil
 }
 
+func (r *Repository) SetPlatformRole(ctx context.Context, input access.PlatformRoleInput) (access.Principal, error) {
+	principalID := strings.TrimSpace(input.PrincipalID)
+	email := access.NormalizeEmail(input.Email)
+	if principalID == "" && email == "" {
+		return access.Principal{}, fmt.Errorf("principal id or email is required")
+	}
+	if strings.TrimSpace(input.Role) == "" {
+		return access.Principal{}, fmt.Errorf("role is required")
+	}
+	role, err := r.q.GetRoleByName(ctx, input.Role)
+	if err != nil {
+		return access.Principal{}, err
+	}
+	if principalID == "" {
+		principalID = access.PrincipalIDForEmail(email)
+	}
+	principal, err := r.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          principalID,
+		Email:       email,
+		DisplayName: firstNonEmpty(strings.TrimSpace(input.DisplayName), email, principalID),
+	})
+	if err != nil {
+		return access.Principal{}, err
+	}
+	if err := r.q.InsertPlatformRoleBinding(ctx, platformdb.InsertPlatformRoleBindingParams{
+		ID:          newID("platformrolebinding"),
+		RoleID:      role.ID,
+		PrincipalID: principal.ID,
+	}); err != nil {
+		return access.Principal{}, err
+	}
+	return principal, nil
+}
+
 func (r *Repository) RemovePrincipalRoles(ctx context.Context, workspaceID, principalID string) error {
 	if strings.TrimSpace(principalID) == "" {
 		return fmt.Errorf("principal id is required")
@@ -194,6 +228,7 @@ func (r *Repository) HasPermission(ctx context.Context, workspaceID, principalID
 		WorkspaceID:   workspaceID,
 		PrincipalID:   sql.NullString{String: principalID, Valid: true},
 		PrincipalID_2: principalID,
+		PrincipalID_3: principalID,
 	})
 	if err != nil {
 		return false, err

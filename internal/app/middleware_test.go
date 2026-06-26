@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/config"
 	"github.com/gorilla/sessions"
 	"github.com/markbates/goth/gothic"
@@ -60,6 +61,35 @@ func TestDeploymentAPIRateLimitPreservesAuth(t *testing.T) {
 		if i == 1 && rec.Code != http.StatusTooManyRequests {
 			t.Fatalf("second API status = %d, want %d", rec.Code, http.StatusTooManyRequests)
 		}
+	}
+}
+
+func TestDevBypassStillUsesRBACPermissions(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	repo := accesssqlite.NewRepository(store.SQLDB())
+	auth := NewAuth(repo, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/deployments?workspace=test", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("unseeded dev status = %d, want %d body=%s", rec.Code, http.StatusForbidden, rec.Body.String())
+	}
+
+	if err := SeedLocalDeveloperPlatformAdmin(ctx, repo); err != nil {
+		t.Fatalf("seed local developer: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/deployments?workspace=test", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	req.Header.Set("Accept", "application/json")
+	rec = httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("seeded dev status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
 	}
 }
 

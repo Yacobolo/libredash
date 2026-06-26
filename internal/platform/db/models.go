@@ -193,6 +193,13 @@ type Permission struct {
 	CreatedAt string `json:"created_at"`
 }
 
+type PlatformRoleBinding struct {
+	ID          string `json:"id"`
+	RoleID      string `json:"role_id"`
+	PrincipalID string `json:"principal_id"`
+	CreatedAt   string `json:"created_at"`
+}
+
 type Principal struct {
 	ID          string `json:"id"`
 	Email       string `json:"email"`

@@ -277,9 +277,6 @@ func (s *Server) agentRequest(w http.ResponseWriter, r *http.Request) (*agentapp
 	if credential, ok := s.auth.APICredential(r); ok {
 		scope.Credential = agentCredentialScope(credential)
 	}
-	if principal.DevBypass {
-		_ = s.upsertAuthenticatedPrincipal(r.Context(), principal)
-	}
 	return s.agent, scope, true
 }
 
@@ -290,10 +287,6 @@ func agentCredentialScope(credential access.APICredential) agentapp.CredentialSc
 		Permissions: append([]string(nil), token.Permissions...),
 		Restricted:  token.Permissions != nil,
 	}
-}
-
-func accessPrincipalInput(principal Principal) access.PrincipalInput {
-	return access.PrincipalInput{ID: principal.ID, Email: principal.Email, DisplayName: principal.DisplayName}
 }
 
 func agentConversationDTO(row agentapp.Conversation) api.AgentConversationResponse {

@@ -796,12 +796,14 @@ func TestWorkspaceAssetRefreshCommandPublishesRunningAndFinalState(t *testing.T)
 
 func TestWorkspaceAssetRefreshCommandPublishesFailedError(t *testing.T) {
 	store := testStore(t)
-	server := NewWithOptions(failingRefreshAssetMetrics{}, Options{Store: store, DefaultWorkspaceID: "test"})
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(failingRefreshAssetMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 	assetID := workspace.NewAssetID("local", workspace.AssetTypeSemanticModel, "olist")
 	updates, unsubscribe := server.broker.Subscribe(workspaceAssetStreamID("test", string(assetID), "refreshes"))
 	defer unsubscribe()
 	path := "/workspaces/test/assets/" + string(assetID) + "/refresh-materializations"
 	req := httptest.NewRequest(http.MethodPost, path, nil)
+	req.Header.Set("Authorization", "Bearer dev")
 	rec := httptest.NewRecorder()
 
 	server.Routes().ServeHTTP(rec, req)
