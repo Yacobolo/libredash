@@ -147,7 +147,7 @@ func newStoreBackedHarness(t *testing.T, opts ...harnessOption) *harness {
 	seedIntegrationActiveDeployment(t, store, workspaceID, catalogPath)
 
 	auth := app.NewAuth(accessRepo, workspaceID, app.AuthConfig{DevBypass: true})
-	server := app.NewWithOptions(refreshableIntegrationMetrics{integrationMetrics: metrics}, app.Options{
+	server := app.NewWithOptions(metrics, app.Options{
 		Store:              store,
 		Auth:               auth,
 		DefaultWorkspaceID: workspaceID,
@@ -681,18 +681,4 @@ func (r integrationDataRuntime) Close() error {
 
 func (r integrationDataRuntime) LastRefresh() time.Time {
 	return r.runtime.LastRefresh()
-}
-
-type refreshableIntegrationMetrics struct {
-	integrationMetrics
-}
-
-func (m refreshableIntegrationMetrics) RefreshModelTables(ctx context.Context, modelID string, tableNames []string) error {
-	port, ok := m.integrationMetrics.(interface {
-		RefreshTables(context.Context, string, []string) error
-	})
-	if !ok {
-		return fmt.Errorf("integration metrics do not support table refresh")
-	}
-	return port.RefreshTables(ctx, modelID, tableNames)
 }

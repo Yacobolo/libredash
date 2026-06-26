@@ -248,6 +248,10 @@ type modelTableRefreshMetrics interface {
 	RefreshModelTables(context.Context, string, []string) error
 }
 
+type modelTableRefreshRuntimeMetrics interface {
+	RefreshTables(context.Context, string, []string) error
+}
+
 func (s *Server) refreshSemanticModelAssetWithPatches(ctx context.Context, r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
 	repo := materialize.NewSQLRunRepository(s.store.SQLDB())
 	principal, _ := currentPrincipal(s, r)
@@ -390,11 +394,13 @@ func (s *Server) refreshModelTableRuns(ctx context.Context, r *http.Request, rep
 }
 
 func (s *Server) refreshModelTables(ctx context.Context, modelID string, tableNames []string) error {
-	port, ok := s.metrics.(modelTableRefreshMetrics)
-	if !ok {
-		return errors.New("model table refresh is not configured")
+	if port, ok := s.metrics.(modelTableRefreshMetrics); ok {
+		return port.RefreshModelTables(ctx, modelID, tableNames)
 	}
-	return port.RefreshModelTables(ctx, modelID, tableNames)
+	if port, ok := s.metrics.(modelTableRefreshRuntimeMetrics); ok {
+		return port.RefreshTables(ctx, modelID, tableNames)
+	}
+	return errors.New("model table refresh is not configured")
 }
 
 func (s *Server) publishWorkspaceAssetRefreshPatch(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) {
