@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/access"
@@ -38,16 +37,25 @@ func (s *Server) listAgentConversations(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	conversations, err := service.ListConversationsPage(r.Context(), scope, agentPageFromRequest(r))
+	page, limit, ok := agentPageFromRequest(w, r)
+	if !ok {
+		return
+	}
+	conversations, err := service.ListConversationsPage(r.Context(), scope, page)
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
+	}
+	nextCursor := ""
+	if len(conversations) > limit {
+		nextCursor = conversations[limit-1].ID
+		conversations = conversations[:limit]
 	}
 	out := make([]api.AgentConversationResponse, 0, len(conversations))
 	for _, conversation := range conversations {
 		out = append(out, agentConversationDTO(conversation))
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(out))
+	writeJSON(w, http.StatusOK, pagedResponseWithCursor(out, nextCursor))
 }
 
 func (s *Server) getAgentConversation(w http.ResponseWriter, r *http.Request) {
@@ -99,16 +107,25 @@ func (s *Server) listAgentMessages(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	messages, err := service.ListMessagesPage(r.Context(), scope, chi.URLParam(r, "conversation"), agentPageFromRequest(r))
+	page, limit, ok := agentPageFromRequest(w, r)
+	if !ok {
+		return
+	}
+	messages, err := service.ListMessagesPage(r.Context(), scope, chi.URLParam(r, "conversation"), page)
 	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
+	}
+	nextCursor := ""
+	if len(messages) > limit {
+		nextCursor = messages[limit-1].ID
+		messages = messages[:limit]
 	}
 	out := make([]api.AgentMessageResponse, 0, len(messages))
 	for _, message := range messages {
 		out = append(out, agentMessageDTO(message))
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(out))
+	writeJSON(w, http.StatusOK, pagedResponseWithCursor(out, nextCursor))
 }
 
 func (s *Server) listAgentRuns(w http.ResponseWriter, r *http.Request) {
@@ -116,16 +133,25 @@ func (s *Server) listAgentRuns(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	runs, err := service.ListRunsPage(r.Context(), scope, chi.URLParam(r, "conversation"), agentPageFromRequest(r))
+	page, limit, ok := agentPageFromRequest(w, r)
+	if !ok {
+		return
+	}
+	runs, err := service.ListRunsPage(r.Context(), scope, chi.URLParam(r, "conversation"), page)
 	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
+	}
+	nextCursor := ""
+	if len(runs) > limit {
+		nextCursor = runs[limit-1].ID
+		runs = runs[:limit]
 	}
 	out := make([]api.AgentRunResponse, 0, len(runs))
 	for _, run := range runs {
 		out = append(out, agentRunDTO(run))
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(out))
+	writeJSON(w, http.StatusOK, pagedResponseWithCursor(out, nextCursor))
 }
 
 func (s *Server) getAgentRun(w http.ResponseWriter, r *http.Request) {
@@ -201,23 +227,32 @@ func (s *Server) listAgentEvents(w http.ResponseWriter, r *http.Request) {
 		events []agentapp.Event
 		err    error
 	)
+	page, limit, ok := agentPageFromRequest(w, r)
+	if !ok {
+		return
+	}
 	if conversationID := chi.URLParam(r, "conversation"); conversationID != "" {
-		events, err = service.ListRunEventsPage(r.Context(), scope, conversationID, chi.URLParam(r, "run"), agentPageFromRequest(r))
+		events, err = service.ListRunEventsPage(r.Context(), scope, conversationID, chi.URLParam(r, "run"), page)
 	} else {
 		events, err = service.ListEvents(r.Context(), scope, chi.URLParam(r, "run"))
 		if err == nil {
-			events = pageAgentEvents(events, agentPageFromRequest(r))
+			events = pageAgentEvents(events, page)
 		}
 	}
 	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
+	nextCursor := ""
+	if len(events) > limit {
+		nextCursor = events[limit-1].ID
+		events = events[:limit]
+	}
 	out := make([]api.AgentEventResponse, 0, len(events))
 	for _, event := range events {
 		out = append(out, agentEventDTO(event))
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(out))
+	writeJSON(w, http.StatusOK, pagedResponseWithCursor(out, nextCursor))
 }
 
 func (s *Server) agentRequest(w http.ResponseWriter, r *http.Request) (*agentapp.Service, agentapp.Scope, bool) {
@@ -235,13 +270,26 @@ func (s *Server) agentRequest(w http.ResponseWriter, r *http.Request) (*agentapp
 		return nil, agentapp.Scope{}, false
 	}
 	scope := agentapp.Scope{
-		WorkspaceID: s.workspaceID(chi.URLParam(r, "workspace")),
-		PrincipalID: principal.ID,
+		WorkspaceID:   s.workspaceID(chi.URLParam(r, "workspace")),
+		PrincipalID:   principal.ID,
+		DevAuthBypass: principal.DevBypass,
+	}
+	if credential, ok := s.auth.APICredential(r); ok {
+		scope.Credential = agentCredentialScope(credential)
 	}
 	if principal.DevBypass {
 		_ = s.upsertAuthenticatedPrincipal(r.Context(), principal)
 	}
 	return s.agent, scope, true
+}
+
+func agentCredentialScope(credential access.APICredential) agentapp.CredentialScope {
+	token := credential.Token
+	return agentapp.CredentialScope{
+		WorkspaceID: token.WorkspaceID,
+		Permissions: append([]string(nil), token.Permissions...),
+		Restricted:  token.Permissions != nil,
+	}
 }
 
 func accessPrincipalInput(principal Principal) access.PrincipalInput {
@@ -294,10 +342,17 @@ func agentMessageDTO(row agentapp.Message) api.AgentMessageResponse {
 	}
 }
 
-func agentPageFromRequest(r *http.Request) agentapp.Page {
+func agentPageFromRequest(w http.ResponseWriter, r *http.Request) (agentapp.Page, int, bool) {
+	limit, ok := apiLimitForRequest(w, r)
+	if !ok {
+		return agentapp.Page{}, 0, false
+	}
 	query := r.URL.Query()
-	limit, _ := strconv.Atoi(query.Get("limit"))
-	return agentapp.Page{Limit: limit, After: firstNonEmpty(query.Get("pageToken"), query.Get("after"))}
+	pageLimit := limit
+	if pageLimit < maxAPILimit {
+		pageLimit++
+	}
+	return agentapp.Page{Limit: pageLimit, After: firstNonEmpty(query.Get("pageToken"), query.Get("after"))}, limit, true
 }
 
 func statusForBadRequestOrNotFound(err error) int {

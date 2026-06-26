@@ -169,7 +169,11 @@ func (s *Server) listDeployments(w http.ResponseWriter, r *http.Request) {
 	for _, row := range rows {
 		response = append(response, deploymentDTO(row))
 	}
-	page, nextCursor := pageDeployments(response, apiLimit(r), r.URL.Query().Get("pageToken"))
+	limit, ok := apiLimitForRequest(w, r)
+	if !ok {
+		return
+	}
+	page, nextCursor := pageDeployments(response, limit, r.URL.Query().Get("pageToken"))
 	writeJSON(w, http.StatusOK, pagedResponseWithCursor(page, nextCursor))
 }
 

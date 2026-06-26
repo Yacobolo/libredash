@@ -2,15 +2,15 @@ package ui
 
 import (
 	"github.com/Yacobolo/libredash/internal/agentapp"
-	"github.com/Yacobolo/libredash/internal/api"
+	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
 )
 
 type WorkspaceAccessResponse struct {
-	Workspace api.WorkspaceResponse     `json:"workspace"`
-	Roles     []api.RoleResponse        `json:"roles"`
-	Bindings  []api.RoleBindingResponse `json:"bindings"`
-	CanManage bool                      `json:"canManage"`
-	Status    WorkspaceAccessStatus     `json:"status"`
+	Workspace workspaceview.WorkspaceView     `json:"workspace"`
+	Roles     []workspaceview.RoleView        `json:"roles"`
+	Bindings  []workspaceview.RoleBindingView `json:"bindings"`
+	CanManage bool                            `json:"canManage"`
+	Status    WorkspaceAccessStatus           `json:"status"`
 }
 
 type WorkspaceAccessStatus struct {
@@ -26,11 +26,25 @@ type WorkspaceAccessCommand struct {
 }
 
 type ChatSignal struct {
-	Conversations        []api.AgentConversationResponse `json:"conversations"`
-	ActiveConversationID string                          `json:"activeConversationId"`
-	Transcript           []agentapp.ChatTranscriptItem   `json:"transcript"`
-	Status               ChatStatus                      `json:"status"`
-	Composer             ComposerSignal                  `json:"composer"`
+	Conversations        []ChatConversationSummary     `json:"conversations"`
+	ActiveConversationID string                        `json:"activeConversationId"`
+	Transcript           []agentapp.ChatTranscriptItem `json:"transcript"`
+	Status               ChatStatus                    `json:"status"`
+	Composer             ComposerSignal                `json:"composer"`
+}
+
+type ChatConversationSummary struct {
+	ID              string `json:"id"`
+	WorkspaceID     string `json:"workspaceId"`
+	PrincipalID     string `json:"principalId"`
+	Title           string `json:"title"`
+	Status          string `json:"status"`
+	MessageCount    int    `json:"messageCount"`
+	LastMessageText string `json:"lastMessageText,omitempty"`
+	TitlePending    bool   `json:"titlePending,omitempty"`
+	CreatedAt       string `json:"createdAt"`
+	UpdatedAt       string `json:"updatedAt"`
+	ArchivedAt      string `json:"archivedAt,omitempty"`
 }
 
 type ChatStatus struct {

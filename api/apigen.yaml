@@ -1,6 +1,6 @@
 targets:
   - name: libredash-v1
-    cue_dir: cue
+    typespec_dir: typespec
     ir_out: gen/json-ir.json
     openapi_out: gen/openapi.yaml
     go_out:

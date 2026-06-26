@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
 )
 
 func TestWorkspaceAssetDetailsRenderSharedShapeForSemanticModel(t *testing.T) {
@@ -60,7 +60,7 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForSemanticModel(t *testing.T) {
 
 func TestWorkspaceAssetDetailSignalsUseSharedGridShape(t *testing.T) {
 	workspace, _, assets, edges := testWorkspaceAssetFixtures()
-	byType := map[string]api.AssetResponse{}
+	byType := map[string]workspaceview.AssetView{}
 	for _, asset := range assets {
 		if _, ok := byType[asset.Type]; !ok {
 			byType[asset.Type] = asset
@@ -479,7 +479,7 @@ func TestLineageProjectionPolicy(t *testing.T) {
 
 func TestCollapsedAssetLineageCollapsesMeasureUsageToSemanticModel(t *testing.T) {
 	workspaceID := "libredash"
-	assets := map[string]api.AssetResponse{
+	assets := map[string]workspaceview.AssetView{
 		"model-a": {
 			ID:          "model-a",
 			WorkspaceID: workspaceID,
@@ -541,7 +541,7 @@ func TestCollapsedAssetLineageCollapsesMeasureUsageToSemanticModel(t *testing.T)
 
 func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 	workspace, catalog, assets, edges := testWorkspaceAssetFixtures()
-	var connection api.AssetResponse
+	var connection workspaceview.AssetView
 	for _, asset := range assets {
 		if asset.Type == "connection" {
 			connection = asset
@@ -587,7 +587,7 @@ func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 
 func TestConnectionsPageUsesConnectionAssetTabs(t *testing.T) {
 	workspace, catalog, assets, edges := testWorkspaceAssetFixtures()
-	visibleAssets := []api.AssetResponse{}
+	visibleAssets := []workspaceview.AssetView{}
 	for _, asset := range assets {
 		if asset.Type == "connection" || asset.Type == "source" {
 			visibleAssets = append(visibleAssets, asset)
@@ -686,8 +686,8 @@ func TestWorkspaceAssetTabsUseWorkspaceAssetTypes(t *testing.T) {
 
 func TestWorkspaceAssetRowsUseDetailLinksForModelAndMetricAssets(t *testing.T) {
 	workspace, _, assets, _ := testWorkspaceAssetFixtures()
-	byType := map[string]api.AssetResponse{}
-	byID := map[string]api.AssetResponse{}
+	byType := map[string]workspaceview.AssetView{}
+	byID := map[string]workspaceview.AssetView{}
 	for _, asset := range assets {
 		byID[asset.ID] = asset
 		if _, ok := byType[asset.Type]; !ok {
@@ -712,7 +712,7 @@ func TestWorkspaceAssetRowsUseDetailLinksForModelAndMetricAssets(t *testing.T) {
 
 func TestWorkspaceAssetRowsRenderTokenBackedIconColors(t *testing.T) {
 	workspace, catalog, assets, _ := testWorkspaceAssetFixtures()
-	visibleAssets := []api.AssetResponse{
+	visibleAssets := []workspaceview.AssetView{
 		testAssetByID(t, assets, "model"),
 		testAssetByID(t, assets, "measure"),
 		testAssetByID(t, assets, "dashboard"),
@@ -745,7 +745,7 @@ func TestWorkspaceAccessControlRendersForManagers(t *testing.T) {
 	workspace, catalog, assets, _ := testWorkspaceAssetFixtures()
 
 	var out strings.Builder
-	err := WorkspacePage(catalog, workspace, []api.AssetResponse{assets[0]}, "", "", "Owner", testWorkspaceAccess(workspace, true), "csrf").Render(&out)
+	err := WorkspacePage(catalog, workspace, []workspaceview.AssetView{assets[0]}, "", "", "Owner", testWorkspaceAccess(workspace, true), "csrf").Render(&out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -781,7 +781,7 @@ func TestWorkspaceAccessControlDoesNotRenderForViewers(t *testing.T) {
 	workspace, catalog, assets, _ := testWorkspaceAssetFixtures()
 
 	var out strings.Builder
-	err := WorkspacePage(catalog, workspace, []api.AssetResponse{assets[0]}, "", "", "Viewer", testWorkspaceAccess(workspace, false), "").Render(&out)
+	err := WorkspacePage(catalog, workspace, []workspaceview.AssetView{assets[0]}, "", "", "Viewer", testWorkspaceAccess(workspace, false), "").Render(&out)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -798,22 +798,22 @@ func TestWorkspaceAccessControlDoesNotRenderForViewers(t *testing.T) {
 	}
 }
 
-func testWorkspaceAccess(workspace api.WorkspaceResponse, canManage bool) WorkspaceAccessResponse {
+func testWorkspaceAccess(workspace workspaceview.WorkspaceView, canManage bool) WorkspaceAccessResponse {
 	return WorkspaceAccessResponse{
 		Workspace: workspace,
-		Roles: []api.RoleResponse{
+		Roles: []workspaceview.RoleView{
 			{Name: "viewer"},
 			{Name: "editor"},
 			{Name: "admin"},
 		},
-		Bindings: []api.RoleBindingResponse{
+		Bindings: []workspaceview.RoleBindingView{
 			{PrincipalID: "principal_1", WorkspaceID: workspace.ID, Email: "owner@example.com", DisplayName: "Owner", Role: "owner"},
 		},
 		CanManage: canManage,
 	}
 }
 
-func testAssetByID(t *testing.T, assets []api.AssetResponse, id string) api.AssetResponse {
+func testAssetByID(t *testing.T, assets []workspaceview.AssetView, id string) workspaceview.AssetView {
 	t.Helper()
 	id = testLogicalAssetID(id)
 	for _, asset := range assets {
@@ -822,7 +822,7 @@ func testAssetByID(t *testing.T, assets []api.AssetResponse, id string) api.Asse
 		}
 	}
 	t.Fatalf("asset %q not found", id)
-	return api.AssetResponse{}
+	return workspaceview.AssetView{}
 }
 
 func testLogicalAssetID(id string) string {
@@ -1055,10 +1055,10 @@ func gridHasRelation(grid metricGrid, relation string) bool {
 	return false
 }
 
-func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []api.AssetResponse, []api.AssetEdgeResponse) {
-	workspace := api.WorkspaceResponse{ID: "libredash", Title: "LibreDash Workspace", Description: "Local BI workspace."}
+func testWorkspaceAssetFixtures() (workspaceview.WorkspaceView, dashboard.Catalog, []workspaceview.AssetView, []workspaceview.AssetEdgeView) {
+	workspace := workspaceview.WorkspaceView{ID: "libredash", Title: "LibreDash Workspace", Description: "Local BI workspace."}
 	catalog := dashboard.Catalog{Workspace: dashboard.CatalogWorkspace{ID: workspace.ID, Title: workspace.Title, Description: workspace.Description}}
-	assets := []api.AssetResponse{
+	assets := []workspaceview.AssetView{
 		{ID: "catalog:libredash", WorkspaceID: workspace.ID, Type: "catalog", Key: workspace.ID, Title: workspace.Title, Description: workspace.Description},
 		{
 			ID:          "semantic_model:olist",
@@ -1146,7 +1146,7 @@ func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []a
 		{ID: "visual:executive-sales.revenue", WorkspaceID: workspace.ID, Type: "visual", Key: "executive-sales.revenue", ParentID: "dashboard:executive-sales", Title: "Revenue by month", Payload: map[string]any{"Type": "line"}},
 		{ID: "table:executive-sales.orders", WorkspaceID: workspace.ID, Type: "table", Key: "executive-sales.orders", ParentID: "dashboard:executive-sales", Title: "Orders", Payload: map[string]any{"Table": "orders"}},
 	}
-	edges := []api.AssetEdgeResponse{
+	edges := []workspaceview.AssetEdgeView{
 		{ID: "catalog-model", FromAssetID: "catalog:libredash", ToAssetID: "semantic_model:olist", Type: "contains"},
 		{ID: "catalog-connection", FromAssetID: "catalog:libredash", ToAssetID: "connection:olist.olist", Type: "contains"},
 		{ID: "catalog-source", FromAssetID: "catalog:libredash", ToAssetID: "source:olist.orders", Type: "contains"},

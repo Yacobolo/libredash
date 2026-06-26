@@ -8,7 +8,6 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/agent"
 )
 
@@ -27,22 +26,33 @@ func IsBusy(err error) bool {
 }
 
 type Scope struct {
-	WorkspaceID string
-	PrincipalID string
+	WorkspaceID   string
+	PrincipalID   string
+	Credential    CredentialScope
+	DevAuthBypass bool
 }
 
+type CredentialScope struct {
+	WorkspaceID string
+	Permissions []string
+	Restricted  bool
+}
+
+type ToolProvider func(scope Scope) []agent.ToolDefinition
+
 type Service struct {
-	metrics Metrics
+	metrics any
 	repo    Repository
-	assets  AssetCatalog
 	config  Config
 	model   agent.Model
+
+	toolProviders []ToolProvider
 
 	mu      sync.Mutex
 	running map[string]struct{}
 }
 
-func NewService(metrics Metrics, repo Repository, config Config) *Service {
+func NewService(metrics any, repo Repository, config Config) *Service {
 	return &Service{
 		metrics: metrics,
 		repo:    repo,
@@ -52,13 +62,12 @@ func NewService(metrics Metrics, repo Repository, config Config) *Service {
 	}
 }
 
-type AssetCatalog interface {
-	ActiveAssetCatalog(ctx context.Context, id workspace.WorkspaceID) (workspace.AssetCatalog, bool, error)
+func (s *Service) SetToolProviders(providers ...ToolProvider) {
+	s.toolProviders = append([]ToolProvider(nil), providers...)
 }
 
-func (s *Service) WithAssetCatalog(catalog AssetCatalog) *Service {
-	s.assets = catalog
-	return s
+func (s *Service) AppendToolProviders(providers ...ToolProvider) {
+	s.toolProviders = append(s.toolProviders, providers...)
 }
 
 func (s *Service) Enabled() bool {

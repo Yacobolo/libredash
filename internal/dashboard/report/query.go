@@ -47,9 +47,11 @@ type AggregateQuery struct {
 	Table      string
 	Dimensions []QueryField
 	Measures   []QueryField
+	Time       QueryTime
 	Filters    []QueryFilter
 	Sort       []QuerySort
 	Limit      int
+	Offset     int
 }
 
 type RowQuery struct {
@@ -110,14 +112,7 @@ func NewAnalyticsDataService(queries AnalyticsQueries) DataService {
 }
 
 func (s analyticsDataService) Query(ctx context.Context, request AggregateQuery) (QueryRows, error) {
-	rows, err := s.queries.Query(ctx, semanticquery.Request{
-		Table:      request.Table,
-		Dimensions: queryFields(request.Dimensions),
-		Measures:   queryFields(request.Measures),
-		Filters:    queryFilters(request.Filters),
-		Sort:       querySorts(request.Sort),
-		Limit:      request.Limit,
-	})
+	rows, err := s.queries.Query(ctx, SemanticAggregateRequest(request))
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +120,28 @@ func (s analyticsDataService) Query(ctx context.Context, request AggregateQuery)
 }
 
 func (s analyticsDataService) Rows(ctx context.Context, request RowQuery) (QueryRows, error) {
-	rows, err := s.queries.Rows(ctx, semanticquery.RowRequest{
+	rows, err := s.queries.Rows(ctx, SemanticRowRequest(request))
+	if err != nil {
+		return nil, err
+	}
+	return queryRows(rows), nil
+}
+
+func SemanticAggregateRequest(request AggregateQuery) semanticquery.Request {
+	return semanticquery.Request{
+		Table:      request.Table,
+		Dimensions: queryFields(request.Dimensions),
+		Measures:   queryFields(request.Measures),
+		Time:       semanticquery.Time{Field: request.Time.Field, Grain: request.Time.Grain, Alias: request.Time.Alias},
+		Filters:    queryFilters(request.Filters),
+		Sort:       querySorts(request.Sort),
+		Limit:      request.Limit,
+		Offset:     request.Offset,
+	}
+}
+
+func SemanticRowRequest(request RowQuery) semanticquery.RowRequest {
+	return semanticquery.RowRequest{
 		Table:      request.Table,
 		Dimensions: queryFields(request.Dimensions),
 		Measures:   queryFields(request.Measures),
@@ -133,11 +149,7 @@ func (s analyticsDataService) Rows(ctx context.Context, request RowQuery) (Query
 		Sort:       querySorts(request.Sort),
 		Limit:      request.Limit,
 		Offset:     request.Offset,
-	})
-	if err != nil {
-		return nil, err
 	}
-	return queryRows(rows), nil
 }
 
 func (s analyticsDataService) Count(ctx context.Context, request CountQuery) (int, error) {

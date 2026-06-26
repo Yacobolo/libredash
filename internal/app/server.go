@@ -26,12 +26,15 @@ type queryMetrics interface {
 	DefaultDashboardID() string
 	ModelIDForDashboard(dashboardID string) string
 	Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool)
+	SemanticModel(modelID string) (*semanticmodel.Model, bool)
 	DefaultFilters(dashboardID string) dashboard.Filters
 	NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
 	QueryDashboard(ctx context.Context, dashboardID string, filters dashboard.Filters) (dashboard.Patch, error)
 	QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error)
 	QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
 	QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
+	QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error)
+	PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
 	RefreshMaterializations(ctx context.Context, modelID string) error
 	DataDir() string
 	Pages(dashboardID string) []dashboard.Page
@@ -97,6 +100,7 @@ func NewWithOptions(metrics queryMetrics, options Options) *Server {
 	if options.Logger != nil {
 		server.logger = options.Logger
 	}
+	server.configureAgentTools()
 	return server
 }
 

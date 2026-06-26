@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"context"
 	"fmt"
 	"sort"
 
@@ -25,6 +26,30 @@ func (m *Service) ModelIDForDashboard(dashboardID string) string {
 
 func (m *Service) Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool) {
 	return m.reports.Report(dashboardID)
+}
+
+func (m *Service) SemanticModel(modelID string) (*semanticmodel.Model, bool) {
+	return m.reports.SemanticModel(modelID)
+}
+
+func (m *Service) QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
+	runtime, err := m.semanticRuntime(modelID)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return runtime.data.Query(ctx, request)
+}
+
+func (m *Service) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
+	runtime, err := m.semanticRuntime(modelID)
+	if err != nil {
+		return nil, err
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return runtime.data.Rows(ctx, request)
 }
 
 func (m *Service) NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
@@ -67,6 +92,11 @@ func (s *ReportService) Report(dashboardID string) (reportdef.Dashboard, *semant
 		return *report, model, true
 	}
 	return reportdef.Dashboard{}, nil, false
+}
+
+func (s *ReportService) SemanticModel(modelID string) (*semanticmodel.Model, bool) {
+	model, ok := s.workspace.Models[modelID]
+	return model, ok
 }
 
 func (s *ReportService) NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest {
@@ -156,6 +186,17 @@ func (s *ReportService) reportRuntime(dashboardID string, runtimes map[string]*m
 		return nil, nil, fmt.Errorf("unknown semantic model %q", report.SemanticModel)
 	}
 	return report, runtime, nil
+}
+
+func (m *Service) semanticRuntime(modelID string) (*modelRuntime, error) {
+	runtime, ok := m.runtimes[modelID]
+	if !ok {
+		return nil, fmt.Errorf("unknown semantic model %q", modelID)
+	}
+	if !runtime.ready {
+		return nil, runtime.missing
+	}
+	return runtime, nil
 }
 
 func sortedKeys[T any](items map[string]T) []string {

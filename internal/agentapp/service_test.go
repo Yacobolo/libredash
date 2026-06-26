@@ -16,224 +16,41 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/agent"
 )
 
-func TestReadOnlyToolsExposeWorkspaceFactsAndBoundRows(t *testing.T) {
+func TestServiceUsesHostProvidedTools(t *testing.T) {
 	service := NewService(fakeAgentMetrics{}, nil, Config{APIKey: "key", Model: "model"})
-	tools := service.toolDefinitions(Scope{WorkspaceID: "test", PrincipalID: "principal"})
+	service.SetToolProviders(func(scope Scope) []agent.ToolDefinition {
+		if scope.WorkspaceID != "test" || scope.PrincipalID != "principal" {
+			t.Fatalf("scope = %#v", scope)
+		}
+		return []agent.ToolDefinition{{
+			Name:        "list_workspace_assets",
+			Description: "List workspace assets via APIGen.",
+			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
+			Handler: agent.ToolHandlerFunc(func(context.Context, agent.ToolCall) (agent.ToolResult, error) {
+				return agent.ToolResult{Content: map[string]any{"ok": true}}, nil
+			}),
+		}}
+	})
 
-	list := runTool(t, tools, "list_dashboards", `{}`)
-	if !strings.Contains(list, "executive-sales") {
-		t.Fatalf("list_dashboards output = %s", list)
-	}
-	describe := runTool(t, tools, "describe_model", `{"model_id":"test"}`)
-	if !strings.Contains(describe, "executive-sales") || !strings.Contains(describe, "Test Model") {
-		t.Fatalf("describe_model output = %s", describe)
-	}
-	table := runTool(t, tools, "query_table", `{"dashboard_id":"executive-sales","page_id":"overview","table_id":"orders","count":500}`)
-	var tableOut dashboard.Table
-	if err := json.Unmarshal([]byte(table), &tableOut); err != nil {
-		t.Fatalf("decode table output: %v", err)
-	}
-	if len(tableOut.Blocks["a"].Rows) != 50 {
-		t.Fatalf("query_table rows were not capped to 50: %s", table)
+	tools := service.toolDefinitions(Scope{WorkspaceID: "test", PrincipalID: "principal"})
+	if runTool(t, tools, "list_workspace_assets", `{}`) != `{"ok":true}` {
+		t.Fatalf("host-provided tool did not run")
 	}
 }
 
-func TestReadOnlyToolPayloadShapesStayStable(t *testing.T) {
+func TestServiceAppendsHostProvidedTools(t *testing.T) {
 	service := NewService(fakeAgentMetrics{}, nil, Config{APIKey: "key", Model: "model"})
+	service.SetToolProviders(fakeToolProvider("one"))
+	service.AppendToolProviders(fakeToolProvider("two"))
 	tools := service.toolDefinitions(Scope{WorkspaceID: "test", PrincipalID: "principal"})
-
-	var dashboards struct {
-		Dashboards []dashboard.CatalogDashboard `json:"dashboards"`
+	if runTool(t, tools, "one", `{}`) != `{"name":"one"}` {
+		t.Fatalf("first host-provided tool did not run")
 	}
-	if err := json.Unmarshal([]byte(runTool(t, tools, "list_dashboards", `{}`)), &dashboards); err != nil {
-		t.Fatalf("decode dashboards: %v", err)
-	}
-	if len(dashboards.Dashboards) != 1 || dashboards.Dashboards[0].ID != "executive-sales" {
-		t.Fatalf("dashboards payload = %#v", dashboards)
-	}
-
-	var models struct {
-		Models []dashboard.CatalogModel `json:"models"`
-	}
-	if err := json.Unmarshal([]byte(runTool(t, tools, "list_semantic_models", `{}`)), &models); err != nil {
-		t.Fatalf("decode semantic models: %v", err)
-	}
-	if len(models.Models) != 1 || models.Models[0].ID != "test" {
-		t.Fatalf("semantic models payload = %#v", models)
-	}
-
-	var model struct {
-		ID         string `json:"id"`
-		Dashboards []struct {
-			ID            string `json:"id"`
-			SemanticModel string `json:"semantic_model"`
-			Pages         int    `json:"pages"`
-		} `json:"dashboards"`
-		Counts *struct {
-			Sources       int `json:"sources"`
-			ModelTables   int `json:"model_tables"`
-			Fields        int `json:"fields"`
-			Measures      int `json:"measures"`
-			Relationships int `json:"relationships"`
-		} `json:"counts"`
-	}
-	if err := json.Unmarshal([]byte(runTool(t, tools, "describe_model", `{"model_id":"test"}`)), &model); err != nil {
-		t.Fatalf("decode model: %v", err)
-	}
-	if model.ID != "test" || len(model.Dashboards) != 1 || model.Dashboards[0].ID != "executive-sales" || model.Dashboards[0].SemanticModel != "test" || model.Counts == nil {
-		t.Fatalf("model payload = %#v", model)
-	}
-}
-
-func TestAssetToolsUseLogicalIDsAndTypedPayloads(t *testing.T) {
-	graph := testAgentAssetGraph(t)
-	catalog, err := workspace.DecodeAssetCatalog(graph)
-	if err != nil {
-		t.Fatalf("decode catalog: %v", err)
-	}
-	service := NewService(fakeAgentMetrics{}, nil, Config{APIKey: "key", Model: "model"}).WithAssetCatalog(fakeAssetCatalog{catalog: catalog})
-	tools := service.toolDefinitions(Scope{WorkspaceID: "test", PrincipalID: "principal"})
-
-	var assets assetListPayload
-	if err := json.Unmarshal([]byte(runTool(t, tools, "list_assets", `{"type":"visual","limit":10}`)), &assets); err != nil {
-		t.Fatalf("decode list_assets: %v", err)
-	}
-	if len(assets.Assets) != 1 || assets.Assets[0].ID != "visual:executive-sales.orders" || assets.Assets[0].SnapshotID == assets.Assets[0].ID {
-		t.Fatalf("list_assets payload = %#v", assets)
-	}
-
-	var described assetDescriptionPayload
-	if err := json.Unmarshal([]byte(runTool(t, tools, "describe_asset", `{"asset_id":"visual:executive-sales.orders"}`)), &described); err != nil {
-		t.Fatalf("decode describe_asset: %v", err)
-	}
-	if described.Asset.PayloadSchema != "visual.v1" || described.Payload["query_kind"] != "aggregate" {
-		t.Fatalf("describe_asset payload = %#v", described)
-	}
-	if len(described.Lineage.Upstream) != 1 || described.Lineage.Upstream[0] != "semantic_model:test" {
-		t.Fatalf("describe_asset lineage = %#v", described.Lineage)
-	}
-
-	var lineage assetLineageReply
-	if err := json.Unmarshal([]byte(runTool(t, tools, "asset_lineage", `{"asset_id":"semantic_model:test"}`)), &lineage); err != nil {
-		t.Fatalf("decode asset_lineage: %v", err)
-	}
-	if len(lineage.Downstream) != 1 || lineage.Downstream[0] != "visual:executive-sales.orders" {
-		t.Fatalf("asset_lineage = %#v", lineage)
-	}
-}
-
-func TestAssetToolsUseSharedRuntimeFallbackCatalog(t *testing.T) {
-	graph := testAgentAssetGraph(t)
-	service := NewService(fakeAgentMetrics{}, nil, Config{APIKey: "key", Model: "model"}).
-		WithAssetCatalog(workspace.NewAssetCatalogService(nil).WithRuntimeProvider(fakeRuntimeAssetGraphProvider{graph: graph, ok: true}))
-	tools := service.toolDefinitions(Scope{WorkspaceID: "test", PrincipalID: "principal"})
-
-	var assets assetListPayload
-	if err := json.Unmarshal([]byte(runTool(t, tools, "list_assets", `{"type":"visual","limit":10}`)), &assets); err != nil {
-		t.Fatalf("decode list_assets: %v", err)
-	}
-	if len(assets.Assets) != 1 || assets.Assets[0].ID != "visual:executive-sales.orders" {
-		t.Fatalf("list_assets payload = %#v", assets)
-	}
-
-	var lineage assetLineageReply
-	if err := json.Unmarshal([]byte(runTool(t, tools, "asset_lineage", `{"asset_id":"semantic_model:test"}`)), &lineage); err != nil {
-		t.Fatalf("decode asset_lineage: %v", err)
-	}
-	if len(lineage.Downstream) != 1 || lineage.Downstream[0] != "visual:executive-sales.orders" {
-		t.Fatalf("asset_lineage = %#v", lineage)
-	}
-}
-
-func TestDescribeDashboardReturnsCompactManifest(t *testing.T) {
-	service := NewService(largeDashboardMetrics{}, nil, Config{APIKey: "key", Model: "model"})
-	tools := service.toolDefinitions(Scope{WorkspaceID: "test", PrincipalID: "principal"})
-
-	output := runTool(t, tools, "describe_dashboard", `{"dashboard_id":"executive-sales"}`)
-	if len(output) > 16*1024 {
-		t.Fatalf("describe_dashboard output = %d bytes, want compact manifest under 16KiB", len(output))
-	}
-	if strings.Contains(output, largeDashboardPayloadMarker) {
-		t.Fatalf("describe_dashboard leaked full visual/table definitions: %s", output[:min(len(output), 512)])
-	}
-
-	var got struct {
-		ID     string `json:"id"`
-		Counts struct {
-			Pages   int `json:"pages"`
-			Visuals int `json:"visuals"`
-			Tables  int `json:"tables"`
-		} `json:"counts"`
-		Pages []struct {
-			ID         string `json:"id"`
-			Title      string `json:"title"`
-			Components []struct {
-				ID    string `json:"id"`
-				Kind  string `json:"kind"`
-				Ref   string `json:"ref"`
-				Title string `json:"title"`
-			} `json:"components"`
-		} `json:"pages"`
-		DetailTools map[string]string `json:"detail_tools"`
-	}
-	if err := json.Unmarshal([]byte(output), &got); err != nil {
-		t.Fatalf("decode describe_dashboard output: %v\n%s", err, output)
-	}
-	if got.ID != "executive-sales" || got.Counts.Pages != 24 || got.Counts.Visuals != 48 || got.Counts.Tables != 24 {
-		t.Fatalf("manifest counts = %#v", got)
-	}
-	if len(got.Pages) != 24 || len(got.Pages[0].Components) != 3 {
-		t.Fatalf("pages/components = %#v", got.Pages[:min(len(got.Pages), 2)])
-	}
-	if got.Pages[0].Components[0].Kind != "visual" || got.Pages[0].Components[0].Ref == "" || got.Pages[0].Components[0].Title == "" {
-		t.Fatalf("visual component summary = %#v", got.Pages[0].Components[0])
-	}
-	if got.DetailTools["page_data"] != "query_dashboard_page" || got.DetailTools["model"] != "describe_model" {
-		t.Fatalf("detail tools = %#v", got.DetailTools)
-	}
-}
-
-type fakeAssetCatalog struct {
-	catalog workspace.AssetCatalog
-}
-
-func (c fakeAssetCatalog) ActiveAssetCatalog(context.Context, workspace.WorkspaceID) (workspace.AssetCatalog, bool, error) {
-	return c.catalog, true, nil
-}
-
-type fakeRuntimeAssetGraphProvider struct {
-	graph workspace.AssetGraph
-	ok    bool
-}
-
-func (p fakeRuntimeAssetGraphProvider) WorkspaceAssets(string, string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
-	return p.graph.Assets, p.graph.Edges, p.ok
-}
-
-func testAgentAssetGraph(t *testing.T) workspace.AssetGraph {
-	t.Helper()
-	workspaceID := workspace.WorkspaceID("test")
-	deploymentID := workspace.DeploymentID("deploy_a")
-	model, err := workspace.NewAsset(workspaceID, deploymentID, workspace.AssetTypeSemanticModel, "test", "", "Test Model", "Fixture model", "semantic_model.v1", map[string]any{
-		"name": "test",
-	})
-	if err != nil {
-		t.Fatalf("model asset: %v", err)
-	}
-	visual, err := workspace.NewAsset(workspaceID, deploymentID, workspace.AssetTypeVisual, "executive-sales.orders", model.ID, "Orders", "Orders visual", "visual.v1", map[string]any{
-		"query_kind": "aggregate",
-		"measures":   []string{"order_count"},
-	})
-	if err != nil {
-		t.Fatalf("visual asset: %v", err)
-	}
-	return workspace.AssetGraph{
-		Assets: []workspace.Asset{visual, model},
-		Edges:  []workspace.AssetEdge{workspace.NewAssetEdge(workspaceID, deploymentID, model.ID, visual.ID, workspace.AssetEdgeUsesSemanticModel)},
+	if runTool(t, tools, "two", `{}`) != `{"name":"two"}` {
+		t.Fatalf("appended host-provided tool did not run")
 	}
 }
 
@@ -278,6 +95,7 @@ func TestServicePromptPersistsRunEventsMessagesAndTranscript(t *testing.T) {
 	defer modelServer.Close()
 
 	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
+	service.SetToolProviders(fakeToolProvider("list_dashboards"))
 	conversation, err := service.CreateConversation(ctx, Scope{WorkspaceID: "test", PrincipalID: principal.ID}, "Dashboards")
 	if err != nil {
 		t.Fatalf("create conversation: %v", err)
@@ -785,6 +603,19 @@ func runTool(t *testing.T, tools []agent.ToolDefinition, name, args string) stri
 	}
 	t.Fatalf("tool %q not found", name)
 	return ""
+}
+
+func fakeToolProvider(name string) ToolProvider {
+	return func(Scope) []agent.ToolDefinition {
+		return []agent.ToolDefinition{{
+			Name:        name,
+			Description: "Fake tool.",
+			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
+			Handler: agent.ToolHandlerFunc(func(context.Context, agent.ToolCall) (agent.ToolResult, error) {
+				return agent.ToolResult{Content: map[string]any{"name": name}}, nil
+			}),
+		}}
+	}
 }
 
 func openAgentAppStore(t *testing.T, _ context.Context) *testAgentStore {

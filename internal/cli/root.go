@@ -20,8 +20,15 @@ type rootOptions struct {
 	deployment   string
 	conversation string
 	jsonOutput   bool
+	pageID       string
+	count        int
+	filtersJSON  string
+	bodyJSON     string
 	schemaFormat string
 	schemaOut    string
+	limit        int
+	pageToken    string
+	searchTypes  []string
 }
 
 func Execute(ctx context.Context) error {
@@ -38,7 +45,12 @@ func Execute(ctx context.Context) error {
 	root.AddCommand(deployCommand(ctx, opts))
 	root.AddCommand(validateCommand(ctx, opts))
 	root.AddCommand(schemaCommand(opts))
+	root.AddCommand(apiCommand(ctx, opts))
 	root.AddCommand(agentCommand(ctx, opts))
+	root.AddCommand(searchCommand(ctx, opts))
+	root.AddCommand(workspacesCommand(ctx, opts))
+	root.AddCommand(dashboardsCommand(ctx, opts))
+	root.AddCommand(semanticModelsCommand(ctx, opts))
 	root.AddCommand(loginCommand(opts))
 	root.AddCommand(deploymentsCommand(ctx, opts))
 	root.AddCommand(rollbackCommand(ctx, opts))

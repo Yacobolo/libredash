@@ -26,7 +26,7 @@ func TestAssetDTOUsesLogicalIDAndTypedPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decode catalog: %v", err)
 	}
-	dto := assetDTOFromCatalog(catalog.Assets[0])
+	dto := apiAssetDTOs([]workspace.AssetView{workspace.AssetViewFromCatalogRecord(catalog.Assets[0])})[0]
 	if dto.ID != "visual:executive-sales.orders" || dto.SnapshotID == "" || dto.SnapshotID == dto.ID {
 		t.Fatalf("asset identity = %#v", dto)
 	}

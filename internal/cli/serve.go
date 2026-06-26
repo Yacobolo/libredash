@@ -132,7 +132,7 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 		WorkspaceRepo:      workspaceRepo,
 		AssetCatalog:       assetCatalog,
 		AccessRepo:         accessRepo,
-		Agent:              agentapp.NewService(runtimeMetrics, agentRepo, agentapp.Config{APIKey: cfg.AgentAPIKey, BaseURL: cfg.AgentBaseURL, Model: cfg.AgentModel}).WithAssetCatalog(assetCatalog),
+		Agent:              agentapp.NewService(runtimeMetrics, agentRepo, agentapp.Config{APIKey: cfg.AgentAPIKey, BaseURL: cfg.AgentBaseURL, Model: cfg.AgentModel}),
 		Auth:               auth,
 		Reloader:           manager,
 		ArtifactDir:        cfg.ArtifactDir(),
@@ -176,7 +176,7 @@ func localDevServer(ctx context.Context, metrics *dashboardruntime.Service, cfg 
 		WorkspaceRepo:      workspaceRepo,
 		AssetCatalog:       assetCatalog,
 		AccessRepo:         accessRepo,
-		Agent:              agentapp.NewService(metrics, agentRepo, config).WithAssetCatalog(assetCatalog),
+		Agent:              agentapp.NewService(metrics, agentRepo, config),
 		Auth:               auth,
 		DefaultWorkspaceID: workspaceID,
 	})

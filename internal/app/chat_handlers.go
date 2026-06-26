@@ -189,15 +189,17 @@ func (s *Server) chatService(w http.ResponseWriter, r *http.Request) (*agentapp.
 
 func (s *Server) chatScope(r *http.Request) agentapp.Scope {
 	principalID := ""
+	devBypass := false
 	if s.auth != nil {
 		if principal, ok := s.auth.Principal(r); ok {
 			principalID = principal.ID
+			devBypass = principal.DevBypass
 			if principal.DevBypass {
 				_ = s.upsertAuthenticatedPrincipal(r.Context(), principal)
 			}
 		}
 	}
-	return agentapp.Scope{WorkspaceID: s.workspaceID(""), PrincipalID: principalID}
+	return agentapp.Scope{WorkspaceID: s.workspaceID(""), PrincipalID: principalID, DevAuthBypass: devBypass}
 }
 
 func chatClientID(r *http.Request) string {

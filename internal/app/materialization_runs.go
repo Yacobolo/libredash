@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	"github.com/go-chi/chi/v5"
@@ -49,12 +48,24 @@ func (s *Server) listMaterializationRuns(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	runs, err := repo.ListRuns(r.Context(), workspaceID, materializationRunPageFromRequest(r))
+	limit, ok := apiLimitForRequest(w, r)
+	if !ok {
+		return
+	}
+	runs, err := repo.ListRuns(r.Context(), workspaceID, materialize.RunPage{
+		Limit: limit + 1,
+		After: firstNonEmpty(r.URL.Query().Get("pageToken"), r.URL.Query().Get("after")),
+	})
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(runs))
+	nextCursor := ""
+	if len(runs) > limit {
+		nextCursor = runs[limit-1].ID
+		runs = runs[:limit]
+	}
+	writeJSON(w, http.StatusOK, pagedResponseWithCursor(runs, nextCursor))
 }
 
 func (s *Server) getMaterializationRun(w http.ResponseWriter, r *http.Request) {
@@ -93,9 +104,4 @@ func (s *Server) materializationRunRepository(w http.ResponseWriter, r *http.Req
 		return nil, "", false
 	}
 	return materialize.NewSQLRunRepository(s.store.SQLDB()), workspaceID, true
-}
-
-func materializationRunPageFromRequest(r *http.Request) materialize.RunPage {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	return materialize.RunPage{Limit: limit, After: firstNonEmpty(r.URL.Query().Get("pageToken"), r.URL.Query().Get("after"))}
 }

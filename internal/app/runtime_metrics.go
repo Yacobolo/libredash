@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
@@ -34,6 +35,7 @@ type workspaceAssetRuntime interface {
 
 type reportRuntime interface {
 	Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool)
+	SemanticModel(modelID string) (*semanticmodel.Model, bool)
 	DefaultFilters(dashboardID string) dashboard.Filters
 }
 
@@ -44,6 +46,11 @@ type dashboardRuntime interface {
 type tableRuntime interface {
 	NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
 	QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
+}
+
+type semanticQueryRuntime interface {
+	QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error)
+	PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
 }
 
 type materializationRuntime interface {
@@ -88,6 +95,14 @@ func (m runtimeMetrics) Report(dashboardID string) (reportdef.Dashboard, *semant
 	return runtime.Report(dashboardID)
 }
 
+func (m runtimeMetrics) SemanticModel(modelID string) (*semanticmodel.Model, bool) {
+	runtime, err := m.reportRuntime()
+	if err != nil {
+		return nil, false
+	}
+	return runtime.SemanticModel(modelID)
+}
+
 func (m runtimeMetrics) DefaultFilters(dashboardID string) dashboard.Filters {
 	runtime, err := m.reportRuntime()
 	if err != nil {
@@ -126,6 +141,38 @@ func (m runtimeMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID 
 		return dashboard.EmptyTable(request.WithDefaults(), err), nil
 	}
 	return runtime.QueryTablePage(ctx, dashboardID, pageID, filters, request)
+}
+
+func (m runtimeMetrics) QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
+	runtime, err := m.semanticQueryRuntime()
+	if err != nil {
+		return nil, err
+	}
+	return runtime.QuerySemantic(ctx, modelID, request)
+}
+
+func (m runtimeMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
+	runtime, err := m.semanticQueryRuntime()
+	if err != nil {
+		return nil, err
+	}
+	return runtime.PreviewSemantic(ctx, modelID, request)
+}
+
+func (m runtimeMetrics) ExplainSemanticQuery(modelID string, request reportdef.AggregateQuery) (semanticquery.Plan, error) {
+	model, ok := m.SemanticModel(modelID)
+	if !ok {
+		return semanticquery.Plan{}, fmt.Errorf("unknown semantic model %q", modelID)
+	}
+	return semanticquery.NewPlanner(model).Plan(reportdef.SemanticAggregateRequest(request))
+}
+
+func (m runtimeMetrics) ExplainSemanticPreview(modelID string, request reportdef.RowQuery) (semanticquery.Plan, error) {
+	model, ok := m.SemanticModel(modelID)
+	if !ok {
+		return semanticquery.Plan{}, fmt.Errorf("unknown semantic model %q", modelID)
+	}
+	return semanticquery.NewPlanner(model).PlanRows(reportdef.SemanticRowRequest(request))
 }
 
 func (m runtimeMetrics) RefreshMaterializations(ctx context.Context, modelID string) error {
@@ -204,6 +251,18 @@ func (m runtimeMetrics) tableRuntime() (tableRuntime, error) {
 	port, ok := runtime.(tableRuntime)
 	if !ok {
 		return nil, fmt.Errorf("active runtime does not provide table data")
+	}
+	return port, nil
+}
+
+func (m runtimeMetrics) semanticQueryRuntime() (semanticQueryRuntime, error) {
+	runtime, err := m.active()
+	if err != nil {
+		return nil, err
+	}
+	port, ok := runtime.(semanticQueryRuntime)
+	if !ok {
+		return nil, fmt.Errorf("active runtime does not provide semantic query data")
 	}
 	return port, nil
 }

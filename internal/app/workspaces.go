@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/api"
@@ -48,7 +47,7 @@ func (s *Server) workspaceAssets(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), statusForNotFound(err))
 		return
 	}
-	filtered := filterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q"))
+	filtered := workspace.FilterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q"))
 	workspace := s.workspaceResponse(r, workspaceID)
 	canManage := s.canManageWorkspaceAccess(r, workspaceID)
 	access := s.workspaceAccessResponse(r, workspace, canManage, ui.WorkspaceAccessStatus{})
@@ -66,8 +65,8 @@ func (s *Server) connections(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), statusForNotFound(err))
 		return
 	}
-	activeType := normalizeConnectionAssetType(r.URL.Query().Get("type"))
-	filtered := filterConnectionAssets(assets, activeType, r.URL.Query().Get("q"))
+	activeType := workspace.NormalizeConnectionAssetType(r.URL.Query().Get("type"))
+	filtered := workspace.FilterConnectionAssets(assets, activeType, r.URL.Query().Get("q"))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if err := ui.ConnectionsPage(s.metrics.Catalog(), workspaceID, filtered, edges, activeType, r.URL.Query().Get("q"), s.currentRoleLabel(r)).Render(w); err != nil {
@@ -83,7 +82,7 @@ func (s *Server) workspaceAsset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), statusForNotFound(err))
 		return
 	}
-	var selected api.AssetResponse
+	var selected workspace.AssetView
 	for _, asset := range assets {
 		if asset.ID == assetID {
 			selected = asset
@@ -123,7 +122,7 @@ func (s *Server) workspaceAssetSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	assetID := chi.URLParam(r, "asset")
-	var selected api.AssetResponse
+	var selected workspace.AssetView
 	for _, asset := range assets {
 		if asset.ID == assetID {
 			selected = asset
@@ -204,14 +203,14 @@ func (s *Server) connectionSourceAssetSection(w http.ResponseWriter, r *http.Req
 	}
 }
 
-func connectionSourcePair(assets []api.AssetResponse, edges []api.AssetEdgeResponse, connectionID, sourceID string) (api.AssetResponse, api.AssetResponse, bool) {
-	connection, ok := assetByID(assets, connectionID)
+func connectionSourcePair(assets []workspace.AssetView, edges []workspace.AssetEdgeView, connectionID, sourceID string) (workspace.AssetView, workspace.AssetView, bool) {
+	connection, ok := workspace.AssetByID(assets, connectionID)
 	if !ok || connection.Type != "connection" {
-		return api.AssetResponse{}, api.AssetResponse{}, false
+		return workspace.AssetView{}, workspace.AssetView{}, false
 	}
-	source, ok := assetByID(assets, sourceID)
+	source, ok := workspace.AssetByID(assets, sourceID)
 	if !ok || source.Type != "source" || assetnav.SourceConnectionID(source.ID, edges) != connection.ID {
-		return api.AssetResponse{}, api.AssetResponse{}, false
+		return workspace.AssetView{}, workspace.AssetView{}, false
 	}
 	return connection, source, true
 }
@@ -233,7 +232,7 @@ func (s *Server) connectionAssetSection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	assetID := chi.URLParam(r, "asset")
-	var selected api.AssetResponse
+	var selected workspace.AssetView
 	for _, asset := range assets {
 		if asset.ID == assetID {
 			selected = asset
@@ -380,7 +379,7 @@ func (s *Server) apiWorkspaces(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(workspaces))
+	_ = writePagedJSON(w, r, apiWorkspaceDTOs(workspaces))
 }
 
 func (s *Server) apiWorkspaceAssets(w http.ResponseWriter, r *http.Request) {
@@ -390,7 +389,7 @@ func (s *Server) apiWorkspaceAssets(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(filterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q"))))
+	_ = writePagedJSON(w, r, apiAssetDTOs(workspace.FilterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q"))))
 }
 
 func (s *Server) apiWorkspaceAssetEdges(w http.ResponseWriter, r *http.Request) {
@@ -400,7 +399,7 @@ func (s *Server) apiWorkspaceAssetEdges(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(edges))
+	_ = writePagedJSON(w, r, apiAssetEdgeDTOs(edges))
 }
 
 func (s *Server) apiWorkspaceRoles(w http.ResponseWriter, r *http.Request) {
@@ -409,7 +408,7 @@ func (s *Server) apiWorkspaceRoles(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(roles))
+	_ = writePagedJSON(w, r, apiRoleDTOs(roles))
 }
 
 func (s *Server) apiRoleBindings(w http.ResponseWriter, r *http.Request) {
@@ -419,7 +418,7 @@ func (s *Server) apiRoleBindings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if repo == nil {
-		writeJSON(w, http.StatusOK, pagedResponse([]map[string]any{}))
+		_ = writePagedJSON(w, r, []map[string]any{})
 		return
 	}
 	bindings, err := repo.ListRoleBindings(r.Context(), s.workspaceID(chi.URLParam(r, "workspace")))
@@ -431,7 +430,7 @@ func (s *Server) apiRoleBindings(w http.ResponseWriter, r *http.Request) {
 	for _, binding := range bindings {
 		out = append(out, apiRoleBindingDTO(binding))
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(out))
+	_ = writePagedJSON(w, r, out)
 }
 
 func (s *Server) apiUpsertRoleBinding(w http.ResponseWriter, r *http.Request) {
@@ -484,48 +483,48 @@ func (s *Server) apiDeleteRoleBinding(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
 }
 
-func (s *Server) workspaceList(r *http.Request) ([]api.WorkspaceResponse, error) {
+func (s *Server) workspaceList(r *http.Request) ([]workspace.WorkspaceView, error) {
 	repo, err := s.workspaceRepository()
 	if err != nil {
 		return nil, err
 	}
 	if repo == nil {
-		return []api.WorkspaceResponse{catalogWorkspaceResponse(s.metrics.Catalog())}, nil
+		return []workspace.WorkspaceView{catalogWorkspaceView(s.metrics.Catalog())}, nil
 	}
 	rows, err := repo.List(r.Context())
 	if err != nil {
 		return nil, err
 	}
-	out := make([]api.WorkspaceResponse, 0, len(rows))
+	out := make([]workspace.WorkspaceView, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, workspaceDTO(row))
+		out = append(out, workspace.WorkspaceViewFromSummary(row))
 	}
 	return out, nil
 }
 
-func (s *Server) workspaceResponse(r *http.Request, workspaceID string) api.WorkspaceResponse {
+func (s *Server) workspaceResponse(r *http.Request, workspaceID string) workspace.WorkspaceView {
 	if repo, _ := s.workspaceRepository(); repo != nil {
 		if row, err := repo.ByID(r.Context(), workspace.WorkspaceID(workspaceID)); err == nil {
-			return workspaceDTO(row)
+			return workspace.WorkspaceViewFromSummary(row)
 		}
 	}
-	workspace := catalogWorkspaceResponse(s.metrics.Catalog())
-	workspace.ID = workspaceID
-	return workspace
+	view := catalogWorkspaceView(s.metrics.Catalog())
+	view.ID = workspaceID
+	return view
 }
 
-func (s *Server) workspaceAssetsAndEdges(r *http.Request, workspaceID string) ([]api.AssetResponse, []api.AssetEdgeResponse, error) {
+func (s *Server) workspaceAssetsAndEdges(r *http.Request, workspaceID string) ([]workspace.AssetView, []workspace.AssetEdgeView, error) {
 	catalog, ok, err := s.workspaceAssetCatalog(r.Context(), workspaceID)
 	if err != nil || !ok {
 		return nil, nil, err
 	}
-	assets := make([]api.AssetResponse, 0, len(catalog.Assets))
+	assets := make([]workspace.AssetView, 0, len(catalog.Assets))
 	for _, row := range catalog.Assets {
-		assets = append(assets, assetDTOFromCatalog(row))
+		assets = append(assets, workspace.AssetViewFromCatalogRecord(row))
 	}
-	edges := make([]api.AssetEdgeResponse, 0, len(catalog.Edges))
+	edges := make([]workspace.AssetEdgeView, 0, len(catalog.Edges))
 	for _, row := range catalog.Edges {
-		edges = append(edges, assetEdgeDTOFromCatalog(row))
+		edges = append(edges, workspace.AssetEdgeViewFromCatalogRecord(row))
 	}
 	return assets, edges, nil
 }
@@ -554,7 +553,7 @@ func (s *Server) workspaceAssetCatalogReader() (workspace.AssetCatalogReader, er
 	return s.assetCatalog, nil
 }
 
-func (s *Server) roleBindingsAndRoles(r *http.Request, workspaceID string) ([]api.RoleBindingResponse, []api.RoleResponse, error) {
+func (s *Server) roleBindingsAndRoles(r *http.Request, workspaceID string) ([]workspace.RoleBindingView, []workspace.RoleView, error) {
 	repo, err := s.accessRepository()
 	if err != nil {
 		return nil, nil, err
@@ -570,24 +569,24 @@ func (s *Server) roleBindingsAndRoles(r *http.Request, workspaceID string) ([]ap
 	if err != nil {
 		return nil, nil, err
 	}
-	bindings := make([]api.RoleBindingResponse, 0, len(bindingRows))
+	bindings := make([]workspace.RoleBindingView, 0, len(bindingRows))
 	for _, row := range bindingRows {
-		bindings = append(bindings, roleBindingDTO(row))
+		bindings = append(bindings, roleBindingView(row))
 	}
-	roles := make([]api.RoleResponse, 0, len(roleRows))
+	roles := make([]workspace.RoleView, 0, len(roleRows))
 	for _, row := range roleRows {
-		roles = append(roles, roleDTO(row))
+		roles = append(roles, roleView(row))
 	}
 	return bindings, roles, nil
 }
 
-func (s *Server) workspaceAccessResponse(r *http.Request, workspace api.WorkspaceResponse, canManage bool, status ui.WorkspaceAccessStatus) ui.WorkspaceAccessResponse {
-	bindings, roles, err := s.roleBindingsAndRoles(r, workspace.ID)
+func (s *Server) workspaceAccessResponse(r *http.Request, workspaceView workspace.WorkspaceView, canManage bool, status ui.WorkspaceAccessStatus) ui.WorkspaceAccessResponse {
+	bindings, roles, err := s.roleBindingsAndRoles(r, workspaceView.ID)
 	if err != nil && status.Error == "" {
 		status.Error = err.Error()
 	}
 	return ui.WorkspaceAccessResponse{
-		Workspace: workspace,
+		Workspace: workspaceView,
 		Roles:     roles,
 		Bindings:  bindings,
 		CanManage: canManage,
@@ -614,8 +613,8 @@ func (s *Server) canManageWorkspaceAccess(r *http.Request, workspaceID string) b
 	return err == nil && allowed
 }
 
-func defaultWorkspaceRoles() []api.RoleResponse {
-	return []api.RoleResponse{
+func defaultWorkspaceRoles() []workspace.RoleView {
+	return []workspace.RoleView{
 		{Name: access.RoleViewer},
 		{Name: access.RoleEditor},
 		{Name: access.RoleDeployer},
@@ -624,59 +623,75 @@ func defaultWorkspaceRoles() []api.RoleResponse {
 	}
 }
 
-func workspaceDTO(row workspace.Summary) api.WorkspaceResponse {
-	activeDeploymentID := ""
-	if row.ActiveDeploymentID != "" {
-		activeDeploymentID = string(row.ActiveDeploymentID)
-	}
-	return api.WorkspaceResponse{
-		ID:                 string(row.ID),
-		Title:              row.Title,
-		Description:        row.Description,
-		ActiveDeploymentID: activeDeploymentID,
-		CreatedAt:          row.CreatedAt,
-		UpdatedAt:          row.UpdatedAt,
-	}
-}
-
-func catalogWorkspaceResponse(catalog dashboard.Catalog) api.WorkspaceResponse {
-	return api.WorkspaceResponse{
+func catalogWorkspaceView(catalog dashboard.Catalog) workspace.WorkspaceView {
+	return workspace.WorkspaceView{
 		ID:          catalog.Workspace.ID,
 		Title:       catalog.Workspace.Title,
 		Description: catalog.Workspace.Description,
 	}
 }
 
-func assetDTOFromCatalog(row workspace.AssetRecord) api.AssetResponse {
-	return api.AssetResponse{
-		ID:            string(row.ID),
-		SnapshotID:    string(row.SnapshotID),
-		WorkspaceID:   string(row.WorkspaceID),
-		DeploymentID:  string(row.DeploymentID),
-		Type:          string(row.Type),
-		Key:           row.Key,
-		ParentID:      string(row.ParentID),
-		Title:         row.Title,
-		Description:   row.Description,
-		PayloadSchema: row.PayloadSchema,
-		Payload:       row.Payload,
-		Href:          assetHref(string(row.Type), row.Key),
+func apiWorkspaceDTOs(rows []workspace.WorkspaceView) []api.WorkspaceResponse {
+	out := make([]api.WorkspaceResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, api.WorkspaceResponse{
+			ID:                 row.ID,
+			Title:              row.Title,
+			Description:        row.Description,
+			ActiveDeploymentID: row.ActiveDeploymentID,
+			CreatedAt:          row.CreatedAt,
+			UpdatedAt:          row.UpdatedAt,
+		})
 	}
+	return out
 }
 
-func assetEdgeDTOFromCatalog(row workspace.AssetEdgeRecord) api.AssetEdgeResponse {
-	return api.AssetEdgeResponse{
-		ID:           string(row.ID),
-		WorkspaceID:  string(row.WorkspaceID),
-		DeploymentID: string(row.DeploymentID),
-		FromAssetID:  string(row.FromAssetID),
-		ToAssetID:    string(row.ToAssetID),
-		Type:         string(row.Type),
+func apiAssetDTOs(rows []workspace.AssetView) []api.AssetResponse {
+	out := make([]api.AssetResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, api.AssetResponse{
+			ID:            row.ID,
+			SnapshotID:    row.SnapshotID,
+			WorkspaceID:   row.WorkspaceID,
+			DeploymentID:  row.DeploymentID,
+			Type:          row.Type,
+			Key:           row.Key,
+			ParentID:      row.ParentID,
+			Title:         row.Title,
+			Description:   row.Description,
+			PayloadSchema: row.PayloadSchema,
+			Payload:       row.Payload,
+			Href:          row.Href,
+		})
 	}
+	return out
 }
 
-func roleBindingDTO(row access.RoleBinding) api.RoleBindingResponse {
-	return api.RoleBindingResponse{
+func apiAssetEdgeDTOs(rows []workspace.AssetEdgeView) []api.AssetEdgeResponse {
+	out := make([]api.AssetEdgeResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, api.AssetEdgeResponse{
+			ID:           row.ID,
+			WorkspaceID:  row.WorkspaceID,
+			DeploymentID: row.DeploymentID,
+			FromAssetID:  row.FromAssetID,
+			ToAssetID:    row.ToAssetID,
+			Type:         row.Type,
+		})
+	}
+	return out
+}
+
+func apiRoleDTOs(rows []workspace.RoleView) []api.RoleResponse {
+	out := make([]api.RoleResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, api.RoleResponse{Name: row.Name, Permissions: row.Permissions})
+	}
+	return out
+}
+
+func roleBindingView(row access.RoleBinding) workspace.RoleBindingView {
+	return workspace.RoleBindingView{
 		ID:          row.ID,
 		WorkspaceID: row.WorkspaceID,
 		SubjectType: string(row.SubjectType),
@@ -691,99 +706,8 @@ func roleBindingDTO(row access.RoleBinding) api.RoleBindingResponse {
 	}
 }
 
-func roleDTO(row access.Role) api.RoleResponse {
-	return api.RoleResponse{Name: row.Name, Permissions: row.Permissions}
-}
-
-func assetHref(assetType, key string) string {
-	switch assetType {
-	case "dashboard":
-		return "/dashboards/" + key
-	default:
-		return ""
-	}
-}
-
-func filterAssets(assets []api.AssetResponse, typ, query string) []api.AssetResponse {
-	typ = strings.TrimSpace(typ)
-	query = strings.ToLower(strings.TrimSpace(query))
-	if typ == "" && query == "" {
-		return assets
-	}
-	out := make([]api.AssetResponse, 0, len(assets))
-	for _, asset := range assets {
-		if typ != "" && asset.Type != typ {
-			continue
-		}
-		haystack := strings.ToLower(asset.Type + " " + asset.Key + " " + asset.Title + " " + asset.Description)
-		if query != "" && !strings.Contains(haystack, query) {
-			continue
-		}
-		out = append(out, asset)
-	}
-	return out
-}
-
-func filterWorkspaceAssets(assets []api.AssetResponse, typ, query string) []api.AssetResponse {
-	typ = strings.TrimSpace(typ)
-	query = strings.TrimSpace(query)
-	if typ != "" || query != "" {
-		return filterAssets(assets, typ, query)
-	}
-	out := make([]api.AssetResponse, 0, len(assets))
-	for _, asset := range assets {
-		if isWorkspaceLandingAsset(asset.Type) {
-			out = append(out, asset)
-		}
-	}
-	return out
-}
-
-func filterConnectionAssets(assets []api.AssetResponse, typ, query string) []api.AssetResponse {
-	typ = normalizeConnectionAssetType(typ)
-	query = strings.ToLower(strings.TrimSpace(query))
-	out := make([]api.AssetResponse, 0, len(assets))
-	for _, asset := range assets {
-		if asset.Type != "connection" && asset.Type != "source" {
-			continue
-		}
-		if typ != "" && asset.Type != typ {
-			continue
-		}
-		haystack := strings.ToLower(asset.Type + " " + asset.Key + " " + asset.Title + " " + asset.Description)
-		if query != "" && !strings.Contains(haystack, query) {
-			continue
-		}
-		out = append(out, asset)
-	}
-	return out
-}
-
-func normalizeConnectionAssetType(typ string) string {
-	switch strings.TrimSpace(typ) {
-	case "connection", "source":
-		return strings.TrimSpace(typ)
-	default:
-		return ""
-	}
-}
-
-func assetByID(assets []api.AssetResponse, id string) (api.AssetResponse, bool) {
-	for _, asset := range assets {
-		if asset.ID == id {
-			return asset, true
-		}
-	}
-	return api.AssetResponse{}, false
-}
-
-func isWorkspaceLandingAsset(typ string) bool {
-	switch typ {
-	case "model_table", "semantic_model", "dashboard":
-		return true
-	default:
-		return false
-	}
+func roleView(row access.Role) workspace.RoleView {
+	return workspace.RoleView{Name: row.Name, Permissions: row.Permissions}
 }
 
 func csrfToken(r *http.Request, auth *Auth) string {

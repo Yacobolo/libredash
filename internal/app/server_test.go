@@ -10,6 +10,7 @@ import (
 	"time"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
@@ -92,6 +93,43 @@ func (fakeMetrics) Report(dashboardID string) (reportdef.Dashboard, *semanticmod
 			},
 			Measures: map[string]semanticmodel.MetricMeasure{"order_count": {Table: "orders", Grain: "order_id", Label: "Orders", Expression: "COUNT(*)"}},
 		}, true
+}
+
+func (fakeMetrics) SemanticModel(modelID string) (*semanticmodel.Model, bool) {
+	_, model, ok := fakeMetrics{}.Report("executive-sales")
+	if !ok || model.Name != modelID {
+		return nil, false
+	}
+	return model, true
+}
+
+func (fakeMetrics) QuerySemantic(_ context.Context, _ string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
+	rows := reportdef.QueryRows{
+		{"status": "delivered", "order_count": 42},
+		{"status": "shipped", "order_count": 7},
+	}
+	return rows[:min(len(rows), request.Limit)], nil
+}
+
+func (fakeMetrics) PreviewSemantic(_ context.Context, _ string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
+	rows := reportdef.QueryRows{
+		{"order_id": "o1", "status": "delivered"},
+		{"order_id": "o2", "status": "shipped"},
+	}
+	return rows[:min(len(rows), request.Limit)], nil
+}
+
+func (fakeMetrics) ExplainSemanticQuery(_ string, request reportdef.AggregateQuery) (semanticquery.Plan, error) {
+	return semanticquery.NewPlanner(fakeMetrics{}.mustSemanticModel()).Plan(reportdef.SemanticAggregateRequest(request))
+}
+
+func (fakeMetrics) ExplainSemanticPreview(_ string, request reportdef.RowQuery) (semanticquery.Plan, error) {
+	return semanticquery.NewPlanner(fakeMetrics{}.mustSemanticModel()).PlanRows(reportdef.SemanticRowRequest(request))
+}
+
+func (fakeMetrics) mustSemanticModel() *semanticmodel.Model {
+	_, model, _ := fakeMetrics{}.Report("executive-sales")
+	return model
 }
 
 func (fakeMetrics) DefaultFilters(_ string) dashboard.Filters {

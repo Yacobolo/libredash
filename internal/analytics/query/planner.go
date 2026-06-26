@@ -131,8 +131,8 @@ func (p *Planner) Plan(request Request) (Plan, error) {
 		sql.WriteString("\nORDER BY ")
 		sql.WriteString(strings.Join(parts, ", "))
 	}
-	if request.Limit > 0 {
-		sql.WriteString(fmt.Sprintf("\nLIMIT %d", request.Limit))
+	if err := writeLimitOffset(&sql, request.Limit, request.Offset); err != nil {
+		return Plan{}, err
 	}
 	return Plan{SQL: sql.String(), Args: args, Columns: columns}, nil
 }
@@ -494,10 +494,17 @@ func writeOrderLimitOffset(sql *strings.Builder, sorts []Sort, columns map[strin
 		sql.WriteString("\nORDER BY ")
 		sql.WriteString(strings.Join(parts, ", "))
 	}
+	return writeLimitOffset(sql, limit, offset)
+}
+
+func writeLimitOffset(sql *strings.Builder, limit, offset int) error {
 	if limit > 0 {
 		sql.WriteString(fmt.Sprintf("\nLIMIT %d", limit))
 	}
 	if offset > 0 {
+		if limit <= 0 {
+			return fmt.Errorf("offset requires limit")
+		}
 		sql.WriteString(fmt.Sprintf("\nOFFSET %d", offset))
 	}
 	return nil

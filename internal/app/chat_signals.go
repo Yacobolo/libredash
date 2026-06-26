@@ -4,16 +4,15 @@ import (
 	"context"
 
 	"github.com/Yacobolo/libredash/internal/agentapp"
-	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/ui"
 )
 
-func chatSignalWithConversations(conversations []api.AgentConversationResponse, activeID string, transcript []agentapp.ChatTranscriptItem, statusErr string, running, enabled bool) ui.ChatSignal {
+func chatSignalWithConversations(conversations []ui.ChatConversationSummary, activeID string, transcript []agentapp.ChatTranscriptItem, statusErr string, running, enabled bool) ui.ChatSignal {
 	if !enabled && statusErr == "" {
 		statusErr = "Agent is not configured"
 	}
 	if conversations == nil {
-		conversations = []api.AgentConversationResponse{}
+		conversations = []ui.ChatConversationSummary{}
 	}
 	return ui.ChatSignal{
 		Conversations:        conversations,
@@ -65,8 +64,8 @@ func (s *Server) chatSignalWith(ctx context.Context, scope agentapp.Scope, activ
 	}
 }
 
-func (s *Server) chatConversations(ctx context.Context, scope agentapp.Scope) []api.AgentConversationResponse {
-	conversations := []api.AgentConversationResponse{}
+func (s *Server) chatConversations(ctx context.Context, scope agentapp.Scope) []ui.ChatConversationSummary {
+	conversations := []ui.ChatConversationSummary{}
 	if s.agent == nil || scope.PrincipalID == "" {
 		return conversations
 	}
@@ -75,11 +74,24 @@ func (s *Server) chatConversations(ctx context.Context, scope agentapp.Scope) []
 		return conversations
 	}
 	for _, row := range rows {
-		out := agentConversationDTO(row)
+		out := chatConversationSummary(row)
 		out.TitlePending = s.isChatTitlePending(row.ID)
 		conversations = append(conversations, out)
 	}
 	return conversations
+}
+
+func chatConversationSummary(row agentapp.Conversation) ui.ChatConversationSummary {
+	return ui.ChatConversationSummary{
+		ID:          row.ID,
+		WorkspaceID: row.WorkspaceID,
+		PrincipalID: row.PrincipalID,
+		Title:       row.Title,
+		Status:      row.Status,
+		CreatedAt:   row.CreatedAt,
+		UpdatedAt:   row.UpdatedAt,
+		ArchivedAt:  row.ArchivedAt,
+	}
 }
 
 func chatPlaceholder(enabled, running bool) string {

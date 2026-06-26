@@ -527,6 +527,7 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 	uploadReq := httptest.NewRequest(http.MethodPut, "/api/v1/workspaces/test/deployments/"+created.ID+"/artifact", bytes.NewReader(bundle.Bytes()))
 	uploadReq.Header.Set("Authorization", "Bearer dev")
 	uploadReq.Header.Set("Accept", "application/json")
+	uploadReq.Header.Set("Content-Type", "application/octet-stream")
 	uploadRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(uploadRec, uploadReq)
 	if uploadRec.Code != http.StatusOK {
@@ -645,17 +646,17 @@ func TestWorkspaceAssetAPIListsActiveDeploymentAssets(t *testing.T) {
 	if err := json.Unmarshal(edgesRec.Body.Bytes(), &edgesBody); err != nil {
 		t.Fatalf("decode edge response: %v body=%s", err, edgesRec.Body.String())
 	}
-	foundLogicalConnectionEdge := false
+	foundLogicalCatalogEdge := false
 	for _, edge := range edgesBody.Items {
 		if strings.HasPrefix(edge.FromAssetID, "asset_") || strings.HasPrefix(edge.ToAssetID, "asset_") {
 			t.Fatalf("edge uses snapshot id endpoint: %#v", edge)
 		}
-		if edge.Type == string(workspace.AssetEdgeUsesConnection) && edge.FromAssetID == "source:olist.orders" && edge.ToAssetID == "connection:olist.olist" {
-			foundLogicalConnectionEdge = true
+		if edge.Type == string(workspace.AssetEdgeContains) && edge.FromAssetID == "catalog:test" && edge.ToAssetID == "source:olist.orders" {
+			foundLogicalCatalogEdge = true
 		}
 	}
-	if !foundLogicalConnectionEdge {
-		t.Fatalf("logical source->connection edge missing: %#v", edgesBody.Items)
+	if !foundLogicalCatalogEdge {
+		t.Fatalf("logical catalog->source edge missing: %#v", edgesBody.Items)
 	}
 }
 

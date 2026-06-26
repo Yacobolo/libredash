@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,38 @@ func pagedResponse(items any) map[string]any {
 
 func pagedResponseWithCursor(items any, nextCursor string) map[string]any {
 	return map[string]any{"items": items, "page": pageResponse{NextCursor: nextCursor}}
+}
+
+func writePagedJSON[T any](w http.ResponseWriter, r *http.Request, items []T) bool {
+	page, nextCursor, ok := pageSliceForRequest(w, r, items)
+	if !ok {
+		return false
+	}
+	writeJSON(w, http.StatusOK, pagedResponseWithCursor(page, nextCursor))
+	return true
+}
+
+func pageSliceForRequest[T any](w http.ResponseWriter, r *http.Request, items []T) ([]T, string, bool) {
+	limit, ok := apiLimitForRequest(w, r)
+	if !ok {
+		return nil, "", false
+	}
+	start, ok := apiCursorOffsetForRequest(w, r)
+	if !ok {
+		return nil, "", false
+	}
+	if start > len(items) {
+		start = len(items)
+	}
+	end := start + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	nextCursor := ""
+	if end < len(items) {
+		nextCursor = encodeIndexCursor(end)
+	}
+	return append([]T(nil), items[start:end]...), nextCursor, true
 }
 
 func (s *Server) apiGetCurrentPrincipal(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +121,7 @@ func (s *Server) apiListCurrentAPITokens(w http.ResponseWriter, r *http.Request)
 	for _, row := range rows {
 		out = append(out, apiTokenDTO(row))
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(out))
+	_ = writePagedJSON(w, r, out)
 }
 
 func (s *Server) apiCreateCurrentAPIToken(w http.ResponseWriter, r *http.Request) {
@@ -173,7 +206,7 @@ func (s *Server) apiListCurrentSessions(w http.ResponseWriter, r *http.Request) 
 	for _, row := range rows {
 		out = append(out, sessionDTO(row))
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(out))
+	_ = writePagedJSON(w, r, out)
 }
 
 func (s *Server) apiRevokeCurrentSession(w http.ResponseWriter, r *http.Request) {
@@ -195,12 +228,18 @@ func (s *Server) apiRevokeCurrentSession(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) apiListPrincipals(w http.ResponseWriter, r *http.Request) {
+	if _, ok := apiLimitForRequest(w, r); !ok {
+		return
+	}
+	if _, ok := apiCursorOffsetForRequest(w, r); !ok {
+		return
+	}
 	rows, err := s.queryPrincipals(r)
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(rows))
+	_ = writePagedJSON(w, r, rows)
 }
 
 func (s *Server) apiGetPrincipal(w http.ResponseWriter, r *http.Request) {
@@ -261,7 +300,7 @@ func (s *Server) apiListGroups(w http.ResponseWriter, r *http.Request) {
 	for _, row := range rows {
 		out = append(out, groupDTO(row))
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(out))
+	_ = writePagedJSON(w, r, out)
 }
 
 func (s *Server) apiCreateGroup(w http.ResponseWriter, r *http.Request) {
@@ -352,7 +391,7 @@ func (s *Server) apiListGroupMembers(w http.ResponseWriter, r *http.Request) {
 	for _, row := range rows {
 		out = append(out, groupMemberPrincipalDTO(row))
 	}
-	writeJSON(w, http.StatusOK, pagedResponse(out))
+	_ = writePagedJSON(w, r, out)
 }
 
 func (s *Server) apiAddGroupMember(w http.ResponseWriter, r *http.Request) {
@@ -423,7 +462,10 @@ func (s *Server) apiListAuditEvents(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	limit := apiLimit(r)
+	limit, ok := apiLimitForRequest(w, r)
+	if !ok {
+		return
+	}
 	cursorTime, cursorID := decodeCursor(r.URL.Query().Get("pageToken"))
 	rows, err := repo.ListAuditEvents(r.Context(), access.AuditEventFilter{
 		WorkspaceID: s.workspaceID(chi.URLParam(r, "workspace")),
@@ -541,10 +583,10 @@ FROM principals
 WHERE (? = '' OR lower(email) = lower(?))
   AND (? = '' OR lower(email) LIKE '%' || lower(?) || '%' OR lower(display_name) LIKE '%' || lower(?) || '%')
 ORDER BY email, id
-LIMIT ?`
+`
 	email := strings.TrimSpace(r.URL.Query().Get("email"))
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
-	rows, err := s.store.SQLDB().QueryContext(r.Context(), query, email, email, q, q, q, apiLimit(r))
+	rows, err := s.store.SQLDB().QueryContext(r.Context(), query, email, email, q, q, q)
 	if err != nil {
 		return nil, err
 	}
@@ -598,20 +640,72 @@ func decodeRoleBindingInput(w http.ResponseWriter, r *http.Request) (access.Role
 	}, true
 }
 
-func apiLimit(r *http.Request) int {
-	const defaultLimit = 50
-	const maxLimit = 100
-	value := 0
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
-		_, _ = fmt.Sscanf(raw, "%d", &value)
+const (
+	defaultAPILimit = 50
+	maxAPILimit     = 100
+)
+
+func apiLimitForRequest(w http.ResponseWriter, r *http.Request) (int, bool) {
+	limit, err := parseAPILimit(r.URL.Query().Get("limit"))
+	if err != nil {
+		writeJSONError(w, err, http.StatusBadRequest)
+		return 0, false
+	}
+	return limit, true
+}
+
+func parseAPILimit(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return defaultAPILimit, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("limit must be an integer")
 	}
 	if value <= 0 {
-		return defaultLimit
+		return defaultAPILimit, nil
 	}
-	if value > maxLimit {
-		return maxLimit
+	if value > maxAPILimit {
+		return maxAPILimit, nil
 	}
-	return value
+	return value, nil
+}
+
+func apiCursorOffsetForRequest(w http.ResponseWriter, r *http.Request) (int, bool) {
+	offset, err := decodeIndexCursor(r.URL.Query().Get("pageToken"))
+	if err != nil {
+		writeJSONError(w, err, http.StatusBadRequest)
+		return 0, false
+	}
+	return offset, true
+}
+
+func encodeIndexCursor(offset int) string {
+	if offset <= 0 {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("idx:%d", offset)))
+}
+
+func decodeIndexCursor(token string) (int, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return 0, nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil {
+		return 0, fmt.Errorf("pageToken is invalid")
+	}
+	text := string(raw)
+	if !strings.HasPrefix(text, "idx:") {
+		return 0, fmt.Errorf("pageToken is invalid")
+	}
+	value, err := strconv.Atoi(strings.TrimPrefix(text, "idx:"))
+	if err != nil || value < 0 {
+		return 0, fmt.Errorf("pageToken is invalid")
+	}
+	return value, nil
 }
 
 func encodeCursor(createdAt, id string) string {

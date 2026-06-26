@@ -1,0 +1,47 @@
+package workspace
+
+import "testing"
+
+func TestWorkspaceViewHelpersFilterAndNavigateAssets(t *testing.T) {
+	assets := []AssetView{
+		{ID: "semantic_model:sales", Type: "semantic_model", Key: "sales", Title: "Sales Model"},
+		{ID: "dashboard:exec", Type: "dashboard", Key: "exec", Title: "Executive Sales"},
+		{ID: "connection:duckdb", Type: "connection", Key: "duckdb", Title: "DuckDB"},
+		{ID: "source:orders", Type: "source", Key: "orders", Title: "Orders"},
+	}
+	landing := FilterWorkspaceAssets(assets, "", "")
+	if len(landing) != 2 {
+		t.Fatalf("landing assets = %#v", landing)
+	}
+	if filtered := FilterConnectionAssets(assets, "source", "ord"); len(filtered) != 1 || filtered[0].ID != "source:orders" {
+		t.Fatalf("filtered connection assets = %#v", filtered)
+	}
+	edges := []AssetEdgeView{{FromAssetID: "source:orders", ToAssetID: "connection:duckdb", Type: string(AssetEdgeUsesConnection)}}
+	if got := SourceConnectionID("source:orders", edges); got != "connection:duckdb" {
+		t.Fatalf("source connection ID = %q", got)
+	}
+}
+
+func TestAssetViewFromCatalogRecordKeepsPayloadContract(t *testing.T) {
+	payload := map[string]any{"kind": "duckdb", "credentials_configured": true}
+	view := AssetViewFromCatalogRecord(AssetRecord{
+		ID:            "connection:olist.olist",
+		SnapshotID:    "asset_snapshot_123",
+		WorkspaceID:   "libredash",
+		DeploymentID:  "deploy_a",
+		Type:          AssetTypeConnection,
+		Key:           "olist.olist",
+		ParentID:      "catalog:libredash",
+		Title:         "Olist connection",
+		Description:   "Local files",
+		PayloadSchema: "connection.v1",
+		Payload:       payload,
+		ContentHash:   "hash",
+	})
+	if view.ID != "connection:olist.olist" || view.SnapshotID != "asset_snapshot_123" || view.ParentID != "catalog:libredash" {
+		t.Fatalf("asset view identity = %#v", view)
+	}
+	if view.PayloadSchema != "connection.v1" || view.Payload["credentials_configured"] != true || view.ContentHash != "hash" {
+		t.Fatalf("asset view payload = %#v", view)
+	}
+}

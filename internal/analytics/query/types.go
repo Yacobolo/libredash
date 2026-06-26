@@ -80,6 +80,7 @@ type Request struct {
 	Filters    []Filter
 	Sort       []Sort
 	Limit      int
+	Offset     int
 }
 
 type RowRequest struct {

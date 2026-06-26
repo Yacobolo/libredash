@@ -40,6 +40,7 @@ func deploymentsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	}
 	list.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
 	list.Flags().StringVar(&opts.token, "token", "", "API token")
+	addPaginationFlags(list, opts)
 	rollback := &cobra.Command{
 		Use:   "rollback",
 		Short: "Activate a previous deployment",
@@ -122,7 +123,7 @@ func runDeploymentsList(ctx context.Context, opts *rootOptions) error {
 	if err != nil {
 		return err
 	}
-	listURL, err := apiOperationURL(target, "listDeployments", map[string]string{"workspace": opts.workspaceID}, nil)
+	listURL, err := apiOperationURL(target, "listDeployments", map[string]string{"workspace": opts.workspaceID}, paginationQuery(opts))
 	if err != nil {
 		return err
 	}

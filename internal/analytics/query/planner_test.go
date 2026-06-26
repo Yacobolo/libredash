@@ -81,6 +81,22 @@ func TestPlannerTimeGrain(t *testing.T) {
 	}
 }
 
+func TestPlannerAggregateLimitOffset(t *testing.T) {
+	plan, err := NewPlanner(testModel()).Plan(Request{
+		Dimensions: []Field{{Field: "customers.state", Alias: "state"}},
+		Measures:   []Field{{Field: "revenue", Alias: "revenue"}},
+		Sort:       []Sort{{Field: "state", Direction: "asc"}},
+		Limit:      25,
+		Offset:     50,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan.SQL, "ORDER BY state ASC\nLIMIT 25\nOFFSET 50") {
+		t.Fatalf("plan SQL missing aggregate limit/offset:\n%s", plan.SQL)
+	}
+}
+
 func TestPlannerFilters(t *testing.T) {
 	plan, err := NewPlanner(testModel()).Plan(Request{
 		Dimensions: []Field{{Field: "customers.state", Alias: "state"}},
