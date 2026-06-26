@@ -223,7 +223,7 @@ func (a apiGenAdapter) GetDeployment(w http.ResponseWriter, r *http.Request, _, 
 	a.server.getDeployment(w, r)
 }
 
-func (a apiGenAdapter) UploadDeploymentArtifact(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) UploadDeploymentArtifact(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenUploadDeploymentArtifactHeaders) {
 	a.server.uploadDeploymentArtifact(w, r)
 }
 

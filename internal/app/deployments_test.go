@@ -522,6 +522,7 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 	uploadReq := httptest.NewRequest(http.MethodPut, "/api/v1/workspaces/test/deployments/"+created.ID+"/artifact", bytes.NewReader(bundle.Bytes()))
 	uploadReq.Header.Set("Authorization", "Bearer dev")
 	uploadReq.Header.Set("Accept", "application/json")
+	uploadReq.Header.Set("Content-Type", "application/octet-stream")
 	uploadRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(uploadRec, uploadReq)
 	if uploadRec.Code != http.StatusOK {

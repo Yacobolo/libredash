@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -72,6 +74,68 @@ func TestAPICommandCallUsesGeneratedContract(t *testing.T) {
 	if strings.TrimSpace(output) != `{"ok":true}` {
 		t.Fatalf("output = %q", output)
 	}
+}
+
+func TestAPICommandCallDefaultsJSONBodyFileContentTypeFromGeneratedContract(t *testing.T) {
+	bodyPath := filepath.Join(t.TempDir(), "turn.json")
+	if err := os.WriteFile(bodyPath, []byte(`{"input":"hello"}`), 0o644); err != nil {
+		t.Fatalf("write body file: %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Fatalf("Content-Type = %q", got)
+		}
+		writeCLIJSON(t, w, map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	captureStdout(t, func() {
+		cmd := apiCommand(context.Background(), &rootOptions{target: server.URL, token: "token", workspaceID: "test"})
+		cmd.SetArgs([]string{
+			"call", "createAgentTurn",
+			"--target", server.URL,
+			"--token", "token",
+			"--path", "conversation=conv_1",
+			"--body-file", bodyPath,
+		})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("api call: %v", err)
+		}
+	})
+}
+
+func TestAPICommandCallDefaultsBinaryBodyFileContentTypeFromGeneratedContract(t *testing.T) {
+	bodyPath := filepath.Join(t.TempDir(), "artifact.tar.gz")
+	if err := os.WriteFile(bodyPath, []byte("bundle"), 0o644); err != nil {
+		t.Fatalf("write body file: %v", err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("method = %s", r.Method)
+		}
+		if r.URL.Path != "/api/v1/workspaces/test/deployments/dep_1/artifact" {
+			t.Fatalf("path = %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Content-Type"); got != "application/octet-stream" {
+			t.Fatalf("Content-Type = %q", got)
+		}
+		writeCLIJSON(t, w, map[string]any{"ok": true})
+	}))
+	defer server.Close()
+
+	captureStdout(t, func() {
+		cmd := apiCommand(context.Background(), &rootOptions{target: server.URL, token: "token", workspaceID: "test"})
+		cmd.SetArgs([]string{
+			"call", "uploadDeploymentArtifact",
+			"--target", server.URL,
+			"--token", "token",
+			"--path", "deployment=dep_1",
+			"--body-file", bodyPath,
+		})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("api call: %v", err)
+		}
+	})
 }
 
 func TestAPICommandRejectsMissingPathParameter(t *testing.T) {

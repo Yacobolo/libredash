@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,7 +11,7 @@ import (
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 )
 
-func TestAPIGenUsesTypeSpecV030(t *testing.T) {
+func TestAPIGenUsesTypeSpecV033(t *testing.T) {
 	root := projectRoot(t)
 	manifest, err := os.ReadFile(filepath.Join(root, "api", "apigen.yaml"))
 	if err != nil {
@@ -30,17 +31,29 @@ func TestAPIGenUsesTypeSpecV030(t *testing.T) {
 	}
 	taskText := string(taskfile)
 	for _, want := range []string{
-		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.0 typespec-compile",
-		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.0 all",
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3 typespec-compile",
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3 all",
 	} {
 		if !strings.Contains(taskText, want) {
 			t.Fatalf("Taskfile.yml missing generation command %q", want)
 		}
 	}
-	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0"} {
+	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0", "apigen@v0.3.0", "apigen@v0.3.2"} {
 		if strings.Contains(taskText, forbidden) {
-			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.3.0 migration", forbidden)
+			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.3.3 migration", forbidden)
 		}
+	}
+
+	ir, err := os.ReadFile(filepath.Join(root, "api", "gen", "json-ir.json"))
+	if err != nil {
+		t.Fatalf("read APIGen IR: %v", err)
+	}
+	var irDoc map[string]any
+	if err := json.Unmarshal(ir, &irDoc); err != nil {
+		t.Fatalf("decode APIGen IR: %v", err)
+	}
+	if got := irDoc["schema_version"]; got != "v2" {
+		t.Fatalf("APIGen IR schema_version = %#v, want v2", got)
 	}
 }
 
@@ -201,21 +214,77 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		} else if hasAgentExtension {
 			t.Fatalf("%s should not have x-agent metadata", operationID)
 		}
-		if operationID != "uploadDeploymentArtifact" {
-			if _, ok := contract.Extensions["x-libredash-dispatch"]; ok {
-				t.Fatalf("%s should not have raw-body dispatch extension", operationID)
-			}
+		if _, ok := contract.Extensions["x-libredash-dispatch"]; ok {
+			t.Fatalf("%s should not have raw-body dispatch extension", operationID)
 		}
 	}
+}
 
-	upload, ok := contracts["uploadDeploymentArtifact"]
+func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
+	spec, err := apigenapi.GetEmbeddedOpenAPISpec()
+	if err != nil {
+		t.Fatalf("embedded openapi: %v", err)
+	}
+	paths, ok := spec["paths"].(map[string]any)
 	if !ok {
-		t.Fatal("uploadDeploymentArtifact contract missing")
+		t.Fatalf("openapi paths missing: %#v", spec["paths"])
 	}
-	if got := upload.Extensions["x-libredash-dispatch"]; got != "raw-body" {
-		t.Fatalf("uploadDeploymentArtifact x-libredash-dispatch = %#v, want raw-body", got)
+	operation := mustOpenAPIOperation(t, paths, "/api/v1/workspaces/{workspace}/deployments/{deployment}/artifact", "put")
+	if _, ok := operation["x-libredash-dispatch"]; ok {
+		t.Fatalf("upload operation should not use x-libredash-dispatch: %#v", operation["x-libredash-dispatch"])
+	}
+	requestBody, _ := operation["requestBody"].(map[string]any)
+	content, _ := requestBody["content"].(map[string]any)
+	octetStream, ok := content["application/octet-stream"].(map[string]any)
+	if !ok {
+		t.Fatalf("upload operation missing application/octet-stream request body: %#v", requestBody)
+	}
+	schema, _ := octetStream["schema"].(map[string]any)
+	if schema == nil {
+		t.Fatalf("upload operation missing application/octet-stream schema: %#v", octetStream)
+	}
+	if got := schema["type"]; got != "string" {
+		t.Fatalf("upload operation schema type = %#v, want string", got)
+	}
+	if got := schema["format"]; got != "binary" {
+		t.Fatalf("upload operation schema format = %#v, want binary", got)
 	}
 
+	root := projectRoot(t)
+	ir, err := os.ReadFile(filepath.Join(root, "api", "gen", "json-ir.json"))
+	if err != nil {
+		t.Fatalf("read APIGen IR: %v", err)
+	}
+	var irDoc struct {
+		Endpoints []struct {
+			OperationID string `json:"operation_id"`
+			RequestBody *struct {
+				Contents []struct {
+					ContentType string `json:"content_type"`
+					BodyKind    string `json:"body_kind"`
+				} `json:"contents"`
+			} `json:"request_body"`
+		} `json:"endpoints"`
+	}
+	if err := json.Unmarshal(ir, &irDoc); err != nil {
+		t.Fatalf("decode APIGen IR: %v", err)
+	}
+	for _, endpoint := range irDoc.Endpoints {
+		if endpoint.OperationID != "uploadDeploymentArtifact" {
+			continue
+		}
+		if endpoint.RequestBody == nil || len(endpoint.RequestBody.Contents) != 1 {
+			t.Fatalf("upload IR request body = %#v", endpoint.RequestBody)
+		}
+		content := endpoint.RequestBody.Contents[0]
+		if content.ContentType != "application/octet-stream" || content.BodyKind != "binary" {
+			t.Fatalf("upload IR content = %#v, want application/octet-stream binary", content)
+		}
+		var generatedBody apigenapi.GenUploadDeploymentArtifactBody
+		_ = []byte(generatedBody)
+		return
+	}
+	t.Fatal("uploadDeploymentArtifact missing from APIGen IR")
 }
 
 func TestAPIGenListOperationsUseStandardEnvelope(t *testing.T) {

@@ -108,7 +108,7 @@ func runAPICall(ctx context.Context, opts *rootOptions, operationID string, call
 	if err != nil {
 		return err
 	}
-	body, contentType, err := apiRequestBody(callOpts, contract.RequestBodyRequired)
+	body, contentType, err := apiRequestBody(operationID, callOpts, contract.RequestBodyRequired)
 	if err != nil {
 		return err
 	}
@@ -177,7 +177,7 @@ func pathParamNames(path string) []string {
 	}
 }
 
-func apiRequestBody(callOpts *apiCallOptions, required bool) (io.Reader, string, error) {
+func apiRequestBody(operationID string, callOpts *apiCallOptions, required bool) (io.Reader, string, error) {
 	if callOpts.bodyJSON != "" && callOpts.bodyFile != "" {
 		return nil, "", fmt.Errorf("use only one of --body-json or --body-file")
 	}
@@ -187,7 +187,7 @@ func apiRequestBody(callOpts *apiCallOptions, required bool) (io.Reader, string,
 		}
 		contentType := callOpts.contentType
 		if contentType == "" {
-			contentType = "application/json"
+			contentType = apiOperationRequestContentType(operationID, "application/json")
 		}
 		return strings.NewReader(callOpts.bodyJSON), contentType, nil
 	}
@@ -198,7 +198,7 @@ func apiRequestBody(callOpts *apiCallOptions, required bool) (io.Reader, string,
 		}
 		contentType := callOpts.contentType
 		if contentType == "" {
-			contentType = "application/octet-stream"
+			contentType = apiOperationRequestContentType(operationID, "application/octet-stream")
 		}
 		return bytes.NewReader(bodyBytes), contentType, nil
 	}
@@ -206,6 +206,35 @@ func apiRequestBody(callOpts *apiCallOptions, required bool) (io.Reader, string,
 		return nil, "", fmt.Errorf("operation requires --body-json or --body-file")
 	}
 	return nil, "", nil
+}
+
+func apiOperationRequestContentType(operationID string, fallback string) string {
+	spec, err := apigenapi.GetEmbeddedOpenAPISpec()
+	if err != nil {
+		return fallback
+	}
+	paths, _ := spec["paths"].(map[string]any)
+	for _, rawPath := range paths {
+		path, _ := rawPath.(map[string]any)
+		for _, method := range []string{"get", "post", "put", "patch", "delete"} {
+			operation, _ := path[method].(map[string]any)
+			if operation["operationId"] != operationID {
+				continue
+			}
+			requestBody, _ := operation["requestBody"].(map[string]any)
+			content, _ := requestBody["content"].(map[string]any)
+			if _, ok := content[fallback]; ok {
+				return fallback
+			}
+			if len(content) == 1 {
+				for contentType := range content {
+					return contentType
+				}
+			}
+			return fallback
+		}
+	}
+	return fallback
 }
 
 func doRawAPI(ctx context.Context, method, endpoint, token, contentType string, body io.Reader, out io.Writer) error {

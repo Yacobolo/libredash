@@ -14,7 +14,6 @@ model DeploymentArtifactResponse {
   sizeBytes: int64;
 }
 
-
 model DeploymentResponse {
   id: string;
   workspaceId: string;
@@ -67,11 +66,11 @@ op activateDeployment(@path workspace: string, @path deployment: string): OkJson
 @put
 @apigen.authz(#{ mode: "permission", permission: "deployment:write" })
 @apigen.manual
-@extension("x-libredash-dispatch", "raw-body")
 op uploadDeploymentArtifact(
   @path workspace: string,
   @path deployment: string,
   @header contentType: "application/octet-stream",
+  @body body: bytes,
 ): OkJson<DeploymentArtifactResponse> | CommonErrors;
 
 @tag("Deployments")
