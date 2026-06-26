@@ -102,7 +102,7 @@ func TestWorkspaceAssetDetailsRenderSemanticModelRefreshSummary(t *testing.T) {
 		`data-attr:disabled="$assetRefresh.running"`,
 		`data-class="{'animate-spin': $assetRefresh.running}"`,
 		`@post('/workspaces/libredash/assets/model/refresh-materializations'`,
-		`title="Refresh model materializations"`,
+		`title="Refresh materializations"`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("semantic model refresh summary did not render %q:\n%s", want, rendered)
@@ -156,11 +156,20 @@ func TestWorkspaceAssetDetailsRenderSemanticModelRefreshSummary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(html.UnescapeString(out.String()), "Refresh model materializations") {
-		t.Fatalf("non-semantic model asset rendered refresh action:\n%s", out.String())
+	modelTableRendered := html.UnescapeString(out.String())
+	for _, want := range []string{
+		"Refresh status",
+		"Last refreshed",
+		`data-init="@get('/workspaces/libredash/assets/table-model/updates?section=details', {openWhenHidden: true})"`,
+		`@post('/workspaces/libredash/assets/table-model/refresh-materializations'`,
+	} {
+		if !strings.Contains(modelTableRendered, want) {
+			t.Fatalf("model table refresh detail did not render %q:\n%s", want, modelTableRendered)
+		}
 	}
-	if strings.Contains(html.UnescapeString(out.String()), "/updates") {
-		t.Fatalf("non-semantic model asset rendered workspace asset updates stream:\n%s", out.String())
+	tableSignals := workspaceAssetSignalsWithRefresh(workspace, modelTable, assets, edges, assetLineage(workspace.ID, modelTable, assets, edges), "details", AssetRefreshState{})
+	if _, ok := tableSignals["assetRefresh"].(map[string]any); !ok {
+		t.Fatalf("model table details missing assetRefresh signal: %#v", tableSignals)
 	}
 }
 
@@ -191,7 +200,7 @@ func TestWorkspaceAssetRefreshesTabRendersSemanticModelRuns(t *testing.T) {
 	}
 	signals := workspaceAssetSignalsWithRefresh(workspace, asset, assets, edges, assetLineage(workspace.ID, asset, assets, edges), "refreshes", refresh)
 	grid := signalMetricGrid(t, signals, "assetRefreshesGrid")
-	assertGridHeaders(t, grid, []string{"Status", "Started", "Duration", "Triggered by", "Run ID", "Error"})
+	assertGridHeaders(t, grid, []string{"Status", "Started", "Duration", "Triggered by", "Trigger", "Run ID", "Error"})
 	if len(grid.Rows) != 2 {
 		t.Fatalf("refresh rows = %#v, want 2", grid.Rows)
 	}
@@ -205,6 +214,9 @@ func TestWorkspaceAssetRefreshesTabRendersSemanticModelRuns(t *testing.T) {
 	}
 	if got := fmt.Sprint(grid.Rows[1]["triggered_by"]); got != "-" {
 		t.Fatalf("missing triggered by = %q, want -", got)
+	}
+	if got := fmt.Sprint(grid.Rows[0]["trigger"]); got != "-" {
+		t.Fatalf("missing trigger = %q, want -", got)
 	}
 	if got := fmt.Sprint(grid.Rows[0]["run"]); got != "matrun_1234567890a" {
 		t.Fatalf("run = %q, want matrun_1234567890a", got)

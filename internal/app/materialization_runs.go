@@ -13,6 +13,10 @@ import (
 type materializationRunRequest struct {
 	ModelID      string `json:"modelId"`
 	DeploymentID string `json:"deploymentId,omitempty"`
+	TargetType   string `json:"targetType,omitempty"`
+	TargetID     string `json:"targetId,omitempty"`
+	TriggerType  string `json:"triggerType,omitempty"`
+	ParentRunID  string `json:"parentRunId,omitempty"`
 }
 
 func (s *Server) createMaterializationRun(w http.ResponseWriter, r *http.Request) {
@@ -31,6 +35,10 @@ func (s *Server) createMaterializationRun(w http.ResponseWriter, r *http.Request
 		ModelID:      input.ModelID,
 		DeploymentID: input.DeploymentID,
 		PrincipalID:  principal.ID,
+		TargetType:   input.TargetType,
+		TargetID:     input.TargetID,
+		TriggerType:  input.TriggerType,
+		ParentRunID:  input.ParentRunID,
 	})
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)

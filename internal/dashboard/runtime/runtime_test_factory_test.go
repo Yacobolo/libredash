@@ -57,6 +57,10 @@ func (r testDataRuntime) Refresh(ctx context.Context) error {
 	return r.runtime.Refresh(ctx)
 }
 
+func (r testDataRuntime) RefreshTables(ctx context.Context, tableNames []string) error {
+	return r.runtime.RefreshModelTables(ctx, tableNames)
+}
+
 func (r testDataRuntime) Close() error {
 	return r.runtime.Close()
 }

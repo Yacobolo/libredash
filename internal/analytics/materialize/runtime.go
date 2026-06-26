@@ -99,6 +99,20 @@ func (r *Runtime) Refresh(ctx context.Context) error {
 	return nil
 }
 
+func (r *Runtime) RefreshModelTables(ctx context.Context, tableNames []string) error {
+	lastRefresh, err := RefreshModelTables(ctx, r.db, r.sources, r.model, tableNames)
+	if err != nil {
+		return err
+	}
+	if discoverer, ok := r.db.(schemaDiscoverer); ok {
+		if err := discoverer.DiscoverSchemas(ctx, r.model); err != nil {
+			return err
+		}
+	}
+	r.lastRefresh = lastRefresh
+	return nil
+}
+
 func (r *Runtime) Queries() *semanticquery.Service {
 	if r == nil {
 		return nil

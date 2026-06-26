@@ -85,6 +85,10 @@ func (r dashboardDataRuntime) Refresh(ctx context.Context) error {
 	return r.runtime.Refresh(ctx)
 }
 
+func (r dashboardDataRuntime) RefreshTables(ctx context.Context, tableNames []string) error {
+	return r.runtime.RefreshModelTables(ctx, tableNames)
+}
+
 func (r dashboardDataRuntime) Close() error {
 	return r.runtime.Close()
 }

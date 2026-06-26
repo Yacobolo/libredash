@@ -67,6 +67,22 @@ func Refresh(ctx context.Context, executor Executor, sources SourceRegistrar, mo
 	return time.Now(), nil
 }
 
+func RefreshModelTables(ctx context.Context, executor Executor, sources SourceRegistrar, model *semanticmodel.Model, tableNames []string) (time.Time, error) {
+	if executor == nil {
+		return time.Time{}, fmt.Errorf("materialization executor is required")
+	}
+	if sources == nil {
+		return time.Time{}, fmt.Errorf("source registrar is required")
+	}
+	if err := sources.PrepareSourceRuntime(ctx, model); err != nil {
+		return time.Time{}, err
+	}
+	if err := ModelTablesNamed(ctx, executor, sources, model, tableNames); err != nil {
+		return time.Time{}, err
+	}
+	return time.Now(), nil
+}
+
 func ValidateFiles(model *semanticmodel.Model, dataDir string) error {
 	return ValidateFilesWithResolver(model, dataDir, defaultSourcePathResolver{})
 }
@@ -142,22 +158,78 @@ func ModelTables(ctx context.Context, executor Executor, sources SourceRegistrar
 	if sources == nil {
 		return fmt.Errorf("source registrar is required")
 	}
-	order, err := materializationOrder(model)
+	order, err := ModelTableOrder(model)
 	if err != nil {
 		return err
+	}
+	return ModelTablesNamed(ctx, executor, sources, model, order)
+}
+
+func ModelTablesNamed(ctx context.Context, executor Executor, sources SourceRegistrar, model *semanticmodel.Model, tableNames []string) error {
+	if executor == nil {
+		return fmt.Errorf("materialization executor is required")
+	}
+	if sources == nil {
+		return fmt.Errorf("source registrar is required")
+	}
+	if model == nil {
+		return fmt.Errorf("semantic model is required")
 	}
 	if err := executor.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS model"); err != nil {
 		return err
 	}
-	for _, name := range order {
+	for _, name := range tableNames {
 		if err := validateIdentifier(name); err != nil {
 			return err
+		}
+		if _, ok := model.Tables[name]; !ok {
+			return fmt.Errorf("unknown model table %q", name)
 		}
 		if err := materializeModelTable(ctx, executor, sources, model, name); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func ModelTableDependencyOrder(model *semanticmodel.Model, selectedTable string) ([]string, error) {
+	selectedTable = strings.TrimSpace(selectedTable)
+	if selectedTable == "" {
+		return nil, fmt.Errorf("model table is required")
+	}
+	if model == nil {
+		return nil, fmt.Errorf("semantic model is required")
+	}
+	temporary := map[string]bool{}
+	permanent := map[string]bool{}
+	order := []string{}
+	var visit func(string) error
+	visit = func(name string) error {
+		if permanent[name] {
+			return nil
+		}
+		if temporary[name] {
+			return fmt.Errorf("model table dependency cycle includes %q", name)
+		}
+		table, ok := model.Tables[name]
+		if !ok {
+			return fmt.Errorf("unknown model table %q", name)
+		}
+		temporary[name] = true
+		for _, dependency := range table.ModelDependencies {
+			if err := visit(dependency); err != nil {
+				return err
+			}
+		}
+		temporary[name] = false
+		permanent[name] = true
+		order = append(order, name)
+		return nil
+	}
+	if err := visit(selectedTable); err != nil {
+		return nil, err
+	}
+	return order, nil
 }
 
 func materializeModelTable(ctx context.Context, executor Executor, sources SourceRegistrar, model *semanticmodel.Model, name string) error {
@@ -175,7 +247,7 @@ func materializeModelTable(ctx context.Context, executor Executor, sources Sourc
 	return nil
 }
 
-func materializationOrder(model *semanticmodel.Model) ([]string, error) {
+func ModelTableOrder(model *semanticmodel.Model) ([]string, error) {
 	if model == nil {
 		return nil, fmt.Errorf("semantic model is required")
 	}

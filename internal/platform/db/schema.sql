@@ -174,11 +174,20 @@ CREATE TABLE IF NOT EXISTS materialization_job_runs (
   id TEXT PRIMARY KEY,
   job_id TEXT NOT NULL REFERENCES materialization_jobs(id) ON DELETE CASCADE,
   principal_id TEXT REFERENCES principals(id) ON DELETE SET NULL,
+  target_type TEXT NOT NULL DEFAULT 'semantic_model',
+  target_id TEXT NOT NULL DEFAULT '',
+  trigger_type TEXT NOT NULL DEFAULT 'direct',
+  parent_run_id TEXT REFERENCES materialization_job_runs(id) ON DELETE SET NULL,
   status TEXT NOT NULL,
   started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   finished_at TEXT,
   error TEXT NOT NULL DEFAULT ''
 );
+
+CREATE INDEX IF NOT EXISTS materialization_job_runs_target_idx
+  ON materialization_job_runs(target_type, target_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS materialization_job_runs_parent_idx
+  ON materialization_job_runs(parent_run_id);
 
 CREATE TABLE IF NOT EXISTS audit_events (
   id TEXT PRIMARY KEY,

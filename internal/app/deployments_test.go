@@ -17,6 +17,7 @@ import (
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/agentapp"
 	agentappsqlite "github.com/Yacobolo/libredash/internal/agentapp/sqlite"
+	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
@@ -84,6 +85,13 @@ func (emptyPageRuntimeAssetMetrics) WorkspaceAssets(workspaceID, deploymentID st
 	if err != nil {
 		return nil, nil, false
 	}
+	modelTable, err := workspace.NewAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeModelTable, "olist.orders", model.ID, "orders", "", map[string]any{
+		"PrimaryKey": "order_id",
+		"Source":     "orders",
+	})
+	if err != nil {
+		return nil, nil, false
+	}
 	table, err := workspace.NewAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeSemanticTable, "olist.orders", model.ID, "orders", "", map[string]any{})
 	if err != nil {
 		return nil, nil, false
@@ -92,12 +100,33 @@ func (emptyPageRuntimeAssetMetrics) WorkspaceAssets(workspaceID, deploymentID st
 	if err != nil {
 		return nil, nil, false
 	}
-	return []workspace.Asset{catalog, model, table, dashboard}, []workspace.AssetEdge{
+	return []workspace.Asset{catalog, model, modelTable, table, dashboard}, []workspace.AssetEdge{
 		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), catalog.ID, model.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), model.ID, modelTable.ID, workspace.AssetEdgeContains),
 		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), model.ID, table.ID, workspace.AssetEdgeContains),
 		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), catalog.ID, dashboard.ID, workspace.AssetEdgeContains),
 		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), dashboard.ID, model.ID, workspace.AssetEdgeUsesSemanticModel),
 	}, true
+}
+
+func (emptyPageRuntimeAssetMetrics) SemanticModel(modelID string) (*semanticmodel.Model, bool) {
+	if modelID != "olist" {
+		return fakeMetrics{}.SemanticModel(modelID)
+	}
+	return &semanticmodel.Model{
+		Name: "olist",
+		Sources: map[string]semanticmodel.Source{
+			"orders": {Path: "orders.csv", Format: "csv"},
+		},
+		BaseTable: "orders",
+		Tables: map[string]semanticmodel.Table{
+			"orders": {Kind: "fact", Source: "orders", PrimaryKey: "order_id"},
+		},
+	}, true
+}
+
+func (emptyPageRuntimeAssetMetrics) RefreshModelTables(context.Context, string, []string) error {
+	return nil
 }
 
 func (m dataDirMetrics) DataDir() string {

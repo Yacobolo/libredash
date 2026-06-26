@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
 	materializeruntime "github.com/Yacobolo/libredash/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
@@ -24,12 +25,19 @@ import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
+	"github.com/Yacobolo/libredash/internal/deployment"
+	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
+	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
+	"github.com/Yacobolo/libredash/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
 
 type harness struct {
 	handler http.Handler
 	server  *httptest.Server
+	store   *platform.Store
 }
 
 type harnessConfig struct {
@@ -111,6 +119,74 @@ func newHarness(t *testing.T, opts ...harnessOption) *harness {
 	h.server = httptest.NewServer(h.handler)
 	t.Cleanup(h.server.Close)
 	return h
+}
+
+func newStoreBackedHarness(t *testing.T, opts ...harnessOption) *harness {
+	t.Helper()
+
+	h, metrics, catalogPath := newHarnessWithMetrics(t, opts...)
+	ctx := context.Background()
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	if err != nil {
+		t.Fatalf("open platform store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	workspaceID := metrics.Catalog().Workspace.ID
+	if workspaceID == "" {
+		workspaceID = platform.DefaultWorkspaceID
+	}
+	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
+	if err := workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: workspace.WorkspaceID(workspaceID), Title: metrics.Catalog().Workspace.Title, Description: metrics.Catalog().Workspace.Description}); err != nil {
+		t.Fatalf("ensure integration workspace: %v", err)
+	}
+	accessRepo := accesssqlite.NewRepository(store.SQLDB())
+	if err := app.SeedLocalDeveloperPlatformAdmin(ctx, accessRepo); err != nil {
+		t.Fatalf("seed local developer: %v", err)
+	}
+	seedIntegrationActiveDeployment(t, store, workspaceID, catalogPath)
+
+	auth := app.NewAuth(accessRepo, workspaceID, app.AuthConfig{DevBypass: true})
+	server := app.NewWithOptions(refreshableIntegrationMetrics{integrationMetrics: metrics}, app.Options{
+		Store:              store,
+		Auth:               auth,
+		DefaultWorkspaceID: workspaceID,
+	})
+	h.handler = server.Routes()
+	h.store = store
+	h.server = httptest.NewServer(h.handler)
+	t.Cleanup(h.server.Close)
+	return h
+}
+
+func newHarnessWithMetrics(t *testing.T, opts ...harnessOption) (*harness, integrationMetrics, string) {
+	t.Helper()
+
+	config := harnessConfig{
+		fixture: writeMinimalOlistFixture,
+	}
+	for _, opt := range opts {
+		opt(&config)
+	}
+	if config.catalogPath == "" {
+		config.catalogPath = discoverCatalogPath(t)
+	}
+
+	dataDir := t.TempDir()
+	duckDBDir := t.TempDir()
+	config.fixture(t, dataDir)
+
+	metrics, err := dashboardruntime.NewFromCatalog(dataDir, config.catalogPath, duckDBDir, integrationDataRuntimeFactory{})
+	if err != nil {
+		t.Fatalf("create dashboard runtime: %v", err)
+	}
+	t.Cleanup(func() { _ = metrics.Close() })
+
+	metricsForApp := integrationMetrics(metrics)
+	if config.wrapMetrics != nil {
+		metricsForApp = config.wrapMetrics(metrics)
+	}
+	return &harness{}, metricsForApp, config.catalogPath
 }
 
 func (h *harness) getUpdates(t *testing.T, dashboardID, pageID string, signals map[string]any) string {
@@ -220,6 +296,85 @@ func (h *harness) postCommand(t *testing.T, path string, signals map[string]any)
 		t.Fatalf("POST %s status = %d, body:\n%s", path, res.StatusCode, string(body))
 	}
 	return res.StatusCode
+}
+
+func (h *harness) getAuthenticated(t *testing.T, path string) string {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodGet, h.serverURL(t)+path, nil)
+	if err != nil {
+		t.Fatalf("create GET %s request: %v", path, err)
+	}
+	req.Header.Set("Authorization", "Bearer dev")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET %s: %v", path, err)
+	}
+	defer res.Body.Close()
+	body, _ := io.ReadAll(res.Body)
+	if res.StatusCode >= 400 {
+		t.Fatalf("GET %s status = %d, body:\n%s", path, res.StatusCode, string(body))
+	}
+	return string(body)
+}
+
+func (h *harness) postAuthenticated(t *testing.T, path string) int {
+	t.Helper()
+
+	req, err := http.NewRequest(http.MethodPost, h.serverURL(t)+path, nil)
+	if err != nil {
+		t.Fatalf("create POST %s request: %v", path, err)
+	}
+	req.Header.Set("Authorization", "Bearer dev")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST %s: %v", path, err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode >= 400 {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("POST %s status = %d, body:\n%s", path, res.StatusCode, string(body))
+	}
+	return res.StatusCode
+}
+
+func (h *harness) openAssetUpdatesStream(t *testing.T, workspaceID, assetID, section string) *streamClient {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	path := h.serverURL(t) + "/workspaces/" + workspaceID + "/assets/" + assetID + "/updates?section=" + url.QueryEscape(section)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		cancel()
+		t.Fatalf("create asset updates request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer dev")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		cancel()
+		t.Fatalf("open asset updates stream: %v", err)
+	}
+	if res.StatusCode != http.StatusOK {
+		defer res.Body.Close()
+		body, _ := io.ReadAll(res.Body)
+		cancel()
+		t.Fatalf("GET asset updates status = %d, body:\n%s", res.StatusCode, string(body))
+	}
+	if got := res.Header.Get("Content-Type"); !strings.HasPrefix(got, "text/event-stream") {
+		_ = res.Body.Close()
+		cancel()
+		t.Fatalf("GET asset updates content type = %q, want text/event-stream", got)
+	}
+
+	client := &streamClient{
+		cancel:  cancel,
+		body:    res.Body,
+		patches: make(chan map[string]any, 16),
+		errs:    make(chan error, 1),
+	}
+	go client.read()
+	t.Cleanup(client.close)
+	return client
 }
 
 func (h *harness) serverURL(t *testing.T) string {
@@ -373,6 +528,102 @@ func writeFixture(t *testing.T, dir, name, content string) {
 	}
 }
 
+func seedIntegrationActiveDeployment(t *testing.T, store *platform.Store, workspaceID, catalogPath string) {
+	t.Helper()
+	ctx := context.Background()
+	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
+	created, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: deployment.WorkspaceID(workspaceID), CreatedBy: "integration"})
+	if err != nil {
+		t.Fatalf("create deployment: %v", err)
+	}
+	workspaceDef, err := workspacecompiler.CompileDefinition(catalogPath)
+	if err != nil {
+		t.Fatalf("compile workspace definition: %v", err)
+	}
+	graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(created.ID), workspaceDef)
+	if err != nil {
+		t.Fatalf("extract workspace assets: %v", err)
+	}
+	validation := deployment.Validation{
+		Digest:       "digest-" + string(created.ID),
+		ManifestJSON: "{}",
+		Assets:       integrationDeploymentAssets(graph.Assets),
+		Edges:        integrationDeploymentEdges(graph.Edges),
+	}
+	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, integrationZeroArtifact(created.ID, workspaceID)); err != nil {
+		t.Fatalf("save validated deployment: %v", err)
+	}
+	if _, err := deploymentRepo.Activate(ctx, deployment.WorkspaceID(workspaceID), created.ID); err != nil {
+		t.Fatalf("activate deployment: %v", err)
+	}
+}
+
+func integrationAssetID(t *testing.T, store *platform.Store, workspaceID, assetType, key string) string {
+	t.Helper()
+	repo := workspacesqlite.NewRepository(store.SQLDB())
+	graph, ok, err := repo.ActiveDeploymentGraph(context.Background(), workspace.WorkspaceID(workspaceID))
+	if err != nil {
+		t.Fatalf("active deployment graph: %v", err)
+	}
+	if !ok {
+		t.Fatalf("workspace %q has no active deployment graph", workspaceID)
+	}
+	for _, asset := range graph.Assets {
+		if string(asset.Type) == assetType && asset.Key == key {
+			return string(asset.ID)
+		}
+	}
+	t.Fatalf("asset %s %q not found in active graph", assetType, key)
+	return ""
+}
+
+func integrationZeroArtifact(deploymentID deployment.ID, workspaceID string) deployment.Artifact {
+	return deployment.Artifact{
+		ID:           "artifact_" + string(deploymentID),
+		DeploymentID: deploymentID,
+		WorkspaceID:  deployment.WorkspaceID(workspaceID),
+		Digest:       "digest",
+		Format:       "tar.gz",
+		Path:         "artifact.tar.gz",
+		ManifestJSON: "{}",
+	}
+}
+
+func integrationDeploymentAssets(rows []workspace.Asset) []deployment.Asset {
+	assets := make([]deployment.Asset, 0, len(rows))
+	for _, row := range rows {
+		assets = append(assets, deployment.Asset{
+			ID:             string(row.ID),
+			WorkspaceID:    deployment.WorkspaceID(row.WorkspaceID),
+			DeploymentID:   deployment.ID(row.DeploymentID),
+			Type:           string(row.Type),
+			Key:            row.Key,
+			ParentID:       string(row.ParentID),
+			Title:          row.Title,
+			Description:    row.Description,
+			ContentJSON:    row.ContentJSON,
+			ContentHash:    row.ContentHash,
+			ContentVersion: row.ContentVersion,
+		})
+	}
+	return assets
+}
+
+func integrationDeploymentEdges(rows []workspace.AssetEdge) []deployment.AssetEdge {
+	edges := make([]deployment.AssetEdge, 0, len(rows))
+	for _, row := range rows {
+		edges = append(edges, deployment.AssetEdge{
+			ID:           string(row.ID),
+			WorkspaceID:  deployment.WorkspaceID(row.WorkspaceID),
+			DeploymentID: deployment.ID(row.DeploymentID),
+			FromAssetID:  string(row.FromAssetID),
+			ToAssetID:    string(row.ToAssetID),
+			Type:         string(row.Type),
+		})
+	}
+	return edges
+}
+
 type integrationDataRuntimeFactory struct{}
 
 func (integrationDataRuntimeFactory) OpenDashboardDataRuntime(ctx context.Context, config dashboardruntime.DataRuntimeConfig) (dashboardruntime.DataRuntime, error) {
@@ -420,10 +671,28 @@ func (r integrationDataRuntime) Refresh(ctx context.Context) error {
 	return r.runtime.Refresh(ctx)
 }
 
+func (r integrationDataRuntime) RefreshTables(ctx context.Context, tableNames []string) error {
+	return r.runtime.RefreshModelTables(ctx, tableNames)
+}
+
 func (r integrationDataRuntime) Close() error {
 	return r.runtime.Close()
 }
 
 func (r integrationDataRuntime) LastRefresh() time.Time {
 	return r.runtime.LastRefresh()
+}
+
+type refreshableIntegrationMetrics struct {
+	integrationMetrics
+}
+
+func (m refreshableIntegrationMetrics) RefreshModelTables(ctx context.Context, modelID string, tableNames []string) error {
+	port, ok := m.integrationMetrics.(interface {
+		RefreshTables(context.Context, string, []string) error
+	})
+	if !ok {
+		return fmt.Errorf("integration metrics do not support table refresh")
+	}
+	return port.RefreshTables(ctx, modelID, tableNames)
 }

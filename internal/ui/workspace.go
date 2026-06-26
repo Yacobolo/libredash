@@ -116,7 +116,7 @@ func WorkspaceAssetPageWithRefresh(catalog dashboard.Catalog, workspace workspac
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 	initAction := ""
-	if asset.Type == "semantic_model" {
+	if assetRefreshable(asset.Type) {
 		refresh.UpdatesURL = "/workspaces/" + workspace.ID + "/assets/" + asset.ID + "/updates?section=" + activeSection
 		initAction = "@get('" + refresh.UpdatesURL + "', {openWhenHidden: true})"
 	}
@@ -579,11 +579,11 @@ func assetActions(workspaceID string, asset workspaceview.AssetView, refresh Ass
 	refreshPath := "/workspaces/" + workspaceID + "/assets/" + asset.ID + "/refresh-materializations"
 	refreshAction := "$assetRefresh.status = 'running'; $assetRefresh.running = true; " + postActionWithCSRFSignal(refreshPath, "$csrfToken")
 	return h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"),
-		g.If(asset.Type == "semantic_model", h.Button(
+		g.If(assetRefreshable(asset.Type), h.Button(
 			h.Type("button"),
 			h.Class(metricActionButtonClass),
-			h.Title("Refresh model materializations"),
-			h.Aria("label", "Refresh model materializations"),
+			h.Title("Refresh materializations"),
+			h.Aria("label", "Refresh materializations"),
 			g.Attr("data-attr:disabled", "$assetRefresh.running"),
 			g.Attr("data-on:click", refreshAction),
 			lucide.RefreshCw(append(metricActionIconAttrs(), g.Attr("data-class", "{'animate-spin': $assetRefresh.running}"))...),
@@ -608,7 +608,7 @@ func connectionSourceAssetActions() g.Node {
 func assetDetailTabs(workspaceID, assetID, assetType, activeSection string, relatedCount int) g.Node {
 	return h.Nav(h.Class("flex min-w-0 gap-6 border-b border-outline-variant bg-app px-3"), h.Aria("label", "Workspace asset sections"),
 		assetDetailTabLink(assetnav.WorkspaceAssetSectionHref(workspaceID, assetID, "details"), activeSection == "details", "Details", nil),
-		g.If(assetType == "semantic_model", assetDetailTabLink(assetnav.WorkspaceAssetSectionHref(workspaceID, assetID, "refreshes"), activeSection == "refreshes", "Refreshes", nil)),
+		g.If(assetRefreshable(assetType), assetDetailTabLink(assetnav.WorkspaceAssetSectionHref(workspaceID, assetID, "refreshes"), activeSection == "refreshes", "Refreshes", nil)),
 		assetDetailTabLink(assetnav.WorkspaceAssetSectionHref(workspaceID, assetID, "lineage"), activeSection == "lineage", "Lineage", metricTabCount(relatedCount)),
 	)
 }
@@ -697,7 +697,7 @@ func workspaceAssetSignals(workspace workspaceview.WorkspaceView, asset workspac
 
 func workspaceAssetSignalsWithRefresh(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, lineage assetLineageModel, activeSection string, refresh AssetRefreshState) map[string]any {
 	signals := map[string]any{}
-	if asset.Type == "semantic_model" {
+	if assetRefreshable(asset.Type) {
 		signals["assetRefresh"] = assetRefreshSignal(refresh)
 		signals["csrfToken"] = refresh.CSRFToken
 	}
@@ -711,7 +711,7 @@ func workspaceAssetSignalsWithRefresh(workspace workspaceview.WorkspaceView, ass
 		signals["assetLineageUsesGrid"] = lineage.Uses
 		signals["assetLineageUsedByGrid"] = lineage.UsedBy
 	}
-	if activeSection == "refreshes" && asset.Type == "semantic_model" {
+	if activeSection == "refreshes" && assetRefreshable(asset.Type) {
 		signals["assetRefreshesGrid"] = assetRefreshesGrid(refresh)
 	}
 	return signals
@@ -723,7 +723,9 @@ func WorkspaceAssetRefreshSignals(workspace workspaceview.WorkspaceView, asset w
 	}
 	switch activeSection {
 	case "details":
-		signals["assetDetailsSemanticModelTablesGrid"] = semanticModelTablesGrid(workspace.ID, asset, assets, asset.Meta, refresh)
+		if asset.Type == "semantic_model" {
+			signals["assetDetailsSemanticModelTablesGrid"] = semanticModelTablesGrid(workspace.ID, asset, assets, asset.Meta, refresh)
+		}
 	case "refreshes":
 		signals["assetRefreshesGrid"] = assetRefreshesGrid(refresh)
 	}
@@ -772,6 +774,7 @@ func assetRefreshesGrid(refresh AssetRefreshState) metricGrid {
 			"started":      emptyDash(run.StartedAt),
 			"duration":     emptyDash(refreshRunDuration(run)),
 			"triggered_by": emptyDash(run.PrincipalDisplayName),
+			"trigger":      refreshTriggerLabel(run.TriggerType),
 			"run":          emptyDash(shortRefreshRunID(run.ID)),
 			"error":        emptyDash(run.Error),
 		})
@@ -782,12 +785,26 @@ func assetRefreshesGrid(refresh AssetRefreshState) metricGrid {
 			{ID: "started", Header: "Started", Width: "180px"},
 			{ID: "duration", Header: "Duration", Width: "110px"},
 			{ID: "triggered_by", Header: "Triggered by", Width: "130px"},
+			{ID: "trigger", Header: "Trigger", Width: "130px"},
 			{ID: "run", Header: "Run ID", Kind: "code", Width: "160px"},
 			{ID: "error", Header: "Error"},
 		},
 		Rows:     rows,
-		Empty:    "No refresh runs have been recorded for this semantic model.",
-		MinWidth: "920px",
+		Empty:    "No refresh runs have been recorded for this asset.",
+		MinWidth: "1040px",
+	}
+}
+
+func refreshTriggerLabel(trigger string) string {
+	switch strings.TrimSpace(trigger) {
+	case "direct":
+		return "Direct"
+	case "semantic_model":
+		return "Semantic model"
+	case "dependency":
+		return "Dependency"
+	default:
+		return "-"
 	}
 }
 
@@ -1514,6 +1531,10 @@ type AssetRefreshRun struct {
 	DeploymentID         string
 	PrincipalID          string
 	PrincipalDisplayName string
+	TargetType           string
+	TargetID             string
+	TriggerType          string
+	ParentRunID          string
 	Status               string
 	StartedAt            string
 	FinishedAt           string
@@ -1567,7 +1588,7 @@ func assetDetailModelForAssetWithRefresh(workspace workspaceview.WorkspaceView, 
 	case "semantic_model":
 		semanticModelDetailModel(&model, workspace, asset, assets, refresh)
 	case "model_table":
-		modelTableDetailModel(&model, workspace, asset, assets)
+		modelTableDetailModel(&model, workspace, asset, assets, refresh)
 	case "dashboard":
 		dashboardDetailModel(&model, asset, assets)
 	case "connection":
@@ -1789,7 +1810,7 @@ func semanticMeasureCountsByTable(measures map[string]any) map[string]int {
 	return counts
 }
 
-func modelTableDetailModel(model *assetDetailModel, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView) {
+func modelTableDetailModel(model *assetDetailModel, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, refresh AssetRefreshState) {
 	modelKey, tableName := modelTableKeyParts(asset)
 	fields := modelTableFields(asset.Meta)
 	mode := "Unspecified"
@@ -1805,12 +1826,17 @@ func modelTableDetailModel(model *assetDetailModel, workspace workspaceview.Work
 		definitionFact{Label: "Grain", Value: metaString(asset.Meta, "Grain", "grain"), Code: true},
 		definitionFact{Label: "Mode", Value: mode},
 	)
+	model.Overview = append(model.Overview, refreshOverviewFacts(refresh)...)
 	model.Sections = append(model.Sections,
 		assetDetailSection{Title: fmt.Sprintf("Fields (%d)", len(fields)), Signal: "assetDetailsModelTableFieldsGrid", Grid: modelTableFieldsGrid(workspace.ID, modelKey, tableName, fields, metaMap(asset.Meta, "Schema", "schema"), assets)},
 	)
 	if sql := modelTableSQL(asset.Meta); sql != "" {
 		model.Sections = append(model.Sections, assetDetailSection{Title: "SQL", Lang: "sql", Code: sql})
 	}
+}
+
+func assetRefreshable(assetType string) bool {
+	return assetType == "semantic_model" || assetType == "model_table"
 }
 
 func modelTableKeyParts(asset workspaceview.AssetView) (string, string) {

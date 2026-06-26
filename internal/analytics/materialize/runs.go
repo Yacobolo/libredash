@@ -16,10 +16,21 @@ const (
 	RunStatusRunning   = "running"
 	RunStatusSucceeded = "succeeded"
 	RunStatusFailed    = "failed"
+
+	TargetSemanticModel = "semantic_model"
+	TargetModelTable    = "model_table"
+
+	TriggerDirect        = "direct"
+	TriggerSemanticModel = "semantic_model"
+	TriggerDependency    = "dependency"
 )
 
 type RefreshRunner interface {
 	RefreshMaterializations(ctx context.Context, modelID string) error
+}
+
+type ModelTableRefreshRunner interface {
+	RefreshModelTables(ctx context.Context, modelID string, tableNames []string) error
 }
 
 type RunRecord struct {
@@ -29,6 +40,10 @@ type RunRecord struct {
 	DeploymentID         string `json:"deploymentId,omitempty"`
 	PrincipalID          string `json:"principalId,omitempty"`
 	PrincipalDisplayName string `json:"principalDisplayName,omitempty"`
+	TargetType           string `json:"targetType"`
+	TargetID             string `json:"targetId"`
+	TriggerType          string `json:"triggerType"`
+	ParentRunID          string `json:"parentRunId,omitempty"`
 	Status               string `json:"status"`
 	CreatedAt            string `json:"createdAt"`
 	UpdatedAt            string `json:"updatedAt"`
@@ -42,12 +57,19 @@ type RunInput struct {
 	ModelID      string
 	DeploymentID string
 	PrincipalID  string
+	TargetType   string
+	TargetID     string
+	TriggerType  string
+	ParentRunID  string
 }
 
 type RunRepository interface {
 	CreateRun(ctx context.Context, input RunInput) (RunRecord, error)
 	GetRun(ctx context.Context, workspaceID, runID string) (RunRecord, error)
 	ListRuns(ctx context.Context, workspaceID string, page RunPage) ([]RunRecord, error)
+	ListTargetRuns(ctx context.Context, workspaceID, targetType, targetID string, page RunPage) ([]RunRecord, error)
+	LatestTargetRun(ctx context.Context, workspaceID, targetType, targetID string) (RunRecord, bool, error)
+	LatestSuccessfulTargetRun(ctx context.Context, workspaceID, targetType, targetID string) (RunRecord, bool, error)
 	MarkRunRunning(ctx context.Context, workspaceID, runID string) (RunRecord, error)
 	MarkRunSucceeded(ctx context.Context, workspaceID, runID string) (RunRecord, error)
 	MarkRunFailed(ctx context.Context, workspaceID, runID, message string) (RunRecord, error)
@@ -81,7 +103,7 @@ func (s RunService) Execute(ctx context.Context, workspaceID, runID string) (Run
 	if err != nil {
 		return RunRecord{}, err
 	}
-	if err := s.Runner.RefreshMaterializations(ctx, run.ModelID); err != nil {
+	if err := executeRunRefresh(ctx, s.Runner, run); err != nil {
 		failed, finishErr := s.Repo.MarkRunFailed(ctx, workspaceID, runID, err.Error())
 		if finishErr != nil {
 			return failed, finishErr
@@ -89,6 +111,34 @@ func (s RunService) Execute(ctx context.Context, workspaceID, runID string) (Run
 		return failed, err
 	}
 	return s.Repo.MarkRunSucceeded(ctx, workspaceID, runID)
+}
+
+func executeRunRefresh(ctx context.Context, runner RefreshRunner, run RunRecord) error {
+	if run.TargetType == TargetModelTable {
+		tableName, err := tableNameFromTargetID(run.ModelID, run.TargetID)
+		if err != nil {
+			return err
+		}
+		port, ok := runner.(ModelTableRefreshRunner)
+		if !ok {
+			return fmt.Errorf("materialization refresh runner does not support model table targets")
+		}
+		return port.RefreshModelTables(ctx, run.ModelID, []string{tableName})
+	}
+	return runner.RefreshMaterializations(ctx, run.ModelID)
+}
+
+func tableNameFromTargetID(modelID, targetID string) (string, error) {
+	prefix := strings.TrimSpace(modelID) + "."
+	targetID = strings.TrimSpace(targetID)
+	if !strings.HasPrefix(targetID, prefix) {
+		return "", fmt.Errorf("model table target %q does not belong to semantic model %q", targetID, modelID)
+	}
+	tableName := strings.TrimSpace(strings.TrimPrefix(targetID, prefix))
+	if tableName == "" {
+		return "", fmt.Errorf("model table target id is missing a table name")
+	}
+	return tableName, nil
 }
 
 type SQLRunRepository struct {
@@ -103,7 +153,7 @@ func (r *SQLRunRepository) CreateRun(ctx context.Context, input RunInput) (RunRe
 	if r == nil || r.db == nil {
 		return RunRecord{}, fmt.Errorf("materialization run database is required")
 	}
-	workspaceID, modelID, deploymentID, principalID, err := normalizeRunInput(input)
+	normalized, err := normalizeRunInput(input)
 	if err != nil {
 		return RunRecord{}, err
 	}
@@ -117,19 +167,19 @@ func (r *SQLRunRepository) CreateRun(ctx context.Context, input RunInput) (RunRe
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO materialization_jobs (id, workspace_id, deployment_id, model_id, status)
 		VALUES (?, ?, NULLIF(?, ''), ?, ?)
-	`, jobID, workspaceID, deploymentID, modelID, RunStatusQueued); err != nil {
+	`, jobID, normalized.WorkspaceID, normalized.DeploymentID, normalized.ModelID, RunStatusQueued); err != nil {
 		return RunRecord{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO materialization_job_runs (id, job_id, principal_id, status)
-		VALUES (?, ?, NULLIF(?, ''), ?)
-	`, runID, jobID, principalID, RunStatusQueued); err != nil {
+		INSERT INTO materialization_job_runs (id, job_id, principal_id, target_type, target_id, trigger_type, parent_run_id, status)
+		VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''), ?)
+	`, runID, jobID, normalized.PrincipalID, normalized.TargetType, normalized.TargetID, normalized.TriggerType, normalized.ParentRunID, RunStatusQueued); err != nil {
 		return RunRecord{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return RunRecord{}, err
 	}
-	return r.GetRun(ctx, workspaceID, runID)
+	return r.GetRun(ctx, normalized.WorkspaceID, runID)
 }
 
 func (r *SQLRunRepository) GetRun(ctx context.Context, workspaceID, runID string) (RunRecord, error) {
@@ -175,18 +225,26 @@ func (r *SQLRunRepository) ListRuns(ctx context.Context, workspaceID string, pag
 }
 
 func (r *SQLRunRepository) ListModelRuns(ctx context.Context, workspaceID, modelID string, page RunPage) ([]RunRecord, error) {
+	return r.ListTargetRuns(ctx, workspaceID, TargetSemanticModel, modelID, page)
+}
+
+func (r *SQLRunRepository) ListTargetRuns(ctx context.Context, workspaceID, targetType, targetID string, page RunPage) ([]RunRecord, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
-	modelID = strings.TrimSpace(modelID)
+	targetType = strings.TrimSpace(targetType)
+	targetID = strings.TrimSpace(targetID)
 	if workspaceID == "" {
 		return nil, fmt.Errorf("workspace id is required")
 	}
-	if modelID == "" {
-		return nil, fmt.Errorf("model id is required")
+	if targetType == "" {
+		return nil, fmt.Errorf("target type is required")
+	}
+	if targetID == "" {
+		return nil, fmt.Errorf("target id is required")
 	}
 	rows, err := r.db.QueryContext(ctx, materializationRunSelect()+`
-		WHERE j.workspace_id = ? AND j.model_id = ?
+		WHERE j.workspace_id = ? AND r.target_type = ? AND r.target_id = ?
 		ORDER BY j.created_at DESC, r.rowid DESC
-	`, workspaceID, modelID)
+	`, workspaceID, targetType, targetID)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +264,11 @@ func (r *SQLRunRepository) ListModelRuns(ctx context.Context, workspaceID, model
 }
 
 func (r *SQLRunRepository) LatestModelRun(ctx context.Context, workspaceID, modelID string) (RunRecord, bool, error) {
-	runs, err := r.ListModelRuns(ctx, workspaceID, modelID, RunPage{Limit: 1})
+	return r.LatestTargetRun(ctx, workspaceID, TargetSemanticModel, modelID)
+}
+
+func (r *SQLRunRepository) LatestTargetRun(ctx context.Context, workspaceID, targetType, targetID string) (RunRecord, bool, error) {
+	runs, err := r.ListTargetRuns(ctx, workspaceID, targetType, targetID, RunPage{Limit: 1})
 	if err != nil {
 		return RunRecord{}, false, err
 	}
@@ -217,19 +279,27 @@ func (r *SQLRunRepository) LatestModelRun(ctx context.Context, workspaceID, mode
 }
 
 func (r *SQLRunRepository) LatestSuccessfulModelRun(ctx context.Context, workspaceID, modelID string) (RunRecord, bool, error) {
+	return r.LatestSuccessfulTargetRun(ctx, workspaceID, TargetSemanticModel, modelID)
+}
+
+func (r *SQLRunRepository) LatestSuccessfulTargetRun(ctx context.Context, workspaceID, targetType, targetID string) (RunRecord, bool, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
-	modelID = strings.TrimSpace(modelID)
+	targetType = strings.TrimSpace(targetType)
+	targetID = strings.TrimSpace(targetID)
 	if workspaceID == "" {
 		return RunRecord{}, false, fmt.Errorf("workspace id is required")
 	}
-	if modelID == "" {
-		return RunRecord{}, false, fmt.Errorf("model id is required")
+	if targetType == "" {
+		return RunRecord{}, false, fmt.Errorf("target type is required")
+	}
+	if targetID == "" {
+		return RunRecord{}, false, fmt.Errorf("target id is required")
 	}
 	row := r.db.QueryRowContext(ctx, materializationRunSelect()+`
-		WHERE j.workspace_id = ? AND j.model_id = ? AND r.status = ?
+		WHERE j.workspace_id = ? AND r.target_type = ? AND r.target_id = ? AND r.status = ?
 		ORDER BY j.created_at DESC, r.rowid DESC
 		LIMIT 1
-	`, workspaceID, modelID, RunStatusSucceeded)
+	`, workspaceID, targetType, targetID, RunStatusSucceeded)
 	run, err := scanRun(row)
 	if err == sql.ErrNoRows {
 		return RunRecord{}, false, nil
@@ -306,7 +376,7 @@ type runScanner interface {
 
 func scanRun(row runScanner) (RunRecord, error) {
 	var run RunRecord
-	var deploymentID, principalID, principalDisplayName, finishedAt sql.NullString
+	var deploymentID, principalID, principalDisplayName, parentRunID, finishedAt sql.NullString
 	if err := row.Scan(
 		&run.ID,
 		&run.WorkspaceID,
@@ -314,6 +384,10 @@ func scanRun(row runScanner) (RunRecord, error) {
 		&run.ModelID,
 		&principalID,
 		&principalDisplayName,
+		&run.TargetType,
+		&run.TargetID,
+		&run.TriggerType,
+		&parentRunID,
 		&run.Status,
 		&run.CreatedAt,
 		&run.UpdatedAt,
@@ -332,6 +406,9 @@ func scanRun(row runScanner) (RunRecord, error) {
 	if principalDisplayName.Valid {
 		run.PrincipalDisplayName = principalDisplayName.String
 	}
+	if parentRunID.Valid {
+		run.ParentRunID = parentRunID.String
+	}
 	if finishedAt.Valid {
 		run.FinishedAt = finishedAt.String
 	}
@@ -343,25 +420,85 @@ func scanRun(row runScanner) (RunRecord, error) {
 
 func materializationRunSelect() string {
 	return `
-		SELECT r.id, j.workspace_id, j.deployment_id, j.model_id, r.principal_id, COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name, r.status, j.created_at, j.updated_at, r.started_at, r.finished_at, r.error
+		SELECT r.id, j.workspace_id, j.deployment_id, j.model_id, r.principal_id, COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name, r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at, r.started_at, r.finished_at, r.error
 		FROM materialization_job_runs r
 		JOIN materialization_jobs j ON j.id = r.job_id
 		LEFT JOIN principals p ON p.id = r.principal_id
 	`
 }
 
-func normalizeRunInput(input RunInput) (string, string, string, string, error) {
+type normalizedRunInput struct {
+	WorkspaceID  string
+	ModelID      string
+	DeploymentID string
+	PrincipalID  string
+	TargetType   string
+	TargetID     string
+	TriggerType  string
+	ParentRunID  string
+}
+
+func normalizeRunInput(input RunInput) (normalizedRunInput, error) {
 	workspaceID := strings.TrimSpace(input.WorkspaceID)
 	modelID := strings.TrimSpace(input.ModelID)
 	deploymentID := strings.TrimSpace(input.DeploymentID)
 	principalID := strings.TrimSpace(input.PrincipalID)
+	targetType := strings.TrimSpace(input.TargetType)
+	targetID := strings.TrimSpace(input.TargetID)
+	triggerType := strings.TrimSpace(input.TriggerType)
+	parentRunID := strings.TrimSpace(input.ParentRunID)
 	if workspaceID == "" {
-		return "", "", "", "", fmt.Errorf("workspace id is required")
+		return normalizedRunInput{}, fmt.Errorf("workspace id is required")
 	}
 	if modelID == "" {
-		return "", "", "", "", fmt.Errorf("model id is required")
+		return normalizedRunInput{}, fmt.Errorf("model id is required")
 	}
-	return workspaceID, modelID, deploymentID, principalID, nil
+	if targetType == "" {
+		targetType = TargetSemanticModel
+	}
+	if targetID == "" && targetType == TargetSemanticModel {
+		targetID = modelID
+	}
+	if triggerType == "" {
+		triggerType = TriggerDirect
+	}
+	if err := validateRunTarget(targetType, targetID); err != nil {
+		return normalizedRunInput{}, err
+	}
+	if err := validateRunTrigger(triggerType); err != nil {
+		return normalizedRunInput{}, err
+	}
+	return normalizedRunInput{
+		WorkspaceID:  workspaceID,
+		ModelID:      modelID,
+		DeploymentID: deploymentID,
+		PrincipalID:  principalID,
+		TargetType:   targetType,
+		TargetID:     targetID,
+		TriggerType:  triggerType,
+		ParentRunID:  parentRunID,
+	}, nil
+}
+
+func validateRunTarget(targetType, targetID string) error {
+	switch targetType {
+	case TargetSemanticModel, TargetModelTable:
+	default:
+		return fmt.Errorf("unsupported materialization target type %q", targetType)
+	}
+	if targetID == "" {
+		return fmt.Errorf("target id is required")
+	}
+	return nil
+}
+
+func validateRunTrigger(triggerType string) error {
+	switch triggerType {
+	case TriggerDirect, TriggerSemanticModel, TriggerDependency:
+		return nil
+	default:
+		return fmt.Errorf("unsupported materialization trigger type %q", triggerType)
+	}
 }
 
 func pageRuns(rows []RunRecord, page RunPage) []RunRecord {

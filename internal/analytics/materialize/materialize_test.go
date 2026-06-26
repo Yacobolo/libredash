@@ -213,6 +213,61 @@ func TestModelTablesMaterializeAfterModelDependencies(t *testing.T) {
 	}
 }
 
+func TestModelTableDependencyOrderIncludesUpstreamBeforeSelected(t *testing.T) {
+	model := &semanticmodel.Model{
+		Name:      "test",
+		BaseTable: "daily_summary",
+		Tables: map[string]semanticmodel.Table{
+			"customers":     {PrimaryKey: "customer_id"},
+			"orders":        {PrimaryKey: "order_id"},
+			"order_summary": {PrimaryKey: "status", Transform: semanticmodel.Transform{SQL: "SELECT status FROM model.orders"}, ModelDependencies: []string{"orders"}},
+			"daily_summary": {PrimaryKey: "day", ModelDependencies: []string{"order_summary", "customers"}},
+		},
+	}
+
+	order, err := analyticsmaterialize.ModelTableDependencyOrder(model, "daily_summary")
+	if err != nil {
+		t.Fatalf("dependency order: %v", err)
+	}
+	want := []string{"orders", "order_summary", "customers", "daily_summary"}
+	if !reflect.DeepEqual(order, want) {
+		t.Fatalf("dependency order = %#v, want %#v", order, want)
+	}
+}
+
+func TestModelTablesNamedMaterializesOnlyRequestedOrder(t *testing.T) {
+	model := &semanticmodel.Model{
+		Name: "test",
+		Connections: map[string]semanticmodel.Connection{
+			"local_files": {Kind: "local"},
+		},
+		Sources: map[string]semanticmodel.Source{
+			"orders": {Path: "orders.csv", Format: "csv", Connection: "local_files"},
+		},
+		BaseTable: "order_summary",
+		Tables: map[string]semanticmodel.Table{
+			"orders":        {Source: "orders", PrimaryKey: "order_id"},
+			"customers":     {Source: "orders", PrimaryKey: "customer_id"},
+			"order_summary": {PrimaryKey: "status", Transform: semanticmodel.Transform{SQL: "SELECT status FROM model.orders"}, ModelDependencies: []string{"orders"}},
+		},
+	}
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	sources := &recordingSourceRegistrar{}
+	executor := &recordingStatementsExecutor{}
+
+	if _, err := analyticsmaterialize.RefreshModelTables(context.Background(), executor, sources, model, []string{"orders", "order_summary"}); err != nil {
+		t.Fatalf("refresh model tables: %v", err)
+	}
+	if !reflect.DeepEqual(sources.ops, []string{"prepare", "plan:orders", "plan:order_summary"}) {
+		t.Fatalf("source ops = %#v, want selected tables only", sources.ops)
+	}
+	if len(executor.statements) != 3 || strings.Contains(strings.Join(executor.statements, "\n"), "customers") {
+		t.Fatalf("statements = %#v, want schema plus selected table materializations", executor.statements)
+	}
+}
+
 func TestRegistersCSVSourcesAndMaterializesModelTables(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "orders.csv", "order_id,revenue\no1,10.50\no2,20.25\n")
@@ -452,6 +507,39 @@ func TestRunServicePersistsQueuedRunningAndSucceededStates(t *testing.T) {
 	}
 }
 
+func TestRunServiceExecutesModelTableTargetRuns(t *testing.T) {
+	ctx := context.Background()
+	store := openMaterializationStore(t, ctx)
+	defer store.Close()
+	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
+	runner := &recordingRefreshRunner{}
+	service := analyticsmaterialize.RunService{Repo: repo, Runner: runner}
+
+	queued, err := service.Enqueue(ctx, analyticsmaterialize.RunInput{
+		WorkspaceID: "test",
+		ModelID:     "model",
+		TargetType:  analyticsmaterialize.TargetModelTable,
+		TargetID:    "model.orders",
+		TriggerType: analyticsmaterialize.TriggerDirect,
+	})
+	if err != nil {
+		t.Fatalf("enqueue run: %v", err)
+	}
+	finished, err := service.Execute(ctx, "test", queued.ID)
+	if err != nil {
+		t.Fatalf("execute run: %v", err)
+	}
+	if finished.Status != analyticsmaterialize.RunStatusSucceeded {
+		t.Fatalf("finished run = %#v, want succeeded", finished)
+	}
+	if runner.modelID != "" {
+		t.Fatalf("whole model refresh called with %q, want table refresh only", runner.modelID)
+	}
+	if !reflect.DeepEqual(runner.modelTables, []string{"model:orders"}) {
+		t.Fatalf("model table refreshes = %#v, want model:orders", runner.modelTables)
+	}
+}
+
 func TestRunServicePersistsFailedStateWithError(t *testing.T) {
 	ctx := context.Background()
 	store := openMaterializationStore(t, ctx)
@@ -569,6 +657,74 @@ func TestRunRepositoryListsAndFindsLatestByModel(t *testing.T) {
 	}
 }
 
+func TestRunRepositoryPersistsTargetTriggerAndParentRun(t *testing.T) {
+	ctx := context.Background()
+	store := openMaterializationStore(t, ctx)
+	defer store.Close()
+	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
+
+	parent, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{
+		WorkspaceID:  "test",
+		ModelID:      "olist",
+		TargetType:   analyticsmaterialize.TargetSemanticModel,
+		TargetID:     "olist",
+		TriggerType:  analyticsmaterialize.TriggerDirect,
+		DeploymentID: "dep_1",
+	})
+	if err != nil {
+		t.Fatalf("create parent run: %v", err)
+	}
+	child, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{
+		WorkspaceID:  "test",
+		ModelID:      "olist",
+		TargetType:   analyticsmaterialize.TargetModelTable,
+		TargetID:     "olist.orders",
+		TriggerType:  analyticsmaterialize.TriggerSemanticModel,
+		ParentRunID:  parent.ID,
+		DeploymentID: "dep_1",
+	})
+	if err != nil {
+		t.Fatalf("create child run: %v", err)
+	}
+	if _, err := repo.MarkRunSucceeded(ctx, "test", child.ID); err != nil {
+		t.Fatalf("mark child succeeded: %v", err)
+	}
+
+	stored, err := repo.GetRun(ctx, "test", child.ID)
+	if err != nil {
+		t.Fatalf("get child run: %v", err)
+	}
+	if stored.TargetType != analyticsmaterialize.TargetModelTable || stored.TargetID != "olist.orders" || stored.TriggerType != analyticsmaterialize.TriggerSemanticModel || stored.ParentRunID != parent.ID {
+		t.Fatalf("child run metadata = %#v", stored)
+	}
+	tableRuns, err := repo.ListTargetRuns(ctx, "test", analyticsmaterialize.TargetModelTable, "olist.orders", analyticsmaterialize.RunPage{Limit: 10})
+	if err != nil {
+		t.Fatalf("list table runs: %v", err)
+	}
+	if len(tableRuns) != 1 || tableRuns[0].ID != child.ID {
+		t.Fatalf("table runs = %#v, want child only", tableRuns)
+	}
+	modelRuns, err := repo.ListModelRuns(ctx, "test", "olist", analyticsmaterialize.RunPage{Limit: 10})
+	if err != nil {
+		t.Fatalf("list model runs: %v", err)
+	}
+	if len(modelRuns) != 1 || modelRuns[0].ID != parent.ID {
+		t.Fatalf("semantic model runs = %#v, want parent only", modelRuns)
+	}
+	latest, ok, err := repo.LatestSuccessfulTargetRun(ctx, "test", analyticsmaterialize.TargetModelTable, "olist.orders")
+	if err != nil || !ok || latest.ID != child.ID {
+		t.Fatalf("latest successful table run = %#v ok=%v err=%v, want child", latest, ok, err)
+	}
+
+	legacy, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{WorkspaceID: "test", ModelID: "legacy"})
+	if err != nil {
+		t.Fatalf("create legacy-shaped run: %v", err)
+	}
+	if legacy.TargetType != analyticsmaterialize.TargetSemanticModel || legacy.TargetID != "legacy" || legacy.TriggerType != analyticsmaterialize.TriggerDirect {
+		t.Fatalf("default target metadata = %#v", legacy)
+	}
+}
+
 func writeFixture(t *testing.T, dir, name, content string) {
 	t.Helper()
 	path := filepath.Join(dir, name)
@@ -581,11 +737,19 @@ func writeFixture(t *testing.T, dir, name, content string) {
 }
 
 type recordingRefreshRunner struct {
-	modelID string
+	modelID     string
+	modelTables []string
 }
 
 func (r *recordingRefreshRunner) RefreshMaterializations(_ context.Context, modelID string) error {
 	r.modelID = modelID
+	return nil
+}
+
+func (r *recordingRefreshRunner) RefreshModelTables(_ context.Context, modelID string, tableNames []string) error {
+	for _, tableName := range tableNames {
+		r.modelTables = append(r.modelTables, modelID+":"+tableName)
+	}
 	return nil
 }
 

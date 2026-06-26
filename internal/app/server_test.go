@@ -7,6 +7,7 @@ import (
 	"html"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -501,8 +502,68 @@ func (fakeMetrics) RefreshMaterializations(_ context.Context, _ string) error {
 	return nil
 }
 
+func (fakeMetrics) RefreshModelTables(_ context.Context, _ string, _ []string) error {
+	return nil
+}
+
 func (failingRefreshAssetMetrics) RefreshMaterializations(_ context.Context, _ string) error {
 	return errors.New("refresh failed")
+}
+
+func (failingRefreshAssetMetrics) RefreshModelTables(_ context.Context, _ string, _ []string) error {
+	return errors.New("refresh failed")
+}
+
+type dependentModelTableMetrics struct {
+	fakeMetrics
+	refreshed [][]string
+}
+
+func (m *dependentModelTableMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+	catalog, err := workspace.NewAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeCatalog, workspaceID, "", "Catalog", "", map[string]any{})
+	if err != nil {
+		return nil, nil, false
+	}
+	model, err := workspace.NewAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeSemanticModel, "olist", catalog.ID, "Olist", "", map[string]any{})
+	if err != nil {
+		return nil, nil, false
+	}
+	orders, err := workspace.NewAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeModelTable, "olist.orders", model.ID, "orders", "", map[string]any{"PrimaryKey": "order_id", "Source": "orders"})
+	if err != nil {
+		return nil, nil, false
+	}
+	summary, err := workspace.NewAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeModelTable, "olist.order_summary", model.ID, "order_summary", "", map[string]any{"PrimaryKey": "status", "SQL": "SELECT status FROM model.orders"})
+	if err != nil {
+		return nil, nil, false
+	}
+	return []workspace.Asset{catalog, model, orders, summary}, []workspace.AssetEdge{
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), catalog.ID, model.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), model.ID, orders.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), model.ID, summary.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), summary.ID, orders.ID, workspace.AssetEdgeUsesModelTable),
+	}, true
+}
+
+func (m *dependentModelTableMetrics) SemanticModel(modelID string) (*semanticmodel.Model, bool) {
+	if modelID != "olist" {
+		return fakeMetrics{}.SemanticModel(modelID)
+	}
+	return &semanticmodel.Model{
+		Name:      "olist",
+		BaseTable: "order_summary",
+		Sources: map[string]semanticmodel.Source{
+			"orders": {Path: "orders.csv", Format: "csv"},
+		},
+		Tables: map[string]semanticmodel.Table{
+			"orders":        {Kind: "fact", Source: "orders", PrimaryKey: "order_id"},
+			"order_summary": {PrimaryKey: "status", Transform: semanticmodel.Transform{SQL: "SELECT status FROM model.orders"}, ModelDependencies: []string{"orders"}},
+		},
+	}, true
+}
+
+func (m *dependentModelTableMetrics) RefreshModelTables(_ context.Context, _ string, tableNames []string) error {
+	m.refreshed = append(m.refreshed, append([]string(nil), tableNames...))
+	return nil
 }
 
 func TestUpdatesStreamsDatastarPatchSignals(t *testing.T) {
@@ -822,6 +883,89 @@ func TestWorkspaceAssetRefreshCommandPublishesFailedError(t *testing.T) {
 	patches := drainPatches(updates)
 	if !patchesContainAssetRefreshStatus(patches, materialize.RunStatusFailed) || !strings.Contains(anyPatchesString(patches), "refresh failed") {
 		t.Fatalf("patches did not include failed error state: %#v", patches)
+	}
+}
+
+func TestWorkspaceModelTableRefreshCommandPersistsDirectAndDependencyRuns(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	principal := testPrincipal(t, ctx, store, "owner@example.com", "Owner", "owner")
+	token := testAPIToken(t, ctx, store, principal.ID, "workspace-table-refresh")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	metrics := &dependentModelTableMetrics{}
+	server := NewWithOptions(metrics, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
+	assetID := workspace.NewAssetID("local", workspace.AssetTypeModelTable, "olist.order_summary")
+	path := "/workspaces/test/assets/" + string(assetID) + "/refresh-materializations"
+	req := httptest.NewRequest(http.MethodPost, path, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if got, want := metrics.refreshed, [][]string{{"orders"}, {"order_summary"}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("refreshed tables = %#v, want %#v", got, want)
+	}
+	repo := materialize.NewSQLRunRepository(store.SQLDB())
+	rootRuns, err := repo.ListTargetRuns(ctx, "test", materialize.TargetModelTable, "olist.order_summary", materialize.RunPage{Limit: 10})
+	if err != nil {
+		t.Fatalf("list selected table runs: %v", err)
+	}
+	if len(rootRuns) != 1 || rootRuns[0].Status != materialize.RunStatusSucceeded || rootRuns[0].TriggerType != materialize.TriggerDirect || rootRuns[0].ParentRunID != "" {
+		t.Fatalf("selected table runs = %#v, want direct root run", rootRuns)
+	}
+	dependencyRuns, err := repo.ListTargetRuns(ctx, "test", materialize.TargetModelTable, "olist.orders", materialize.RunPage{Limit: 10})
+	if err != nil {
+		t.Fatalf("list dependency table runs: %v", err)
+	}
+	if len(dependencyRuns) != 1 || dependencyRuns[0].Status != materialize.RunStatusSucceeded || dependencyRuns[0].TriggerType != materialize.TriggerDependency || dependencyRuns[0].ParentRunID != rootRuns[0].ID {
+		t.Fatalf("dependency table runs = %#v, want dependency child run", dependencyRuns)
+	}
+	if rootRuns[0].PrincipalID != principal.ID || dependencyRuns[0].PrincipalID != principal.ID {
+		t.Fatalf("principal attribution root=%#v dependency=%#v, want %s", rootRuns[0], dependencyRuns[0], principal.ID)
+	}
+}
+
+func TestWorkspaceSemanticModelRefreshCommandPersistsTableChildRuns(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	principal := testPrincipal(t, ctx, store, "owner@example.com", "Owner", "owner")
+	token := testAPIToken(t, ctx, store, principal.ID, "workspace-semantic-refresh")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	metrics := &dependentModelTableMetrics{}
+	server := NewWithOptions(metrics, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
+	assetID := workspace.NewAssetID("local", workspace.AssetTypeSemanticModel, "olist")
+	path := "/workspaces/test/assets/" + string(assetID) + "/refresh-materializations"
+	req := httptest.NewRequest(http.MethodPost, path, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if got, want := metrics.refreshed, [][]string{{"orders"}, {"order_summary"}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("refreshed tables = %#v, want %#v", got, want)
+	}
+	repo := materialize.NewSQLRunRepository(store.SQLDB())
+	modelRuns, err := repo.ListModelRuns(ctx, "test", "olist", materialize.RunPage{Limit: 10})
+	if err != nil {
+		t.Fatalf("list model runs: %v", err)
+	}
+	if len(modelRuns) != 1 || modelRuns[0].Status != materialize.RunStatusSucceeded {
+		t.Fatalf("model runs = %#v, want succeeded parent run", modelRuns)
+	}
+	for _, targetID := range []string{"olist.orders", "olist.order_summary"} {
+		tableRuns, err := repo.ListTargetRuns(ctx, "test", materialize.TargetModelTable, targetID, materialize.RunPage{Limit: 10})
+		if err != nil {
+			t.Fatalf("list table runs for %s: %v", targetID, err)
+		}
+		if len(tableRuns) != 1 || tableRuns[0].TriggerType != materialize.TriggerSemanticModel || tableRuns[0].ParentRunID != modelRuns[0].ID {
+			t.Fatalf("table runs for %s = %#v, want semantic model child run", targetID, tableRuns)
+		}
 	}
 }
 

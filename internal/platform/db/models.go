@@ -174,6 +174,10 @@ type MaterializationJobRun struct {
 	ID          string         `json:"id"`
 	JobID       string         `json:"job_id"`
 	PrincipalID sql.NullString `json:"principal_id"`
+	TargetType  string         `json:"target_type"`
+	TargetID    string         `json:"target_id"`
+	TriggerType string         `json:"trigger_type"`
+	ParentRunID sql.NullString `json:"parent_run_id"`
 	Status      string         `json:"status"`
 	StartedAt   string         `json:"started_at"`
 	FinishedAt  sql.NullString `json:"finished_at"`

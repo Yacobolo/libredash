@@ -183,6 +183,20 @@ func (m runtimeMetrics) RefreshMaterializations(ctx context.Context, modelID str
 	return runtime.RefreshMaterializations(ctx, modelID)
 }
 
+func (m runtimeMetrics) RefreshModelTables(ctx context.Context, modelID string, tableNames []string) error {
+	runtime, err := m.materializationRuntime()
+	if err != nil {
+		return err
+	}
+	port, ok := runtime.(interface {
+		RefreshTables(context.Context, string, []string) error
+	})
+	if !ok {
+		return fmt.Errorf("active runtime does not support model table refresh")
+	}
+	return port.RefreshTables(ctx, modelID, tableNames)
+}
+
 func (m runtimeMetrics) DataDir() string {
 	return m.dataDir
 }

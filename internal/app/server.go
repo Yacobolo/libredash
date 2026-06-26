@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -213,6 +214,9 @@ func (s *Server) refreshMaterializationsWithRunForWorkspace(ctx context.Context,
 		WorkspaceID: workspaceID,
 		ModelID:     modelID,
 		PrincipalID: principal.ID,
+		TargetType:  materialize.TargetSemanticModel,
+		TargetID:    modelID,
+		TriggerType: materialize.TriggerDirect,
 	})
 	if err != nil {
 		return err
@@ -222,12 +226,56 @@ func (s *Server) refreshMaterializationsWithRunForWorkspace(ctx context.Context,
 		return err
 	}
 	s.publishModelRefreshPatches(ctx, workspaceID, modelID)
-	if err := s.metrics.RefreshMaterializations(ctx, modelID); err != nil {
+	model, ok := s.metrics.SemanticModel(modelID)
+	if !ok {
+		err := fmt.Errorf("unknown semantic model %q", modelID)
 		if _, finishErr := repo.MarkRunFailed(ctx, workspaceID, run.ID, err.Error()); finishErr != nil {
 			return finishErr
 		}
 		s.publishModelRefreshPatches(ctx, workspaceID, modelID)
 		return err
+	}
+	order, err := materialize.ModelTableOrder(model)
+	if err != nil {
+		if _, finishErr := repo.MarkRunFailed(ctx, workspaceID, run.ID, err.Error()); finishErr != nil {
+			return finishErr
+		}
+		s.publishModelRefreshPatches(ctx, workspaceID, modelID)
+		return err
+	}
+	for _, tableName := range order {
+		targetID := modelID + "." + tableName
+		tableRun, err := repo.CreateRun(ctx, materialize.RunInput{
+			WorkspaceID: workspaceID,
+			ModelID:     modelID,
+			PrincipalID: principal.ID,
+			TargetType:  materialize.TargetModelTable,
+			TargetID:    targetID,
+			TriggerType: materialize.TriggerSemanticModel,
+			ParentRunID: run.ID,
+		})
+		if err != nil {
+			return err
+		}
+		s.publishModelRefreshPatches(ctx, workspaceID, modelID)
+		if _, err := repo.MarkRunRunning(ctx, workspaceID, tableRun.ID); err != nil {
+			return err
+		}
+		s.publishModelRefreshPatches(ctx, workspaceID, modelID)
+		if err := s.refreshModelTables(ctx, modelID, []string{tableName}); err != nil {
+			if _, finishErr := repo.MarkRunFailed(ctx, workspaceID, tableRun.ID, err.Error()); finishErr != nil {
+				return finishErr
+			}
+			if _, finishErr := repo.MarkRunFailed(ctx, workspaceID, run.ID, err.Error()); finishErr != nil {
+				return finishErr
+			}
+			s.publishModelRefreshPatches(ctx, workspaceID, modelID)
+			return err
+		}
+		if _, err := repo.MarkRunSucceeded(ctx, workspaceID, tableRun.ID); err != nil {
+			return err
+		}
+		s.publishModelRefreshPatches(ctx, workspaceID, modelID)
 	}
 	if _, err := repo.MarkRunSucceeded(ctx, workspaceID, run.ID); err != nil {
 		return err
