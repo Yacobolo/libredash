@@ -360,15 +360,30 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.De
 }
 
 type catalogPayloadV1 struct {
-	Workspace      catalogWorkspacePayloadV1    `json:"Workspace"`
-	SemanticModels []workspace.CatalogModel     `json:"SemanticModels"`
-	Dashboards     []workspace.CatalogDashboard `json:"Dashboards"`
+	Workspace      catalogWorkspacePayloadV1   `json:"Workspace"`
+	SemanticModels []catalogModelPayloadV1     `json:"SemanticModels"`
+	Dashboards     []catalogDashboardPayloadV1 `json:"Dashboards"`
 }
 
 type catalogWorkspacePayloadV1 struct {
 	ID          string `json:"ID"`
 	Title       string `json:"Title"`
 	Description string `json:"Description"`
+}
+
+type catalogModelPayloadV1 struct {
+	ID          string `json:"ID"`
+	Title       string `json:"Title"`
+	Path        string `json:"Path"`
+	Description string `json:"Description"`
+}
+
+type catalogDashboardPayloadV1 struct {
+	ID          string   `json:"ID"`
+	Title       string   `json:"Title"`
+	Path        string   `json:"Path"`
+	Description string   `json:"Description"`
+	Tags        []string `json:"Tags"`
 }
 
 type connectionPayloadV1 struct {
@@ -506,23 +521,46 @@ type dashboardPayloadV1 struct {
 }
 
 type filterPayloadV1 struct {
-	Type             string                   `json:"Type"`
-	Label            string                   `json:"Label"`
-	Description      string                   `json:"Description"`
-	Dimension        string                   `json:"Dimension"`
-	Default          any                      `json:"Default"`
-	Custom           bool                     `json:"Custom"`
-	Presets          []reportdef.FilterPreset `json:"Presets"`
-	Operator         string                   `json:"Operator"`
-	Values           reportdef.FilterValues   `json:"Values"`
-	DefaultOperator  string                   `json:"DefaultOperator"`
-	Operators        []string                 `json:"Operators"`
-	Options          []reportdef.FilterOption `json:"Options"`
-	URLParam         string                   `json:"URLParam"`
-	FromURLParam     string                   `json:"FromURLParam"`
-	ToURLParam       string                   `json:"ToURLParam"`
-	OperatorURLParam string                   `json:"OperatorURLParam"`
-	Targets          reportdef.FilterTargets  `json:"Targets"`
+	Type             string                  `json:"Type"`
+	Label            string                  `json:"Label"`
+	Description      string                  `json:"Description"`
+	Dimension        string                  `json:"Dimension"`
+	Default          any                     `json:"Default"`
+	Custom           bool                    `json:"Custom"`
+	Presets          []filterPresetPayloadV1 `json:"Presets"`
+	Operator         string                  `json:"Operator"`
+	Values           filterValuesPayloadV1   `json:"Values"`
+	DefaultOperator  string                  `json:"DefaultOperator"`
+	Operators        []string                `json:"Operators"`
+	Options          []filterOptionPayloadV1 `json:"Options"`
+	URLParam         string                  `json:"URLParam"`
+	FromURLParam     string                  `json:"FromURLParam"`
+	ToURLParam       string                  `json:"ToURLParam"`
+	OperatorURLParam string                  `json:"OperatorURLParam"`
+	Targets          filterTargetsPayloadV1  `json:"Targets"`
+}
+
+type filterPresetPayloadV1 struct {
+	Value        string `json:"value"`
+	Label        string `json:"label"`
+	From         string `json:"from,omitempty"`
+	To           string `json:"to,omitempty"`
+	RelativeDays int    `json:"relativeDays,omitempty"`
+}
+
+type filterValuesPayloadV1 struct {
+	Source string `json:"source,omitempty"`
+	Limit  int    `json:"limit,omitempty"`
+}
+
+type filterOptionPayloadV1 struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
+
+type filterTargetsPayloadV1 struct {
+	Visuals []string `json:"visuals,omitempty"`
+	Tables  []string `json:"tables,omitempty"`
 }
 
 type visualPayloadV1 struct {
@@ -539,25 +577,37 @@ type visualPayloadV1 struct {
 }
 
 type visualQueryPayloadV1 struct {
-	Table      string              `json:"Table"`
-	Dimensions []string            `json:"Dimensions"`
-	Series     string              `json:"Series"`
-	Measures   []string            `json:"Measures"`
-	Time       reportdef.QueryTime `json:"Time"`
-	Sort       []reportdef.Sort    `json:"Sort"`
-	Limit      int                 `json:"Limit"`
+	Table      string             `json:"Table"`
+	Dimensions []string           `json:"Dimensions"`
+	Series     string             `json:"Series"`
+	Measures   []string           `json:"Measures"`
+	Time       queryTimePayloadV1 `json:"Time"`
+	Sort       []sortPayloadV1    `json:"Sort"`
+	Limit      int                `json:"Limit"`
+}
+
+type queryTimePayloadV1 struct {
+	Field string `json:"field"`
+	Grain string `json:"grain"`
+	Alias string `json:"alias,omitempty"`
+}
+
+type sortPayloadV1 struct {
+	Field     string `json:"Field"`
+	Direction string `json:"Direction"`
+	Expr      string `json:"Expr"`
 }
 
 type tablePayloadV1 struct {
-	Title       string               `json:"Title"`
-	Description string               `json:"Description"`
-	Kind        string               `json:"Kind"`
-	Query       tableQueryPayloadV1  `json:"Query"`
-	Rows        []string             `json:"Rows"`
-	ColumnDims  []string             `json:"ColumnDims"`
-	DataColumns []reportdef.FieldRef `json:"DataColumns"`
-	Style       dashboard.TableStyle `json:"Style"`
-	DefaultSort dashboard.TableSort  `json:"DefaultSort"`
+	Title       string              `json:"Title"`
+	Description string              `json:"Description"`
+	Kind        string              `json:"Kind"`
+	Query       tableQueryPayloadV1 `json:"Query"`
+	Rows        []string            `json:"Rows"`
+	ColumnDims  []string            `json:"ColumnDims"`
+	DataColumns []fieldRefPayloadV1 `json:"DataColumns"`
+	Style       tableStylePayloadV1 `json:"Style"`
+	DefaultSort tableSortPayloadV1  `json:"DefaultSort"`
 }
 
 type tableQueryPayloadV1 struct {
@@ -565,25 +615,60 @@ type tableQueryPayloadV1 struct {
 	Measures []string `json:"Measures"`
 }
 
+type fieldRefPayloadV1 struct {
+	Field string `json:"field"`
+	Alias string `json:"alias,omitempty"`
+}
+
+type tableStylePayloadV1 struct {
+	Density string `json:"density"`
+	Zebra   *bool  `json:"zebra"`
+	Grid    string `json:"grid"`
+}
+
+type tableSortPayloadV1 struct {
+	Key       string `json:"key"`
+	Direction string `json:"direction"`
+}
+
 type pagePayloadV1 struct {
-	ID          string               `json:"ID"`
-	Title       string               `json:"Title"`
-	Description string               `json:"Description"`
-	Canvas      dashboard.PageCanvas `json:"Canvas"`
-	Grid        dashboard.PageGrid   `json:"Grid"`
+	ID          string       `json:"ID"`
+	Title       string       `json:"Title"`
+	Description string       `json:"Description"`
+	Canvas      pageCanvasV1 `json:"Canvas"`
+	Grid        pageGridV1   `json:"Grid"`
 }
 
 type pageItemPayloadV1 struct {
-	ID          string                  `json:"ID"`
-	Kind        string                  `json:"Kind"`
-	Visual      string                  `json:"Visual"`
-	Table       string                  `json:"Table"`
-	Filter      string                  `json:"Filter"`
-	Description string                  `json:"Description"`
-	Placement   dashboard.PagePlacement `json:"Placement"`
-	Title       string                  `json:"Title"`
-	Subtitle    string                  `json:"Subtitle"`
-	Badges      []string                `json:"Badges"`
+	ID          string          `json:"ID"`
+	Kind        string          `json:"Kind"`
+	Visual      string          `json:"Visual"`
+	Table       string          `json:"Table"`
+	Filter      string          `json:"Filter"`
+	Description string          `json:"Description"`
+	Placement   pagePlacementV1 `json:"Placement"`
+	Title       string          `json:"Title"`
+	Subtitle    string          `json:"Subtitle"`
+	Badges      []string        `json:"Badges"`
+}
+
+type pageCanvasV1 struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+type pageGridV1 struct {
+	Columns   int `json:"columns"`
+	RowHeight int `json:"rowHeight"`
+	Gap       int `json:"gap"`
+	Padding   int `json:"padding"`
+}
+
+type pagePlacementV1 struct {
+	Col     int `json:"col"`
+	Row     int `json:"row"`
+	ColSpan int `json:"colSpan"`
+	RowSpan int `json:"rowSpan"`
 }
 
 func catalogPayload(definition *workspace.Definition) catalogPayloadV1 {
@@ -593,9 +678,36 @@ func catalogPayload(definition *workspace.Definition) catalogPayloadV1 {
 			Title:       workspaceTitle(definition.Catalog.Workspace.Title),
 			Description: definition.Catalog.Workspace.Description,
 		},
-		SemanticModels: definition.Catalog.SemanticModels,
-		Dashboards:     definition.Catalog.Dashboards,
+		SemanticModels: catalogModelsPayload(definition.Catalog.SemanticModels),
+		Dashboards:     catalogDashboardsPayload(definition.Catalog.Dashboards),
 	}
+}
+
+func catalogModelsPayload(models []workspace.CatalogModel) []catalogModelPayloadV1 {
+	out := make([]catalogModelPayloadV1, 0, len(models))
+	for _, model := range models {
+		out = append(out, catalogModelPayloadV1{
+			ID:          model.ID,
+			Title:       model.Title,
+			Path:        model.Path,
+			Description: model.Description,
+		})
+	}
+	return out
+}
+
+func catalogDashboardsPayload(dashboards []workspace.CatalogDashboard) []catalogDashboardPayloadV1 {
+	out := make([]catalogDashboardPayloadV1, 0, len(dashboards))
+	for _, dashboard := range dashboards {
+		out = append(out, catalogDashboardPayloadV1{
+			ID:          dashboard.ID,
+			Title:       dashboard.Title,
+			Path:        dashboard.Path,
+			Description: dashboard.Description,
+			Tags:        dashboard.Tags,
+		})
+	}
+	return out
 }
 
 func connectionPayload(connection semanticmodel.Connection) connectionPayloadV1 {
@@ -789,18 +901,48 @@ func filterPayload(filter reportdef.FilterDefinition) filterPayloadV1 {
 		Dimension:        filter.Dimension,
 		Default:          filter.Default,
 		Custom:           filter.Custom,
-		Presets:          filter.Presets,
+		Presets:          filterPresetsPayload(filter.Presets),
 		Operator:         filter.Operator,
-		Values:           filter.Values,
+		Values:           filterValuesPayload(filter.Values),
 		DefaultOperator:  filter.DefaultOperator,
 		Operators:        filter.Operators,
-		Options:          filter.Options,
+		Options:          filterOptionsPayload(filter.Options),
 		URLParam:         filter.URLParam,
 		FromURLParam:     filter.FromURLParam,
 		ToURLParam:       filter.ToURLParam,
 		OperatorURLParam: filter.OperatorURLParam,
-		Targets:          filter.Targets,
+		Targets:          filterTargetsPayload(filter.Targets),
 	}
+}
+
+func filterPresetsPayload(presets []reportdef.FilterPreset) []filterPresetPayloadV1 {
+	out := make([]filterPresetPayloadV1, 0, len(presets))
+	for _, preset := range presets {
+		out = append(out, filterPresetPayloadV1{
+			Value:        preset.Value,
+			Label:        preset.Label,
+			From:         preset.From,
+			To:           preset.To,
+			RelativeDays: preset.RelativeDays,
+		})
+	}
+	return out
+}
+
+func filterValuesPayload(values reportdef.FilterValues) filterValuesPayloadV1 {
+	return filterValuesPayloadV1{Source: values.Source, Limit: values.Limit}
+}
+
+func filterOptionsPayload(options []reportdef.FilterOption) []filterOptionPayloadV1 {
+	out := make([]filterOptionPayloadV1, 0, len(options))
+	for _, option := range options {
+		out = append(out, filterOptionPayloadV1{Value: option.Value, Label: option.Label})
+	}
+	return out
+}
+
+func filterTargetsPayload(targets reportdef.FilterTargets) filterTargetsPayloadV1 {
+	return filterTargetsPayloadV1{Visuals: targets.Visuals, Tables: targets.Tables}
 }
 
 func visualPayload(visual reportdef.Visual) visualPayloadV1 {
@@ -824,16 +966,36 @@ func visualQueryPayload(query reportdef.VisualQuery) visualQueryPayloadV1 {
 		Dimensions: fieldRefStrings(query.Dimensions),
 		Series:     query.Series.Field,
 		Measures:   fieldRefStrings(query.Measures),
-		Time:       query.Time,
-		Sort:       query.Sort,
+		Time:       queryTimePayload(query.Time),
+		Sort:       sortPayload(query.Sort),
 		Limit:      query.Limit,
 	}
+}
+
+func queryTimePayload(time reportdef.QueryTime) queryTimePayloadV1 {
+	return queryTimePayloadV1{Field: time.Field, Grain: time.Grain, Alias: time.Alias}
+}
+
+func sortPayload(sort []reportdef.Sort) []sortPayloadV1 {
+	out := make([]sortPayloadV1, 0, len(sort))
+	for _, entry := range sort {
+		out = append(out, sortPayloadV1{Field: entry.Field, Direction: entry.Direction, Expr: entry.Expr})
+	}
+	return out
 }
 
 func fieldRefStrings(refs []reportdef.FieldRef) []string {
 	out := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		out = append(out, ref.Field)
+	}
+	return out
+}
+
+func fieldRefsPayload(refs []reportdef.FieldRef) []fieldRefPayloadV1 {
+	out := make([]fieldRefPayloadV1, 0, len(refs))
+	for _, ref := range refs {
+		out = append(out, fieldRefPayloadV1{Field: ref.Field, Alias: ref.Alias})
 	}
 	return out
 }
@@ -849,10 +1011,18 @@ func tableVisualPayload(table reportdef.TableVisual) tablePayloadV1 {
 		},
 		Rows:        table.Rows,
 		ColumnDims:  table.ColumnDims,
-		DataColumns: table.DataColumns,
-		Style:       table.Style,
-		DefaultSort: table.DefaultSort,
+		DataColumns: fieldRefsPayload(table.DataColumns),
+		Style:       tableStylePayload(table.Style),
+		DefaultSort: tableSortPayload(table.DefaultSort),
 	}
+}
+
+func tableStylePayload(style dashboard.TableStyle) tableStylePayloadV1 {
+	return tableStylePayloadV1{Density: style.Density, Zebra: style.Zebra, Grid: style.Grid}
+}
+
+func tableSortPayload(sort dashboard.TableSort) tableSortPayloadV1 {
+	return tableSortPayloadV1{Key: sort.Key, Direction: sort.Direction}
 }
 
 func pagePayload(page dashboard.Page) pagePayloadV1 {
@@ -860,9 +1030,17 @@ func pagePayload(page dashboard.Page) pagePayloadV1 {
 		ID:          page.ID,
 		Title:       page.Title,
 		Description: page.Description,
-		Canvas:      page.Canvas,
-		Grid:        page.Grid,
+		Canvas:      pageCanvasPayload(page.Canvas),
+		Grid:        pageGridPayload(page.Grid),
 	}
+}
+
+func pageCanvasPayload(canvas dashboard.PageCanvas) pageCanvasV1 {
+	return pageCanvasV1{Width: canvas.Width, Height: canvas.Height}
+}
+
+func pageGridPayload(grid dashboard.PageGrid) pageGridV1 {
+	return pageGridV1{Columns: grid.Columns, RowHeight: grid.RowHeight, Gap: grid.Gap, Padding: grid.Padding}
 }
 
 func pageItemPayload(item dashboard.PageVisual) pageItemPayloadV1 {
@@ -873,10 +1051,19 @@ func pageItemPayload(item dashboard.PageVisual) pageItemPayloadV1 {
 		Table:       item.Table,
 		Filter:      item.Filter,
 		Description: item.Description,
-		Placement:   item.Placement,
+		Placement:   pagePlacementPayload(item.Placement),
 		Title:       item.Title,
 		Subtitle:    item.Subtitle,
 		Badges:      item.Badges,
+	}
+}
+
+func pagePlacementPayload(placement dashboard.PagePlacement) pagePlacementV1 {
+	return pagePlacementV1{
+		Col:     placement.Col,
+		Row:     placement.Row,
+		ColSpan: placement.ColSpan,
+		RowSpan: placement.RowSpan,
 	}
 }
 

@@ -23,7 +23,7 @@ func TestRepositorySaveValidatedCommitsDeploymentGraph(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	validation := validationGraph(created.ID, "edge_1", "edge_2")
+	validation := validationGraph(created.ID)
 	artifact := artifact(created.ID, "test")
 	saved, err := repo.SaveValidated(ctx, created.ID, validation, artifact)
 	if err != nil {
@@ -52,7 +52,7 @@ func TestRepositorySaveValidatedRollsBackOnDuplicateEdge(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 
-	validation := validationGraph(created.ID, "edge_1", "edge_2")
+	validation := validationGraph(created.ID)
 	validation.Graph.Edges[1].FromAssetID = validation.Graph.Edges[0].FromAssetID
 	validation.Graph.Edges[1].ToAssetID = validation.Graph.Edges[0].ToAssetID
 	validation.Graph.Edges[1].Type = validation.Graph.Edges[0].Type
@@ -83,11 +83,11 @@ func TestRepositorySaveValidatedReplacesDeploymentGraph(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if _, err := repo.SaveValidated(ctx, created.ID, validationGraph(created.ID, "edge_1", "edge_2"), artifact(created.ID, "test")); err != nil {
+	if _, err := repo.SaveValidated(ctx, created.ID, validationGraph(created.ID), artifact(created.ID, "test")); err != nil {
 		t.Fatalf("first save validated: %v", err)
 	}
 
-	replacement := validationGraph(created.ID, "edge_1", "edge_3")
+	replacement := validationGraph(created.ID)
 	replacement.Digest = "replacement"
 	replacement.Graph.Edges = replacement.Graph.Edges[:1]
 	if _, err := repo.SaveValidated(ctx, created.ID, replacement, artifact(created.ID, "test")); err != nil {
@@ -119,7 +119,7 @@ func TestRepositorySaveValidatedRollsBackOnDuplicateLogicalAsset(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	validation := validationGraph(created.ID, "edge_1", "edge_2")
+	validation := validationGraph(created.ID)
 	validation.Graph.Assets = append(validation.Graph.Assets, validation.Graph.Assets[0])
 	if _, err := repo.SaveValidated(ctx, created.ID, validation, artifact(created.ID, "test")); err == nil {
 		t.Fatal("expected duplicate logical asset error")
@@ -150,10 +150,10 @@ func TestRepositorySaveValidatedAllowsSameLogicalAssetsAcrossDeployments(t *test
 	if err != nil {
 		t.Fatalf("create second: %v", err)
 	}
-	if _, err := repo.SaveValidated(ctx, first.ID, validationGraph(first.ID, "edge_first_1", "edge_first_2"), artifact(first.ID, "test")); err != nil {
+	if _, err := repo.SaveValidated(ctx, first.ID, validationGraph(first.ID), artifact(first.ID, "test")); err != nil {
 		t.Fatalf("save first: %v", err)
 	}
-	if _, err := repo.SaveValidated(ctx, second.ID, validationGraph(second.ID, "edge_second_1", "edge_second_2"), artifact(second.ID, "test")); err != nil {
+	if _, err := repo.SaveValidated(ctx, second.ID, validationGraph(second.ID), artifact(second.ID, "test")); err != nil {
 		t.Fatalf("save second: %v", err)
 	}
 }
@@ -182,6 +182,12 @@ func TestRepositorySaveValidatedRejectsMismatchedAssetGraph(t *testing.T) {
 			},
 		},
 		{
+			name: "asset parent",
+			mutate: func(validation *deployment.Validation) {
+				validation.Graph.Assets[0].ParentID = "dashboard:missing"
+			},
+		},
+		{
 			name: "edge workspace",
 			mutate: func(validation *deployment.Validation) {
 				validation.Graph.Edges[0].WorkspaceID = "other"
@@ -199,6 +205,20 @@ func TestRepositorySaveValidatedRejectsMismatchedAssetGraph(t *testing.T) {
 				validation.Graph.Edges[0].ID = "edge_wrong"
 			},
 		},
+		{
+			name: "edge from",
+			mutate: func(validation *deployment.Validation) {
+				edge := validation.Graph.Edges[0]
+				validation.Graph.Edges[0] = workspace.NewAssetEdge(edge.WorkspaceID, edge.DeploymentID, "dashboard:missing", edge.ToAssetID, edge.Type)
+			},
+		},
+		{
+			name: "edge to",
+			mutate: func(validation *deployment.Validation) {
+				edge := validation.Graph.Edges[0]
+				validation.Graph.Edges[0] = workspace.NewAssetEdge(edge.WorkspaceID, edge.DeploymentID, edge.FromAssetID, "semantic_model:missing", edge.Type)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -211,7 +231,7 @@ func TestRepositorySaveValidatedRejectsMismatchedAssetGraph(t *testing.T) {
 			if err != nil {
 				t.Fatalf("create: %v", err)
 			}
-			validation := validationGraph(created.ID, "edge_1", "edge_2")
+			validation := validationGraph(created.ID)
 			tt.mutate(&validation)
 			if _, err := repo.SaveValidated(ctx, created.ID, validation, artifact(created.ID, "test")); err == nil {
 				t.Fatal("expected mismatched graph error")
@@ -240,7 +260,7 @@ func openRepo(t *testing.T, ctx context.Context) (*platform.Store, *Repository) 
 	return store, NewRepository(store.SQLDB())
 }
 
-func validationGraph(deploymentID deployment.ID, edgeID1, edgeID2 string) deployment.Validation {
+func validationGraph(deploymentID deployment.ID) deployment.Validation {
 	workspaceID := workspace.WorkspaceID("test")
 	assetA := mustTestAsset(workspaceID, workspace.DeploymentID(deploymentID), workspace.AssetTypeDashboard, "a", "")
 	assetB := mustTestAsset(workspaceID, workspace.DeploymentID(deploymentID), workspace.AssetTypeSemanticModel, "b", "")

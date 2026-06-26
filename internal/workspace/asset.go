@@ -95,6 +95,70 @@ func NewAssetEdge(workspaceID WorkspaceID, deploymentID DeploymentID, fromID, to
 	}
 }
 
+func ValidateAssetGraphForDeployment(graph AssetGraph, workspaceID WorkspaceID, deploymentID DeploymentID) error {
+	assetIDs := make(map[AssetID]struct{}, len(graph.Assets))
+	for _, asset := range graph.Assets {
+		if asset.ID == "" {
+			return fmt.Errorf("asset logical id is required")
+		}
+		if _, ok := assetIDs[asset.ID]; ok {
+			return fmt.Errorf("asset %s is duplicated", asset.ID)
+		}
+		assetIDs[asset.ID] = struct{}{}
+		if asset.WorkspaceID != workspaceID {
+			return fmt.Errorf("asset %s workspace = %q, want %q", asset.ID, asset.WorkspaceID, workspaceID)
+		}
+		if asset.DeploymentID != deploymentID {
+			return fmt.Errorf("asset %s deployment = %q, want %q", asset.ID, asset.DeploymentID, deploymentID)
+		}
+		if want := NewAssetSnapshotID(deploymentID, asset.ID); asset.SnapshotID != want {
+			return fmt.Errorf("asset %s snapshot id = %q, want %q", asset.ID, asset.SnapshotID, want)
+		}
+		if err := validatePayloadSchema(asset.Type, asset.PayloadSchema); err != nil {
+			return fmt.Errorf("asset %s: %w", asset.ID, err)
+		}
+	}
+	for _, asset := range graph.Assets {
+		if asset.ParentID == "" {
+			continue
+		}
+		if _, ok := assetIDs[asset.ParentID]; !ok {
+			return fmt.Errorf("asset %s parent %s is not in graph", asset.ID, asset.ParentID)
+		}
+	}
+
+	edgeKeys := make(map[assetEdgeKey]struct{}, len(graph.Edges))
+	for _, edge := range graph.Edges {
+		if edge.WorkspaceID != workspaceID {
+			return fmt.Errorf("asset edge %s workspace = %q, want %q", edge.ID, edge.WorkspaceID, workspaceID)
+		}
+		if edge.DeploymentID != deploymentID {
+			return fmt.Errorf("asset edge %s deployment = %q, want %q", edge.ID, edge.DeploymentID, deploymentID)
+		}
+		if want := NewAssetEdgeID(deploymentID, edge.FromAssetID, edge.ToAssetID, edge.Type); edge.ID != want {
+			return fmt.Errorf("asset edge %s id = %q, want %q", edge.Type, edge.ID, want)
+		}
+		if _, ok := assetIDs[edge.FromAssetID]; !ok {
+			return fmt.Errorf("asset edge %s from asset %s is not in graph", edge.ID, edge.FromAssetID)
+		}
+		if _, ok := assetIDs[edge.ToAssetID]; !ok {
+			return fmt.Errorf("asset edge %s to asset %s is not in graph", edge.ID, edge.ToAssetID)
+		}
+		key := assetEdgeKey{from: edge.FromAssetID, to: edge.ToAssetID, typ: edge.Type}
+		if _, ok := edgeKeys[key]; ok {
+			return fmt.Errorf("asset edge %s -> %s (%s) is duplicated", edge.FromAssetID, edge.ToAssetID, edge.Type)
+		}
+		edgeKeys[key] = struct{}{}
+	}
+	return nil
+}
+
+type assetEdgeKey struct {
+	from AssetID
+	to   AssetID
+	typ  AssetEdgeType
+}
+
 func validatePayloadSchema(typ AssetType, schema string) error {
 	want := PayloadSchemaForAssetType(typ)
 	if want == "" {

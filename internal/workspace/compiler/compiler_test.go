@@ -329,13 +329,44 @@ func TestCompilerPayloadBuildersDoNotReturnAnonymousMaps(t *testing.T) {
 	}
 }
 
-func TestCompileTypedTablePagePayloadsKeepFieldNames(t *testing.T) {
+func TestCompilerPayloadContractsDoNotEmbedDomainTypes(t *testing.T) {
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, "lineage.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse lineage.go: %v", err)
+	}
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok || !strings.HasSuffix(typeSpec.Name.Name, "PayloadV1") {
+				continue
+			}
+			structType, ok := typeSpec.Type.(*ast.StructType)
+			if !ok {
+				continue
+			}
+			for _, field := range structType.Fields.List {
+				if selectorTypeName(field.Type) != "" {
+					t.Fatalf("%s embeds domain type %s; project into a compiler-owned v1 payload struct", typeSpec.Name.Name, selectorTypeName(field.Type))
+				}
+			}
+		}
+	}
+}
+
+func TestCompileTypedPayloadsKeepFieldNames(t *testing.T) {
 	compiled := compileLineageWorkspace(t)
 	assets := assetsByID(compiled.Workspace.Graph)
 	checks := map[string][]string{
 		"table:sales.order_rows":                {"Title", "Description", "Kind", "Query", "Rows", "ColumnDims", "DataColumns", "Style", "DefaultSort"},
 		"page:sales.overview":                   {"ID", "Title", "Description", "Canvas", "Grid"},
 		"page_item:sales.overview.orders_table": {"ID", "Kind", "Visual", "Table", "Filter", "Description", "Placement", "Title", "Subtitle", "Badges"},
+		"filter:sales.status":                   {"Type", "Label", "Description", "Dimension", "Default", "Custom", "Presets", "Operator", "Values", "DefaultOperator", "Operators", "Options", "URLParam", "FromURLParam", "ToURLParam", "OperatorURLParam", "Targets"},
+		"visual:sales.revenue_by_status":        {"Title", "Description", "Kind", "Shape", "Renderer", "Type", "Query", "Options", "RendererOptions", "Encode"},
 	}
 	for id, fields := range checks {
 		asset := assets[id]
@@ -351,6 +382,40 @@ func TestCompileTypedTablePagePayloadsKeepFieldNames(t *testing.T) {
 				t.Fatalf("asset %q payload missing field %q: %s", id, field, asset.PayloadJSON)
 			}
 		}
+	}
+	var visualPayload map[string]any
+	if err := json.Unmarshal([]byte(assets["visual:sales.revenue_by_status"].PayloadJSON), &visualPayload); err != nil {
+		t.Fatalf("visual payload JSON invalid: %v", err)
+	}
+	query, ok := visualPayload["Query"].(map[string]any)
+	if !ok {
+		t.Fatalf("visual payload Query = %#v, want object", visualPayload["Query"])
+	}
+	for _, field := range []string{"Table", "Dimensions", "Series", "Measures", "Time", "Sort", "Limit"} {
+		if _, ok := query[field]; !ok {
+			t.Fatalf("visual query payload missing field %q: %s", field, assets["visual:sales.revenue_by_status"].PayloadJSON)
+		}
+	}
+}
+
+func selectorTypeName(expr ast.Expr) string {
+	switch typ := expr.(type) {
+	case *ast.SelectorExpr:
+		if pkg, ok := typ.X.(*ast.Ident); ok {
+			return pkg.Name + "." + typ.Sel.Name
+		}
+		return typ.Sel.Name
+	case *ast.ArrayType:
+		return selectorTypeName(typ.Elt)
+	case *ast.StarExpr:
+		return selectorTypeName(typ.X)
+	case *ast.MapType:
+		if name := selectorTypeName(typ.Key); name != "" {
+			return name
+		}
+		return selectorTypeName(typ.Value)
+	default:
+		return ""
 	}
 }
 

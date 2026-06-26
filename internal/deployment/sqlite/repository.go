@@ -81,7 +81,7 @@ func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.
 		return deployment.Deployment{}, mapNotFound(err)
 	}
 	artifact.WorkspaceID = deployment.WorkspaceID(current.WorkspaceID)
-	if err := validateGraphForDeployment(validation.Graph, workspace.WorkspaceID(current.WorkspaceID), workspace.DeploymentID(deploymentID)); err != nil {
+	if err := workspace.ValidateAssetGraphForDeployment(validation.Graph, workspace.WorkspaceID(current.WorkspaceID), workspace.DeploymentID(deploymentID)); err != nil {
 		return deployment.Deployment{}, err
 	}
 	if err := q.InsertDeploymentArtifact(ctx, mapArtifactParams(artifact)); err != nil {
@@ -135,32 +135,6 @@ func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.
 		return deployment.Deployment{}, err
 	}
 	return r.ByID(ctx, deploymentID)
-}
-
-func validateGraphForDeployment(graph workspace.AssetGraph, workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID) error {
-	for _, asset := range graph.Assets {
-		if asset.WorkspaceID != workspaceID {
-			return fmt.Errorf("asset %s workspace = %q, want %q", asset.ID, asset.WorkspaceID, workspaceID)
-		}
-		if asset.DeploymentID != deploymentID {
-			return fmt.Errorf("asset %s deployment = %q, want %q", asset.ID, asset.DeploymentID, deploymentID)
-		}
-		if want := workspace.NewAssetSnapshotID(deploymentID, asset.ID); asset.SnapshotID != want {
-			return fmt.Errorf("asset %s snapshot id = %q, want %q", asset.ID, asset.SnapshotID, want)
-		}
-	}
-	for _, edge := range graph.Edges {
-		if edge.WorkspaceID != workspaceID {
-			return fmt.Errorf("asset edge %s workspace = %q, want %q", edge.ID, edge.WorkspaceID, workspaceID)
-		}
-		if edge.DeploymentID != deploymentID {
-			return fmt.Errorf("asset edge %s deployment = %q, want %q", edge.ID, edge.DeploymentID, deploymentID)
-		}
-		if want := workspace.NewAssetEdgeID(deploymentID, edge.FromAssetID, edge.ToAssetID, edge.Type); edge.ID != want {
-			return fmt.Errorf("asset edge %s id = %q, want %q", edge.Type, edge.ID, want)
-		}
-	}
-	return nil
 }
 
 func (r *Repository) Activate(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID) (deployment.Deployment, error) {
