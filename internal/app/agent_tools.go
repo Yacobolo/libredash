@@ -50,7 +50,7 @@ func (s *Server) configureAgentTools() {
 	if s.agent == nil {
 		return
 	}
-	s.agent.AppendToolProviders(s.agentAssetToolDefinitions, s.agentAPIGenToolDefinitions)
+	s.agent.AppendToolProviders(s.agentAPIGenToolDefinitions)
 }
 
 func (s *Server) agentAPIGenToolDefinitions(scope agentapp.Scope) []agent.ToolDefinition {

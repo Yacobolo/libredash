@@ -13,6 +13,8 @@ var apigenOperationPermissions = map[string]string{
 	"listWorkspaces":             access.PermissionWorkspaceRead,
 	"searchWorkspace":            access.PermissionAssetRead,
 	"listWorkspaceAssets":        access.PermissionAssetRead,
+	"getWorkspaceAsset":          access.PermissionAssetRead,
+	"getWorkspaceAssetLineage":   access.PermissionAssetRead,
 	"listWorkspaceAssetEdges":    access.PermissionAssetRead,
 	"listDashboards":             access.PermissionAssetRead,
 	"getDashboard":               access.PermissionAssetRead,

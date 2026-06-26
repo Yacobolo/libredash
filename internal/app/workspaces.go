@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"sort"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/api"
@@ -392,6 +394,22 @@ func (s *Server) apiWorkspaceAssets(w http.ResponseWriter, r *http.Request) {
 	_ = writePagedJSON(w, r, apiAssetDTOs(workspace.FilterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q"))))
 }
 
+func (s *Server) apiWorkspaceAsset(w http.ResponseWriter, r *http.Request) {
+	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
+	assetID := firstNonEmpty(chi.URLParam(r, "assetId"), chi.URLParam(r, "asset"))
+	assets, _, err := s.workspaceAssetsAndEdges(r, workspaceID)
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	asset, ok := workspace.AssetByID(assets, assetID)
+	if !ok {
+		writeJSONError(w, fmt.Errorf("asset %q not found", assetID), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, apiAssetDTOs([]workspace.AssetView{asset})[0])
+}
+
 func (s *Server) apiWorkspaceAssetEdges(w http.ResponseWriter, r *http.Request) {
 	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
 	_, edges, err := s.workspaceAssetsAndEdges(r, workspaceID)
@@ -400,6 +418,25 @@ func (s *Server) apiWorkspaceAssetEdges(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	_ = writePagedJSON(w, r, apiAssetEdgeDTOs(edges))
+}
+
+func (s *Server) apiWorkspaceAssetLineage(w http.ResponseWriter, r *http.Request) {
+	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
+	assetID := firstNonEmpty(chi.URLParam(r, "assetId"), chi.URLParam(r, "asset"))
+	assets, edges, err := s.workspaceAssetsAndEdges(r, workspaceID)
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	if _, ok := workspace.AssetByID(assets, assetID); !ok {
+		writeJSONError(w, fmt.Errorf("asset %q not found", assetID), http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, api.AssetLineageResponse{
+		AssetID:    assetID,
+		Upstream:   assetLineageEndpointIDs(edges, assetID, true),
+		Downstream: assetLineageEndpointIDs(edges, assetID, false),
+	})
 }
 
 func (s *Server) apiWorkspaceRoles(w http.ResponseWriter, r *http.Request) {
@@ -679,6 +716,24 @@ func apiAssetEdgeDTOs(rows []workspace.AssetEdgeView) []api.AssetEdgeResponse {
 			Type:         row.Type,
 		})
 	}
+	return out
+}
+
+func assetLineageEndpointIDs(edges []workspace.AssetEdgeView, assetID string, upstream bool) []string {
+	values := map[string]struct{}{}
+	for _, edge := range edges {
+		if upstream && edge.ToAssetID == assetID {
+			values[edge.FromAssetID] = struct{}{}
+		}
+		if !upstream && edge.FromAssetID == assetID {
+			values[edge.ToAssetID] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(values))
+	for value := range values {
+		out = append(out, value)
+	}
+	sort.Strings(out)
 	return out
 }
 

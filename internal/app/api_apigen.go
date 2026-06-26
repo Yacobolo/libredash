@@ -143,6 +143,14 @@ func (a apiGenAdapter) ListWorkspaceAssets(w http.ResponseWriter, r *http.Reques
 	a.server.apiWorkspaceAssets(w, r)
 }
 
+func (a apiGenAdapter) GetWorkspaceAsset(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.apiWorkspaceAsset(w, r)
+}
+
+func (a apiGenAdapter) GetWorkspaceAssetLineage(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.apiWorkspaceAssetLineage(w, r)
+}
+
 func (a apiGenAdapter) ListWorkspaceAssetEdges(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListWorkspaceAssetEdgesParams) {
 	a.server.apiWorkspaceAssetEdges(w, r)
 }

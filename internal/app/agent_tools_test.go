@@ -27,8 +27,11 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		"describe_model",
 		"get_deployment",
 		"get_materialization_run",
+		"asset_lineage",
+		"describe_asset",
 		"list_dashboard_components",
 		"list_dashboard_filter_options",
+		"list_assets",
 		"list_dashboards",
 		"list_deployments",
 		"list_materialization_runs",
@@ -36,7 +39,6 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		"list_semantic_fields",
 		"list_semantic_models",
 		"list_workspace_asset_edges",
-		"list_workspace_assets",
 		"list_workspaces",
 		"preview_semantic_dataset",
 		"query_dashboard_page",
@@ -69,15 +71,15 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		Properties map[string]any `json:"properties"`
 		Required   []string       `json:"required"`
 	}
-	if err := json.Unmarshal(names["list_workspace_assets"].InputSchema, &schema); err != nil {
-		t.Fatalf("decode list_workspace_assets schema: %v", err)
+	if err := json.Unmarshal(names["list_assets"].InputSchema, &schema); err != nil {
+		t.Fatalf("decode list_assets schema: %v", err)
 	}
 	if _, ok := schema.Properties["workspace"]; ok {
-		t.Fatalf("workspace should be injected from agent scope, not model arguments: %s", names["list_workspace_assets"].InputSchema)
+		t.Fatalf("workspace should be injected from agent scope, not model arguments: %s", names["list_assets"].InputSchema)
 	}
 	for _, want := range []string{"type", "q", "limit", "pageToken"} {
 		if _, ok := schema.Properties[want]; !ok {
-			t.Fatalf("schema missing query parameter %q: %s", want, names["list_workspace_assets"].InputSchema)
+			t.Fatalf("schema missing query parameter %q: %s", want, names["list_assets"].InputSchema)
 		}
 	}
 	if err := json.Unmarshal(names["search_workspace"].InputSchema, &schema); err != nil {
@@ -156,6 +158,8 @@ func TestAPIGenAgentToolsExposeTypeSpecArgumentNamesAndBodyFields(t *testing.T) 
 	for toolName, wantProps := range map[string][]string{
 		"describe_dashboard":            {"dashboard"},
 		"describe_dashboard_visual":     {"dashboard", "page", "visual"},
+		"describe_asset":                {"assetId"},
+		"asset_lineage":                 {"assetId"},
 		"describe_model":                {"model"},
 		"list_dashboard_components":     {"dashboard", "page", "limit", "pageToken"},
 		"list_dashboard_filter_options": {"dashboard", "page", "filter", "filters", "limit", "pageToken"},
@@ -189,18 +193,18 @@ func TestAPIGenAgentToolDispatchesThroughGeneratedOperation(t *testing.T) {
 	tools := server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"})
 	var listAssets agent.ToolDefinition
 	for _, tool := range tools {
-		if tool.Name == "list_workspace_assets" {
+		if tool.Name == "list_assets" {
 			listAssets = tool
 			break
 		}
 	}
 	if listAssets.Handler == nil {
-		t.Fatal("list_workspace_assets tool missing")
+		t.Fatal("list_assets tool missing")
 	}
 
 	result, err := listAssets.Handler.Run(context.Background(), agent.ToolCall{
 		ID:        "call_1",
-		Name:      "list_workspace_assets",
+		Name:      "list_assets",
 		Arguments: json.RawMessage(`{"type":"dashboard","limit":1}`),
 	})
 	if err != nil {
@@ -228,60 +232,45 @@ func TestAPIGenAgentToolDispatchesThroughGeneratedOperation(t *testing.T) {
 	}
 }
 
-func TestAgentAssetToolsReadSharedCatalogService(t *testing.T) {
+func TestAPIGenAgentAssetDescribeAndLineageToolsUseTypeSpecContracts(t *testing.T) {
 	catalog := testAgentAssetCatalog(t)
 	server := NewWithOptions(fakeMetrics{}, Options{
 		AssetCatalog:       fakeAssetCatalogReader{catalog: catalog},
 		DefaultWorkspaceID: "test",
 	})
-	tools := server.agentAssetToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"})
+	tools := server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"})
 	names := map[string]agent.ToolDefinition{}
 	for _, tool := range tools {
 		names[tool.Name] = tool
 	}
-	for _, want := range []string{"list_assets", "describe_asset", "asset_lineage"} {
+	for _, want := range []string{"describe_asset", "asset_lineage"} {
 		if names[want].Handler == nil {
 			t.Fatalf("missing asset tool %q in %#v", want, toolNames(tools))
 		}
 	}
 
-	result, err := names["list_assets"].Handler.Run(context.Background(), agent.ToolCall{
-		ID:        "call_1",
-		Name:      "list_assets",
-		Arguments: json.RawMessage(`{"type":"dashboard","limit":1}`),
-	})
-	if err != nil {
-		t.Fatalf("run list_assets: %v", err)
-	}
-	body, err := json.Marshal(result.Content)
-	if err != nil {
-		t.Fatalf("marshal list_assets: %v", err)
-	}
-	var list agentAssetListPayload
-	if err := json.Unmarshal(body, &list); err != nil {
-		t.Fatalf("decode list_assets: %v body=%s", err, body)
-	}
-	if len(list.Assets) != 1 || list.Assets[0].ID != "dashboard:executive-sales" || list.Assets[0].SnapshotID == "" || list.Assets[0].PayloadSchema != "dashboard.v1" {
-		t.Fatalf("list_assets result = %#v", list.Assets)
-	}
-
-	result, err = names["describe_asset"].Handler.Run(context.Background(), agent.ToolCall{
+	result, err := names["describe_asset"].Handler.Run(context.Background(), agent.ToolCall{
 		ID:        "call_2",
 		Name:      "describe_asset",
-		Arguments: json.RawMessage(`{"asset_id":"visual:executive-sales.revenue"}`),
+		Arguments: json.RawMessage(`{"assetId":"visual:executive-sales.revenue"}`),
 	})
 	if err != nil {
 		t.Fatalf("run describe_asset: %v", err)
 	}
-	body, err = json.Marshal(result.Content)
+	body, err := json.Marshal(result.Content)
 	if err != nil {
 		t.Fatalf("marshal describe_asset: %v", err)
 	}
-	var described agentAssetDescriptionPayload
+	var described struct {
+		ID            string         `json:"id"`
+		SnapshotID    string         `json:"snapshotId"`
+		PayloadSchema string         `json:"payloadSchema"`
+		Payload       map[string]any `json:"payload"`
+	}
 	if err := json.Unmarshal(body, &described); err != nil {
 		t.Fatalf("decode describe_asset: %v body=%s", err, body)
 	}
-	if described.Asset.ID != "visual:executive-sales.revenue" || described.Payload["query_kind"] != "aggregate" {
+	if described.ID != "visual:executive-sales.revenue" || described.SnapshotID == "" || described.PayloadSchema != "visual.v1" || described.Payload["query_kind"] != "aggregate" {
 		t.Fatalf("describe_asset result = %#v", described)
 	}
 	if _, ok := described.Payload["auth"]; ok {
@@ -291,7 +280,7 @@ func TestAgentAssetToolsReadSharedCatalogService(t *testing.T) {
 	result, err = names["asset_lineage"].Handler.Run(context.Background(), agent.ToolCall{
 		ID:        "call_3",
 		Name:      "asset_lineage",
-		Arguments: json.RawMessage(`{"asset_id":"visual:executive-sales.revenue"}`),
+		Arguments: json.RawMessage(`{"assetId":"visual:executive-sales.revenue"}`),
 	})
 	if err != nil {
 		t.Fatalf("run asset_lineage: %v", err)
@@ -300,7 +289,11 @@ func TestAgentAssetToolsReadSharedCatalogService(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal asset_lineage: %v", err)
 	}
-	var lineage agentAssetLineageReply
+	var lineage struct {
+		AssetID    string   `json:"assetId"`
+		Upstream   []string `json:"upstream"`
+		Downstream []string `json:"downstream"`
+	}
 	if err := json.Unmarshal(body, &lineage); err != nil {
 		t.Fatalf("decode asset_lineage: %v body=%s", err, body)
 	}

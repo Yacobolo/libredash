@@ -439,7 +439,7 @@ func TestAgentToolsCommandListsGeneratedTools(t *testing.T) {
 			t.Fatalf("agent tools: %v", err)
 		}
 	})
-	for _, want := range []string{"NAME", "PERMISSION", "list_dashboards", "asset:read", "list_workspace_assets", "search_workspace", "query_dashboard_visual_data", "query_semantic_dataset", "explain_semantic_query"} {
+	for _, want := range []string{"NAME", "PERMISSION", "list_dashboards", "asset:read", "list_assets", "describe_asset", "asset_lineage", "search_workspace", "query_dashboard_visual_data", "query_semantic_dataset", "explain_semantic_query"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("agent tools output missing %q:\n%s", want, output)
 		}

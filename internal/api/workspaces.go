@@ -33,6 +33,12 @@ type AssetEdgeResponse struct {
 	Type         string `json:"type"`
 }
 
+type AssetLineageResponse struct {
+	AssetID    string   `json:"assetId"`
+	Upstream   []string `json:"upstream"`
+	Downstream []string `json:"downstream"`
+}
+
 type RoleResponse struct {
 	Name        string   `json:"name"`
 	Permissions []string `json:"permissions"`

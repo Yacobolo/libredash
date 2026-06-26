@@ -632,6 +632,38 @@ func TestWorkspaceAssetAPIListsActiveDeploymentAssets(t *testing.T) {
 		t.Fatalf("connection API leaked auth content:\n%s", rec.Body.String())
 	}
 
+	detailReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/assets/connection:olist.olist", nil)
+	detailReq.Header.Set("Authorization", "Bearer dev")
+	detailReq.Header.Set("Accept", "application/json")
+	detailRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(detailRec, detailReq)
+	if detailRec.Code != http.StatusOK {
+		t.Fatalf("asset detail status = %d body=%s", detailRec.Code, detailRec.Body.String())
+	}
+	var detail api.AssetResponse
+	if err := json.Unmarshal(detailRec.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode asset detail response: %v body=%s", err, detailRec.Body.String())
+	}
+	if detail.ID != connection.ID || detail.SnapshotID != connection.SnapshotID || detail.PayloadSchema != "connection.v1" {
+		t.Fatalf("asset detail = %#v, list connection = %#v", detail, connection)
+	}
+
+	lineageReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/assets/connection:olist.olist/lineage", nil)
+	lineageReq.Header.Set("Authorization", "Bearer dev")
+	lineageReq.Header.Set("Accept", "application/json")
+	lineageRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(lineageRec, lineageReq)
+	if lineageRec.Code != http.StatusOK {
+		t.Fatalf("asset lineage status = %d body=%s", lineageRec.Code, lineageRec.Body.String())
+	}
+	var lineage api.AssetLineageResponse
+	if err := json.Unmarshal(lineageRec.Body.Bytes(), &lineage); err != nil {
+		t.Fatalf("decode asset lineage response: %v body=%s", err, lineageRec.Body.String())
+	}
+	if lineage.AssetID != "connection:olist.olist" || !stringSliceHas(lineage.Upstream, "source:olist.orders") {
+		t.Fatalf("asset lineage = %#v", lineage)
+	}
+
 	edgesReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/asset-edges", nil)
 	edgesReq.Header.Set("Authorization", "Bearer dev")
 	edgesReq.Header.Set("Accept", "application/json")

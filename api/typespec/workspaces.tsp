@@ -52,6 +52,12 @@ model AssetEdgeListResponse {
   page: PageInfo;
 }
 
+model AssetLineageResponse {
+  assetId: string;
+  upstream: string[];
+  downstream: string[];
+}
+
 alias ListWorkspacesOK = OkJson<WorkspaceListResponse>;
 
 @tag("Workspaces")
@@ -70,6 +76,7 @@ alias ListWorkspaceAssetEdgesOK = OkJson<AssetEdgeListResponse>;
 @route("/workspaces/{workspace}/asset-edges")
 @get
 @apigen.authz(#{ mode: "permission", permission: "asset:read" })
+@apigen.cli(#{ command: #["assets", "edges"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
 @extension("x-agent", #{ enabled: true, name: "list_workspace_asset_edges", risk: "read", tags: #["workspace", "lineage"], defaultLimit: 25 })
 op listWorkspaceAssetEdges(@path workspace: string, @query limit?: int32, @query pageToken?: string): ListWorkspaceAssetEdgesOK | CommonErrors;
 
@@ -80,5 +87,24 @@ alias ListWorkspaceAssetsOK = OkJson<AssetListResponse>;
 @route("/workspaces/{workspace}/assets")
 @get
 @apigen.authz(#{ mode: "permission", permission: "asset:read" })
-@extension("x-agent", #{ enabled: true, name: "list_workspace_assets", risk: "read", tags: #["workspace", "asset", "lineage"], defaultLimit: 25 })
+@apigen.cli(#{ command: #["assets", "list"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
+@extension("x-agent", #{ enabled: true, name: "list_assets", risk: "read", tags: #["workspace", "asset", "lineage"], defaultLimit: 25 })
 op listWorkspaceAssets(@path workspace: string, @query type?: string, @query q?: string, @query limit?: int32, @query pageToken?: string): ListWorkspaceAssetsOK | CommonErrors;
+
+@tag("Workspaces")
+@summary("Describe a workspace asset")
+@route("/workspaces/{workspace}/assets/{assetId}")
+@get
+@apigen.authz(#{ mode: "permission", permission: "asset:read" })
+@apigen.cli(#{ command: #["assets", "describe"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "assetId", displayName: "asset-id" }], output: #{ mode: "raw" } })
+@extension("x-agent", #{ enabled: true, name: "describe_asset", risk: "read", tags: #["workspace", "asset"] })
+op getWorkspaceAsset(@path workspace: string, @path assetId: string): OkJson<AssetResponse> | CommonErrors;
+
+@tag("Workspaces")
+@summary("Get workspace asset lineage")
+@route("/workspaces/{workspace}/assets/{assetId}/lineage")
+@get
+@apigen.authz(#{ mode: "permission", permission: "asset:read" })
+@apigen.cli(#{ command: #["assets", "lineage"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "assetId", displayName: "asset-id" }], output: #{ mode: "raw" } })
+@extension("x-agent", #{ enabled: true, name: "asset_lineage", risk: "read", tags: #["workspace", "asset", "lineage"] })
+op getWorkspaceAssetLineage(@path workspace: string, @path assetId: string): OkJson<AssetLineageResponse> | CommonErrors;
