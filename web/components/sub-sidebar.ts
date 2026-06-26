@@ -455,6 +455,50 @@ class SubSidebar extends LitElement {
       writing-mode: vertical-rl;
     }
 
+    @media (max-width: 640px) {
+      :host,
+      :host([data-collapsed]) {
+        --ld-sub-sidebar-width: 100%;
+        width: 100%;
+        height: auto;
+        min-height: auto;
+        overflow: hidden;
+      }
+
+      aside {
+        position: static;
+        width: 100%;
+        height: auto;
+        max-height: none;
+        grid-template-rows: auto;
+        border-right: 0;
+      }
+
+      .top-row {
+        padding-block: var(--base-size-10) var(--base-size-6);
+      }
+
+      nav {
+        display: flex;
+        gap: var(--base-size-4);
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-block: var(--base-size-6) var(--base-size-10);
+        scrollbar-gutter: auto;
+      }
+
+      .rail-label,
+      .hover-title {
+        display: none;
+      }
+
+      .item-link,
+      .item-link.unnumbered {
+        width: max-content;
+        min-width: max-content;
+      }
+    }
+
     @keyframes rail-title-fade-in {
       from {
         opacity: 0;

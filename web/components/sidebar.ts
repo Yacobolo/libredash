@@ -477,6 +477,7 @@ class LibreDashSidebar extends LitElement {
       :host([data-collapsed]) {
         --ld-sidebar-width: 100%;
         width: 100%;
+        min-height: auto;
       }
 
       aside {

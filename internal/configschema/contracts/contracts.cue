@@ -214,6 +214,7 @@ package contracts
 })
 
 #VisualQuery: close({
+	table?:      #Identifier
 	dimensions?: #FieldRefs
 	series?:     #FieldRefObject
 	measures?:   #MeasureRefs

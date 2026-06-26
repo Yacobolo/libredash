@@ -63,7 +63,6 @@ func inspectorElement() g.Node {
 
 func pageHead(extra ...g.Node) []g.Node {
 	nodes := []g.Node{
-		h.Meta(h.Name("viewport"), h.Content("width=device-width, initial-scale=1")),
 		h.Link(h.Rel("preconnect"), h.Href("https://cdn.jsdelivr.net")),
 		h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
 		h.Script(h.Type("module"), h.Src(staticAsset("/static/theme.js"))),
@@ -267,7 +266,7 @@ func sidebarGroups(catalog dashboard.Catalog) []map[string]any {
 				{"id": "chat", "label": "Chats", "href": "/chat", "icon": "chat", "meta": "Agent interface"},
 				{"id": "workspaces", "label": "Workspaces", "href": "/workspaces", "icon": "catalog", "meta": "Published assets"},
 				{"id": "connections", "label": "Connections", "href": "/connections", "icon": "data", "meta": "Data access"},
-				{"id": "settings", "label": "Settings", "href": "/workspaces/" + workspaceID + "/permissions", "icon": "settings", "meta": "Permissions"},
+				{"id": "admin", "label": "Admin", "href": "/admin", "icon": "settings", "meta": "Read-only administration"},
 			},
 		},
 	}

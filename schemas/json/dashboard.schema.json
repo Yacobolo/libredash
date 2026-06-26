@@ -895,6 +895,9 @@
           },
           "type": "array"
         },
+        "table": {
+          "$ref": "#/$defs/%23Identifier"
+        },
         "time": {
           "additionalProperties": false,
           "properties": {
