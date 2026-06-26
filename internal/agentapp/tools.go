@@ -49,14 +49,14 @@ func (s *Service) toolDefinitions(scope Scope) []agent.ToolDefinition {
 				if err := json.Unmarshal(raw, &input); err != nil {
 					return nil, err
 				}
-				graph, ok, err := s.activeAssetGraph(ctx, scope.WorkspaceID)
+				catalog, ok, err := s.activeAssetCatalog(ctx, scope.WorkspaceID)
 				if err != nil {
 					return nil, err
 				}
 				if !ok {
 					return assetListPayload{Assets: []assetSummary{}}, nil
 				}
-				return assetList(graph, input.Type, input.Limit), nil
+				return assetList(catalog, input.Type, input.Limit), nil
 			}),
 		},
 		{
@@ -70,14 +70,14 @@ func (s *Service) toolDefinitions(scope Scope) []agent.ToolDefinition {
 				if err := json.Unmarshal(raw, &input); err != nil {
 					return nil, err
 				}
-				graph, ok, err := s.activeAssetGraph(ctx, scope.WorkspaceID)
+				catalog, ok, err := s.activeAssetCatalog(ctx, scope.WorkspaceID)
 				if err != nil {
 					return nil, err
 				}
 				if !ok {
 					return nil, fmt.Errorf("no active asset graph for workspace %q", scope.WorkspaceID)
 				}
-				return describeAsset(graph, input.AssetID)
+				return describeAsset(catalog, input.AssetID)
 			}),
 		},
 		{
@@ -91,14 +91,14 @@ func (s *Service) toolDefinitions(scope Scope) []agent.ToolDefinition {
 				if err := json.Unmarshal(raw, &input); err != nil {
 					return nil, err
 				}
-				graph, ok, err := s.activeAssetGraph(ctx, scope.WorkspaceID)
+				catalog, ok, err := s.activeAssetCatalog(ctx, scope.WorkspaceID)
 				if err != nil {
 					return nil, err
 				}
 				if !ok {
 					return nil, fmt.Errorf("no active asset graph for workspace %q", scope.WorkspaceID)
 				}
-				return assetLineage(graph, input.AssetID)
+				return assetLineage(catalog, input.AssetID)
 			}),
 		},
 		{
@@ -204,11 +204,11 @@ func (s *Service) toolDefinitions(scope Scope) []agent.ToolDefinition {
 	}
 }
 
-func (s *Service) activeAssetGraph(ctx context.Context, workspaceID string) (workspace.AssetGraph, bool, error) {
+func (s *Service) activeAssetCatalog(ctx context.Context, workspaceID string) (workspace.AssetCatalog, bool, error) {
 	if s.assets == nil {
-		return workspace.AssetGraph{}, false, nil
+		return workspace.AssetCatalog{}, false, nil
 	}
-	return s.assets.ActiveDeploymentGraph(ctx, workspace.WorkspaceID(workspaceID))
+	return s.assets.ActiveAssetCatalog(ctx, workspace.WorkspaceID(workspaceID))
 }
 
 func (s *Service) tool(fn func(ctx context.Context, raw json.RawMessage) (any, error)) agent.ToolHandler {
@@ -249,12 +249,12 @@ type assetLineageReply struct {
 	Downstream []string `json:"downstream"`
 }
 
-func assetList(graph workspace.AssetGraph, typ string, limit int) assetListPayload {
+func assetList(catalog workspace.AssetCatalog, typ string, limit int) assetListPayload {
 	if limit <= 0 || limit > 100 {
 		limit = maxAgentRows
 	}
 	typ = strings.TrimSpace(strings.ToLower(typ))
-	assets := append([]workspace.Asset(nil), graph.Assets...)
+	assets := append([]workspace.AssetRecord(nil), catalog.Assets...)
 	sort.SliceStable(assets, func(i, j int) bool { return assets[i].ID < assets[j].ID })
 	out := make([]assetSummary, 0, min(len(assets), limit))
 	for _, asset := range assets {
@@ -269,29 +269,25 @@ func assetList(graph workspace.AssetGraph, typ string, limit int) assetListPaylo
 	return assetListPayload{Assets: out}
 }
 
-func describeAsset(graph workspace.AssetGraph, assetID string) (assetDescriptionPayload, error) {
-	asset, ok := assetByLogicalID(graph, assetID)
+func describeAsset(catalog workspace.AssetCatalog, assetID string) (assetDescriptionPayload, error) {
+	asset, ok := assetByLogicalID(catalog, assetID)
 	if !ok {
 		return assetDescriptionPayload{}, fmt.Errorf("asset %q not found", assetID)
 	}
-	payload, err := assetPayloadMap(asset.PayloadJSON)
+	lineage, err := assetLineage(catalog, assetID)
 	if err != nil {
 		return assetDescriptionPayload{}, err
 	}
-	lineage, err := assetLineage(graph, assetID)
-	if err != nil {
-		return assetDescriptionPayload{}, err
-	}
-	return assetDescriptionPayload{Asset: summarizeAsset(asset), Payload: payload, Lineage: lineage}, nil
+	return assetDescriptionPayload{Asset: summarizeAsset(asset), Payload: asset.Payload, Lineage: lineage}, nil
 }
 
-func assetLineage(graph workspace.AssetGraph, assetID string) (assetLineageReply, error) {
-	if _, ok := assetByLogicalID(graph, assetID); !ok {
+func assetLineage(catalog workspace.AssetCatalog, assetID string) (assetLineageReply, error) {
+	if _, ok := assetByLogicalID(catalog, assetID); !ok {
 		return assetLineageReply{}, fmt.Errorf("asset %q not found", assetID)
 	}
 	upstreamSet := map[string]struct{}{}
 	downstreamSet := map[string]struct{}{}
-	for _, edge := range graph.Edges {
+	for _, edge := range catalog.Edges {
 		from := string(edge.FromAssetID)
 		to := string(edge.ToAssetID)
 		if to == assetID {
@@ -308,16 +304,16 @@ func assetLineage(graph workspace.AssetGraph, assetID string) (assetLineageReply
 	}, nil
 }
 
-func assetByLogicalID(graph workspace.AssetGraph, assetID string) (workspace.Asset, bool) {
-	for _, asset := range graph.Assets {
+func assetByLogicalID(catalog workspace.AssetCatalog, assetID string) (workspace.AssetRecord, bool) {
+	for _, asset := range catalog.Assets {
 		if string(asset.ID) == assetID {
 			return asset, true
 		}
 	}
-	return workspace.Asset{}, false
+	return workspace.AssetRecord{}, false
 }
 
-func summarizeAsset(asset workspace.Asset) assetSummary {
+func summarizeAsset(asset workspace.AssetRecord) assetSummary {
 	return assetSummary{
 		ID:            string(asset.ID),
 		SnapshotID:    string(asset.SnapshotID),
@@ -329,17 +325,6 @@ func summarizeAsset(asset workspace.Asset) assetSummary {
 		PayloadSchema: asset.PayloadSchema,
 		ContentHash:   asset.ContentHash,
 	}
-}
-
-func assetPayloadMap(raw string) (map[string]any, error) {
-	out := map[string]any{}
-	if strings.TrimSpace(raw) == "" {
-		return out, nil
-	}
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return nil, fmt.Errorf("decode asset payload: %w", err)
-	}
-	return out, nil
 }
 
 func sortedKeys(values map[string]struct{}) []string {

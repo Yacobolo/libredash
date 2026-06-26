@@ -566,8 +566,8 @@ func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 		"Credentials",
 		"Sources",
 		`Back to connections`,
-		`href="/connections/connection/lineage"`,
-		`/connections/connection/sources/source/details`,
+		`href="/connections/connection:olist.olist/lineage"`,
+		`/connections/connection:olist.olist/sources/source:olist.orders/details`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("connection details did not render %q:\n%s", want, rendered)
@@ -577,7 +577,7 @@ func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 		"Published from Git/YAML",
 		">Parent</span>",
 		"Back to workspace",
-		`href="/workspaces/libredash/assets/connection/details"`,
+		`href="/workspaces/libredash/assets/connection:olist.olist/details"`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("connection details rendered workspace-only content %q:\n%s", notWant, rendered)
@@ -606,8 +606,8 @@ func TestConnectionsPageUsesConnectionAssetTabs(t *testing.T) {
 		`href="/connections"`,
 		`href="/connections?type=connection"`,
 		`href="/connections?type=source" aria-current="page"`,
-		`href="/connections/connection/sources/source/details"`,
-		`href="/connections/connection/details">Olist connection</a>`,
+		`href="/connections/connection:olist.olist/sources/source:olist.orders/details"`,
+		`href="/connections/connection:olist.olist/details">Olist connection</a>`,
 		`>Source<`,
 	} {
 		if !strings.Contains(rendered, want) {
@@ -638,7 +638,7 @@ func TestConnectionSourceAssetDetailsRenderConnectionChrome(t *testing.T) {
 		"orders",
 		"Fields",
 		`href="/connections?type=source"`,
-		`href="/connections/connection/sources/source/lineage"`,
+		`href="/connections/connection:olist.olist/sources/source:olist.orders/lineage"`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("connection-scoped source details did not render %q:\n%s", want, rendered)
@@ -647,7 +647,7 @@ func TestConnectionSourceAssetDetailsRenderConnectionChrome(t *testing.T) {
 	for _, notWant := range []string{
 		"Workspaces /",
 		"Back to workspace",
-		`href="/workspaces/libredash/assets/source/details"`,
+		`href="/workspaces/libredash/assets/source:olist.orders/details"`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("connection-scoped source details rendered workspace content %q:\n%s", notWant, rendered)
@@ -733,7 +733,7 @@ func TestWorkspaceAssetRowsRenderTokenBackedIconColors(t *testing.T) {
 		"background-color: var(--ld-asset-semantic-model-bg); border-color: var(--ld-asset-semantic-model-border); color: var(--ld-asset-semantic-model-accent)",
 		"background-color: var(--ld-asset-measure-bg); border-color: var(--ld-asset-measure-border); color: var(--ld-asset-measure-accent)",
 		"background-color: var(--ld-asset-dashboard-bg); border-color: var(--ld-asset-dashboard-border); color: var(--ld-asset-dashboard-accent)",
-		`href="/workspaces/libredash/assets/model/details">Olist Commerce</a>`,
+		`href="/workspaces/libredash/assets/semantic_model:olist/details">Olist Commerce</a>`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("workspace asset rows did not render token-backed icon style %q:\n%s", want, rendered)
@@ -815,6 +815,7 @@ func testWorkspaceAccess(workspace api.WorkspaceResponse, canManage bool) Worksp
 
 func testAssetByID(t *testing.T, assets []api.AssetResponse, id string) api.AssetResponse {
 	t.Helper()
+	id = testLogicalAssetID(id)
 	for _, asset := range assets {
 		if asset.ID == id {
 			return asset
@@ -822,6 +823,33 @@ func testAssetByID(t *testing.T, assets []api.AssetResponse, id string) api.Asse
 	}
 	t.Fatalf("asset %q not found", id)
 	return api.AssetResponse{}
+}
+
+func testLogicalAssetID(id string) string {
+	if logicalID, ok := testAssetAliases[id]; ok {
+		return logicalID
+	}
+	return id
+}
+
+var testAssetAliases = map[string]string{
+	"catalog":         "catalog:libredash",
+	"model":           "semantic_model:olist",
+	"connection":      "connection:olist.olist",
+	"source":          "source:olist.orders",
+	"source-payments": "source:olist.payments",
+	"table-model":     "model_table:olist.orders",
+	"table-transform": "model_table:olist.payments",
+	"semantic-table":  "semantic_table:olist.orders",
+	"field":           "field:olist.orders.state",
+	"measure":         "measure:olist.revenue",
+	"relationship":    "relationship:olist.orders_customers",
+	"dashboard":       "dashboard:executive-sales",
+	"page":            "page:executive-sales.overview",
+	"page-item":       "page_item:executive-sales.overview.revenue",
+	"filter":          "filter:executive-sales.state",
+	"visual":          "visual:executive-sales.revenue",
+	"table":           "table:executive-sales.orders",
 }
 
 func signalMetricGrid(t *testing.T, signals map[string]any, key string) metricGrid {
@@ -956,6 +984,7 @@ func assertLineageSelectedNode(t *testing.T, graph assetLineageGraph, wantKind s
 
 func assertLineageNode(t *testing.T, graph assetLineageGraph, id string) assetLineageNode {
 	t.Helper()
+	id = testLogicalAssetID(id)
 	for _, node := range graph.Nodes {
 		if node.ID == id {
 			return node
@@ -967,6 +996,7 @@ func assertLineageNode(t *testing.T, graph assetLineageGraph, id string) assetLi
 
 func assertLineageMissingNode(t *testing.T, graph assetLineageGraph, id string) {
 	t.Helper()
+	id = testLogicalAssetID(id)
 	for _, node := range graph.Nodes {
 		if node.ID == id {
 			t.Fatalf("lineage graph included unwanted node %q: %#v", id, graph.Nodes)
@@ -976,6 +1006,8 @@ func assertLineageMissingNode(t *testing.T, graph assetLineageGraph, id string) 
 
 func assertLineageHasEdge(t *testing.T, graph assetLineageGraph, source, target, kind string) {
 	t.Helper()
+	source = testLogicalAssetID(source)
+	target = testLogicalAssetID(target)
 	for _, edge := range graph.Edges {
 		if edge.Source == source && edge.Target == target && edge.Kind == kind {
 			return
@@ -986,6 +1018,8 @@ func assertLineageHasEdge(t *testing.T, graph assetLineageGraph, source, target,
 
 func assertLineageMissingEdge(t *testing.T, graph assetLineageGraph, source, target, kind string) {
 	t.Helper()
+	source = testLogicalAssetID(source)
+	target = testLogicalAssetID(target)
 	for _, edge := range graph.Edges {
 		if edge.Source == source && edge.Target == target && edge.Kind == kind {
 			t.Fatalf("lineage graph included unwanted edge %s -> %s (%s): %#v", source, target, kind, graph.Edges)
@@ -1025,13 +1059,13 @@ func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []a
 	workspace := api.WorkspaceResponse{ID: "libredash", Title: "LibreDash Workspace", Description: "Local BI workspace."}
 	catalog := dashboard.Catalog{Workspace: dashboard.CatalogWorkspace{ID: workspace.ID, Title: workspace.Title, Description: workspace.Description}}
 	assets := []api.AssetResponse{
-		{ID: "catalog", WorkspaceID: workspace.ID, Type: "catalog", Key: workspace.ID, Title: workspace.Title, Description: workspace.Description},
+		{ID: "catalog:libredash", WorkspaceID: workspace.ID, Type: "catalog", Key: workspace.ID, Title: workspace.Title, Description: workspace.Description},
 		{
-			ID:          "model",
+			ID:          "semantic_model:olist",
 			WorkspaceID: workspace.ID,
 			Type:        "semantic_model",
 			Key:         "olist",
-			ParentID:    "catalog",
+			ParentID:    "catalog:libredash",
 			Title:       "Olist Commerce",
 			Description: "Brazilian ecommerce model.",
 			Payload: map[string]any{
@@ -1058,8 +1092,8 @@ func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []a
 				"Relationships": []any{map[string]any{"ID": "orders_customers", "From": "orders.customer_id", "To": "customers.customer_id", "Cardinality": "many_to_one", "Active": true}},
 			},
 		},
-		{ID: "connection", WorkspaceID: workspace.ID, Type: "connection", Key: "olist.olist", ParentID: "catalog", Title: "Olist connection", Payload: map[string]any{"Kind": "local", "credentials_configured": false}},
-		{ID: "source", WorkspaceID: workspace.ID, Type: "source", Key: "olist.orders", ParentID: "catalog", Title: "orders", Payload: map[string]any{
+		{ID: "connection:olist.olist", WorkspaceID: workspace.ID, Type: "connection", Key: "olist.olist", ParentID: "catalog:libredash", Title: "Olist connection", Payload: map[string]any{"Kind": "local", "credentials_configured": false}},
+		{ID: "source:olist.orders", WorkspaceID: workspace.ID, Type: "source", Key: "olist.orders", ParentID: "catalog:libredash", Title: "orders", Payload: map[string]any{
 			"Connection": "olist",
 			"Format":     "csv",
 			"Path":       "orders.csv",
@@ -1072,8 +1106,8 @@ func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []a
 				map[string]any{"name": "customer_id", "ordinal": float64(2), "physicalType": "VARCHAR", "nullable": true},
 			}},
 		}},
-		{ID: "source-payments", WorkspaceID: workspace.ID, Type: "source", Key: "olist.payments", ParentID: "catalog", Title: "payments", Payload: map[string]any{"Connection": "olist", "Format": "csv", "Path": "payments.csv"}},
-		{ID: "table-model", WorkspaceID: workspace.ID, Type: "model_table", Key: "olist.orders", ParentID: "catalog", Title: "orders", Payload: map[string]any{
+		{ID: "source:olist.payments", WorkspaceID: workspace.ID, Type: "source", Key: "olist.payments", ParentID: "catalog:libredash", Title: "payments", Payload: map[string]any{"Connection": "olist", "Format": "csv", "Path": "payments.csv"}},
+		{ID: "model_table:olist.orders", WorkspaceID: workspace.ID, Type: "model_table", Key: "olist.orders", ParentID: "catalog:libredash", Title: "orders", Payload: map[string]any{
 			"Source":     "orders",
 			"PrimaryKey": "order_id",
 			"Grain":      "order_id",
@@ -1086,7 +1120,7 @@ func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []a
 				map[string]any{"name": "state", "ordinal": float64(2), "physicalType": "VARCHAR", "nullable": true},
 			}},
 		}},
-		{ID: "table-transform", WorkspaceID: workspace.ID, Type: "model_table", Key: "olist.payments", ParentID: "catalog", Title: "payments", Payload: map[string]any{
+		{ID: "model_table:olist.payments", WorkspaceID: workspace.ID, Type: "model_table", Key: "olist.payments", ParentID: "catalog:libredash", Title: "payments", Payload: map[string]any{
 			"Sources":            []any{"payments"},
 			"SourceDependencies": []any{"payments"},
 			"PrimaryKey":         "order_id",
@@ -1101,46 +1135,46 @@ func testWorkspaceAssetFixtures() (api.WorkspaceResponse, dashboard.Catalog, []a
 				map[string]any{"name": "revenue", "ordinal": float64(2), "physicalType": "DOUBLE", "nullable": true},
 			}},
 		}},
-		{ID: "semantic-table", WorkspaceID: workspace.ID, Type: "semantic_table", Key: "olist.orders", ParentID: "model", Title: "Orders semantic table", Payload: map[string]any{"Table": "orders"}},
-		{ID: "field", WorkspaceID: workspace.ID, Type: "field", Key: "olist.orders.state", ParentID: "semantic-table", Title: "State", Payload: map[string]any{"Label": "State"}},
-		{ID: "measure", WorkspaceID: workspace.ID, Type: "measure", Key: "olist.revenue", ParentID: "model", Title: "Revenue", Payload: map[string]any{"Table": "orders", "Expression": "SUM(orders.revenue)", "Format": "currency"}},
-		{ID: "relationship", WorkspaceID: workspace.ID, Type: "relationship", Key: "olist.orders_customers", ParentID: "model", Title: "Orders to customers", Payload: map[string]any{"From": "orders.customer_id", "To": "customers.customer_id"}},
-		{ID: "dashboard", WorkspaceID: workspace.ID, Type: "dashboard", Key: "executive-sales", ParentID: "catalog", Title: "Executive Sales Dashboard", Description: "Sales overview.", Href: "/dashboards/executive-sales", Payload: map[string]any{"SemanticModel": "olist", "Tags": []any{"sales"}}},
-		{ID: "page", WorkspaceID: workspace.ID, Type: "page", Key: "executive-sales.overview", ParentID: "dashboard", Title: "Overview"},
-		{ID: "page-item", WorkspaceID: workspace.ID, Type: "page_item", Key: "executive-sales.overview.revenue", ParentID: "page", Title: "Revenue tile"},
-		{ID: "filter", WorkspaceID: workspace.ID, Type: "filter", Key: "executive-sales.state", ParentID: "dashboard", Title: "State", Payload: map[string]any{"Field": "orders.state", "Type": "multi_select"}},
-		{ID: "visual", WorkspaceID: workspace.ID, Type: "visual", Key: "executive-sales.revenue", ParentID: "dashboard", Title: "Revenue by month", Payload: map[string]any{"Type": "line"}},
-		{ID: "table", WorkspaceID: workspace.ID, Type: "table", Key: "executive-sales.orders", ParentID: "dashboard", Title: "Orders", Payload: map[string]any{"Table": "orders"}},
+		{ID: "semantic_table:olist.orders", WorkspaceID: workspace.ID, Type: "semantic_table", Key: "olist.orders", ParentID: "semantic_model:olist", Title: "Orders semantic table", Payload: map[string]any{"Table": "orders"}},
+		{ID: "field:olist.orders.state", WorkspaceID: workspace.ID, Type: "field", Key: "olist.orders.state", ParentID: "semantic_table:olist.orders", Title: "State", Payload: map[string]any{"Label": "State"}},
+		{ID: "measure:olist.revenue", WorkspaceID: workspace.ID, Type: "measure", Key: "olist.revenue", ParentID: "semantic_model:olist", Title: "Revenue", Payload: map[string]any{"Table": "orders", "Expression": "SUM(orders.revenue)", "Format": "currency"}},
+		{ID: "relationship:olist.orders_customers", WorkspaceID: workspace.ID, Type: "relationship", Key: "olist.orders_customers", ParentID: "semantic_model:olist", Title: "Orders to customers", Payload: map[string]any{"From": "orders.customer_id", "To": "customers.customer_id"}},
+		{ID: "dashboard:executive-sales", WorkspaceID: workspace.ID, Type: "dashboard", Key: "executive-sales", ParentID: "catalog:libredash", Title: "Executive Sales Dashboard", Description: "Sales overview.", Href: "/dashboards/executive-sales", Payload: map[string]any{"SemanticModel": "olist", "Tags": []any{"sales"}}},
+		{ID: "page:executive-sales.overview", WorkspaceID: workspace.ID, Type: "page", Key: "executive-sales.overview", ParentID: "dashboard:executive-sales", Title: "Overview"},
+		{ID: "page_item:executive-sales.overview.revenue", WorkspaceID: workspace.ID, Type: "page_item", Key: "executive-sales.overview.revenue", ParentID: "page:executive-sales.overview", Title: "Revenue tile"},
+		{ID: "filter:executive-sales.state", WorkspaceID: workspace.ID, Type: "filter", Key: "executive-sales.state", ParentID: "dashboard:executive-sales", Title: "State", Payload: map[string]any{"Field": "orders.state", "Type": "multi_select"}},
+		{ID: "visual:executive-sales.revenue", WorkspaceID: workspace.ID, Type: "visual", Key: "executive-sales.revenue", ParentID: "dashboard:executive-sales", Title: "Revenue by month", Payload: map[string]any{"Type": "line"}},
+		{ID: "table:executive-sales.orders", WorkspaceID: workspace.ID, Type: "table", Key: "executive-sales.orders", ParentID: "dashboard:executive-sales", Title: "Orders", Payload: map[string]any{"Table": "orders"}},
 	}
 	edges := []api.AssetEdgeResponse{
-		{ID: "catalog-model", FromAssetID: "catalog", ToAssetID: "model", Type: "contains"},
-		{ID: "catalog-connection", FromAssetID: "catalog", ToAssetID: "connection", Type: "contains"},
-		{ID: "catalog-source", FromAssetID: "catalog", ToAssetID: "source", Type: "contains"},
-		{ID: "catalog-model-table", FromAssetID: "catalog", ToAssetID: "table-model", Type: "contains"},
-		{ID: "catalog-dashboard", FromAssetID: "catalog", ToAssetID: "dashboard", Type: "contains"},
-		{ID: "model-semantic-table", FromAssetID: "model", ToAssetID: "semantic-table", Type: "contains"},
-		{ID: "model-measure", FromAssetID: "model", ToAssetID: "measure", Type: "contains"},
-		{ID: "model-relationship", FromAssetID: "model", ToAssetID: "relationship", Type: "contains"},
-		{ID: "semantic-table-field", FromAssetID: "semantic-table", ToAssetID: "field", Type: "contains"},
-		{ID: "table-source", FromAssetID: "table-model", ToAssetID: "source", Type: "reads_source"},
-		{ID: "source-connection", FromAssetID: "source", ToAssetID: "connection", Type: "uses_connection"},
-		{ID: "semantic-table-model-table", FromAssetID: "semantic-table", ToAssetID: "table-model", Type: "uses_model_table"},
-		{ID: "measure-semantic-table", FromAssetID: "measure", ToAssetID: "semantic-table", Type: "uses_semantic_table"},
-		{ID: "measure-field", FromAssetID: "measure", ToAssetID: "field", Type: "uses_field"},
-		{ID: "dashboard-model", FromAssetID: "dashboard", ToAssetID: "model", Type: "uses_semantic_model"},
-		{ID: "dashboard-page", FromAssetID: "dashboard", ToAssetID: "page", Type: "contains"},
-		{ID: "dashboard-filter", FromAssetID: "dashboard", ToAssetID: "filter", Type: "contains"},
-		{ID: "dashboard-visual", FromAssetID: "dashboard", ToAssetID: "visual", Type: "contains"},
-		{ID: "dashboard-table", FromAssetID: "dashboard", ToAssetID: "table", Type: "contains"},
-		{ID: "page-item-edge", FromAssetID: "page", ToAssetID: "page-item", Type: "contains"},
-		{ID: "page-item-visual", FromAssetID: "page-item", ToAssetID: "visual", Type: "uses_visual"},
-		{ID: "page-item-table", FromAssetID: "page-item", ToAssetID: "table", Type: "uses_table"},
-		{ID: "page-item-filter", FromAssetID: "page-item", ToAssetID: "filter", Type: "uses_filter"},
-		{ID: "visual-measure", FromAssetID: "visual", ToAssetID: "measure", Type: "uses_measure"},
-		{ID: "visual-field", FromAssetID: "visual", ToAssetID: "field", Type: "uses_field"},
-		{ID: "table-semantic-table", FromAssetID: "table", ToAssetID: "semantic-table", Type: "uses_semantic_table"},
-		{ID: "table-field", FromAssetID: "table", ToAssetID: "field", Type: "uses_field"},
-		{ID: "filter-field", FromAssetID: "filter", ToAssetID: "field", Type: "filters_field"},
+		{ID: "catalog-model", FromAssetID: "catalog:libredash", ToAssetID: "semantic_model:olist", Type: "contains"},
+		{ID: "catalog-connection", FromAssetID: "catalog:libredash", ToAssetID: "connection:olist.olist", Type: "contains"},
+		{ID: "catalog-source", FromAssetID: "catalog:libredash", ToAssetID: "source:olist.orders", Type: "contains"},
+		{ID: "catalog-model-table", FromAssetID: "catalog:libredash", ToAssetID: "model_table:olist.orders", Type: "contains"},
+		{ID: "catalog-dashboard", FromAssetID: "catalog:libredash", ToAssetID: "dashboard:executive-sales", Type: "contains"},
+		{ID: "model-semantic-table", FromAssetID: "semantic_model:olist", ToAssetID: "semantic_table:olist.orders", Type: "contains"},
+		{ID: "model-measure", FromAssetID: "semantic_model:olist", ToAssetID: "measure:olist.revenue", Type: "contains"},
+		{ID: "model-relationship", FromAssetID: "semantic_model:olist", ToAssetID: "relationship:olist.orders_customers", Type: "contains"},
+		{ID: "semantic-table-field", FromAssetID: "semantic_table:olist.orders", ToAssetID: "field:olist.orders.state", Type: "contains"},
+		{ID: "table-source", FromAssetID: "model_table:olist.orders", ToAssetID: "source:olist.orders", Type: "reads_source"},
+		{ID: "source-connection", FromAssetID: "source:olist.orders", ToAssetID: "connection:olist.olist", Type: "uses_connection"},
+		{ID: "semantic-table-model-table", FromAssetID: "semantic_table:olist.orders", ToAssetID: "model_table:olist.orders", Type: "uses_model_table"},
+		{ID: "measure-semantic-table", FromAssetID: "measure:olist.revenue", ToAssetID: "semantic_table:olist.orders", Type: "uses_semantic_table"},
+		{ID: "measure-field", FromAssetID: "measure:olist.revenue", ToAssetID: "field:olist.orders.state", Type: "uses_field"},
+		{ID: "dashboard-model", FromAssetID: "dashboard:executive-sales", ToAssetID: "semantic_model:olist", Type: "uses_semantic_model"},
+		{ID: "dashboard-page", FromAssetID: "dashboard:executive-sales", ToAssetID: "page:executive-sales.overview", Type: "contains"},
+		{ID: "dashboard-filter", FromAssetID: "dashboard:executive-sales", ToAssetID: "filter:executive-sales.state", Type: "contains"},
+		{ID: "dashboard-visual", FromAssetID: "dashboard:executive-sales", ToAssetID: "visual:executive-sales.revenue", Type: "contains"},
+		{ID: "dashboard-table", FromAssetID: "dashboard:executive-sales", ToAssetID: "table:executive-sales.orders", Type: "contains"},
+		{ID: "page-item-edge", FromAssetID: "page:executive-sales.overview", ToAssetID: "page_item:executive-sales.overview.revenue", Type: "contains"},
+		{ID: "page-item-visual", FromAssetID: "page_item:executive-sales.overview.revenue", ToAssetID: "visual:executive-sales.revenue", Type: "uses_visual"},
+		{ID: "page-item-table", FromAssetID: "page_item:executive-sales.overview.revenue", ToAssetID: "table:executive-sales.orders", Type: "uses_table"},
+		{ID: "page-item-filter", FromAssetID: "page_item:executive-sales.overview.revenue", ToAssetID: "filter:executive-sales.state", Type: "uses_filter"},
+		{ID: "visual-measure", FromAssetID: "visual:executive-sales.revenue", ToAssetID: "measure:olist.revenue", Type: "uses_measure"},
+		{ID: "visual-field", FromAssetID: "visual:executive-sales.revenue", ToAssetID: "field:olist.orders.state", Type: "uses_field"},
+		{ID: "table-semantic-table", FromAssetID: "table:executive-sales.orders", ToAssetID: "semantic_table:olist.orders", Type: "uses_semantic_table"},
+		{ID: "table-field", FromAssetID: "table:executive-sales.orders", ToAssetID: "field:olist.orders.state", Type: "uses_field"},
+		{ID: "filter-field", FromAssetID: "filter:executive-sales.state", ToAssetID: "field:olist.orders.state", Type: "filters_field"},
 	}
 	return workspace, catalog, assets, edges
 }

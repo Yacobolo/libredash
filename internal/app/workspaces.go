@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -518,35 +519,33 @@ func (s *Server) workspaceResponse(r *http.Request, workspaceID string) api.Work
 }
 
 func (s *Server) workspaceAssetsAndEdges(r *http.Request, workspaceID string) ([]api.AssetResponse, []api.AssetEdgeResponse, error) {
-	if s.store == nil {
-		if assets, edges, ok := s.workspaceAssetsFromRuntime(workspaceID); ok {
-			return assets, edges, nil
-		}
-		return nil, nil, nil
-	}
-	repo, err := s.workspaceRepository()
-	if err != nil {
+	catalog, ok, err := s.workspaceAssetCatalog(r.Context(), workspaceID)
+	if err != nil || !ok {
 		return nil, nil, err
 	}
-	graph, ok, err := repo.ActiveDeploymentGraph(r.Context(), workspace.WorkspaceID(workspaceID))
-	if err != nil {
-		return nil, nil, err
+	assets := make([]api.AssetResponse, 0, len(catalog.Assets))
+	for _, row := range catalog.Assets {
+		assets = append(assets, assetDTOFromCatalog(row))
 	}
-	if !ok {
-		if assets, edges, ok := s.workspaceAssetsFromRuntime(workspaceID); ok {
-			return assets, edges, nil
-		}
-		return nil, nil, nil
-	}
-	assets := make([]api.AssetResponse, 0, len(graph.Assets))
-	for _, row := range graph.Assets {
-		assets = append(assets, assetDTOFromWorkspace(row))
-	}
-	edges := make([]api.AssetEdgeResponse, 0, len(graph.Edges))
-	for _, row := range graph.Edges {
-		edges = append(edges, assetEdgeDTOFromWorkspace(row))
+	edges := make([]api.AssetEdgeResponse, 0, len(catalog.Edges))
+	for _, row := range catalog.Edges {
+		edges = append(edges, assetEdgeDTOFromCatalog(row))
 	}
 	return assets, edges, nil
+}
+
+func (s *Server) workspaceAssetCatalog(ctx context.Context, workspaceID string) (workspace.AssetCatalog, bool, error) {
+	if s.store != nil {
+		repo, err := s.workspaceRepository()
+		if err != nil {
+			return workspace.AssetCatalog{}, false, err
+		}
+		catalog, ok, err := workspace.NewAssetCatalogService(repo).ActiveAssetCatalog(ctx, workspace.WorkspaceID(workspaceID))
+		if err != nil || ok {
+			return catalog, ok, err
+		}
+	}
+	return s.workspaceAssetCatalogFromRuntime(workspaceID)
 }
 
 func (s *Server) workspaceGraphFromRuntime(workspaceID, deploymentID string) (workspace.AssetGraph, bool) {
@@ -561,20 +560,13 @@ func (s *Server) workspaceGraphFromRuntime(workspaceID, deploymentID string) (wo
 	return workspace.AssetGraph{Assets: assets, Edges: edges}, true
 }
 
-func (s *Server) workspaceAssetsFromRuntime(workspaceID string) ([]api.AssetResponse, []api.AssetEdgeResponse, bool) {
+func (s *Server) workspaceAssetCatalogFromRuntime(workspaceID string) (workspace.AssetCatalog, bool, error) {
 	graph, ok := s.workspaceGraphFromRuntime(workspaceID, "local")
 	if !ok {
-		return nil, nil, false
+		return workspace.AssetCatalog{}, false, nil
 	}
-	assets := make([]api.AssetResponse, 0, len(graph.Assets))
-	for _, row := range graph.Assets {
-		assets = append(assets, assetDTOFromWorkspace(row))
-	}
-	edges := make([]api.AssetEdgeResponse, 0, len(graph.Edges))
-	for _, row := range graph.Edges {
-		edges = append(edges, assetEdgeDTOFromWorkspace(row))
-	}
-	return assets, edges, true
+	catalog, err := workspace.DecodeAssetCatalog(graph)
+	return catalog, err == nil, err
 }
 
 func (s *Server) roleBindingsAndRoles(r *http.Request, workspaceID string) ([]api.RoleBindingResponse, []api.RoleResponse, error) {
@@ -670,7 +662,7 @@ func catalogWorkspaceResponse(catalog dashboard.Catalog) api.WorkspaceResponse {
 	}
 }
 
-func assetDTOFromWorkspace(row workspace.Asset) api.AssetResponse {
+func assetDTOFromCatalog(row workspace.AssetRecord) api.AssetResponse {
 	return api.AssetResponse{
 		ID:            string(row.ID),
 		SnapshotID:    string(row.SnapshotID),
@@ -682,12 +674,12 @@ func assetDTOFromWorkspace(row workspace.Asset) api.AssetResponse {
 		Title:         row.Title,
 		Description:   row.Description,
 		PayloadSchema: row.PayloadSchema,
-		Payload:       assetPayload(row.PayloadJSON),
+		Payload:       row.Payload,
 		Href:          assetHref(string(row.Type), row.Key),
 	}
 }
 
-func assetEdgeDTOFromWorkspace(row workspace.AssetEdge) api.AssetEdgeResponse {
+func assetEdgeDTOFromCatalog(row workspace.AssetEdgeRecord) api.AssetEdgeResponse {
 	return api.AssetEdgeResponse{
 		ID:           string(row.ID),
 		WorkspaceID:  string(row.WorkspaceID),
@@ -716,14 +708,6 @@ func roleBindingDTO(row access.RoleBinding) api.RoleBindingResponse {
 
 func roleDTO(row access.Role) api.RoleResponse {
 	return api.RoleResponse{Name: row.Name, Permissions: row.Permissions}
-}
-
-func assetPayload(raw string) map[string]any {
-	payload := map[string]any{}
-	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
-		return nil
-	}
-	return payload
 }
 
 func assetHref(assetType, key string) string {

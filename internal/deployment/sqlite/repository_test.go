@@ -72,6 +72,91 @@ func TestRepositorySaveValidatedRollsBackOnDuplicateEdge(t *testing.T) {
 	}
 }
 
+func TestRepositorySaveValidatedReplacesDeploymentGraph(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openRepo(t, ctx)
+	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
+	if err := workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	created, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if _, err := repo.SaveValidated(ctx, created.ID, validationGraph(created.ID, "edge_1", "edge_2"), artifact(created.ID, "test")); err != nil {
+		t.Fatalf("first save validated: %v", err)
+	}
+
+	replacement := validationGraph(created.ID, "edge_1", "edge_3")
+	replacement.Digest = "replacement"
+	replacement.Graph.Edges = replacement.Graph.Edges[:1]
+	if _, err := repo.SaveValidated(ctx, created.ID, replacement, artifact(created.ID, "test")); err != nil {
+		t.Fatalf("replacement save validated: %v", err)
+	}
+	if _, err := repo.Activate(ctx, "test", created.ID); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+	graph, ok, err := workspaceRepo.ActiveDeploymentGraph(ctx, "test")
+	if err != nil {
+		t.Fatalf("active graph: %v", err)
+	}
+	if !ok {
+		t.Fatal("active graph ok = false")
+	}
+	if len(graph.Edges) != 1 || graph.Edges[0].ID != "edge_1" {
+		t.Fatalf("edges after replacement = %#v, want only edge_1", graph.Edges)
+	}
+}
+
+func TestRepositorySaveValidatedRollsBackOnDuplicateLogicalAsset(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openRepo(t, ctx)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	created, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	validation := validationGraph(created.ID, "edge_1", "edge_2")
+	validation.Graph.Assets = append(validation.Graph.Assets, validation.Graph.Assets[0])
+	if _, err := repo.SaveValidated(ctx, created.ID, validation, artifact(created.ID, "test")); err == nil {
+		t.Fatal("expected duplicate logical asset error")
+	}
+	after, err := repo.ByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("get after rollback: %v", err)
+	}
+	if after.Status != deployment.StatusPending {
+		t.Fatalf("status = %q, want pending rollback", after.Status)
+	}
+	if _, err := repo.ArtifactByDeployment(ctx, created.ID); !errors.Is(err, deployment.ErrNotFound) {
+		t.Fatalf("artifact error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestRepositorySaveValidatedAllowsSameLogicalAssetsAcrossDeployments(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openRepo(t, ctx)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	first, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create first: %v", err)
+	}
+	second, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create second: %v", err)
+	}
+	if _, err := repo.SaveValidated(ctx, first.ID, validationGraph(first.ID, "edge_first_1", "edge_first_2"), artifact(first.ID, "test")); err != nil {
+		t.Fatalf("save first: %v", err)
+	}
+	if _, err := repo.SaveValidated(ctx, second.ID, validationGraph(second.ID, "edge_second_1", "edge_second_2"), artifact(second.ID, "test")); err != nil {
+		t.Fatalf("save second: %v", err)
+	}
+}
+
 func openRepo(t *testing.T, ctx context.Context) (*platform.Store, *Repository) {
 	t.Helper()
 	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))

@@ -71,6 +71,9 @@ SELECT * FROM deployment_artifacts WHERE deployment_id = ?;
 -- name: ClearAssetsForDeployment :exec
 DELETE FROM assets WHERE deployment_id = ?;
 
+-- name: ClearAssetEdgesForDeployment :exec
+DELETE FROM asset_edges WHERE deployment_id = ?;
+
 -- name: InsertAsset :exec
 INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, payload_schema, payload_json, content_hash)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);

@@ -19,7 +19,7 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.De
 	byKey := map[string]workspace.AssetID{}
 	seenEdges := map[string]struct{}{}
 	add := func(typ workspace.AssetType, key string, parentID workspace.AssetID, title, description string, payload any) (workspace.AssetID, error) {
-		asset, err := workspace.NewAsset(workspaceID, deploymentID, typ, key, parentID, title, description, string(typ)+".v1", payload)
+		asset, err := workspace.NewAsset(workspaceID, deploymentID, typ, key, parentID, title, description, workspace.PayloadSchemaForAssetType(typ), payload)
 		if err != nil {
 			return "", err
 		}
@@ -359,259 +359,474 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.De
 	return graph, nil
 }
 
-func catalogPayload(definition *workspace.Definition) map[string]any {
-	return map[string]any{
-		"Workspace": map[string]any{
-			"ID":          definition.Catalog.Workspace.ID,
-			"Title":       workspaceTitle(definition.Catalog.Workspace.Title),
-			"Description": definition.Catalog.Workspace.Description,
+type catalogPayloadV1 struct {
+	Workspace      catalogWorkspacePayloadV1    `json:"Workspace"`
+	SemanticModels []workspace.CatalogModel     `json:"SemanticModels"`
+	Dashboards     []workspace.CatalogDashboard `json:"Dashboards"`
+}
+
+type catalogWorkspacePayloadV1 struct {
+	ID          string `json:"ID"`
+	Title       string `json:"Title"`
+	Description string `json:"Description"`
+}
+
+type connectionPayloadV1 struct {
+	Kind                  string                      `json:"Kind"`
+	Path                  string                      `json:"Path"`
+	Root                  string                      `json:"Root"`
+	Scope                 string                      `json:"Scope"`
+	Options               map[string]any              `json:"Options"`
+	Defaults              connectionDefaultsPayloadV1 `json:"Defaults"`
+	CredentialsConfigured bool                        `json:"credentials_configured"`
+}
+
+type connectionDefaultsPayloadV1 struct {
+	Options map[string]any `json:"Options"`
+}
+
+type sourcePayloadV1 struct {
+	Format     string                          `json:"Format"`
+	Path       string                          `json:"Path"`
+	Connection string                          `json:"Connection"`
+	Object     string                          `json:"Object"`
+	Options    map[string]any                  `json:"Options"`
+	Fields     map[string]sourceFieldPayloadV1 `json:"Fields"`
+	Schema     schemaPayloadV1                 `json:"Schema"`
+}
+
+type sourceFieldPayloadV1 struct {
+	Name        string `json:"Name"`
+	Field       string `json:"Field"`
+	Table       string `json:"Table"`
+	Description string `json:"Description"`
+}
+
+type modelTablePayloadV1 struct {
+	Kind               string                          `json:"Kind"`
+	Source             string                          `json:"Source"`
+	Sources            []string                        `json:"Sources"`
+	SourceDependencies []string                        `json:"SourceDependencies"`
+	ModelDependencies  []string                        `json:"ModelDependencies"`
+	Transform          transformPayloadV1              `json:"Transform"`
+	SQL                string                          `json:"SQL"`
+	PrimaryKey         string                          `json:"PrimaryKey"`
+	Grain              string                          `json:"Grain"`
+	Dimensions         map[string]fieldPayloadV1       `json:"Dimensions"`
+	Fields             map[string]fieldPayloadV1       `json:"Fields"`
+	Measures           map[string]measurePayloadV1     `json:"Measures"`
+	Columns            map[string]modelColumnPayloadV1 `json:"Columns"`
+	Schema             schemaPayloadV1                 `json:"Schema"`
+}
+
+type semanticTablePayloadV1 struct {
+	Table string `json:"Table"`
+	modelTablePayloadV1
+}
+
+type transformPayloadV1 struct {
+	SQL string `json:"SQL"`
+}
+
+type semanticModelPayloadV1 struct {
+	Name          string                         `json:"Name"`
+	Title         string                         `json:"Title"`
+	Description   string                         `json:"Description"`
+	BaseTable     string                         `json:"BaseTable"`
+	Connections   map[string]connectionPayloadV1 `json:"Connections"`
+	Sources       map[string]sourcePayloadV1     `json:"Sources"`
+	Tables        map[string]modelTablePayloadV1 `json:"Tables"`
+	Models        map[string]modelTablePayloadV1 `json:"Models"`
+	Measures      map[string]measurePayloadV1    `json:"Measures"`
+	Relationships []relationshipPayloadV1        `json:"Relationships"`
+}
+
+type fieldPayloadV1 struct {
+	Field       string `json:"Field"`
+	Table       string `json:"Table"`
+	Name        string `json:"Name"`
+	Label       string `json:"Label"`
+	Description string `json:"Description"`
+	Expr        string `json:"Expr"`
+	Expression  string `json:"Expression"`
+}
+
+type measurePayloadV1 struct {
+	Field       string   `json:"Field"`
+	Table       string   `json:"Table"`
+	Name        string   `json:"Name"`
+	Label       string   `json:"Label"`
+	Description string   `json:"Description"`
+	Expr        string   `json:"Expr"`
+	Expression  string   `json:"Expression"`
+	Unit        string   `json:"Unit"`
+	Format      string   `json:"Format"`
+	Grain       string   `json:"Grain"`
+	Time        string   `json:"Time"`
+	Grains      []string `json:"Grains"`
+}
+
+type relationshipPayloadV1 struct {
+	ID          string `json:"ID"`
+	Description string `json:"Description"`
+	From        string `json:"From"`
+	To          string `json:"To"`
+	Cardinality string `json:"Cardinality"`
+	Active      bool   `json:"Active"`
+}
+
+type modelColumnPayloadV1 struct {
+	Field       string `json:"Field"`
+	Name        string `json:"Name"`
+	SourceField string `json:"SourceField"`
+	Description string `json:"Description"`
+	Type        string `json:"Type"`
+}
+
+type schemaPayloadV1 struct {
+	Columns []schemaColumnPayloadV1 `json:"Columns"`
+}
+
+type schemaColumnPayloadV1 struct {
+	Name         string `json:"Name"`
+	Ordinal      int    `json:"Ordinal"`
+	PhysicalType string `json:"PhysicalType"`
+	Nullable     *bool  `json:"Nullable"`
+	Default      string `json:"Default"`
+	Comment      string `json:"Comment"`
+	PrimaryKey   bool   `json:"PrimaryKey"`
+}
+
+type dashboardPayloadV1 struct {
+	ID            string   `json:"ID"`
+	Title         string   `json:"Title"`
+	Description   string   `json:"Description"`
+	SemanticModel string   `json:"SemanticModel"`
+	Tags          []string `json:"Tags"`
+}
+
+type filterPayloadV1 struct {
+	Type             string                   `json:"Type"`
+	Label            string                   `json:"Label"`
+	Description      string                   `json:"Description"`
+	Dimension        string                   `json:"Dimension"`
+	Default          any                      `json:"Default"`
+	Custom           bool                     `json:"Custom"`
+	Presets          []reportdef.FilterPreset `json:"Presets"`
+	Operator         string                   `json:"Operator"`
+	Values           reportdef.FilterValues   `json:"Values"`
+	DefaultOperator  string                   `json:"DefaultOperator"`
+	Operators        []string                 `json:"Operators"`
+	Options          []reportdef.FilterOption `json:"Options"`
+	URLParam         string                   `json:"URLParam"`
+	FromURLParam     string                   `json:"FromURLParam"`
+	ToURLParam       string                   `json:"ToURLParam"`
+	OperatorURLParam string                   `json:"OperatorURLParam"`
+	Targets          reportdef.FilterTargets  `json:"Targets"`
+}
+
+type visualPayloadV1 struct {
+	Title           string               `json:"Title"`
+	Description     string               `json:"Description"`
+	Kind            string               `json:"Kind"`
+	Shape           string               `json:"Shape"`
+	Renderer        string               `json:"Renderer"`
+	Type            string               `json:"Type"`
+	Query           visualQueryPayloadV1 `json:"Query"`
+	Options         map[string]any       `json:"Options"`
+	RendererOptions map[string]any       `json:"RendererOptions"`
+	Encode          map[string]string    `json:"Encode"`
+}
+
+type visualQueryPayloadV1 struct {
+	Table      string              `json:"Table"`
+	Dimensions []string            `json:"Dimensions"`
+	Series     string              `json:"Series"`
+	Measures   []string            `json:"Measures"`
+	Time       reportdef.QueryTime `json:"Time"`
+	Sort       []reportdef.Sort    `json:"Sort"`
+	Limit      int                 `json:"Limit"`
+}
+
+type tablePayloadV1 struct {
+	Title       string               `json:"Title"`
+	Description string               `json:"Description"`
+	Kind        string               `json:"Kind"`
+	Query       tableQueryPayloadV1  `json:"Query"`
+	Rows        []string             `json:"Rows"`
+	ColumnDims  []string             `json:"ColumnDims"`
+	DataColumns []reportdef.FieldRef `json:"DataColumns"`
+	Style       dashboard.TableStyle `json:"Style"`
+	DefaultSort dashboard.TableSort  `json:"DefaultSort"`
+}
+
+type tableQueryPayloadV1 struct {
+	Table    string   `json:"Table"`
+	Measures []string `json:"Measures"`
+}
+
+type pagePayloadV1 struct {
+	ID          string               `json:"ID"`
+	Title       string               `json:"Title"`
+	Description string               `json:"Description"`
+	Canvas      dashboard.PageCanvas `json:"Canvas"`
+	Grid        dashboard.PageGrid   `json:"Grid"`
+}
+
+type pageItemPayloadV1 struct {
+	ID          string                  `json:"ID"`
+	Kind        string                  `json:"Kind"`
+	Visual      string                  `json:"Visual"`
+	Table       string                  `json:"Table"`
+	Filter      string                  `json:"Filter"`
+	Description string                  `json:"Description"`
+	Placement   dashboard.PagePlacement `json:"Placement"`
+	Title       string                  `json:"Title"`
+	Subtitle    string                  `json:"Subtitle"`
+	Badges      []string                `json:"Badges"`
+}
+
+func catalogPayload(definition *workspace.Definition) catalogPayloadV1 {
+	return catalogPayloadV1{
+		Workspace: catalogWorkspacePayloadV1{
+			ID:          definition.Catalog.Workspace.ID,
+			Title:       workspaceTitle(definition.Catalog.Workspace.Title),
+			Description: definition.Catalog.Workspace.Description,
 		},
-		"SemanticModels": definition.Catalog.SemanticModels,
-		"Dashboards":     definition.Catalog.Dashboards,
+		SemanticModels: definition.Catalog.SemanticModels,
+		Dashboards:     definition.Catalog.Dashboards,
 	}
 }
 
-func connectionPayload(connection semanticmodel.Connection) map[string]any {
-	return map[string]any{
-		"Kind":                   connection.Kind,
-		"Path":                   connection.Path,
-		"Root":                   connection.Root,
-		"Scope":                  connection.Scope,
-		"Options":                connection.Options,
-		"Defaults":               map[string]any{"Options": connection.Defaults.Options},
-		"credentials_configured": len(connection.Auth) > 0,
+func connectionPayload(connection semanticmodel.Connection) connectionPayloadV1 {
+	return connectionPayloadV1{
+		Kind:                  connection.Kind,
+		Path:                  connection.Path,
+		Root:                  connection.Root,
+		Scope:                 connection.Scope,
+		Options:               connection.Options,
+		Defaults:              connectionDefaultsPayloadV1{Options: connection.Defaults.Options},
+		CredentialsConfigured: len(connection.Auth) > 0,
 	}
 }
 
-func sourcePayload(source semanticmodel.Source) map[string]any {
-	return map[string]any{
-		"Format":     source.Format,
-		"Path":       source.Path,
-		"Connection": source.Connection,
-		"Object":     source.Object,
-		"Options":    source.Options,
-		"Fields":     sourceFieldsPayload(source.Fields),
-		"Schema":     schemaPayload(source.Schema),
+func sourcePayload(source semanticmodel.Source) sourcePayloadV1 {
+	return sourcePayloadV1{
+		Format:     source.Format,
+		Path:       source.Path,
+		Connection: source.Connection,
+		Object:     source.Object,
+		Options:    source.Options,
+		Fields:     sourceFieldsPayload(source.Fields),
+		Schema:     schemaPayload(source.Schema),
 	}
 }
 
-func sourceFieldsPayload(fields map[string]semanticmodel.SourceField) map[string]any {
-	out := map[string]any{}
+func sourceFieldsPayload(fields map[string]semanticmodel.SourceField) map[string]sourceFieldPayloadV1 {
+	out := map[string]sourceFieldPayloadV1{}
 	for _, name := range sortedMapKeys(fields) {
 		field := fields[name]
-		out[name] = map[string]any{
-			"Name":        field.Name,
-			"Field":       field.Field,
-			"Table":       field.Table,
-			"Description": field.Description,
-		}
+		out[name] = sourceFieldPayloadV1{Name: field.Name, Field: field.Field, Table: field.Table, Description: field.Description}
 	}
 	return out
 }
 
-func modelTablePayload(table semanticmodel.Table) map[string]any {
-	return map[string]any{
-		"Kind":               table.Kind,
-		"Source":             table.Source,
-		"Sources":            table.Sources,
-		"SourceDependencies": table.SourceDependencies,
-		"ModelDependencies":  table.ModelDependencies,
-		"Transform":          map[string]any{"SQL": table.Transform.SQL},
-		"SQL":                table.SQL,
-		"PrimaryKey":         table.PrimaryKey,
-		"Grain":              table.Grain,
-		"Dimensions":         dimensionsPayload(table.Dimensions),
-		"Fields":             dimensionsPayload(table.Dimensions),
-		"Measures":           measuresPayload(table.Measures),
-		"Columns":            columnsPayload(table.Columns),
-		"Schema":             schemaPayload(table.Schema),
+func modelTablePayload(table semanticmodel.Table) modelTablePayloadV1 {
+	dimensions := dimensionsPayload(table.Dimensions)
+	return modelTablePayloadV1{
+		Kind:               table.Kind,
+		Source:             table.Source,
+		Sources:            table.Sources,
+		SourceDependencies: table.SourceDependencies,
+		ModelDependencies:  table.ModelDependencies,
+		Transform:          transformPayloadV1{SQL: table.Transform.SQL},
+		SQL:                table.SQL,
+		PrimaryKey:         table.PrimaryKey,
+		Grain:              table.Grain,
+		Dimensions:         dimensions,
+		Fields:             dimensions,
+		Measures:           measuresPayload(table.Measures),
+		Columns:            columnsPayload(table.Columns),
+		Schema:             schemaPayload(table.Schema),
 	}
 }
 
-func semanticModelPayload(model *semanticmodel.Model) map[string]any {
-	connections := map[string]any{}
+func semanticModelPayload(model *semanticmodel.Model) semanticModelPayloadV1 {
+	connections := map[string]connectionPayloadV1{}
 	for _, name := range sortedMapKeys(model.Connections) {
 		connections[name] = connectionPayload(model.Connections[name])
 	}
-	sources := map[string]any{}
+	sources := map[string]sourcePayloadV1{}
 	for _, name := range sortedMapKeys(model.Sources) {
 		sources[name] = sourcePayload(model.Sources[name])
 	}
-	tables := map[string]any{}
+	tables := map[string]modelTablePayloadV1{}
 	for _, name := range sortedMapKeys(model.Tables) {
 		tables[name] = modelTablePayload(model.Tables[name])
 	}
-	return map[string]any{
-		"Name":          model.Name,
-		"Title":         model.Title,
-		"Description":   model.Description,
-		"BaseTable":     model.BaseTable,
-		"Connections":   connections,
-		"Sources":       sources,
-		"Tables":        tables,
-		"Models":        tables,
-		"Measures":      measuresPayload(model.Measures),
-		"Relationships": relationshipsPayload(model.Relationships),
+	return semanticModelPayloadV1{
+		Name:          model.Name,
+		Title:         model.Title,
+		Description:   model.Description,
+		BaseTable:     model.BaseTable,
+		Connections:   connections,
+		Sources:       sources,
+		Tables:        tables,
+		Models:        tables,
+		Measures:      measuresPayload(model.Measures),
+		Relationships: relationshipsPayload(model.Relationships),
 	}
 }
 
-func semanticTablePayload(name string, table semanticmodel.Table) map[string]any {
-	payload := modelTablePayload(table)
-	payload["Table"] = name
-	return payload
+func semanticTablePayload(name string, table semanticmodel.Table) semanticTablePayloadV1 {
+	return semanticTablePayloadV1{Table: name, modelTablePayloadV1: modelTablePayload(table)}
 }
 
-func fieldPayload(field semanticmodel.MetricDimension) map[string]any {
-	return map[string]any{
-		"Field":       field.Field,
-		"Table":       field.Table,
-		"Name":        field.Name,
-		"Label":       field.Label,
-		"Description": field.Description,
-		"Expr":        field.Expr,
-		"Expression":  field.Expression,
+func fieldPayload(field semanticmodel.MetricDimension) fieldPayloadV1 {
+	return fieldPayloadV1{
+		Field:       field.Field,
+		Table:       field.Table,
+		Name:        field.Name,
+		Label:       field.Label,
+		Description: field.Description,
+		Expr:        field.Expr,
+		Expression:  field.Expression,
 	}
 }
 
-func dimensionsPayload(fields map[string]semanticmodel.MetricDimension) map[string]any {
-	out := map[string]any{}
+func dimensionsPayload(fields map[string]semanticmodel.MetricDimension) map[string]fieldPayloadV1 {
+	out := map[string]fieldPayloadV1{}
 	for _, name := range sortedMapKeys(fields) {
 		out[name] = fieldPayload(fields[name])
 	}
 	return out
 }
 
-func measurePayload(measure semanticmodel.MetricMeasure) map[string]any {
-	return map[string]any{
-		"Field":       measure.Field,
-		"Table":       measure.Table,
-		"Name":        measure.Name,
-		"Label":       measure.Label,
-		"Description": measure.Description,
-		"Expr":        measure.Expr,
-		"Expression":  measure.SQLExpression(),
-		"Unit":        measure.Unit,
-		"Format":      measure.Format,
-		"Grain":       measure.Grain,
-		"Time":        measure.Time,
-		"Grains":      measure.Grains,
+func measurePayload(measure semanticmodel.MetricMeasure) measurePayloadV1 {
+	return measurePayloadV1{
+		Field:       measure.Field,
+		Table:       measure.Table,
+		Name:        measure.Name,
+		Label:       measure.Label,
+		Description: measure.Description,
+		Expr:        measure.Expr,
+		Expression:  measure.SQLExpression(),
+		Unit:        measure.Unit,
+		Format:      measure.Format,
+		Grain:       measure.Grain,
+		Time:        measure.Time,
+		Grains:      measure.Grains,
 	}
 }
 
-func measuresPayload(measures map[string]semanticmodel.MetricMeasure) map[string]any {
-	out := map[string]any{}
+func measuresPayload(measures map[string]semanticmodel.MetricMeasure) map[string]measurePayloadV1 {
+	out := map[string]measurePayloadV1{}
 	for _, name := range sortedMapKeys(measures) {
 		out[name] = measurePayload(measures[name])
 	}
 	return out
 }
 
-func relationshipPayload(relationship semanticmodel.Relationship) map[string]any {
-	return map[string]any{
-		"ID":          relationship.ID,
-		"Description": relationship.Description,
-		"From":        relationship.From,
-		"To":          relationship.To,
-		"Cardinality": relationship.Cardinality,
-		"Active":      relationship.Active,
+func relationshipPayload(relationship semanticmodel.Relationship) relationshipPayloadV1 {
+	return relationshipPayloadV1{
+		ID:          relationship.ID,
+		Description: relationship.Description,
+		From:        relationship.From,
+		To:          relationship.To,
+		Cardinality: relationship.Cardinality,
+		Active:      relationship.Active,
 	}
 }
 
-func relationshipsPayload(relationships []semanticmodel.Relationship) []any {
-	out := make([]any, 0, len(relationships))
+func relationshipsPayload(relationships []semanticmodel.Relationship) []relationshipPayloadV1 {
+	out := make([]relationshipPayloadV1, 0, len(relationships))
 	for _, relationship := range relationships {
 		out = append(out, relationshipPayload(relationship))
 	}
 	return out
 }
 
-func columnsPayload(columns map[string]semanticmodel.ModelColumn) map[string]any {
-	out := map[string]any{}
+func columnsPayload(columns map[string]semanticmodel.ModelColumn) map[string]modelColumnPayloadV1 {
+	out := map[string]modelColumnPayloadV1{}
 	for _, name := range sortedMapKeys(columns) {
 		column := columns[name]
-		out[name] = map[string]any{
-			"Field":       column.Field,
-			"Name":        column.Name,
-			"SourceField": column.SourceField,
-			"Description": column.Description,
-			"Type":        column.Type,
+		out[name] = modelColumnPayloadV1{
+			Field:       column.Field,
+			Name:        column.Name,
+			SourceField: column.SourceField,
+			Description: column.Description,
+			Type:        column.Type,
 		}
 	}
 	return out
 }
 
-func schemaPayload(schema semanticmodel.TableSchema) map[string]any {
-	columns := make([]map[string]any, 0, len(schema.Columns))
+func schemaPayload(schema semanticmodel.TableSchema) schemaPayloadV1 {
+	columns := make([]schemaColumnPayloadV1, 0, len(schema.Columns))
 	for _, column := range schema.Columns {
-		columns = append(columns, map[string]any{
-			"Name":         column.Name,
-			"Ordinal":      column.Ordinal,
-			"PhysicalType": column.PhysicalType,
-			"Nullable":     column.Nullable,
-			"Default":      column.Default,
-			"Comment":      column.Comment,
-			"PrimaryKey":   column.PrimaryKey,
+		columns = append(columns, schemaColumnPayloadV1{
+			Name:         column.Name,
+			Ordinal:      column.Ordinal,
+			PhysicalType: column.PhysicalType,
+			Nullable:     column.Nullable,
+			Default:      column.Default,
+			Comment:      column.Comment,
+			PrimaryKey:   column.PrimaryKey,
 		})
 	}
-	return map[string]any{"Columns": columns}
+	return schemaPayloadV1{Columns: columns}
 }
 
-func dashboardPayload(report reportdef.Dashboard, tags []string) map[string]any {
-	return map[string]any{
-		"ID":            report.ID,
-		"Title":         report.Title,
-		"Description":   report.Description,
-		"SemanticModel": report.SemanticModel,
-		"Tags":          tags,
+func dashboardPayload(report reportdef.Dashboard, tags []string) dashboardPayloadV1 {
+	return dashboardPayloadV1{ID: report.ID, Title: report.Title, Description: report.Description, SemanticModel: report.SemanticModel, Tags: tags}
+}
+
+func filterPayload(filter reportdef.FilterDefinition) filterPayloadV1 {
+	return filterPayloadV1{
+		Type:             filter.Type,
+		Label:            filter.Label,
+		Description:      filter.Description,
+		Dimension:        filter.Dimension,
+		Default:          filter.Default,
+		Custom:           filter.Custom,
+		Presets:          filter.Presets,
+		Operator:         filter.Operator,
+		Values:           filter.Values,
+		DefaultOperator:  filter.DefaultOperator,
+		Operators:        filter.Operators,
+		Options:          filter.Options,
+		URLParam:         filter.URLParam,
+		FromURLParam:     filter.FromURLParam,
+		ToURLParam:       filter.ToURLParam,
+		OperatorURLParam: filter.OperatorURLParam,
+		Targets:          filter.Targets,
 	}
 }
 
-func filterPayload(filter reportdef.FilterDefinition) map[string]any {
-	return map[string]any{
-		"Type":             filter.Type,
-		"Label":            filter.Label,
-		"Description":      filter.Description,
-		"Dimension":        filter.Dimension,
-		"Default":          filter.Default,
-		"Custom":           filter.Custom,
-		"Presets":          filter.Presets,
-		"Operator":         filter.Operator,
-		"Values":           filter.Values,
-		"DefaultOperator":  filter.DefaultOperator,
-		"Operators":        filter.Operators,
-		"Options":          filter.Options,
-		"URLParam":         filter.URLParam,
-		"FromURLParam":     filter.FromURLParam,
-		"ToURLParam":       filter.ToURLParam,
-		"OperatorURLParam": filter.OperatorURLParam,
-		"Targets":          filter.Targets,
+func visualPayload(visual reportdef.Visual) visualPayloadV1 {
+	return visualPayloadV1{
+		Title:           visual.Title,
+		Description:     visual.Description,
+		Kind:            visual.KindOrDefault(),
+		Shape:           visual.ShapeOrDefault(),
+		Renderer:        visual.RendererOrDefault(),
+		Type:            visual.Type,
+		Query:           visualQueryPayload(visual.Query),
+		Options:         visual.CoreOptions(),
+		RendererOptions: visual.RendererOptions,
+		Encode:          visual.Encode,
 	}
 }
 
-func visualPayload(visual reportdef.Visual) map[string]any {
-	return map[string]any{
-		"Title":           visual.Title,
-		"Description":     visual.Description,
-		"Kind":            visual.KindOrDefault(),
-		"Shape":           visual.ShapeOrDefault(),
-		"Renderer":        visual.RendererOrDefault(),
-		"Type":            visual.Type,
-		"Query":           visualQueryPayload(visual.Query),
-		"Options":         visual.CoreOptions(),
-		"RendererOptions": visual.RendererOptions,
-		"Encode":          visual.Encode,
-	}
-}
-
-func visualQueryPayload(query reportdef.VisualQuery) map[string]any {
-	return map[string]any{
-		"Table":      query.Table,
-		"Dimensions": fieldRefStrings(query.Dimensions),
-		"Series":     query.Series.Field,
-		"Measures":   fieldRefStrings(query.Measures),
-		"Time":       query.Time,
-		"Sort":       query.Sort,
-		"Limit":      query.Limit,
+func visualQueryPayload(query reportdef.VisualQuery) visualQueryPayloadV1 {
+	return visualQueryPayloadV1{
+		Table:      query.Table,
+		Dimensions: fieldRefStrings(query.Dimensions),
+		Series:     query.Series.Field,
+		Measures:   fieldRefStrings(query.Measures),
+		Time:       query.Time,
+		Sort:       query.Sort,
+		Limit:      query.Limit,
 	}
 }
 

@@ -91,7 +91,11 @@ func TestReadOnlyToolPayloadShapesStayStable(t *testing.T) {
 
 func TestAssetToolsUseLogicalIDsAndTypedPayloads(t *testing.T) {
 	graph := testAgentAssetGraph(t)
-	service := NewService(fakeAgentMetrics{}, nil, Config{APIKey: "key", Model: "model"}).WithAssetCatalog(fakeAssetCatalog{graph: graph})
+	catalog, err := workspace.DecodeAssetCatalog(graph)
+	if err != nil {
+		t.Fatalf("decode catalog: %v", err)
+	}
+	service := NewService(fakeAgentMetrics{}, nil, Config{APIKey: "key", Model: "model"}).WithAssetCatalog(fakeAssetCatalog{catalog: catalog})
 	tools := service.toolDefinitions(Scope{WorkspaceID: "test", PrincipalID: "principal"})
 
 	var assets assetListPayload
@@ -171,11 +175,11 @@ func TestDescribeDashboardReturnsCompactManifest(t *testing.T) {
 }
 
 type fakeAssetCatalog struct {
-	graph workspace.AssetGraph
+	catalog workspace.AssetCatalog
 }
 
-func (c fakeAssetCatalog) ActiveDeploymentGraph(context.Context, workspace.WorkspaceID) (workspace.AssetGraph, bool, error) {
-	return c.graph, true, nil
+func (c fakeAssetCatalog) ActiveAssetCatalog(context.Context, workspace.WorkspaceID) (workspace.AssetCatalog, bool, error) {
+	return c.catalog, true, nil
 }
 
 func testAgentAssetGraph(t *testing.T) workspace.AssetGraph {

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 )
 
 type Asset struct {
@@ -36,6 +37,9 @@ type AssetGraph struct {
 }
 
 func NewAsset(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType, key string, parentID AssetID, title, description, payloadSchema string, payload any) (Asset, error) {
+	if err := validatePayloadSchema(typ, payloadSchema); err != nil {
+		return Asset{}, err
+	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return Asset{}, err
@@ -88,5 +92,56 @@ func NewAssetEdge(workspaceID WorkspaceID, deploymentID DeploymentID, fromID, to
 		FromAssetID:  fromID,
 		ToAssetID:    toID,
 		Type:         typ,
+	}
+}
+
+func validatePayloadSchema(typ AssetType, schema string) error {
+	want := PayloadSchemaForAssetType(typ)
+	if want == "" {
+		return fmt.Errorf("asset %s payload schema is not registered", typ)
+	}
+	if schema == "" {
+		return fmt.Errorf("asset %s payload schema is required", typ)
+	}
+	if schema != want {
+		return fmt.Errorf("asset %s payload schema = %q, want %q", typ, schema, want)
+	}
+	return nil
+}
+
+func PayloadSchemaForAssetType(typ AssetType) string {
+	switch typ {
+	case AssetTypeCatalog:
+		return "catalog.v1"
+	case AssetTypeConnection:
+		return "connection.v1"
+	case AssetTypeSource:
+		return "source.v1"
+	case AssetTypeModelTable:
+		return "model_table.v1"
+	case AssetTypeSemanticModel:
+		return "semantic_model.v1"
+	case AssetTypeSemanticTable:
+		return "semantic_table.v1"
+	case AssetTypeField:
+		return "field.v1"
+	case AssetTypeMeasure:
+		return "measure.v1"
+	case AssetTypeRelationship:
+		return "relationship.v1"
+	case AssetTypeDashboard:
+		return "dashboard.v1"
+	case AssetTypePage:
+		return "page.v1"
+	case AssetTypePageItem:
+		return "page_item.v1"
+	case AssetTypeFilter:
+		return "filter.v1"
+	case AssetTypeVisual:
+		return "visual.v1"
+	case AssetTypeTable:
+		return "table.v1"
+	default:
+		return ""
 	}
 }

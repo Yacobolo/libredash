@@ -85,6 +85,9 @@ func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.
 	if err := q.InsertDeploymentArtifact(ctx, mapArtifactParams(artifact)); err != nil {
 		return deployment.Deployment{}, err
 	}
+	if err := q.ClearAssetEdgesForDeployment(ctx, string(deploymentID)); err != nil {
+		return deployment.Deployment{}, err
+	}
 	if err := q.ClearAssetsForDeployment(ctx, string(deploymentID)); err != nil {
 		return deployment.Deployment{}, err
 	}

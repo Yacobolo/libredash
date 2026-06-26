@@ -162,6 +162,15 @@ func (q *Queries) ArchiveAgentConversation(ctx context.Context, arg ArchiveAgent
 	return i, err
 }
 
+const clearAssetEdgesForDeployment = `-- name: ClearAssetEdgesForDeployment :exec
+DELETE FROM asset_edges WHERE deployment_id = ?
+`
+
+func (q *Queries) ClearAssetEdgesForDeployment(ctx context.Context, deploymentID string) error {
+	_, err := q.db.ExecContext(ctx, clearAssetEdgesForDeployment, deploymentID)
+	return err
+}
+
 const clearAssetsForDeployment = `-- name: ClearAssetsForDeployment :exec
 DELETE FROM assets WHERE deployment_id = ?
 `

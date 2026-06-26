@@ -611,11 +611,51 @@ func TestWorkspaceAssetAPIListsActiveDeploymentAssets(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
-	if !bytes.Contains(rec.Body.Bytes(), []byte(`"type":"connection"`)) {
-		t.Fatalf("connection asset missing:\n%s", rec.Body.String())
+	var body struct {
+		Items []api.AssetResponse `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode assets response: %v body=%s", err, rec.Body.String())
+	}
+	if len(body.Items) != 1 {
+		t.Fatalf("asset count = %d, want 1 body=%s", len(body.Items), rec.Body.String())
+	}
+	connection := body.Items[0]
+	if connection.ID != "connection:olist.olist" || connection.SnapshotID == "" || connection.SnapshotID == connection.ID {
+		t.Fatalf("connection identity = %#v", connection)
+	}
+	if connection.PayloadSchema != "connection.v1" || connection.Payload["Kind"] != "local" || connection.Payload["credentials_configured"] != false {
+		t.Fatalf("connection payload = schema %q payload %#v", connection.PayloadSchema, connection.Payload)
 	}
 	if bytes.Contains(rec.Body.Bytes(), []byte(`"auth"`)) {
 		t.Fatalf("connection API leaked auth content:\n%s", rec.Body.String())
+	}
+
+	edgesReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/asset-edges", nil)
+	edgesReq.Header.Set("Authorization", "Bearer dev")
+	edgesReq.Header.Set("Accept", "application/json")
+	edgesRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(edgesRec, edgesReq)
+	if edgesRec.Code != http.StatusOK {
+		t.Fatalf("edges status = %d body=%s", edgesRec.Code, edgesRec.Body.String())
+	}
+	var edgesBody struct {
+		Items []api.AssetEdgeResponse `json:"items"`
+	}
+	if err := json.Unmarshal(edgesRec.Body.Bytes(), &edgesBody); err != nil {
+		t.Fatalf("decode edge response: %v body=%s", err, edgesRec.Body.String())
+	}
+	foundLogicalConnectionEdge := false
+	for _, edge := range edgesBody.Items {
+		if strings.HasPrefix(edge.FromAssetID, "asset_") || strings.HasPrefix(edge.ToAssetID, "asset_") {
+			t.Fatalf("edge uses snapshot id endpoint: %#v", edge)
+		}
+		if edge.Type == string(workspace.AssetEdgeUsesConnection) && edge.FromAssetID == "source:olist.orders" && edge.ToAssetID == "connection:olist.olist" {
+			foundLogicalConnectionEdge = true
+		}
+	}
+	if !foundLogicalConnectionEdge {
+		t.Fatalf("logical source->connection edge missing: %#v", edgesBody.Items)
 	}
 }
 

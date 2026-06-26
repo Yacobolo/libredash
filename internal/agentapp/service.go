@@ -53,7 +53,7 @@ func NewService(metrics Metrics, repo Repository, config Config) *Service {
 }
 
 type AssetCatalog interface {
-	ActiveDeploymentGraph(ctx context.Context, id workspace.WorkspaceID) (workspace.AssetGraph, bool, error)
+	ActiveAssetCatalog(ctx context.Context, id workspace.WorkspaceID) (workspace.AssetCatalog, bool, error)
 }
 
 func (s *Service) WithAssetCatalog(catalog AssetCatalog) *Service {

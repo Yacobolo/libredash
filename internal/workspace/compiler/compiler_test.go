@@ -213,6 +213,9 @@ func TestCompileAssetGraphIdentityAndPayloadInvariants(t *testing.T) {
 		if firstAsset.PayloadSchema == "" {
 			t.Fatalf("asset %q has empty payload schema", id)
 		}
+		if want := workspace.PayloadSchemaForAssetType(firstAsset.Type); want == "" || firstAsset.PayloadSchema != want {
+			t.Fatalf("asset %q payload schema = %q, want %q", id, firstAsset.PayloadSchema, want)
+		}
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(firstAsset.PayloadJSON), &payload); err != nil {
 			t.Fatalf("asset %q payload is invalid JSON: %v", id, err)
@@ -234,6 +237,67 @@ func TestCompileAssetGraphIdentityAndPayloadInvariants(t *testing.T) {
 	}
 	if assetsByID(changed.Workspace.Graph)["dashboard:sales"].ContentHash == firstAssets["dashboard:sales"].ContentHash {
 		t.Fatal("dashboard content hash did not change after authored title changed")
+	}
+}
+
+func TestCompileConnectionPayloadRedactsAuth(t *testing.T) {
+	t.Setenv("LIBREDASH_TEST_S3_KEY", "env-key")
+	t.Setenv("LIBREDASH_TEST_S3_SECRET", "env-secret")
+	dir := t.TempDir()
+	writeCompilerFixture(t, filepath.Join(dir, "catalog.yaml"), validCompilerCatalogYAML())
+	writeCompilerFixture(t, filepath.Join(dir, "model.yaml"), `
+name: olist
+title: Olist
+connections:
+  prod_lake:
+    kind: s3
+    scope: s3://analytics-prod/
+    auth:
+      access_key_id: ${LIBREDASH_TEST_S3_KEY}
+      secret_access_key: ${LIBREDASH_TEST_S3_SECRET}
+sources:
+  orders:
+    connection: prod_lake
+    path: orders.parquet
+models:
+  orders:
+    source: orders
+    primary_key: order_id
+    fields:
+      revenue: {label: Revenue}
+semantic_models:
+  olist:
+    base_table: orders
+    tables:
+      - orders
+    measures:
+      defaults: {table: orders, grain: order_id}
+      revenue: {expr: SUM(orders.revenue), format: currency}
+`)
+	writeCompilerFixture(t, filepath.Join(dir, "dashboard.yaml"), validCompilerDashboardYAML())
+
+	compiled, err := Compile(filepath.Join(dir, "catalog.yaml"), Options{WorkspaceID: "libredash", DeploymentID: "dep_auth"})
+	if err != nil {
+		t.Fatalf("Compile() error = %v", err)
+	}
+	asset := assetsByID(compiled.Workspace.Graph)["connection:olist.prod_lake"]
+	if asset.ID == "" {
+		t.Fatal("connection asset missing")
+	}
+	if asset.PayloadSchema != "connection.v1" {
+		t.Fatalf("connection payload schema = %q, want connection.v1", asset.PayloadSchema)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(asset.PayloadJSON), &payload); err != nil {
+		t.Fatalf("connection payload JSON invalid: %v", err)
+	}
+	if payload["credentials_configured"] != true {
+		t.Fatalf("credentials_configured = %#v, want true in %s", payload["credentials_configured"], asset.PayloadJSON)
+	}
+	for _, leaked := range []string{`"auth"`, "access_key_id", "secret_access_key", "env-key", "env-secret"} {
+		if strings.Contains(strings.ToLower(asset.PayloadJSON), strings.ToLower(leaked)) {
+			t.Fatalf("connection payload leaked %q: %s", leaked, asset.PayloadJSON)
+		}
 	}
 }
 
