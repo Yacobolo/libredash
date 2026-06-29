@@ -48,7 +48,7 @@ func (s *Server) createMaterializationRun(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
 	}
-	orchestrator := NewRefreshOrchestrator(repo, s.metrics)
+	orchestrator := NewGenericRefreshOrchestrator(repo, s.metrics)
 	go func() {
 		ctx := context.Background()
 		if _, err := orchestrator.ExecuteRun(ctx, workspaceID, run.ID, refreshPublisher{}); err != nil && s.logger != nil {

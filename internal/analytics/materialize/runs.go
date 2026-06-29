@@ -25,14 +25,6 @@ const (
 	TriggerDependency    = "dependency"
 )
 
-type RefreshRunner interface {
-	RefreshMaterializations(ctx context.Context, modelID string) error
-}
-
-type ModelTableRefreshRunner interface {
-	RefreshModelTables(ctx context.Context, modelID string, tableNames []string) error
-}
-
 type RunRecord struct {
 	ID                   string `json:"id"`
 	WorkspaceID          string `json:"workspaceId"`
@@ -78,67 +70,6 @@ type RunRepository interface {
 type RunPage struct {
 	Limit int
 	After string
-}
-
-type RunService struct {
-	Repo   RunRepository
-	Runner RefreshRunner
-}
-
-func (s RunService) Enqueue(ctx context.Context, input RunInput) (RunRecord, error) {
-	if s.Repo == nil {
-		return RunRecord{}, fmt.Errorf("materialization run repository is required")
-	}
-	return s.Repo.CreateRun(ctx, input)
-}
-
-func (s RunService) Execute(ctx context.Context, workspaceID, runID string) (RunRecord, error) {
-	if s.Repo == nil {
-		return RunRecord{}, fmt.Errorf("materialization run repository is required")
-	}
-	if s.Runner == nil {
-		return RunRecord{}, fmt.Errorf("materialization refresh runner is required")
-	}
-	run, err := s.Repo.MarkRunRunning(ctx, workspaceID, runID)
-	if err != nil {
-		return RunRecord{}, err
-	}
-	if err := executeRunRefresh(ctx, s.Runner, run); err != nil {
-		failed, finishErr := s.Repo.MarkRunFailed(ctx, workspaceID, runID, err.Error())
-		if finishErr != nil {
-			return failed, finishErr
-		}
-		return failed, err
-	}
-	return s.Repo.MarkRunSucceeded(ctx, workspaceID, runID)
-}
-
-func executeRunRefresh(ctx context.Context, runner RefreshRunner, run RunRecord) error {
-	if run.TargetType == TargetModelTable {
-		tableName, err := tableNameFromTargetID(run.ModelID, run.TargetID)
-		if err != nil {
-			return err
-		}
-		port, ok := runner.(ModelTableRefreshRunner)
-		if !ok {
-			return fmt.Errorf("materialization refresh runner does not support model table targets")
-		}
-		return port.RefreshModelTables(ctx, run.ModelID, []string{tableName})
-	}
-	return runner.RefreshMaterializations(ctx, run.ModelID)
-}
-
-func tableNameFromTargetID(modelID, targetID string) (string, error) {
-	prefix := strings.TrimSpace(modelID) + "."
-	targetID = strings.TrimSpace(targetID)
-	if !strings.HasPrefix(targetID, prefix) {
-		return "", fmt.Errorf("model table target %q does not belong to semantic model %q", targetID, modelID)
-	}
-	tableName := strings.TrimSpace(strings.TrimPrefix(targetID, prefix))
-	if tableName == "" {
-		return "", fmt.Errorf("model table target id is missing a table name")
-	}
-	return tableName, nil
 }
 
 type SQLRunRepository struct {

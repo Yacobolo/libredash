@@ -657,6 +657,17 @@ func (m *failingDependencyModelTableMetrics) RefreshModelTables(_ context.Contex
 	return nil
 }
 
+type missingSemanticModelAssetMetrics struct {
+	emptyPageRuntimeAssetMetrics
+}
+
+func (m missingSemanticModelAssetMetrics) SemanticModel(modelID string) (*semanticmodel.Model, bool) {
+	if modelID == "olist" {
+		return nil, false
+	}
+	return m.emptyPageRuntimeAssetMetrics.SemanticModel(modelID)
+}
+
 func TestUpdatesStreamsDatastarPatchSignals(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
@@ -842,13 +853,12 @@ func TestWorkspaceAssetUpdatesStreamsInitialRefreshState(t *testing.T) {
 	store := testStore(t)
 	server := NewWithOptions(emptyPageRuntimeAssetMetrics{}, Options{Store: store, DefaultWorkspaceID: "test"})
 	repo := materialize.NewSQLRunRepository(store.SQLDB())
-	service := materialize.RunService{Repo: repo, Runner: fakeMetrics{}}
-	queued, err := service.Enqueue(context.Background(), materialize.RunInput{WorkspaceID: "test", ModelID: "olist"})
+	queued, err := repo.CreateRun(context.Background(), materialize.RunInput{WorkspaceID: "test", ModelID: "olist"})
 	if err != nil {
-		t.Fatalf("enqueue run: %v", err)
+		t.Fatalf("create run: %v", err)
 	}
-	if _, err := service.Execute(context.Background(), "test", queued.ID); err != nil {
-		t.Fatalf("execute run: %v", err)
+	if _, err := repo.MarkRunSucceeded(context.Background(), "test", queued.ID); err != nil {
+		t.Fatalf("mark run succeeded: %v", err)
 	}
 	assetID := workspace.NewAssetID("local", workspace.AssetTypeSemanticModel, "olist")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
@@ -1062,6 +1072,78 @@ func TestMaterializationRunAPICanExecuteModelTableTargetWithLocalDevRuntimeShape
 	}
 	if run.Status != materialize.RunStatusSucceeded || run.PrincipalID != principal.ID {
 		t.Fatalf("run = %#v, want succeeded model table run attributed to editor", run)
+	}
+}
+
+func TestMaterializationRunAPIMalformedModelTableTargetFailsPersistedRun(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	principal := testPrincipal(t, ctx, store, "editor@example.com", "Editor", "editor")
+	token := testAPIToken(t, ctx, store, principal.ID, "materialization-table-invalid-test")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(&localDevStyleModelTableMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
+
+	createReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/materialization-runs", token, `{"modelId":"olist","targetType":"model_table","targetId":"other.orders"}`)
+	createRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusAccepted {
+		t.Fatalf("create status=%d body=%s", createRec.Code, createRec.Body.String())
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+
+	repo := materialize.NewSQLRunRepository(store.SQLDB())
+	var run materialize.RunRecord
+	deadline := time.After(time.Second)
+	for {
+		var err error
+		run, err = repo.GetRun(ctx, "test", created.ID)
+		if err != nil {
+			t.Fatalf("get run: %v", err)
+		}
+		if run.Status != materialize.RunStatusQueued {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("run remained queued: %#v", run)
+		case <-time.After(10 * time.Millisecond):
+		}
+	}
+	if run.Status != materialize.RunStatusFailed || !strings.Contains(run.Error, "does not belong to semantic model") {
+		t.Fatalf("run = %#v, want failed wrong-prefix target run", run)
+	}
+}
+
+func TestWorkspaceSemanticModelRefreshFailsWhenGraphMissing(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	principal := testPrincipal(t, ctx, store, "owner@example.com", "Owner", "owner")
+	token := testAPIToken(t, ctx, store, principal.ID, "workspace-semantic-refresh-missing-graph")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(missingSemanticModelAssetMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
+	assetID := workspace.NewAssetID("local", workspace.AssetTypeSemanticModel, "olist")
+	path := "/workspaces/test/assets/" + string(assetID) + "/refresh-materializations"
+	req := httptest.NewRequest(http.MethodPost, path, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	repo := materialize.NewSQLRunRepository(store.SQLDB())
+	runs, err := repo.ListModelRuns(ctx, "test", "olist", materialize.RunPage{Limit: 10})
+	if err != nil {
+		t.Fatalf("list runs: %v", err)
+	}
+	if len(runs) != 1 || runs[0].Status != materialize.RunStatusFailed || !strings.Contains(runs[0].Error, "unknown semantic model") {
+		t.Fatalf("runs = %#v, want failed missing graph run", runs)
 	}
 }
 

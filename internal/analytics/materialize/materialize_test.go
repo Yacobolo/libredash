@@ -471,95 +471,6 @@ func TestValidateFilesUsesLocalConnectionRoot(t *testing.T) {
 	}
 }
 
-func TestRunServicePersistsQueuedRunningAndSucceededStates(t *testing.T) {
-	ctx := context.Background()
-	store := openMaterializationStore(t, ctx)
-	defer store.Close()
-	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
-	runner := &recordingRefreshRunner{}
-	service := analyticsmaterialize.RunService{Repo: repo, Runner: runner}
-
-	queued, err := service.Enqueue(ctx, analyticsmaterialize.RunInput{
-		WorkspaceID:  "test",
-		ModelID:      "model.orders",
-		DeploymentID: "dep_1",
-	})
-	if err != nil {
-		t.Fatalf("enqueue run: %v", err)
-	}
-	if queued.Status != analyticsmaterialize.RunStatusQueued || queued.ModelID != "model.orders" || queued.DeploymentID != "dep_1" {
-		t.Fatalf("queued run = %#v", queued)
-	}
-
-	finished, err := service.Execute(ctx, "test", queued.ID)
-	if err != nil {
-		t.Fatalf("execute run: %v", err)
-	}
-	if finished.Status != analyticsmaterialize.RunStatusSucceeded || finished.FinishedAt == "" || runner.modelID != "model.orders" {
-		t.Fatalf("finished run = %#v runner=%#v", finished, runner)
-	}
-	stored, err := repo.GetRun(ctx, "test", queued.ID)
-	if err != nil {
-		t.Fatalf("get run: %v", err)
-	}
-	if stored.Status != analyticsmaterialize.RunStatusSucceeded || stored.ModelID != "model.orders" || stored.DeploymentID != "dep_1" {
-		t.Fatalf("stored run = %#v", stored)
-	}
-}
-
-func TestRunServiceExecutesModelTableTargetRuns(t *testing.T) {
-	ctx := context.Background()
-	store := openMaterializationStore(t, ctx)
-	defer store.Close()
-	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
-	runner := &recordingRefreshRunner{}
-	service := analyticsmaterialize.RunService{Repo: repo, Runner: runner}
-
-	queued, err := service.Enqueue(ctx, analyticsmaterialize.RunInput{
-		WorkspaceID: "test",
-		ModelID:     "model",
-		TargetType:  analyticsmaterialize.TargetModelTable,
-		TargetID:    "model.orders",
-		TriggerType: analyticsmaterialize.TriggerDirect,
-	})
-	if err != nil {
-		t.Fatalf("enqueue run: %v", err)
-	}
-	finished, err := service.Execute(ctx, "test", queued.ID)
-	if err != nil {
-		t.Fatalf("execute run: %v", err)
-	}
-	if finished.Status != analyticsmaterialize.RunStatusSucceeded {
-		t.Fatalf("finished run = %#v, want succeeded", finished)
-	}
-	if runner.modelID != "" {
-		t.Fatalf("whole model refresh called with %q, want table refresh only", runner.modelID)
-	}
-	if !reflect.DeepEqual(runner.modelTables, []string{"model:orders"}) {
-		t.Fatalf("model table refreshes = %#v, want model:orders", runner.modelTables)
-	}
-}
-
-func TestRunServicePersistsFailedStateWithError(t *testing.T) {
-	ctx := context.Background()
-	store := openMaterializationStore(t, ctx)
-	defer store.Close()
-	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
-	service := analyticsmaterialize.RunService{Repo: repo, Runner: failingRefreshRunner{}}
-	queued, err := service.Enqueue(ctx, analyticsmaterialize.RunInput{WorkspaceID: "test", ModelID: "model.orders"})
-	if err != nil {
-		t.Fatalf("enqueue run: %v", err)
-	}
-
-	failed, err := service.Execute(ctx, "test", queued.ID)
-	if err == nil {
-		t.Fatal("execute run unexpectedly succeeded")
-	}
-	if failed.Status != analyticsmaterialize.RunStatusFailed || failed.Error == "" || failed.FinishedAt == "" {
-		t.Fatalf("failed run = %#v err=%v", failed, err)
-	}
-}
-
 func TestRunRepositoryPersistsPrincipalAttribution(t *testing.T) {
 	ctx := context.Background()
 	store := openMaterializationStore(t, ctx)
@@ -829,29 +740,6 @@ func writeFixture(t *testing.T, dir, name, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-}
-
-type recordingRefreshRunner struct {
-	modelID     string
-	modelTables []string
-}
-
-func (r *recordingRefreshRunner) RefreshMaterializations(_ context.Context, modelID string) error {
-	r.modelID = modelID
-	return nil
-}
-
-func (r *recordingRefreshRunner) RefreshModelTables(_ context.Context, modelID string, tableNames []string) error {
-	for _, tableName := range tableNames {
-		r.modelTables = append(r.modelTables, modelID+":"+tableName)
-	}
-	return nil
-}
-
-type failingRefreshRunner struct{}
-
-func (failingRefreshRunner) RefreshMaterializations(context.Context, string) error {
-	return errors.New("refresh failed")
 }
 
 func openMaterializationStore(t *testing.T, ctx context.Context) *platform.Store {

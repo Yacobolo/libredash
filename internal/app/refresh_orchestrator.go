@@ -62,9 +62,10 @@ func (p refreshPublisher) publishTarget(targetID string) {
 }
 
 type RefreshOrchestrator struct {
-	repo   *materialize.SQLRunRepository
-	runner appRefreshRunner
-	model  refreshModelLookup
+	repo                *materialize.SQLRunRepository
+	runner              appRefreshRunner
+	model               refreshModelLookup
+	allowDirectFallback bool
 }
 
 func NewRefreshOrchestrator(repo *materialize.SQLRunRepository, metrics queryMetrics) RefreshOrchestrator {
@@ -77,6 +78,12 @@ func NewRefreshOrchestrator(repo *materialize.SQLRunRepository, metrics queryMet
 		runner: appRefreshRunner{metrics: metrics},
 		model:  lookup,
 	}
+}
+
+func NewGenericRefreshOrchestrator(repo *materialize.SQLRunRepository, metrics queryMetrics) RefreshOrchestrator {
+	orchestrator := NewRefreshOrchestrator(repo, metrics)
+	orchestrator.allowDirectFallback = true
+	return orchestrator
 }
 
 type refreshRunInput struct {
@@ -107,10 +114,24 @@ func (o RefreshOrchestrator) ExecuteRun(ctx context.Context, workspaceID, runID 
 	if err != nil {
 		return materialize.RunRecord{}, err
 	}
+	var finished materialize.RunRecord
 	if run.TargetType == materialize.TargetModelTable {
-		return o.executeModelTableRun(ctx, workspaceID, run, publisher)
+		finished, err = o.executeModelTableRun(ctx, workspaceID, run, publisher)
+	} else {
+		finished, err = o.executeSemanticModelRun(ctx, workspaceID, run, run.PrincipalID, publisher)
 	}
-	return o.executeSemanticModelRun(ctx, workspaceID, run, run.PrincipalID, publisher)
+	if err == nil {
+		return finished, nil
+	}
+	if stored, getErr := o.repo.GetRun(ctx, workspaceID, run.ID); getErr == nil && stored.Status == materialize.RunStatusFailed {
+		return stored, err
+	}
+	failed, finishErr := o.repo.MarkRunFailed(ctx, workspaceID, run.ID, err.Error())
+	if finishErr != nil {
+		return failed, finishErr
+	}
+	o.publishRunFailure(run, publisher)
+	return failed, err
 }
 
 func (o RefreshOrchestrator) executeSemanticModelRun(ctx context.Context, workspaceID string, run materialize.RunRecord, principalID string, publisher refreshPublisher) (materialize.RunRecord, error) {
@@ -121,11 +142,17 @@ func (o RefreshOrchestrator) executeSemanticModelRun(ctx context.Context, worksp
 	publisher.publishRoot()
 
 	if o.model == nil {
-		return o.executeSemanticModelDirectRun(ctx, workspaceID, run, publisher.publishRoot)
+		if o.allowDirectFallback {
+			return o.executeSemanticModelDirectRun(ctx, workspaceID, run, publisher.publishRoot)
+		}
+		return materialize.RunRecord{}, o.failRun(ctx, workspaceID, run.ID, errors.New("semantic model lookup is not configured"), publisher.publishRoot)
 	}
 	model, ok := o.model(run.ModelID)
 	if !ok {
-		return o.executeSemanticModelDirectRun(ctx, workspaceID, run, publisher.publishRoot)
+		if o.allowDirectFallback {
+			return o.executeSemanticModelDirectRun(ctx, workspaceID, run, publisher.publishRoot)
+		}
+		return materialize.RunRecord{}, o.failRun(ctx, workspaceID, run.ID, fmt.Errorf("unknown semantic model %q", run.ModelID), publisher.publishRoot)
 	}
 	order, err := materialize.ModelTableOrder(model)
 	if err != nil {
@@ -206,11 +233,17 @@ func (o RefreshOrchestrator) executeModelTableDirectRun(ctx context.Context, wor
 	publisher.publishRoot()
 
 	if o.model == nil {
-		return o.executeRootModelTableRun(ctx, workspaceID, root, tableName, publisher.publishRoot)
+		if o.allowDirectFallback {
+			return o.executeRootModelTableRun(ctx, workspaceID, root, tableName, publisher.publishRoot)
+		}
+		return materialize.RunRecord{}, o.failRun(ctx, workspaceID, root.ID, errors.New("semantic model lookup is not configured"), publisher.publishRoot)
 	}
 	model, ok := o.model(root.ModelID)
 	if !ok {
-		return o.executeRootModelTableRun(ctx, workspaceID, root, tableName, publisher.publishRoot)
+		if o.allowDirectFallback {
+			return o.executeRootModelTableRun(ctx, workspaceID, root, tableName, publisher.publishRoot)
+		}
+		return materialize.RunRecord{}, o.failRun(ctx, workspaceID, root.ID, fmt.Errorf("unknown semantic model %q", root.ModelID), publisher.publishRoot)
 	}
 	order, err := materialize.ModelTableDependencyOrder(model, tableName)
 	if err != nil {
@@ -336,6 +369,14 @@ func (o RefreshOrchestrator) failRun(ctx context.Context, workspaceID, runID str
 		publish()
 	}
 	return err
+}
+
+func (o RefreshOrchestrator) publishRunFailure(run materialize.RunRecord, publisher refreshPublisher) {
+	if run.TargetType == materialize.TargetModelTable {
+		publisher.publishTarget(run.TargetID)
+		return
+	}
+	publisher.publishRoot()
 }
 
 func tableNameFromTargetID(modelID, targetID string) (string, error) {
