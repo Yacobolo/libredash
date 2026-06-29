@@ -148,7 +148,10 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 }
 
 func localDevServer(ctx context.Context, metrics *dashboardruntime.Service, cfg config.Config, workspaceID string) (*app.Server, func(), error) {
-	duckDBDir := metrics.DataDir()
+	duckDBDir := ""
+	if metrics != nil {
+		duckDBDir = metrics.DataDir()
+	}
 	if cfg.DuckDBDir != "" {
 		duckDBDir = cfg.DuckDBDirPath()
 	}
