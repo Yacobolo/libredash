@@ -342,7 +342,7 @@ func (s *Server) workspaceAssetsAndEdgesForRefresh(ctx context.Context, workspac
 func (s *Server) workspaceAssetRefreshPatch(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView, section string) map[string]any {
 	refresh, err := s.assetRefreshState(r, workspaceID, asset)
 	if err != nil {
-		return map[string]any{"assetRefresh": map[string]any{"status": "failed", "running": false, "lastSuccessful": ""}}
+		refresh = ui.AssetRefreshState{Latest: ui.AssetRefreshRun{Status: "failed"}}
 	}
 	return ui.WorkspaceAssetRefreshSignals(s.workspaceResponse(r, workspaceID), asset, assets, edges, refresh, section)
 }

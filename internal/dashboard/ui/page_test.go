@@ -74,6 +74,9 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	}
 
 	showcase := renderPageForTest(t, report, model, report.Pages[0])
+	if !strings.Contains(showcase, `<ld-dashboard-page`) || !strings.Contains(showcase, `data-on:ld-filters-change`) || !strings.Contains(showcase, `data-on:ld-interaction-select`) {
+		t.Fatalf("showcase page did not mount dashboard route root with command bridge:\n%s", showcase)
+	}
 	if !strings.Contains(showcase, `"active_chart"`) || !strings.Contains(showcase, `"active_kpi"`) {
 		t.Fatalf("showcase page did not seed active chart and KPI visuals:\n%s", showcase)
 	}
@@ -83,9 +86,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	if strings.Contains(showcase, `"kpis"`) {
 		t.Fatalf("showcase page seeded legacy kpis signal:\n%s", showcase)
 	}
-	if !strings.Contains(showcase, `<ld-kpi-card`) {
-		t.Fatalf("showcase page did not render kpi card component:\n%s", showcase)
-	}
+	assertNoDashboardProductDOM(t, showcase)
 	if !strings.Contains(showcase, `"tables":{}`) {
 		t.Fatalf("showcase page should seed no tables:\n%s", showcase)
 	}
@@ -100,16 +101,19 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	}
 
 	tables := renderPageForTest(t, report, model, report.Pages[1])
-	if !strings.Contains(tables, `"orders":{"availableRows"`) || !strings.Contains(tables, `"matrix":{"availableRows"`) || !strings.Contains(tables, `"pivot":{"availableRows"`) {
-		t.Fatalf("tables page did not seed its three tables:\n%s", tables)
+	for _, tableID := range []string{"orders", "matrix", "pivot"} {
+		if !strings.Contains(tables, `"`+tableID+`":{`) || !strings.Contains(tables, `"availableRows"`) {
+			t.Fatalf("tables page did not seed table %q with row metadata:\n%s", tableID, tables)
+		}
 	}
 	if !strings.Contains(tables, `"style":{"density":"compact"`) || !strings.Contains(tables, `"rowHeight":28`) || !strings.Contains(tables, `"width":220`) {
 		t.Fatalf("tables page did not seed table style and column display metadata:\n%s", tables)
 	}
-	if !strings.Contains(showcase, `"interaction":{"kind":"point_selection","mappings":[{"field":"orders.status","label":"","value":"label"}]`) || strings.Contains(showcase, `"mode":"multi"`) {
+	assertNoDashboardProductDOM(t, tables)
+	if !strings.Contains(showcase, `"interaction":{"kind":"point_selection","toggle":false,"mappings":[{"field":"orders.status","value":"label"}]`) || strings.Contains(showcase, `"mode":"multi"`) {
 		t.Fatalf("showcase page did not seed point selection without mode:\n%s", showcase)
 	}
-	if !strings.Contains(tables, `"interaction":{"kind":"row_selection","mappings":[{"field":"orders.order_id","label":"","value":"order_id"}]`) || strings.Contains(tables, `"mode":"multi"`) {
+	if !strings.Contains(tables, `"interaction":{"kind":"row_selection","toggle":false,"mappings":[{"field":"orders.order_id","value":"order_id"}]`) || strings.Contains(tables, `"mode":"multi"`) {
 		t.Fatalf("tables page did not seed row selection without mode:\n%s", tables)
 	}
 	if strings.Contains(tables, `"off_page"`) {
@@ -128,4 +132,23 @@ func renderPageForTest(t *testing.T, report reportdef.Dashboard, model *semantic
 		t.Fatal(err)
 	}
 	return html.UnescapeString(out.String())
+}
+
+func assertNoDashboardProductDOM(t *testing.T, body string) {
+	t.Helper()
+	for _, tag := range []string{
+		"ld-sub-sidebar",
+		"ld-report-canvas",
+		"ld-filter-panel",
+		"ld-filter-card",
+		"ld-kpi-card",
+		"ld-echart",
+		"ld-data-table",
+		"ld-report-footer",
+		"ld-visual-modal",
+	} {
+		if strings.Contains(body, "<"+tag) {
+			t.Fatalf("Go rendered dashboard product DOM <%s> below route root:\n%s", tag, body)
+		}
+	}
 }

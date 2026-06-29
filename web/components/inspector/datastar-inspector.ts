@@ -1,0 +1,650 @@
+/**
+ * Datastar Inspector - Dev-only debugging tool
+ *
+ * A self-contained web component for inspecting Datastar signals.
+ * Works in any Datastar project with zero configuration.
+ */
+import { LitElement, css, html, nothing } from 'lit'
+import { customElement, state } from 'lit/decorators.js'
+import { ChevronDown, ChevronRight, X } from 'lucide'
+
+import { lucideIcon } from '../shared/lucide-icons'
+import type { InspectorState, SignalObject } from './types.js'
+import {
+  countSignals,
+  filterObject,
+  findChangedPaths,
+  parseFilterPattern,
+} from './utils.js'
+
+const FLASH_DURATION = 400
+const STORAGE_KEY = 'ds-inspector'
+
+@customElement('datastar-inspector')
+export class DatastarInspector extends LitElement {
+  @state() private expanded = false
+  @state() private filter = ''
+  @state() private signals: SignalObject = {}
+  @state() private signalCount = 0
+  @state() private changedPaths: Set<string> = new Set()
+  @state() private expandedPaths: Set<string> = new Set()
+  @state() private hasUnseenChanges = false
+
+  private observer: MutationObserver | null = null
+  private signalsElementId = `ds-inspector-signals-${Math.random().toString(36).slice(2, 9)}`
+  private signalsElement: HTMLElement | null = null
+  private previousSignals: SignalObject = {}
+  private flashTimeout: number | null = null
+  private parseFrame: number | null = null
+
+  static styles = css`
+    :host {
+      --ds-bg: var(--bgColor-default, #0d1117);
+      --ds-panel: var(--overlay-bgColor, var(--bgColor-default, #161b22));
+      --ds-panel-muted: var(--bgColor-muted, #21262d);
+      --ds-fg: var(--fgColor-default, #f0f6fc);
+      --ds-muted: var(--fgColor-muted, #8b949e);
+      --ds-border: var(--borderColor-default, #30363d);
+      --ds-border-muted: var(--borderColor-muted, #21262d);
+      --ds-accent: var(--bgColor-accent-emphasis, #1f6feb);
+      --ds-accent-fg: var(--fgColor-onEmphasis, #ffffff);
+      --ds-success: var(--fgColor-success, #3fb950);
+      --ds-warning: var(--fgColor-attention, #d29922);
+      --ds-radius: var(--ld-radius-default, 6px);
+      --ds-radius-full: var(--ld-radius-full, 999px);
+      --ds-shadow: 0 18px 48px rgb(0 0 0 / 42%), 0 0 0 1px rgb(255 255 255 / 4%);
+      color: var(--ds-fg);
+      font-family: var(--fontStack-system, Inter, ui-sans-serif, system-ui, sans-serif);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    .toggle {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: var(--zIndex-popover);
+      display: grid;
+      width: 38px;
+      height: 38px;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--ds-accent), white 18%);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 35% 24%, rgb(255 255 255 / 22%), transparent 30%),
+        linear-gradient(145deg, color-mix(in srgb, var(--ds-accent), white 10%), var(--ds-accent));
+      color: var(--ds-accent-fg);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: var(--ld-font-weight-strong);
+      letter-spacing: 0;
+      line-height: 1;
+      box-shadow: 0 10px 28px rgb(0 0 0 / 38%), 0 0 0 1px rgb(255 255 255 / 8%) inset;
+      transition:
+        transform var(--motion-transition-hover),
+        box-shadow var(--motion-transition-hover),
+        filter var(--motion-transition-hover);
+    }
+
+    .toggle:hover,
+    .toggle:focus-visible {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+      box-shadow: 0 14px 34px rgb(0 0 0 / 44%), 0 0 0 1px rgb(255 255 255 / 14%) inset;
+      outline: 0;
+    }
+
+    .toggle[data-unseen] {
+      animation: ds-pulse var(--base-duration-1000) var(--motion-easing-move) infinite;
+    }
+
+    @keyframes ds-pulse {
+      0%,
+      100% {
+        box-shadow: 0 10px 28px rgb(0 0 0 / 38%), 0 0 0 0 color-mix(in srgb, var(--ds-accent), transparent 40%);
+      }
+
+      50% {
+        box-shadow: 0 10px 28px rgb(0 0 0 / 38%), 0 0 0 7px color-mix(in srgb, var(--ds-accent), transparent 84%);
+      }
+    }
+
+    .panel {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: var(--zIndex-popover);
+      display: flex;
+      width: min(384px, calc(100vw - 32px));
+      height: min(512px, calc(100vh - 32px));
+      overflow: hidden;
+      flex-direction: column;
+      border: 1px solid var(--ds-border);
+      border-radius: 10px;
+      background: var(--ds-panel);
+      box-shadow: var(--ds-shadow);
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--ds-border-muted);
+      background: color-mix(in srgb, var(--ds-panel-muted), var(--ds-panel) 32%);
+      padding: 8px 10px;
+    }
+
+    .badge {
+      display: inline-grid;
+      min-width: 26px;
+      height: 20px;
+      place-items: center;
+      border-radius: var(--ds-radius-full);
+      background: var(--ds-accent);
+      color: var(--ds-accent-fg);
+      font-size: 11px;
+      font-weight: var(--ld-font-weight-strong);
+      line-height: 1;
+    }
+
+    .filter {
+      min-width: 0;
+      height: 26px;
+      flex: 1;
+      border: 1px solid var(--ds-border);
+      border-radius: var(--ds-radius);
+      background: var(--ds-bg);
+      color: var(--ds-fg);
+      font-size: 12px;
+      outline: 0;
+      padding: 0 8px;
+    }
+
+    .filter::placeholder {
+      color: var(--ds-muted);
+      opacity: 0.8;
+    }
+
+    .filter:focus {
+      border-color: var(--ds-accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent), transparent 78%);
+    }
+
+    .icon-button {
+      display: grid;
+      width: 26px;
+      height: 26px;
+      place-items: center;
+      border: 1px solid transparent;
+      border-radius: var(--ds-radius);
+      background: transparent;
+      color: var(--ds-muted);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 0;
+    }
+
+    .icon-button:hover,
+    .icon-button:focus-visible {
+      border-color: var(--ds-border);
+      background: var(--ds-panel-muted);
+      color: var(--ds-fg);
+      outline: 0;
+    }
+
+    .content {
+      min-height: 0;
+      flex: 1;
+      overflow: auto;
+      padding: 10px;
+    }
+
+    .empty {
+      display: grid;
+      height: 100%;
+      place-items: center;
+      color: var(--ds-muted);
+      font-size: 13px;
+    }
+
+    .tree {
+      font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .row,
+    .branch {
+      min-width: 0;
+      border: 0;
+      border-radius: 4px;
+      color: var(--ds-muted);
+      white-space: nowrap;
+    }
+
+    .row {
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+      padding: 2px 4px;
+    }
+
+    .branch {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: transparent;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: inherit;
+      padding: 2px 4px;
+      text-align: left;
+    }
+
+    .branch:hover,
+    .branch:focus-visible {
+      background: var(--ds-panel-muted);
+      outline: 0;
+    }
+
+    .changed {
+      background: color-mix(in srgb, var(--ds-warning), transparent 82%);
+    }
+
+    .key {
+      color: color-mix(in srgb, var(--ds-muted), var(--ds-fg) 18%);
+      font-weight: var(--ld-font-weight-regular);
+    }
+
+    .separator,
+    .chevron,
+    .null {
+      color: var(--ds-muted);
+      opacity: 0.8;
+    }
+
+    .chevron {
+      display: inline-grid;
+      width: 16px;
+      place-items: center;
+      text-align: center;
+    }
+
+    .chevron svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .count {
+      border: 1px solid var(--ds-border);
+      border-radius: var(--ds-radius-full);
+      background: var(--ds-panel-muted);
+      color: var(--ds-muted);
+      font-size: 10px;
+      font-weight: var(--ld-font-weight-regular);
+      line-height: 16px;
+      padding: 0 6px;
+    }
+
+    .value {
+      min-width: 0;
+      max-width: 16rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .boolean {
+      color: var(--ds-accent);
+    }
+
+    .number {
+      color: var(--ds-warning);
+    }
+
+    .string {
+      color: var(--ds-success);
+    }
+  `
+
+  override connectedCallback() {
+    super.connectedCallback()
+    this.ensureSignalsElement()
+    this.loadState()
+  }
+
+  override disconnectedCallback() {
+    super.disconnectedCallback()
+    this.observer?.disconnect()
+    if (this.parseFrame !== null) {
+      cancelAnimationFrame(this.parseFrame)
+    }
+    if (this.flashTimeout) {
+      clearTimeout(this.flashTimeout)
+    }
+  }
+
+  override firstUpdated() {
+    this.setupSignalObserver()
+  }
+
+  private ensureSignalsElement() {
+    let el = this.querySelector<HTMLElement>('[data-json-signals]')
+    if (!el) {
+      el = document.createElement('pre')
+      el.setAttribute('data-json-signals', '')
+      this.append(el)
+    }
+    el.id = this.signalsElementId
+    el.hidden = true
+    el.style.display = 'none'
+  }
+
+  private loadState() {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        const state: InspectorState = JSON.parse(saved)
+        this.expanded = state.expanded ?? false
+        this.filter = state.filter ?? ''
+        this.expandedPaths = new Set(state.expandedPaths ?? [])
+      }
+    } catch {
+      /* ignore parse errors */
+    }
+  }
+
+  private saveState() {
+    const state: InspectorState = {
+      expanded: this.expanded,
+      filter: this.filter,
+      expandedPaths: [...this.expandedPaths],
+    }
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  }
+
+  private setupSignalObserver() {
+    const el = this.querySelector<HTMLElement>(`#${this.signalsElementId}`)
+    if (!el) return
+
+    this.observer?.disconnect()
+    this.signalsElement = el
+    this.parseSignals(el.textContent || '{}', true)
+
+    this.observer = new MutationObserver(() => {
+      this.scheduleSignalParse()
+    })
+    this.observer.observe(el, { childList: true, characterData: true, subtree: true })
+  }
+
+  private scheduleSignalParse() {
+    if (this.parseFrame !== null) {
+      cancelAnimationFrame(this.parseFrame)
+    }
+    this.parseFrame = requestAnimationFrame(() => {
+      this.parseFrame = null
+      this.parseSignals(this.signalsElement?.textContent || '{}', false)
+    })
+  }
+
+  private parseSignals(json: string, isInitial: boolean) {
+    try {
+      const newSignals = JSON.parse(json) as SignalObject
+
+      if (!isInitial && Object.keys(this.previousSignals).length > 0) {
+        const changed = findChangedPaths(this.previousSignals, newSignals)
+        if (changed.size > 0) {
+          this.changedPaths = changed
+
+          if (!this.expanded) {
+            this.hasUnseenChanges = true
+          }
+
+          if (this.flashTimeout) {
+            clearTimeout(this.flashTimeout)
+          }
+          this.flashTimeout = window.setTimeout(() => {
+            this.changedPaths = new Set()
+            this.hasUnseenChanges = false
+          }, FLASH_DURATION)
+        }
+      }
+
+      this.previousSignals = newSignals
+      this.signals = newSignals
+      this.signalCount = countSignals(this.signals)
+    } catch {
+      this.signals = {}
+      this.signalCount = 0
+    }
+  }
+
+  private getFilteredSignals(): SignalObject {
+    if (!this.filter.trim()) return this.signals
+
+    const regex = parseFilterPattern(this.filter.trim())
+    return filterObject(this.signals, regex) as SignalObject
+  }
+
+  private toggle() {
+    this.expanded = !this.expanded
+    this.saveState()
+    if (this.expanded) {
+      this.hasUnseenChanges = false
+    }
+  }
+
+  private close() {
+    this.expanded = false
+    this.saveState()
+  }
+
+  private handleFilterInput(e: Event) {
+    this.filter = (e.target as HTMLInputElement).value
+    this.saveState()
+  }
+
+  private clearFilter() {
+    this.filter = ''
+    this.saveState()
+  }
+
+  private togglePath(path: string) {
+    const next = new Set(this.expandedPaths)
+    if (next.has(path)) {
+      next.delete(path)
+    } else {
+      next.add(path)
+    }
+    this.expandedPaths = next
+    this.saveState()
+  }
+
+  override render() {
+    return html`
+      ${this.expanded ? this.renderOpenPanel() : this.renderToggle()}
+    `
+  }
+
+  private renderToggle() {
+    return html`
+      <button
+        class="toggle"
+        ?data-unseen=${this.hasUnseenChanges}
+        @click=${this.toggle}
+        aria-label="Open Datastar Inspector"
+      >
+        DS
+      </button>
+    `
+  }
+
+  private renderOpenPanel() {
+    const filteredSignals = this.getFilteredSignals()
+    const filteredCount = countSignals(filteredSignals)
+    const hasFilter = this.filter.trim().length > 0
+    return this.renderPanel(filteredSignals, filteredCount, hasFilter)
+  }
+
+  private renderPanel(filteredSignals: SignalObject, filteredCount: number, hasFilter: boolean) {
+    return html`
+      <div class="panel">
+        ${this.renderHeader(filteredCount, hasFilter)}
+        ${this.renderContent(filteredSignals, hasFilter)}
+      </div>
+    `
+  }
+
+  private renderHeader(filteredCount: number, hasFilter: boolean) {
+    const placeholder = hasFilter
+      ? `${filteredCount}/${this.signalCount} match...`
+      : `Filter ${this.signalCount} signals...`
+
+    return html`
+      <div class="header">
+        <span class="badge">DS</span>
+        <input
+          type="text"
+          class="filter"
+          placeholder="${placeholder}"
+          .value=${this.filter}
+          @input=${this.handleFilterInput}
+        />
+        ${hasFilter
+          ? html`<button class="icon-button" @click=${this.clearFilter} aria-label="Clear filter">${lucideIcon(X, { size: 14 })}</button>`
+          : nothing}
+        <button class="icon-button" @click=${this.close} aria-label="Close">${lucideIcon(X, { size: 14 })}</button>
+      </div>
+    `
+  }
+
+  private renderContent(filteredSignals: SignalObject, hasFilter: boolean) {
+    const isEmpty = Object.keys(filteredSignals).length === 0
+
+    return html`
+      <div class="content">
+        ${isEmpty
+          ? html`<div class="empty">
+              ${hasFilter ? 'No signals match filter' : 'No signals found'}
+            </div>`
+          : this.renderJsonView(filteredSignals)}
+      </div>
+    `
+  }
+
+  private renderJsonView(signals: SignalObject) {
+    return html`
+      <div class="tree">
+        ${Object.entries(signals).map(([key, value]) => this.renderTreeNode(key, value, key, 0, this.filter.trim().length > 0))}
+      </div>
+    `
+  }
+
+  private renderTreeNode(key: string, value: unknown, path: string, depth: number, hasFilter: boolean) {
+    const changed = this.isChanged(path)
+    const rowClass = changed ? ' changed' : ''
+    const rowStyle = this.treeRowStyle(depth)
+
+    if (!this.isBranch(value)) {
+      return html`
+        <div class="row${rowClass}" style=${rowStyle}>
+          <span class="key">${key}</span>
+          <span class="separator">:</span>
+          ${this.renderPrimitive(value)}
+        </div>
+      `
+    }
+
+    const count = countSignals(value)
+    const expanded = hasFilter || this.expandedPaths.has(path)
+    const marker = Array.isArray(value) ? `[${count}]` : `{${count}}`
+
+    return html`
+      <div>
+        <button
+          type="button"
+          class="branch${rowClass}"
+          style=${rowStyle}
+          aria-expanded=${String(expanded)}
+          aria-label=${expanded ? `Collapse ${key}` : `Expand ${key}`}
+          @click=${() => this.togglePath(path)}
+        >
+          <span class="chevron">${lucideIcon(expanded ? ChevronDown : ChevronRight, { size: 14 })}</span>
+          <span class="key">${key}</span>
+          <span class="count">${marker}</span>
+        </button>
+        ${expanded
+          ? this.childEntries(value).map(([childKey, childValue]) =>
+              this.renderTreeNode(childKey, childValue, this.childPath(path, childKey, value), depth + 1, hasFilter)
+            )
+          : nothing}
+      </div>
+    `
+  }
+
+  private treeRowStyle(depth: number) {
+    const indent = depth * 0.85
+    const guide = depth > 0 ? 'border-left: 1px solid var(--borderColor-muted); padding-left: 0.55rem;' : ''
+    return `margin-left: ${indent}rem; width: calc(100% - ${indent}rem); ${guide}`
+  }
+
+  private renderPrimitive(value: unknown) {
+    if (value === null) {
+      return html`<span class="null">null</span>`
+    }
+    if (typeof value === 'boolean') {
+      return html`<span class="value boolean">${String(value)}</span>`
+    }
+    if (typeof value === 'number') {
+      return html`<span class="value number">${value}</span>`
+    }
+    if (typeof value === 'string') {
+      return html`
+        <span class="value string">
+          "${value}"
+        </span>
+      `
+    }
+    return html`<span class="value">${String(value)}</span>`
+  }
+
+  private isBranch(value: unknown): value is Record<string, unknown> | unknown[] {
+    return typeof value === 'object' && value !== null
+  }
+
+  private childEntries(value: Record<string, unknown> | unknown[]): Array<[string, unknown]> {
+    if (Array.isArray(value)) {
+      return value.map((item, index) => [String(index), item])
+    }
+    return Object.entries(value)
+  }
+
+  private childPath(path: string, key: string, parent: Record<string, unknown> | unknown[]) {
+    return Array.isArray(parent) ? `${path}[${key}]` : `${path}.${key}`
+  }
+
+  private isChanged(path: string) {
+    if (this.changedPaths.has(path)) return true
+    for (const changedPath of this.changedPaths) {
+      if (changedPath.startsWith(`${path}.`) || changedPath.startsWith(`${path}[`)) {
+        return true
+      }
+    }
+    return false
+  }
+
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'datastar-inspector': DatastarInspector
+  }
+}

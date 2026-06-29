@@ -32,7 +32,7 @@ go run ./cmd/libredash
 
 ## Architecture
 
-- `GET /` renders the file-backed dashboard catalog with gomponents.
+- `GET /` renders the file-backed dashboard catalog by mounting `ld-catalog-page` in the server document shell.
 - `GET /dashboards/{dashboard}` opens a dashboard, and `GET /dashboards/{dashboard}/pages/{page}` renders a report page.
 - `GET /workspaces` renders published BI workspaces, and `GET /workspaces/{workspace}` renders canonical dashboard and semantic model assets.
 - `GET /connections` renders global connection administration and inspection.
@@ -43,7 +43,7 @@ go run ./cmd/libredash
 - `dashboards/catalog.yaml` discovers semantic models and dashboards.
 - Semantic model YAML follows `sources -> models -> semantic model`: sources are raw physical inputs, models are light DuckDB-backed preparation tables, and semantic models own tables, fields, relationships, and measures.
 - Dashboard YAML owns pages, filters, KPIs, visuals, tables, and interactions over semantic model fields and measures.
-- Lit chart components bind to signal paths such as `charts.revenue`.
+- Lit route components consume typed Datastar-backed page signals; dashboard visuals bind to signal payloads such as `visuals.revenue`.
 - The bundled `datastar-inspector` web component shows live Datastar signals in the browser.
 
 ## Source Model

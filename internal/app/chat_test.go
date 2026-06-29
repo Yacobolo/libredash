@@ -41,17 +41,18 @@ func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		`/static/chat.js`,
+		`/static/app-shell.js`,
+		`/static/chat-page.js`,
 		`data-signals=`,
-		`<ld-sub-sidebar`,
-		`<ld-chat-thread`,
-		`<ld-chat-composer`,
+		`<ld-app-shell`,
+		`<ld-chat-page`,
 		`&#34;compact&#34;:true`,
-		`data-attr:config=`,
-		`collapsible: false`,
-		`numbered: false`,
-		`data-attr:transcript="$agent.transcript"`,
+		`&#34;collapsible&#34;:false`,
+		`&#34;numbered&#34;:false`,
+		`data-attr:page="JSON.stringify($page)"`,
+		`data-attr:agent="JSON.stringify($agent)"`,
 		`data-attr:pending="$agentTurnPending || $agent.status.running"`,
+		`data-attr:composerdisabled="$agentTurnPending || $agent.status.running || $agent.composer.disabled"`,
 		`data-indicator="agentTurnPending"`,
 		`data-on:ld-chat-submit`,
 		`/chat/turns`,
@@ -63,6 +64,11 @@ func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 	}
 	if strings.Contains(body, `aria-label="Agent conversations"`) {
 		t.Fatalf("chat page should render the conversation web component instead of the static rail:\n%s", body)
+	}
+	for _, legacy := range []string{`<ld-sub-sidebar`, `<ld-chat-thread`, `<ld-chat-composer`, `data-attr:transcript`, `JSON.stringify($page.sidebar)`} {
+		if strings.Contains(body, legacy) {
+			t.Fatalf("chat page rendered product internals below the route root (%q):\n%s", legacy, body)
+		}
 	}
 	if strings.Contains(body, `<ld-chat-conversation-sidebar`) {
 		t.Fatalf("chat page still rendered chat-specific conversation sidebar:\n%s", body)
@@ -87,7 +93,7 @@ func TestChatPageDisabledState(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `<ld-chat-thread`) || !strings.Contains(body, `Agent is not configured`) {
+	if !strings.Contains(body, `<ld-chat-page`) || !strings.Contains(body, `Agent is not configured`) {
 		t.Fatalf("disabled chat page did not render usable disabled state:\n%s", body)
 	}
 }
@@ -153,7 +159,7 @@ func TestChatNewRendersDraftWithoutCreatingConversation(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{`href: &#39;/chat/new&#39;`, `title: &#39;New chat&#39;`, `activeId: $agent.activeConversationId`} {
+	for _, want := range []string{`&#34;href&#34;:&#34;/chat/new&#34;`, `&#34;title&#34;:&#34;New chat&#34;`, `&#34;activeId&#34;:&#34;&#34;`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("draft chat page missing %q:\n%s", want, body)
 		}

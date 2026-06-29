@@ -1,0 +1,2922 @@
+{
+  "$defs": {
+    "AdminContentSectionSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "facts": {
+          "items": {
+            "$ref": "#/$defs/DefinitionFactSignal"
+          },
+          "type": "array"
+        },
+        "grid": {
+          "$ref": "#/$defs/MetricGridSignal"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "AdminMetricSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "type": "object"
+    },
+    "AdminPageEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "chrome": {
+          "$ref": "#/$defs/ChromeSignal"
+        },
+        "page": {
+          "$ref": "#/$defs/AdminPageSignal"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RouteRuntimeSignal"
+        },
+        "status": {
+          "$ref": "#/$defs/DashboardStatus"
+        }
+      },
+      "required": [
+        "chrome",
+        "page",
+        "runtime",
+        "status"
+      ],
+      "type": "object"
+    },
+    "AdminPageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "string"
+        },
+        "empty": {
+          "type": "string"
+        },
+        "headerDetail": {
+          "type": "string"
+        },
+        "headerTitle": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/AdminMetricSignal"
+          },
+          "type": "array"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/AdminContentSectionSignal"
+          },
+          "type": "array"
+        },
+        "sidebar": {
+          "$ref": "#/$defs/SubSidebarSignal"
+        },
+        "storage": {
+          "$ref": "#/$defs/AdminStorageSignal"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "active",
+        "headerDetail",
+        "headerTitle",
+        "kind",
+        "sidebar",
+        "title"
+      ],
+      "type": "object"
+    },
+    "AdminStorageColumnSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "nullable": {
+          "type": "string"
+        },
+        "ordinal": {
+          "type": "integer"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "default",
+        "name",
+        "nullable",
+        "ordinal",
+        "type"
+      ],
+      "type": "object"
+    },
+    "AdminStorageCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "databaseId": {
+          "type": "string"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "databaseId",
+        "schema",
+        "table"
+      ],
+      "type": "object"
+    },
+    "AdminStorageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "selectedKey": {
+          "type": "string"
+        },
+        "selectedTable": {
+          "$ref": "#/$defs/AdminStorageTableSignal"
+        },
+        "status": {
+          "type": "string"
+        },
+        "summary": {
+          "$ref": "#/$defs/AdminStorageSummary"
+        },
+        "tables": {
+          "items": {
+            "$ref": "#/$defs/AdminStorageTableSignal"
+          },
+          "type": "array"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "selectedKey",
+        "selectedTable",
+        "status",
+        "summary",
+        "tables",
+        "warnings"
+      ],
+      "type": "object"
+    },
+    "AdminStorageSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "databaseCount": {
+          "type": "integer"
+        },
+        "duckdbDir": {
+          "type": "string"
+        },
+        "tableCount": {
+          "type": "integer"
+        },
+        "totalSizeLabel": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "databaseCount",
+        "duckdbDir",
+        "tableCount",
+        "totalSizeLabel"
+      ],
+      "type": "object"
+    },
+    "AdminStorageTableSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "columnCount": {
+          "type": "integer"
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/AdminStorageColumnSignal"
+          },
+          "type": "array"
+        },
+        "databaseId": {
+          "type": "string"
+        },
+        "databaseName": {
+          "type": "string"
+        },
+        "databasePath": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "modelId": {
+          "type": "string"
+        },
+        "modelName": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "rowCountLabel": {
+          "type": "string"
+        },
+        "schema": {
+          "type": "string"
+        },
+        "sizeLabel": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "columnCount",
+        "databaseId",
+        "databaseName",
+        "databasePath",
+        "key",
+        "modelId",
+        "modelName",
+        "name",
+        "rowCountLabel",
+        "schema",
+        "sizeLabel",
+        "type"
+      ],
+      "type": "object"
+    },
+    "AssetLineageEdgeSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "source",
+        "target"
+      ],
+      "type": "object"
+    },
+    "AssetLineageGraphSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/AssetLineageEdgeSignal"
+          },
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/AssetLineageNodeSignal"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "edges",
+        "nodes"
+      ],
+      "type": "object"
+    },
+    "AssetLineageNodeSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "containedCount": {
+          "type": "integer"
+        },
+        "containedSummary": {
+          "type": "string"
+        },
+        "href": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "meta": {
+          "type": "string"
+        },
+        "rank": {
+          "type": "integer"
+        },
+        "selected": {
+          "type": "boolean"
+        },
+        "side": {
+          "type": "string"
+        },
+        "usedByCount": {
+          "type": "integer"
+        },
+        "usesCount": {
+          "type": "integer"
+        },
+        "visibleDownstreamCount": {
+          "type": "integer"
+        },
+        "visibleUpstreamCount": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "label",
+        "rank",
+        "side"
+      ],
+      "type": "object"
+    },
+    "CatalogDashboardSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "href": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "pageCount": {
+          "type": "integer"
+        },
+        "semanticModel": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "href",
+        "id",
+        "pageCount",
+        "title"
+      ],
+      "type": "object"
+    },
+    "CatalogPageEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "chrome": {
+          "$ref": "#/$defs/ChromeSignal"
+        },
+        "page": {
+          "$ref": "#/$defs/CatalogPageSignal"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RouteRuntimeSignal"
+        },
+        "status": {
+          "$ref": "#/$defs/DashboardStatus"
+        }
+      },
+      "required": [
+        "chrome",
+        "page",
+        "runtime",
+        "status"
+      ],
+      "type": "object"
+    },
+    "CatalogPageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "dashboards": {
+          "items": {
+            "$ref": "#/$defs/CatalogDashboardSignal"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "dashboards",
+        "description",
+        "kind",
+        "title"
+      ],
+      "type": "object"
+    },
+    "ChatConversationSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "archivedAt": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lastMessageText": {
+          "type": "string"
+        },
+        "messageCount": {
+          "type": "integer"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "titlePending": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "createdAt",
+        "id",
+        "messageCount",
+        "principalId",
+        "status",
+        "title",
+        "updatedAt",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "ChatEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/ChatSignal"
+        },
+        "chrome": {
+          "$ref": "#/$defs/ChromeSignal"
+        },
+        "csrfToken": {
+          "type": "string"
+        },
+        "page": {
+          "$ref": "#/$defs/ChatPageSignal"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RouteRuntimeSignal"
+        }
+      },
+      "required": [
+        "agent",
+        "chrome",
+        "csrfToken",
+        "page",
+        "runtime"
+      ],
+      "type": "object"
+    },
+    "ChatPageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "sidebar": {
+          "$ref": "#/$defs/SubSidebarSignal"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "kind",
+        "sidebar",
+        "title"
+      ],
+      "type": "object"
+    },
+    "ChatSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "activeConversationId": {
+          "type": "string"
+        },
+        "composer": {
+          "$ref": "#/$defs/ComposerSignal"
+        },
+        "conversations": {
+          "items": {
+            "$ref": "#/$defs/ChatConversationSummary"
+          },
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/ChatStatus"
+        },
+        "transcript": {
+          "items": {},
+          "type": "array"
+        }
+      },
+      "required": [
+        "activeConversationId",
+        "composer",
+        "conversations",
+        "status",
+        "transcript"
+      ],
+      "type": "object"
+    },
+    "ChatStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "error": {
+          "type": "string"
+        },
+        "running": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled",
+        "running"
+      ],
+      "type": "object"
+    },
+    "ChromeSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "sidebar": {
+          "$ref": "#/$defs/SidebarSignal"
+        }
+      },
+      "required": [
+        "sidebar"
+      ],
+      "type": "object"
+    },
+    "ComposerSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "disabled": {
+          "type": "boolean"
+        },
+        "placeholder": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "disabled",
+        "placeholder",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ConnectionsPageEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "chrome": {
+          "$ref": "#/$defs/ChromeSignal"
+        },
+        "page": {
+          "$ref": "#/$defs/ConnectionsPageSignal"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RouteRuntimeSignal"
+        },
+        "status": {
+          "$ref": "#/$defs/DashboardStatus"
+        }
+      },
+      "required": [
+        "chrome",
+        "page",
+        "runtime",
+        "status"
+      ],
+      "type": "object"
+    },
+    "ConnectionsPageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "assetList": {
+          "$ref": "#/$defs/WorkspaceAssetListSignal"
+        },
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "title"
+      ],
+      "type": "object"
+    },
+    "DashboardComponentSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "badges": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "eyebrow": {
+          "type": "string"
+        },
+        "filter": {
+          "type": "string"
+        },
+        "height": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "placement": {
+          "$ref": "#/$defs/DashboardPagePlacement"
+        },
+        "subtitle": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "visual": {
+          "type": "string"
+        },
+        "width": {
+          "type": "number"
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "height",
+        "id",
+        "kind",
+        "placement",
+        "width",
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "DashboardEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "chrome": {
+          "$ref": "#/$defs/ChromeSignal"
+        },
+        "csrfToken": {
+          "type": "string"
+        },
+        "filterConfig": {
+          "items": {
+            "$ref": "#/$defs/ReportFilterConfig"
+          },
+          "type": "array"
+        },
+        "filterOptions": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/DashboardFilterOption"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        },
+        "filters": {
+          "$ref": "#/$defs/DashboardFilters"
+        },
+        "interactionCommand": {
+          "$ref": "#/$defs/DashboardInteractionCommand"
+        },
+        "page": {
+          "$ref": "#/$defs/DashboardPageSignal"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RouteRuntimeSignal"
+        },
+        "status": {
+          "$ref": "#/$defs/DashboardStatus"
+        },
+        "tableCommand": {
+          "$ref": "#/$defs/DashboardTableRequest"
+        },
+        "tables": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DashboardTable"
+          },
+          "type": "object"
+        },
+        "urlParamShape": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "urlParams": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "visuals": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DashboardVisual"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "chrome",
+        "csrfToken",
+        "filterConfig",
+        "filterOptions",
+        "filters",
+        "interactionCommand",
+        "page",
+        "runtime",
+        "status",
+        "tableCommand",
+        "tables",
+        "urlParamShape",
+        "urlParams",
+        "visuals"
+      ],
+      "type": "object"
+    },
+    "DashboardFilterControl": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "preset": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    },
+    "DashboardFilterOption": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "type": "object"
+    },
+    "DashboardFilters": {
+      "additionalProperties": false,
+      "properties": {
+        "controls": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DashboardFilterControl"
+          },
+          "type": "object"
+        },
+        "selections": {
+          "items": {
+            "$ref": "#/$defs/DashboardInteractionSelection"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "controls",
+        "selections"
+      ],
+      "type": "object"
+    },
+    "DashboardInteractionCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "interactionKind": {
+          "type": "string"
+        },
+        "mappings": {
+          "items": {
+            "$ref": "#/$defs/DashboardInteractionCommandMapping"
+          },
+          "type": "array"
+        },
+        "sourceId": {
+          "type": "string"
+        },
+        "sourceKind": {
+          "type": "string"
+        },
+        "toggle": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "interactionKind",
+        "mappings",
+        "sourceId",
+        "sourceKind",
+        "toggle"
+      ],
+      "type": "object"
+    },
+    "DashboardInteractionCommandMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "value"
+      ],
+      "type": "object"
+    },
+    "DashboardInteractionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "mappings": {
+          "items": {
+            "$ref": "#/$defs/DashboardInteractionConfigMapping"
+          },
+          "type": "array"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "toggle": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kind",
+        "mappings",
+        "toggle"
+      ],
+      "type": "object"
+    },
+    "DashboardInteractionConfigMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "value"
+      ],
+      "type": "object"
+    },
+    "DashboardInteractionSelection": {
+      "additionalProperties": false,
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/DashboardInteractionSelectionEntry"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "interactionKind": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer"
+        },
+        "sourceId": {
+          "type": "string"
+        },
+        "sourceKind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "entries",
+        "id",
+        "interactionKind",
+        "label",
+        "order",
+        "sourceId",
+        "sourceKind"
+      ],
+      "type": "object"
+    },
+    "DashboardInteractionSelectionEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "mappings": {
+          "items": {
+            "$ref": "#/$defs/DashboardInteractionSelectionMapping"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "mappings"
+      ],
+      "type": "object"
+    },
+    "DashboardInteractionSelectionMapping": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "field",
+        "value"
+      ],
+      "type": "object"
+    },
+    "DashboardPageCanvas": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "type": "integer"
+        },
+        "width": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "height",
+        "width"
+      ],
+      "type": "object"
+    },
+    "DashboardPageGrid": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "type": "integer"
+        },
+        "gap": {
+          "type": "integer"
+        },
+        "padding": {
+          "type": "integer"
+        },
+        "rowHeight": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "columns",
+        "gap",
+        "padding",
+        "rowHeight"
+      ],
+      "type": "object"
+    },
+    "DashboardPageNavSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "href": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "active",
+        "href",
+        "id",
+        "title"
+      ],
+      "type": "object"
+    },
+    "DashboardPagePlacement": {
+      "additionalProperties": false,
+      "properties": {
+        "col": {
+          "type": "integer"
+        },
+        "colSpan": {
+          "type": "integer"
+        },
+        "row": {
+          "type": "integer"
+        },
+        "rowSpan": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "col",
+        "colSpan",
+        "row",
+        "rowSpan"
+      ],
+      "type": "object"
+    },
+    "DashboardPageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "canvas": {
+          "$ref": "#/$defs/DashboardPageCanvas"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/DashboardComponentSignal"
+          },
+          "type": "array"
+        },
+        "dashboardId": {
+          "type": "string"
+        },
+        "dashboardTitle": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "grid": {
+          "$ref": "#/$defs/DashboardPageGrid"
+        },
+        "headerDetail": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "modelId": {
+          "type": "string"
+        },
+        "modelTitle": {
+          "type": "string"
+        },
+        "pageId": {
+          "type": "string"
+        },
+        "pageTitle": {
+          "type": "string"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/DashboardPageNavSignal"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "canvas",
+        "components",
+        "dashboardId",
+        "dashboardTitle",
+        "grid",
+        "headerDetail",
+        "kind",
+        "modelId",
+        "modelTitle",
+        "pageId",
+        "pageTitle",
+        "pages",
+        "title"
+      ],
+      "type": "object"
+    },
+    "DashboardStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "dataDirectory": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "lastUpdated": {
+          "type": "string"
+        },
+        "loading": {
+          "type": "boolean"
+        },
+        "setupRequired": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "dataDirectory",
+        "error",
+        "lastUpdated",
+        "loading",
+        "setupRequired"
+      ],
+      "type": "object"
+    },
+    "DashboardTable": {
+      "additionalProperties": false,
+      "properties": {
+        "availableRows": {
+          "type": "integer"
+        },
+        "blocks": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DashboardTableBlock"
+          },
+          "type": "object"
+        },
+        "chunkSize": {
+          "type": "integer"
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/DashboardTableColumn"
+          },
+          "type": "array"
+        },
+        "error": {
+          "type": "string"
+        },
+        "interaction": {
+          "$ref": "#/$defs/DashboardInteractionConfig"
+        },
+        "isCapped": {
+          "type": "boolean"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "loadingBlock": {
+          "type": "string"
+        },
+        "resetVersion": {
+          "type": "integer"
+        },
+        "rowCap": {
+          "type": "integer"
+        },
+        "rowHeight": {
+          "type": "integer"
+        },
+        "selection": {
+          "items": {
+            "$ref": "#/$defs/DashboardInteractionSelectionEntry"
+          },
+          "type": "array"
+        },
+        "sort": {
+          "$ref": "#/$defs/DashboardTableSort"
+        },
+        "style": {
+          "$ref": "#/$defs/DashboardTableStyle"
+        },
+        "title": {
+          "type": "string"
+        },
+        "totalRows": {
+          "type": "integer"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "availableRows",
+        "blocks",
+        "chunkSize",
+        "columns",
+        "error",
+        "interaction",
+        "isCapped",
+        "kind",
+        "loadingBlock",
+        "resetVersion",
+        "rowCap",
+        "rowHeight",
+        "selection",
+        "sort",
+        "style",
+        "title",
+        "totalRows",
+        "version"
+      ],
+      "type": "object"
+    },
+    "DashboardTableBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "requestSeq": {
+          "type": "integer"
+        },
+        "resetVersion": {
+          "type": "integer"
+        },
+        "rows": {
+          "items": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "sort": {
+          "$ref": "#/$defs/DashboardTableSort"
+        },
+        "start": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "requestSeq",
+        "resetVersion",
+        "rows",
+        "sort",
+        "start"
+      ],
+      "type": "object"
+    },
+    "DashboardTableColumn": {
+      "additionalProperties": false,
+      "properties": {
+        "align": {
+          "type": "string"
+        },
+        "columnValue": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
+        },
+        "formatting": {
+          "items": {
+            "$ref": "#/$defs/DashboardTableFormattingRule"
+          },
+          "type": "array"
+        },
+        "group": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "measure": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "width": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "key",
+        "label"
+      ],
+      "type": "object"
+    },
+    "DashboardTableFormattingRule": {
+      "additionalProperties": false,
+      "properties": {
+        "background": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "highColor": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "lowColor": {
+          "type": "string"
+        },
+        "max": {
+          "type": "number"
+        },
+        "min": {
+          "type": "number"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "DashboardTableRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "block": {
+          "type": "string"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "requestSeq": {
+          "type": "integer"
+        },
+        "resetVersion": {
+          "type": "integer"
+        },
+        "sort": {
+          "$ref": "#/$defs/DashboardTableSort"
+        },
+        "start": {
+          "type": "integer"
+        },
+        "table": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "block",
+        "count",
+        "requestSeq",
+        "resetVersion",
+        "sort",
+        "start",
+        "table"
+      ],
+      "type": "object"
+    },
+    "DashboardTableSort": {
+      "additionalProperties": false,
+      "properties": {
+        "direction": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "direction",
+        "key"
+      ],
+      "type": "object"
+    },
+    "DashboardTableStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "density": {
+          "type": "string"
+        },
+        "grid": {
+          "type": "string"
+        },
+        "zebra": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "density",
+        "grid",
+        "zebra"
+      ],
+      "type": "object"
+    },
+    "DashboardVisual": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "items": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "dimensions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "format": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "interaction": {
+          "$ref": "#/$defs/DashboardInteractionConfig"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "measure": {
+          "type": "string"
+        },
+        "measures": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "options": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "renderer": {
+          "type": "string"
+        },
+        "rendererOptions": {
+          "additionalProperties": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "type": "object"
+        },
+        "selection": {
+          "items": {
+            "$ref": "#/$defs/DashboardInteractionSelectionEntry"
+          },
+          "type": "array"
+        },
+        "series": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "unit": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "data",
+        "dimensions",
+        "id",
+        "interaction",
+        "kind",
+        "measure",
+        "measures",
+        "options",
+        "renderer",
+        "rendererOptions",
+        "selection",
+        "series",
+        "shape",
+        "title",
+        "type",
+        "unit",
+        "version"
+      ],
+      "type": "object"
+    },
+    "DefinitionFactSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "wide": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "type": "object"
+    },
+    "LoginPageEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "page": {
+          "$ref": "#/$defs/LoginPageSignal"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RouteRuntimeSignal"
+        },
+        "status": {
+          "$ref": "#/$defs/DashboardStatus"
+        }
+      },
+      "required": [
+        "page",
+        "runtime",
+        "status"
+      ],
+      "type": "object"
+    },
+    "LoginPageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "backgroundModuleSrc": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "providerLabel": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "backgroundModuleSrc",
+        "kind",
+        "providerLabel",
+        "title"
+      ],
+      "type": "object"
+    },
+    "MetricGridBadgeSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "tone": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "type": "object"
+    },
+    "MetricGridColumnSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "align": {
+          "type": "string"
+        },
+        "header": {
+          "type": "string"
+        },
+        "hrefKey": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "width": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "header",
+        "id"
+      ],
+      "type": "object"
+    },
+    "MetricGridSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/MetricGridColumnSignal"
+          },
+          "type": "array"
+        },
+        "empty": {
+          "type": "string"
+        },
+        "minWidth": {
+          "type": "string"
+        },
+        "rows": {
+          "items": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "columns",
+        "empty",
+        "rows"
+      ],
+      "type": "object"
+    },
+    "ReportFilterConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "custom": {
+          "type": "boolean"
+        },
+        "default": {
+          "$ref": "#/$defs/ReportFilterDefault"
+        },
+        "defaultOperator": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "dimension": {
+          "type": "string"
+        },
+        "fromURLParam": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "operatorURLParam": {
+          "type": "string"
+        },
+        "operators": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/ReportFilterOption"
+          },
+          "type": "array"
+        },
+        "presets": {
+          "items": {
+            "$ref": "#/$defs/ReportFilterPreset"
+          },
+          "type": "array"
+        },
+        "targets": {
+          "$ref": "#/$defs/ReportFilterTargets"
+        },
+        "toURLParam": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "urlParam": {
+          "type": "string"
+        },
+        "values": {
+          "$ref": "#/$defs/ReportFilterValues"
+        }
+      },
+      "required": [
+        "default",
+        "dimension",
+        "id",
+        "label",
+        "type"
+      ],
+      "type": "object"
+    },
+    "ReportFilterDefault": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "preset": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "ReportFilterDefinition": {
+      "additionalProperties": false,
+      "properties": {
+        "custom": {
+          "type": "boolean"
+        },
+        "default": {
+          "$ref": "#/$defs/ReportFilterDefault"
+        },
+        "defaultOperator": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "dimension": {
+          "type": "string"
+        },
+        "fromURLParam": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "operator": {
+          "type": "string"
+        },
+        "operatorURLParam": {
+          "type": "string"
+        },
+        "operators": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/ReportFilterOption"
+          },
+          "type": "array"
+        },
+        "presets": {
+          "items": {
+            "$ref": "#/$defs/ReportFilterPreset"
+          },
+          "type": "array"
+        },
+        "targets": {
+          "$ref": "#/$defs/ReportFilterTargets"
+        },
+        "toURLParam": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "urlParam": {
+          "type": "string"
+        },
+        "values": {
+          "$ref": "#/$defs/ReportFilterValues"
+        }
+      },
+      "required": [
+        "default",
+        "dimension",
+        "label",
+        "type"
+      ],
+      "type": "object"
+    },
+    "ReportFilterOption": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ReportFilterPreset": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "relativeDays": {
+          "type": "integer"
+        },
+        "to": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ReportFilterTargets": {
+      "additionalProperties": false,
+      "properties": {
+        "tables": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "visuals": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "ReportFilterValues": {
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "RouteRuntimeSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "clientId": {
+          "type": "string"
+        },
+        "dashboardId": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "modelId": {
+          "type": "string"
+        },
+        "pageId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "SidebarGroupSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/SidebarItemSignal"
+          },
+          "type": "array"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "items",
+        "label"
+      ],
+      "type": "object"
+    },
+    "SidebarItemSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "href": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "meta": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "href",
+        "icon",
+        "id",
+        "label"
+      ],
+      "type": "object"
+    },
+    "SidebarSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "string"
+        },
+        "compact": {
+          "type": "boolean"
+        },
+        "dashboardId": {
+          "type": "string"
+        },
+        "dashboardTitle": {
+          "type": "string"
+        },
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/SidebarGroupSignal"
+          },
+          "type": "array"
+        },
+        "modelId": {
+          "type": "string"
+        },
+        "modelTitle": {
+          "type": "string"
+        },
+        "pageTitle": {
+          "type": "string"
+        },
+        "userRole": {
+          "type": "string"
+        },
+        "workspaceTitle": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "active",
+        "compact",
+        "dashboardTitle",
+        "groups",
+        "pageTitle",
+        "workspaceTitle"
+      ],
+      "type": "object"
+    },
+    "SubSidebarItemSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "href": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "pending": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "active",
+        "href",
+        "id",
+        "title"
+      ],
+      "type": "object"
+    },
+    "SubSidebarSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "activeId": {
+          "type": "string"
+        },
+        "ariaLabel": {
+          "type": "string"
+        },
+        "collapsible": {
+          "type": "boolean"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "emptyText": {
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/SubSidebarItemSignal"
+          },
+          "type": "array"
+        },
+        "label": {
+          "type": "string"
+        },
+        "numbered": {
+          "type": "boolean"
+        },
+        "railLabel": {
+          "type": "string"
+        },
+        "storageKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "activeId",
+        "ariaLabel",
+        "collapsible",
+        "items",
+        "label",
+        "numbered",
+        "railLabel",
+        "storageKey"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAccessCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "email": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "email",
+        "principalId",
+        "role"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAccessResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "bindings": {
+          "items": {},
+          "type": "array"
+        },
+        "canManage": {
+          "type": "boolean"
+        },
+        "roles": {
+          "items": {},
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkspaceAccessStatus"
+        },
+        "workspace": {}
+      },
+      "required": [
+        "bindings",
+        "canManage",
+        "roles",
+        "status",
+        "workspace"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAccessSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "bindings": {
+          "items": {},
+          "type": "array"
+        },
+        "canManage": {
+          "type": "boolean"
+        },
+        "command": {
+          "$ref": "#/$defs/WorkspaceAccessCommand"
+        },
+        "csrfToken": {
+          "type": "string"
+        },
+        "roles": {
+          "items": {},
+          "type": "array"
+        },
+        "search": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/WorkspaceAccessStatus"
+        },
+        "workspace": {}
+      },
+      "required": [
+        "bindings",
+        "canManage",
+        "command",
+        "csrfToken",
+        "roles",
+        "search",
+        "status",
+        "workspace"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAccessStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "loading": {
+          "type": "boolean"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "error",
+        "loading",
+        "message"
+      ],
+      "type": "object"
+    },
+    "WorkspaceActionSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "href": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAssetDetailsSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "overview": {
+          "items": {
+            "$ref": "#/$defs/DefinitionFactSignal"
+          },
+          "type": "array"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceDetailSectionSignal"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "overview",
+        "sections"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAssetLineageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer"
+        },
+        "graph": {
+          "$ref": "#/$defs/AssetLineageGraphSignal"
+        },
+        "usedByGrid": {
+          "$ref": "#/$defs/MetricGridSignal"
+        },
+        "usesGrid": {
+          "$ref": "#/$defs/MetricGridSignal"
+        }
+      },
+      "required": [
+        "count",
+        "graph",
+        "usedByGrid",
+        "usesGrid"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAssetListSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "activeType": {
+          "type": "string"
+        },
+        "assets": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceAssetSummarySignal"
+          },
+          "type": "array"
+        },
+        "empty": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "searchHref": {
+          "type": "string"
+        },
+        "tabs": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceTabSignal"
+          },
+          "type": "array"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "assets",
+        "empty",
+        "searchHref",
+        "tabs"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAssetPageEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "chrome": {
+          "$ref": "#/$defs/ChromeSignal"
+        },
+        "page": {
+          "$ref": "#/$defs/WorkspaceAssetPageSignal"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RouteRuntimeSignal"
+        },
+        "status": {
+          "$ref": "#/$defs/DashboardStatus"
+        }
+      },
+      "required": [
+        "chrome",
+        "page",
+        "runtime",
+        "status"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAssetPageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceActionSignal"
+          },
+          "type": "array"
+        },
+        "activeSection": {
+          "type": "string"
+        },
+        "asset": {
+          "$ref": "#/$defs/WorkspaceAssetSummarySignal"
+        },
+        "assetId": {
+          "type": "string"
+        },
+        "breadcrumbs": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceBreadcrumbSignal"
+          },
+          "type": "array"
+        },
+        "details": {
+          "$ref": "#/$defs/WorkspaceAssetDetailsSignal"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "lineage": {
+          "$ref": "#/$defs/WorkspaceAssetLineageSignal"
+        },
+        "refresh": {
+          "$ref": "#/$defs/WorkspaceAssetRefreshSignal"
+        },
+        "tabs": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceTabSignal"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "activeSection",
+        "asset",
+        "assetId",
+        "breadcrumbs",
+        "kind",
+        "tabs",
+        "title",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAssetRefreshSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "lastSuccessful": {
+          "type": "string"
+        },
+        "running": {
+          "type": "boolean"
+        },
+        "runsGrid": {
+          "$ref": "#/$defs/MetricGridSignal"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "lastSuccessful",
+        "running",
+        "status"
+      ],
+      "type": "object"
+    },
+    "WorkspaceAssetSummarySignal": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "detailHref": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "openHref": {
+          "type": "string"
+        },
+        "parentHref": {
+          "type": "string"
+        },
+        "parentTitle": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "typeLabel": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "detailHref",
+        "id",
+        "key",
+        "openHref",
+        "title",
+        "type",
+        "typeLabel"
+      ],
+      "type": "object"
+    },
+    "WorkspaceBreadcrumbSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "current": {
+          "type": "boolean"
+        },
+        "href": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "type": "object"
+    },
+    "WorkspaceCardSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "deploymentLabel": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "href": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "deploymentLabel",
+        "description",
+        "href",
+        "id",
+        "title"
+      ],
+      "type": "object"
+    },
+    "WorkspaceDetailSectionSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "facts": {
+          "items": {
+            "$ref": "#/$defs/DefinitionFactSignal"
+          },
+          "type": "array"
+        },
+        "grid": {
+          "$ref": "#/$defs/MetricGridSignal"
+        },
+        "lang": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
+    "WorkspacePageEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "chrome": {
+          "$ref": "#/$defs/ChromeSignal"
+        },
+        "page": {
+          "$ref": "#/$defs/WorkspacePageSignal"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RouteRuntimeSignal"
+        },
+        "status": {
+          "$ref": "#/$defs/DashboardStatus"
+        },
+        "workspaceAccess": {
+          "$ref": "#/$defs/WorkspaceAccessSignal"
+        }
+      },
+      "required": [
+        "chrome",
+        "page",
+        "runtime",
+        "status"
+      ],
+      "type": "object"
+    },
+    "WorkspacePageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "assetList": {
+          "$ref": "#/$defs/WorkspaceAssetListSignal"
+        },
+        "cards": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceCardSignal"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "title"
+      ],
+      "type": "object"
+    },
+    "WorkspaceTabSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "href": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "active",
+        "href",
+        "id",
+        "label"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://libredash.local/schemas/ui-signals.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/AdminContentSectionSignal"
+    },
+    {
+      "$ref": "#/$defs/AdminMetricSignal"
+    },
+    {
+      "$ref": "#/$defs/AdminPageEnvelope"
+    },
+    {
+      "$ref": "#/$defs/AdminPageSignal"
+    },
+    {
+      "$ref": "#/$defs/AdminStorageColumnSignal"
+    },
+    {
+      "$ref": "#/$defs/AdminStorageCommand"
+    },
+    {
+      "$ref": "#/$defs/AdminStorageSignal"
+    },
+    {
+      "$ref": "#/$defs/AdminStorageSummary"
+    },
+    {
+      "$ref": "#/$defs/AdminStorageTableSignal"
+    },
+    {
+      "$ref": "#/$defs/CatalogDashboardSignal"
+    },
+    {
+      "$ref": "#/$defs/CatalogPageEnvelope"
+    },
+    {
+      "$ref": "#/$defs/CatalogPageSignal"
+    },
+    {
+      "$ref": "#/$defs/ChatEnvelope"
+    },
+    {
+      "$ref": "#/$defs/ChatPageSignal"
+    },
+    {
+      "$ref": "#/$defs/ChatSignal"
+    },
+    {
+      "$ref": "#/$defs/ChromeSignal"
+    },
+    {
+      "$ref": "#/$defs/ConnectionsPageEnvelope"
+    },
+    {
+      "$ref": "#/$defs/ConnectionsPageSignal"
+    },
+    {
+      "$ref": "#/$defs/DashboardComponentSignal"
+    },
+    {
+      "$ref": "#/$defs/DashboardEnvelope"
+    },
+    {
+      "$ref": "#/$defs/DashboardPageNavSignal"
+    },
+    {
+      "$ref": "#/$defs/DashboardPageSignal"
+    },
+    {
+      "$ref": "#/$defs/DefinitionFactSignal"
+    },
+    {
+      "$ref": "#/$defs/LoginPageEnvelope"
+    },
+    {
+      "$ref": "#/$defs/LoginPageSignal"
+    },
+    {
+      "$ref": "#/$defs/MetricGridBadgeSignal"
+    },
+    {
+      "$ref": "#/$defs/MetricGridColumnSignal"
+    },
+    {
+      "$ref": "#/$defs/MetricGridSignal"
+    },
+    {
+      "$ref": "#/$defs/RouteRuntimeSignal"
+    },
+    {
+      "$ref": "#/$defs/SidebarGroupSignal"
+    },
+    {
+      "$ref": "#/$defs/SidebarItemSignal"
+    },
+    {
+      "$ref": "#/$defs/SidebarSignal"
+    },
+    {
+      "$ref": "#/$defs/SubSidebarItemSignal"
+    },
+    {
+      "$ref": "#/$defs/SubSidebarSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceAccessSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceActionSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceAssetDetailsSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceAssetLineageSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceAssetPageEnvelope"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceAssetPageSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceAssetRefreshSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceAssetSummarySignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceBreadcrumbSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceCardSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceDetailSectionSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspacePageEnvelope"
+    },
+    {
+      "$ref": "#/$defs/WorkspacePageSignal"
+    },
+    {
+      "$ref": "#/$defs/WorkspaceTabSignal"
+    }
+  ],
+  "title": "LibreDash UI Signals"
+}

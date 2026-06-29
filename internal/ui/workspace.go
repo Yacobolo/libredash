@@ -10,71 +10,51 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/assetnav"
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
-	lucide "github.com/eduardolat/gomponents-lucide"
 	g "maragu.dev/gomponents"
 	ds "maragu.dev/gomponents-datastar"
 	c "maragu.dev/gomponents/components"
 	h "maragu.dev/gomponents/html"
 )
 
-const (
-	workspaceMainClass  = "grid min-w-0 min-h-svh content-start gap-3 bg-app px-4 py-4 max-sm:min-h-0 max-sm:p-3"
-	workspacePanelClass = "min-w-0 overflow-hidden rounded-default border border-outline-muted bg-panel"
-	assetRowClass       = "border-b border-outline-muted last:border-b-0 hover:bg-control-hover"
-)
-
 func WorkspacesPage(catalog dashboard.Catalog, workspaces []workspaceview.WorkspaceView, roleLabel string) g.Node {
-	return workspaceDocument("LibreDash Workspaces", catalog, "workspaces", roleLabel, nil,
-		h.Section(h.Class(catalogMainClass), h.Aria("label", "LibreDash workspaces"),
-			workspaceHeader("", "Workspaces", "View published BI workspaces. Authoring lives in Git.", nil),
-			h.Div(h.Class("grid grid-cols-catalog-grid items-start justify-start gap-4"),
-				g.Map(workspaces, workspaceCard),
-			),
+	page := workspaceCatalogPageSignal(workspaces)
+	return workspaceRouteDocument("LibreDash Workspaces", catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspace,
+		g.El("ld-workspace-page",
+			g.Attr("slot", "page"),
+			g.Attr("page", jsonString(page)),
+			g.Attr("data-attr:page", "JSON.stringify($page)"),
 		),
+		nil,
 	)
 }
 
 func WorkspacePage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, assets []workspaceview.AssetView, activeType, query, roleLabel string, access WorkspaceAccessResponse, csrfToken string) g.Node {
-	extraHead := []g.Node{}
-	if access.CanManage {
-		extraHead = append(extraHead, h.Script(h.Type("module"), h.Src(staticAsset("/static/workspace-access-control.js"))))
+	page := workspacePageSignal(workspace, assets, nil, activeType, query)
+	attrs := []g.Node{
+		g.Attr("slot", "page"),
+		g.Attr("page", jsonString(page)),
+		g.Attr("data-attr:page", "JSON.stringify($page)"),
 	}
-	return workspaceDocument(workspace.Title, catalog, "workspaces", roleLabel, workspacePageSignals(access, csrfToken),
-		h.Section(h.Class(workspaceMainClass), h.Aria("label", "Workspace assets"),
-			workspaceHeader(
-				"Workspace",
-				workspace.Title,
-				workspace.Description,
-				workspaceAccessControl(workspace.ID, access.CanManage),
-			),
-			assetToolbar(workspace.ID, activeType, query, assets),
-			h.Div(h.Class(workspacePanelClass),
-				g.If(len(assets) == 0, h.Div(h.Class("p-3"), emptyState("No assets match this view."))),
-				g.If(len(assets) > 0, assetTable(workspace.ID, assets, nil)),
-			),
-		),
-		extraHead...,
+	accessAttrs, extraSignals := workspaceAccessRouteBridge(workspace.ID, access, csrfToken)
+	attrs = append(attrs, accessAttrs...)
+	return workspaceRouteDocument(workspace.Title, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspace,
+		g.El("ld-workspace-page", attrs...),
+		extraSignals,
 	)
 }
 
 func ConnectionsPage(catalog dashboard.Catalog, workspaceID string, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeType, query, roleLabel string) g.Node {
-	return workspaceDocument("Connections", catalog, "connections", roleLabel, nil,
-		h.Section(h.Class(workspaceMainClass), h.Aria("label", "Connections and sources"),
-			workspaceHeader("Data access", "Connections", "Connection-scoped data assets used by published semantic models.", nil),
-			connectionToolbar(activeType, query),
-			h.Div(h.Class(workspacePanelClass),
-				g.If(len(assets) == 0, h.Div(h.Class("p-3"), emptyState("No connection assets match this view."))),
-				g.If(len(assets) > 0, assetTable(workspaceID, assets, edges)),
-			),
+	page := connectionsPageSignal(workspaceID, assets, edges, activeType, query)
+	return workspaceRouteDocument("Connections", catalog, "connections", roleLabel, page, uisignals.RouteConnections,
+		g.El("ld-connections-page",
+			g.Attr("slot", "page"),
+			g.Attr("page", jsonString(page)),
+			g.Attr("data-attr:page", "JSON.stringify($page)"),
 		),
+		nil,
 	)
-}
-
-func workspacePageSignals(access WorkspaceAccessResponse, csrfToken string) map[string]any {
-	return map[string]any{
-		"workspaceAccess": WorkspaceAccessSignals(access, csrfToken),
-	}
 }
 
 type workspaceAccessSignalState struct {
@@ -93,19 +73,328 @@ func WorkspaceAccessSignals(access WorkspaceAccessResponse, csrfToken string) wo
 	}
 }
 
-func workspaceAccessControl(workspaceID string, canManage bool) g.Node {
-	if !canManage {
-		return nil
+func workspaceAccessRouteBridge(workspaceID string, access WorkspaceAccessResponse, csrfToken string) ([]g.Node, map[string]any) {
+	if !access.CanManage {
+		return nil, nil
 	}
+	accessSignal := WorkspaceAccessSignals(access, csrfToken)
 	upsert := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + postActionWithCSRFSignal("/workspaces/"+workspaceID+"/access/upsert", "$workspaceAccess.csrfToken")
 	remove := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + postActionWithCSRFSignal("/workspaces/"+workspaceID+"/access/remove", "$workspaceAccess.csrfToken")
-	return g.El("ld-workspace-access-control",
-		g.Attr("data-attr:access", "$workspaceAccess"),
-		g.Attr("data-attr:search", "$workspaceAccess.search"),
+	return []g.Node{
+		g.Attr("workspaceaccess", jsonString(accessSignal)),
+		g.Attr("data-attr:workspaceaccess", "JSON.stringify($workspaceAccess)"),
 		g.Attr("data-on:ld-workspace-access-search__debounce.200ms", "$workspaceAccess.search = evt.detail.search"),
 		g.Attr("data-on:ld-workspace-access-upsert", upsert),
 		g.Attr("data-on:ld-workspace-access-remove", remove),
-	)
+	}, map[string]any{"workspaceAccess": accessSignal}
+}
+
+func workspaceCatalogPageSignal(workspaces []workspaceview.WorkspaceView) uisignals.WorkspacePageSignal {
+	return uisignals.WorkspacePageSignal{
+		Kind:        uisignals.RouteWorkspace,
+		Title:       "Workspaces",
+		Description: "View published BI workspaces. Authoring lives in Git.",
+		Cards:       workspaceCardSignals(workspaces),
+	}
+}
+
+func workspacePageSignal(workspace workspaceview.WorkspaceView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeType, query string) uisignals.WorkspacePageSignal {
+	return uisignals.WorkspacePageSignal{
+		Kind:        uisignals.RouteWorkspace,
+		Title:       workspace.Title,
+		Description: workspace.Description,
+		WorkspaceID: workspace.ID,
+		AssetList: workspaceAssetListSignal(
+			workspace.ID,
+			assets,
+			edges,
+			activeType,
+			query,
+			workspaceAssetListTabs(workspace.ID, activeType, query),
+			"No assets match this view.",
+			"/workspaces/"+workspace.ID,
+		),
+	}
+}
+
+func connectionsPageSignal(workspaceID string, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeType, query string) uisignals.ConnectionsPageSignal {
+	return uisignals.ConnectionsPageSignal{
+		Kind:        uisignals.RouteConnections,
+		Title:       "Connections",
+		Description: "Connection-scoped data assets used by published semantic models.",
+		WorkspaceID: workspaceID,
+		AssetList: workspaceAssetListSignal(
+			workspaceID,
+			assets,
+			edges,
+			activeType,
+			query,
+			connectionAssetListTabs(activeType, query),
+			"No connection assets match this view.",
+			"/connections",
+		),
+	}
+}
+
+func workspaceCardSignals(workspaces []workspaceview.WorkspaceView) []uisignals.WorkspaceCardSignal {
+	cards := make([]uisignals.WorkspaceCardSignal, 0, len(workspaces))
+	for _, workspace := range workspaces {
+		description := workspace.Description
+		if strings.TrimSpace(description) == "" {
+			description = "Published workspace assets."
+		}
+		cards = append(cards, uisignals.WorkspaceCardSignal{
+			ID:              workspace.ID,
+			Title:           workspace.Title,
+			Description:     description,
+			Href:            "/workspaces/" + workspace.ID,
+			DeploymentLabel: activeDeploymentLabel(workspace),
+		})
+	}
+	return cards
+}
+
+func workspaceAssetListSignal(workspaceID string, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeType, query string, tabs []uisignals.WorkspaceTabSignal, empty, searchHref string) uisignals.WorkspaceAssetListSignal {
+	items := make([]uisignals.WorkspaceAssetSummarySignal, 0, len(assets))
+	sortedAssets := sortedWorkspaceAssetList(assets)
+	assetIndex := assetsByID(sortedAssets)
+	for _, asset := range sortedAssets {
+		items = append(items, workspaceAssetSummarySignal(workspaceID, asset, assetIndex, edges))
+	}
+	return uisignals.WorkspaceAssetListSignal{
+		WorkspaceID: workspaceID,
+		Query:       query,
+		ActiveType:  activeType,
+		SearchHref:  searchHref,
+		Tabs:        tabs,
+		Assets:      items,
+		Empty:       empty,
+	}
+}
+
+func sortedWorkspaceAssetList(assets []workspaceview.AssetView) []workspaceview.AssetView {
+	out := append([]workspaceview.AssetView(nil), assets...)
+	sort.SliceStable(out, func(i, j int) bool {
+		leftPriority := workspaceAssetTypePriority(out[i].Type)
+		rightPriority := workspaceAssetTypePriority(out[j].Type)
+		if leftPriority != rightPriority {
+			return leftPriority < rightPriority
+		}
+		leftTitle := strings.ToLower(assetTitle(out[i]))
+		rightTitle := strings.ToLower(assetTitle(out[j]))
+		if leftTitle != rightTitle {
+			return leftTitle < rightTitle
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
+func workspaceAssetTypePriority(typ string) int {
+	switch typ {
+	case "dashboard":
+		return 0
+	case "model_table":
+		return 1
+	case "semantic_model":
+		return 2
+	case "connection":
+		return 3
+	case "source":
+		return 4
+	default:
+		return 10
+	}
+}
+
+func workspaceAssetListTabs(workspaceID, activeType, query string) []uisignals.WorkspaceTabSignal {
+	types := []string{"", "model_table", "semantic_model", "dashboard"}
+	tabs := make([]uisignals.WorkspaceTabSignal, 0, len(types))
+	for _, typ := range types {
+		label := "All"
+		if typ != "" {
+			label = assetTypeLabel(typ)
+		}
+		tabs = append(tabs, uisignals.WorkspaceTabSignal{ID: typ, Label: label, Href: workspaceAssetHref(workspaceID, typ, query), Active: typ == activeType})
+	}
+	return tabs
+}
+
+func connectionAssetListTabs(activeType, query string) []uisignals.WorkspaceTabSignal {
+	types := []string{"", "connection", "source"}
+	tabs := make([]uisignals.WorkspaceTabSignal, 0, len(types))
+	for _, typ := range types {
+		label := "All"
+		if typ != "" {
+			label = assetTypeLabel(typ)
+		}
+		tabs = append(tabs, uisignals.WorkspaceTabSignal{ID: typ, Label: label, Href: connectionAssetListHref(typ, query), Active: typ == activeType})
+	}
+	return tabs
+}
+
+func workspaceAssetSummarySignal(workspaceID string, asset workspaceview.AssetView, assetIndex map[string]workspaceview.AssetView, edges []workspaceview.AssetEdgeView) uisignals.WorkspaceAssetSummarySignal {
+	detailHref := assetnav.CanonicalAssetSectionHref(workspaceID, asset, "details", edges)
+	openHref := detailHref
+	if asset.Href != "" {
+		openHref = asset.Href
+	}
+	parentTitle := emptyDash("")
+	parentHref := ""
+	if asset.Type == "source" {
+		if connection, ok := assetIndex[assetnav.SourceConnectionID(asset.ID, edges)]; ok && connection.Type == "connection" {
+			parentTitle = assetTitle(connection)
+			parentHref = assetnav.ConnectionAssetSectionHref(connection.ID, "details")
+		}
+	} else if parent, ok := assetIndex[asset.ParentID]; ok {
+		parentTitle = assetTitle(parent)
+		parentHref = assetnav.WorkspaceAssetSectionHref(workspaceID, parent.ID, "details")
+	}
+	return uisignals.WorkspaceAssetSummarySignal{
+		ID:          asset.ID,
+		Title:       assetTitle(asset),
+		Description: asset.Description,
+		Type:        asset.Type,
+		TypeLabel:   assetTypeLabel(asset.Type),
+		Key:         asset.Key,
+		ParentTitle: parentTitle,
+		ParentHref:  parentHref,
+		DetailHref:  detailHref,
+		OpenHref:    openHref,
+	}
+}
+
+func workspaceAssetPageSignal(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel) uisignals.WorkspaceAssetPageSignal {
+	return workspaceAssetPageSignalWithRefresh(workspace, asset, assets, edges, activeSection, lineage, AssetRefreshState{})
+}
+
+func workspaceAssetPageSignalWithRefresh(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel, refresh AssetRefreshState) uisignals.WorkspaceAssetPageSignal {
+	page := baseWorkspaceAssetPageSignalWithRefresh(workspace, asset, assets, edges, activeSection, lineage, refresh)
+	page.Kind = uisignals.RouteWorkspaceAsset
+	page.Breadcrumbs = []uisignals.WorkspaceBreadcrumbSignal{
+		{Label: "Workspaces", Href: "/workspaces"},
+		{Label: workspace.Title, Href: "/workspaces/" + workspace.ID},
+		{Label: assetTitle(asset), Current: true},
+	}
+	page.Actions = []uisignals.WorkspaceActionSignal{{Label: "Back to workspace", Href: "/workspaces/" + workspace.ID, Icon: "back"}}
+	if assetRefreshable(asset.Type) {
+		page.Actions = append([]uisignals.WorkspaceActionSignal{{
+			Label:    "Refresh materializations",
+			Icon:     "refresh",
+			Command:  "refresh-materializations",
+			Disabled: assetRefreshSignal(refresh).Running,
+		}}, page.Actions...)
+	}
+	if asset.Href != "" {
+		page.Actions = append(page.Actions, uisignals.WorkspaceActionSignal{Label: "Open asset", Href: asset.Href, Icon: "open"})
+	}
+	page.Tabs = []uisignals.WorkspaceTabSignal{
+		{ID: "details", Label: "Details", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "details"), Active: activeSection == "details"},
+	}
+	if assetRefreshable(asset.Type) {
+		page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "refreshes", Label: "Refreshes", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "refreshes"), Active: activeSection == "refreshes"})
+	}
+	page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "lineage", Label: "Lineage", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "lineage"), Active: activeSection == "lineage", Count: lineage.Count})
+	return page
+}
+
+func connectionAssetPageSignal(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel) uisignals.WorkspaceAssetPageSignal {
+	page := baseWorkspaceAssetPageSignal(workspace, asset, assets, edges, activeSection, lineage)
+	page.Kind = uisignals.RouteConnectionAsset
+	page.Breadcrumbs = []uisignals.WorkspaceBreadcrumbSignal{
+		{Label: "Connections", Href: "/connections"},
+		{Label: assetTitle(asset), Current: true},
+	}
+	page.Actions = []uisignals.WorkspaceActionSignal{{Label: "Back to connections", Href: "/connections", Icon: "back"}}
+	page.Tabs = []uisignals.WorkspaceTabSignal{
+		{ID: "details", Label: "Details", Href: assetnav.ConnectionAssetSectionHref(asset.ID, "details"), Active: activeSection == "details"},
+		{ID: "lineage", Label: "Lineage", Href: assetnav.ConnectionAssetSectionHref(asset.ID, "lineage"), Active: activeSection == "lineage", Count: lineage.Count},
+	}
+	return page
+}
+
+func connectionSourceAssetPageSignal(workspace workspaceview.WorkspaceView, connection workspaceview.AssetView, source workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel) uisignals.WorkspaceAssetPageSignal {
+	page := baseWorkspaceAssetPageSignal(workspace, source, assets, edges, activeSection, lineage)
+	page.Kind = uisignals.RouteConnectionAsset
+	page.Breadcrumbs = []uisignals.WorkspaceBreadcrumbSignal{
+		{Label: "Connections", Href: "/connections"},
+		{Label: assetTitle(connection), Href: assetnav.ConnectionAssetSectionHref(connection.ID, "details")},
+		{Label: "Sources", Href: "/connections?type=source"},
+		{Label: assetTitle(source), Current: true},
+	}
+	page.Actions = []uisignals.WorkspaceActionSignal{{Label: "Back to sources", Href: "/connections?type=source", Icon: "back"}}
+	page.Tabs = []uisignals.WorkspaceTabSignal{
+		{ID: "details", Label: "Details", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "details"), Active: activeSection == "details"},
+		{ID: "lineage", Label: "Lineage", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "lineage"), Active: activeSection == "lineage", Count: lineage.Count},
+	}
+	return page
+}
+
+func baseWorkspaceAssetPageSignal(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel) uisignals.WorkspaceAssetPageSignal {
+	return baseWorkspaceAssetPageSignalWithRefresh(workspace, asset, assets, edges, activeSection, lineage, AssetRefreshState{})
+}
+
+func baseWorkspaceAssetPageSignalWithRefresh(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel, refresh AssetRefreshState) uisignals.WorkspaceAssetPageSignal {
+	activeSection = normalizeWorkspaceAssetSection(activeSection)
+	page := uisignals.WorkspaceAssetPageSignal{
+		Title:         assetTitle(asset),
+		WorkspaceID:   workspace.ID,
+		AssetID:       asset.ID,
+		ActiveSection: activeSection,
+		Asset:         workspaceAssetSummarySignal(workspace.ID, asset, assetsByID(assets), edges),
+	}
+	if assetRefreshable(asset.Type) {
+		page.Refresh = assetRefreshSignal(refresh)
+	}
+	if activeSection == "details" {
+		page.Details = workspaceAssetDetailsSignalWithRefresh(workspace, asset, assets, edges, refresh)
+	}
+	if activeSection == "lineage" {
+		page.Lineage = uisignals.WorkspaceAssetLineageSignal{
+			Count:      lineage.Count,
+			Graph:      lineage.Graph,
+			UsesGrid:   lineage.Uses,
+			UsedByGrid: lineage.UsedBy,
+		}
+	}
+	if activeSection == "refreshes" && assetRefreshable(asset.Type) {
+		runsGrid := assetRefreshesGrid(refresh)
+		page.Refresh.RunsGrid = &runsGrid
+	}
+	return page
+}
+
+func workspaceAssetDetailsSignal(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView) uisignals.WorkspaceAssetDetailsSignal {
+	return workspaceAssetDetailsSignalWithRefresh(workspace, asset, assets, edges, AssetRefreshState{})
+}
+
+func workspaceAssetDetailsSignalWithRefresh(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, refresh AssetRefreshState) uisignals.WorkspaceAssetDetailsSignal {
+	model := assetDetailModelForAssetWithRefresh(workspace, asset, assets, edges, refresh)
+	sections := make([]uisignals.WorkspaceDetailSectionSignal, 0, len(model.Sections))
+	for _, section := range model.Sections {
+		sections = append(sections, uisignals.WorkspaceDetailSectionSignal{
+			Title: section.Title,
+			Facts: definitionFactSignals(section.Facts),
+			Grid:  section.Grid,
+			Code:  section.Code,
+			Lang:  section.Lang,
+		})
+	}
+	return uisignals.WorkspaceAssetDetailsSignal{
+		Overview: definitionFactSignals(model.Overview),
+		Sections: sections,
+	}
+}
+
+func definitionFactSignals(facts []definitionFact) []uisignals.DefinitionFactSignal {
+	out := make([]uisignals.DefinitionFactSignal, 0, len(facts))
+	for _, fact := range facts {
+		if strings.TrimSpace(fact.Value) == "" {
+			continue
+		}
+		out = append(out, uisignals.DefinitionFactSignal{Label: fact.Label, Value: fact.Value, Code: fact.Code, Wide: fact.Wide})
+	}
+	return out
 }
 
 func WorkspaceAssetPage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string) g.Node {
@@ -115,66 +404,55 @@ func WorkspaceAssetPage(catalog dashboard.Catalog, workspace workspaceview.Works
 func WorkspaceAssetPageWithRefresh(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, refresh AssetRefreshState) g.Node {
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
-	initAction := ""
+	page := workspaceAssetPageSignalWithRefresh(workspace, asset, assets, edges, activeSection, lineage, refresh)
+	extraSignals := map[string]any{}
+	attrs := []g.Node{
+		g.Attr("slot", "page"),
+		g.Attr("page", jsonString(page)),
+		g.Attr("data-attr:page", "JSON.stringify($page)"),
+	}
 	if assetRefreshable(asset.Type) {
-		refresh.UpdatesURL = "/workspaces/" + workspace.ID + "/assets/" + asset.ID + "/updates?section=" + activeSection
-		initAction = "@get('" + refresh.UpdatesURL + "', {openWhenHidden: true})"
+		refreshPath := "/workspaces/" + workspace.ID + "/assets/" + asset.ID + "/refresh-materializations"
+		updatesURL := "/workspaces/" + workspace.ID + "/assets/" + asset.ID + "/updates?section=" + activeSection
+		extraSignals["csrfToken"] = refresh.CSRFToken
+		attrs = append(attrs,
+			g.Attr("data-on:ld-refresh-materializations", "$page.refresh.status = 'running'; $page.refresh.running = true; "+postActionWithCSRFSignal(refreshPath, "$csrfToken")),
+		)
+		extraHeadInit := ds.Init("@get('" + updatesURL + "', {openWhenHidden: true})")
+		return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extraSignals, activeSection, extraHeadInit)
 	}
-	extraHead := []g.Node{
-		h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
-	}
-	if activeSection == "details" && assetDetailUsesCodeBlock(asset) {
-		extraHead = append(extraHead, h.Script(h.Type("module"), h.Src(staticAsset("/static/code-block.js"))))
-	}
+	return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), nil, activeSection)
+}
+
+func workspaceAssetRouteDocument(asset workspaceview.AssetView, catalog dashboard.Catalog, active, roleLabel string, page any, routeKind uisignals.RouteKind, routeRoot g.Node, extraSignals map[string]any, activeSection string, bodyExtras ...g.Node) g.Node {
+	extraHead := []g.Node{}
 	if activeSection == "lineage" {
 		extraHead = append(extraHead,
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/asset-lineage-graph.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/asset-lineage-graph.js"))),
 		)
 	}
-	return workspaceDocumentWithInit(asset.Title, catalog, "workspaces", roleLabel, workspaceAssetSignalsWithRefresh(workspace, asset, assets, edges, lineage, activeSection, refresh), initAction,
-		h.Section(h.Class(metricMainClass), h.Aria("label", "Workspace asset detail"),
-			assetBreadcrumbHeader(workspace, asset, refresh),
-			h.Div(h.Class(metricContentColumnClass),
-				assetDetailTabs(workspace.ID, asset.ID, asset.Type, activeSection, lineage.Count),
-				h.Div(h.Class(assetDetailBodyClass(activeSection)),
-					g.If(activeSection == "details",
-						assetDetailsSectionWithRefresh(workspace, asset, assets, edges, refresh),
-					),
-					g.If(activeSection == "lineage", assetLineageSection(lineage)),
-					g.If(activeSection == "refreshes", assetRefreshesSection()),
-				),
-			),
-		),
-		extraHead...,
-	)
+	return workspaceRouteDocumentWithBodyExtras(asset.Title, catalog, active, roleLabel, page, routeKind, routeRoot, extraSignals, bodyExtras, extraHead...)
 }
 
 func ConnectionAssetPage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string) g.Node {
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
-	extraHead := []g.Node{
-		h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
-	}
+	page := connectionAssetPageSignal(workspace, asset, assets, edges, activeSection, lineage)
+	extraHead := []g.Node{}
 	if activeSection == "lineage" {
 		extraHead = append(extraHead,
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/asset-lineage-graph.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/asset-lineage-graph.js"))),
 		)
 	}
-	return workspaceDocument(asset.Title, catalog, "connections", roleLabel, workspaceAssetSignals(workspace, asset, assets, edges, lineage, activeSection),
-		h.Section(h.Class(metricMainClass), h.Aria("label", "Connection asset detail"),
-			connectionBreadcrumbHeader(asset),
-			h.Div(h.Class(metricContentColumnClass),
-				connectionAssetDetailTabs(asset.ID, activeSection, lineage.Count),
-				h.Div(h.Class(assetDetailBodyClass(activeSection)),
-					g.If(activeSection == "details",
-						assetDetailsSection(workspace, asset, assets, edges),
-					),
-					g.If(activeSection == "lineage", assetLineageSection(lineage)),
-				),
-			),
+	return workspaceRouteDocument(asset.Title, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset,
+		g.El("ld-workspace-asset-page",
+			g.Attr("slot", "page"),
+			g.Attr("page", jsonString(page)),
+			g.Attr("data-attr:page", "JSON.stringify($page)"),
 		),
+		nil,
 		extraHead...,
 	)
 }
@@ -182,148 +460,83 @@ func ConnectionAssetPage(catalog dashboard.Catalog, workspace workspaceview.Work
 func ConnectionSourceAssetPage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, connection workspaceview.AssetView, source workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string) g.Node {
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, source, assets, edges)
-	extraHead := []g.Node{
-		h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
-	}
+	page := connectionSourceAssetPageSignal(workspace, connection, source, assets, edges, activeSection, lineage)
+	extraHead := []g.Node{}
 	if activeSection == "lineage" {
 		extraHead = append(extraHead,
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/asset-lineage-graph.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/asset-lineage-graph.js"))),
 		)
 	}
-	return workspaceDocument(source.Title, catalog, "connections", roleLabel, workspaceAssetSignals(workspace, source, assets, edges, lineage, activeSection),
-		h.Section(h.Class(metricMainClass), h.Aria("label", "Connection source detail"),
-			connectionSourceBreadcrumbHeader(connection, source),
-			h.Div(h.Class(metricContentColumnClass),
-				connectionSourceAssetDetailTabs(connection.ID, source.ID, activeSection, lineage.Count),
-				h.Div(h.Class(assetDetailBodyClass(activeSection)),
-					g.If(activeSection == "details",
-						assetDetailsSection(workspace, source, assets, edges),
-					),
-					g.If(activeSection == "lineage", assetLineageSection(lineage)),
-				),
-			),
+	return workspaceRouteDocument(source.Title, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset,
+		g.El("ld-workspace-asset-page",
+			g.Attr("slot", "page"),
+			g.Attr("page", jsonString(page)),
+			g.Attr("data-attr:page", "JSON.stringify($page)"),
 		),
+		nil,
 		extraHead...,
 	)
 }
 
-func assetBreadcrumbHeader(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, refresh AssetRefreshState) g.Node {
-	return h.Header(h.Class("grid min-w-0 grid-cols-workspace-header items-center gap-2 border-b border-outline-muted px-4 py-2.5"),
-		h.Nav(h.Class("min-w-0"), h.Aria("label", "Breadcrumb"),
-			h.Ol(h.Class("flex min-w-0 flex-wrap items-center gap-1.5 text-body-sm font-medium leading-snug"),
-				breadcrumbLink("Workspaces", "/workspaces"),
-				breadcrumbSeparator(),
-				breadcrumbLink(workspace.Title, "/workspaces/"+workspace.ID),
-				breadcrumbSeparator(),
-				assetBreadcrumbCurrent(asset),
-			),
-		),
-		h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"), assetActions(workspace.ID, asset, refresh)),
-	)
-}
-
-func connectionBreadcrumbHeader(asset workspaceview.AssetView) g.Node {
-	return h.Header(h.Class("grid min-w-0 grid-cols-workspace-header items-center gap-2 border-b border-outline-muted px-4 py-2.5"),
-		h.Nav(h.Class("min-w-0"), h.Aria("label", "Breadcrumb"),
-			h.Ol(h.Class("flex min-w-0 flex-wrap items-center gap-1.5 text-body-sm font-medium leading-snug"),
-				breadcrumbLink("Connections", "/connections"),
-				breadcrumbSeparator(),
-				assetBreadcrumbCurrent(asset),
-			),
-		),
-		h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"), connectionAssetActions()),
-	)
-}
-
-func connectionSourceBreadcrumbHeader(connection, source workspaceview.AssetView) g.Node {
-	return h.Header(h.Class("grid min-w-0 grid-cols-workspace-header items-center gap-2 border-b border-outline-muted px-4 py-2.5"),
-		h.Nav(h.Class("min-w-0"), h.Aria("label", "Breadcrumb"),
-			h.Ol(h.Class("flex min-w-0 flex-wrap items-center gap-1.5 text-body-sm font-medium leading-snug"),
-				breadcrumbLink("Connections", "/connections"),
-				breadcrumbSeparator(),
-				breadcrumbLink(assetTitle(connection), assetnav.ConnectionAssetSectionHref(connection.ID, "details")),
-				breadcrumbSeparator(),
-				breadcrumbLink("Sources", "/connections?type=source"),
-				breadcrumbSeparator(),
-				assetBreadcrumbCurrent(source),
-			),
-		),
-		h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"), connectionSourceAssetActions()),
-	)
-}
-
-func breadcrumbLink(label, href string) g.Node {
-	return h.Li(h.Class("min-w-0"),
-		h.A(h.Href(href), h.Class("block min-w-0 truncate text-fg-muted no-underline hover:text-fg-default focus-visible:text-fg-default focus-visible:outline-0"),
-			g.Text(label),
-		),
-	)
-}
-
-func breadcrumbSeparator() g.Node {
-	return h.Li(h.Class("shrink-0 text-fg-muted"), h.Aria("hidden", "true"), g.Text("/"))
-}
-
-func assetBreadcrumbCurrent(asset workspaceview.AssetView) g.Node {
-	return h.Li(h.Class("min-w-0"),
-		h.H1(h.Class("m-0 inline-flex min-w-0 items-center gap-2 text-title-sm font-semibold leading-snug text-fg-default"),
-			assetTypeInlineIcon(asset.Type),
-			h.Span(h.Class("min-w-0 truncate"), g.Text(assetTitle(asset))),
-		),
-	)
-}
-
 func WorkspacePermissionsPage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, bindings []workspaceview.RoleBindingView, roles []workspaceview.RoleView, csrfToken, roleLabel string) g.Node {
-	return workspaceDocument("Workspace permissions", catalog, "settings", roleLabel, nil,
-		h.Section(h.Class(catalogMainClass), h.Aria("label", "Workspace permissions"),
-			workspaceHeader("Workspace", workspace.Title, "Assign workspace roles. BI assets remain authored in Git.", nil),
-			h.Div(h.Class("grid max-w-workspace-detail grid-cols-workspace-detail gap-4 max-lg:grid-cols-1"),
-				h.Section(h.Class(workspacePanelClass+" content-start p-4"),
-					h.H2(h.Class("m-0 text-body-md font-semibold text-fg-default"), g.Text("Assign role")),
-					h.Form(h.Method("post"), h.Action("/workspaces/"+workspace.ID+"/permissions"), h.Class("mt-4 grid gap-3"),
-						g.If(csrfToken != "", h.Input(h.Type("hidden"), h.Name("gorilla.csrf.Token"), h.Value(csrfToken))),
-						formInput("Email", "email", "person@example.com", ""),
-						formInput("Display name", "displayName", "Optional", ""),
-						h.Label(h.Class("grid gap-1 text-caption font-medium uppercase text-fg-muted"),
-							g.Text("Role"),
-							h.Select(h.Name("role"), h.Class("min-h-control-md rounded-small border border-outline-variant bg-control px-2 text-body-sm font-medium text-fg-default"),
-								g.Map(roles, func(role workspaceview.RoleView) g.Node {
-									return h.Option(h.Value(role.Name), g.Text(role.Name))
-								}),
-							),
-						),
-						h.Button(h.Type("submit"), h.Class(primaryLinkButtonClass+" justify-self-start"), lucide.UserPlus(buttonIconAttrs()...), h.Span(g.Text("Assign"))),
-					),
-				),
-				h.Section(h.Class(workspacePanelClass+" content-start p-4"),
-					h.H2(h.Class("m-0 text-body-md font-semibold text-fg-default"), g.Text("Current access")),
-					g.If(len(bindings) == 0, emptyState("No role bindings yet.")),
-					h.Div(h.Class("mt-3 grid"),
-						g.Map(bindings, func(binding workspaceview.RoleBindingView) g.Node {
-							return roleBindingRow(workspace.ID, binding, csrfToken)
-						}),
-					),
-				),
-			),
-		),
+	page := uisignals.WorkspacePageSignal{
+		Kind:        uisignals.RouteWorkspace,
+		Title:       workspace.Title,
+		Description: "Assign workspace roles. BI assets remain authored in Git.",
+		WorkspaceID: workspace.ID,
+	}
+	access := WorkspaceAccessResponse{
+		Workspace: workspace,
+		Roles:     roles,
+		Bindings:  bindings,
+		CanManage: true,
+	}
+	attrs := []g.Node{
+		g.Attr("slot", "page"),
+		g.Attr("page", jsonString(page)),
+		g.Attr("data-attr:page", "JSON.stringify($page)"),
+	}
+	accessAttrs, extraSignals := workspaceAccessRouteBridge(workspace.ID, access, csrfToken)
+	attrs = append(attrs, accessAttrs...)
+	return workspaceRouteDocument("Workspace permissions", catalog, "settings", roleLabel, page, uisignals.RouteWorkspace,
+		g.El("ld-workspace-page", attrs...),
+		extraSignals,
 	)
 }
 
-func workspaceDocument(title string, catalog dashboard.Catalog, active, roleLabel string, signals map[string]any, content g.Node, extraHead ...g.Node) g.Node {
-	return workspaceDocumentWithInit(title, catalog, active, roleLabel, signals, "", content, extraHead...)
+func workspaceRouteDocument(title string, catalog dashboard.Catalog, active, roleLabel string, page any, routeKind uisignals.RouteKind, routeRoot g.Node, extraSignals map[string]any, extraHead ...g.Node) g.Node {
+	return workspaceRouteDocumentWithBodyExtras(title, catalog, active, roleLabel, page, routeKind, routeRoot, extraSignals, nil, extraHead...)
 }
 
-func workspaceDocumentWithInit(title string, catalog dashboard.Catalog, active, roleLabel string, signals map[string]any, initAction string, content g.Node, extraHead ...g.Node) g.Node {
-	if signals == nil {
-		signals = map[string]any{}
+func workspaceRouteDocumentWithBodyExtras(title string, catalog dashboard.Catalog, active, roleLabel string, page any, routeKind uisignals.RouteKind, routeRoot g.Node, extraSignals map[string]any, bodyExtras []g.Node, extraHead ...g.Node) g.Node {
+	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, active, roleLabel)}
+	signals := map[string]any{
+		"chrome":  chrome,
+		"page":    page,
+		"runtime": uisignals.RouteRuntimeSignal{Kind: routeKind},
+		"status":  dashboard.Status{},
+	}
+	for key, value := range extraSignals {
+		signals[key] = value
 	}
 	head := []g.Node{
-		h.Script(h.Type("module"), h.Src(staticAsset("/static/sidebar.js"))),
+		h.Script(h.Type("module"), h.Src(staticAsset("/static/app-shell.js"))),
+		h.Script(h.Type("module"), h.Src(staticAsset("/static/workspace-page.js"))),
 		inspectorScript(),
 		h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 	}
 	head = append(head, extraHead...)
+	mainChildren := []g.Node{ds.Signals(signals)}
+	mainChildren = append(mainChildren, bodyExtras...)
+	mainChildren = append(mainChildren,
+		g.El("ld-app-shell",
+			g.Attr("chrome", jsonString(chrome)),
+			g.Attr("data-attr:chrome", "JSON.stringify($chrome)"),
+			routeRoot,
+		),
+		inspectorElement(),
+	)
 	return c.HTML5(c.HTML5Props{
 		Title:    title,
 		Language: "en",
@@ -334,38 +547,9 @@ func workspaceDocumentWithInit(title string, catalog dashboard.Catalog, active, 
 		},
 		Head: pageHead(head...),
 		Body: []g.Node{
-			h.Main(h.Class(appRootClass),
-				ds.Signals(signals),
-				g.If(initAction != "", ds.Init(initAction)),
-				h.Div(h.Class(appShellClass),
-					sidebar(sidebarConfigForWorkspace(catalog, active, roleLabel)),
-					content,
-				),
-				inspectorElement(),
-			),
+			h.Main(append([]g.Node{h.Class(appRootClass)}, mainChildren...)...),
 		},
 	})
-}
-
-func workspaceCard(workspace workspaceview.WorkspaceView) g.Node {
-	description := workspace.Description
-	if strings.TrimSpace(description) == "" {
-		description = "Published workspace assets."
-	}
-	return h.Article(h.Class(cardClass),
-		h.Div(h.Class("min-w-0"),
-			h.P(h.Class(eyebrowClass), g.Text("Workspace")),
-			h.H2(h.Class(cardTitleClass), g.Text(workspace.Title)),
-			h.P(h.Class(cardDescriptionClass), g.Text(description)),
-		),
-		h.Footer(h.Class(cardFooterClass),
-			h.Span(g.Text(activeDeploymentLabel(workspace))),
-			h.A(h.Class(primaryLinkButtonClass), h.Href("/workspaces/"+workspace.ID),
-				lucide.ExternalLink(buttonIconAttrs()...),
-				h.Span(g.Text("Open")),
-			),
-		),
-	)
 }
 
 func activeDeploymentLabel(workspace workspaceview.WorkspaceView) string {
@@ -373,56 +557,6 @@ func activeDeploymentLabel(workspace workspaceview.WorkspaceView) string {
 		return "Local catalog"
 	}
 	return "Published deployment"
-}
-
-func assetToolbar(workspaceID, activeType, query string, assets []workspaceview.AssetView) g.Node {
-	types := []string{"", "model_table", "semantic_model", "dashboard"}
-	return h.Div(h.Class("grid min-w-0 gap-3 border-b border-outline-variant bg-app px-3 pt-3"), g.Attr("data-workspace-asset-toolbar", ""),
-		h.Form(h.Method("get"), h.Action("/workspaces/"+workspaceID), h.Class("flex min-w-0 max-w-workspace-search items-center gap-2"),
-			h.Input(h.Type("search"), h.Name("q"), h.Value(query), h.Placeholder("Search workspace assets..."), h.Class("min-h-control-md w-full rounded-small border border-outline-variant bg-control px-3 text-body-sm font-medium text-fg-default placeholder:text-fg-muted")),
-			g.If(activeType != "", h.Input(h.Type("hidden"), h.Name("type"), h.Value(activeType))),
-			h.Button(h.Type("submit"), h.Class(metricActionButtonClass), h.Title("Search"), h.Aria("label", "Search"), lucide.Search(metricActionIconAttrs()...)),
-		),
-		h.Nav(h.Class("flex min-w-0 flex-wrap gap-x-6"), h.Aria("label", "Asset type filters"),
-			g.Map(types, func(typ string) g.Node {
-				label := "All"
-				if typ != "" {
-					label = assetTypeLabel(typ)
-				}
-				return assetTabLink(workspaceID, typ, activeType, query, label)
-			}),
-		),
-	)
-}
-
-func connectionToolbar(activeType, query string) g.Node {
-	types := []string{"", "connection", "source"}
-	return h.Div(h.Class("grid min-w-0 gap-3 border-b border-outline-variant bg-app px-3 pt-3"), g.Attr("data-connection-toolbar", ""),
-		h.Form(h.Method("get"), h.Action("/connections"), h.Class("flex min-w-0 max-w-workspace-search items-center gap-2"),
-			h.Input(h.Type("search"), h.Name("q"), h.Value(query), h.Placeholder("Search connections and sources..."), h.Class("min-h-control-md w-full rounded-small border border-outline-variant bg-control px-3 text-body-sm font-medium text-fg-default placeholder:text-fg-muted")),
-			g.If(activeType != "", h.Input(h.Type("hidden"), h.Name("type"), h.Value(activeType))),
-			h.Button(h.Type("submit"), h.Class(metricActionButtonClass), h.Title("Search"), h.Aria("label", "Search"), lucide.Search(metricActionIconAttrs()...)),
-		),
-		h.Nav(h.Class("flex min-w-0 flex-wrap gap-x-6"), h.Aria("label", "Connection asset type filters"),
-			g.Map(types, func(typ string) g.Node {
-				label := "All"
-				if typ != "" {
-					label = assetTypeLabel(typ)
-				}
-				return connectionTabLink(typ, activeType, query, label)
-			}),
-		),
-	)
-}
-
-func connectionTabLink(typ, activeType, query, label string) g.Node {
-	className := "relative -mb-px inline-flex min-h-control-xl items-center whitespace-nowrap border-b-2 px-1 text-body-sm font-medium no-underline transition-colors duration-micro ease-hover"
-	if typ == activeType {
-		className += " border-fg-accent font-semibold text-fg-default"
-	} else {
-		className += " border-transparent text-fg-muted hover:border-outline-muted hover:text-fg-default"
-	}
-	return h.A(h.Class(className), h.Href(connectionAssetListHref(typ, query)), g.If(typ == activeType, h.Aria("current", "page")), g.Text(label))
 }
 
 func connectionAssetListHref(typ, query string) string {
@@ -438,25 +572,6 @@ func connectionAssetListHref(typ, query string) string {
 		href += "?" + encoded
 	}
 	return href
-}
-
-func hasAssetType(assets []workspaceview.AssetView, typ string) bool {
-	for _, asset := range assets {
-		if asset.Type == typ {
-			return true
-		}
-	}
-	return false
-}
-
-func assetTabLink(workspaceID, typ, activeType, query, label string) g.Node {
-	className := "relative -mb-px inline-flex min-h-control-xl items-center whitespace-nowrap border-b-2 px-1 text-body-sm font-medium no-underline transition-colors duration-micro ease-hover"
-	if typ == activeType {
-		className += " border-fg-accent font-semibold text-fg-default"
-	} else {
-		className += " border-transparent text-fg-muted hover:border-outline-muted hover:text-fg-default"
-	}
-	return h.A(h.Class(className), h.Href(workspaceAssetHref(workspaceID, typ, query)), g.If(typ == activeType, h.Aria("current", "page")), g.Text(label))
 }
 
 func workspaceAssetHref(workspaceID, typ, query string) string {
@@ -483,287 +598,47 @@ func ValidWorkspaceAssetSection(section string) bool {
 	}
 }
 
-func normalizeWorkspaceAssetSection(section string) string {
-	if ValidWorkspaceAssetSection(section) {
-		return section
-	}
-	return "details"
+type AssetRefreshState struct {
+	CSRFToken        string
+	UpdatesURL       string
+	Runs             []AssetRefreshRun
+	Latest           AssetRefreshRun
+	LatestSuccessful AssetRefreshRun
 }
 
-func assetTable(workspaceID string, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView) g.Node {
-	assetIndex := map[string]workspaceview.AssetView{}
-	for _, asset := range assets {
-		assetIndex[asset.ID] = asset
-	}
-	return h.Div(h.Class("min-w-0 overflow-x-auto"),
-		h.Table(h.Class("w-full border-collapse text-left"),
-			h.THead(h.Class("border-b border-outline-muted bg-panel-muted"),
-				h.Tr(
-					assetHeaderCell("Name", ""),
-					assetHeaderCell("Type", "w-40"),
-					assetHeaderCell("Key", "w-56 max-md:hidden"),
-					assetHeaderCell("Parent", "w-48 max-lg:hidden"),
-					assetHeaderCell("Actions", "w-24 text-right"),
-				),
-			),
-			h.TBody(
-				g.Map(assets, func(asset workspaceview.AssetView) g.Node {
-					return assetRow(workspaceID, asset, assetIndex, edges)
-				}),
-			),
-		),
-	)
-}
-
-func assetHeaderCell(label, className string) g.Node {
-	classes := strings.TrimSpace("px-3 py-2 text-caption font-medium uppercase text-fg-muted " + className)
-	return h.Th(h.Class(classes), g.Attr("scope", "col"), g.Text(label))
-}
-
-func assetCell(className string, children ...g.Node) g.Node {
-	classes := strings.TrimSpace("px-3 py-2 align-middle " + className)
-	nodes := append([]g.Node{h.Class(classes)}, children...)
-	return h.Td(nodes...)
-}
-
-func assetRow(workspaceID string, asset workspaceview.AssetView, assetIndex map[string]workspaceview.AssetView, edges []workspaceview.AssetEdgeView) g.Node {
-	detailHref := assetnav.CanonicalAssetSectionHref(workspaceID, asset, "details", edges)
-	openHref := detailHref
-	if asset.Href != "" {
-		openHref = asset.Href
-	}
-	return h.Tr(h.Class(assetRowClass),
-		assetCell("min-w-0",
-			h.Div(h.Class("flex min-w-0 items-center gap-3"),
-				assetTypeIcon(asset.Type),
-				h.Div(h.Class("min-w-0"),
-					h.A(h.Class("block truncate text-body-sm font-semibold text-fg-default no-underline hover:underline"), h.Href(detailHref), g.Text(assetTitle(asset))),
-					g.If(asset.Description != "", h.P(h.Class("m-0 mt-1 truncate text-caption font-normal text-fg-muted"), g.Text(asset.Description))),
-				),
-			),
-		),
-		assetCell("w-40 text-body-sm font-medium text-fg-muted", h.Span(g.Text(assetTypeLabel(asset.Type)))),
-		assetCell("w-56 max-md:hidden", h.Code(h.Class("block truncate text-caption font-medium text-fg-muted"), g.Text(asset.Key))),
-		assetCell("w-48 max-lg:hidden", assetParentTableLink(workspaceID, asset, assetIndex, edges)),
-		assetCell("w-24",
-			h.Div(h.Class("inline-flex w-full justify-end gap-2"),
-				h.A(h.Class(metricActionButtonClass), h.Href(detailHref), h.Title("View details"), h.Aria("label", "View details"), lucide.FileText(metricActionIconAttrs()...)),
-				h.A(h.Class(metricActionButtonClass), h.Href(openHref), h.Title("Open asset"), h.Aria("label", "Open asset"), lucide.ExternalLink(metricActionIconAttrs()...)),
-			),
-		),
-	)
-}
-
-func assetParentTableLink(workspaceID string, asset workspaceview.AssetView, assetIndex map[string]workspaceview.AssetView, edges []workspaceview.AssetEdgeView) g.Node {
-	if asset.Type == "source" {
-		if connection, ok := assetIndex[assetnav.SourceConnectionID(asset.ID, edges)]; ok && connection.Type == "connection" {
-			return h.A(
-				h.Class("block truncate text-body-sm font-medium text-fg-accent no-underline hover:underline"),
-				h.Href(assetnav.ConnectionAssetSectionHref(connection.ID, "details")),
-				g.Text(assetTitle(connection)),
-			)
-		}
-	}
-	parent, ok := assetIndex[asset.ParentID]
-	if !ok {
-		return h.Span(h.Class("text-caption font-medium text-fg-muted"), g.Text(emptyDash("")))
-	}
-	return h.A(
-		h.Class("block truncate text-body-sm font-medium text-fg-accent no-underline hover:underline"),
-		h.Href(assetnav.WorkspaceAssetSectionHref(workspaceID, parent.ID, "details")),
-		g.Text(assetTitle(parent)),
-	)
-}
-
-func assetActions(workspaceID string, asset workspaceview.AssetView, refresh AssetRefreshState) g.Node {
-	refreshPath := "/workspaces/" + workspaceID + "/assets/" + asset.ID + "/refresh-materializations"
-	refreshAction := "$assetRefresh.status = 'running'; $assetRefresh.running = true; " + postActionWithCSRFSignal(refreshPath, "$csrfToken")
-	return h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"),
-		g.If(assetRefreshable(asset.Type), h.Button(
-			h.Type("button"),
-			h.Class(metricActionButtonClass),
-			h.Title("Refresh materializations"),
-			h.Aria("label", "Refresh materializations"),
-			g.Attr("data-attr:disabled", "$assetRefresh.running"),
-			g.Attr("data-on:click", refreshAction),
-			lucide.RefreshCw(append(metricActionIconAttrs(), g.Attr("data-class", "{'animate-spin': $assetRefresh.running}"))...),
-		)),
-		h.A(h.Class(metricActionButtonClass), h.Href("/workspaces/"+workspaceID), h.Title("Back to workspace"), h.Aria("label", "Back to workspace"), lucide.ArrowLeft(metricActionIconAttrs()...)),
-		g.If(asset.Href != "", h.A(h.Class(metricActionButtonClass), h.Href(asset.Href), h.Title("Open asset"), h.Aria("label", "Open asset"), lucide.ExternalLink(metricActionIconAttrs()...))),
-	)
-}
-
-func connectionAssetActions() g.Node {
-	return h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"),
-		h.A(h.Class(metricActionButtonClass), h.Href("/connections"), h.Title("Back to connections"), h.Aria("label", "Back to connections"), lucide.ArrowLeft(metricActionIconAttrs()...)),
-	)
-}
-
-func connectionSourceAssetActions() g.Node {
-	return h.Div(h.Class("inline-flex min-w-0 items-center justify-end gap-2"),
-		h.A(h.Class(metricActionButtonClass), h.Href("/connections?type=source"), h.Title("Back to sources"), h.Aria("label", "Back to sources"), lucide.ArrowLeft(metricActionIconAttrs()...)),
-	)
-}
-
-func assetDetailTabs(workspaceID, assetID, assetType, activeSection string, relatedCount int) g.Node {
-	return h.Nav(h.Class("flex min-w-0 gap-6 border-b border-outline-variant bg-app px-3"), h.Aria("label", "Workspace asset sections"),
-		assetDetailTabLink(assetnav.WorkspaceAssetSectionHref(workspaceID, assetID, "details"), activeSection == "details", "Details", nil),
-		g.If(assetRefreshable(assetType), assetDetailTabLink(assetnav.WorkspaceAssetSectionHref(workspaceID, assetID, "refreshes"), activeSection == "refreshes", "Refreshes", nil)),
-		assetDetailTabLink(assetnav.WorkspaceAssetSectionHref(workspaceID, assetID, "lineage"), activeSection == "lineage", "Lineage", metricTabCount(relatedCount)),
-	)
-}
-
-func connectionAssetDetailTabs(assetID, activeSection string, relatedCount int) g.Node {
-	return h.Nav(h.Class("flex min-w-0 gap-6 border-b border-outline-variant bg-app px-3"), h.Aria("label", "Connection asset sections"),
-		assetDetailTabLink(assetnav.ConnectionAssetSectionHref(assetID, "details"), activeSection == "details", "Details", nil),
-		assetDetailTabLink(assetnav.ConnectionAssetSectionHref(assetID, "lineage"), activeSection == "lineage", "Lineage", metricTabCount(relatedCount)),
-	)
-}
-
-func connectionSourceAssetDetailTabs(connectionID, sourceID, activeSection string, relatedCount int) g.Node {
-	return h.Nav(h.Class("flex min-w-0 gap-6 border-b border-outline-variant bg-app px-3"), h.Aria("label", "Connection source sections"),
-		assetDetailTabLink(assetnav.ConnectionSourceAssetSectionHref(connectionID, sourceID, "details"), activeSection == "details", "Details", nil),
-		assetDetailTabLink(assetnav.ConnectionSourceAssetSectionHref(connectionID, sourceID, "lineage"), activeSection == "lineage", "Lineage", metricTabCount(relatedCount)),
-	)
-}
-
-func assetDetailBodyClass(activeSection string) string {
-	if activeSection == "lineage" {
-		return "min-h-0 overflow-auto"
-	}
-	return "min-h-0 overflow-auto px-4 py-4"
-}
-
-func assetDetailTabLink(href string, active bool, label string, meta g.Node) g.Node {
-	className := "relative -mb-px inline-flex min-h-control-xl items-center gap-2 whitespace-nowrap border-b-2 px-1 text-body-sm font-medium no-underline transition-colors duration-micro ease-hover"
-	if active {
-		className += " border-fg-accent font-semibold text-fg-default"
-	} else {
-		className += " border-transparent text-fg-muted hover:border-outline-muted hover:text-fg-default"
-	}
-	return h.A(h.Class(className), h.Href(href), g.If(active, h.Aria("current", "page")), h.Span(g.Text(label)), meta)
-}
-
-type assetLineageModel struct {
-	Count  int
-	Graph  assetLineageGraph
-	Uses   metricGrid
-	UsedBy metricGrid
-}
-
-type assetLineageGraph struct {
-	Nodes []assetLineageNode `json:"nodes"`
-	Edges []assetLineageEdge `json:"edges"`
-}
-
-type assetLineageNode struct {
-	ID                string `json:"id"`
-	Label             string `json:"label"`
-	Kind              string `json:"kind"`
-	Meta              string `json:"meta,omitempty"`
-	Href              string `json:"href,omitempty"`
-	Side              string `json:"side"`
-	Rank              int    `json:"rank"`
-	Selected          bool   `json:"selected,omitempty"`
-	VisibleUpstream   int    `json:"visibleUpstreamCount,omitempty"`
-	VisibleDownstream int    `json:"visibleDownstreamCount,omitempty"`
-	UsesCount         int    `json:"usesCount,omitempty"`
-	UsedByCount       int    `json:"usedByCount,omitempty"`
-	ContainedCount    int    `json:"containedCount,omitempty"`
-	ContainedSummary  string `json:"containedSummary,omitempty"`
-}
-
-type assetLineageEdge struct {
-	ID     string `json:"id"`
-	Source string `json:"source"`
-	Target string `json:"target"`
-	Label  string `json:"label,omitempty"`
-	Kind   string `json:"kind"`
-}
-
-func assetLineageSection(lineage assetLineageModel) g.Node {
-	return h.Section(h.ID("lineage"), h.Class("grid content-start"), h.Aria("label", "Asset lineage"),
-		g.El("ld-asset-lineage-graph", h.Class("block h-min-model-graph min-h-0 border-b border-outline-muted bg-panel"), g.Attr("data-attr:graph", "$assetLineageGraph")),
-		h.Div(h.Class("grid content-start gap-5 px-4 py-4"),
-			definitionSignalGrid("Uses", "assetLineageUsesGrid"),
-			definitionSignalGrid("Used by", "assetLineageUsedByGrid"),
-		),
-	)
-}
-
-func workspaceAssetSignals(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, lineage assetLineageModel, activeSection string) map[string]any {
-	return workspaceAssetSignalsWithRefresh(workspace, asset, assets, edges, lineage, activeSection, AssetRefreshState{})
-}
-
-func workspaceAssetSignalsWithRefresh(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, lineage assetLineageModel, activeSection string, refresh AssetRefreshState) map[string]any {
-	signals := map[string]any{}
-	if assetRefreshable(asset.Type) {
-		signals["assetRefresh"] = assetRefreshSignal(refresh)
-		signals["csrfToken"] = refresh.CSRFToken
-	}
-	if activeSection == "details" {
-		for key, grid := range workspaceAssetDetailGridSignalsWithRefresh(workspace, asset, assets, edges, refresh) {
-			signals[key] = grid
-		}
-	}
-	if activeSection == "lineage" {
-		signals["assetLineageGraph"] = lineage.Graph
-		signals["assetLineageUsesGrid"] = lineage.Uses
-		signals["assetLineageUsedByGrid"] = lineage.UsedBy
-	}
-	if activeSection == "refreshes" && assetRefreshable(asset.Type) {
-		signals["assetRefreshesGrid"] = assetRefreshesGrid(refresh)
-	}
-	return signals
+type AssetRefreshRun struct {
+	ID                   string
+	ModelID              string
+	DeploymentID         string
+	PrincipalID          string
+	PrincipalDisplayName string
+	TargetType           string
+	TargetID             string
+	TriggerType          string
+	ParentRunID          string
+	Status               string
+	StartedAt            string
+	FinishedAt           string
+	Error                string
 }
 
 func WorkspaceAssetRefreshSignals(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, refresh AssetRefreshState, activeSection string) map[string]any {
-	signals := map[string]any{
-		"assetRefresh": assetRefreshSignal(refresh),
+	lineage := assetLineage(workspace.ID, asset, assets, edges)
+	return map[string]any{
+		"page": workspaceAssetPageSignalWithRefresh(workspace, asset, assets, edges, activeSection, lineage, refresh),
 	}
-	switch activeSection {
-	case "details":
-		if asset.Type == "semantic_model" {
-			signals["assetDetailsSemanticModelTablesGrid"] = semanticModelTablesGrid(workspace.ID, asset, assets, asset.Payload, refresh)
-		}
-	case "refreshes":
-		signals["assetRefreshesGrid"] = assetRefreshesGrid(refresh)
-	}
-	return signals
 }
 
-func assetRefreshSignal(refresh AssetRefreshState) map[string]any {
-	latest := refresh.Latest
-	status := strings.TrimSpace(latest.Status)
+func assetRefreshSignal(refresh AssetRefreshState) uisignals.WorkspaceAssetRefreshSignal {
+	status := strings.TrimSpace(refresh.Latest.Status)
 	if status == "" {
 		status = "not refreshed"
 	}
-	return map[string]any{
-		"status":         status,
-		"running":        status == "queued" || status == "running",
-		"lastSuccessful": refresh.LatestSuccessful.FinishedAt,
+	return uisignals.WorkspaceAssetRefreshSignal{
+		Status:         status,
+		Running:        status == "queued" || status == "running",
+		LastSuccessful: refresh.LatestSuccessful.FinishedAt,
 	}
-}
-
-func workspaceAssetDetailGridSignals(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView) map[string]metricGrid {
-	return workspaceAssetDetailGridSignalsWithRefresh(workspace, asset, assets, edges, AssetRefreshState{})
-}
-
-func workspaceAssetDetailGridSignalsWithRefresh(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, refresh AssetRefreshState) map[string]metricGrid {
-	signals := map[string]metricGrid{}
-	for _, section := range assetDetailModelForAssetWithRefresh(workspace, asset, assets, edges, refresh).Sections {
-		if section.Signal == "" {
-			continue
-		}
-		signals[section.Signal] = section.Grid
-	}
-	return signals
-}
-
-func assetRefreshesSection() g.Node {
-	return h.Section(h.ID("refreshes"), h.Class("grid content-start gap-5 px-4 py-4"), h.Aria("label", "Refresh runs"),
-		definitionSignalGrid("Refreshes", "assetRefreshesGrid"),
-	)
 }
 
 func assetRefreshesGrid(refresh AssetRefreshState) metricGrid {
@@ -816,6 +691,19 @@ func refreshStatusGridValue(status string) any {
 	return metricGridBadge{Label: status, Tone: refreshStatusBadgeTone(status)}
 }
 
+func refreshStatusBadgeTone(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "succeeded":
+		return "success"
+	case "running", "queued":
+		return "accent"
+	case "failed":
+		return "danger"
+	default:
+		return "muted"
+	}
+}
+
 func shortRefreshRunID(id string) string {
 	id = strings.TrimSpace(id)
 	if len(id) <= 18 {
@@ -849,6 +737,28 @@ func parseRefreshTime(value string) (time.Time, bool) {
 	}
 	return time.Time{}, false
 }
+
+func assetRefreshable(assetType string) bool {
+	return assetType == "semantic_model" || assetType == "model_table"
+}
+
+func normalizeWorkspaceAssetSection(section string) string {
+	if ValidWorkspaceAssetSection(section) {
+		return section
+	}
+	return "details"
+}
+
+type assetLineageModel struct {
+	Count  int
+	Graph  assetLineageGraph
+	Uses   metricGrid
+	UsedBy metricGrid
+}
+
+type assetLineageGraph = uisignals.AssetLineageGraphSignal
+type assetLineageNode = uisignals.AssetLineageNodeSignal
+type assetLineageEdge = uisignals.AssetLineageEdgeSignal
 
 func assetLineage(workspaceID string, selected workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView) assetLineageModel {
 	byID := assetsByID(assets)
@@ -1517,30 +1427,6 @@ type assetDetailModel struct {
 	Sections []assetDetailSection
 }
 
-type AssetRefreshState struct {
-	CSRFToken        string
-	UpdatesURL       string
-	Runs             []AssetRefreshRun
-	Latest           AssetRefreshRun
-	LatestSuccessful AssetRefreshRun
-}
-
-type AssetRefreshRun struct {
-	ID                   string
-	ModelID              string
-	DeploymentID         string
-	PrincipalID          string
-	PrincipalDisplayName string
-	TargetType           string
-	TargetID             string
-	TriggerType          string
-	ParentRunID          string
-	Status               string
-	StartedAt            string
-	FinishedAt           string
-	Error                string
-}
-
 type assetDetailSection struct {
 	Title  string
 	Signal string
@@ -1548,28 +1434,6 @@ type assetDetailSection struct {
 	Facts  []definitionFact
 	Code   string
 	Lang   string
-}
-
-func assetDetailsSection(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView) g.Node {
-	return assetDetailsSectionWithRefresh(workspace, asset, assets, edges, AssetRefreshState{})
-}
-
-func assetDetailsSectionWithRefresh(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, refresh AssetRefreshState) g.Node {
-	model := assetDetailModelForAssetWithRefresh(workspace, asset, assets, edges, refresh)
-	return h.Section(h.ID("details"), h.Class("grid content-start gap-6"), h.Aria("label", "Asset details"),
-		definitionStats("Overview", model.Overview),
-		g.Map(model.Sections, assetDetailSectionNode),
-	)
-}
-
-func assetDetailSectionNode(section assetDetailSection) g.Node {
-	if section.Code != "" {
-		return definitionCodeBlock(section.Title, section.Lang, section.Code)
-	}
-	if section.Signal != "" {
-		return definitionSignalGrid(section.Title, section.Signal)
-	}
-	return definitionFacts(section.Title, section.Facts)
 }
 
 func assetDetailUsesCodeBlock(asset workspaceview.AssetView) bool {
@@ -1633,7 +1497,9 @@ func semanticModelDetailModel(model *assetDetailModel, workspace workspaceview.W
 	measures := sortedMapKeys(metaMap(meta, "Measures", "measures"))
 	relationships := metaSlice(meta, "Relationships", "relationships")
 
-	model.Overview = append(model.Overview, refreshOverviewFacts(refresh)...)
+	model.Overview = append(model.Overview,
+		refreshOverviewFacts(refresh)...,
+	)
 	model.Sections = append(model.Sections,
 		assetDetailSection{Title: fmt.Sprintf("Model tables (%d)", len(modelTables)), Signal: "assetDetailsSemanticModelTablesGrid", Grid: semanticModelTablesGrid(workspace.ID, asset, assets, meta, refresh)},
 		assetDetailSection{Title: fmt.Sprintf("Measures (%d)", len(measures)), Signal: "assetDetailsSemanticMeasuresGrid", Grid: semanticMeasuresGrid(workspace.ID, asset, assets, meta)},
@@ -1642,41 +1508,14 @@ func semanticModelDetailModel(model *assetDetailModel, workspace workspaceview.W
 }
 
 func refreshOverviewFacts(refresh AssetRefreshState) []definitionFact {
-	latest := refresh.Latest
-	status := strings.TrimSpace(latest.Status)
+	status := strings.TrimSpace(refresh.Latest.Status)
 	if status == "" {
 		status = "not refreshed"
 	}
 	return []definitionFact{
-		{
-			Label:        "Refresh status",
-			Value:        status,
-			StatusSignal: "$assetRefresh.status",
-		},
-		{Label: "Last refreshed", Value: emptyDash(refresh.LatestSuccessful.FinishedAt), TextSignal: "$assetRefresh.lastSuccessful || '-'"},
+		{Label: "Refresh status", Value: status},
+		{Label: "Last refreshed", Value: emptyDash(refresh.LatestSuccessful.FinishedAt)},
 	}
-}
-
-func refreshStatusBadgeTone(status string) string {
-	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "succeeded":
-		return "success"
-	case "running", "queued":
-		return "accent"
-	case "failed":
-		return "danger"
-	default:
-		return "muted"
-	}
-}
-
-func refreshStatusBadgeStyleSignal(statusExpr string) string {
-	successBorder, successBg, successColor := definitionBadgeColors("success")
-	accentBorder, accentBg, accentColor := definitionBadgeColors("accent")
-	dangerBorder, dangerBg, dangerColor := definitionBadgeColors("danger")
-	mutedBorder, mutedBg, mutedColor := definitionBadgeColors("muted")
-	isRunning := "(" + statusExpr + " === 'running' || " + statusExpr + " === 'queued')"
-	return "{'border-color': " + statusExpr + " === 'succeeded' ? '" + successBorder + "' : (" + statusExpr + " === 'failed' ? '" + dangerBorder + "' : (" + isRunning + " ? '" + accentBorder + "' : '" + mutedBorder + "')), 'background': " + statusExpr + " === 'succeeded' ? '" + successBg + "' : (" + statusExpr + " === 'failed' ? '" + dangerBg + "' : (" + isRunning + " ? '" + accentBg + "' : '" + mutedBg + "')), 'color': " + statusExpr + " === 'succeeded' ? '" + successColor + "' : (" + statusExpr + " === 'failed' ? '" + dangerColor + "' : (" + isRunning + " ? '" + accentColor + "' : '" + mutedColor + "'))}"
 }
 
 func semanticFieldCount(tables map[string]any) int {
@@ -1760,7 +1599,7 @@ func semanticModelTablesGrid(workspaceID string, parent workspaceview.AssetView,
 	rows := make([]map[string]any, 0, len(tables))
 	lastRefreshed := emptyDash(refresh.LatestSuccessful.FinishedAt)
 	refreshStatus := "not refreshed"
-	if refresh.LatestSuccessful.Status != "" {
+	if strings.TrimSpace(refresh.LatestSuccessful.Status) != "" {
 		refreshStatus = refresh.LatestSuccessful.Status
 	}
 	for _, name := range sortedMapKeys(tables) {
@@ -1773,7 +1612,7 @@ func semanticModelTablesGrid(workspaceID string, parent workspaceview.AssetView,
 			"fields":         len(metaMap(table, "Dimensions", "dimensions", "Fields", "fields")),
 			"measures":       measureCounts[name],
 			"last_refreshed": lastRefreshed,
-			"refresh_status": refreshStatus,
+			"refresh_status": refreshStatusGridValue(refreshStatus),
 			"description":    emptyDash(metaString(table, "Description", "description")),
 		})
 	}
@@ -1784,7 +1623,7 @@ func semanticModelTablesGrid(workspaceID string, parent workspaceview.AssetView,
 			{ID: "fields", Header: "Fields", Width: "100px"},
 			{ID: "measures", Header: "Measures", Width: "110px"},
 			{ID: "last_refreshed", Header: "Last refreshed", Width: "180px"},
-			{ID: "refresh_status", Header: "Refresh status", Width: "130px"},
+			{ID: "refresh_status", Header: "Refresh status", Kind: "status", Width: "130px"},
 			{ID: "description", Header: "Description"},
 		},
 		Rows:     rows,
@@ -1813,6 +1652,7 @@ func semanticMeasureCountsByTable(measures map[string]any) map[string]int {
 func modelTableDetailModel(model *assetDetailModel, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, refresh AssetRefreshState) {
 	modelKey, tableName := modelTableKeyParts(asset)
 	fields := modelTableFields(asset.Payload)
+	sources := modelTableSourceNames(asset.Payload)
 	mode := "Unspecified"
 	if modelTableSQL(asset.Payload) != "" {
 		mode = "Transform"
@@ -1824,6 +1664,8 @@ func modelTableDetailModel(model *assetDetailModel, workspace workspaceview.Work
 		definitionFact{Label: "Semantic model", Value: assetTitle(semanticModel)},
 		definitionFact{Label: "Primary key", Value: metaString(asset.Payload, "PrimaryKey", "primary_key"), Code: true},
 		definitionFact{Label: "Grain", Value: metaString(asset.Payload, "Grain", "grain"), Code: true},
+		definitionFact{Label: "Fields", Value: fmt.Sprint(len(fields))},
+		definitionFact{Label: "Input sources", Value: fmt.Sprint(len(sources))},
 		definitionFact{Label: "Mode", Value: mode},
 	)
 	model.Overview = append(model.Overview, refreshOverviewFacts(refresh)...)
@@ -1833,10 +1675,6 @@ func modelTableDetailModel(model *assetDetailModel, workspace workspaceview.Work
 	if sql := modelTableSQL(asset.Payload); sql != "" {
 		model.Sections = append(model.Sections, assetDetailSection{Title: "SQL", Lang: "sql", Code: sql})
 	}
-}
-
-func assetRefreshable(assetType string) bool {
-	return assetType == "semantic_model" || assetType == "model_table"
 }
 
 func modelTableKeyParts(asset workspaceview.AssetView) (string, string) {
@@ -1856,6 +1694,7 @@ func sourceDetailModel(model *assetDetailModel, asset workspaceview.AssetView) {
 	schema := metaMap(asset.Payload, "Schema", "schema")
 	columns := modelTableSchemaColumns(fields, schema)
 	model.Overview = append(model.Overview, sourceFacts(asset)...)
+	model.Overview = append(model.Overview, definitionFact{Label: "Fields", Value: fmt.Sprint(len(columns))})
 	model.Sections = append(model.Sections,
 		assetDetailSection{Title: fmt.Sprintf("Fields (%d)", len(columns)), Signal: "assetDetailsSourceFieldsGrid", Grid: sourceFieldsGrid(fields, schema)},
 	)
@@ -2202,6 +2041,7 @@ func dashboardTablesGrid(parent workspaceview.AssetView, tables []workspaceview.
 func connectionDetailModel(model *assetDetailModel, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView) {
 	sources := sourcesUsingConnection(asset.ID, assets, edges)
 	model.Overview = append(model.Overview, connectionFacts(asset)...)
+	model.Overview = append(model.Overview, definitionFact{Label: "Sources", Value: fmt.Sprint(len(sources))})
 	model.Sections = append(model.Sections,
 		assetDetailSection{
 			Title:  fmt.Sprintf("Sources (%d)", len(sources)),
@@ -2267,215 +2107,10 @@ func metricLeafFacts(asset workspaceview.AssetView) []definitionFact {
 }
 
 type definitionFact struct {
-	Label        string
-	Value        string
-	Code         bool
-	Wide         bool
-	BadgeTone    string
-	TextSignal   string
-	StatusSignal string
-	StyleSignal  string
-}
-
-func definitionFacts(title string, facts []definitionFact) g.Node {
-	filtered := make([]definitionFact, 0, len(facts))
-	for _, fact := range facts {
-		if strings.TrimSpace(fact.Value) == "" && fact.TextSignal == "" && fact.StatusSignal == "" {
-			continue
-		}
-		filtered = append(filtered, fact)
-	}
-	return h.Section(h.Class("grid min-w-0 content-start gap-3 border-b border-outline-muted pb-5 last:border-b-0"), h.Aria("label", title),
-		h.H2(h.Class("m-0 text-body-sm font-semibold text-fg-default"), g.Text(title)),
-		g.If(len(filtered) == 0, emptyState("No details are available.")),
-		g.If(len(filtered) > 0, h.Div(h.Class("grid min-w-0 grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-x-5 gap-y-3"),
-			g.Map(filtered, func(fact definitionFact) g.Node {
-				return h.Div(h.Class("grid min-w-0 gap-1"),
-					h.Span(h.Class("text-caption font-medium uppercase leading-none text-fg-muted"), g.Text(fact.Label)),
-					g.If(fact.StatusSignal != "", definitionStatus(fact)),
-					g.If(fact.BadgeTone != "", definitionBadge(fact)),
-					g.If(fact.Code, h.Code(h.Class("min-w-0 truncate font-mono text-body-sm font-medium text-fg-default"), g.Text(fact.Value))),
-					g.If(!fact.Code && fact.BadgeTone == "" && fact.StatusSignal == "", definitionFactValue(fact, "min-w-0 truncate text-body-sm font-medium text-fg-default")),
-				)
-			}),
-		)),
-	)
-}
-
-func definitionCodeBlock(title, lang, code string) g.Node {
-	return h.Section(h.Class("grid min-w-0 content-start gap-3 border-b border-outline-muted pb-5 last:border-b-0"), h.Aria("label", title),
-		h.H2(h.Class("m-0 text-body-sm font-semibold text-fg-default"), g.Text(title)),
-		g.El("ld-code-block",
-			g.Attr("language", firstNonEmpty(lang, "text")),
-			g.Attr("code", code),
-		),
-	)
-}
-
-func definitionStats(title string, facts []definitionFact) g.Node {
-	filtered := make([]definitionFact, 0, len(facts))
-	for _, fact := range facts {
-		if strings.TrimSpace(fact.Value) == "" && fact.TextSignal == "" && fact.StatusSignal == "" {
-			continue
-		}
-		filtered = append(filtered, fact)
-	}
-	return h.Section(h.Class("grid min-w-0 content-start gap-3 border-b border-outline-muted pb-5 last:border-b-0"), h.Aria("label", title),
-		h.H2(h.Class("m-0 text-body-sm font-semibold text-fg-default"), g.Text(title)),
-		g.If(len(filtered) == 0, emptyState("No details are available.")),
-		g.If(len(filtered) > 0, h.Div(h.Class("grid min-w-0 grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-x-6 gap-y-4"),
-			g.Map(filtered, func(fact definitionFact) g.Node {
-				return h.Div(h.Class(definitionStatItemClass(fact)),
-					h.Span(h.Class("text-caption font-medium uppercase leading-none text-fg-muted"), g.Text(fact.Label)),
-					g.If(fact.StatusSignal != "", definitionStatus(fact)),
-					g.If(fact.BadgeTone != "", definitionBadge(fact)),
-					g.If(fact.Code, h.Code(h.Class(definitionStatValueClass(fact, true)), g.Text(fact.Value))),
-					g.If(!fact.Code && fact.BadgeTone == "" && fact.StatusSignal == "", definitionFactValue(fact, definitionStatValueClass(fact, false))),
-				)
-			}),
-		)),
-	)
-}
-
-func definitionFactValue(fact definitionFact, class string) g.Node {
-	return h.Span(
-		h.Class(class),
-		g.If(fact.TextSignal != "", ds.Text(fact.TextSignal)),
-		g.Text(fact.Value),
-	)
-}
-
-func definitionStatus(fact definitionFact) g.Node {
-	return h.Span(
-		h.Class("inline-flex min-w-0 items-center gap-1.5 text-body-sm font-medium leading-normal text-fg-default"),
-		definitionStatusIcon(fact.StatusSignal),
-		h.Span(
-			h.Class("min-w-0 truncate"),
-			ds.Text(fact.StatusSignal),
-			g.Text(fact.Value),
-		),
-	)
-}
-
-func definitionStatusIcon(statusSignal string) g.Node {
-	return h.Span(h.Class("inline-flex size-4 shrink-0 items-center justify-center"),
-		definitionStatusSVG(statusSignal+" === 'succeeded'", "var(--ld-fg-success)", "M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16Zm-1.4-4.9L3.8 8.3 5 7.1l1.6 1.6L11 4.3l1.2 1.2-5.6 5.6Z"),
-		definitionStatusSVG(statusSignal+" === 'failed'", "var(--ld-fg-danger)", "M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16ZM5.1 4 8 6.9 10.9 4 12 5.1 9.1 8l2.9 2.9-1.1 1.1L8 9.1 5.1 12 4 10.9 6.9 8 4 5.1 5.1 4Z"),
-		definitionClockStatusSVG("("+statusSignal+" === 'running' || "+statusSignal+" === 'queued')"),
-		definitionStatusDot("("+statusSignal+" !== 'succeeded' && "+statusSignal+" !== 'failed' && "+statusSignal+" !== 'running' && "+statusSignal+" !== 'queued')"),
-	)
-}
-
-func definitionStatusSVG(showExpr, color, path string) g.Node {
-	return g.El("svg",
-		g.Attr("viewBox", "0 0 16 16"),
-		g.Attr("focusable", "false"),
-		h.Aria("hidden", "true"),
-		h.Class("block size-4"),
-		h.Style("color: "+color),
-		ds.Show(showExpr),
-		g.El("path",
-			g.Attr("fill", "currentColor"),
-			g.Attr("fill-rule", "evenodd"),
-			g.Attr("clip-rule", "evenodd"),
-			g.Attr("d", path),
-		),
-	)
-}
-
-func definitionClockStatusSVG(showExpr string) g.Node {
-	return g.El("svg",
-		g.Attr("viewBox", "0 0 16 16"),
-		g.Attr("focusable", "false"),
-		h.Aria("hidden", "true"),
-		h.Class("block size-4"),
-		h.Style("color: var(--ld-fg-link)"),
-		ds.Show(showExpr),
-		g.El("circle",
-			g.Attr("cx", "8"),
-			g.Attr("cy", "8"),
-			g.Attr("r", "7"),
-			g.Attr("fill", "none"),
-			g.Attr("stroke", "currentColor"),
-			g.Attr("stroke-width", "2"),
-		),
-		g.El("path",
-			g.Attr("d", "M8 4.5v3.8l2.6 1.5"),
-			g.Attr("fill", "none"),
-			g.Attr("stroke", "currentColor"),
-			g.Attr("stroke-linecap", "round"),
-			g.Attr("stroke-linejoin", "round"),
-			g.Attr("stroke-width", "1.6"),
-		),
-	)
-}
-
-func definitionStatusDot(showExpr string) g.Node {
-	return g.El("svg",
-		g.Attr("viewBox", "0 0 16 16"),
-		g.Attr("focusable", "false"),
-		h.Aria("hidden", "true"),
-		h.Class("block size-4"),
-		h.Style("color: var(--ld-fg-muted)"),
-		ds.Show(showExpr),
-		g.El("circle",
-			g.Attr("cx", "8"),
-			g.Attr("cy", "8"),
-			g.Attr("r", "4"),
-			g.Attr("fill", "currentColor"),
-		),
-	)
-}
-
-func definitionBadge(fact definitionFact) g.Node {
-	border, background, color := definitionBadgeColors(fact.BadgeTone)
-	return h.Span(
-		h.Class("inline-flex min-h-control-xs w-fit items-center rounded-full border px-2 text-caption font-medium leading-none"),
-		h.Style("width: fit-content; justify-self: start; border-color: "+border+"; background: "+background+"; color: "+color),
-		g.If(fact.TextSignal != "", ds.Text(fact.TextSignal)),
-		g.If(fact.StyleSignal != "", g.Attr("data-style", fact.StyleSignal)),
-		g.Text(fact.Value),
-	)
-}
-
-func definitionBadgeColors(tone string) (string, string, string) {
-	switch tone {
-	case "success":
-		return "var(--ld-line-success-muted)", "var(--ld-bg-success-muted)", "var(--ld-fg-default)"
-	case "accent":
-		return "var(--ld-line-accent-muted)", "var(--ld-bg-accent-muted)", "var(--ld-fg-default)"
-	case "danger":
-		return "var(--ld-line-danger-muted)", "var(--ld-bg-danger-muted)", "var(--ld-fg-default)"
-	default:
-		return "var(--ld-line-muted)", "var(--ld-bg-panel-muted)", "var(--ld-fg-muted)"
-	}
-}
-
-func definitionStatItemClass(fact definitionFact) string {
-	if fact.Wide {
-		return "grid min-w-0 content-start gap-1 sm:col-span-2 xl:col-span-3"
-	}
-	return "grid min-w-0 content-start gap-1"
-}
-
-func definitionStatValueClass(fact definitionFact, code bool) string {
-	if fact.Wide {
-		if code {
-			return "min-w-0 whitespace-pre-wrap font-mono text-body-sm font-normal leading-snug text-fg-default"
-		}
-		return "min-w-0 text-body-sm font-normal leading-snug text-fg-default"
-	}
-	if code {
-		return "min-w-0 truncate font-mono text-body-sm font-medium leading-normal text-fg-default"
-	}
-	return "min-w-0 truncate text-body-sm font-medium leading-normal text-fg-default"
-}
-
-func definitionSignalGrid(title, signal string) g.Node {
-	return h.Section(h.Class("grid min-w-0 content-start gap-3 border-b border-outline-muted pb-5 last:border-b-0"), h.Aria("label", title),
-		h.H2(h.Class("m-0 text-body-sm font-semibold text-fg-default"), g.Text(title)),
-		g.El("ld-data-grid", g.Attr("data-attr:grid", "$"+signal)),
-	)
+	Label string
+	Value string
+	Code  bool
+	Wide  bool
 }
 
 func childAssetGrid(workspaceID string, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, empty string) metricGrid {
@@ -2835,32 +2470,6 @@ func dependentAssetNames(assetID, edgeType string, assets []workspaceview.AssetV
 	}
 	sort.Strings(names)
 	return names
-}
-
-func roleBindingRow(workspaceID string, binding workspaceview.RoleBindingView, csrfToken string) g.Node {
-	return h.Div(h.Class("grid grid-cols-role-row items-center gap-3 border-b border-outline-muted py-2 last:border-b-0"),
-		h.Div(h.Class("min-w-0"),
-			h.P(h.Class("m-0 truncate text-body-sm font-semibold text-fg-default"), g.Text(displayLabel(binding.DisplayName, binding.Email))),
-			h.P(h.Class("m-0 mt-0.5 truncate text-caption font-normal text-fg-muted"), g.Text(binding.Email)),
-		),
-		h.Span(h.Class(tagClass), g.Text(binding.Role)),
-		h.Form(h.Method("post"), h.Action("/workspaces/"+workspaceID+"/permissions/remove"), h.Class("justify-self-end"),
-			g.If(csrfToken != "", h.Input(h.Type("hidden"), h.Name("gorilla.csrf.Token"), h.Value(csrfToken))),
-			h.Input(h.Type("hidden"), h.Name("principalId"), h.Value(binding.PrincipalID)),
-			h.Button(h.Type("submit"), h.Class(metricActionButtonClass), h.Title("Remove access"), h.Aria("label", "Remove access"), lucide.Trash2(metricActionIconAttrs()...)),
-		),
-	)
-}
-
-func formInput(label, name, placeholder, value string) g.Node {
-	return h.Label(h.Class("grid gap-1 text-caption font-medium uppercase text-fg-muted"),
-		g.Text(label),
-		h.Input(h.Type("text"), h.Name(name), h.Value(value), h.Placeholder(placeholder), h.Class("min-h-control-md rounded-small border border-outline-variant bg-control px-2 text-body-sm font-medium text-fg-default placeholder:text-fg-muted")),
-	)
-}
-
-func emptyState(message string) g.Node {
-	return h.Div(h.Class("rounded-small border border-dashed border-outline-muted bg-panel-muted px-3 py-4 text-body-sm font-medium text-fg-muted"), g.Text(message))
 }
 
 func assetTitle(asset workspaceview.AssetView) string {

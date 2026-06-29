@@ -44,6 +44,7 @@
   --ld-font-family-ui: var(--fontStack-system);
   --ld-font-family-display: var(--fontStack-sansSerifDisplay);
   --ld-font-family-mono: var(--fontStack-monospace);
+  --base-size-10: 0.625rem;
 }
 
 @theme {
@@ -83,7 +84,7 @@
   --spacing-1: var(--base-size-4);
   --spacing-1\.5: var(--base-size-6);
   --spacing-2: var(--base-size-8);
-  --spacing-2\.5: 0.625rem;
+  --spacing-2\.5: var(--base-size-10);
   --spacing-3: var(--base-size-12);
   --spacing-3\.5: 0.875rem;
   --spacing-4: var(--base-size-16);
@@ -577,6 +578,43 @@
     overscroll-behavior: none;
   }
 
+  ld-app-shell:not(:defined) {
+    display: grid;
+    min-height: 100svh;
+    grid-template-columns: var(--ld-sidebar-width, 248px) minmax(0, 1fr);
+    background: var(--ld-bg-app);
+    color: var(--ld-fg-default);
+    font-family: var(--ld-font-family-ui, var(--fontStack-system));
+  }
+
+  ld-app-shell > [slot='page'],
+  ld-catalog-page,
+  ld-dashboard-page,
+  ld-chat-page,
+  ld-workspace-page,
+  ld-workspace-asset-page,
+  ld-connections-page,
+  ld-admin-page,
+  ld-login-page {
+    display: block;
+    min-width: 0;
+  }
+
+  ld-app-shell:not(:defined) > [slot='page'] {
+    grid-column: 2;
+    min-height: 100svh;
+  }
+
+  @media (max-width: 640px) {
+    ld-app-shell:not(:defined) {
+      grid-template-columns: 1fr;
+    }
+
+    ld-app-shell:not(:defined) > [slot='page'] {
+      grid-column: 1;
+    }
+  }
+
   button,
   input,
   select {
@@ -592,6 +630,7 @@
       transition-duration: 0.001ms !important;
     }
   }
+
 }
 
 @utility shadow-inset {

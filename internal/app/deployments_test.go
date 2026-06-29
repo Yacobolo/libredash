@@ -842,7 +842,7 @@ func TestConnectionsPageRendersGlobalConnectionSurface(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Connections", "Connection", "Source", "data-connection-toolbar", "Local CSV files for the Olist ecommerce demo dataset.", "Raw Olist order lifecycle records."} {
+	for _, want := range []string{"<ld-connections-page", "Connections", "Connection", "Source", "assetList", "Local CSV files for the Olist ecommerce demo dataset.", "Raw Olist order lifecycle records."} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("connections page missing %q:\n%s", want, body)
 		}
@@ -932,8 +932,10 @@ func TestConnectionAssetRoutesUseConnectionSurface(t *testing.T) {
 	if lineageRec.Code != http.StatusOK {
 		t.Fatalf("connection lineage status = %d body=%s", lineageRec.Code, lineageRec.Body.String())
 	}
-	if !strings.Contains(lineageRec.Body.String(), "ld-asset-lineage-graph") {
-		t.Fatalf("connection lineage did not render lineage graph:\n%s", lineageRec.Body.String())
+	for _, want := range []string{"<ld-workspace-asset-page", "/static/asset-lineage-graph.js", "lineage", "usesGrid"} {
+		if !strings.Contains(lineageRec.Body.String(), want) {
+			t.Fatalf("connection lineage missing %q:\n%s", want, lineageRec.Body.String())
+		}
 	}
 }
 
@@ -983,8 +985,10 @@ func TestConnectionSourceAssetRoutesUseConnectionScopedSurface(t *testing.T) {
 	if lineageRec.Code != http.StatusOK {
 		t.Fatalf("source lineage status = %d body=%s", lineageRec.Code, lineageRec.Body.String())
 	}
-	if !strings.Contains(lineageRec.Body.String(), "ld-asset-lineage-graph") {
-		t.Fatalf("source lineage did not render lineage graph:\n%s", lineageRec.Body.String())
+	for _, want := range []string{"<ld-workspace-asset-page", "/static/asset-lineage-graph.js", "lineage", "usesGrid"} {
+		if !strings.Contains(lineageRec.Body.String(), want) {
+			t.Fatalf("source lineage missing %q:\n%s", want, lineageRec.Body.String())
+		}
 	}
 
 	invalidReq := httptest.NewRequest(http.MethodGet, "/connections/"+sourceID+"/sources/"+sourceID+"/details", nil)

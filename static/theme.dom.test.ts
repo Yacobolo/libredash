@@ -1,0 +1,145 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { createServer, type Server } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { chromium, type Browser } from '@playwright/test'
+
+let server: Server
+let baseURL = ''
+let browser: Browser
+
+test.before(async () => {
+  server = createServer(async (request, response) => {
+    const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+    if (url.pathname === '/') {
+      response.setHeader('content-type', 'text/html')
+      response.end(testDocument())
+      return
+    }
+    if (url.pathname === '/theme.js') {
+      response.setHeader('content-type', 'text/javascript')
+      response.end(await readFile(join(process.cwd(), 'static/theme.js'), 'utf8'))
+      return
+    }
+    response.writeHead(404)
+    response.end('not found')
+  })
+  await new Promise<void>((resolve) => server.listen(0, resolve))
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('test server did not bind to a port')
+  baseURL = `http://127.0.0.1:${address.port}`
+  browser = await chromium.launch()
+})
+
+test.after(async () => {
+  await browser?.close()
+  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+})
+
+test('theme bootstrap does not emit applied event during page reveal', async () => {
+  const page = await browser.newPage()
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (window as any).themeBooted === true)
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+
+    const state = await page.evaluate(() => ({
+      events: (window as any).themeAppliedEvents,
+      colorMode: document.documentElement.dataset.colorMode,
+      colorScheme: document.documentElement.style.colorScheme,
+      storedMode: localStorage.getItem('libredash-color-mode'),
+    }))
+
+    assert.deepEqual(state, {
+      events: [],
+      colorMode: 'light',
+      colorScheme: 'light',
+      storedMode: 'light',
+    })
+  } finally {
+    await page.close()
+  }
+})
+
+test('explicit theme changes still emit applied event', async () => {
+  const page = await browser.newPage()
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (window as any).themeBooted === true)
+    await page.evaluate(() => {
+      ;(window as any).themeAppliedEvents = []
+      document.dispatchEvent(new CustomEvent('libredash-theme-change', { detail: { mode: 'dark' } }))
+    })
+    await page.waitForFunction(() => (window as any).themeAppliedEvents.length === 1)
+
+    const state = await page.evaluate(() => ({
+      events: (window as any).themeAppliedEvents,
+      colorMode: document.documentElement.dataset.colorMode,
+      colorScheme: document.documentElement.style.colorScheme,
+      storedMode: localStorage.getItem('libredash-color-mode'),
+    }))
+
+    assert.deepEqual(state, {
+      events: [{ mode: 'dark', resolvedMode: 'dark' }],
+      colorMode: 'dark',
+      colorScheme: 'dark',
+      storedMode: 'dark',
+    })
+  } finally {
+    await page.close()
+  }
+})
+
+test('view transition abort rejections are treated as progressive enhancement misses', async () => {
+  const page = await browser.newPage()
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => (window as any).themeBooted === true)
+    await page.evaluate(() => {
+      ;(window as any).unhandledRejectionMessages = []
+      window.addEventListener('unhandledrejection', (event) => {
+        if (!event.defaultPrevented) {
+          ;(window as any).unhandledRejectionMessages.push(event.reason?.message ?? String(event.reason))
+        }
+      })
+      Promise.reject(new DOMException('Transition was skipped', 'AbortError'))
+      Promise.reject(new DOMException('Transition was aborted because of invalid state', 'InvalidStateError'))
+      Promise.reject(new Error('real failure'))
+    })
+    await page.waitForFunction(() => (window as any).unhandledRejectionMessages.length === 1)
+
+    const messages = await page.evaluate(() => (window as any).unhandledRejectionMessages)
+    assert.deepEqual(messages, ['real failure'])
+  } finally {
+    await page.close()
+  }
+})
+
+function testDocument(): string {
+  return `
+    <!doctype html>
+    <html data-color-mode="auto" data-light-theme="light" data-dark-theme="dark">
+      <head>
+        <script>
+          localStorage.setItem('libredash-color-mode', 'light');
+          window.themeAppliedEvents = [];
+          document.addEventListener('libredash-theme-applied', (event) => {
+            window.themeAppliedEvents.push(event.detail);
+          });
+        </script>
+        <script type="module" src="/theme.js"></script>
+        <script type="module">
+          window.themeBooted = true;
+        </script>
+      </head>
+      <body>
+        <button data-theme-toggle type="button">
+          <span data-theme-icon="system"></span>
+          <span data-theme-icon="light"></span>
+          <span data-theme-icon="dark"></span>
+        </button>
+      </body>
+    </html>
+  `
+}

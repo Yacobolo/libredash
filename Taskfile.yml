@@ -63,6 +63,7 @@ tasks:
     cmds:
       - task api:generate
       - task schema:generate
+      - task ui-signals:generate
 
   api:generate:
     desc: Generate headless API contract artifacts and APIGen Go surfaces
@@ -76,14 +77,27 @@ tasks:
     cmds:
       - go run ./cmd/libredash schema export --format json-schema --out schemas/json
 
+  ui-signals:generate:
+    desc: Generate UI signal schemas and TypeScript types
+    cmds:
+      - go run ./internal/tools/uisignalsgen
+
   test:
     desc: Run tests
     deps:
       - generate
       - build
     cmds:
+      - npm run test:theme
+      - npm run test:app-shell
       - npm run test:table-selection
       - npm run test:visual-modal
+      - npm run test:catalog-page
+      - npm run test:dashboard-page
+      - npm run test:chat-page
+      - npm run test:workspace-page
+      - npm run test:admin-page
+      - npm run test:login-page
       - go test ./...
 
   ci:

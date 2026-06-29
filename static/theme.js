@@ -5,13 +5,25 @@ const nextModes = { system: 'light', light: 'dark', dark: 'system' };
 const modeLabels = { system: 'System theme', light: 'Light theme', dark: 'Dark theme' };
 let lastAppliedEvent = 0;
 
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  const message = typeof reason?.message === 'string' ? reason.message : '';
+  if (reason?.name === 'AbortError' && message.includes('Transition was skipped')) {
+    event.preventDefault();
+    return;
+  }
+  if (reason?.name === 'InvalidStateError' && message.includes('Transition was aborted')) {
+    event.preventDefault();
+  }
+});
+
 function storedMode() {
   const saved = localStorage.getItem(storageKey);
   if (saved === 'system' || saved === 'light' || saved === 'dark') return saved;
   return 'system';
 }
 
-function setMode(mode) {
+function setMode(mode, options = {}) {
   const next = mode === 'light' || mode === 'dark' ? mode : 'system';
   const resolved = next === 'system' ? (media?.matches ? 'dark' : 'light') : next;
   root.dataset.colorMode = next === 'system' ? 'auto' : next;
@@ -35,11 +47,13 @@ function setMode(mode) {
     }
   }
 
-  const eventID = ++lastAppliedEvent;
-  requestAnimationFrame(() => {
-    if (eventID !== lastAppliedEvent) return;
-    document.dispatchEvent(new CustomEvent('libredash-theme-applied', { detail: { mode: next, resolvedMode: resolved } }));
-  });
+  if (options.notify !== false) {
+    const eventID = ++lastAppliedEvent;
+    requestAnimationFrame(() => {
+      if (eventID !== lastAppliedEvent) return;
+      document.dispatchEvent(new CustomEvent('libredash-theme-applied', { detail: { mode: next, resolvedMode: resolved } }));
+    });
+  }
 }
 
 document.addEventListener('click', (event) => {
@@ -61,4 +75,4 @@ media?.addEventListener?.('change', () => {
   if (storedMode() === 'system') setMode('system');
 });
 
-setMode(storedMode());
+setMode(storedMode(), { notify: false });

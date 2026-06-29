@@ -102,8 +102,11 @@ func TestPageSetsClientCookieAndRendersReport(t *testing.T) {
 		t.Fatalf("cookies = %#v", cookies)
 	}
 	body := html.UnescapeString(rec.Body.String())
-	if !strings.Contains(body, `<ld-report-canvas`) || !strings.Contains(body, `/updates?dashboard=dash&page=overview`) {
+	if !strings.Contains(body, `<ld-dashboard-page`) || !strings.Contains(body, `/updates?dashboard=dash&page=overview`) {
 		t.Fatalf("page did not render report shell:\n%s", body)
+	}
+	if strings.Contains(body, `<ld-report-canvas`) {
+		t.Fatalf("page rendered dashboard internals in Go shell:\n%s", body)
 	}
 }
 

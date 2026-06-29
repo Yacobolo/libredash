@@ -6,7 +6,7 @@ LibreDash uses a locality-first styling model:
 
 - Primer primitives are the root design token source.
 - `static/app.input.css` imports Primer primitives, imports Tailwind, defines the curated Tailwind theme, and keeps only minimal document defaults.
-- Gomponents-rendered light DOM uses token-backed Tailwind utility classes directly.
+- Gomponents-rendered document shells and top-level custom element mounts use token-backed Tailwind utility classes directly.
 - Lit web components own their local styles and consume Primer or LibreDash CSS variables directly.
 - LibreDash does not keep custom global component classes for ordinary product UI.
 
@@ -20,7 +20,7 @@ Add a token mapping before using a new design value. Arbitrary Tailwind values a
 
 ## Light DOM And Gomponents
 
-Gomponents functions are the reusable UI abstraction. Light DOM should compose utility class strings directly in Go instead of relying on global product selectors such as app shells, report canvases, filter docks, visual frames, sidebars, catalog cards, metric panels, or table regions.
+Gomponents owns document shells, assets, Datastar roots, and explicit top-level custom element mounting. It should not compose product UI internals such as app shells, report canvases, filter docks, visual frames, sidebars, catalog cards, metric panels, or table regions.
 
 Behavior hooks should use `data-*` attributes. Do not use a class name as both a style hook and behavior hook.
 

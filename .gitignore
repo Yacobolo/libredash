@@ -12,6 +12,7 @@ internal/api/gen/
 internal/cli/gen/
 static/app.css
 static/*.js
+static/chunks/
 !static/theme.js
 static/asset-lineage-graph.css
 .env

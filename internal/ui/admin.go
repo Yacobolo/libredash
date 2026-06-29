@@ -6,14 +6,13 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
-	lucide "github.com/eduardolat/gomponents-lucide"
 	g "maragu.dev/gomponents"
 	ds "maragu.dev/gomponents-datastar"
+	c "maragu.dev/gomponents/components"
 	h "maragu.dev/gomponents/html"
 )
-
-const adminMainClass = "grid min-w-0 min-h-svh content-start grid-cols-[minmax(0,1fr)] gap-3 bg-app px-4 py-4 max-sm:min-h-0 max-sm:p-3"
 
 type AdminData struct {
 	Workspace         workspaceview.WorkspaceView
@@ -64,285 +63,178 @@ type AdminPrincipalRef struct {
 	DisplayName string
 }
 
-type AdminStorageData struct {
-	DuckDBDir      string
-	Status         string
-	DatabaseCount  int
-	TotalSizeBytes int64
-	TotalSizeLabel string
-	TableCount     int
-	Databases      []AdminStorageDatabase
-	Tables         []AdminStorageTable
-	Warnings       []string
-}
-
-type AdminStorageDatabase struct {
-	ID        string
-	Name      string
-	Path      string
-	ModelID   string
-	ModelName string
-	SizeBytes int64
-	SizeLabel string
-}
-
-type AdminStorageTable struct {
-	DatabaseID    string
-	DatabaseName  string
-	DatabasePath  string
-	ModelID       string
-	ModelName     string
-	Schema        string
-	Name          string
-	Type          string
-	RowCountLabel string
-	ColumnCount   int
-	SizeLabel     string
-	Columns       []AdminStorageColumn
-}
-
-type AdminStorageColumn struct {
-	Name     string
-	Type     string
-	Ordinal  int
-	Nullable string
-	Default  string
-}
-
-type AdminStorageSignal struct {
-	Summary       AdminStorageSummary       `json:"summary"`
-	Status        string                    `json:"status"`
-	Warnings      []string                  `json:"warnings"`
-	Tables        []AdminStorageTableSignal `json:"tables"`
-	SelectedKey   string                    `json:"selectedKey"`
-	SelectedTable *AdminStorageTableSignal  `json:"selectedTable"`
-}
-
-type AdminStorageSummary struct {
-	DuckDBDir      string `json:"duckdbDir"`
-	DatabaseCount  int    `json:"databaseCount"`
-	TotalSizeLabel string `json:"totalSizeLabel"`
-	TableCount     int    `json:"tableCount"`
-}
-
-type AdminStorageTableSignal struct {
-	Key           string                     `json:"key"`
-	DatabaseID    string                     `json:"databaseId"`
-	DatabaseName  string                     `json:"databaseName"`
-	DatabasePath  string                     `json:"databasePath"`
-	ModelID       string                     `json:"modelId"`
-	ModelName     string                     `json:"modelName"`
-	Schema        string                     `json:"schema"`
-	Name          string                     `json:"name"`
-	Type          string                     `json:"type"`
-	RowCountLabel string                     `json:"rowCountLabel"`
-	ColumnCount   int                        `json:"columnCount"`
-	SizeLabel     string                     `json:"sizeLabel"`
-	Columns       []AdminStorageColumnSignal `json:"columns,omitempty"`
-}
-
-type AdminStorageColumnSignal struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	Ordinal  int    `json:"ordinal"`
-	Nullable string `json:"nullable"`
-	Default  string `json:"default"`
-}
-
-type AdminStorageCommand struct {
-	DatabaseID string `json:"databaseId"`
-	Schema     string `json:"schema"`
-	Table      string `json:"table"`
-}
+type AdminStorageData = uisignals.AdminStorageData
+type AdminStorageDatabase = uisignals.AdminStorageDatabase
+type AdminStorageTable = uisignals.AdminStorageTable
+type AdminStorageColumn = uisignals.AdminStorageColumn
+type AdminStorageSignal = uisignals.AdminStorageSignal
+type AdminStorageSummary = uisignals.AdminStorageSummary
+type AdminStorageTableSignal = uisignals.AdminStorageTableSignal
+type AdminStorageColumnSignal = uisignals.AdminStorageColumnSignal
+type AdminStorageCommand = uisignals.AdminStorageCommand
 
 func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminData) g.Node {
 	title := adminPageTitle(active)
-	return workspaceDocument("Admin - "+title, catalog, "admin", roleLabel, adminSignals(active, data),
-		h.Div(h.Class("grid min-h-svh min-w-0 content-start grid-cols-[max-content_minmax(0,1fr)] bg-app max-sm:grid-cols-1"),
-			adminSubSidebar(active),
-			adminContent(active, data),
+	page := adminPageSignal(active, data)
+	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, "admin", roleLabel)}
+	storageSignal := page.Storage
+	signals := map[string]any{
+		"chrome":  chrome,
+		"page":    page,
+		"runtime": uisignals.RouteRuntimeSignal{Kind: uisignals.RouteAdmin},
+		"status":  dashboard.Status{},
+	}
+	if active == "storage" {
+		signals["adminStorage"] = storageSignal
+		signals["adminStorageCommand"] = AdminStorageCommand{}
+	}
+	adminAttrs := []g.Node{
+		g.Attr("slot", "page"),
+		g.Attr("page", jsonString(page)),
+		g.Attr("data-attr:page", "JSON.stringify($page)"),
+	}
+	if active == "storage" {
+		adminAttrs = append(adminAttrs,
+			g.Attr("storage", jsonString(storageSignal)),
+			g.Attr("data-attr:storage", "JSON.stringify($adminStorage)"),
+			g.Attr("data-on:ld-storage-table-select", "$adminStorageCommand = evt.detail; "+postAction("/admin/storage/select-table")),
+		)
+	}
+	return c.HTML5(c.HTML5Props{
+		Title:    "Admin - " + title,
+		Language: "en",
+		HTMLAttrs: []g.Node{
+			g.Attr("data-color-mode", "auto"),
+			g.Attr("data-light-theme", "light"),
+			g.Attr("data-dark-theme", "dark"),
+		},
+		Head: pageHead(
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/app-shell.js"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/admin-page.js"))),
+			inspectorScript(),
+			h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 		),
-		h.Script(h.Type("module"), h.Src(staticAsset("/static/sub-sidebar.js"))),
-		h.Script(h.Type("module"), h.Src(staticAsset("/static/data-grid.js"))),
-		g.If(active == "storage", h.Script(h.Type("module"), h.Src(staticAsset("/static/storage-explorer.js")))),
-	)
+		Body: []g.Node{
+			h.Main(h.Class(appRootClass),
+				ds.Signals(signals),
+				g.If(active == "storage", ds.Init("@get('/admin/storage/updates', {openWhenHidden: true})")),
+				g.El("ld-app-shell",
+					g.Attr("chrome", jsonString(chrome)),
+					g.Attr("data-attr:chrome", "JSON.stringify($chrome)"),
+					g.El("ld-admin-page", adminAttrs...),
+				),
+				inspectorElement(),
+			),
+		},
+	})
 }
 
-func adminSubSidebar(active string) g.Node {
+func adminPageSignal(active string, data AdminData) uisignals.AdminPageSignal {
+	page := uisignals.AdminPageSignal{
+		Kind:    uisignals.RouteAdmin,
+		Title:   adminPageTitle(active),
+		Active:  active,
+		Sidebar: adminSidebarSignal(active),
+	}
+	switch active {
+	case "principals":
+		page.HeaderTitle = "Principals"
+		page.HeaderDetail = "Users and service principals known to LibreDash."
+		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Principals", Grid: adminPrincipalsGrid(data.Principals)}}
+	case "principal-detail":
+		page.HeaderTitle = "Principals"
+		page.HeaderDetail = "Read-only principal access."
+		if data.SelectedPrincipal == nil {
+			page.Empty = "Principal not found."
+			return page
+		}
+		principal := *data.SelectedPrincipal
+		name := adminDisplayLabel(principal.DisplayName, principal.Email, principal.ID)
+		page.HeaderTitle = "Principals / " + name
+		page.HeaderDetail = "Read-only principal identity and group memberships."
+		page.Metrics = []uisignals.AdminMetricSignal{
+			{Label: "Email", Value: principal.Email},
+			{Label: "Principal ID", Value: principal.ID},
+			{Label: "Direct roles", Value: strings.Join(principal.DirectRoles, ", ")},
+			{Label: "Group count", Value: fmt.Sprint(len(principal.Groups))},
+			{Label: "Created", Value: principal.CreatedAt},
+			{Label: "Updated", Value: principal.UpdatedAt},
+		}
+		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Groups", Grid: adminPrincipalGroupsGrid(principal, data.Groups)}}
+	case "groups":
+		page.HeaderTitle = "Groups"
+		page.HeaderDetail = "Workspace groups and their read-only membership summaries."
+		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Groups", Grid: adminGroupsGrid(data.Groups)}}
+	case "group-detail":
+		page.HeaderTitle = "Groups"
+		page.HeaderDetail = "Read-only group membership."
+		if data.SelectedGroup == nil {
+			page.Empty = "Group not found."
+			return page
+		}
+		group := *data.SelectedGroup
+		name := adminDisplayLabel(group.Name, group.ExternalID, group.ID)
+		page.HeaderTitle = "Groups / " + name
+		page.HeaderDetail = "Read-only group membership and role assignments."
+		page.Metrics = []uisignals.AdminMetricSignal{
+			{Label: "Provider", Value: group.Provider},
+			{Label: "External ID", Value: group.ExternalID},
+			{Label: "Group ID", Value: group.ID},
+			{Label: "Roles", Value: strings.Join(group.Roles, ", ")},
+			{Label: "Member count", Value: fmt.Sprint(len(group.Members))},
+		}
+		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Members", Grid: adminGroupMembersGrid(group, data.Principals)}}
+	case "storage":
+		page.HeaderTitle = "Storage"
+		page.HeaderDetail = "Read-only DuckDB database and table inventory."
+		page.Storage = AdminStorageSignalFromData(data.Storage, AdminStorageCommand{})
+		if data.Storage.Status != "" {
+			page.Empty = data.Storage.Status
+		}
+		page.Metrics = []uisignals.AdminMetricSignal{
+			{Label: "DuckDB directory", Value: data.Storage.DuckDBDir},
+			{Label: "Database files", Value: fmt.Sprint(data.Storage.DatabaseCount)},
+			{Label: "Total size", Value: data.Storage.TotalSizeLabel},
+			{Label: "Tables and views", Value: fmt.Sprint(data.Storage.TableCount)},
+		}
+	default:
+		page.HeaderTitle = "General"
+		page.HeaderDetail = "Read-only workspace administration."
+		if !data.RBACConfigured {
+			page.Empty = data.RBACStatusLabel
+		}
+		page.Metrics = []uisignals.AdminMetricSignal{
+			{Label: "Workspace", Value: data.Workspace.Title, Detail: data.Workspace.ID},
+			{Label: "Auth", Value: configuredLabel(data.AuthConfigured)},
+			{Label: "RBAC", Value: data.RBACStatusLabel},
+			{Label: "Principals", Value: fmt.Sprint(data.PrincipalCount)},
+			{Label: "Groups", Value: fmt.Sprint(data.GroupCount)},
+			{Label: "Role bindings", Value: fmt.Sprint(data.BindingCount)},
+			{Label: "Roles", Value: fmt.Sprint(data.RoleCount)},
+		}
+	}
+	return page
+}
+
+func adminSidebarSignal(active string) uisignals.SubSidebarSignal {
 	principalsActive := active == "principals" || active == "principal-detail"
 	groupsActive := active == "groups" || active == "group-detail"
 	storageActive := active == "storage"
-	items := []map[string]any{
-		{"id": "general", "title": "General", "href": "/admin", "active": active == "general"},
-		{"id": "principals", "title": "Principals", "href": "/admin/principals", "active": principalsActive},
-		{"id": "groups", "title": "Groups", "href": "/admin/groups", "active": groupsActive},
-		{"id": "storage", "title": "Storage", "href": "/admin/storage", "active": storageActive},
+	return uisignals.SubSidebarSignal{
+		Label:       "Admin",
+		RailLabel:   "Admin",
+		AriaLabel:   "Admin navigation",
+		StorageKey:  "libredash-admin-sidebar-collapsed",
+		ActiveID:    active,
+		Numbered:    false,
+		Collapsible: false,
+		Items: []uisignals.SubSidebarItemSignal{
+			{ID: "general", Title: "General", Href: "/admin", Active: active == "general"},
+			{ID: "principals", Title: "Principals", Href: "/admin/principals", Active: principalsActive},
+			{ID: "groups", Title: "Groups", Href: "/admin/groups", Active: groupsActive},
+			{ID: "storage", Title: "Storage", Href: "/admin/storage", Active: storageActive},
+		},
 	}
-	return g.El("ld-sub-sidebar",
-		h.Class("border-r border-outline-variant max-sm:border-b max-sm:border-r-0"),
-		g.Attr("config", jsonString(map[string]any{
-			"label":       "Admin",
-			"railLabel":   "Admin",
-			"ariaLabel":   "Admin navigation",
-			"storageKey":  "libredash-admin-sidebar-collapsed",
-			"activeId":    active,
-			"numbered":    false,
-			"collapsible": false,
-			"items":       items,
-		})),
-	)
-}
-
-func adminContent(active string, data AdminData) g.Node {
-	switch active {
-	case "principals":
-		return adminPrincipalsContent(data)
-	case "principal-detail":
-		return adminPrincipalDetailContent(data)
-	case "groups":
-		return adminGroupsContent(data)
-	case "group-detail":
-		return adminGroupDetailContent(data)
-	case "storage":
-		return adminStorageContent(data)
-	default:
-		return adminGeneralContent(data)
-	}
-}
-
-func adminGeneralContent(data AdminData) g.Node {
-	return h.Section(h.Class(adminMainClass), h.Aria("label", "Admin general"),
-		workspaceHeader("Admin", "General", "Read-only workspace administration.", nil),
-		g.If(!data.RBACConfigured, emptyState(data.RBACStatusLabel)),
-		h.Div(h.Class("grid max-w-workspace-detail content-start items-start grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3"),
-			adminMetricCard("Workspace", data.Workspace.Title, data.Workspace.ID),
-			adminMetricCard("Auth", configuredLabel(data.AuthConfigured), ""),
-			adminMetricCard("RBAC", data.RBACStatusLabel, ""),
-			adminMetricCard("Principals", fmt.Sprint(data.PrincipalCount), ""),
-			adminMetricCard("Groups", fmt.Sprint(data.GroupCount), ""),
-			adminMetricCard("Role bindings", fmt.Sprint(data.BindingCount), ""),
-			adminMetricCard("Roles", fmt.Sprint(data.RoleCount), ""),
-		),
-	)
-}
-
-func adminPrincipalsContent(data AdminData) g.Node {
-	return h.Section(h.Class(adminMainClass), h.Aria("label", "Admin principals"),
-		workspaceHeader("Admin", "Principals", "Users and service principals known to LibreDash.", nil),
-		h.Div(h.Class(workspacePanelClass),
-			g.El("ld-data-grid", g.Attr("grid", jsonString(adminPrincipalsGrid(data.Principals)))),
-		),
-	)
-}
-
-func adminPrincipalDetailContent(data AdminData) g.Node {
-	if data.SelectedPrincipal == nil {
-		return h.Section(h.Class(adminMainClass), h.Aria("label", "Admin principal detail"),
-			workspaceHeader("Admin", "Principals", "Read-only principal access.", adminBackToPrincipalsAction()),
-			emptyState("Principal not found."),
-		)
-	}
-	principal := *data.SelectedPrincipal
-	name := adminDisplayLabel(principal.DisplayName, principal.Email, principal.ID)
-	return h.Section(h.Class(adminMainClass), h.Aria("label", "Admin principal detail"),
-		workspaceHeader("Admin", "Principals / "+name, "Read-only principal identity and group memberships.", adminBackToPrincipalsAction()),
-		h.Div(h.Class("grid max-w-workspace-detail content-start items-start grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-3"),
-			adminMetricCard("Email", principal.Email, ""),
-			adminMetricCard("Principal ID", principal.ID, ""),
-			adminMetricCard("Direct roles", strings.Join(principal.DirectRoles, ", "), ""),
-			adminMetricCard("Group count", fmt.Sprint(len(principal.Groups)), ""),
-			adminMetricCard("Created", principal.CreatedAt, ""),
-			adminMetricCard("Updated", principal.UpdatedAt, ""),
-		),
-		h.Section(h.Class("grid min-w-0 content-start gap-3"), h.Aria("label", "Principal groups"),
-			h.H2(h.Class("m-0 text-body-sm font-semibold text-fg-default"), g.Text("Groups")),
-			h.Div(h.Class(workspacePanelClass),
-				g.El("ld-data-grid", g.Attr("grid", jsonString(adminPrincipalGroupsGrid(principal, data.Groups)))),
-			),
-		),
-	)
-}
-
-func adminGroupsContent(data AdminData) g.Node {
-	return h.Section(h.Class(adminMainClass), h.Aria("label", "Admin groups"),
-		workspaceHeader("Admin", "Groups", "Workspace groups and their read-only membership summaries.", nil),
-		h.Div(h.Class(workspacePanelClass),
-			g.El("ld-data-grid", g.Attr("grid", jsonString(adminGroupsGrid(data.Groups)))),
-		),
-	)
-}
-
-func adminGroupDetailContent(data AdminData) g.Node {
-	if data.SelectedGroup == nil {
-		return h.Section(h.Class(adminMainClass), h.Aria("label", "Admin group detail"),
-			workspaceHeader("Admin", "Groups", "Read-only group membership.", adminBackToGroupsAction()),
-			emptyState("Group not found."),
-		)
-	}
-	group := *data.SelectedGroup
-	name := adminDisplayLabel(group.Name, group.ExternalID, group.ID)
-	return h.Section(h.Class(adminMainClass), h.Aria("label", "Admin group detail"),
-		workspaceHeader("Admin", "Groups / "+name, "Read-only group membership and role assignments.", adminBackToGroupsAction()),
-		h.Div(h.Class("grid max-w-workspace-detail content-start items-start grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-3"),
-			adminMetricCard("Provider", group.Provider, ""),
-			adminMetricCard("External ID", group.ExternalID, ""),
-			adminMetricCard("Group ID", group.ID, ""),
-			adminMetricCard("Roles", strings.Join(group.Roles, ", "), ""),
-			adminMetricCard("Member count", fmt.Sprint(len(group.Members)), ""),
-		),
-		h.Section(h.Class("grid min-w-0 content-start gap-3"), h.Aria("label", "Group members"),
-			h.H2(h.Class("m-0 text-body-sm font-semibold text-fg-default"), g.Text("Members")),
-			h.Div(h.Class(workspacePanelClass),
-				g.El("ld-data-grid", g.Attr("grid", jsonString(adminGroupMembersGrid(group, data.Principals)))),
-			),
-		),
-	)
-}
-
-func adminStorageContent(data AdminData) g.Node {
-	return h.Section(h.Class(adminMainClass), h.Aria("label", "Admin storage"),
-		ds.Init("@get('/admin/storage/updates', {openWhenHidden: true})"),
-		workspaceHeader("Admin", "Storage", "Read-only DuckDB database and table inventory.", nil),
-		g.If(data.Storage.Status != "", emptyState(data.Storage.Status)),
-		g.If(len(data.Storage.Warnings) > 0, adminWarnings(data.Storage.Warnings)),
-		h.Div(h.Class("grid max-w-workspace-detail content-start items-start grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3"),
-			adminMetricCard("DuckDB directory", data.Storage.DuckDBDir, ""),
-			adminMetricCard("Database files", fmt.Sprint(data.Storage.DatabaseCount), ""),
-			adminMetricCard("Total size", data.Storage.TotalSizeLabel, ""),
-			adminMetricCard("Tables and views", fmt.Sprint(data.Storage.TableCount), ""),
-		),
-		g.El("ld-storage-explorer",
-			g.Attr("data-attr:storage", "$adminStorage"),
-			g.Attr("data-on:ld-storage-table-select", "$adminStorageCommand = evt.detail; "+postAction("/admin/storage/select-table")),
-		),
-	)
-}
-
-func adminBackToPrincipalsAction() g.Node {
-	return h.A(h.Class(metricActionButtonClass), h.Href("/admin/principals"), h.Title("Back to principals"), h.Aria("label", "Back to principals"), lucide.ArrowLeft(metricActionIconAttrs()...))
-}
-
-func adminBackToGroupsAction() g.Node {
-	return h.A(h.Class(metricActionButtonClass), h.Href("/admin/groups"), h.Title("Back to groups"), h.Aria("label", "Back to groups"), lucide.ArrowLeft(metricActionIconAttrs()...))
-}
-
-func adminWarnings(warnings []string) g.Node {
-	return h.Div(h.Class("grid max-w-workspace-detail content-start gap-2"),
-		g.Map(warnings, func(warning string) g.Node {
-			return h.P(h.Class("m-0 rounded-default border border-outline-muted bg-panel p-3 text-body-sm text-fg-muted"), g.Text(warning))
-		}),
-	)
-}
-
-func adminMetricCard(label, value, detail string) g.Node {
-	if strings.TrimSpace(value) == "" {
-		value = "-"
-	}
-	return h.Div(h.Class(workspacePanelClass+" content-start p-4"),
-		h.P(h.Class(eyebrowClass), g.Text(label)),
-		h.P(h.Class("m-0 truncate text-title-sm font-semibold text-fg-default"), g.Text(value)),
-		g.If(detail != "", h.P(h.Class("m-0 mt-1 truncate text-caption font-medium text-fg-muted"), g.Text(detail))),
-	)
 }
 
 func adminPrincipalsGrid(principals []AdminPrincipal) metricGrid {
@@ -487,31 +379,20 @@ func adminPageTitle(active string) string {
 	}
 }
 
-func adminSignals(active string, data AdminData) map[string]any {
-	if active != "storage" {
-		return nil
-	}
-	return map[string]any{
-		"adminStorage":        AdminStorageSignalFromData(data.Storage, AdminStorageCommand{}),
-		"adminStorageCommand": AdminStorageCommand{},
-		"csrfToken":           data.CSRFToken,
-	}
-}
-
 func AdminStorageSignalFromData(data AdminStorageData, command AdminStorageCommand) AdminStorageSignal {
 	tables := make([]AdminStorageTableSignal, 0, len(data.Tables))
 	var selected *AdminStorageTableSignal
 	for _, table := range data.Tables {
-		signalTable := adminStorageTableSignal(table)
+		signalTable := AdminStorageTableSignalFromTable(table)
 		tables = append(tables, signalTable)
-		if adminStorageCommandMatches(command, table) {
-			selectedCopy := signalTable
-			selected = &selectedCopy
+		if selected == nil && adminStorageCommandMatches(command, table) {
+			copy := signalTable
+			selected = &copy
 		}
 	}
 	if selected == nil && len(tables) > 0 {
-		selectedCopy := tables[0]
-		selected = &selectedCopy
+		copy := tables[0]
+		selected = &copy
 	}
 	selectedKey := ""
 	if selected != nil {
@@ -530,10 +411,6 @@ func AdminStorageSignalFromData(data AdminStorageData, command AdminStorageComma
 		SelectedKey:   selectedKey,
 		SelectedTable: selected,
 	}
-}
-
-func adminStorageTableSignal(table AdminStorageTable) AdminStorageTableSignal {
-	return AdminStorageTableSignalFromTable(table)
 }
 
 func AdminStorageTableSignalFromTable(table AdminStorageTable) AdminStorageTableSignal {

@@ -114,7 +114,7 @@ func TestRefreshVisibilityRecordsDirectModelTableDependencyRuns(t *testing.T) {
 		t.Fatalf("model table refresh status = %d, want %d", got, http.StatusNoContent)
 	}
 	requireStreamPatch(t, summaryStream, func(patch map[string]any) bool {
-		refresh := mapAt(patch, "assetRefresh")
+		refresh := mapAt(mapAt(patch, "page"), "refresh")
 		return stringValue(refresh["status"]) == materialize.RunStatusSucceeded && strings.Contains(patchJSON(t, patch), "Direct")
 	})
 
@@ -159,7 +159,7 @@ func TestRefreshVisibilityRecordsDirectModelTableDependencyRuns(t *testing.T) {
 func requireAssetRefreshStatus(t *testing.T, stream *streamClient, status string) map[string]any {
 	t.Helper()
 	return requireStreamPatch(t, stream, func(patch map[string]any) bool {
-		refresh := mapAt(patch, "assetRefresh")
+		refresh := mapAt(mapAt(patch, "page"), "refresh")
 		return stringValue(refresh["status"]) == status
 	})
 }
