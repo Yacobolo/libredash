@@ -42,12 +42,14 @@ const (
 )
 
 type Diagnostic struct {
-	File     string   `json:"file,omitempty"`
-	Line     int      `json:"line,omitempty"`
-	Column   int      `json:"column,omitempty"`
-	Severity Severity `json:"severity"`
-	Code     string   `json:"code"`
-	Message  string   `json:"message"`
+	File       string   `json:"file,omitempty"`
+	Line       int      `json:"line,omitempty"`
+	Column     int      `json:"column,omitempty"`
+	ResourceID string   `json:"resourceId,omitempty"`
+	FieldPath  string   `json:"fieldPath,omitempty"`
+	Severity   Severity `json:"severity"`
+	Code       string   `json:"code"`
+	Message    string   `json:"message"`
 }
 
 type Error struct {
@@ -72,7 +74,14 @@ func (d Diagnostic) String() string {
 	if location == "" {
 		return fmt.Sprintf("%s %s: %s", d.Severity, d.Code, d.Message)
 	}
-	return fmt.Sprintf("%s: %s %s: %s", location, d.Severity, d.Code, d.Message)
+	context := ""
+	if d.ResourceID != "" {
+		context += " resource=" + d.ResourceID
+	}
+	if d.FieldPath != "" {
+		context += " field=" + d.FieldPath
+	}
+	return fmt.Sprintf("%s: %s %s%s: %s", location, d.Severity, d.Code, context, d.Message)
 }
 
 func ValidateFile(kind Kind, path string) error {
@@ -197,6 +206,12 @@ func Diagnostics(err error) []Diagnostic {
 }
 
 func DiagnosticForError(err error) Diagnostic {
+	var provider interface {
+		Diagnostic() Diagnostic
+	}
+	if errors.As(err, &provider) {
+		return provider.Diagnostic()
+	}
 	return Diagnostic{
 		Severity: SeverityError,
 		Code:     compilerCode(err),

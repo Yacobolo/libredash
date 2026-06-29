@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Yacobolo/libredash/internal/configschema"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
@@ -88,6 +89,10 @@ spec:
 	if !strings.Contains(err.Error(), "outside uses.sources") {
 		t.Fatalf("CompileProject() error = %v, want outside uses.sources", err)
 	}
+	diagnostic := configschema.Diagnostics(err)[0]
+	if diagnostic.ResourceID != "model_table:sales.orders" || diagnostic.FieldPath != "spec.sources" || diagnostic.File == "" {
+		t.Fatalf("diagnostic = %#v, want resource, field, and file context", diagnostic)
+	}
 }
 
 func TestCompileShowcaseProject(t *testing.T) {
@@ -137,6 +142,86 @@ func TestPlanProjectIsStableAndSorted(t *testing.T) {
 	if got := first.Workspaces[0].ModelTables; !reflect.DeepEqual(got, []string{"customers", "orders"}) {
 		t.Fatalf("model tables = %#v, want sorted customers/orders", got)
 	}
+}
+
+func TestPlanProjectAgainstGraphReportsStableDiff(t *testing.T) {
+	projectPath := writeProjectFixture(t, map[string]string{
+		"libredash.yaml":                                   projectYAML(),
+		"connections/olist.yaml":                           connectionYAML("olist"),
+		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
+		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
+		"workspaces/sales/workspace.yaml":                  workspaceYAML("sales"),
+		"workspaces/sales/models/orders.yaml":              modelTableYAML("sales", "orders", "olist.orders", "order_id", "SELECT order_id, order_status AS status FROM source.\"olist.orders\""),
+		"workspaces/sales/semantic-models/sales.yaml":      semanticModelYAML("sales", "orders", "order_count"),
+		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
+	})
+	active, err := CompileProject(projectPath, Options{DeploymentID: "dep_active"})
+	if err != nil {
+		t.Fatalf("CompileProject() error = %v", err)
+	}
+	activeGraph := active.Workspaces["sales"].Workspace.Graph
+	for index := range activeGraph.Assets {
+		if activeGraph.Assets[index].ID == "model_table:sales.orders" {
+			activeGraph.Assets[index].ContentHash = "changed"
+		}
+	}
+	activeGraph.Assets = append(activeGraph.Assets, workspace.Asset{
+		ID:            "dashboard:sales.removed",
+		WorkspaceID:   "sales",
+		DeploymentID:  "dep_active",
+		Type:          workspace.AssetTypeDashboard,
+		Key:           "sales.removed",
+		PayloadSchema: workspace.PayloadSchemaForAssetType(workspace.AssetTypeDashboard),
+		ContentHash:   "removed",
+	})
+	if len(activeGraph.Edges) == 0 {
+		t.Fatal("fixture graph has no edges")
+	}
+	activeGraph.Edges = activeGraph.Edges[:len(activeGraph.Edges)-1]
+
+	first, err := PlanProjectAgainstGraph(projectPath, "sales", activeGraph)
+	if err != nil {
+		t.Fatalf("PlanProjectAgainstGraph() error = %v", err)
+	}
+	second, err := PlanProjectAgainstGraph(projectPath, "sales", activeGraph)
+	if err != nil {
+		t.Fatalf("PlanProjectAgainstGraph() second error = %v", err)
+	}
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("plan diff unstable:\nfirst=%#v\nsecond=%#v", first, second)
+	}
+	workspacePlan := first.Workspaces[0]
+	if workspacePlan.Summary.Changed != 1 || workspacePlan.Summary.Removed != 1 || workspacePlan.Summary.DependencyChanges != 1 {
+		t.Fatalf("summary = %#v, want one changed, one removed, one dependency change", workspacePlan.Summary)
+	}
+	if !workspacePlan.Summary.Breaking || !workspacePlan.Summary.MaterializationImpact {
+		t.Fatalf("summary impact = %#v, want breaking and materialization impact", workspacePlan.Summary)
+	}
+}
+
+func TestCompileProjectSupportsMultipleSemanticModelsInWorkspace(t *testing.T) {
+	projectPath := writeProjectFixture(t, map[string]string{
+		"libredash.yaml":                                   projectYAML(),
+		"connections/olist.yaml":                           connectionYAML("olist"),
+		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
+		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
+		"workspaces/sales/workspace.yaml":                  workspaceYAML("sales"),
+		"workspaces/sales/models/orders.yaml":              modelTableYAML("sales", "orders", "olist.orders", "order_id", "SELECT order_id, order_status AS status FROM source.\"olist.orders\""),
+		"workspaces/sales/semantic-models/sales.yaml":      semanticModelNamedYAML("sales", "sales", "orders", "order_count"),
+		"workspaces/sales/semantic-models/finance.yaml":    semanticModelNamedYAML("sales", "finance", "orders", "finance_order_count"),
+		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
+	})
+
+	compiled, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+	if err != nil {
+		t.Fatalf("CompileProject() error = %v", err)
+	}
+	definition := compiled.Workspaces["sales"].Definition
+	if len(definition.Models) != 2 {
+		t.Fatalf("semantic model count = %d, want 2", len(definition.Models))
+	}
+	assertGraphAsset(t, compiled.Workspaces["sales"].Workspace.Graph, "semantic_model:sales.sales")
+	assertGraphAsset(t, compiled.Workspaces["sales"].Workspace.Graph, "semantic_model:sales.finance")
 }
 
 func TestCompileProjectAllowsDuplicateDashboardIDsAcrossWorkspaces(t *testing.T) {
@@ -426,12 +511,16 @@ spec:
 }
 
 func semanticModelYAML(workspace, table, measure string) string {
+	return semanticModelNamedYAML(workspace, workspace, table, measure)
+}
+
+func semanticModelNamedYAML(workspace, name, table, measure string) string {
 	return `
 apiVersion: libredash.dev/v1
 kind: SemanticModel
 metadata:
   workspace: ` + workspace + `
-  name: ` + workspace + `
+  name: ` + name + `
 spec:
   baseTable: ` + table + `
   tables:

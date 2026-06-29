@@ -36,19 +36,18 @@ func (f deploymentRuntimeFactory) Prepare(_ context.Context, input runtimehost.R
 		return nil, err
 	}
 	duckDir := filepath.Join(duckDBDir, string(input.Deployment.ID))
-	projectPath := filepath.Join(targetDir, deploymentfs.ProjectFile)
-	if _, err := os.Stat(projectPath); err == nil {
-		services, err := dashboardruntime.NewFromProject(dataDir, projectPath, duckDir, dashboardDataRuntimeFactory{})
-		if err != nil {
-			return nil, err
-		}
-		service, ok := services[string(input.Deployment.WorkspaceID)]
-		if !ok {
-			return nil, fmt.Errorf("project artifact has no workspace %q", input.Deployment.WorkspaceID)
-		}
-		return service, nil
+	compiled, _, err := deploymentfs.LoadCompiledWorkspaceArtifact(targetDir)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("deployment artifact is missing %s", deploymentfs.ProjectFile)
+	if compiled.WorkspaceID != string(input.Deployment.WorkspaceID) {
+		return nil, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, input.Deployment.WorkspaceID)
+	}
+	service, err := dashboardruntime.NewFromDefinition(dataDir, duckDir, dashboardDataRuntimeFactory{}, compiled.Definition)
+	if err != nil {
+		return nil, err
+	}
+	return service, nil
 }
 
 type dashboardDataRuntimeFactory struct{}

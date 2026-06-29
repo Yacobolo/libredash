@@ -109,6 +109,10 @@ package contracts
 	root?:        string
 	scope?:       string
 	auth?:        #AnyObject
+	credentials?: close({
+		provider!: "env"
+		secret!:   string
+	})
 	options?:     #AnyObject
 	defaults?: close({
 		options?: #AnyObject

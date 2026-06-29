@@ -11,7 +11,9 @@ import (
 	"text/tabwriter"
 
 	"github.com/Yacobolo/libredash/internal/api"
+	"github.com/Yacobolo/libredash/internal/deployment"
 	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
+	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 	"github.com/spf13/cobra"
 )
 
@@ -77,15 +79,16 @@ func runDeploy(ctx context.Context, opts *rootOptions) error {
 	if err != nil {
 		return err
 	}
-	var buf bytes.Buffer
-	var manifest deploymentfs.Manifest
-	var digest string
-	manifest, digest, err = deploymentfs.PackProject(opts.catalog, opts.workspaceID, &buf)
+	project, err := workspacecompiler.LoadProject(opts.catalog)
 	if err != nil {
 		return err
 	}
+	workspaceProject, ok := project.Workspaces[opts.workspaceID]
+	if !ok {
+		return fmt.Errorf("project %q has no workspace %q", opts.catalog, opts.workspaceID)
+	}
 	createBody, _ := json.Marshal(map[string]any{
-		"title": manifest.WorkspaceTitle,
+		"title": workspaceProject.Title,
 	})
 	var created api.DeploymentResponse
 	workspacePathParams := map[string]string{"workspace": opts.workspaceID}
@@ -94,6 +97,12 @@ func runDeploy(ctx context.Context, opts *rootOptions) error {
 		return err
 	}
 	if err := doJSON(ctx, http.MethodPost, createURL, token, bytes.NewReader(createBody), &created); err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	var digest string
+	_, digest, err = deploymentfs.PackProject(opts.catalog, opts.workspaceID, deployment.ID(created.ID), &buf)
+	if err != nil {
 		return err
 	}
 	uploadURL, err := apiOperationURL(target, "uploadDeploymentArtifact", map[string]string{"workspace": opts.workspaceID, "deployment": created.ID}, nil)

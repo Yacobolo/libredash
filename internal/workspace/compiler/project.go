@@ -20,11 +20,13 @@ import (
 const projectAPIVersion = "libredash.dev/v1"
 
 type Project struct {
-	Name        string
-	BaseDir     string
-	Connections map[string]semanticmodel.Connection
-	Sources     map[string]semanticmodel.Source
-	Workspaces  map[string]*WorkspaceProject
+	Name            string
+	BaseDir         string
+	Connections     map[string]semanticmodel.Connection
+	ConnectionPaths map[string]string
+	Sources         map[string]semanticmodel.Source
+	SourcePaths     map[string]string
+	Workspaces      map[string]*WorkspaceProject
 }
 
 type WorkspaceProject struct {
@@ -40,6 +42,10 @@ type WorkspaceProject struct {
 	DashboardTitles       map[string]string
 	DashboardDescriptions map[string]string
 	DashboardTags         map[string][]string
+	Path                  string
+	ModelPaths            map[string]string
+	SemanticModelPaths    map[string]string
+	DashboardPaths        map[string]string
 }
 
 type CompiledProject struct {
@@ -53,12 +59,43 @@ type ProjectPlan struct {
 }
 
 type ProjectPlanWorkspace struct {
-	ID             string   `json:"id"`
-	Connections    []string `json:"connections"`
-	Sources        []string `json:"sources"`
-	ModelTables    []string `json:"modelTables"`
-	SemanticModels []string `json:"semanticModels"`
-	Dashboards     []string `json:"dashboards"`
+	ID                string                        `json:"id"`
+	Connections       []string                      `json:"connections"`
+	Sources           []string                      `json:"sources"`
+	ModelTables       []string                      `json:"modelTables"`
+	SemanticModels    []string                      `json:"semanticModels"`
+	Dashboards        []string                      `json:"dashboards"`
+	Changes           []ProjectPlanChange           `json:"changes,omitempty"`
+	DependencyChanges []ProjectPlanDependencyChange `json:"dependencyChanges,omitempty"`
+	Summary           ProjectPlanSummary            `json:"summary,omitempty"`
+}
+
+type ProjectPlanSummary struct {
+	Added                 int  `json:"added,omitempty"`
+	Changed               int  `json:"changed,omitempty"`
+	Removed               int  `json:"removed,omitempty"`
+	DependencyChanges     int  `json:"dependencyChanges,omitempty"`
+	Breaking              bool `json:"breaking,omitempty"`
+	MaterializationImpact bool `json:"materializationImpact,omitempty"`
+	AccessImpact          bool `json:"accessImpact,omitempty"`
+}
+
+type ProjectPlanChange struct {
+	Action                string `json:"action"`
+	ID                    string `json:"id"`
+	Type                  string `json:"type"`
+	Key                   string `json:"key"`
+	Reason                string `json:"reason,omitempty"`
+	Breaking              bool   `json:"breaking,omitempty"`
+	MaterializationImpact bool   `json:"materializationImpact,omitempty"`
+	AccessImpact          bool   `json:"accessImpact,omitempty"`
+}
+
+type ProjectPlanDependencyChange struct {
+	Action string `json:"action"`
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Type   string `json:"type"`
 }
 
 type resourceEnvelope struct {
@@ -186,6 +223,233 @@ func PlanProject(projectPath string) (ProjectPlan, error) {
 	return plan, nil
 }
 
+func PlanProjectAgainstGraph(projectPath, workspaceID string, active workspace.AssetGraph) (ProjectPlan, error) {
+	compiled, err := CompileProject(projectPath, Options{DeploymentID: workspace.DeploymentID("plan")})
+	if err != nil {
+		return ProjectPlan{}, err
+	}
+	plan, err := PlanProject(projectPath)
+	if err != nil {
+		return ProjectPlan{}, err
+	}
+	if workspaceID != "" {
+		filtered := plan.Workspaces[:0]
+		for _, workspacePlan := range plan.Workspaces {
+			if workspacePlan.ID == workspaceID {
+				filtered = append(filtered, workspacePlan)
+			}
+		}
+		if len(filtered) == 0 {
+			return ProjectPlan{}, fmt.Errorf("project %q has no workspace %q", projectPath, workspaceID)
+		}
+		plan.Workspaces = filtered
+	}
+	for index := range plan.Workspaces {
+		compiledWorkspace, ok := compiled.Workspaces[plan.Workspaces[index].ID]
+		if !ok {
+			continue
+		}
+		changes, dependencyChanges, summary := diffAssetGraphs(compiledWorkspace.Workspace.Graph, active)
+		plan.Workspaces[index].Changes = changes
+		plan.Workspaces[index].DependencyChanges = dependencyChanges
+		plan.Workspaces[index].Summary = summary
+	}
+	return plan, nil
+}
+
+func diffAssetGraphs(authored, active workspace.AssetGraph) ([]ProjectPlanChange, []ProjectPlanDependencyChange, ProjectPlanSummary) {
+	authoredAssets := map[workspace.AssetID]workspace.Asset{}
+	activeAssets := map[workspace.AssetID]workspace.Asset{}
+	for _, asset := range authored.Assets {
+		authoredAssets[asset.ID] = asset
+	}
+	for _, asset := range active.Assets {
+		activeAssets[asset.ID] = asset
+	}
+	changes := []ProjectPlanChange{}
+	for _, id := range sortedAssetIDs(authoredAssets) {
+		asset := authoredAssets[id]
+		activeAsset, ok := activeAssets[id]
+		if !ok {
+			changes = append(changes, projectPlanChange("add", asset, "not in active deployment"))
+			continue
+		}
+		if activeAsset.ContentHash != asset.ContentHash {
+			changes = append(changes, projectPlanChange("change", asset, "content hash changed"))
+		}
+	}
+	for _, id := range sortedAssetIDs(activeAssets) {
+		if _, ok := authoredAssets[id]; ok {
+			continue
+		}
+		changes = append(changes, projectPlanChange("remove", activeAssets[id], "not in authored config"))
+	}
+	dependencyChanges := diffAssetEdges(authored.Edges, active.Edges)
+	sort.Slice(changes, func(i, j int) bool {
+		if changes[i].Action != changes[j].Action {
+			return planActionOrder(changes[i].Action) < planActionOrder(changes[j].Action)
+		}
+		return changes[i].ID < changes[j].ID
+	})
+	sort.Slice(dependencyChanges, func(i, j int) bool {
+		if dependencyChanges[i].Action != dependencyChanges[j].Action {
+			return planActionOrder(dependencyChanges[i].Action) < planActionOrder(dependencyChanges[j].Action)
+		}
+		if dependencyChanges[i].From != dependencyChanges[j].From {
+			return dependencyChanges[i].From < dependencyChanges[j].From
+		}
+		if dependencyChanges[i].To != dependencyChanges[j].To {
+			return dependencyChanges[i].To < dependencyChanges[j].To
+		}
+		return dependencyChanges[i].Type < dependencyChanges[j].Type
+	})
+	summary := ProjectPlanSummary{DependencyChanges: len(dependencyChanges)}
+	for _, change := range changes {
+		switch change.Action {
+		case "add":
+			summary.Added++
+		case "change":
+			summary.Changed++
+		case "remove":
+			summary.Removed++
+		}
+		if change.Breaking {
+			summary.Breaking = true
+		}
+		if change.MaterializationImpact {
+			summary.MaterializationImpact = true
+		}
+		if change.AccessImpact {
+			summary.AccessImpact = true
+		}
+	}
+	for _, change := range dependencyChanges {
+		if dependencyMaterializationImpact(change.Type) {
+			summary.MaterializationImpact = true
+		}
+	}
+	return changes, dependencyChanges, summary
+}
+
+func projectPlanChange(action string, asset workspace.Asset, reason string) ProjectPlanChange {
+	return ProjectPlanChange{
+		Action:                action,
+		ID:                    string(asset.ID),
+		Type:                  string(asset.Type),
+		Key:                   asset.Key,
+		Reason:                reason,
+		Breaking:              action == "remove" && breakingAssetType(asset.Type),
+		MaterializationImpact: materializationAssetType(asset.Type),
+	}
+}
+
+func diffAssetEdges(authored, active []workspace.AssetEdge) []ProjectPlanDependencyChange {
+	authoredEdges := map[planEdgeKey]struct{}{}
+	activeEdges := map[planEdgeKey]struct{}{}
+	for _, edge := range authored {
+		authoredEdges[planEdgeKey{from: edge.FromAssetID, to: edge.ToAssetID, typ: edge.Type}] = struct{}{}
+	}
+	for _, edge := range active {
+		activeEdges[planEdgeKey{from: edge.FromAssetID, to: edge.ToAssetID, typ: edge.Type}] = struct{}{}
+	}
+	changes := []ProjectPlanDependencyChange{}
+	for _, key := range sortedPlanEdgeKeys(authoredEdges) {
+		if _, ok := activeEdges[key]; ok {
+			continue
+		}
+		changes = append(changes, ProjectPlanDependencyChange{
+			Action: "add",
+			From:   string(key.from),
+			To:     string(key.to),
+			Type:   string(key.typ),
+		})
+	}
+	for _, key := range sortedPlanEdgeKeys(activeEdges) {
+		if _, ok := authoredEdges[key]; ok {
+			continue
+		}
+		changes = append(changes, ProjectPlanDependencyChange{
+			Action: "remove",
+			From:   string(key.from),
+			To:     string(key.to),
+			Type:   string(key.typ),
+		})
+	}
+	return changes
+}
+
+type planEdgeKey struct {
+	from workspace.AssetID
+	to   workspace.AssetID
+	typ  workspace.AssetEdgeType
+}
+
+func sortedAssetIDs(values map[workspace.AssetID]workspace.Asset) []workspace.AssetID {
+	keys := make([]workspace.AssetID, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	return keys
+}
+
+func sortedPlanEdgeKeys(values map[planEdgeKey]struct{}) []planEdgeKey {
+	keys := make([]planEdgeKey, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].from != keys[j].from {
+			return keys[i].from < keys[j].from
+		}
+		if keys[i].to != keys[j].to {
+			return keys[i].to < keys[j].to
+		}
+		return keys[i].typ < keys[j].typ
+	})
+	return keys
+}
+
+func planActionOrder(action string) int {
+	switch action {
+	case "add":
+		return 0
+	case "change":
+		return 1
+	case "remove":
+		return 2
+	default:
+		return 3
+	}
+}
+
+func breakingAssetType(typ workspace.AssetType) bool {
+	switch typ {
+	case workspace.AssetTypeCatalog, workspace.AssetTypeDashboard, workspace.AssetTypeSemanticModel, workspace.AssetTypeModelTable, workspace.AssetTypeSource:
+		return true
+	default:
+		return false
+	}
+}
+
+func materializationAssetType(typ workspace.AssetType) bool {
+	switch typ {
+	case workspace.AssetTypeSource, workspace.AssetTypeModelTable:
+		return true
+	default:
+		return false
+	}
+}
+
+func dependencyMaterializationImpact(edgeType string) bool {
+	switch workspace.AssetEdgeType(edgeType) {
+	case workspace.AssetEdgeReadsSource, workspace.AssetEdgeUsesModelTable:
+		return true
+	default:
+		return false
+	}
+}
+
 func IsProjectConfigFile(path string) bool {
 	return projectConfigFile(path)
 }
@@ -204,11 +468,13 @@ func LoadProject(projectPath string) (Project, error) {
 	}
 	baseDir := filepath.Dir(projectPath)
 	project := Project{
-		Name:        envelope.Metadata.Name,
-		BaseDir:     baseDir,
-		Connections: map[string]semanticmodel.Connection{},
-		Sources:     map[string]semanticmodel.Source{},
-		Workspaces:  map[string]*WorkspaceProject{},
+		Name:            envelope.Metadata.Name,
+		BaseDir:         baseDir,
+		Connections:     map[string]semanticmodel.Connection{},
+		ConnectionPaths: map[string]string{},
+		Sources:         map[string]semanticmodel.Source{},
+		SourcePaths:     map[string]string{},
+		Workspaces:      map[string]*WorkspaceProject{},
 	}
 	if err := loadConnections(&project, spec.Connections.Include); err != nil {
 		return Project{}, err
@@ -247,6 +513,7 @@ func loadConnections(project *Project, includes []string) error {
 			return fmt.Errorf("duplicate Connection %q", name)
 		}
 		project.Connections[name] = spec
+		project.ConnectionPaths[name] = path
 	}
 	return nil
 }
@@ -288,6 +555,7 @@ func loadSources(project *Project, includes []string) error {
 			source.Fields[field] = semanticmodel.SourceField{Description: cfg.Description}
 		}
 		project.Sources[name] = source
+		project.SourcePaths[name] = path
 	}
 	return nil
 }
@@ -329,6 +597,10 @@ func loadWorkspaces(project *Project, includes []string) error {
 			DashboardTitles:       map[string]string{},
 			DashboardDescriptions: map[string]string{},
 			DashboardTags:         map[string][]string{},
+			Path:                  path,
+			ModelPaths:            map[string]string{},
+			SemanticModelPaths:    map[string]string{},
+			DashboardPaths:        map[string]string{},
 		}
 		for _, source := range spec.Uses.Sources {
 			workspaceProject.AllowedSources[source] = struct{}{}
@@ -375,6 +647,7 @@ func loadWorkspaceModels(workspaceProject *WorkspaceProject, baseDir string, inc
 		workspaceProject.Models[name] = table
 		workspaceProject.ModelTitles[name] = envelope.Metadata.Title
 		workspaceProject.ModelDescriptions[name] = envelope.Metadata.Description
+		workspaceProject.ModelPaths[name] = path
 	}
 	return nil
 }
@@ -406,6 +679,7 @@ func loadWorkspaceSemanticModels(workspaceProject *WorkspaceProject, baseDir str
 		workspaceProject.SemanticModels[name] = spec
 		workspaceProject.ModelTitles[name] = envelope.Metadata.Title
 		workspaceProject.ModelDescriptions[name] = envelope.Metadata.Description
+		workspaceProject.SemanticModelPaths[name] = path
 	}
 	return nil
 }
@@ -448,6 +722,7 @@ func loadWorkspaceDashboards(workspaceProject *WorkspaceProject, baseDir string,
 		workspaceProject.DashboardTitles[name] = envelope.Metadata.Title
 		workspaceProject.DashboardDescriptions[name] = envelope.Metadata.Description
 		workspaceProject.DashboardTags[name] = append([]string{}, envelope.Metadata.Tags...)
+		workspaceProject.DashboardPaths[name] = path
 	}
 	return nil
 }
@@ -455,43 +730,43 @@ func loadWorkspaceDashboards(workspaceProject *WorkspaceProject, baseDir string,
 func validateProject(project Project) error {
 	for sourceName, source := range project.Sources {
 		if _, ok := project.Connections[source.Connection]; !ok {
-			return fmt.Errorf("Source %q references unknown Connection %q", sourceName, source.Connection)
+			return resourceError(project.SourcePaths[sourceName], "source:"+sourceName, "spec.connection", "Source %q references unknown Connection %q", sourceName, source.Connection)
 		}
 	}
 	for _, workspaceProject := range project.Workspaces {
 		for source := range workspaceProject.AllowedSources {
 			if _, ok := project.Sources[source]; !ok {
-				return fmt.Errorf("Workspace %q allows unknown Source %q", workspaceProject.ID, source)
+				return resourceError(workspaceProject.Path, "workspace:"+workspaceProject.ID, "spec.uses.sources", "Workspace %q allows unknown Source %q", workspaceProject.ID, source)
 			}
 		}
 		if len(workspaceProject.SemanticModels) == 0 {
-			return fmt.Errorf("Workspace %q requires SemanticModel resources", workspaceProject.ID)
+			return resourceError(workspaceProject.Path, "workspace:"+workspaceProject.ID, "spec.semanticModels", "Workspace %q requires SemanticModel resources", workspaceProject.ID)
 		}
 		for tableName, table := range workspaceProject.Models {
 			for _, source := range table.Sources {
 				if _, ok := workspaceProject.AllowedSources[source]; !ok {
-					return fmt.Errorf("ModelTable %q.%q reads source %q outside uses.sources", workspaceProject.ID, tableName, source)
+					return resourceError(workspaceProject.ModelPaths[tableName], "model_table:"+workspaceProject.ID+"."+tableName, "spec.sources", "ModelTable %q.%q reads source %q outside uses.sources", workspaceProject.ID, tableName, source)
 				}
 			}
 			if table.Source != "" {
 				if _, ok := workspaceProject.AllowedSources[table.Source]; !ok {
-					return fmt.Errorf("ModelTable %q.%q reads source %q outside uses.sources", workspaceProject.ID, tableName, table.Source)
+					return resourceError(workspaceProject.ModelPaths[tableName], "model_table:"+workspaceProject.ID+"."+tableName, "spec.source", "ModelTable %q.%q reads source %q outside uses.sources", workspaceProject.ID, tableName, table.Source)
 				}
 			}
-			if err := validateProjectTableSources(workspaceProject.ID, tableName, table); err != nil {
+			if err := validateProjectTableSources(workspaceProject.ID, tableName, workspaceProject.ModelPaths[tableName], table); err != nil {
 				return err
 			}
 		}
 		for name, dashboard := range workspaceProject.Dashboards {
 			if _, ok := workspaceProject.SemanticModels[dashboard.SemanticModel]; !ok {
-				return fmt.Errorf("Dashboard %q.%q references unknown SemanticModel %q", workspaceProject.ID, name, dashboard.SemanticModel)
+				return resourceError(workspaceProject.DashboardPaths[name], "dashboard:"+workspaceProject.ID+"."+name, "spec.semanticModel", "Dashboard %q.%q references unknown SemanticModel %q", workspaceProject.ID, name, dashboard.SemanticModel)
 			}
 		}
 	}
 	return nil
 }
 
-func validateProjectTableSources(workspaceID, tableName string, table semanticmodel.Table) error {
+func validateProjectTableSources(workspaceID, tableName, path string, table semanticmodel.Table) error {
 	sql := strings.TrimSpace(table.Transform.SQL)
 	if sql == "" {
 		sql = strings.TrimSpace(table.SQL)
@@ -506,39 +781,18 @@ func validateProjectTableSources(workspaceID, tableName string, table semanticmo
 	sort.Strings(declared)
 	inferred, rawRefs, unqualifiedRefs := (&semanticmodel.Model{}).SQLSourceRefs(sql)
 	if len(rawRefs) > 0 {
-		return fmt.Errorf("ModelTable %q.%q SQL must reference sources through source.<name>; raw.<name> is internal", workspaceID, tableName)
+		return resourceError(path, "model_table:"+workspaceID+"."+tableName, "spec.sql", "ModelTable %q.%q SQL must reference sources through source.<name>; raw.<name> is internal", workspaceID, tableName)
 	}
 	if len(unqualifiedRefs) > 0 {
-		return fmt.Errorf("ModelTable %q.%q SQL must reference sources through source.<name>; found unqualified relation %q", workspaceID, tableName, unqualifiedRefs[0])
+		return resourceError(path, "model_table:"+workspaceID+"."+tableName, "spec.sql", "ModelTable %q.%q SQL must reference sources through source.<name>; found unqualified relation %q", workspaceID, tableName, unqualifiedRefs[0])
 	}
 	if !sameStringList(declared, inferred) {
-		return fmt.Errorf("ModelTable %q.%q SQL source references %v do not match declared sources %v", workspaceID, tableName, inferred, declared)
+		return resourceError(path, "model_table:"+workspaceID+"."+tableName, "spec.sources", "ModelTable %q.%q SQL source references %v do not match declared sources %v", workspaceID, tableName, inferred, declared)
 	}
 	return nil
 }
 
 func (workspaceProject *WorkspaceProject) definition(project Project) (*workspace.Definition, error) {
-	if len(workspaceProject.SemanticModels) != 1 {
-		return nil, fmt.Errorf("workspace %q requires exactly one SemanticModel for runtime compilation", workspaceProject.ID)
-	}
-	var modelName string
-	var semanticSpec projectSemanticModelSpec
-	for name, spec := range workspaceProject.SemanticModels {
-		modelName = name
-		semanticSpec = spec
-	}
-	model := &semanticmodel.Model{
-		Name:          modelName,
-		Title:         firstNonEmpty(workspaceProject.ModelTitles[modelName], modelName),
-		Description:   workspaceProject.ModelDescriptions[modelName],
-		Connections:   workspaceConnections(project, workspaceProject),
-		Sources:       map[string]semanticmodel.Source{},
-		Tables:        copyTables(workspaceProject.Models),
-		BaseTable:     semanticSpec.BaseTable,
-		Relationships: append([]semanticmodel.Relationship{}, semanticSpec.Relationships...),
-		Measures:      map[string]semanticmodel.MetricMeasure{},
-	}
-	model.DefaultConnection = firstConnectionName(model.Connections)
 	sourceAliases := map[string]string{}
 	sourceIDs := map[string]string{}
 	for source := range workspaceProject.AllowedSources {
@@ -548,17 +802,6 @@ func (workspaceProject *WorkspaceProject) definition(project Project) (*workspac
 		}
 		sourceAliases[source] = alias
 		sourceIDs[alias] = source
-		model.Sources[alias] = project.Sources[source]
-	}
-	model.Tables = translatedTablesForRuntime(model.Tables, sourceAliases)
-	if err := applySemanticModelSpec(model, semanticSpec); err != nil {
-		return nil, err
-	}
-	if err := model.Validate(); err != nil {
-		return nil, err
-	}
-	if _, err := analyticsmaterialize.ModelTableOrder(model); err != nil {
-		return nil, err
 	}
 	catalog := workspace.Catalog{
 		Workspace: workspace.CatalogWorkspace{
@@ -566,24 +809,33 @@ func (workspaceProject *WorkspaceProject) definition(project Project) (*workspac
 			Title:       workspaceProject.Title,
 			Description: workspaceProject.Description,
 		},
-		SemanticModels: []workspace.CatalogModel{{
-			ID:          modelName,
-			Title:       model.Title,
-			Description: model.Description,
-		}},
-		Dashboards: []workspace.CatalogDashboard{},
+		SemanticModels: []workspace.CatalogModel{},
+		Dashboards:     []workspace.CatalogDashboard{},
 	}
 	definition := &workspace.Definition{
 		Catalog:    catalog,
-		Models:     map[string]*semanticmodel.Model{modelName: model},
+		Models:     map[string]*semanticmodel.Model{},
 		Dashboards: workspaceProject.Dashboards,
 		BaseDir:    project.BaseDir,
 		SourceIDs:  sourceIDs,
 	}
+	for _, modelName := range sortedMapKeys(workspaceProject.SemanticModels) {
+		semanticSpec := workspaceProject.SemanticModels[modelName]
+		model, err := workspaceProject.semanticModel(project, modelName, semanticSpec, sourceAliases)
+		if err != nil {
+			return nil, err
+		}
+		definition.Models[modelName] = model
+		definition.Catalog.SemanticModels = append(definition.Catalog.SemanticModels, workspace.CatalogModel{
+			ID:          modelName,
+			Title:       model.Title,
+			Description: model.Description,
+		})
+	}
 	for name := range workspaceProject.Dashboards {
 		dashboard := workspaceProject.Dashboards[name]
 		if err := ValidateDashboard(dashboard, definition.Models); err != nil {
-			return nil, fmt.Errorf("loading dashboard %q: %w", name, err)
+			return nil, resourceError(workspaceProject.DashboardPaths[name], "dashboard:"+workspaceProject.ID+"."+name, "spec", "loading dashboard %q: %s", name, err.Error())
 		}
 		definition.Catalog.Dashboards = append(definition.Catalog.Dashboards, workspace.CatalogDashboard{
 			ID:          name,
@@ -596,6 +848,35 @@ func (workspaceProject *WorkspaceProject) definition(project Project) (*workspac
 		return definition.Catalog.Dashboards[i].ID < definition.Catalog.Dashboards[j].ID
 	})
 	return definition, nil
+}
+
+func (workspaceProject *WorkspaceProject) semanticModel(project Project, modelName string, semanticSpec projectSemanticModelSpec, sourceAliases map[string]string) (*semanticmodel.Model, error) {
+	model := &semanticmodel.Model{
+		Name:          modelName,
+		Title:         firstNonEmpty(workspaceProject.ModelTitles[modelName], modelName),
+		Description:   workspaceProject.ModelDescriptions[modelName],
+		Connections:   workspaceConnections(project, workspaceProject),
+		Sources:       map[string]semanticmodel.Source{},
+		Tables:        copyTables(workspaceProject.Models),
+		BaseTable:     semanticSpec.BaseTable,
+		Relationships: append([]semanticmodel.Relationship{}, semanticSpec.Relationships...),
+		Measures:      map[string]semanticmodel.MetricMeasure{},
+	}
+	model.DefaultConnection = firstConnectionName(model.Connections)
+	for source, alias := range sourceAliases {
+		model.Sources[alias] = project.Sources[source]
+	}
+	model.Tables = translatedTablesForRuntime(model.Tables, sourceAliases)
+	if err := applySemanticModelSpec(model, semanticSpec); err != nil {
+		return nil, resourceError(workspaceProject.SemanticModelPaths[modelName], "semantic_model:"+workspaceProject.ID+"."+modelName, "spec", "%s", err.Error())
+	}
+	if err := model.Validate(); err != nil {
+		return nil, resourceError(workspaceProject.SemanticModelPaths[modelName], "semantic_model:"+workspaceProject.ID+"."+modelName, "spec", "%s", err.Error())
+	}
+	if _, err := analyticsmaterialize.ModelTableOrder(model); err != nil {
+		return nil, resourceError(workspaceProject.SemanticModelPaths[modelName], "semantic_model:"+workspaceProject.ID+"."+modelName, "spec.tables", "%s", err.Error())
+	}
+	return model, nil
 }
 
 func translatedTablesForRuntime(in map[string]semanticmodel.Table, sourceAliases map[string]string) map[string]semanticmodel.Table {

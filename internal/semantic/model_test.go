@@ -226,6 +226,36 @@ func TestModelValidateResolvesConnectionAuthEnv(t *testing.T) {
 	}
 }
 
+func TestModelValidateConnectionCredentialsEnvReference(t *testing.T) {
+	t.Setenv("LIBREDASH_TEST_CRM_URL", "postgres://crm")
+	model := minimalSourceModel()
+	model.Connections["crm"] = Connection{
+		Kind:        "postgres",
+		Credentials: ConnectionCredentials{Provider: "env", Secret: "LIBREDASH_TEST_CRM_URL"},
+	}
+	model.Sources = map[string]Source{
+		"orders": {Connection: "crm", Object: "public.orders"},
+	}
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if len(model.Connections["crm"].Auth) != 0 {
+		t.Fatalf("compiled model stored resolved credentials in auth: %#v", model.Connections["crm"].Auth)
+	}
+}
+
+func TestModelValidateRejectsMissingConnectionCredentialsEnv(t *testing.T) {
+	model := minimalSourceModel()
+	model.Connections["crm"] = Connection{
+		Kind:        "postgres",
+		Credentials: ConnectionCredentials{Provider: "env", Secret: "LIBREDASH_TEST_MISSING_CRM_URL"},
+	}
+	model.Sources = map[string]Source{
+		"orders": {Connection: "crm", Object: "public.orders"},
+	}
+	assertModelValidateError(t, model, `env credential "LIBREDASH_TEST_MISSING_CRM_URL" is not set`)
+}
+
 func TestModelValidateRejectsMissingConnectionAuthEnv(t *testing.T) {
 	model := minimalSourceModel()
 	model.Connections["prod_lake"] = Connection{

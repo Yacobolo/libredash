@@ -21,14 +21,20 @@ type Model struct {
 }
 
 type Connection struct {
-	Kind        string             `yaml:"kind"`
-	Description string             `yaml:"description"`
-	Path        string             `yaml:"path"`
-	Root        string             `yaml:"root"`
-	Scope       string             `yaml:"scope"`
-	Auth        ConnectionAuth     `yaml:"auth"`
-	Options     map[string]any     `yaml:"options"`
-	Defaults    ConnectionDefaults `yaml:"defaults"`
+	Kind        string                `yaml:"kind"`
+	Description string                `yaml:"description"`
+	Path        string                `yaml:"path"`
+	Root        string                `yaml:"root"`
+	Scope       string                `yaml:"scope"`
+	Auth        ConnectionAuth        `yaml:"auth"`
+	Credentials ConnectionCredentials `yaml:"credentials"`
+	Options     map[string]any        `yaml:"options"`
+	Defaults    ConnectionDefaults    `yaml:"defaults"`
+}
+
+type ConnectionCredentials struct {
+	Provider string `yaml:"provider"`
+	Secret   string `yaml:"secret"`
 }
 
 type ConnectionDefaults struct {

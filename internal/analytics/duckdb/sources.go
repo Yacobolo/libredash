@@ -472,7 +472,7 @@ func compileSourceSecretStatements(model *semanticmodel.Model) ([]string, error)
 			continue
 		}
 		connection := model.Connections[source.Connection]
-		if len(connection.Auth) == 0 {
+		if !semanticmodel.ConnectionCredentialsConfigured(connection) {
 			continue
 		}
 		stmt, ok, err := compileTypedConnectionSecret(source.Connection+"_"+format.SourceSecretType, connection, format.SourceSecretType)
@@ -503,7 +503,11 @@ func compileConnectionSecret(name string, connection semanticmodel.Connection) (
 }
 
 func compileTypedConnectionSecret(name string, connection semanticmodel.Connection, secretType string) (string, bool, error) {
-	if len(connection.Auth) == 0 {
+	auth, err := semanticmodel.ResolveConnectionAuth(connection)
+	if err != nil {
+		return "", false, err
+	}
+	if len(auth) == 0 {
 		return "", false, nil
 	}
 	secret, err := connectionSecretName(name)
@@ -512,13 +516,13 @@ func compileTypedConnectionSecret(name string, connection semanticmodel.Connecti
 	}
 	parts := []string{"TYPE " + secretType}
 	if secretType != "quack" {
-		parts = append(parts, "PROVIDER "+duckDBSecretProvider(secretType, connection.Auth))
+		parts = append(parts, "PROVIDER "+duckDBSecretProvider(secretType, auth))
 	}
-	for _, key := range sortedKeys(connection.Auth) {
+	for _, key := range sortedKeys(auth) {
 		if err := validateIdentifier(key); err != nil {
 			return "", false, fmt.Errorf("invalid auth param %q: %w", key, err)
 		}
-		parts = append(parts, duckDBAuthParameter(key)+" "+sqlLiteral(connection.Auth[key]))
+		parts = append(parts, duckDBAuthParameter(key)+" "+sqlLiteral(auth[key]))
 	}
 	if scope := duckDBSecretScope(secretType, connection); scope != "" {
 		parts = append(parts, "SCOPE '"+sqlString(scope)+"'")
@@ -660,13 +664,17 @@ func resolvePathInConnectionScope(_ *semanticmodel.Model, connection semanticmod
 }
 
 func databaseAttachSecret(connectionName string, connection semanticmodel.Connection) (string, bool, error) {
-	if len(connection.Auth) == 0 {
+	auth, err := semanticmodel.ResolveConnectionAuth(connection)
+	if err != nil {
+		return "", false, err
+	}
+	if len(auth) == 0 {
 		return "", false, nil
 	}
-	if _, ok := connection.Auth["connection_string"]; ok {
+	if _, ok := auth["connection_string"]; ok {
 		return "", false, nil
 	}
-	if _, ok := connection.Auth["path"]; ok {
+	if _, ok := auth["path"]; ok {
 		return "", false, nil
 	}
 	secret, err := connectionSecretName(connectionName)
@@ -690,12 +698,16 @@ func connectionStringOption(connection semanticmodel.Connection) (string, error)
 			return "", fmt.Errorf("unsupported database connection option %q", key)
 		}
 	}
-	if len(connection.Auth) > 0 {
-		if value, ok := connection.Auth["connection_string"]; ok {
+	auth, err := semanticmodel.ResolveConnectionAuth(connection)
+	if err != nil {
+		return "", err
+	}
+	if len(auth) > 0 {
+		if value, ok := auth["connection_string"]; ok {
 			return fmt.Sprint(value), nil
 		}
 		if connection.Kind == "sqlite" {
-			if value, ok := connection.Auth["path"]; ok {
+			if value, ok := auth["path"]; ok {
 				return fmt.Sprint(value), nil
 			}
 		}

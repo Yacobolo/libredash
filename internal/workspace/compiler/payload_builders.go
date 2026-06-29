@@ -54,7 +54,7 @@ func connectionPayload(connection semanticmodel.Connection) connectionPayloadV1 
 		Scope:                 connection.Scope,
 		Options:               connection.Options,
 		Defaults:              connectionDefaultsPayloadV1{Options: connection.Defaults.Options},
-		CredentialsConfigured: len(connection.Auth) > 0,
+		CredentialsConfigured: semanticmodel.ConnectionCredentialsConfigured(connection),
 	}
 }
 

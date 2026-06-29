@@ -443,6 +443,19 @@ func TestCompileConnectionSecret(t *testing.T) {
 		t.Fatalf("azure secret = %q ok=%v, want %q ok=true", stmt, ok, want)
 	}
 
+	t.Setenv("LIBREDASH_TEST_AZURE_CREDENTIALS", `{"connection_string":"DefaultEndpointsProtocol=https;AccountName=envstorage"}`)
+	stmt, ok, err = compileConnectionSecret("azure_lake", semanticmodel.Connection{
+		Kind:        "azure_blob",
+		Credentials: semanticmodel.ConnectionCredentials{Provider: "env", Secret: "LIBREDASH_TEST_AZURE_CREDENTIALS"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = "CREATE OR REPLACE SECRET libredash_azure_lake (TYPE azure, PROVIDER config, CONNECTION_STRING 'DefaultEndpointsProtocol=https;AccountName=envstorage')"
+	if !ok || stmt != want {
+		t.Fatalf("azure env credential secret = %q ok=%v, want %q ok=true", stmt, ok, want)
+	}
+
 	stmt, ok, err = compileConnectionSecret("azure_lake", semanticmodel.Connection{
 		Kind: "azure_blob",
 		Auth: semanticmodel.ConnectionAuth{

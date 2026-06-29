@@ -1019,6 +1019,7 @@ func apiAssetSummaryDTOs(rows []workspace.AssetView) []api.AssetSummaryResponse 
 			Title:         row.Title,
 			Description:   row.Description,
 			PayloadSchema: row.PayloadSchema,
+			ContentHash:   row.ContentHash,
 			Href:          row.Href,
 		})
 	}

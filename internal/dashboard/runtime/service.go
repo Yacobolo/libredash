@@ -106,6 +106,16 @@ func NewFromProject(dataDir, projectPath, duckDBDir string, factory DataRuntimeF
 	return services, nil
 }
 
+func NewFromDefinition(dataDir, duckDBDir string, factory DataRuntimeFactory, definition *workspace.Definition) (*Service, error) {
+	if factory == nil {
+		return nil, fmt.Errorf("dashboard data runtime factory is required")
+	}
+	if definition == nil {
+		return nil, fmt.Errorf("workspace definition is required")
+	}
+	return newFromDefinition(dataDir, duckDBDir, factory, definition)
+}
+
 func newFromDefinition(dataDir, duckDBDir string, factory DataRuntimeFactory, definition *workspace.Definition) (*Service, error) {
 	service := &Service{
 		dataDir:  dataDir,

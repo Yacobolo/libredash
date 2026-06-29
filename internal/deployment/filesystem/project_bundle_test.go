@@ -12,7 +12,8 @@ import (
 func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
-	manifest, _, err := PackProject(projectPath, "operations", &bundle)
+	deploymentID := deployment.ID("dep_ops")
+	manifest, _, err := PackProject(projectPath, "operations", deploymentID, &bundle)
 	if err != nil {
 		t.Fatalf("PackProject() error = %v", err)
 	}
@@ -27,7 +28,7 @@ func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	if err := os.WriteFile(path, bundle.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	validation, err := ValidateArtifact(path, deployment.WorkspaceID("operations"), deployment.ID("dep_ops"))
+	validation, err := ValidateArtifact(path, deployment.WorkspaceID("operations"), deploymentID)
 	if err != nil {
 		t.Fatalf("ValidateArtifact() error = %v", err)
 	}
@@ -41,10 +42,26 @@ func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	}
 }
 
+func TestValidateArtifactRejectsWrongDeploymentCompiledGraph(t *testing.T) {
+	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
+	var bundle bytes.Buffer
+	if _, _, err := PackProject(projectPath, "operations", deployment.ID("dep_ops"), &bundle); err != nil {
+		t.Fatalf("PackProject() error = %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
+	if err := os.WriteFile(path, bundle.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ValidateArtifact(path, deployment.WorkspaceID("operations"), deployment.ID("dep_other"))
+	if err == nil {
+		t.Fatal("ValidateArtifact() error = nil, want deployment mismatch")
+	}
+}
+
 func TestPackProjectRejectsUnknownWorkspace(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
-	_, _, err := PackProject(projectPath, "missing", &bundle)
+	_, _, err := PackProject(projectPath, "missing", deployment.ID("dep_missing"), &bundle)
 	if err == nil {
 		t.Fatal("PackProject() error = nil, want unknown workspace error")
 	}

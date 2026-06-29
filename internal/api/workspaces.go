@@ -35,6 +35,7 @@ type AssetSummaryResponse struct {
 	Title         string `json:"title"`
 	Description   string `json:"description"`
 	PayloadSchema string `json:"payloadSchema"`
+	ContentHash   string `json:"contentHash"`
 	Href          string `json:"href,omitempty"`
 }
 

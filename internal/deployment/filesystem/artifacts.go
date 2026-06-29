@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	BundleFormat = "tar.gz"
-	ProjectFile  = "libredash.yaml"
+	BundleFormat        = "tar.gz"
+	ProjectFile         = "libredash.yaml"
+	CompiledProjectFile = "compiled/workspace.json"
 )
 
 type ArtifactStore struct {

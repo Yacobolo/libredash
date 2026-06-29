@@ -44,6 +44,7 @@ model AssetSummaryResponse {
   title: string;
   description: string;
   payloadSchema: string;
+  contentHash: string;
   href?: string;
 }
 

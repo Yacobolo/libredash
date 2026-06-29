@@ -10,6 +10,7 @@ type Source = semanticmodel.Source
 type SourceField = semanticmodel.SourceField
 type Connection = semanticmodel.Connection
 type ConnectionAuth = semanticmodel.ConnectionAuth
+type ConnectionCredentials = semanticmodel.ConnectionCredentials
 type ConnectionDefaults = semanticmodel.ConnectionDefaults
 type ModelTable = semanticmodel.Table
 type ModelColumn = semanticmodel.ModelColumn

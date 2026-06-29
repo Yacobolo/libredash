@@ -13,6 +13,22 @@
         "auth": {
           "$ref": "#/$defs/%23AnyObject"
         },
+        "credentials": {
+          "additionalProperties": false,
+          "properties": {
+            "provider": {
+              "const": "env"
+            },
+            "secret": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "provider",
+            "secret"
+          ],
+          "type": "object"
+        },
         "defaults": {
           "additionalProperties": false,
           "properties": {

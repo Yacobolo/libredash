@@ -550,7 +550,7 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 	}
 
 	var bundle bytes.Buffer
-	if _, _, err := deploymentfs.PackProject(filepath.Join("..", "..", "dashboards", "libredash.yaml"), "sales", &bundle); err != nil {
+	if _, _, err := deploymentfs.PackProject(filepath.Join("..", "..", "dashboards", "libredash.yaml"), "sales", deployment.ID(created.ID), &bundle); err != nil {
 		t.Fatalf("pack project: %v", err)
 	}
 	uploadReq := httptest.NewRequest(http.MethodPut, "/api/v1/workspaces/sales/deployments/"+created.ID+"/artifact", bytes.NewReader(bundle.Bytes()))
@@ -656,6 +656,9 @@ func TestWorkspaceAssetAPIListsActiveDeploymentAssets(t *testing.T) {
 	}
 	if connection.PayloadSchema != "connection.v1" {
 		t.Fatalf("connection payload schema = %q", connection.PayloadSchema)
+	}
+	if connection.ContentHash == "" {
+		t.Fatal("connection content hash is empty")
 	}
 	var rawListBody map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &rawListBody); err != nil {

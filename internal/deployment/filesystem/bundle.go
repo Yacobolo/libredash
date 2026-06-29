@@ -26,6 +26,8 @@ type Manifest struct {
 	WorkspaceID    string         `json:"workspaceId"`
 	WorkspaceTitle string         `json:"workspaceTitle"`
 	CatalogPath    string         `json:"catalogPath"`
+	CompiledPath   string         `json:"compiledPath"`
+	GraphHash      string         `json:"graphHash"`
 	Files          []ManifestFile `json:"files"`
 	SemanticModels []string       `json:"semanticModels"`
 	Dashboards     []string       `json:"dashboards"`
@@ -42,7 +44,17 @@ type ValidateOptions struct {
 	DuckDBDir string
 }
 
-func PackProject(projectPath, workspaceID string, out io.Writer) (Manifest, string, error) {
+type CompiledWorkspaceArtifact struct {
+	Version        int                                    `json:"version"`
+	WorkspaceID    string                                 `json:"workspaceId"`
+	WorkspaceTitle string                                 `json:"workspaceTitle"`
+	DeploymentID   string                                 `json:"deploymentId"`
+	Definition     *workspace.Definition                  `json:"definition"`
+	Graph          workspace.AssetGraph                   `json:"graph"`
+	Plan           workspacecompiler.ProjectPlanWorkspace `json:"plan"`
+}
+
+func PackProject(projectPath, workspaceID string, deploymentID deployment.ID, out io.Writer) (Manifest, string, error) {
 	projectPath, err := filepath.Abs(projectPath)
 	if err != nil {
 		return Manifest{}, "", err
@@ -50,13 +62,40 @@ func PackProject(projectPath, workspaceID string, out io.Writer) (Manifest, stri
 	if workspaceID == "" {
 		return Manifest{}, "", fmt.Errorf("project deploy requires explicit workspace")
 	}
-	compiled, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{})
+	if deploymentID == "" {
+		return Manifest{}, "", fmt.Errorf("project deploy requires deployment id")
+	}
+	compiled, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{DeploymentID: workspace.DeploymentID(deploymentID)})
 	if err != nil {
 		return Manifest{}, "", err
 	}
 	compiledWorkspace, ok := compiled.Workspaces[workspaceID]
 	if !ok {
 		return Manifest{}, "", fmt.Errorf("project %q has no workspace %q", projectPath, workspaceID)
+	}
+	if err := workspace.ValidateAssetGraphForDeployment(compiledWorkspace.Workspace.Graph, workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID)); err != nil {
+		return Manifest{}, "", err
+	}
+	plan, err := workspacecompiler.PlanProject(projectPath)
+	if err != nil {
+		return Manifest{}, "", err
+	}
+	workspacePlan, ok := projectPlanWorkspace(plan, workspaceID)
+	if !ok {
+		return Manifest{}, "", fmt.Errorf("project %q has no workspace %q in plan", projectPath, workspaceID)
+	}
+	compiledArtifact := CompiledWorkspaceArtifact{
+		Version:        1,
+		WorkspaceID:    workspaceID,
+		WorkspaceTitle: compiledWorkspace.Workspace.Title,
+		DeploymentID:   string(deploymentID),
+		Definition:     compiledWorkspace.Definition,
+		Graph:          compiledWorkspace.Workspace.Graph,
+		Plan:           workspacePlan,
+	}
+	compiledBytes, err := json.MarshalIndent(compiledArtifact, "", "  ")
+	if err != nil {
+		return Manifest{}, "", err
 	}
 	baseDir := filepath.Dir(projectPath)
 	relFiles, err := collectProjectBundleFiles(baseDir, projectPath)
@@ -68,6 +107,8 @@ func PackProject(projectPath, workspaceID string, out io.Writer) (Manifest, stri
 		WorkspaceID:    workspaceID,
 		WorkspaceTitle: compiledWorkspace.Workspace.Title,
 		CatalogPath:    ProjectFile,
+		CompiledPath:   CompiledProjectFile,
+		GraphHash:      digestBytes(compiledBytes),
 		Files:          make([]ManifestFile, 0, len(relFiles)),
 	}
 	for _, model := range compiledWorkspace.Definition.Catalog.SemanticModels {
@@ -76,7 +117,7 @@ func PackProject(projectPath, workspaceID string, out io.Writer) (Manifest, stri
 	for _, report := range compiledWorkspace.Definition.Catalog.Dashboards {
 		manifest.Dashboards = append(manifest.Dashboards, report.ID)
 	}
-	return writeBundle(baseDir, relFiles, ProjectFile, projectPath, manifest, out)
+	return writeBundle(baseDir, relFiles, ProjectFile, projectPath, map[string][]byte{CompiledProjectFile: compiledBytes}, manifest, out)
 }
 
 func collectProjectBundleFiles(baseDir, projectPath string) ([]string, error) {
@@ -118,7 +159,7 @@ func collectProjectBundleFiles(baseDir, projectPath string) ([]string, error) {
 	return relFiles, nil
 }
 
-func writeBundle(baseDir string, relFiles []string, rootRel string, rootPath string, manifest Manifest, out io.Writer) (Manifest, string, error) {
+func writeBundle(baseDir string, relFiles []string, rootRel string, rootPath string, generatedFiles map[string][]byte, manifest Manifest, out io.Writer) (Manifest, string, error) {
 	hash := sha256.New()
 	mw := io.MultiWriter(out, hash)
 	gz := gzip.NewWriter(mw)
@@ -151,6 +192,27 @@ func writeBundle(baseDir string, relFiles []string, rootRel string, rootPath str
 			Size:   info.Size(),
 		})
 		if err := tw.WriteHeader(&tar.Header{Name: rel, Mode: 0o644, Size: int64(len(bytes))}); err != nil {
+			return Manifest{}, "", err
+		}
+		if _, err := tw.Write(bytes); err != nil {
+			return Manifest{}, "", err
+		}
+	}
+	generatedPaths := make([]string, 0, len(generatedFiles))
+	for rel := range generatedFiles {
+		generatedPaths = append(generatedPaths, rel)
+	}
+	sort.Strings(generatedPaths)
+	for _, rel := range generatedPaths {
+		cleanRel, err := safeBundlePath(rel)
+		if err != nil {
+			return Manifest{}, "", err
+		}
+		if _, ok := seen[cleanRel]; ok {
+			return Manifest{}, "", fmt.Errorf("bundle generated path %s duplicates source file", cleanRel)
+		}
+		bytes := generatedFiles[rel]
+		if err := tw.WriteHeader(&tar.Header{Name: cleanRel, Mode: 0o644, Size: int64(len(bytes))}); err != nil {
 			return Manifest{}, "", err
 		}
 		if _, err := tw.Write(bytes); err != nil {
@@ -198,7 +260,11 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 		os.RemoveAll(root)
 		return deployment.Validation{}, err
 	}
-	catalogRel, err := validateManifestFiles(root, manifest)
+	if _, err := validateManifestFiles(root, manifest); err != nil {
+		os.RemoveAll(root)
+		return deployment.Validation{}, err
+	}
+	compiled, err := readCompiledWorkspaceArtifact(root, manifest)
 	if err != nil {
 		os.RemoveAll(root)
 		return deployment.Validation{}, err
@@ -210,16 +276,17 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 		}
 		workspaceID = deployment.WorkspaceID(manifest.WorkspaceID)
 	}
-	projectPath := filepath.Join(root, catalogRel)
-	project, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{DeploymentID: workspace.DeploymentID(deploymentID)})
-	if err != nil {
+	if compiled.WorkspaceID != string(workspaceID) {
+		os.RemoveAll(root)
+		return deployment.Validation{}, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, workspaceID)
+	}
+	if compiled.DeploymentID != string(deploymentID) {
+		os.RemoveAll(root)
+		return deployment.Validation{}, fmt.Errorf("compiled artifact deployment = %q, want %q", compiled.DeploymentID, deploymentID)
+	}
+	if err := workspace.ValidateAssetGraphForDeployment(compiled.Graph, workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID)); err != nil {
 		os.RemoveAll(root)
 		return deployment.Validation{}, err
-	}
-	compiled, ok := project.Workspaces[string(workspaceID)]
-	if !ok {
-		os.RemoveAll(root)
-		return deployment.Validation{}, fmt.Errorf("project artifact has no workspace %q", workspaceID)
 	}
 	if options.DataDir != "" {
 		if err := discoverSchemasForDefinition(context.Background(), compiled.Definition, options); err != nil {
@@ -231,7 +298,11 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 			os.RemoveAll(root)
 			return deployment.Validation{}, err
 		}
-		compiled.Workspace.Graph = graph
+		compiled.Graph = graph
+		if err := workspace.ValidateAssetGraphForDeployment(compiled.Graph, workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID)); err != nil {
+			os.RemoveAll(root)
+			return deployment.Validation{}, err
+		}
 	}
 	manifestJSON, err := json.Marshal(manifest)
 	if err != nil {
@@ -242,7 +313,7 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 		Digest:       digest,
 		ManifestJSON: string(manifestJSON),
 		RootDir:      root,
-		Graph:        compiled.Workspace.Graph,
+		Graph:        compiled.Graph,
 	}, nil
 }
 
@@ -349,7 +420,47 @@ func readManifest(root string) (Manifest, error) {
 	if manifest.CatalogPath == "" {
 		manifest.CatalogPath = ProjectFile
 	}
+	if manifest.CompiledPath == "" {
+		manifest.CompiledPath = CompiledProjectFile
+	}
 	return manifest, nil
+}
+
+func LoadCompiledWorkspaceArtifact(root string) (CompiledWorkspaceArtifact, Manifest, error) {
+	manifest, err := readManifest(root)
+	if err != nil {
+		return CompiledWorkspaceArtifact{}, Manifest{}, err
+	}
+	compiled, err := readCompiledWorkspaceArtifact(root, manifest)
+	if err != nil {
+		return CompiledWorkspaceArtifact{}, Manifest{}, err
+	}
+	return compiled, manifest, nil
+}
+
+func readCompiledWorkspaceArtifact(root string, manifest Manifest) (CompiledWorkspaceArtifact, error) {
+	compiledRel, err := safeBundlePath(manifest.CompiledPath)
+	if err != nil {
+		return CompiledWorkspaceArtifact{}, fmt.Errorf("invalid compiled path: %w", err)
+	}
+	bytes, err := os.ReadFile(filepath.Join(root, compiledRel))
+	if err != nil {
+		return CompiledWorkspaceArtifact{}, err
+	}
+	if manifest.GraphHash != "" && digestBytes(bytes) != manifest.GraphHash {
+		return CompiledWorkspaceArtifact{}, fmt.Errorf("compiled artifact digest mismatch")
+	}
+	var compiled CompiledWorkspaceArtifact
+	if err := json.Unmarshal(bytes, &compiled); err != nil {
+		return CompiledWorkspaceArtifact{}, err
+	}
+	if compiled.Version != 1 {
+		return CompiledWorkspaceArtifact{}, fmt.Errorf("compiled artifact version = %d, want 1", compiled.Version)
+	}
+	if compiled.Definition == nil {
+		return CompiledWorkspaceArtifact{}, fmt.Errorf("compiled artifact definition is required")
+	}
+	return compiled, nil
 }
 
 func validateManifestFiles(root string, manifest Manifest) (string, error) {
@@ -398,6 +509,20 @@ func fileDigest(path string) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func digestBytes(bytes []byte) string {
+	sum := sha256.Sum256(bytes)
+	return hex.EncodeToString(sum[:])
+}
+
+func projectPlanWorkspace(plan workspacecompiler.ProjectPlan, workspaceID string) (workspacecompiler.ProjectPlanWorkspace, bool) {
+	for _, workspacePlan := range plan.Workspaces {
+		if workspacePlan.ID == workspaceID {
+			return workspacePlan, true
+		}
+	}
+	return workspacecompiler.ProjectPlanWorkspace{}, false
 }
 
 func cleanBundlePath(path string) string {

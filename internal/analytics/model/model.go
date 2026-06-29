@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -908,6 +909,9 @@ func (c Connection) Validate(name string) (Connection, error) {
 	if c.Kind == "" {
 		return c, fmt.Errorf("connection %q requires kind", name)
 	}
+	if err := validateConnectionCredentials(name, c.Credentials); err != nil {
+		return c, err
+	}
 	connectionSpec, ok := LookupConnection(c.Kind)
 	if !ok {
 		return c, fmt.Errorf("connection %q has unsupported kind %q", name, c.Kind)
@@ -992,8 +996,47 @@ func validateConnectionOptions(name string, connection Connection) error {
 	return nil
 }
 
+func validateConnectionCredentials(name string, credentials ConnectionCredentials) error {
+	if credentials.Provider == "" && credentials.Secret == "" {
+		return nil
+	}
+	if credentials.Provider == "" {
+		return fmt.Errorf("connection %q credentials require provider", name)
+	}
+	switch credentials.Provider {
+	case "env":
+		if credentials.Secret == "" {
+			return fmt.Errorf("connection %q env credentials require secret", name)
+		}
+		if _, ok := os.LookupEnv(credentials.Secret); !ok {
+			return fmt.Errorf("connection %q env credential %q is not set", name, credentials.Secret)
+		}
+	default:
+		return fmt.Errorf("connection %q has unsupported credentials provider %q", name, credentials.Provider)
+	}
+	return nil
+}
+
 func validateConnectionAuth(name string, connection Connection, spec ConnectionSpec) (ConnectionAuth, error) {
 	if len(connection.Auth) == 0 {
+		if connection.Credentials.Provider != "" {
+			resolved, err := ResolveConnectionAuth(connection)
+			if err != nil {
+				return nil, fmt.Errorf("connection %q credentials: %w", name, err)
+			}
+			for key := range resolved {
+				if err := validateSemanticIdentifier(key); err != nil {
+					return nil, fmt.Errorf("connection %q credential key %q is invalid: %w", name, key, err)
+				}
+				if !connectionAllowsAuthKey(spec, key) {
+					return nil, fmt.Errorf("connection %q credentials include unsupported auth key %q", name, key)
+				}
+			}
+			if !connectionHasRequiredAuth(resolved, spec.RequiredAuthSets) {
+				return nil, fmt.Errorf("connection %q %s credentials are missing required values", name, connection.Kind)
+			}
+			return nil, nil
+		}
 		if connection.Kind == "ducklake" && duckLakeNeedsAuth(connection) {
 			return nil, fmt.Errorf("connection %q ducklake remote path requires auth", name)
 		}
@@ -1023,6 +1066,42 @@ func validateConnectionAuth(name string, connection Connection, spec ConnectionS
 		return nil, fmt.Errorf("connection %q %s auth is missing required credentials", name, connection.Kind)
 	}
 	return resolved, nil
+}
+
+func ResolveConnectionAuth(connection Connection) (ConnectionAuth, error) {
+	if len(connection.Auth) > 0 {
+		return connection.Auth, nil
+	}
+	if connection.Credentials.Provider == "" {
+		return nil, nil
+	}
+	switch connection.Credentials.Provider {
+	case "env":
+		value, ok := os.LookupEnv(connection.Credentials.Secret)
+		if !ok {
+			return nil, fmt.Errorf("env credential %q is not set", connection.Credentials.Secret)
+		}
+		var object map[string]any
+		if err := json.Unmarshal([]byte(value), &object); err == nil {
+			return ConnectionAuth(object), nil
+		}
+		spec, ok := LookupConnection(connection.Kind)
+		if !ok {
+			return nil, fmt.Errorf("unsupported connection kind %q", connection.Kind)
+		}
+		for _, key := range []string{"connection_string", "token"} {
+			if connectionAllowsAuthKey(spec, key) {
+				return ConnectionAuth{key: value}, nil
+			}
+		}
+		return nil, fmt.Errorf("env credential %q must be a JSON object for connection kind %q", connection.Credentials.Secret, connection.Kind)
+	default:
+		return nil, fmt.Errorf("unsupported credentials provider %q", connection.Credentials.Provider)
+	}
+}
+
+func ConnectionCredentialsConfigured(connection Connection) bool {
+	return len(connection.Auth) > 0 || connection.Credentials.Provider != ""
 }
 
 func connectionAllowsAuthKey(connection ConnectionSpec, key string) bool {

@@ -31,12 +31,16 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.De
 		return sourceID
 	}
 	add := func(typ workspace.AssetType, key string, parentID workspace.AssetID, title, description string, payload any) (workspace.AssetID, error) {
+		lookupKey := string(typ) + ":" + key
+		if existing := byKey[lookupKey]; existing != "" {
+			return existing, nil
+		}
 		asset, err := workspace.NewAsset(workspaceID, deploymentID, typ, key, parentID, title, description, workspace.PayloadSchemaForAssetType(typ), payload)
 		if err != nil {
 			return "", err
 		}
 		graph.Assets = append(graph.Assets, asset)
-		byKey[string(typ)+":"+key] = asset.ID
+		byKey[lookupKey] = asset.ID
 		return asset.ID, nil
 	}
 	edge := func(fromID, toID workspace.AssetID, typ workspace.AssetEdgeType) {
