@@ -2,22 +2,27 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/Yacobolo/libredash/internal/agentapp"
+	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/ui"
 )
 
-func chatSignalWithConversations(conversations []ui.ChatConversationSummary, activeID string, transcript []agentapp.ChatTranscriptItem, statusErr string, running, enabled bool) ui.ChatSignal {
+func chatSignalWithConversations(conversations []ui.ChatConversationSummary, activeID string, transcript []agentapp.ChatTranscriptItem, artifacts agentapp.ChatArtifactSignals, statusErr string, running, enabled bool) ui.ChatSignal {
 	if !enabled && statusErr == "" {
 		statusErr = "Agent is not configured"
 	}
 	if conversations == nil {
 		conversations = []ui.ChatConversationSummary{}
 	}
+	artifacts = normalizeChatArtifacts(artifacts)
 	return ui.ChatSignal{
 		Conversations:        conversations,
 		ActiveConversationID: activeID,
-		Transcript:           transcript,
+		Transcript:           ui.ChatTranscriptItems(transcript),
+		Visuals:              typedChatVisualArtifacts(artifacts.Visuals),
+		Tables:               typedChatTableArtifacts(artifacts.Tables),
 		Status: ui.ChatStatus{
 			Enabled: enabled,
 			Running: running,
@@ -33,24 +38,29 @@ func chatSignalWithConversations(conversations []ui.ChatConversationSummary, act
 
 func (s *Server) chatSignal(ctx context.Context, scope agentapp.Scope, activeID, statusErr string, running bool) ui.ChatSignal {
 	transcript := []agentapp.ChatTranscriptItem{}
+	artifacts := agentapp.ChatArtifactSignals{}
 	if activeID != "" && s.agent != nil && scope.PrincipalID != "" {
-		if loaded, err := s.agent.ConversationTranscript(ctx, scope, activeID); err == nil {
-			transcript = loaded
+		if loaded, err := s.agent.ConversationTranscriptState(ctx, scope, activeID); err == nil {
+			transcript = loaded.Transcript
+			artifacts = loaded.Artifacts
 		}
 	}
-	return s.chatSignalWith(ctx, scope, activeID, transcript, statusErr, running)
+	return s.chatSignalWith(ctx, scope, activeID, transcript, artifacts, statusErr, running)
 }
 
-func (s *Server) chatSignalWith(ctx context.Context, scope agentapp.Scope, activeID string, transcript []agentapp.ChatTranscriptItem, statusErr string, running bool) ui.ChatSignal {
+func (s *Server) chatSignalWith(ctx context.Context, scope agentapp.Scope, activeID string, transcript []agentapp.ChatTranscriptItem, artifacts agentapp.ChatArtifactSignals, statusErr string, running bool) ui.ChatSignal {
 	conversations := s.chatConversations(ctx, scope)
 	enabled := s.agent != nil && s.agent.Enabled()
 	if !enabled && statusErr == "" {
 		statusErr = "Agent is not configured"
 	}
+	artifacts = normalizeChatArtifacts(artifacts)
 	return ui.ChatSignal{
 		Conversations:        conversations,
 		ActiveConversationID: activeID,
-		Transcript:           transcript,
+		Transcript:           ui.ChatTranscriptItems(transcript),
+		Visuals:              typedChatVisualArtifacts(artifacts.Visuals),
+		Tables:               typedChatTableArtifacts(artifacts.Tables),
 		Status: ui.ChatStatus{
 			Enabled: enabled,
 			Running: running,
@@ -61,6 +71,56 @@ func (s *Server) chatSignalWith(ctx context.Context, scope agentapp.Scope, activ
 			Disabled:    !enabled || running,
 			Placeholder: chatPlaceholder(enabled, running),
 		},
+	}
+}
+
+func normalizeChatArtifacts(artifacts agentapp.ChatArtifactSignals) agentapp.ChatArtifactSignals {
+	if artifacts.Visuals == nil {
+		artifacts.Visuals = map[string]any{}
+	}
+	if artifacts.Tables == nil {
+		artifacts.Tables = map[string]any{}
+	}
+	return artifacts
+}
+
+func typedChatVisualArtifacts(values map[string]any) map[string]dashboard.Visual {
+	visuals := map[string]dashboard.Visual{}
+	for key, value := range values {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			continue
+		}
+		visual := dashboard.Visual{}
+		if err := json.Unmarshal(raw, &visual); err != nil {
+			continue
+		}
+		visuals[key] = visual
+	}
+	return visuals
+}
+
+func typedChatTableArtifacts(values map[string]any) map[string]dashboard.Table {
+	tables := map[string]dashboard.Table{}
+	for key, value := range values {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			continue
+		}
+		table := dashboard.Table{}
+		if err := json.Unmarshal(raw, &table); err != nil {
+			continue
+		}
+		tables[key] = table
+	}
+	return tables
+}
+
+func chatSignalPatch(signal ui.ChatSignal) map[string]any {
+	return map[string]any{
+		"agent":   signal,
+		"visuals": signal.Visuals,
+		"tables":  signal.Tables,
 	}
 }
 

@@ -121,14 +121,15 @@ func messageEnvelope(conversationID string, row Message) EventEnvelope {
 
 func messageContentJSON(message agent.Message) string {
 	payload := map[string]any{
-		"role":          message.Role,
-		"content":       message.Content,
-		"tool_calls":    message.ToolCalls,
-		"tool_call_id":  message.ToolCallID,
-		"tool_name":     message.ToolName,
-		"is_error":      message.IsError,
-		"finish_reason": message.FinishReason,
-		"usage":         message.Usage,
+		"role":            message.Role,
+		"content":         message.Content,
+		"display_content": message.DisplayContent,
+		"tool_calls":      message.ToolCalls,
+		"tool_call_id":    message.ToolCallID,
+		"tool_name":       message.ToolName,
+		"is_error":        message.IsError,
+		"finish_reason":   message.FinishReason,
+		"usage":           message.Usage,
 	}
 	return metadataJSON(payload)
 }

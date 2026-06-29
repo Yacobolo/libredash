@@ -4,37 +4,20 @@ import { unsafeHTML } from 'lit/directives/unsafe-html.js'
 import DOMPurify from 'dompurify'
 import MarkdownIt from 'markdown-it'
 import { Box, ChevronRight, FileText, LayoutDashboard, LayoutPanelTop, Table2, Wrench, type IconNode } from 'lucide'
+import type { ChatArtifactSignal, ChatStatus, ChatTranscriptItemSignal, DashboardTable, DashboardVisual } from '../../generated/signals'
 import { lucideIcon } from '../shared/lucide-icons'
-
-type ChatStatus = {
-  enabled?: boolean
-  running?: boolean
-  error?: string
-}
-
-type ChatTranscriptItem = {
-  id: string
-  kind: 'user' | 'assistant' | 'tool' | 'error' | 'summary' | string
-  text?: string
-  markdown?: string
-  toolCallId?: string
-  name?: string
-  title?: string
-  status?: 'running' | 'complete' | 'error' | 'streaming' | string
-  summary?: string
-  resultSummary?: string
-  inputJson?: string
-  argumentsJson?: string
-  resultJson?: string
-  error?: string
-  conversationId?: string
-  runId?: string
-  createdAt?: string
-}
+import '../shared/visual-artifact'
 
 type ChatRenderUnit =
-  | { kind: 'user'; item: ChatTranscriptItem }
-  | { kind: 'agent'; items: ChatTranscriptItem[] }
+  | { kind: 'user'; item: ChatTranscriptItemSignal }
+  | { kind: 'agent'; items: ChatTranscriptItemSignal[] }
+
+type LegacyArtifact = ChatArtifactSignal & {
+  patch?: {
+    visuals?: Record<string, DashboardVisual>
+    tables?: Record<string, DashboardTable>
+  }
+}
 
 const markdown = new MarkdownIt({
   html: false,
@@ -57,8 +40,12 @@ const jsonConverter = <T,>(fallback: T) => ({
 })
 
 class ChatThread extends LitElement {
-  @property({ attribute: false }) transcript: ChatTranscriptItem[] = []
-  @property({ attribute: 'transcript', converter: jsonConverter<ChatTranscriptItem[]>([]) }) transcriptAttribute: ChatTranscriptItem[] = []
+  @property({ attribute: false }) transcript: ChatTranscriptItemSignal[] = []
+  @property({ attribute: 'transcript', converter: jsonConverter<ChatTranscriptItemSignal[]>([]) }) transcriptAttribute: ChatTranscriptItemSignal[] = []
+  @property({ attribute: false }) visuals: Record<string, DashboardVisual> = {}
+  @property({ attribute: 'visuals', converter: jsonConverter<Record<string, DashboardVisual>>({}) }) visualsAttribute: Record<string, DashboardVisual> = {}
+  @property({ attribute: false }) tables: Record<string, DashboardTable> = {}
+  @property({ attribute: 'tables', converter: jsonConverter<Record<string, DashboardTable>>({}) }) tablesAttribute: Record<string, DashboardTable> = {}
   @property({ attribute: 'status', converter: jsonConverter<ChatStatus>({}) }) status: ChatStatus = {}
   @property({ attribute: 'conversation-id' }) conversationId = ''
   @state() private expandedToolCalls = new Set<string>()
@@ -253,6 +240,10 @@ class ChatThread extends LitElement {
       gap: var(--ld-space-sm);
     }
 
+    .tool-call.has-artifact {
+      width: min(100%, 48rem);
+    }
+
     .tool-trigger {
       display: inline-flex;
       width: fit-content;
@@ -402,6 +393,21 @@ class ChatThread extends LitElement {
       color: var(--ld-fg-danger);
     }
 
+    ld-visual-artifact {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    ld-visual-artifact[kind='chart'] {
+      height: 18rem;
+    }
+
+    ld-visual-artifact[kind='table'] {
+      height: 22rem;
+    }
+
     @keyframes tool-details-open {
       from {
         opacity: 0;
@@ -464,8 +470,16 @@ class ChatThread extends LitElement {
     super.disconnectedCallback()
   }
 
-  private get resolvedTranscript(): ChatTranscriptItem[] {
+  private get resolvedTranscript(): ChatTranscriptItemSignal[] {
     return Array.isArray(this.transcript) && this.transcript.length > 0 ? this.transcript : this.transcriptAttribute
+  }
+
+  private get resolvedVisuals(): Record<string, DashboardVisual> {
+    return hasKeys(this.visuals) ? this.visuals : this.visualsAttribute
+  }
+
+  private get resolvedTables(): Record<string, DashboardTable> {
+    return hasKeys(this.tables) ? this.tables : this.tablesAttribute
   }
 
   private scheduleScrollToBottom() {
@@ -483,7 +497,7 @@ class ChatThread extends LitElement {
     return this.renderAgentTurn(unit.items)
   }
 
-  private renderAgentTurn(items: ChatTranscriptItem[]) {
+  private renderAgentTurn(items: ChatTranscriptItemSignal[]) {
     return html`
       <article class="agent-turn">
         <div class="agent-stack">
@@ -493,7 +507,7 @@ class ChatThread extends LitElement {
     `
   }
 
-  private renderAgentItem(item: ChatTranscriptItem) {
+  private renderAgentItem(item: ChatTranscriptItemSignal) {
     switch (item.kind) {
       case 'tool':
         return this.renderTool(item)
@@ -522,7 +536,7 @@ class ChatThread extends LitElement {
     return html`<div class="agent-markdown markdown">${unsafeHTML(renderMarkdownHTML(content))}</div>`
   }
 
-  private renderTool(item: ChatTranscriptItem) {
+  private renderTool(item: ChatTranscriptItemSignal) {
     const status = item.status || 'running'
     const label = toolCallLabel(item)
     const key = toolCallKey(item)
@@ -530,7 +544,7 @@ class ChatThread extends LitElement {
     const expanded = this.expandedToolCalls.has(key)
     return html`
       <div
-        class=${['tool-call', status === 'running' ? 'running' : '', status === 'complete' ? 'done' : '', status === 'error' ? 'error' : ''].filter(Boolean).join(' ')}
+        class=${['tool-call', item.artifact ? 'has-artifact' : '', status === 'running' ? 'running' : '', status === 'complete' ? 'done' : '', status === 'error' ? 'error' : ''].filter(Boolean).join(' ')}
         title=${`${label}: ${statusLabel(status)}`}
       >
         <button
@@ -544,12 +558,23 @@ class ChatThread extends LitElement {
           <span class="activity-text">${label}</span>
           <span class="tool-chevron" aria-hidden="true">${chevronRightIcon()}</span>
         </button>
+        ${status === 'complete' && item.artifact ? this.renderArtifact(item.artifact) : nothing}
         ${expanded ? this.renderToolDetails(item, detailsID) : nothing}
       </div>
     `
   }
 
-  private renderToolDetails(item: ChatTranscriptItem, detailsID: string) {
+  private renderArtifact(artifact: ChatArtifactSignal) {
+    const legacyArtifact = artifact as LegacyArtifact
+    const payload = artifact.kind === 'chart'
+      ? this.resolvedVisuals[artifact.id] || legacyArtifact.patch?.visuals?.[artifact.id]
+      : artifact.kind === 'table'
+        ? this.resolvedTables[artifact.id] || legacyArtifact.patch?.tables?.[artifact.id]
+        : null
+    return html`<ld-visual-artifact kind=${artifact.kind} artifact-id=${artifact.id} .payload=${payload ?? null}></ld-visual-artifact>`
+  }
+
+  private renderToolDetails(item: ChatTranscriptItemSignal, detailsID: string) {
     const status = item.status || 'running'
     return html`
       <div class="tool-details" id=${detailsID}>
@@ -581,7 +606,11 @@ class ChatThread extends LitElement {
 
 }
 
-function groupTranscript(transcript: ChatTranscriptItem[]): ChatRenderUnit[] {
+function hasKeys(value: Record<string, unknown> | undefined): boolean {
+  return !!value && Object.keys(value).length > 0
+}
+
+function groupTranscript(transcript: ChatTranscriptItemSignal[]): ChatRenderUnit[] {
   const units: ChatRenderUnit[] = []
   let agentItems: ChatTranscriptItem[] = []
   const flushAgent = () => {
@@ -608,7 +637,7 @@ function renderMarkdownHTML(value: string): string {
   })
 }
 
-function toolCallLabel(item: ChatTranscriptItem): string {
+function toolCallLabel(item: ChatTranscriptItemSignal): string {
   const title = item.title || titleFromToolName(item.name || '')
   return title || 'Tool'
 }
@@ -637,7 +666,7 @@ function chevronRightIcon() {
   return lucideIcon(ChevronRight)
 }
 
-function toolCallKey(item: ChatTranscriptItem): string {
+function toolCallKey(item: ChatTranscriptItemSignal): string {
   return item.toolCallId || item.id || `${item.name || 'tool'}:${item.createdAt || ''}`
 }
 

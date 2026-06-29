@@ -95,6 +95,7 @@ tasks:
       - npm run test:catalog-page
       - npm run test:dashboard-page
       - npm run test:chat-page
+      - npm run test:chat-thread
       - npm run test:workspace-page
       - npm run test:admin-page
       - npm run test:login-page

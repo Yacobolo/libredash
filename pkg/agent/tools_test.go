@@ -75,10 +75,11 @@ func TestToolValidationFailuresBecomeToolResults(t *testing.T) {
 
 func TestToolOutputValidationAndHandlerFailures(t *testing.T) {
 	tests := []struct {
-		name     string
-		handler  ToolHandler
-		limit    int
-		wantCode string
+		name         string
+		handler      ToolHandler
+		limit        int
+		displayLimit int
+		wantCode     string
 	}{
 		{
 			name: "handler error",
@@ -116,6 +117,17 @@ func TestToolOutputValidationAndHandlerFailures(t *testing.T) {
 			limit:    12,
 			wantCode: "tool_output_too_large",
 		},
+		{
+			name: "display too large",
+			handler: ToolHandlerFunc(func(context.Context, ToolCall) (ToolResult, error) {
+				return ToolResult{
+					Content:        map[string]any{"ok": true},
+					DisplayContent: map[string]any{"rows": strings.Repeat("row-data", 100)},
+				}, nil
+			}),
+			displayLimit: 24,
+			wantCode:     "tool_display_output_too_large",
+		},
 	}
 
 	for _, tc := range tests {
@@ -123,6 +135,9 @@ func TestToolOutputValidationAndHandlerFailures(t *testing.T) {
 			limits := Limits{}
 			if tc.limit > 0 {
 				limits.MaxToolResultBytes = tc.limit
+			}
+			if tc.displayLimit > 0 {
+				limits.MaxToolDisplayBytes = tc.displayLimit
 			}
 			model := &fakeModel{responses: []ModelResponse{
 				{ToolCalls: []ToolCall{{ID: "call_1", Name: "work", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
@@ -148,6 +163,9 @@ func TestToolOutputValidationAndHandlerFailures(t *testing.T) {
 			tool := onlyToolMessage(t, a.Transcript())
 			if !tool.IsError || !strings.Contains(tool.Content, tc.wantCode) {
 				t.Fatalf("tool content = %s, IsError=%v, want %s", tool.Content, tool.IsError, tc.wantCode)
+			}
+			if strings.Contains(tool.Content, "row-data") || tool.DisplayContent != nil {
+				t.Fatalf("tool error leaked display payload: %#v", tool)
 			}
 		})
 	}
@@ -222,6 +240,71 @@ func TestToolExecutionIsBoundedParallelAndOrdered(t *testing.T) {
 	}
 	if strings.Join(gotIDs, ",") != "call_1,call_2,call_3" {
 		t.Fatalf("tool result order = %v", gotIDs)
+	}
+}
+
+func TestToolDisplayContentIsNotSentBackToModel(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{
+		{ToolCalls: []ToolCall{{ID: "call_1", Name: "visual", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
+		{Content: "done", FinishReason: FinishReasonStop},
+	}}
+	display := map[string]any{
+		"kind": "table",
+		"patch": map[string]any{
+			"tables": map[string]any{
+				"agent_table_1": map[string]any{"rows": strings.Repeat("row-data", 1000)},
+			},
+		},
+	}
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "x",
+		Model:        model,
+		Tools: []ToolDefinition{{
+			Name:        "visual",
+			Description: "visual",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+			Handler: ToolHandlerFunc(func(context.Context, ToolCall) (ToolResult, error) {
+				return ToolResult{
+					Content:        map[string]any{"ok": true, "id": "agent_table_1"},
+					DisplayContent: display,
+				}, nil
+			}),
+		}},
+	})
+
+	if _, err := a.Prompt(context.Background(), PromptRequest{Input: "go"}); err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	tool := onlyToolMessage(t, a.Transcript())
+	if tool.DisplayContent == nil {
+		t.Fatalf("tool transcript missing display content: %#v", tool)
+	}
+	if !strings.Contains(tool.Content, `"ok":true`) || strings.Contains(tool.Content, "row-data") {
+		t.Fatalf("tool model content should be compact: %s", tool.Content)
+	}
+	if len(model.requests) != 2 {
+		t.Fatalf("model requests = %d, want 2", len(model.requests))
+	}
+	last := model.requests[1].Messages[len(model.requests[1].Messages)-1]
+	if last.Role != RoleTool || last.DisplayContent != nil {
+		t.Fatalf("second model request leaked display content: %#v", last)
+	}
+	if strings.Contains(last.Content, "row-data") {
+		t.Fatalf("second model request leaked display rows: %s", last.Content)
+	}
+}
+
+func TestToolDisplayContentDoesNotAffectTokenEstimate(t *testing.T) {
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "x",
+		Model:        &fakeModel{responses: []ModelResponse{{Content: "ok", FinishReason: FinishReasonStop}}},
+	})
+	base := []Message{{Role: RoleTool, ToolCallID: "call_1", ToolName: "visual", Content: `{"ok":true}`}}
+	withDisplay := []Message{{Role: RoleTool, ToolCallID: "call_1", ToolName: "visual", Content: `{"ok":true}`, DisplayContent: map[string]any{"rows": strings.Repeat("row-data", 1000)}}}
+	if got, want := a.estimateModelInputTokens(withDisplay), a.estimateModelInputTokens(base); got != want {
+		t.Fatalf("token estimate with display = %d, want %d", got, want)
 	}
 }
 

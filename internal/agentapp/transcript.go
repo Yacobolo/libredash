@@ -10,8 +10,13 @@ import (
 )
 
 func transcriptFromMessages(conversationID string, messages []Message) []ChatTranscriptItem {
+	return transcriptStateFromMessages(conversationID, messages).Transcript
+}
+
+func transcriptStateFromMessages(conversationID string, messages []Message) ChatTranscriptState {
 	items := make([]ChatTranscriptItem, 0, len(messages))
 	toolIndex := map[string]int{}
+	artifacts := emptyChatArtifactSignals()
 	for _, message := range messages {
 		switch message.Role {
 		case MessageRoleUser:
@@ -55,6 +60,12 @@ func transcriptFromMessages(conversationID string, messages []Message) []ChatTra
 				})
 			}
 		case MessageRoleTool:
+			artifact, artifactSignals, compactArtifactResult := toolArtifact(message.ContentText, message.ContentJSON)
+			mergeChatArtifactSignals(&artifacts, artifactSignals)
+			resultJSON := formatJSONPreview(message.ContentText, maxToolResultPreviewBytes)
+			if compactArtifactResult != "" {
+				resultJSON = formatJSONPreview(compactArtifactResult, maxToolResultPreviewBytes)
+			}
 			item := ChatTranscriptItem{
 				ID:             message.ID,
 				Kind:           "tool",
@@ -64,7 +75,8 @@ func transcriptFromMessages(conversationID string, messages []Message) []ChatTra
 				Status:         "complete",
 				Summary:        toolSummary(message.ContentText),
 				ResultSummary:  toolSummary(message.ContentText),
-				ResultJSON:     formatJSONPreview(message.ContentText, maxToolResultPreviewBytes),
+				ResultJSON:     resultJSON,
+				Artifact:       artifact,
 				ConversationID: conversationID,
 				RunID:          message.RunID,
 				CreatedAt:      message.CreatedAt,
@@ -82,7 +94,7 @@ func transcriptFromMessages(conversationID string, messages []Message) []ChatTra
 			items = append(items, item)
 		}
 	}
-	return items
+	return ChatTranscriptState{Transcript: items, Artifacts: artifacts}
 }
 
 type transcriptToolCall struct {
@@ -107,6 +119,7 @@ func mergeToolTranscriptItem(started, finished ChatTranscriptItem) ChatTranscrip
 	started.Summary = finished.Summary
 	started.ResultSummary = finished.ResultSummary
 	started.ResultJSON = finished.ResultJSON
+	started.Artifact = finished.Artifact
 	started.Error = finished.Error
 	started.RunID = finished.RunID
 	if started.InputJSON == "" {
@@ -122,6 +135,105 @@ func mergeToolTranscriptItem(started, finished ChatTranscriptItem) ChatTranscrip
 		started.Title = finished.Title
 	}
 	return started
+}
+
+func toolArtifact(rawText, rawJSON string) (*ChatArtifact, ChatArtifactSignals, string) {
+	raw := displayContentJSON(rawJSON)
+	legacyVerbose := raw == ""
+	if legacyVerbose {
+		raw = rawText
+	}
+	var payload struct {
+		Kind    string         `json:"kind"`
+		ID      string         `json:"id"`
+		Patch   map[string]any `json:"patch"`
+		Summary string         `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return nil, emptyChatArtifactSignals(), ""
+	}
+	if payload.ID == "" || payload.Patch == nil {
+		return nil, emptyChatArtifactSignals(), ""
+	}
+	signals := emptyChatArtifactSignals()
+	switch payload.Kind {
+	case "chart":
+		visuals, ok := payload.Patch["visuals"].(map[string]any)
+		if !ok {
+			return nil, emptyChatArtifactSignals(), ""
+		}
+		mergeMap(signals.Visuals, visuals)
+	case "table":
+		tables, ok := payload.Patch["tables"].(map[string]any)
+		if !ok {
+			return nil, emptyChatArtifactSignals(), ""
+		}
+		mergeMap(signals.Tables, tables)
+	default:
+		return nil, emptyChatArtifactSignals(), ""
+	}
+	compactResult := ""
+	if legacyVerbose {
+		compactResult = compactToolArtifactResultJSON(payload.Kind, payload.ID, payload.Summary)
+	}
+	return &ChatArtifact{Kind: payload.Kind, ID: payload.ID, Summary: payload.Summary}, signals, compactResult
+}
+
+func compactToolArtifactResultJSON(kind, id, summary string) string {
+	payload := map[string]any{
+		"ok":      true,
+		"kind":    kind,
+		"id":      id,
+		"summary": summary,
+		"signal":  toolArtifactSignal(kind, id),
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+func toolArtifactSignal(kind, id string) string {
+	switch kind {
+	case "chart":
+		return "visuals." + id
+	case "table":
+		return "tables." + id
+	default:
+		return id
+	}
+}
+
+func displayContentJSON(raw string) string {
+	var payload struct {
+		DisplayContent json.RawMessage `json:"display_content"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil || len(payload.DisplayContent) == 0 || string(payload.DisplayContent) == "null" {
+		return ""
+	}
+	return string(payload.DisplayContent)
+}
+
+func emptyChatArtifactSignals() ChatArtifactSignals {
+	return ChatArtifactSignals{Visuals: map[string]any{}, Tables: map[string]any{}}
+}
+
+func mergeChatArtifactSignals(target *ChatArtifactSignals, source ChatArtifactSignals) {
+	if target.Visuals == nil {
+		target.Visuals = map[string]any{}
+	}
+	if target.Tables == nil {
+		target.Tables = map[string]any{}
+	}
+	mergeMap(target.Visuals, source.Visuals)
+	mergeMap(target.Tables, source.Tables)
+}
+
+func mergeMap(target, source map[string]any) {
+	for key, value := range source {
+		target[key] = value
+	}
 }
 
 func toolTitle(name string) string {

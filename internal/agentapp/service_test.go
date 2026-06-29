@@ -142,6 +142,103 @@ func TestServicePromptPersistsRunEventsMessagesAndTranscript(t *testing.T) {
 	}
 }
 
+func TestServicePromptPersistsDisplayContentButSendsCompactToolResult(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentAppStore(t, ctx)
+	defer store.Close()
+	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
+	var secondRequest openAIChatRequest
+	var calls atomic.Int64
+	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req openAIChatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode model request: %v", err)
+		}
+		switch calls.Add(1) {
+		case 1:
+			writeJSON(t, w, openAIChatResponse{Choices: []openAIChoice{{
+				Message: openAIMessage{Role: "assistant", ToolCalls: []openAIToolCall{{
+					ID:       "call_visual",
+					Type:     "function",
+					Function: openAIFunctionCall{Name: "query_visual", Arguments: `{}`},
+				}}},
+				FinishReason: "tool_calls",
+			}}})
+		case 2:
+			secondRequest = req
+			writeJSON(t, w, openAIChatResponse{Choices: []openAIChoice{{
+				Message:      openAIMessage{Role: "assistant", Content: "Created the artifact."},
+				FinishReason: "stop",
+			}}})
+		default:
+			t.Fatalf("unexpected model call")
+		}
+	}))
+	defer modelServer.Close()
+
+	scope := Scope{WorkspaceID: "test", PrincipalID: principal.ID}
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"})
+	service.SetToolProviders(func(Scope) []agent.ToolDefinition {
+		return []agent.ToolDefinition{{
+			Name:        "query_visual",
+			Description: "visual",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+			Handler: agent.ToolHandlerFunc(func(context.Context, agent.ToolCall) (agent.ToolResult, error) {
+				return agent.ToolResult{
+					Content: map[string]any{"ok": true, "kind": "table", "id": "agent_table_1", "summary": "Created table.", "signal": "tables.agent_table_1"},
+					DisplayContent: map[string]any{
+						"kind":    "table",
+						"id":      "agent_table_1",
+						"patch":   map[string]any{"tables": map[string]any{"agent_table_1": map[string]any{"blocks": map[string]any{"a": map[string]any{"rows": []any{map[string]any{"status": "delivered"}}}}}}},
+						"summary": "Created table.",
+					},
+				}, nil
+			}),
+		}}
+	})
+	conversation, err := service.CreateConversation(ctx, scope, "Display")
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	if _, err := service.Prompt(ctx, PromptInput{Scope: scope, ConversationID: conversation.ID, Input: "make a table"}); err != nil {
+		t.Fatalf("prompt: %v", err)
+	}
+	if len(secondRequest.Messages) == 0 {
+		t.Fatal("missing second request messages")
+	}
+	toolMessage := secondRequest.Messages[len(secondRequest.Messages)-1]
+	if toolMessage.Role != "tool" || strings.Contains(toolMessage.Content, "delivered") || !strings.Contains(toolMessage.Content, "tables.agent_table_1") {
+		t.Fatalf("model-visible tool message = %#v", toolMessage)
+	}
+	messages, err := store.ListMessages(ctx, "test", principal.ID, conversation.ID)
+	if err != nil {
+		t.Fatalf("list messages: %v", err)
+	}
+	var storedTool Message
+	for _, message := range messages {
+		if message.Role == MessageRoleTool {
+			storedTool = message
+			break
+		}
+	}
+	if storedTool.ID == "" {
+		t.Fatal("stored tool message missing")
+	}
+	if strings.Contains(storedTool.ContentText, "delivered") {
+		t.Fatalf("stored compact content leaked display row: %s", storedTool.ContentText)
+	}
+	if !strings.Contains(storedTool.ContentJSON, "display_content") || !strings.Contains(storedTool.ContentJSON, "delivered") {
+		t.Fatalf("stored content_json missing display artifact: %s", storedTool.ContentJSON)
+	}
+	updated, err := store.GetConversation(ctx, "test", principal.ID, conversation.ID)
+	if err != nil {
+		t.Fatalf("get conversation: %v", err)
+	}
+	if strings.Contains(updated.TranscriptJSON, "delivered") || strings.Contains(updated.TranscriptJSON, "display_content") {
+		t.Fatalf("conversation transcript snapshot should stay compact: %s", updated.TranscriptJSON)
+	}
+}
+
 func TestServiceGenerateConversationTitleUsesNoToolsAndSavesCleanTitle(t *testing.T) {
 	ctx := context.Background()
 	store := openAgentAppStore(t, ctx)
@@ -385,6 +482,9 @@ func TestServiceConversationTranscriptDerivesDisplayItems(t *testing.T) {
 	if !strings.Contains(transcript[2].ResultJSON, `"summary": "Found 2 dashboards"`) {
 		t.Fatalf("tool result preview = %q", transcript[2].ResultJSON)
 	}
+	if transcript[2].Artifact != nil {
+		t.Fatalf("non-visual tool should not produce artifact: %#v", transcript[2].Artifact)
+	}
 	if transcript[3].Kind != "assistant" || !strings.Contains(transcript[3].Markdown, "two") {
 		t.Fatalf("assistant item = %#v", transcript[3])
 	}
@@ -392,6 +492,88 @@ func TestServiceConversationTranscriptDerivesDisplayItems(t *testing.T) {
 		if strings.Contains(item.Text+item.Markdown+item.Summary, "internal summary") {
 			t.Fatalf("summary leaked into transcript: %#v", transcript)
 		}
+	}
+}
+
+func TestServiceConversationTranscriptExtractsVisualArtifact(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentAppStore(t, ctx)
+	defer store.Close()
+	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", Model: "fake-model"})
+	scope := Scope{WorkspaceID: "test", PrincipalID: principal.ID}
+	conversation, err := service.CreateConversation(ctx, scope, "Artifact")
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	if _, err := store.AppendMessage(ctx, MessageInput{
+		WorkspaceID:    "test",
+		PrincipalID:    principal.ID,
+		ConversationID: conversation.ID,
+		Role:           MessageRoleTool,
+		ContentText:    `{"ok":true,"kind":"chart","id":"agent_chart_123","summary":"Created chart.","signal":"visuals.agent_chart_123"}`,
+		ContentJSON:    `{"display_content":{"kind":"chart","id":"agent_chart_123","patch":{"visuals":{"agent_chart_123":{"title":"Orders","data":[{"label":"delivered","value":42}]}}},"summary":"Created chart."}}`,
+		ToolCallID:     "call_1",
+		ToolName:       "query_visual",
+	}); err != nil {
+		t.Fatalf("append tool: %v", err)
+	}
+	state, err := service.ConversationTranscriptState(ctx, scope, conversation.ID)
+	if err != nil {
+		t.Fatalf("conversation transcript: %v", err)
+	}
+	transcript := state.Transcript
+	if len(transcript) != 1 || transcript[0].Artifact == nil {
+		t.Fatalf("transcript artifact missing: %#v", transcript)
+	}
+	if transcript[0].Artifact.Kind != "chart" || transcript[0].Artifact.ID != "agent_chart_123" {
+		t.Fatalf("artifact = %#v", transcript[0].Artifact)
+	}
+	if strings.Contains(transcript[0].ResultJSON, "delivered") {
+		t.Fatalf("compact result preview leaked chart data: %s", transcript[0].ResultJSON)
+	}
+	if _, ok := state.Artifacts.Visuals["agent_chart_123"]; !ok {
+		t.Fatalf("artifact signal missing visual: %#v", state.Artifacts)
+	}
+	if len(state.Artifacts.Tables) != 0 {
+		t.Fatalf("unexpected table artifacts: %#v", state.Artifacts.Tables)
+	}
+}
+
+func TestServiceConversationTranscriptSupportsLegacyVerboseVisualArtifact(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentAppStore(t, ctx)
+	defer store.Close()
+	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", Model: "fake-model"})
+	scope := Scope{WorkspaceID: "test", PrincipalID: principal.ID}
+	conversation, err := service.CreateConversation(ctx, scope, "Legacy artifact")
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	if _, err := store.AppendMessage(ctx, MessageInput{
+		WorkspaceID:    "test",
+		PrincipalID:    principal.ID,
+		ConversationID: conversation.ID,
+		Role:           MessageRoleTool,
+		ContentText:    `{"kind":"table","id":"agent_table_123","patch":{"tables":{"agent_table_123":{"title":"Orders","blocks":{"a":{"rows":[{"status":"delivered"}]}}}}},"summary":"Created table."}`,
+		ToolCallID:     "call_1",
+		ToolName:       "query_visual",
+	}); err != nil {
+		t.Fatalf("append tool: %v", err)
+	}
+	state, err := service.ConversationTranscriptState(ctx, scope, conversation.ID)
+	if err != nil {
+		t.Fatalf("conversation transcript: %v", err)
+	}
+	if len(state.Transcript) != 1 || state.Transcript[0].Artifact == nil || state.Transcript[0].Artifact.ID != "agent_table_123" {
+		t.Fatalf("legacy artifact missing: %#v", state.Transcript)
+	}
+	if strings.Contains(state.Transcript[0].ResultJSON, "delivered") || strings.Contains(state.Transcript[0].ResultJSON, `"patch"`) || !strings.Contains(state.Transcript[0].ResultJSON, "tables.agent_table_123") {
+		t.Fatalf("legacy result preview should be compact: %s", state.Transcript[0].ResultJSON)
+	}
+	if _, ok := state.Artifacts.Tables["agent_table_123"]; !ok {
+		t.Fatalf("legacy table signal missing: %#v", state.Artifacts)
 	}
 }
 

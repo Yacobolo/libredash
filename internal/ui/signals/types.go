@@ -151,11 +151,13 @@ type DashboardComponentSignal struct {
 }
 
 type ChatEnvelope struct {
-	Chrome    ChromeSignal       `json:"chrome"`
-	Page      ChatPageSignal     `json:"page"`
-	Runtime   RouteRuntimeSignal `json:"runtime"`
-	CSRFToken string             `json:"csrfToken"`
-	Agent     ChatSignal         `json:"agent"`
+	Chrome    ChromeSignal                `json:"chrome"`
+	Page      ChatPageSignal              `json:"page"`
+	Runtime   RouteRuntimeSignal          `json:"runtime"`
+	CSRFToken string                      `json:"csrfToken"`
+	Agent     ChatSignal                  `json:"agent"`
+	Visuals   map[string]dashboard.Visual `json:"visuals"`
+	Tables    map[string]dashboard.Table  `json:"tables"`
 }
 
 type ChatPageSignal struct {
@@ -542,11 +544,78 @@ type WorkspaceAccessCommand struct {
 }
 
 type ChatSignal struct {
-	Conversations        []ChatConversationSummary     `json:"conversations"`
-	ActiveConversationID string                        `json:"activeConversationId"`
-	Transcript           []agentapp.ChatTranscriptItem `json:"transcript"`
-	Status               ChatStatus                    `json:"status"`
-	Composer             ComposerSignal                `json:"composer"`
+	Conversations        []ChatConversationSummary   `json:"conversations"`
+	ActiveConversationID string                      `json:"activeConversationId"`
+	Transcript           []ChatTranscriptItemSignal  `json:"transcript"`
+	Status               ChatStatus                  `json:"status"`
+	Composer             ComposerSignal              `json:"composer"`
+	Visuals              map[string]dashboard.Visual `json:"-"`
+	Tables               map[string]dashboard.Table  `json:"-"`
+}
+
+type ChatTranscriptItemSignal struct {
+	ID             string              `json:"id"`
+	Kind           string              `json:"kind"`
+	Text           string              `json:"text,omitempty"`
+	Markdown       string              `json:"markdown,omitempty"`
+	ToolCallID     string              `json:"toolCallId,omitempty"`
+	Name           string              `json:"name,omitempty"`
+	Title          string              `json:"title,omitempty"`
+	Status         string              `json:"status,omitempty"`
+	Summary        string              `json:"summary,omitempty"`
+	ResultSummary  string              `json:"resultSummary,omitempty"`
+	InputJSON      string              `json:"inputJson,omitempty"`
+	ArgumentsJSON  string              `json:"argumentsJson,omitempty"`
+	ResultJSON     string              `json:"resultJson,omitempty"`
+	Artifact       *ChatArtifactSignal `json:"artifact,omitempty"`
+	Error          string              `json:"error,omitempty"`
+	ConversationID string              `json:"conversationId,omitempty"`
+	RunID          string              `json:"runId,omitempty"`
+	CreatedAt      string              `json:"createdAt,omitempty"`
+}
+
+type ChatArtifactSignal struct {
+	Kind    string `json:"kind"`
+	ID      string `json:"id"`
+	Summary string `json:"summary,omitempty"`
+}
+
+func ChatTranscriptItems(items []agentapp.ChatTranscriptItem) []ChatTranscriptItemSignal {
+	out := make([]ChatTranscriptItemSignal, 0, len(items))
+	for _, item := range items {
+		out = append(out, ChatTranscriptItem(item))
+	}
+	return out
+}
+
+func ChatTranscriptItem(item agentapp.ChatTranscriptItem) ChatTranscriptItemSignal {
+	out := ChatTranscriptItemSignal{
+		ID:             item.ID,
+		Kind:           item.Kind,
+		Text:           item.Text,
+		Markdown:       item.Markdown,
+		ToolCallID:     item.ToolCallID,
+		Name:           item.Name,
+		Title:          item.Title,
+		Status:         item.Status,
+		Summary:        item.Summary,
+		ResultSummary:  item.ResultSummary,
+		InputJSON:      item.InputJSON,
+		ArgumentsJSON:  item.ArgumentsJSON,
+		ResultJSON:     item.ResultJSON,
+		Error:          item.Error,
+		ConversationID: item.ConversationID,
+		RunID:          item.RunID,
+		CreatedAt:      item.CreatedAt,
+	}
+	if item.Artifact != nil {
+		out.Artifact = &ChatArtifactSignal{
+			Kind:    item.Artifact.Kind,
+			ID:      item.Artifact.ID,
+			Summary: item.Artifact.Summary,
+		}
+	}
+	return out
 }
 
 type ChatConversationSummary struct {
@@ -636,6 +705,8 @@ func ChatInitialEnvelope(catalog dashboard.Catalog, csrfToken, roleLabel string,
 		Runtime:   RouteRuntimeSignal{Kind: RouteChat},
 		CSRFToken: csrfToken,
 		Agent:     agent,
+		Visuals:   agent.Visuals,
+		Tables:    agent.Tables,
 	}
 }
 

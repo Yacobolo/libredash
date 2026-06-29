@@ -1,9 +1,10 @@
 import { LitElement, css, html } from 'lit'
 import { property } from 'lit/decorators.js'
-import type { ChatPageSignal, ChatSignal } from '../../generated/signals'
+import type { ChatPageSignal, ChatSignal, DashboardTable, DashboardVisual } from '../../generated/signals'
 import { jsonAttribute } from '../shared/json-attribute'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../navigation/sub-sidebar'
+import '../dashboard/visual-modal'
 import './chat-thread'
 import './chat-composer'
 
@@ -18,6 +19,8 @@ const emptyAgent: ChatSignal = {
 class LibreDashChatPage extends LitElement {
   @property({ converter: jsonAttribute<ChatPageSignal | null>(null) }) page: ChatPageSignal | null = null
   @property({ converter: jsonAttribute<ChatSignal>(emptyAgent) }) agent: ChatSignal = emptyAgent
+  @property({ converter: jsonAttribute<Record<string, DashboardVisual>>({}) }) visuals: Record<string, DashboardVisual> = {}
+  @property({ converter: jsonAttribute<Record<string, DashboardTable>>({}) }) tables: Record<string, DashboardTable> = {}
   @property({ type: Boolean, reflect: true }) pending = false
   @property({ attribute: 'composerdisabled', type: Boolean }) composerDisabled = false
 
@@ -152,6 +155,8 @@ class LibreDashChatPage extends LitElement {
             <div class="thread-stack">
               <ld-chat-thread
                 .transcript=${agent.transcript ?? []}
+                .visuals=${this.visuals ?? {}}
+                .tables=${this.tables ?? {}}
                 .status=${status}
                 conversation-id=${agent.activeConversationId ?? ''}
               >${status.error ?? ''}</ld-chat-thread>
@@ -163,6 +168,7 @@ class LibreDashChatPage extends LitElement {
               ></ld-chat-composer>
             </div>
           </div>
+          <ld-visual-modal></ld-visual-modal>
         </section>
       </div>
     `

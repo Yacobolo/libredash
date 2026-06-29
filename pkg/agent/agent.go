@@ -260,6 +260,7 @@ func (a *Agent) modelMessagesFrom(transcript []Message) []Message {
 		if message.Role == RoleSystem {
 			continue
 		}
+		message.DisplayContent = nil
 		messages = append(messages, message)
 	}
 	return cloneMessages(messages)

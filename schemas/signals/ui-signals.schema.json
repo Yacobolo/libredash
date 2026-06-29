@@ -477,6 +477,25 @@
       ],
       "type": "object"
     },
+    "ChatArtifactSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "type": "object"
+    },
     "ChatConversationSummary": {
       "additionalProperties": false,
       "properties": {
@@ -543,6 +562,18 @@
         },
         "runtime": {
           "$ref": "#/$defs/RouteRuntimeSignal"
+        },
+        "tables": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DashboardTable"
+          },
+          "type": "object"
+        },
+        "visuals": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DashboardVisual"
+          },
+          "type": "object"
         }
       },
       "required": [
@@ -550,7 +581,9 @@
         "chrome",
         "csrfToken",
         "page",
-        "runtime"
+        "runtime",
+        "tables",
+        "visuals"
       ],
       "type": "object"
     },
@@ -597,7 +630,9 @@
           "$ref": "#/$defs/ChatStatus"
         },
         "transcript": {
-          "items": {},
+          "items": {
+            "$ref": "#/$defs/ChatTranscriptItemSignal"
+          },
           "type": "array"
         }
       },
@@ -626,6 +661,70 @@
       "required": [
         "enabled",
         "running"
+      ],
+      "type": "object"
+    },
+    "ChatTranscriptItemSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "argumentsJson": {
+          "type": "string"
+        },
+        "artifact": {
+          "$ref": "#/$defs/ChatArtifactSignal"
+        },
+        "conversationId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "inputJson": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "markdown": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "resultJson": {
+          "type": "string"
+        },
+        "resultSummary": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "toolCallId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
       ],
       "type": "object"
     },

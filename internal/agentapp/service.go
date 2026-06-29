@@ -184,14 +184,22 @@ func normalizePage(page Page) Page {
 }
 
 func (s *Service) ConversationTranscript(ctx context.Context, scope Scope, conversationID string) ([]ChatTranscriptItem, error) {
-	if _, err := s.repo.GetConversation(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID); err != nil {
-		return nil, err
-	}
-	messages, err := s.repo.ListMessages(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID)
+	state, err := s.ConversationTranscriptState(ctx, scope, conversationID)
 	if err != nil {
 		return nil, err
 	}
-	return transcriptFromMessages(conversationID, messages), nil
+	return state.Transcript, nil
+}
+
+func (s *Service) ConversationTranscriptState(ctx context.Context, scope Scope, conversationID string) (ChatTranscriptState, error) {
+	if _, err := s.repo.GetConversation(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID); err != nil {
+		return ChatTranscriptState{}, err
+	}
+	messages, err := s.repo.ListMessages(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID)
+	if err != nil {
+		return ChatTranscriptState{}, err
+	}
+	return transcriptStateFromMessages(conversationID, messages), nil
 }
 
 func systemPrompt() string {

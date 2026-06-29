@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,11 +47,15 @@ func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 		`data-signals=`,
 		`<ld-app-shell`,
 		`<ld-chat-page`,
+		`&#34;visuals&#34;`,
+		`&#34;tables&#34;`,
 		`&#34;compact&#34;:true`,
 		`&#34;collapsible&#34;:false`,
 		`&#34;numbered&#34;:false`,
 		`data-attr:page="JSON.stringify($page)"`,
 		`data-attr:agent="JSON.stringify($agent)"`,
+		`data-attr:visuals="JSON.stringify($visuals)"`,
+		`data-attr:tables="JSON.stringify($tables)"`,
 		`data-attr:pending="$agentTurnPending || $agent.status.running"`,
 		`data-attr:composerdisabled="$agentTurnPending || $agent.status.running || $agent.composer.disabled"`,
 		`data-indicator="agentTurnPending"`,
@@ -187,7 +192,7 @@ func TestChatSignalConversationListUsesCallerContext(t *testing.T) {
 
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	signal := server.chatSignalWith(canceled, scope, "", nil, "", false)
+	signal := server.chatSignalWith(canceled, scope, "", nil, agentapp.ChatArtifactSignals{}, "", false)
 	if len(signal.Conversations) != 0 {
 		t.Fatalf("canceled context should prevent conversation loading, got %#v", signal.Conversations)
 	}
@@ -233,6 +238,57 @@ func TestChatConversationRouteLoadsOwnedEventsAndRejectsOtherPrincipal(t *testin
 	server.Routes().ServeHTTP(hiddenRec, hiddenReq)
 	if hiddenRec.Code != http.StatusNotFound {
 		t.Fatalf("hidden route status=%d body=%s", hiddenRec.Code, hiddenRec.Body.String())
+	}
+}
+
+func TestChatConversationRouteLoadsArtifactSignalsOutsideTranscript(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	owner, token := chatPrincipalAndToken(t, ctx, store)
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	service := agentapp.NewService(fakeMetrics{}, testAgentRepository(store), agentapp.Config{APIKey: "key", Model: "fake-model"})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: service, DefaultWorkspaceID: "test"})
+	conversation, err := service.CreateConversation(ctx, agentapp.Scope{WorkspaceID: "test", PrincipalID: owner.ID}, "Artifact")
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	if _, err := testAgentRepository(store).AppendMessage(ctx, agentapp.MessageInput{
+		WorkspaceID:    "test",
+		PrincipalID:    owner.ID,
+		ConversationID: conversation.ID,
+		Role:           agentapp.MessageRoleTool,
+		ContentText:    `{"ok":true,"kind":"chart","id":"agent_chart_123","summary":"Created chart.","signal":"visuals.agent_chart_123"}`,
+		ContentJSON:    `{"display_content":{"kind":"chart","id":"agent_chart_123","patch":{"visuals":{"agent_chart_123":{"title":"Orders","data":[{"label":"delivered","value":42}]}}},"summary":"Created chart."}}`,
+		ToolCallID:     "call_1",
+		ToolName:       "query_visual",
+	}); err != nil {
+		t.Fatalf("append tool: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/chat/"+conversation.ID, nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	body := html.UnescapeString(rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, body)
+	}
+	for _, want := range []string{
+		`"visuals":{"agent_chart_123":`,
+		`"title":"Orders"`,
+		`"data":[{"label":"delivered","value":42}]`,
+		`"tables":{}`,
+		`data-attr:visuals="JSON.stringify($visuals)"`,
+		`data-attr:tables="JSON.stringify($tables)"`,
+		`"artifact":{"kind":"chart","id":"agent_chart_123","summary":"Created chart."}`,
+		`"resultJson":"{\n  \"ok\": true,\n  \"kind\": \"chart\"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("chat page missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `"patch"`) {
+		t.Fatalf("transcript should not embed artifact patch payload:\n%s", body)
 	}
 }
 

@@ -59,13 +59,13 @@ func (s *Server) chatConversation(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "chat requires an authenticated principal", http.StatusUnauthorized)
 		return
 	}
-	transcript, err := s.agent.ConversationTranscript(r.Context(), scope, conversationID)
+	state, err := s.agent.ConversationTranscriptState(r.Context(), scope, conversationID)
 	if err != nil {
 		http.Error(w, err.Error(), statusForNotFound(err))
 		return
 	}
 	s.queueMissingChatTitle(r.Context(), scope, conversationID, chatClientID(r))
-	s.renderChat(w, r, s.chatSignalWith(r.Context(), scope, conversationID, transcript, "", false))
+	s.renderChat(w, r, s.chatSignalWith(r.Context(), scope, conversationID, state.Transcript, state.Artifacts, "", false))
 }
 
 func (s *Server) renderChat(w http.ResponseWriter, r *http.Request, signal ui.ChatSignal) {
@@ -110,11 +110,13 @@ func (s *Server) runChatTurn(w http.ResponseWriter, r *http.Request, service *ag
 		createdConversation = true
 	}
 
-	transcript, err := service.ConversationTranscript(r.Context(), scope, conversationID)
+	state, err := service.ConversationTranscriptState(r.Context(), scope, conversationID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	transcript := state.Transcript
+	streamArtifacts := state.Artifacts
 	transcript = appendServerUserTranscript(transcript, conversationID, input)
 	sse := datastar.NewSSE(w, r)
 	if createdConversation {
@@ -124,7 +126,7 @@ func (s *Server) runChatTurn(w http.ResponseWriter, r *http.Request, service *ag
 	streamActiveID := strings.TrimSpace(activeConversationID)
 	emit := func(event agentapp.EventEnvelope) {
 		transcript = applyLiveTranscriptEvent(transcript, conversationID, event)
-		_ = sse.MarshalAndPatchSignals(map[string]any{"agent": chatSignalWithConversations(streamConversations, streamActiveID, transcript, "", true, true)})
+		_ = sse.MarshalAndPatchSignals(chatSignalPatch(chatSignalWithConversations(streamConversations, streamActiveID, transcript, streamArtifacts, "", true, true)))
 	}
 	result, err := service.Prompt(r.Context(), agentapp.PromptInput{
 		Scope:          scope,
@@ -140,15 +142,16 @@ func (s *Server) runChatTurn(w http.ResponseWriter, r *http.Request, service *ag
 		}
 	}
 	if result.RunID != "" {
-		if refreshed, refreshErr := service.ConversationTranscript(r.Context(), scope, conversationID); refreshErr == nil {
-			transcript = refreshed
+		if refreshed, refreshErr := service.ConversationTranscriptState(r.Context(), scope, conversationID); refreshErr == nil {
+			transcript = refreshed.Transcript
+			streamArtifacts = refreshed.Artifacts
 		}
 	}
 	shouldGenerateTitle := createdConversation && err == nil && result.RunID != ""
 	if shouldGenerateTitle {
 		s.markChatTitlePending(conversationID)
 	}
-	_ = sse.MarshalAndPatchSignals(map[string]any{"agent": s.chatSignalWith(r.Context(), scope, conversationID, transcript, statusErr, false)})
+	_ = sse.MarshalAndPatchSignals(chatSignalPatch(s.chatSignalWith(r.Context(), scope, conversationID, transcript, streamArtifacts, statusErr, false)))
 	if shouldGenerateTitle {
 		s.generateConversationTitleAsync(scope, conversationID, clientID)
 	}

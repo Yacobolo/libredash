@@ -36,9 +36,10 @@ type ToolCall struct {
 }
 
 type ToolResult struct {
-	Content any
-	IsError bool
-	Fatal   bool
+	Content        any
+	DisplayContent any
+	IsError        bool
+	Fatal          bool
 }
 
 type compiledTool struct {
@@ -176,17 +177,29 @@ func (a *Agent) runOneTool(ctx context.Context, call ToolCall, tool *compiledToo
 		result.message = toolErrorMessage(call, "tool_result_invalid", "Tool output was not JSON-serializable.", []string{err.Error()}, false)
 		return result
 	}
+	if toolResult.DisplayContent != nil {
+		displayBody, err := json.Marshal(toolResult.DisplayContent)
+		if err != nil {
+			result.message = toolErrorMessage(call, "tool_result_invalid", "Tool display output was not JSON-serializable.", []string{err.Error()}, false)
+			return result
+		}
+		if len(displayBody) > a.def.Limits.MaxToolDisplayBytes {
+			result.message = toolErrorMessage(call, "tool_display_output_too_large", "Tool display output exceeded the configured size limit.", nil, false)
+			return result
+		}
+	}
 	if len(body) > a.def.Limits.MaxToolResultBytes {
 		result.message = toolErrorMessage(call, "tool_output_too_large", "Tool output exceeded the configured size limit.", nil, false)
 		return result
 	}
 	result.message = Message{
-		ID:         a.def.IDGenerator.NewID("msg"),
-		Role:       RoleTool,
-		Content:    string(body),
-		ToolCallID: call.ID,
-		ToolName:   call.Name,
-		IsError:    toolResult.IsError,
+		ID:             a.def.IDGenerator.NewID("msg"),
+		Role:           RoleTool,
+		Content:        string(body),
+		DisplayContent: toolResult.DisplayContent,
+		ToolCallID:     call.ID,
+		ToolName:       call.Name,
+		IsError:        toolResult.IsError,
 	}
 	if toolResult.Fatal {
 		result.fatal = NewError(ErrorCodeTool, "fatal tool result", nil)

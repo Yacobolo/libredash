@@ -134,6 +134,12 @@ export interface CatalogPageSignal {
   dashboards: CatalogDashboardSignal[]
 }
 
+export interface ChatArtifactSignal {
+  kind: string
+  id: string
+  summary?: string
+}
+
 export interface ChatConversationSummary {
   id: string
   workspaceId: string
@@ -154,6 +160,8 @@ export interface ChatEnvelope {
   runtime: RouteRuntimeSignal
   csrfToken: string
   agent: ChatSignal
+  visuals: Record<string, DashboardVisual>
+  tables: Record<string, DashboardTable>
 }
 
 export interface ChatPageSignal {
@@ -166,7 +174,7 @@ export interface ChatPageSignal {
 export interface ChatSignal {
   conversations: ChatConversationSummary[]
   activeConversationId: string
-  transcript: unknown[]
+  transcript: ChatTranscriptItemSignal[]
   status: ChatStatus
   composer: ComposerSignal
 }
@@ -175,6 +183,27 @@ export interface ChatStatus {
   enabled: boolean
   running: boolean
   error?: string
+}
+
+export interface ChatTranscriptItemSignal {
+  id: string
+  kind: string
+  text?: string
+  markdown?: string
+  toolCallId?: string
+  name?: string
+  title?: string
+  status?: string
+  summary?: string
+  resultSummary?: string
+  inputJson?: string
+  argumentsJson?: string
+  resultJson?: string
+  artifact?: ChatArtifactSignal
+  error?: string
+  conversationId?: string
+  runId?: string
+  createdAt?: string
 }
 
 export interface ChromeSignal {

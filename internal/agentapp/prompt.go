@@ -161,12 +161,21 @@ func (s *Service) appendMessage(ctx context.Context, input PromptInput, runID st
 }
 
 func (s *Service) persistTranscript(ctx context.Context, input PromptInput, transcript []agent.Message) error {
-	bytes, err := json.Marshal(transcript)
+	bytes, err := json.Marshal(compactTranscriptForStorage(transcript))
 	if err != nil {
 		return err
 	}
 	_, err = s.repo.UpdateConversationTranscript(ctx, input.Scope.WorkspaceID, input.Scope.PrincipalID, input.ConversationID, string(bytes))
 	return err
+}
+
+func compactTranscriptForStorage(transcript []agent.Message) []agent.Message {
+	out := make([]agent.Message, len(transcript))
+	for i, message := range transcript {
+		message.DisplayContent = nil
+		out[i] = message
+	}
+	return out
 }
 
 func (s *Service) finishRun(ctx context.Context, input PromptInput, runID, status string, stop agent.StopReason, usage agent.Usage, runErr error) error {

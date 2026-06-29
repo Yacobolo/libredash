@@ -131,7 +131,10 @@ func (a *Agent) compactionMessages(summary Message, older []Message) []Message {
 	if summary.Content != "" {
 		messages = append(messages, Message{Role: RoleSystem, Content: "Existing summary:\n" + summary.Content})
 	}
-	messages = append(messages, older...)
+	for _, message := range older {
+		message.DisplayContent = nil
+		messages = append(messages, message)
+	}
 	return cloneMessages(messages)
 }
 

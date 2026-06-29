@@ -3,11 +3,12 @@ package agent
 import "time"
 
 type Limits struct {
-	MaxTurns           int
-	MaxToolCalls       int
-	MaxConcurrentTools int
-	ToolTimeout        time.Duration
-	MaxToolResultBytes int
+	MaxTurns            int
+	MaxToolCalls        int
+	MaxConcurrentTools  int
+	ToolTimeout         time.Duration
+	MaxToolResultBytes  int
+	MaxToolDisplayBytes int
 
 	ContextWindowTokens  int
 	ReserveOutputTokens  int
@@ -29,6 +30,9 @@ func defaultLimits(l Limits) Limits {
 	}
 	if l.MaxToolResultBytes == 0 {
 		l.MaxToolResultBytes = 64 * 1024
+	}
+	if l.MaxToolDisplayBytes == 0 {
+		l.MaxToolDisplayBytes = 1024 * 1024
 	}
 	if l.ContextWindowTokens == 0 {
 		l.ContextWindowTokens = 128000
@@ -57,6 +61,9 @@ func validateLimits(l Limits) error {
 	}
 	if l.MaxToolResultBytes <= 0 {
 		return NewError(ErrorCodeInvalidArgument, "max tool result bytes must be positive", nil)
+	}
+	if l.MaxToolDisplayBytes <= 0 {
+		return NewError(ErrorCodeInvalidArgument, "max tool display bytes must be positive", nil)
 	}
 	if l.ContextWindowTokens <= 0 {
 		return NewError(ErrorCodeInvalidArgument, "context window tokens must be positive", nil)

@@ -38,6 +38,9 @@ func TestNewAppliesDefaultsAndValidatesDefinition(t *testing.T) {
 	if a.def.Limits.ToolTimeout != 30*time.Second {
 		t.Fatalf("ToolTimeout = %s, want 30s", a.def.Limits.ToolTimeout)
 	}
+	if a.def.Limits.MaxToolDisplayBytes != 1024*1024 {
+		t.Fatalf("MaxToolDisplayBytes = %d, want 1MiB", a.def.Limits.MaxToolDisplayBytes)
+	}
 	if a.def.Compaction.KeepLastTurns != 8 {
 		t.Fatalf("KeepLastTurns = %d, want 8", a.def.Compaction.KeepLastTurns)
 	}

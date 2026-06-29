@@ -1,23 +1,40 @@
 package agentapp
 
 type ChatTranscriptItem struct {
-	ID             string `json:"id"`
-	Kind           string `json:"kind"`
-	Text           string `json:"text,omitempty"`
-	Markdown       string `json:"markdown,omitempty"`
-	ToolCallID     string `json:"toolCallId,omitempty"`
-	Name           string `json:"name,omitempty"`
-	Title          string `json:"title,omitempty"`
-	Status         string `json:"status,omitempty"`
-	Summary        string `json:"summary,omitempty"`
-	ResultSummary  string `json:"resultSummary,omitempty"`
-	InputJSON      string `json:"inputJson,omitempty"`
-	ArgumentsJSON  string `json:"argumentsJson,omitempty"`
-	ResultJSON     string `json:"resultJson,omitempty"`
-	Error          string `json:"error,omitempty"`
-	ConversationID string `json:"conversationId,omitempty"`
-	RunID          string `json:"runId,omitempty"`
-	CreatedAt      string `json:"createdAt,omitempty"`
+	ID             string        `json:"id"`
+	Kind           string        `json:"kind"`
+	Text           string        `json:"text,omitempty"`
+	Markdown       string        `json:"markdown,omitempty"`
+	ToolCallID     string        `json:"toolCallId,omitempty"`
+	Name           string        `json:"name,omitempty"`
+	Title          string        `json:"title,omitempty"`
+	Status         string        `json:"status,omitempty"`
+	Summary        string        `json:"summary,omitempty"`
+	ResultSummary  string        `json:"resultSummary,omitempty"`
+	InputJSON      string        `json:"inputJson,omitempty"`
+	ArgumentsJSON  string        `json:"argumentsJson,omitempty"`
+	ResultJSON     string        `json:"resultJson,omitempty"`
+	Artifact       *ChatArtifact `json:"artifact,omitempty"`
+	Error          string        `json:"error,omitempty"`
+	ConversationID string        `json:"conversationId,omitempty"`
+	RunID          string        `json:"runId,omitempty"`
+	CreatedAt      string        `json:"createdAt,omitempty"`
+}
+
+type ChatArtifact struct {
+	Kind    string `json:"kind"`
+	ID      string `json:"id"`
+	Summary string `json:"summary,omitempty"`
+}
+
+type ChatArtifactSignals struct {
+	Visuals map[string]any `json:"visuals"`
+	Tables  map[string]any `json:"tables"`
+}
+
+type ChatTranscriptState struct {
+	Transcript []ChatTranscriptItem
+	Artifacts  ChatArtifactSignals
 }
 
 type EventEnvelope struct {

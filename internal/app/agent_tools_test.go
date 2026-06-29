@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/agentapp"
+	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/agent"
@@ -91,6 +93,256 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 	for _, want := range []string{"q", "types", "limit", "pageToken"} {
 		if _, ok := schema.Properties[want]; !ok {
 			t.Fatalf("search_workspace schema missing query parameter %q: %s", want, names["search_workspace"].InputSchema)
+		}
+	}
+}
+
+func TestAgentVisualToolIsCustomAgentOnlyTool(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+	tools := server.agentVisualToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true})
+	if len(tools) != 1 || tools[0].Name != "query_visual" || tools[0].Handler == nil {
+		t.Fatalf("visual tools = %#v", tools)
+	}
+	for _, tool := range server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"}) {
+		if tool.Name == "query_visual" {
+			t.Fatalf("query_visual should not be exposed through APIGen tools")
+		}
+	}
+}
+
+func TestAgentVisualToolReturnsChartPatchFromSemanticData(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+	tool := server.agentVisualToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true})[0]
+	result, err := tool.Handler.Run(context.Background(), agent.ToolCall{
+		ID:   "call_1",
+		Name: "query_visual",
+		Arguments: json.RawMessage(`{
+			"kind":"chart",
+			"model":"test",
+			"dataset":"orders",
+			"title":"Orders by status",
+			"type":"bar",
+			"dimensions":[{"field":"orders.status"}],
+			"measures":[{"field":"order_count"}],
+			"limit":10
+		}`),
+	})
+	if err != nil {
+		t.Fatalf("run query_visual: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("query_visual returned error: %#v", result.Content)
+	}
+	compact, err := json.Marshal(result.Content)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if strings.Contains(string(compact), "delivered") || strings.Contains(string(compact), `"patch"`) || strings.Contains(string(compact), `"data"`) {
+		t.Fatalf("model-visible chart result should be compact: %s", compact)
+	}
+	var compactResult struct {
+		OK      bool   `json:"ok"`
+		Kind    string `json:"kind"`
+		ID      string `json:"id"`
+		Summary string `json:"summary"`
+		Signal  string `json:"signal"`
+	}
+	if err := json.Unmarshal(compact, &compactResult); err != nil {
+		t.Fatalf("decode compact result: %v body=%s", err, compact)
+	}
+	if compactResult.ID != "agent_chart_call_1" {
+		t.Fatalf("chart artifact id = %q, want call-scoped id", compactResult.ID)
+	}
+	body, err := json.Marshal(result.DisplayContent)
+	if err != nil {
+		t.Fatalf("marshal display result: %v", err)
+	}
+	var decoded struct {
+		Kind  string `json:"kind"`
+		ID    string `json:"id"`
+		Patch struct {
+			Visuals map[string]dashboard.Visual `json:"visuals"`
+		} `json:"patch"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decode result: %v body=%s", err, body)
+	}
+	if !compactResult.OK || compactResult.Kind != "chart" || compactResult.ID != decoded.ID || compactResult.Signal != "visuals."+decoded.ID {
+		t.Fatalf("compact result = %#v decoded=%#v", compactResult, decoded)
+	}
+	visual := decoded.Patch.Visuals[decoded.ID]
+	if decoded.Kind != "chart" || visual.ID != decoded.ID || visual.Title != "Orders by status" || visual.Type != "bar" || len(visual.Data) != 2 {
+		t.Fatalf("chart result = %#v visual=%#v", decoded, visual)
+	}
+	if visual.Data[0]["label"] == nil || visual.Data[0]["value"] == nil {
+		t.Fatalf("chart data does not use dashboard datum shape: %#v", visual.Data)
+	}
+	if len(visual.Interaction.Mappings) != 0 || len(visual.Selection) != 0 {
+		t.Fatalf("chart should not include interactivity: %#v", visual)
+	}
+}
+
+func TestAgentVisualToolReturnsTablePatchFromSemanticData(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+	tool := server.agentVisualToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true})[0]
+	result, err := tool.Handler.Run(context.Background(), agent.ToolCall{
+		ID:   "call_1",
+		Name: "query_visual",
+		Arguments: json.RawMessage(`{
+			"kind":"table",
+			"model":"test",
+			"dataset":"orders",
+			"title":"Orders",
+			"fields":[{"field":"orders.order_id"},{"field":"orders.status"}],
+			"limit":10
+		}`),
+	})
+	if err != nil {
+		t.Fatalf("run query_visual: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("query_visual returned error: %#v", result.Content)
+	}
+	compact, err := json.Marshal(result.Content)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	if strings.Contains(string(compact), "delivered") || strings.Contains(string(compact), `"patch"`) || strings.Contains(string(compact), `"rows"`) {
+		t.Fatalf("model-visible table result should be compact: %s", compact)
+	}
+	var compactResult struct {
+		OK     bool   `json:"ok"`
+		Kind   string `json:"kind"`
+		ID     string `json:"id"`
+		Signal string `json:"signal"`
+	}
+	if err := json.Unmarshal(compact, &compactResult); err != nil {
+		t.Fatalf("decode compact result: %v body=%s", err, compact)
+	}
+	if compactResult.ID != "agent_table_call_1" {
+		t.Fatalf("table artifact id = %q, want call-scoped id", compactResult.ID)
+	}
+	body, err := json.Marshal(result.DisplayContent)
+	if err != nil {
+		t.Fatalf("marshal display result: %v", err)
+	}
+	var decoded struct {
+		Kind  string `json:"kind"`
+		ID    string `json:"id"`
+		Patch struct {
+			Tables map[string]dashboard.Table `json:"tables"`
+		} `json:"patch"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decode result: %v body=%s", err, body)
+	}
+	if !compactResult.OK || compactResult.Kind != "table" || compactResult.ID != decoded.ID || compactResult.Signal != "tables."+decoded.ID {
+		t.Fatalf("compact result = %#v decoded=%#v", compactResult, decoded)
+	}
+	table := decoded.Patch.Tables[decoded.ID]
+	if decoded.Kind != "table" || table.Title != "Orders" || table.Kind != "data_table" || len(table.Columns) != 2 || len(table.Blocks["a"].Rows) != 2 {
+		t.Fatalf("table result = %#v table=%#v", decoded, table)
+	}
+	if len(table.Interaction.Mappings) != 0 || len(table.Selection) != 0 {
+		t.Fatalf("table should not include interactivity: %#v", table)
+	}
+}
+
+func TestAgentVisualToolReturnsAggregateTableFromRowsAndMeasures(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+	tool := server.agentVisualToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true})[0]
+	result, err := tool.Handler.Run(context.Background(), agent.ToolCall{
+		ID:   "call_1",
+		Name: "query_visual",
+		Arguments: json.RawMessage(`{
+			"kind":"table",
+			"model":"test",
+			"dataset":"orders",
+			"title":"Orders by status",
+			"rows":[{"field":"orders.status"}],
+			"measures":[{"field":"order_count"}],
+			"limit":10
+		}`),
+	})
+	if err != nil {
+		t.Fatalf("run query_visual: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("query_visual returned error: %#v", result.Content)
+	}
+	body, err := json.Marshal(result.DisplayContent)
+	if err != nil {
+		t.Fatalf("marshal result: %v", err)
+	}
+	var decoded struct {
+		ID    string `json:"id"`
+		Patch struct {
+			Tables map[string]dashboard.Table `json:"tables"`
+		} `json:"patch"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decode result: %v body=%s", err, body)
+	}
+	table := decoded.Patch.Tables[decoded.ID]
+	if len(table.Columns) != 2 || table.Columns[0].Key != "status" || table.Columns[1].Key != "order_count" {
+		t.Fatalf("aggregate table columns = %#v", table.Columns)
+	}
+	if got := table.Blocks["a"].Rows[0]["order_count"]; got == nil {
+		t.Fatalf("aggregate table rows missing measure: %#v", table.Blocks["a"].Rows)
+	}
+}
+
+func TestAgentVisualToolUsesToolCallScopedArtifactIDs(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+	tool := server.agentVisualToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true})[0]
+	args := json.RawMessage(`{
+		"kind":"chart",
+		"model":"test",
+		"dataset":"orders",
+		"title":"Orders by status",
+		"type":"bar",
+		"dimensions":[{"field":"orders.status"}],
+		"measures":[{"field":"order_count"}],
+		"limit":10
+	}`)
+	first, err := tool.Handler.Run(context.Background(), agent.ToolCall{ID: "call_first", Name: "query_visual", Arguments: args})
+	if err != nil {
+		t.Fatalf("run first query_visual: %v", err)
+	}
+	second, err := tool.Handler.Run(context.Background(), agent.ToolCall{ID: "call_second", Name: "query_visual", Arguments: args})
+	if err != nil {
+		t.Fatalf("run second query_visual: %v", err)
+	}
+	firstBody, _ := json.Marshal(first.Content)
+	secondBody, _ := json.Marshal(second.Content)
+	var firstCompact, secondCompact struct {
+		ID     string `json:"id"`
+		Signal string `json:"signal"`
+	}
+	if err := json.Unmarshal(firstBody, &firstCompact); err != nil {
+		t.Fatalf("decode first compact: %v", err)
+	}
+	if err := json.Unmarshal(secondBody, &secondCompact); err != nil {
+		t.Fatalf("decode second compact: %v", err)
+	}
+	if firstCompact.ID == secondCompact.ID || firstCompact.Signal == secondCompact.Signal {
+		t.Fatalf("identical requests reused artifact identity: first=%#v second=%#v", firstCompact, secondCompact)
+	}
+	if firstCompact.ID != "agent_chart_call_first" || secondCompact.ID != "agent_chart_call_second" {
+		t.Fatalf("unexpected call-scoped IDs: first=%#v second=%#v", firstCompact, secondCompact)
+	}
+}
+
+func TestAgentVisualToolRejectsInlineDataAndFilters(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+	for _, args := range []string{
+		`{"kind":"chart","model":"test","dataset":"orders","data":[{"label":"x","value":1}],"measures":[{"field":"order_count"}]}`,
+		`{"kind":"chart","model":"test","dataset":"orders","filters":{"controls":{}},"measures":[{"field":"order_count"}]}`,
+		`{"kind":"table","model":"test","dataset":"orders","interaction":{"row_selection":{}},"fields":[{"field":"orders.order_id"}]}`,
+	} {
+		result := server.runAgentVisualTool(context.Background(), agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true}, agent.ToolCall{ID: "call_1", Name: "query_visual", Arguments: json.RawMessage(args)})
+		if !result.IsError {
+			t.Fatalf("query_visual accepted forbidden input %s: %#v", args, result.Content)
 		}
 	}
 }
