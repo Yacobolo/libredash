@@ -296,8 +296,9 @@ type WorkspaceActionSignal struct {
 }
 
 type WorkspaceAssetDetailsSignal struct {
-	Overview []DefinitionFactSignal         `json:"overview"`
-	Sections []WorkspaceDetailSectionSignal `json:"sections"`
+	Overview           []DefinitionFactSignal         `json:"overview"`
+	Sections           []WorkspaceDetailSectionSignal `json:"sections"`
+	SemanticModelGraph *SemanticModelGraphSignal      `json:"semanticModelGraph,omitempty"`
 }
 
 type WorkspaceDetailSectionSignal struct {
@@ -313,6 +314,40 @@ type DefinitionFactSignal struct {
 	Value string `json:"value"`
 	Code  bool   `json:"code,omitempty"`
 	Wide  bool   `json:"wide,omitempty"`
+}
+
+type SemanticModelGraphSignal struct {
+	BaseTable string                         `json:"baseTable,omitempty"`
+	Nodes     []SemanticModelGraphNodeSignal `json:"nodes"`
+	Edges     []SemanticModelGraphEdgeSignal `json:"edges"`
+}
+
+type SemanticModelGraphNodeSignal struct {
+	ID          string                          `json:"id"`
+	Title       string                          `json:"title"`
+	Description string                          `json:"description,omitempty"`
+	PrimaryKey  string                          `json:"primaryKey,omitempty"`
+	Fields      []SemanticModelGraphFieldSignal `json:"fields"`
+}
+
+type SemanticModelGraphFieldSignal struct {
+	Name          string   `json:"name"`
+	Label         string   `json:"label,omitempty"`
+	Type          string   `json:"type,omitempty"`
+	PrimaryKey    bool     `json:"primaryKey,omitempty"`
+	Join          bool     `json:"join,omitempty"`
+	Relationships []string `json:"relationships,omitempty"`
+}
+
+type SemanticModelGraphEdgeSignal struct {
+	ID          string `json:"id"`
+	Source      string `json:"source"`
+	Target      string `json:"target"`
+	SourceField string `json:"sourceField"`
+	TargetField string `json:"targetField"`
+	Cardinality string `json:"cardinality"`
+	Label       string `json:"label"`
+	Active      bool   `json:"active"`
 }
 
 type WorkspaceAssetLineageSignal struct {

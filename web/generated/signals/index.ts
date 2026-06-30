@@ -603,6 +603,40 @@ export interface RouteRuntimeSignal {
   kind: string
 }
 
+export interface SemanticModelGraphEdgeSignal {
+  id: string
+  source: string
+  target: string
+  sourceField: string
+  targetField: string
+  cardinality: string
+  label: string
+  active: boolean
+}
+
+export interface SemanticModelGraphFieldSignal {
+  name: string
+  label?: string
+  type?: string
+  primaryKey?: boolean
+  join?: boolean
+  relationships?: string[]
+}
+
+export interface SemanticModelGraphNodeSignal {
+  id: string
+  title: string
+  description?: string
+  primaryKey?: string
+  fields: SemanticModelGraphFieldSignal[]
+}
+
+export interface SemanticModelGraphSignal {
+  baseTable?: string
+  nodes: SemanticModelGraphNodeSignal[]
+  edges: SemanticModelGraphEdgeSignal[]
+}
+
 export interface SidebarGroupSignal {
   label: string
   items: SidebarItemSignal[]
@@ -693,6 +727,7 @@ export interface WorkspaceActionSignal {
 export interface WorkspaceAssetDetailsSignal {
   overview: DefinitionFactSignal[]
   sections: WorkspaceDetailSectionSignal[]
+  semanticModelGraph?: SemanticModelGraphSignal
 }
 
 export interface WorkspaceAssetLineageSignal {
@@ -801,4 +836,4 @@ export interface WorkspaceTabSignal {
   count?: number
 }
 
-export type UISignalEnvelope = AdminContentSectionSignal | AdminMetricSignal | AdminPageEnvelope | AdminPageSignal | AdminStorageColumnSignal | AdminStorageCommand | AdminStorageSignal | AdminStorageSummary | AdminStorageTableSignal | CatalogDashboardSignal | CatalogPageEnvelope | CatalogPageSignal | ChatEnvelope | ChatPageSignal | ChatSignal | ChromeSignal | ConnectionsPageEnvelope | ConnectionsPageSignal | DashboardComponentSignal | DashboardEnvelope | DashboardPageNavSignal | DashboardPageSignal | DefinitionFactSignal | LoginPageEnvelope | LoginPageSignal | MetricGridBadgeSignal | MetricGridColumnSignal | MetricGridSignal | RouteRuntimeSignal | SidebarGroupSignal | SidebarItemSignal | SidebarSignal | SubSidebarItemSignal | SubSidebarSignal | WorkspaceAccessSignal | WorkspaceActionSignal | WorkspaceAssetDetailsSignal | WorkspaceAssetLineageSignal | WorkspaceAssetPageEnvelope | WorkspaceAssetPageSignal | WorkspaceAssetRefreshSignal | WorkspaceAssetSummarySignal | WorkspaceBreadcrumbSignal | WorkspaceCardSignal | WorkspaceDetailSectionSignal | WorkspacePageEnvelope | WorkspacePageSignal | WorkspaceTabSignal
+export type UISignalEnvelope = AdminContentSectionSignal | AdminMetricSignal | AdminPageEnvelope | AdminPageSignal | AdminStorageColumnSignal | AdminStorageCommand | AdminStorageSignal | AdminStorageSummary | AdminStorageTableSignal | CatalogDashboardSignal | CatalogPageEnvelope | CatalogPageSignal | ChatEnvelope | ChatPageSignal | ChatSignal | ChromeSignal | ConnectionsPageEnvelope | ConnectionsPageSignal | DashboardComponentSignal | DashboardEnvelope | DashboardPageNavSignal | DashboardPageSignal | DefinitionFactSignal | LoginPageEnvelope | LoginPageSignal | MetricGridBadgeSignal | MetricGridColumnSignal | MetricGridSignal | RouteRuntimeSignal | SemanticModelGraphEdgeSignal | SemanticModelGraphFieldSignal | SemanticModelGraphNodeSignal | SemanticModelGraphSignal | SidebarGroupSignal | SidebarItemSignal | SidebarSignal | SubSidebarItemSignal | SubSidebarSignal | WorkspaceAccessSignal | WorkspaceActionSignal | WorkspaceAssetDetailsSignal | WorkspaceAssetLineageSignal | WorkspaceAssetPageEnvelope | WorkspaceAssetPageSignal | WorkspaceAssetRefreshSignal | WorkspaceAssetSummarySignal | WorkspaceBreadcrumbSignal | WorkspaceCardSignal | WorkspaceDetailSectionSignal | WorkspacePageEnvelope | WorkspacePageSignal | WorkspaceTabSignal

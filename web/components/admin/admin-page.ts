@@ -40,9 +40,17 @@ class LibreDashAdminPage extends LitElement {
     .main {
       display: grid;
       min-width: 0;
+      min-height: 100svh;
       align-content: start;
       gap: var(--base-size-12);
       padding: var(--base-size-16);
+    }
+
+    .main-storage {
+      grid-template-rows: minmax(0, 1fr);
+      align-content: stretch;
+      gap: 0;
+      padding: 0;
     }
 
     header {
@@ -151,7 +159,9 @@ class LibreDashAdminPage extends LitElement {
     }
 
     ld-storage-explorer {
-      max-width: min(100%, 88rem);
+      width: 100%;
+      max-width: 100%;
+      min-height: 0;
     }
 
     .section {
@@ -194,14 +204,16 @@ class LibreDashAdminPage extends LitElement {
     return html`
       <div class="route">
         <ld-sub-sidebar .config=${page.sidebar}></ld-sub-sidebar>
-        <section class="main" aria-label="Admin">
-          <header>
-            <p class="eyebrow">Admin</p>
-            <h1>${page.headerTitle || page.title}</h1>
-            ${page.headerDetail ? html`<p class="detail">${page.headerDetail}</p>` : nothing}
-          </header>
+        <section class=${page.active === 'storage' ? 'main main-storage' : 'main'} aria-label="Admin">
+          ${page.active === 'storage' ? nothing : html`
+            <header>
+              <p class="eyebrow">Admin</p>
+              <h1>${page.headerTitle || page.title}</h1>
+              ${page.headerDetail ? html`<p class="detail">${page.headerDetail}</p>` : nothing}
+            </header>
+          `}
           ${page.empty && page.active !== 'storage' ? html`<div class="panel"><div class="empty">${page.empty}</div></div>` : nothing}
-          ${page.metrics?.length ? html`
+          ${page.metrics?.length && page.active !== 'storage' ? html`
             <div class="metrics">
               ${page.metrics.map((metric) => html`
                 <div class="metric">
@@ -221,11 +233,6 @@ class LibreDashAdminPage extends LitElement {
   private renderStorage(page: AdminPageSignal) {
     const storage = storageHasPayload(this.storage) ? this.storage : page.storage ?? emptyStorage
     return html`
-      ${storage.warnings?.length ? html`
-        <div class="warnings">
-          ${storage.warnings.map((warning) => html`<p class="warning">${warning}</p>`)}
-        </div>
-      ` : nothing}
       <ld-storage-explorer .storage=${storage}></ld-storage-explorer>
     `
   }

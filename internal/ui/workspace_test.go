@@ -31,7 +31,9 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForSemanticModel(t *testing.T) {
 		"Olist Commerce",
 		"Details",
 		"Lineage",
+		`<script type="module" src="/static/semantic-model-graph.js?v=dev"></script>`,
 		`"overview":[`,
+		`"semanticModelGraph":`,
 		"Model tables (1)",
 		"Measures (1)",
 		"Relationships (1)",
@@ -114,6 +116,86 @@ func TestWorkspaceAssetDetailSignalsUseSharedGridShape(t *testing.T) {
 	}
 }
 
+func TestSemanticModelDetailsSignalIncludesModelGraph(t *testing.T) {
+	workspace := workspaceview.WorkspaceView{ID: "libredash", Title: "LibreDash Workspace"}
+	asset := workspaceview.AssetView{
+		ID:          "semantic_model:commerce",
+		WorkspaceID: workspace.ID,
+		Type:        "semantic_model",
+		Key:         "commerce",
+		Title:       "Commerce Model",
+		Payload: map[string]any{
+			"BaseTable": "orders",
+			"Tables": map[string]any{
+				"orders": map[string]any{
+					"PrimaryKey":  "order_id",
+					"Description": "One row per order.",
+					"Dimensions": map[string]any{
+						"order_id":    map[string]any{"Label": "Order ID"},
+						"customer_id": map[string]any{"Label": "Customer ID"},
+						"state":       map[string]any{"Label": "State"},
+					},
+					"Schema": map[string]any{"Columns": []any{
+						map[string]any{"Name": "order_id", "Ordinal": float64(1), "PhysicalType": "VARCHAR", "PrimaryKey": true},
+						map[string]any{"Name": "customer_id", "Ordinal": float64(2), "PhysicalType": "VARCHAR"},
+						map[string]any{"Name": "state", "Ordinal": float64(3), "PhysicalType": "VARCHAR"},
+					}},
+				},
+				"customers": map[string]any{
+					"PrimaryKey": "customer_id",
+					"Dimensions": map[string]any{
+						"customer_id": map[string]any{"Label": "Customer ID"},
+						"segment":     map[string]any{"Label": "Segment"},
+					},
+				},
+			},
+			"Relationships": []any{
+				map[string]any{"ID": "orders_customers", "From": "orders.customer_id", "To": "customers.customer_id", "Cardinality": "many_to_one", "Active": true},
+			},
+		},
+	}
+
+	page := workspaceAssetPageSignal(workspace, asset, []workspaceview.AssetView{asset}, nil, "details", assetLineage(workspace.ID, asset, []workspaceview.AssetView{asset}, nil))
+	graph := page.Details.SemanticModelGraph
+	if graph == nil {
+		t.Fatalf("semantic model details did not include graph: %#v", page.Details)
+	}
+	if graph.BaseTable != "orders" {
+		t.Fatalf("graph base table = %q, want orders", graph.BaseTable)
+	}
+	if len(graph.Nodes) != 2 {
+		t.Fatalf("graph nodes = %d, want 2: %#v", len(graph.Nodes), graph.Nodes)
+	}
+	orders := graphNodeByID(t, graph.Nodes, "orders")
+	if orders.Title != "orders" || orders.PrimaryKey != "order_id" {
+		t.Fatalf("orders node = %#v, want title orders and primary key order_id", orders)
+	}
+	assertGraphField(t, orders.Fields, "order_id", true, false, nil)
+	assertGraphField(t, orders.Fields, "customer_id", false, true, []string{"orders_customers"})
+	customers := graphNodeByID(t, graph.Nodes, "customers")
+	assertGraphField(t, customers.Fields, "customer_id", true, true, []string{"orders_customers"})
+	if len(graph.Edges) != 1 {
+		t.Fatalf("graph edges = %d, want 1: %#v", len(graph.Edges), graph.Edges)
+	}
+	edge := graph.Edges[0]
+	if edge.ID != "orders_customers" || edge.Source != "orders" || edge.Target != "customers" || edge.SourceField != "customer_id" || edge.TargetField != "customer_id" {
+		t.Fatalf("graph edge endpoints = %#v, want orders.customer_id -> customers.customer_id", edge)
+	}
+	if edge.Cardinality != "many_to_one" || edge.Label != "*:1" || !edge.Active {
+		t.Fatalf("graph edge cardinality = %#v, want active many_to_one labeled *:1", edge)
+	}
+}
+
+func TestNonSemanticAssetDetailsSignalOmitsModelGraph(t *testing.T) {
+	workspace, _, assets, edges := testWorkspaceAssetFixtures()
+	asset := testAssetByID(t, assets, "dashboard")
+
+	page := workspaceAssetPageSignal(workspace, asset, assets, edges, "details", assetLineage(workspace.ID, asset, assets, edges))
+	if page.Details.SemanticModelGraph != nil {
+		t.Fatalf("dashboard details included semantic model graph: %#v", page.Details.SemanticModelGraph)
+	}
+}
+
 func TestWorkspaceAssetDetailsRenderModelTableComposition(t *testing.T) {
 	workspace, catalog, assets, edges := testWorkspaceAssetFixtures()
 	asset := testAssetByID(t, assets, "table-transform")
@@ -139,6 +221,8 @@ func TestWorkspaceAssetDetailsRenderModelTableComposition(t *testing.T) {
 	for _, notWant := range []string{
 		"Source / transform",
 		"/static/code-block.js",
+		"semantic-model-graph.js",
+		`"semanticModelGraph":`,
 		`<ld-code-block language="sql"`,
 		`data-attr:grid="$assetDetailsModelTableDefinitionGrid"`,
 	} {
@@ -868,6 +952,31 @@ func detailSectionGrid(t *testing.T, sections []uisignals.WorkspaceDetailSection
 	}
 	t.Fatalf("detail sections missing grid %q: %#v", title, sections)
 	return metricGrid{}
+}
+
+func graphNodeByID(t *testing.T, nodes []uisignals.SemanticModelGraphNodeSignal, id string) uisignals.SemanticModelGraphNodeSignal {
+	t.Helper()
+	for _, node := range nodes {
+		if node.ID == id {
+			return node
+		}
+	}
+	t.Fatalf("graph node %q not found in %#v", id, nodes)
+	return uisignals.SemanticModelGraphNodeSignal{}
+}
+
+func assertGraphField(t *testing.T, fields []uisignals.SemanticModelGraphFieldSignal, name string, primaryKey, join bool, relationships []string) {
+	t.Helper()
+	for _, field := range fields {
+		if field.Name != name {
+			continue
+		}
+		if field.PrimaryKey != primaryKey || field.Join != join || strings.Join(field.Relationships, ",") != strings.Join(relationships, ",") {
+			t.Fatalf("graph field %q = %#v, want primaryKey=%t join=%t relationships=%v", name, field, primaryKey, join, relationships)
+		}
+		return
+	}
+	t.Fatalf("graph field %q not found in %#v", name, fields)
 }
 
 func assertNoDetailSection(t *testing.T, sections []uisignals.WorkspaceDetailSectionSignal, title string) {

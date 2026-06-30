@@ -82,7 +82,10 @@ class SubSidebar extends LitElement {
       width: var(--ld-sub-sidebar-width);
       height: 100%;
       min-height: 0;
+      box-sizing: border-box;
       overflow: hidden;
+      border-right: var(--ld-border-muted);
+      background: var(--ld-sidebar-bg);
       color: var(--ld-fg-default);
       font-family: var(--fontStack-system);
       transition: width var(--motion-transition-stateChange);
@@ -98,14 +101,13 @@ class SubSidebar extends LitElement {
       position: sticky;
       top: 0;
       display: grid;
-      width: var(--ld-sub-sidebar-width);
+      width: 100%;
       height: 100%;
       min-height: 0;
       max-height: 100svh;
       grid-template-rows: auto minmax(0, 1fr);
       overflow: hidden;
-      border-right: 1px solid color-mix(in srgb, var(--ld-line-muted), transparent 36%);
-      background: var(--ld-report-rail-bg);
+      background: var(--ld-sidebar-bg);
       transition: width var(--motion-transition-stateChange);
     }
 
@@ -399,7 +401,7 @@ class SubSidebar extends LitElement {
       align-items: center;
       gap: var(--base-size-6);
       padding: 0 var(--control-xsmall-paddingInline-normal) 0 0;
-      background: var(--ld-report-rail-bg);
+      background: var(--ld-sidebar-bg);
       color: var(--ld-fg-default);
       font-size: var(--ld-font-size-caption);
       font-weight: var(--ld-font-weight-strong);
@@ -463,6 +465,8 @@ class SubSidebar extends LitElement {
         height: auto;
         min-height: auto;
         overflow: hidden;
+        border-right: 0;
+        border-bottom: var(--ld-border-muted);
       }
 
       aside {
@@ -471,7 +475,6 @@ class SubSidebar extends LitElement {
         height: auto;
         max-height: none;
         grid-template-rows: auto;
-        border-right: 0;
       }
 
       .top-row {

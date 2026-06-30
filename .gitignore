@@ -16,6 +16,7 @@ static/*.js
 static/chunks/
 !static/theme.js
 static/asset-lineage-graph.css
+static/semantic-model-graph.css
 .env
 .env.*
 !.env.example

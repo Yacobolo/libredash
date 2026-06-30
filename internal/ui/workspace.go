@@ -381,8 +381,9 @@ func workspaceAssetDetailsSignalWithRefresh(workspace workspaceview.WorkspaceVie
 		})
 	}
 	return uisignals.WorkspaceAssetDetailsSignal{
-		Overview: definitionFactSignals(model.Overview),
-		Sections: sections,
+		Overview:           definitionFactSignals(model.Overview),
+		Sections:           sections,
+		SemanticModelGraph: model.SemanticModelGraph,
 	}
 }
 
@@ -430,6 +431,12 @@ func workspaceAssetRouteDocument(asset workspaceview.AssetView, catalog dashboar
 		extraHead = append(extraHead,
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/asset-lineage-graph.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/asset-lineage-graph.js"))),
+		)
+	}
+	if activeSection == "details" && asset.Type == "semantic_model" {
+		extraHead = append(extraHead,
+			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/semantic-model-graph.css"))),
+			h.Script(h.Type("module"), h.Src(staticAsset("/static/semantic-model-graph.js"))),
 		)
 	}
 	return workspaceRouteDocumentWithBodyExtras(asset.Title, catalog, active, roleLabel, page, routeKind, routeRoot, extraSignals, bodyExtras, extraHead...)
@@ -1423,8 +1430,9 @@ func lineageAssetHref(workspaceID string, asset workspaceview.AssetView, edges [
 }
 
 type assetDetailModel struct {
-	Overview []definitionFact
-	Sections []assetDetailSection
+	Overview           []definitionFact
+	Sections           []assetDetailSection
+	SemanticModelGraph *uisignals.SemanticModelGraphSignal
 }
 
 type assetDetailSection struct {
@@ -1496,6 +1504,7 @@ func semanticModelDetailModel(model *assetDetailModel, workspace workspaceview.W
 	modelTables := sortedMapKeys(modelTableMeta)
 	measures := sortedMapKeys(metaMap(meta, "Measures", "measures"))
 	relationships := metaSlice(meta, "Relationships", "relationships")
+	model.SemanticModelGraph = semanticModelGraphSignal(meta)
 
 	model.Overview = append(model.Overview,
 		refreshOverviewFacts(refresh)...,
@@ -1647,6 +1656,177 @@ func semanticMeasureCountsByTable(measures map[string]any) map[string]int {
 		counts[table]++
 	}
 	return counts
+}
+
+func semanticModelGraphSignal(meta map[string]any) *uisignals.SemanticModelGraphSignal {
+	tables := metaMap(meta, "Tables", "tables", "Models", "models")
+	if len(tables) == 0 {
+		return nil
+	}
+	baseTable := metaString(meta, "BaseTable", "baseTable", "base_table")
+	relationships := semanticModelGraphRelationships(metaSlice(meta, "Relationships", "relationships"), tables)
+	joinFields := semanticModelJoinFields(relationships)
+	nodes := make([]uisignals.SemanticModelGraphNodeSignal, 0, len(tables))
+	for _, name := range semanticModelGraphTableNames(tables, baseTable) {
+		table := asMap(tables[name])
+		nodes = append(nodes, uisignals.SemanticModelGraphNodeSignal{
+			ID:          name,
+			Title:       name,
+			Description: metaString(table, "Description", "description"),
+			PrimaryKey:  metaString(table, "PrimaryKey", "primaryKey", "primary_key"),
+			Fields:      semanticModelGraphFields(table, joinFields[name]),
+		})
+	}
+	return &uisignals.SemanticModelGraphSignal{
+		BaseTable: baseTable,
+		Nodes:     nodes,
+		Edges:     relationships,
+	}
+}
+
+func semanticModelGraphRelationships(raw []any, tables map[string]any) []uisignals.SemanticModelGraphEdgeSignal {
+	edges := make([]uisignals.SemanticModelGraphEdgeSignal, 0, len(raw))
+	for _, item := range raw {
+		relationship := asMap(item)
+		fromTable, fromField := splitSemanticFieldRef(metaString(relationship, "From", "from"))
+		toTable, toField := splitSemanticFieldRef(metaString(relationship, "To", "to"))
+		if fromTable == "" || fromField == "" || toTable == "" || toField == "" {
+			continue
+		}
+		if _, ok := tables[fromTable]; !ok {
+			continue
+		}
+		if _, ok := tables[toTable]; !ok {
+			continue
+		}
+		id := metaString(relationship, "ID", "id")
+		if id == "" {
+			id = fromTable + "_" + fromField + "_" + toTable + "_" + toField
+		}
+		cardinality := metaString(relationship, "Cardinality", "cardinality")
+		edges = append(edges, uisignals.SemanticModelGraphEdgeSignal{
+			ID:          id,
+			Source:      fromTable,
+			Target:      toTable,
+			SourceField: fromField,
+			TargetField: toField,
+			Cardinality: cardinality,
+			Label:       semanticModelGraphCardinalityLabel(cardinality),
+			Active:      metaBool(relationship, "Active", "active"),
+		})
+	}
+	sort.SliceStable(edges, func(i, j int) bool {
+		if edges[i].Source != edges[j].Source {
+			return edges[i].Source < edges[j].Source
+		}
+		if edges[i].Target != edges[j].Target {
+			return edges[i].Target < edges[j].Target
+		}
+		return edges[i].ID < edges[j].ID
+	})
+	return edges
+}
+
+func semanticModelJoinFields(edges []uisignals.SemanticModelGraphEdgeSignal) map[string]map[string][]string {
+	joinFields := map[string]map[string][]string{}
+	add := func(table, field, relationship string) {
+		if joinFields[table] == nil {
+			joinFields[table] = map[string][]string{}
+		}
+		joinFields[table][field] = append(joinFields[table][field], relationship)
+	}
+	for _, edge := range edges {
+		add(edge.Source, edge.SourceField, edge.ID)
+		add(edge.Target, edge.TargetField, edge.ID)
+	}
+	for _, fields := range joinFields {
+		for field := range fields {
+			sort.Strings(fields[field])
+		}
+	}
+	return joinFields
+}
+
+func semanticModelGraphTableNames(tables map[string]any, baseTable string) []string {
+	names := sortedMapKeys(tables)
+	if baseTable == "" {
+		return names
+	}
+	out := make([]string, 0, len(names))
+	if _, ok := tables[baseTable]; ok {
+		out = append(out, baseTable)
+	}
+	for _, name := range names {
+		if name != baseTable {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func semanticModelGraphFields(table map[string]any, joins map[string][]string) []uisignals.SemanticModelGraphFieldSignal {
+	fields := metaMap(table, "Dimensions", "dimensions", "Fields", "fields")
+	columns := modelTableSchemaColumns(fields, metaMap(table, "Schema", "schema"))
+	seen := map[string]struct{}{}
+	out := make([]uisignals.SemanticModelGraphFieldSignal, 0, len(columns)+len(joins))
+	primaryKey := metaString(table, "PrimaryKey", "primaryKey", "primary_key")
+	for _, column := range columns {
+		name := metaString(column, "Name", "name")
+		if name == "" {
+			continue
+		}
+		field := asMap(fields[name])
+		out = append(out, semanticModelGraphField(name, field, column, primaryKey, joins[name]))
+		seen[name] = struct{}{}
+	}
+	for _, name := range sortedMapKeysString(joins) {
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		out = append(out, uisignals.SemanticModelGraphFieldSignal{
+			Name:          name,
+			Label:         labelFromKey(name),
+			Join:          true,
+			Relationships: joins[name],
+			PrimaryKey:    name == primaryKey,
+		})
+	}
+	return out
+}
+
+func semanticModelGraphField(name string, field, column map[string]any, primaryKey string, relationships []string) uisignals.SemanticModelGraphFieldSignal {
+	return uisignals.SemanticModelGraphFieldSignal{
+		Name:          name,
+		Label:         firstNonEmpty(metaString(field, "Label", "label"), labelFromKey(name)),
+		Type:          firstNonEmpty(metaString(column, "PhysicalType", "physicalType"), metaString(column, "Type", "type")),
+		PrimaryKey:    metaBool(column, "PrimaryKey", "primaryKey") || name == primaryKey,
+		Join:          len(relationships) > 0,
+		Relationships: relationships,
+	}
+}
+
+func semanticModelGraphCardinalityLabel(cardinality string) string {
+	switch strings.ToLower(strings.TrimSpace(cardinality)) {
+	case "many_to_one":
+		return "*:1"
+	case "one_to_one":
+		return "1:1"
+	case "one_to_many":
+		return "1:*"
+	case "many_to_many":
+		return "*:*"
+	default:
+		return cardinality
+	}
+}
+
+func sortedMapKeysString(values map[string][]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func modelTableDetailModel(model *assetDetailModel, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, refresh AssetRefreshState) {

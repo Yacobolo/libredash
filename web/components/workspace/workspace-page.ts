@@ -1,5 +1,5 @@
-import { LitElement, css, html, nothing } from 'lit'
-import { property } from 'lit/decorators.js'
+import { LitElement, css, html, nothing, type PropertyValues } from 'lit'
+import { property, state } from 'lit/decorators.js'
 import {
   ArrowLeft,
   BookOpen,
@@ -57,12 +57,14 @@ const emptyWorkspaceAccess: WorkspaceAccessSignal = {
 class LibreDashWorkspacePage extends LitElement {
   @property({ converter: jsonAttribute<WorkspacePageSignal | null>(null) }) page: WorkspacePageSignal | null = null
   @property({ attribute: 'workspaceaccess', converter: jsonAttribute<WorkspaceAccessSignal>(emptyWorkspaceAccess) }) workspaceAccess: WorkspaceAccessSignal = emptyWorkspaceAccess
+  @state() private assetQuery: string | null = null
 
   static get styles() {
     return workspaceStyles
   }
 
-  updated(): void {
+  updated(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('page')) this.assetQuery = null
     checkSignalContract('workspace page', this.page, { kind: 'required', title: 'required' })
   }
 
@@ -98,11 +100,14 @@ class LibreDashWorkspacePage extends LitElement {
   }
 
   private renderAssetList(page: WorkspacePageSignal, eyebrow: string, label: string) {
+    const assetList = page.assetList
+    const query = this.assetQuery ?? assetList?.query ?? ''
+    const assets = filterAssetSummaries(assetList?.assets ?? [], query)
     return html`
       <section class="page" aria-label=${label}>
         ${this.renderHeader(eyebrow, page.title, page.description, this.renderAccessControl())}
-        ${renderAssetToolbar(page.assetList?.searchHref ?? '', page.assetList?.query ?? '', page.assetList?.activeType ?? '', page.assetList?.tabs ?? [], 'Search workspace assets...')}
-        ${renderAssetTable(page.assetList?.assets ?? [], page.assetList?.empty ?? 'No assets match this view.')}
+        ${renderAssetToolbar(query, assetList?.activeType ?? '', assetList?.tabs ?? [], 'Search workspace assets...', (event: Event) => this.assetQuery = (event.currentTarget as HTMLInputElement).value)}
+        ${renderAssetTable(assets, query ? 'No assets match this search.' : assetList?.empty ?? 'No assets match this view.')}
       </section>
     `
   }
@@ -141,18 +146,23 @@ class LibreDashWorkspacePage extends LitElement {
 
 class LibreDashConnectionsPage extends LitElement {
   @property({ converter: jsonAttribute<ConnectionsPageSignal | null>(null) }) page: ConnectionsPageSignal | null = null
+  @state() private assetQuery: string | null = null
 
   static get styles() {
     return workspaceStyles
   }
 
-  updated(): void {
+  updated(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('page')) this.assetQuery = null
     checkSignalContract('connections page', this.page, { kind: 'required', title: 'required', assetList: 'required' })
   }
 
   render() {
     const page = this.page
     if (!page) return html`<slot></slot>`
+    const assetList = page.assetList
+    const query = this.assetQuery ?? assetList?.query ?? ''
+    const assets = filterAssetSummaries(assetList?.assets ?? [], query)
     return html`
       <section class="page" aria-label="Connections and sources">
         <header class="header">
@@ -162,8 +172,8 @@ class LibreDashConnectionsPage extends LitElement {
             ${page.description ? html`<p class="detail">${page.description}</p>` : nothing}
           </div>
         </header>
-        ${renderAssetToolbar(page.assetList?.searchHref ?? '/connections', page.assetList?.query ?? '', page.assetList?.activeType ?? '', page.assetList?.tabs ?? [], 'Search connections and sources...')}
-        ${renderAssetTable(page.assetList?.assets ?? [], page.assetList?.empty ?? 'No connection assets match this view.')}
+        ${renderAssetToolbar(query, assetList?.activeType ?? '', assetList?.tabs ?? [], 'Search connections and sources...', (event: Event) => this.assetQuery = (event.currentTarget as HTMLInputElement).value)}
+        ${renderAssetTable(assets, query ? 'No connection assets match this search.' : assetList?.empty ?? 'No connection assets match this view.')}
       </section>
     `
   }
@@ -203,7 +213,7 @@ class LibreDashWorkspaceAssetPage extends LitElement {
         </header>
         <div class="asset-body">
           ${renderTabs(page.tabs)}
-          <div class=${page.activeSection === 'lineage' ? 'section-body lineage-body' : 'section-body'}>
+          <div class=${page.activeSection === 'lineage' ? 'section-body lineage-body' : page.activeSection === 'details' && page.details?.semanticModelGraph ? 'section-body graph-details-body' : 'section-body'}>
             ${page.activeSection === 'lineage'
               ? this.renderLineage(page)
               : page.activeSection === 'refreshes'
@@ -241,8 +251,11 @@ class LibreDashWorkspaceAssetPage extends LitElement {
   private renderDetails(page: WorkspaceAssetPageSignal) {
     return html`
       <section class="details" id="details" aria-label="Asset details">
-        ${renderFacts('Overview', page.details?.overview ?? [], true)}
-        ${(page.details?.sections ?? []).map(renderDetailSection)}
+        ${page.details?.semanticModelGraph ? renderSemanticModelGraph(page.details.semanticModelGraph, page) : nothing}
+        <div class="details-content">
+          ${renderFacts('Overview', page.details?.overview ?? [], true)}
+          ${(page.details?.sections ?? []).map(renderDetailSection)}
+        </div>
       </section>
     `
   }
@@ -268,17 +281,41 @@ class LibreDashWorkspaceAssetPage extends LitElement {
   }
 }
 
-function renderAssetToolbar(action: string, query: string, activeType: string, tabs: WorkspaceTabSignal[], placeholder: string) {
+function renderAssetToolbar(query: string, activeType: string, tabs: WorkspaceTabSignal[], placeholder: string, onSearch: (event: Event) => void) {
   return html`
     <div class="toolbar">
-      <form method="get" action=${action} class="search">
-        <input type="search" name="q" value=${query} placeholder=${placeholder} />
+      <form class="search" @submit=${preventSubmit}>
+        <input
+          type="search"
+          name="q"
+          .value=${query}
+          placeholder=${placeholder}
+          autocomplete="off"
+          @input=${onSearch}
+        />
         ${activeType ? html`<input type="hidden" name="type" value=${activeType} />` : nothing}
-        <button type="submit" class="icon-button" title="Search" aria-label="Search">${lucideIcon(Search)}</button>
+        <span class="search-icon" aria-hidden="true">${lucideIcon(Search)}</span>
       </form>
       ${renderTabs(tabs)}
     </div>
   `
+}
+
+function preventSubmit(event: Event) {
+  event.preventDefault()
+}
+
+function filterAssetSummaries(assets: WorkspaceAssetSummarySignal[], query: string) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return assets
+  return assets.filter((asset) => [
+    asset.title,
+    asset.description,
+    asset.typeLabel,
+    asset.type,
+    asset.key,
+    asset.parentTitle,
+  ].some((value) => String(value ?? '').toLowerCase().includes(normalized)))
 }
 
 function renderAssetTable(assets: WorkspaceAssetSummarySignal[], empty: string) {
@@ -353,6 +390,14 @@ function renderDetailSection(section: WorkspaceDetailSectionSignal) {
   }
   if (section.grid?.columns?.length) return renderGridSection(section.title, section.grid)
   return renderFacts(section.title, section.facts ?? [], false)
+}
+
+function renderSemanticModelGraph(graph: NonNullable<NonNullable<WorkspaceAssetPageSignal['details']>['semanticModelGraph']>, page: WorkspaceAssetPageSignal) {
+  return html`
+    <section class="semantic-model-section" aria-label="Data model graph">
+      <ld-semantic-model-graph class="semantic-model-graph" .graph=${graph} storagekey=${`${page.workspaceId}:${page.assetId}`}></ld-semantic-model-graph>
+    </section>
+  `
 }
 
 function renderFacts(title: string, facts: DefinitionFactSignal[], overview: boolean) {
@@ -689,10 +734,10 @@ const workspaceStyles = css`
   }
 
   .search {
-    display: flex;
+    position: relative;
+    display: block;
     max-width: 34rem;
     min-width: 0;
-    gap: var(--base-size-8);
   }
 
   input[type='search'] {
@@ -703,7 +748,27 @@ const workspaceStyles = css`
     border-radius: var(--ld-radius-tight);
     background: var(--ld-bg-control);
     color: var(--ld-fg-default);
-    padding: 0 var(--base-size-12);
+    padding: 0 calc(var(--base-size-24) + var(--base-size-12)) 0 var(--base-size-12);
+  }
+
+  input[type='search']:focus {
+    border-color: var(--ld-line-accent, var(--ld-accent));
+    background: var(--ld-bg-panel);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ld-line-accent, var(--ld-accent)), transparent 84%);
+    outline: 0;
+  }
+
+  .search-icon {
+    position: absolute;
+    top: 50%;
+    right: var(--base-size-10);
+    display: grid;
+    width: var(--base-size-16);
+    height: var(--base-size-16);
+    place-items: center;
+    color: var(--ld-fg-muted);
+    pointer-events: none;
+    transform: translateY(-50%);
   }
 
   .tabs {
@@ -990,11 +1055,20 @@ const workspaceStyles = css`
     padding: 0;
   }
 
+  .graph-details-body {
+    padding: 0;
+  }
+
   .details,
+  .details-content,
   .lineage-grids {
     display: grid;
     align-content: start;
     gap: var(--base-size-24);
+  }
+
+  .details-content {
+    padding: var(--base-size-16);
   }
 
   .lineage {
@@ -1007,6 +1081,19 @@ const workspaceStyles = css`
     display: block;
     height: var(--ld-lineage-graph-height, 32rem);
     min-height: 0;
+    border-bottom: var(--ld-border-muted);
+    background: var(--ld-bg-panel);
+  }
+
+  .semantic-model-section {
+    min-height: 0;
+  }
+
+  .semantic-model-graph {
+    display: block;
+    height: min(72svh, 48rem);
+    min-height: 0;
+    overflow: hidden;
     border-bottom: var(--ld-border-muted);
     background: var(--ld-bg-panel);
   }
@@ -1092,6 +1179,14 @@ const workspaceStyles = css`
 
     .section-body {
       overflow: visible;
+    }
+
+    .graph-details-body {
+      overflow: visible;
+    }
+
+    .semantic-model-graph {
+      height: 32rem;
     }
   }
 `

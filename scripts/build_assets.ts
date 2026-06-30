@@ -18,6 +18,17 @@ const builds: AssetBuild[] = [
   single('datastar-inspector', 'web/components/inspector/index.ts', 'static/datastar-inspector.js'),
   single('topology-background', 'web/components/login/topology-background.ts', 'static/topology-background.js'),
   {
+    label: 'semantic-model-graph',
+    clean: ['static/semantic-model-graph.js', 'static/semantic-model-graph.css'],
+    options: {
+      entrypoints: ['web/components/shared/semantic-model-graph.ts'],
+      target: 'browser',
+      format: 'esm',
+      outdir: 'static',
+      naming: { entry: 'semantic-model-graph.[ext]' },
+    },
+  },
+  {
     label: 'asset-lineage-graph',
     clean: ['static/asset-lineage-graph.js', 'static/asset-lineage-graph.css'],
     options: {

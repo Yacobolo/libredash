@@ -30,6 +30,21 @@ const fixtures = new Map<string, FixtureBuild>([
   ['login-page', single('login-page', 'web/components/login/login-page.ts', '.tmp/login-page-test/login-page-under-test.js')],
   ['visual-modal', single('visual-modal', 'web/components/dashboard/visual-modal.ts', '.tmp/visual-modal-under-test.js')],
   [
+    'semantic-model-graph',
+    {
+      label: 'semantic-model-graph',
+      clean: ['.tmp/semantic-model-graph-test'],
+      options: {
+        entrypoints: ['web/components/shared/semantic-model-graph.ts'],
+        target: 'browser',
+        format: 'esm',
+        outdir: '.tmp/semantic-model-graph-test',
+        naming: { entry: 'semantic-model-graph.[ext]' },
+      },
+      copy: [{ from: '.tmp/semantic-model-graph-test/semantic-model-graph.js', to: '.tmp/semantic-model-graph-test/semantic-model-graph-under-test.js' }],
+    },
+  ],
+  [
     'asset-lineage',
     {
       label: 'asset-lineage',

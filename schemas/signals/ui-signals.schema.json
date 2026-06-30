@@ -2168,6 +2168,130 @@
       ],
       "type": "object"
     },
+    "SemanticModelGraphEdgeSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "cardinality": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "sourceField": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "targetField": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "active",
+        "cardinality",
+        "id",
+        "label",
+        "source",
+        "sourceField",
+        "target",
+        "targetField"
+      ],
+      "type": "object"
+    },
+    "SemanticModelGraphFieldSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "join": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "primaryKey": {
+          "type": "boolean"
+        },
+        "relationships": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "SemanticModelGraphNodeSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/SemanticModelGraphFieldSignal"
+          },
+          "type": "array"
+        },
+        "id": {
+          "type": "string"
+        },
+        "primaryKey": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "fields",
+        "id",
+        "title"
+      ],
+      "type": "object"
+    },
+    "SemanticModelGraphSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "baseTable": {
+          "type": "string"
+        },
+        "edges": {
+          "items": {
+            "$ref": "#/$defs/SemanticModelGraphEdgeSignal"
+          },
+          "type": "array"
+        },
+        "nodes": {
+          "items": {
+            "$ref": "#/$defs/SemanticModelGraphNodeSignal"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "edges",
+        "nodes"
+      ],
+      "type": "object"
+    },
     "SidebarGroupSignal": {
       "additionalProperties": false,
       "properties": {
@@ -2486,6 +2610,9 @@
             "$ref": "#/$defs/WorkspaceDetailSectionSignal"
           },
           "type": "array"
+        },
+        "semanticModelGraph": {
+          "$ref": "#/$defs/SemanticModelGraphSignal"
         }
       },
       "required": [
@@ -2958,6 +3085,18 @@
     },
     {
       "$ref": "#/$defs/RouteRuntimeSignal"
+    },
+    {
+      "$ref": "#/$defs/SemanticModelGraphEdgeSignal"
+    },
+    {
+      "$ref": "#/$defs/SemanticModelGraphFieldSignal"
+    },
+    {
+      "$ref": "#/$defs/SemanticModelGraphNodeSignal"
+    },
+    {
+      "$ref": "#/$defs/SemanticModelGraphSignal"
     },
     {
       "$ref": "#/$defs/SidebarGroupSignal"

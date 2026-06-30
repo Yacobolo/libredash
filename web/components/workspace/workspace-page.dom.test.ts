@@ -79,6 +79,10 @@ for (const viewport of [
         const assetHeader = asset.shadowRoot.querySelector('.breadcrumb-header') as HTMLElement
         const assetTabs = asset.shadowRoot.querySelector('.asset-body > .tabs') as HTMLElement
         const assetFirstTab = asset.shadowRoot.querySelector('.asset-body > .tabs a') as HTMLElement
+        const assetSectionBody = asset.shadowRoot.querySelector('.section-body') as HTMLElement
+        const semanticGraph = asset.shadowRoot.querySelector('ld-semantic-model-graph') as HTMLElement
+        const firstGrid = asset.shadowRoot.querySelector('ld-data-grid') as HTMLElement
+        const semanticGraphSection = asset.shadowRoot.querySelector('.semantic-model-section') as HTMLElement
         const nameCellRight = workspaceNameCell.getBoundingClientRect().right
         const typeCellLeft = workspaceTypeCell.getBoundingClientRect().left
         return {
@@ -100,6 +104,10 @@ for (const viewport of [
           assetTitle: asset.shadowRoot.querySelector('h1 span:last-child')?.textContent?.trim(),
           assetHasOverview: asset.shadowRoot.textContent?.includes('Overview') ?? false,
           assetHasGrid: Boolean(asset.shadowRoot.querySelector('ld-data-grid')),
+          assetHasSemanticGraph: Boolean(semanticGraph),
+          assetSemanticGraphBeforeGrid: Boolean(semanticGraph && firstGrid && semanticGraph.compareDocumentPosition(firstGrid) & Node.DOCUMENT_POSITION_FOLLOWING),
+          assetHasDataModelHeading: Array.from(asset.shadowRoot.querySelectorAll('h2')).some((heading) => heading.textContent?.trim() === 'Data model'),
+          assetGraphFlushLeft: semanticGraphSection ? Math.round(semanticGraphSection.getBoundingClientRect().left - assetSectionBody.getBoundingClientRect().left) : -1,
           assetHeaderDisplay: getComputedStyle(assetHeader).display,
           assetTabsPaddingLeft: getComputedStyle(assetTabs).paddingLeft,
           assetFirstTabInset: Math.round(assetFirstTab.getBoundingClientRect().left - assetTabs.getBoundingClientRect().left),
@@ -125,6 +133,10 @@ for (const viewport of [
         assetTitle: 'Olist Commerce',
         assetHasOverview: true,
         assetHasGrid: true,
+        assetHasSemanticGraph: true,
+        assetSemanticGraphBeforeGrid: true,
+        assetHasDataModelHeading: false,
+        assetGraphFlushLeft: 0,
         assetHeaderDisplay: 'grid',
         assetTabsPaddingLeft: '16px',
         assetFirstTabInset: 16,
@@ -134,6 +146,48 @@ for (const viewport of [
     }
   })
 }
+
+test('workspace asset search filters the current asset rows', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-workspace-page'))
+    await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
+
+    const state = await page.evaluate(async () => {
+      const workspace = document.querySelector('ld-workspace-page') as any
+      const root = workspace.shadowRoot
+      const input = root.querySelector('.toolbar .search input[type="search"]') as HTMLInputElement
+      const form = root.querySelector('.toolbar .search') as HTMLFormElement
+      const before = Array.from(root.querySelectorAll('.asset-title')).map((link) => link.textContent?.trim())
+      input.value = 'customer'
+      input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
+      await workspace.updateComplete
+      input.focus()
+      const focusedStyle = getComputedStyle(input)
+      const after = Array.from(root.querySelectorAll('.asset-title')).map((link) => link.textContent?.trim())
+      return {
+        before,
+        after,
+        focusedBorderColor: focusedStyle.borderTopColor,
+        focusedOutlineStyle: focusedStyle.outlineStyle,
+        hasSubmitButton: Boolean(root.querySelector('.toolbar .search button[type="submit"]')),
+        formAction: form.getAttribute('action'),
+        inputAutocomplete: input.getAttribute('autocomplete'),
+      }
+    })
+
+    expect(state.before).toEqual(['Executive Sales Dashboard', 'Customer Segments'])
+    expect(state.after).toEqual(['Customer Segments'])
+    expect(state.focusedBorderColor).toBe('rgb(9, 105, 218)')
+    expect(state.focusedOutlineStyle).toBe('none')
+    expect(state.hasSubmitButton).toBe(false)
+    expect(state.formAction).toBeNull()
+    expect(state.inputAutocomplete).toBe('off')
+  } finally {
+    await page.close()
+  }
+})
 
 test('workspace access modal normalizes Go-shaped access signals', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
@@ -260,17 +314,30 @@ function testDocument(): string {
       { id: '', label: 'All', href: '/workspaces/libredash', active: true },
       { id: 'dashboard', label: 'Dashboard', href: '/workspaces/libredash?type=dashboard', active: false },
     ],
-    assets: [{
-      id: 'semantic_model:olist',
-      title: 'Executive Sales Dashboard',
-      description: 'Sales, order, category, and delivery overview with deliberately long text for table fitting.',
-      type: 'semantic_model',
-      typeLabel: 'Semantic model',
-      key: 'olist',
-      parentTitle: '-',
-      detailHref: '/workspaces/libredash/assets/semantic_model:olist/details',
-      openHref: '/workspaces/libredash/assets/semantic_model:olist/details',
-    }],
+    assets: [
+      {
+        id: 'semantic_model:olist',
+        title: 'Executive Sales Dashboard',
+        description: 'Sales, order, category, and delivery overview with deliberately long text for table fitting.',
+        type: 'semantic_model',
+        typeLabel: 'Semantic model',
+        key: 'olist',
+        parentTitle: '-',
+        detailHref: '/workspaces/libredash/assets/semantic_model:olist/details',
+        openHref: '/workspaces/libredash/assets/semantic_model:olist/details',
+      },
+      {
+        id: 'dashboard:customers',
+        title: 'Customer Segments',
+        description: 'Customer cohort report.',
+        type: 'dashboard',
+        typeLabel: 'Dashboard',
+        key: 'customers',
+        parentTitle: '-',
+        detailHref: '/workspaces/libredash/assets/dashboard:customers/details',
+        openHref: '/dashboards/customers',
+      },
+    ],
     empty: 'No assets match this view.',
   }
   const workspacePage = {
@@ -313,6 +380,33 @@ function testDocument(): string {
         { label: 'Type', value: 'Semantic model' },
         { label: 'Key', value: 'olist', code: true },
       ],
+      semanticModelGraph: {
+        baseTable: 'orders',
+        nodes: [{
+          id: 'orders',
+          title: 'orders',
+          primaryKey: 'order_id',
+          fields: [
+            { name: 'order_id', label: 'Order ID', primaryKey: true },
+            { name: 'customer_id', label: 'Customer ID', join: true, relationships: ['orders_customers'] },
+          ],
+        }, {
+          id: 'customers',
+          title: 'customers',
+          primaryKey: 'customer_id',
+          fields: [{ name: 'customer_id', label: 'Customer ID', primaryKey: true, join: true, relationships: ['orders_customers'] }],
+        }],
+        edges: [{
+          id: 'orders_customers',
+          source: 'orders',
+          target: 'customers',
+          sourceField: 'customer_id',
+          targetField: 'customer_id',
+          cardinality: 'many_to_one',
+          label: '*:1',
+          active: true,
+        }],
+      },
       sections: [{
         title: 'Model tables (1)',
         grid: {
@@ -345,7 +439,7 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-accent: #0969da; --ld-accent-fg: #fff; --ld-line-muted: #d8dee4; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-radius-default: 6px; --ld-radius-tight: 4px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; --ld-asset-semantic-model-bg: #ddf4ff; --ld-asset-semantic-model-accent: #0969da; --ld-asset-semantic-model-border: #b6e3ff; --z-index-inspector: 1000; --ld-modal-backdrop: rgb(0 0 0 / .28); }
+          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-accent: #0969da; --ld-accent-fg: #fff; --ld-line-muted: #d8dee4; --ld-line-accent: #0969da; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-radius-default: 6px; --ld-radius-tight: 4px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; --ld-asset-semantic-model-bg: #ddf4ff; --ld-asset-semantic-model-accent: #0969da; --ld-asset-semantic-model-border: #b6e3ff; --z-index-inspector: 1000; --ld-modal-backdrop: rgb(0 0 0 / .28); }
           ld-workspace-page, ld-connections-page, ld-workspace-asset-page { display: block; min-height: 720px; }
         </style>
       </head>

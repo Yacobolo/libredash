@@ -139,6 +139,7 @@ tasks:
       - bun run test:admin-page
       - bun run test:login-page
       - bun run test:asset-lineage
+      - bun run test:semantic-model-graph
       - go test ./...
 
   ci:
