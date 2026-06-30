@@ -1,41 +1,15 @@
 package semantic
 
 import (
-	"bytes"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/configschema"
 	"gopkg.in/yaml.v3"
 )
 
 func Load(path string) (*model.Model, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	if err := rejectSourceBusinessSemantics(content); err != nil {
-		return nil, err
-	}
-	if err := configschema.ValidateBytes(configschema.KindSemanticModel, path, content); err != nil {
-		return nil, err
-	}
-	var file modelFile
-	decoder := yaml.NewDecoder(bytes.NewReader(content))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&file); err != nil {
-		return nil, err
-	}
-	semanticModel, err := file.compile()
-	if err != nil {
-		return nil, err
-	}
-	if err := semanticModel.Validate(); err != nil {
-		return nil, err
-	}
-	return semanticModel, nil
+	return nil, fmt.Errorf("legacy semantic model files are not supported; use libredash.dev/v1 SemanticModel resources")
 }
 
 func (m *semanticModelMeasures) UnmarshalYAML(value *yaml.Node) error {

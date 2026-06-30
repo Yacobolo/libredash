@@ -328,23 +328,24 @@ func diffAssetGraphs(authored, active workspace.AssetGraph) ([]ProjectPlanChange
 	for _, asset := range active.Assets {
 		activeAssets[asset.ID] = asset
 	}
+	impact := planImpactContext{activeIncomingUse: activeIncomingUseEdges(active.Edges)}
 	changes := []ProjectPlanChange{}
 	for _, id := range sortedAssetIDs(authoredAssets) {
 		asset := authoredAssets[id]
 		activeAsset, ok := activeAssets[id]
 		if !ok {
-			changes = append(changes, projectPlanChange("add", asset, workspace.Asset{}, "not in active deployment"))
+			changes = append(changes, projectPlanChange("add", asset, workspace.Asset{}, "not in active deployment", impact))
 			continue
 		}
 		if activeAsset.ContentHash != asset.ContentHash {
-			changes = append(changes, projectPlanChange("change", asset, activeAsset, "content hash changed"))
+			changes = append(changes, projectPlanChange("change", asset, activeAsset, "content hash changed", impact))
 		}
 	}
 	for _, id := range sortedAssetIDs(activeAssets) {
 		if _, ok := authoredAssets[id]; ok {
 			continue
 		}
-		changes = append(changes, projectPlanChange("remove", activeAssets[id], workspace.Asset{}, "not in authored config"))
+		changes = append(changes, projectPlanChange("remove", activeAssets[id], workspace.Asset{}, "not in authored config", impact))
 	}
 	dependencyChanges := diffAssetEdges(authored.Edges, active.Edges)
 	sort.Slice(changes, func(i, j int) bool {
@@ -393,9 +394,27 @@ func diffAssetGraphs(authored, active workspace.AssetGraph) ([]ProjectPlanChange
 	return changes, dependencyChanges, summary
 }
 
-func projectPlanChange(action string, asset, active workspace.Asset, reason string) ProjectPlanChange {
-	breaking := action == "remove" && breakingAssetType(asset.Type)
+type planImpactContext struct {
+	activeIncomingUse map[workspace.AssetID]struct{}
+}
+
+func activeIncomingUseEdges(edges []workspace.AssetEdge) map[workspace.AssetID]struct{} {
+	used := map[workspace.AssetID]struct{}{}
+	for _, edge := range edges {
+		if edge.Type == workspace.AssetEdgeContains {
+			continue
+		}
+		used[edge.ToAssetID] = struct{}{}
+	}
+	return used
+}
+
+func projectPlanChange(action string, asset, active workspace.Asset, reason string, impact planImpactContext) ProjectPlanChange {
+	breaking := action == "remove" && (breakingAssetType(asset.Type) || usedSemanticChild(asset, impact))
 	if action == "change" && semanticBreakingChange(asset, active) {
+		breaking = true
+	}
+	if action == "change" && usedSemanticChild(asset, impact) {
 		breaking = true
 	}
 	return ProjectPlanChange{
@@ -494,6 +513,16 @@ func breakingAssetType(typ workspace.AssetType) bool {
 	switch typ {
 	case workspace.AssetTypeCatalog, workspace.AssetTypeDashboard, workspace.AssetTypeSemanticModel, workspace.AssetTypeModelTable, workspace.AssetTypeSource:
 		return true
+	default:
+		return false
+	}
+}
+
+func usedSemanticChild(asset workspace.Asset, impact planImpactContext) bool {
+	switch asset.Type {
+	case workspace.AssetTypeSemanticTable, workspace.AssetTypeField, workspace.AssetTypeMeasure:
+		_, ok := impact.activeIncomingUse[asset.ID]
+		return ok
 	default:
 		return false
 	}
@@ -1006,9 +1035,24 @@ func projectWorkspaceRoleBinding(name string, spec workspaceRoleBindingSpec) wor
 }
 
 func validateProject(project Project) error {
+	for connectionName, connection := range project.Connections {
+		if _, err := connection.Validate(connectionName); err != nil {
+			return resourceError(project.ConnectionPaths[connectionName], "connection:"+connectionName, "spec", "Connection %q %s", connectionName, err.Error())
+		}
+	}
 	for sourceName, source := range project.Sources {
 		if _, ok := project.Connections[source.Connection]; !ok {
 			return resourceError(project.SourcePaths[sourceName], "source:"+sourceName, "spec.connection", "Source %q references unknown Connection %q", sourceName, source.Connection)
+		}
+		if source.Path != "" && source.Format == "" {
+			format, ok := semanticmodel.InferFormat(source.Path)
+			if !ok {
+				return resourceError(project.SourcePaths[sourceName], "source:"+sourceName, "spec.format", "Source %q path %q requires format", sourceName, source.Path)
+			}
+			source.Format = format
+		}
+		if err := source.Validate(localSourceName(sourceName), project.Connections); err != nil {
+			return resourceError(project.SourcePaths[sourceName], "source:"+sourceName, "spec", "Source %q %s", sourceName, err.Error())
 		}
 	}
 	for _, workspaceProject := range project.Workspaces {

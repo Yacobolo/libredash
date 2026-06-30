@@ -1,44 +1,14 @@
 package semantic
 
 import (
-	"bytes"
-	"os"
+	"fmt"
 
-	"github.com/Yacobolo/libredash/internal/configschema"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
 	"gopkg.in/yaml.v3"
 )
 
 func LoadDashboard(path string) (*report.Dashboard, error) {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	if err := rejectLegacyDashboardCollectionKeys(content); err != nil {
-		return nil, err
-	}
-	if err := rejectLegacyVisualStacked(content); err != nil {
-		return nil, err
-	}
-	if err := rejectLegacyKPIs(content); err != nil {
-		return nil, err
-	}
-	if err := rejectLegacyDashboardQueryContract(content); err != nil {
-		return nil, err
-	}
-	if err := configschema.ValidateBytes(configschema.KindDashboard, path, content); err != nil {
-		return nil, err
-	}
-	var dashboard report.Dashboard
-	decoder := yaml.NewDecoder(bytes.NewReader(content))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&dashboard); err != nil {
-		return nil, err
-	}
-	if err := dashboard.ValidateContract(); err != nil {
-		return nil, err
-	}
-	return &dashboard, nil
+	return nil, fmt.Errorf("legacy dashboard files are not supported; use libredash.dev/v1 Dashboard resources")
 }
 
 func mappingNode(node *yaml.Node) *yaml.Node {

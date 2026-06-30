@@ -123,27 +123,8 @@ package contracts
 	spec!:        #DashboardSpec
 })
 
-#SemanticModel: close({
-	name!:               #Identifier
-	title?:              string
-	description?:        string
-	default_connection?: #Identifier
-	connections?: close({
-		[#Identifier]: #Connection
-	})
-	sources!: close({
-		[#Identifier]: #Source
-	})
-	models!: close({
-		[#Identifier]: #ModelTable
-	})
-	semantic_models!: close({
-		[#Identifier]: #LegacySemanticModelSpec
-	})
-})
-
 #Connection: close({
-	kind!:        string
+	kind!:        "local" | "s3" | "r2" | "gcs" | "http" | "azure_blob" | "postgres" | "mysql" | "sqlite" | "ducklake" | "quack"
 	description?: string
 	path?:        string
 	root?:        string
@@ -198,16 +179,6 @@ package contracts
 		[#Identifier]: #Measure
 	})
 	description?: string
-})
-
-#LegacySemanticModelSpec: close({
-	base_table: #Identifier
-	tables: [...#Identifier]
-	relationships?: [...#Relationship]
-	measures?: close({
-		defaults?:     #MeasureDefaults
-		[#Identifier]: #Measure | #MeasureDefaults
-	})
 })
 
 #ProjectSemanticModelSpec: close({

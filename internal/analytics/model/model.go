@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 )
@@ -868,6 +869,9 @@ func (s Source) Validate(name string, connections map[string]Connection) error {
 		if connection.Kind == "local" && !IsLocalPath(s.Path) {
 			return fmt.Errorf("source %q local connection %q cannot use remote path %q", name, s.Connection, s.Path)
 		}
+		if !sourceWithinConnectionScope(connection, s.Path) {
+			return fmt.Errorf("source %q path %q escapes connection scope", name, s.Path)
+		}
 		if connectionSpec.AllowsPathSource && connection.Kind != "local" && IsLocalPath(s.Path) && connection.Scope == "" {
 			return fmt.Errorf("source %q remote connection %q requires scope for relative path %q", name, s.Connection, s.Path)
 		}
@@ -900,6 +904,39 @@ func (s Source) Validate(name string, connections map[string]Connection) error {
 		return fmt.Errorf("source %q requires exactly one of path or object", name)
 	}
 	return nil
+}
+
+func sourceWithinConnectionScope(connection Connection, sourcePath string) bool {
+	scope := firstNonEmpty(connection.Scope, connection.Root)
+	if scope == "" {
+		return true
+	}
+	if !IsLocalPath(scope) || !IsLocalPath(sourcePath) {
+		fullPath := sourcePath
+		if IsLocalPath(sourcePath) {
+			fullPath = JoinScope(scope, sourcePath)
+		}
+		return WithinScope(scope, fullPath)
+	}
+	cleanScope := filepath.Clean(scope)
+	cleanPath := filepath.Clean(sourcePath)
+	if !filepath.IsAbs(cleanPath) {
+		cleanPath = filepath.Clean(filepath.Join(cleanScope, cleanPath))
+	}
+	rel, err := filepath.Rel(cleanScope, cleanPath)
+	if err != nil {
+		return false
+	}
+	return rel == "." || rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func (c Connection) Validate(name string) (Connection, error) {

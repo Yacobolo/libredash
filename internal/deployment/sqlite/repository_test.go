@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -155,6 +156,72 @@ func TestRepositorySaveValidatedAllowsSameLogicalAssetsAcrossDeployments(t *test
 	}
 	if _, err := repo.SaveValidated(ctx, second.ID, validationGraph(second.ID), artifact(second.ID, "test")); err != nil {
 		t.Fatalf("save second: %v", err)
+	}
+}
+
+func TestRepositoryActivateWithWorkspacePolicyIsAtomic(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openRepo(t, ctx)
+	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
+	if err := workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	first, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create first: %v", err)
+	}
+	second, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create second: %v", err)
+	}
+	if _, err := repo.SaveValidated(ctx, first.ID, validationGraph(first.ID), artifact(first.ID, "test")); err != nil {
+		t.Fatalf("save first: %v", err)
+	}
+	if _, err := repo.SaveValidated(ctx, second.ID, validationGraph(second.ID), artifact(second.ID, "test")); err != nil {
+		t.Fatalf("save second: %v", err)
+	}
+	initial := workspace.AccessPolicy{
+		Groups: map[string]workspace.WorkspaceGroup{
+			"analysts": {Name: "analysts", Members: []workspace.WorkspaceGroupMember{{Email: "analyst@example.com"}}},
+		},
+		RoleBindings: map[string]workspace.WorkspaceRoleBinding{
+			"analysts-viewer": {Role: "viewer", Subject: workspace.WorkspaceRoleBindingSubject{Kind: "group", Group: "analysts"}},
+		},
+	}
+	if _, err := repo.ActivateWithWorkspacePolicy(ctx, "test", first.ID, initial); err != nil {
+		t.Fatalf("activate first: %v", err)
+	}
+
+	invalid := workspace.AccessPolicy{
+		RoleBindings: map[string]workspace.WorkspaceRoleBinding{
+			"missing-viewer": {Role: "viewer", Subject: workspace.WorkspaceRoleBindingSubject{Kind: "group", Group: "missing"}},
+		},
+	}
+	if _, err := repo.ActivateWithWorkspacePolicy(ctx, "test", second.ID, invalid); err == nil {
+		t.Fatal("ActivateWithWorkspacePolicy() error = nil, want atomic policy failure")
+	}
+
+	active, _, err := repo.ActiveArtifact(ctx, "test")
+	if err != nil {
+		t.Fatalf("active artifact: %v", err)
+	}
+	if active.ID != first.ID {
+		t.Fatalf("active deployment = %s, want %s", active.ID, first.ID)
+	}
+	accessRepo := accesssqlite.NewRepository(store.SQLDB())
+	groups, err := accessRepo.ListGroups(ctx, "test")
+	if err != nil {
+		t.Fatalf("list groups: %v", err)
+	}
+	if len(groups) != 1 || groups[0].Name != "analysts" {
+		t.Fatalf("groups after failed activation = %#v, want original analysts group", groups)
+	}
+	bindings, err := accessRepo.ListRoleBindings(ctx, "test")
+	if err != nil {
+		t.Fatalf("list bindings: %v", err)
+	}
+	if len(bindings) != 1 || bindings[0].Role != "viewer" {
+		t.Fatalf("bindings after failed activation = %#v, want original viewer binding", bindings)
 	}
 }
 

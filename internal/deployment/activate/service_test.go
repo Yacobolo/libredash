@@ -55,17 +55,14 @@ func TestServiceReconcilesAccessPolicyFromValidatedArtifact(t *testing.T) {
 	if _, err := service.Activate(ctx, deploymentID); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
-	if reconciler.workspaceID != "sales" {
-		t.Fatalf("reconciled workspace = %q, want sales", reconciler.workspaceID)
+	if _, ok := repo.policy.Groups["analysts"]; !ok {
+		t.Fatalf("transaction policy groups = %#v, want analysts", repo.policy.Groups)
 	}
-	if _, ok := reconciler.policy.Groups["analysts"]; !ok {
-		t.Fatalf("reconciled groups = %#v, want analysts", reconciler.policy.Groups)
+	if _, ok := repo.policy.RoleBindings["analysts-viewer"]; !ok {
+		t.Fatalf("transaction policy role bindings = %#v, want analysts-viewer", repo.policy.RoleBindings)
 	}
-	if _, ok := reconciler.policy.RoleBindings["analysts-viewer"]; !ok {
-		t.Fatalf("reconciled role bindings = %#v, want analysts-viewer", reconciler.policy.RoleBindings)
-	}
-	if repo.activateCalls != 1 {
-		t.Fatalf("activate calls = %d, want 1", repo.activateCalls)
+	if repo.activateWithPolicyCalls != 1 {
+		t.Fatalf("activate with policy calls = %d, want 1", repo.activateWithPolicyCalls)
 	}
 }
 
@@ -102,10 +99,12 @@ func TestServiceRejectsInvalidStatusBeforePrepare(t *testing.T) {
 }
 
 type fakeRepo struct {
-	deployment    deployment.Deployment
-	artifact      deployment.Artifact
-	activateErr   error
-	activateCalls int
+	deployment              deployment.Deployment
+	artifact                deployment.Artifact
+	activateErr             error
+	activateCalls           int
+	activateWithPolicyCalls int
+	policy                  workspace.AccessPolicy
 }
 
 func (r *fakeRepo) ByID(context.Context, deployment.ID) (deployment.Deployment, error) {
@@ -114,6 +113,16 @@ func (r *fakeRepo) ByID(context.Context, deployment.ID) (deployment.Deployment, 
 
 func (r *fakeRepo) Activate(context.Context, deployment.WorkspaceID, deployment.ID) (deployment.Deployment, error) {
 	r.activateCalls++
+	if r.activateErr != nil {
+		return deployment.Deployment{}, r.activateErr
+	}
+	r.deployment.Status = deployment.StatusActive
+	return r.deployment, nil
+}
+
+func (r *fakeRepo) ActivateWithWorkspacePolicy(_ context.Context, _ deployment.WorkspaceID, _ deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error) {
+	r.activateWithPolicyCalls++
+	r.policy = policy
 	if r.activateErr != nil {
 		return deployment.Deployment{}, r.activateErr
 	}

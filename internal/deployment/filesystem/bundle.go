@@ -330,6 +330,16 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 			os.RemoveAll(root)
 			return deployment.Validation{}, err
 		}
+		compiled.Validation = CompiledArtifactValidation{
+			Status:        "passed",
+			GraphHash:     graphHash(compiled.Graph),
+			SchemaVersion: projectAPIVersion,
+		}
+		manifest, digest, err = persistValidatedArtifact(path, root, manifest, compiled)
+		if err != nil {
+			os.RemoveAll(root)
+			return deployment.Validation{}, err
+		}
 	}
 	manifestJSON, err := json.Marshal(manifest)
 	if err != nil {
@@ -344,6 +354,91 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 	}, nil
 }
 
+func persistValidatedArtifact(path, root string, manifest Manifest, compiled CompiledWorkspaceArtifact) (Manifest, string, error) {
+	compiledRel, err := safeBundlePath(manifest.CompiledPath)
+	if err != nil {
+		return Manifest{}, "", err
+	}
+	compiledBytes, err := json.MarshalIndent(compiled, "", "  ")
+	if err != nil {
+		return Manifest{}, "", err
+	}
+	manifest.GraphHash = digestBytes(compiledBytes)
+	if err := os.WriteFile(filepath.Join(root, compiledRel), compiledBytes, 0o644); err != nil {
+		return Manifest{}, "", err
+	}
+	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return Manifest{}, "", err
+	}
+	if err := os.WriteFile(filepath.Join(root, "manifest.json"), manifestBytes, 0o644); err != nil {
+		return Manifest{}, "", err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".libredash-validated-*.tar.gz")
+	if err != nil {
+		return Manifest{}, "", err
+	}
+	tmpPath := tmp.Name()
+	if err := writeExtractedRoot(root, tmp); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		return Manifest{}, "", err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		return Manifest{}, "", err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		return Manifest{}, "", err
+	}
+	digest, err := fileDigest(path)
+	if err != nil {
+		return Manifest{}, "", err
+	}
+	return manifest, digest, nil
+}
+
+func writeExtractedRoot(root string, out io.Writer) error {
+	hash := sha256.New()
+	gz := gzip.NewWriter(io.MultiWriter(out, hash))
+	tw := tar.NewWriter(gz)
+	paths := []string{}
+	if err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		paths = append(paths, filepath.ToSlash(rel))
+		return nil
+	}); err != nil {
+		return err
+	}
+	sort.Strings(paths)
+	for _, rel := range paths {
+		bytes, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			return err
+		}
+		if err := tw.WriteHeader(&tar.Header{Name: rel, Mode: 0o644, Size: int64(len(bytes))}); err != nil {
+			return err
+		}
+		if _, err := tw.Write(bytes); err != nil {
+			return err
+		}
+	}
+	if err := tw.Close(); err != nil {
+		return err
+	}
+	return gz.Close()
+}
+
 func validateCompiledArtifactValidation(compiled CompiledWorkspaceArtifact) error {
 	if compiled.Validation.Status != "passed" {
 		return fmt.Errorf("compiled artifact validation status = %q, want passed", compiled.Validation.Status)
@@ -355,6 +450,10 @@ func validateCompiledArtifactValidation(compiled CompiledWorkspaceArtifact) erro
 		return fmt.Errorf("compiled artifact validation graphHash = %q, want %q", compiled.Validation.GraphHash, want)
 	}
 	return nil
+}
+
+func ValidateCompiledWorkspaceArtifact(compiled CompiledWorkspaceArtifact) error {
+	return validateCompiledArtifactValidation(compiled)
 }
 
 const projectAPIVersion = "libredash.dev/v1"

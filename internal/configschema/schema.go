@@ -31,8 +31,6 @@ const (
 	KindWorkspaceGroup        Kind = "workspace-group"
 	KindWorkspaceRoleBinding  Kind = "workspace-role-binding"
 	KindModelTable            Kind = "model-table"
-	KindSemanticModel         Kind = "semantic-model"
-	KindDashboard             Kind = "dashboard"
 	KindSemanticModelResource Kind = "semantic-model-resource"
 	KindDashboardResource     Kind = "dashboard-resource"
 )
@@ -187,10 +185,6 @@ func JSONSchemaFilename(kind Kind) string {
 		return "workspace-role-binding.schema.json"
 	case KindModelTable:
 		return "model-table.schema.json"
-	case KindSemanticModel:
-		return "semantic-model.schema.json"
-	case KindDashboard:
-		return "dashboard.schema.json"
 	case KindSemanticModelResource:
 		return "semantic-model.schema.json"
 	case KindDashboardResource:
@@ -241,10 +235,6 @@ func definitionName(kind Kind) (string, error) {
 		return "WorkspaceRoleBindingResource", nil
 	case KindModelTable:
 		return "ModelTableResource", nil
-	case KindSemanticModel:
-		return "SemanticModel", nil
-	case KindDashboard:
-		return "Dashboard", nil
 	case KindSemanticModelResource:
 		return "SemanticModelResource", nil
 	case KindDashboardResource:
@@ -417,22 +407,6 @@ var schemaOverlays = map[Kind]schemaOverlay{
 	},
 	KindModelTable: {
 		required: []string{"apiVersion", "kind", "metadata", "spec"},
-	},
-	KindSemanticModel: {
-		required: []string{"name", "sources", "models", "semantic_models"},
-		collections: []collectionRule{
-			rootCollection("sources", collectionMapping),
-			rootCollection("models", collectionMapping),
-			rootCollection("semantic_models", collectionMapping),
-			definitionCollection("#LegacySemanticModelSpec", "tables", collectionSequence),
-		},
-	},
-	KindDashboard: {
-		required: []string{"id", "title", "semantic_model", "visuals", "pages"},
-		collections: []collectionRule{
-			rootCollection("visuals", collectionMapping),
-			rootCollection("pages", collectionSequence),
-		},
 	},
 	KindSemanticModelResource: {
 		required: []string{"apiVersion", "kind", "metadata", "spec"},

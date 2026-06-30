@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,6 +60,48 @@ func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	}
 }
 
+func TestValidateArtifactWithDiscoveryPersistsValidatedCompiledGraph(t *testing.T) {
+	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
+	var bundle bytes.Buffer
+	deploymentID := deployment.ID("dep_discovered")
+	if _, _, err := PackProject(projectPath, "sales", deploymentID, &bundle); err != nil {
+		t.Fatalf("PackProject() error = %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
+	if err := os.WriteFile(path, bundle.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := filepath.Join("..", "..", "..", ".data", "olist")
+	if _, err := os.Stat(dataDir); err != nil {
+		t.Skipf("Olist data is not available: %v", err)
+	}
+
+	validation, err := ValidateArtifactWithOptions(path, "sales", deploymentID, ValidateOptions{DataDir: dataDir})
+	if err != nil {
+		t.Fatalf("ValidateArtifactWithOptions() error = %v", err)
+	}
+	root := t.TempDir()
+	if err := ExtractArtifact(path, root); err != nil {
+		t.Fatalf("ExtractArtifact() error = %v", err)
+	}
+	compiled, manifest, err := LoadCompiledWorkspaceArtifact(root)
+	if err != nil {
+		t.Fatalf("LoadCompiledWorkspaceArtifact() error = %v", err)
+	}
+	if compiled.Validation.GraphHash != graphHash(compiled.Graph) {
+		t.Fatalf("compiled validation graphHash = %q, want %q", compiled.Validation.GraphHash, graphHash(compiled.Graph))
+	}
+	if manifest.GraphHash != digestCompiledForTest(t, compiled) {
+		t.Fatalf("manifest graphHash = %q, want digest of persisted compiled graph", manifest.GraphHash)
+	}
+	if validation.Graph.Assets[0].ContentHash == "" {
+		t.Fatal("validation graph has empty content hash")
+	}
+	if graphHash(validation.Graph) != graphHash(compiled.Graph) {
+		t.Fatalf("returned validation graph hash = %q, persisted compiled graph hash = %q", graphHash(validation.Graph), graphHash(compiled.Graph))
+	}
+}
+
 func TestValidateArtifactRejectsWrongDeploymentCompiledGraph(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
@@ -73,6 +116,15 @@ func TestValidateArtifactRejectsWrongDeploymentCompiledGraph(t *testing.T) {
 	if err == nil {
 		t.Fatal("ValidateArtifact() error = nil, want deployment mismatch")
 	}
+}
+
+func digestCompiledForTest(t *testing.T, compiled CompiledWorkspaceArtifact) string {
+	t.Helper()
+	raw, err := json.MarshalIndent(compiled, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return digestBytes(raw)
 }
 
 func TestPackProjectRejectsUnknownWorkspace(t *testing.T) {

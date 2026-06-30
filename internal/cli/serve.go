@@ -35,7 +35,7 @@ func serveCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cfg := config.MustLoad()
 	cmd.Flags().StringVar(&opts.addr, "addr", cfg.ListenAddr(), "listen address")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", cfg.DataDir, "dashboard source data directory")
-	cmd.Flags().StringVar(&opts.localCatalog, "local-catalog", "", "serve a filesystem catalog instead of active deployments")
+	cmd.Flags().StringVar(&opts.localCatalog, "local-project", "", "serve a filesystem project instead of active deployments")
 	cmd.Flags().BoolVar(&opts.production, "production", cfg.Production, "serve active deployment from the platform DB")
 	return cmd
 }

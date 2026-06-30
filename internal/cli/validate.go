@@ -27,15 +27,15 @@ func validateCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 				return fmt.Errorf("validate accepts at most one positional project")
 			}
 			if len(args) == 1 {
-				if cmd.Flags().Changed("catalog") {
-					return fmt.Errorf("choose either --catalog or positional project, not both")
+				if cmd.Flags().Changed("project") {
+					return fmt.Errorf("choose either --project or positional project, not both")
 				}
 				opts.catalog = args[0]
 			}
 			return runValidate(ctx, opts, cmd.OutOrStdout())
 		},
 	}
-	cmd.Flags().StringVar(&opts.catalog, "catalog", filepath.Join("dashboards", "libredash.yaml"), "project path")
+	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "emit JSON diagnostics")
 	return cmd
 }
@@ -49,15 +49,15 @@ func planCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 				return fmt.Errorf("plan accepts at most one positional project")
 			}
 			if len(args) == 1 {
-				if cmd.Flags().Changed("catalog") {
-					return fmt.Errorf("choose either --catalog or positional project, not both")
+				if cmd.Flags().Changed("project") {
+					return fmt.Errorf("choose either --project or positional project, not both")
 				}
 				opts.catalog = args[0]
 			}
 			return runPlan(ctx, opts, cmd.OutOrStdout())
 		},
 	}
-	cmd.Flags().StringVar(&opts.catalog, "catalog", filepath.Join("dashboards", "libredash.yaml"), "project path")
+	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
 	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL for active deployment diff")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "emit JSON plan")
@@ -89,7 +89,7 @@ type validateResponse struct {
 }
 
 func runValidate(ctx context.Context, opts *rootOptions, out io.Writer) error {
-	diagnostics := validateCatalog(ctx, opts.catalog)
+	diagnostics := validateProject(ctx, opts.catalog)
 	response := validateResponse{OK: len(diagnostics) == 0, Diagnostics: diagnostics}
 	if opts.jsonOutput {
 		encoder := json.NewEncoder(out)
@@ -273,8 +273,8 @@ func planChangeAnnotations(change workspacecompiler.ProjectPlanChange) string {
 	return strings.Join(parts, ",")
 }
 
-func validateCatalog(ctx context.Context, catalogPath string) []configschema.Diagnostic {
-	if _, err := workspacecompiler.CompileProject(catalogPath, workspacecompiler.Options{}); err != nil {
+func validateProject(ctx context.Context, projectPath string) []configschema.Diagnostic {
+	if _, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{}); err != nil {
 		return configschema.Diagnostics(err)
 	}
 	if err := ctx.Err(); err != nil {

@@ -74,8 +74,8 @@ semantic_models:
 		t.Fatal(err)
 	}
 	_, err := semantic.Load(path)
-	if err == nil || !strings.Contains(err.Error(), "field expr not found") {
-		t.Fatalf("semantic.Load() error = %v, want legacy expr rejection", err)
+	if err == nil || !strings.Contains(err.Error(), "legacy semantic model files are not supported") {
+		t.Fatalf("semantic.Load() error = %v, want unsupported legacy format", err)
 	}
 }
 

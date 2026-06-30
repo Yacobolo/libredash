@@ -15,12 +15,12 @@ func TestValidateCommandRejectsAmbiguousProjectArgs(t *testing.T) {
 	project := filepath.Join("..", "..", "dashboards", "libredash.yaml")
 	opts := &rootOptions{}
 	cmd := validateCommand(context.Background(), opts)
-	cmd.SetArgs([]string{"--catalog", project, project})
+	cmd.SetArgs([]string{"--project", project, project})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("validate command error = nil, want ambiguity error")
 	}
-	if !strings.Contains(err.Error(), "either --catalog or positional project") {
+	if !strings.Contains(err.Error(), "either --project or positional project") {
 		t.Fatalf("error = %v, want ambiguity message", err)
 	}
 }

@@ -358,6 +358,91 @@ func TestPlanProjectAgainstGraphReportsSemanticAndAccessImpact(t *testing.T) {
 	}
 }
 
+func TestDiffAssetGraphsMarksUsedSemanticChildrenBreaking(t *testing.T) {
+	workspaceID := workspace.WorkspaceID("sales")
+	activeDeployment := workspace.DeploymentID("dep_active")
+	authoredDeployment := workspace.DeploymentID("plan")
+	field := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeField, "sales.orders.order_id", "semantic_table:sales.sales.orders")
+	measure := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeMeasure, "sales.order_count", "semantic_model:sales.sales")
+	visual := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeVisual, "sales.executive-sales.total", "dashboard:sales.executive-sales")
+	active := workspace.AssetGraph{
+		Assets: []workspace.Asset{field, measure, visual},
+		Edges: []workspace.AssetEdge{
+			workspace.NewAssetEdge(workspaceID, activeDeployment, visual.ID, field.ID, workspace.AssetEdgeUsesField),
+			workspace.NewAssetEdge(workspaceID, activeDeployment, visual.ID, measure.ID, workspace.AssetEdgeUsesMeasure),
+		},
+	}
+	authored := workspace.AssetGraph{
+		Assets: []workspace.Asset{testPlanAsset(t, workspaceID, authoredDeployment, workspace.AssetTypeVisual, "sales.executive-sales.total", "dashboard:sales.executive-sales")},
+	}
+
+	changes, _, summary := diffAssetGraphs(authored, active)
+	if !summary.Breaking {
+		t.Fatalf("summary = %#v, want breaking", summary)
+	}
+	for _, id := range []string{"field:sales.orders.order_id", "measure:sales.order_count"} {
+		var found bool
+		for _, change := range changes {
+			if change.ID == id {
+				found = true
+				if !change.Breaking {
+					t.Fatalf("change %s = %#v, want breaking", id, change)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("changes = %#v, missing %s", changes, id)
+		}
+	}
+}
+
+func TestCompileProjectValidatesUnusedGlobalConnectionsAndSources(t *testing.T) {
+	t.Run("unused unsupported connection", func(t *testing.T) {
+		projectPath := writeProjectFixture(t, minimalProjectFiles(map[string]string{
+			"connections/bad.yaml": `
+apiVersion: libredash.dev/v1
+kind: Connection
+metadata:
+  name: bad
+spec:
+  kind: unsupported
+`,
+		}))
+
+		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		assertCompileErrorContains(t, err, `schema.enum`)
+		assertDiagnostic(t, err, "connection:bad", "spec")
+	})
+
+	t.Run("unused source path outside connection scope", func(t *testing.T) {
+		projectPath := writeProjectFixture(t, minimalProjectFiles(map[string]string{
+			"connections/scoped.yaml": `
+apiVersion: libredash.dev/v1
+kind: Connection
+metadata:
+  name: scoped
+spec:
+  kind: local
+  scope: data/allowed
+`,
+			"sources/unused.escape.yaml": `
+apiVersion: libredash.dev/v1
+kind: Source
+metadata:
+  name: unused.escape
+spec:
+  connection: scoped
+  path: ../outside.csv
+  format: csv
+`,
+		}))
+
+		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		assertCompileErrorContains(t, err, `escapes connection scope`)
+		assertDiagnostic(t, err, "source:unused.escape", "spec")
+	})
+}
+
 func TestCompileProjectSupportsMultipleSemanticModelsInWorkspace(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
 		"libredash.yaml":                                   projectYAML(),
@@ -596,6 +681,32 @@ func writeProjectFixture(t *testing.T, files map[string]string) string {
 		writeCompilerFixture(t, path, content)
 	}
 	return filepath.Join(dir, "libredash.yaml")
+}
+
+func minimalProjectFiles(extra map[string]string) map[string]string {
+	files := map[string]string{
+		"libredash.yaml":                                   projectYAML(),
+		"connections/olist.yaml":                           connectionYAML("olist"),
+		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
+		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
+		"workspaces/sales/workspace.yaml":                  workspaceYAML("sales"),
+		"workspaces/sales/models/orders.yaml":              modelTableYAML("sales", "orders", "olist.orders", "order_id", "SELECT order_id, order_status AS status FROM source.\"olist.orders\""),
+		"workspaces/sales/semantic-models/sales.yaml":      semanticModelYAML("sales", "orders", "order_count"),
+		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
+	}
+	for path, content := range extra {
+		files[path] = content
+	}
+	return files
+}
+
+func testPlanAsset(t *testing.T, workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, typ workspace.AssetType, key string, parent workspace.AssetID) workspace.Asset {
+	t.Helper()
+	asset, err := workspace.NewAsset(workspaceID, deploymentID, typ, key, parent, key, "", workspace.PayloadSchemaForAssetType(typ), map[string]any{"key": key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return asset
 }
 
 func connectionYAML(name string) string {

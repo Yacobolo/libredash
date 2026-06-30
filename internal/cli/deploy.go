@@ -20,14 +20,14 @@ import (
 func deployCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy",
-		Short: "Deploy a dashboard-as-code catalog",
+		Short: "Deploy a configuration-as-code project",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDeploy(ctx, opts)
 		},
 	}
 	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
-	cmd.Flags().StringVar(&opts.catalog, "catalog", filepath.Join("dashboards", "libredash.yaml"), "project path")
+	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
 	return cmd
 }
 

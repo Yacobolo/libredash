@@ -9,6 +9,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
+	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
 var ErrInvalidStatus = errors.New("deployment cannot be activated")
@@ -16,6 +17,7 @@ var ErrInvalidStatus = errors.New("deployment cannot be activated")
 type Repository interface {
 	ByID(ctx context.Context, id deployment.ID) (deployment.Deployment, error)
 	Activate(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID) (deployment.Deployment, error)
+	ActivateWithWorkspacePolicy(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error)
 }
 
 type ArtifactRepository interface {
@@ -51,6 +53,14 @@ func (s Service) Activate(ctx context.Context, deploymentID deployment.ID) (depl
 		return deployment.Deployment{}, fmt.Errorf("%w: deployment %s has status %q, want validated", ErrInvalidStatus, deploymentID, current.Status)
 	}
 
+	var policy *workspace.AccessPolicy
+	if s.access != nil && s.artifacts != nil {
+		loaded, err := s.accessPolicy(ctx, current)
+		if err != nil {
+			return deployment.Deployment{}, err
+		}
+		policy = &loaded
+	}
 	var prepared deployment.PreparedRuntime
 	if s.runtime != nil {
 		prepared, err = s.runtime.PrepareDeployment(ctx, string(deploymentID))
@@ -58,16 +68,13 @@ func (s Service) Activate(ctx context.Context, deploymentID deployment.ID) (depl
 			return deployment.Deployment{}, err
 		}
 	}
-	if s.access != nil && s.artifacts != nil {
-		if err := s.reconcileAccess(ctx, current); err != nil {
-			if prepared != nil {
-				_ = prepared.Close()
-			}
-			return deployment.Deployment{}, err
-		}
-	}
 
-	activated, err := s.repo.Activate(ctx, current.WorkspaceID, current.ID)
+	var activated deployment.Deployment
+	if policy != nil {
+		activated, err = s.repo.ActivateWithWorkspacePolicy(ctx, current.WorkspaceID, current.ID, *policy)
+	} else {
+		activated, err = s.repo.Activate(ctx, current.WorkspaceID, current.ID)
+	}
 	if err != nil {
 		if prepared != nil {
 			_ = prepared.Close()
@@ -83,31 +90,31 @@ func (s Service) Activate(ctx context.Context, deploymentID deployment.ID) (depl
 	return activated, nil
 }
 
-func (s Service) reconcileAccess(ctx context.Context, current deployment.Deployment) error {
+func (s Service) accessPolicy(ctx context.Context, current deployment.Deployment) (workspace.AccessPolicy, error) {
 	artifact, err := s.artifacts.ArtifactByDeployment(ctx, current.ID)
 	if err != nil {
-		return err
+		return workspace.AccessPolicy{}, err
 	}
 	root, err := os.MkdirTemp("", "libredash-activate-*")
 	if err != nil {
-		return err
+		return workspace.AccessPolicy{}, err
 	}
 	defer os.RemoveAll(root)
 	if err := deploymentfs.ExtractArtifact(artifact.Path, root); err != nil {
-		return err
+		return workspace.AccessPolicy{}, err
 	}
 	compiled, _, err := deploymentfs.LoadCompiledWorkspaceArtifact(root)
 	if err != nil {
-		return err
+		return workspace.AccessPolicy{}, err
 	}
 	if compiled.WorkspaceID != string(current.WorkspaceID) {
-		return fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, current.WorkspaceID)
+		return workspace.AccessPolicy{}, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, current.WorkspaceID)
 	}
 	if compiled.DeploymentID != string(current.ID) {
-		return fmt.Errorf("compiled artifact deployment = %q, want %q", compiled.DeploymentID, current.ID)
+		return workspace.AccessPolicy{}, fmt.Errorf("compiled artifact deployment = %q, want %q", compiled.DeploymentID, current.ID)
 	}
-	if compiled.Validation.Status != "passed" {
-		return fmt.Errorf("compiled artifact validation status = %q, want passed", compiled.Validation.Status)
+	if err := deploymentfs.ValidateCompiledWorkspaceArtifact(compiled); err != nil {
+		return workspace.AccessPolicy{}, err
 	}
-	return s.access.ReconcileWorkspacePolicy(ctx, string(current.WorkspaceID), compiled.Definition.Access)
+	return compiled.Definition.Access, nil
 }

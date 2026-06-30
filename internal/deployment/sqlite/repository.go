@@ -8,8 +8,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -138,6 +141,14 @@ func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.
 }
 
 func (r *Repository) Activate(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID) (deployment.Deployment, error) {
+	return r.activate(ctx, workspaceID, deploymentID, nil)
+}
+
+func (r *Repository) ActivateWithWorkspacePolicy(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error) {
+	return r.activate(ctx, workspaceID, deploymentID, &policy)
+}
+
+func (r *Repository) activate(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID, policy *workspace.AccessPolicy) (deployment.Deployment, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return deployment.Deployment{}, err
@@ -155,6 +166,11 @@ func (r *Repository) Activate(ctx context.Context, workspaceID deployment.Worksp
 	if !current.CanActivate() {
 		return deployment.Deployment{}, fmt.Errorf("deployment %s has status %q, want validated", deploymentID, current.Status)
 	}
+	if policy != nil {
+		if err := reconcileWorkspacePolicyTx(ctx, q, string(workspaceID), *policy); err != nil {
+			return deployment.Deployment{}, err
+		}
+	}
 	if err := q.MarkOtherDeploymentsInactive(ctx, platformdb.MarkOtherDeploymentsInactiveParams{WorkspaceID: string(workspaceID), ID: string(deploymentID)}); err != nil {
 		return deployment.Deployment{}, err
 	}
@@ -171,6 +187,108 @@ func (r *Repository) Activate(ctx context.Context, workspaceID deployment.Worksp
 		return deployment.Deployment{}, err
 	}
 	return r.ByID(ctx, deploymentID)
+}
+
+func reconcileWorkspacePolicyTx(ctx context.Context, q *platformdb.Queries, workspaceID string, policy workspace.AccessPolicy) error {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return fmt.Errorf("workspace id is required")
+	}
+	bindings, err := q.ListRoleBindingsByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	for _, binding := range bindings {
+		if err := q.DeleteRoleBindingByID(ctx, platformdb.DeleteRoleBindingByIDParams{WorkspaceID: workspaceID, ID: binding.ID}); err != nil {
+			return err
+		}
+	}
+	groups, err := q.ListGroupsByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	for _, group := range groups {
+		if err := q.DeleteGroup(ctx, platformdb.DeleteGroupParams{WorkspaceID: workspaceID, ID: group.ID}); err != nil {
+			return err
+		}
+	}
+
+	groupIDs := map[string]string{}
+	for _, name := range sortedWorkspaceGroupNames(policy.Groups) {
+		group := policy.Groups[name]
+		id := stableAccessID("group", workspaceID, name)
+		if err := q.UpsertGroup(ctx, platformdb.UpsertGroupParams{
+			ID:          id,
+			WorkspaceID: workspaceID,
+			Provider:    "local",
+			ExternalID:  name,
+			Name:        firstNonEmpty(group.Name, name),
+		}); err != nil {
+			return err
+		}
+		groupIDs[name] = id
+		for _, member := range group.Members {
+			principalID, err := upsertPolicyPrincipalTx(ctx, q, member.PrincipalID, member.Email, member.DisplayName)
+			if err != nil {
+				return err
+			}
+			if err := q.InsertGroupMember(ctx, platformdb.InsertGroupMemberParams{WorkspaceID: workspaceID, GroupID: id, PrincipalID: principalID}); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, name := range sortedWorkspaceRoleBindingNames(policy.RoleBindings) {
+		binding := policy.RoleBindings[name]
+		role, err := q.GetRoleByName(ctx, binding.Role)
+		if err != nil {
+			return err
+		}
+		params := platformdb.InsertRoleBindingParams{
+			ID:          stableAccessID("rolebinding", workspaceID, name),
+			WorkspaceID: workspaceID,
+			RoleID:      role.ID,
+		}
+		switch binding.Subject.Kind {
+		case string(access.SubjectGroup):
+			groupID := groupIDs[binding.Subject.Group]
+			if groupID == "" {
+				return fmt.Errorf("workspace role binding %q references unknown group %q", name, binding.Subject.Group)
+			}
+			params.GroupID = sql.NullString{String: groupID, Valid: true}
+		case string(access.SubjectPrincipal):
+			principalID, err := upsertPolicyPrincipalTx(ctx, q, binding.Subject.PrincipalID, binding.Subject.Email, binding.Subject.DisplayName)
+			if err != nil {
+				return err
+			}
+			params.PrincipalID = sql.NullString{String: principalID, Valid: true}
+		default:
+			return fmt.Errorf("workspace role binding %q has unsupported subject kind %q", name, binding.Subject.Kind)
+		}
+		if err := q.InsertRoleBinding(ctx, params); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func upsertPolicyPrincipalTx(ctx context.Context, q *platformdb.Queries, id, email, displayName string) (string, error) {
+	email = access.NormalizeEmail(email)
+	id = strings.TrimSpace(id)
+	if id == "" && email != "" {
+		id = access.PrincipalIDForEmail(email)
+	}
+	if id == "" {
+		return "", fmt.Errorf("policy principal requires principalId or email")
+	}
+	if err := q.UpsertPrincipal(ctx, platformdb.UpsertPrincipalParams{
+		ID:          id,
+		Email:       email,
+		DisplayName: firstNonEmpty(strings.TrimSpace(displayName), email, id),
+	}); err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 func (r *Repository) ActiveArtifact(ctx context.Context, workspaceID deployment.WorkspaceID) (deployment.Deployment, deployment.Artifact, error) {
@@ -244,6 +362,37 @@ func mapNotFound(err error) error {
 	return err
 }
 
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func stableAccessID(prefix, workspaceID, name string) string {
+	return "cac_" + prefix + "_" + stableID(workspaceID+"|"+name)
+}
+
+func sortedWorkspaceGroupNames(values map[string]workspace.WorkspaceGroup) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedWorkspaceRoleBindingNames(values map[string]workspace.WorkspaceRoleBinding) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func newID(prefix string) string {
 	return prefix + "_" + newSecret()[:24]
 }
@@ -255,4 +404,9 @@ func newSecret() string {
 		return hex.EncodeToString(sum[:])
 	}
 	return hex.EncodeToString(b[:])
+}
+
+func stableID(value string) string {
+	sum := sha256.Sum256([]byte(strings.ToLower(value)))
+	return hex.EncodeToString(sum[:])[:32]
 }
