@@ -4,7 +4,7 @@ import type { AdminPageSignal, AdminContentSectionSignal, AdminStorageSignal } f
 import { jsonAttribute } from '../shared/json-attribute'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../navigation/sub-sidebar'
-import '../shared/data-grid'
+import '../shared/record-table'
 import './storage-explorer'
 
 const emptyStorage: AdminStorageSignal = {
@@ -252,8 +252,8 @@ function renderSection(section: AdminContentSectionSignal) {
   return html`
     <section class="section" aria-label=${section.title}>
       <h2>${section.title}</h2>
-      ${section.grid?.columns?.length
-        ? html`<div class="panel"><ld-data-grid .grid=${section.grid}></ld-data-grid></div>`
+      ${section.table?.columns?.length
+        ? html`<div class="panel"><ld-record-table variant="primary" .table=${section.table}></ld-record-table></div>`
         : html`<div class="facts">${section.facts?.map((fact) => html`
           <div class="metric">
             <span class="label">${fact.label}</span>

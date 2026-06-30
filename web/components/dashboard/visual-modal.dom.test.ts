@@ -25,7 +25,7 @@ beforeAll(async () => {
           <button id="trigger">Expand</button>
           <section id="parent">
             <ld-echart id="first"></ld-echart>
-            <ld-data-table id="second"></ld-data-table>
+            <ld-report-table id="second"></ld-report-table>
           </section>
           <ld-visual-modal id="modal"></ld-visual-modal>
           <script type="module" src="/visual-modal-under-test.js"></script>
@@ -61,7 +61,7 @@ async function dispatchVisualAction(page: Awaited<ReturnType<typeof setupPage>>,
       composed: true,
       detail: {
         action,
-        visualType: source.localName === 'ld-data-table' ? 'table' : 'chart',
+        visualType: source.localName === 'ld-report-table' ? 'table' : 'chart',
         visualId: sourceId,
         title: sourceId,
         columns: [{ key: 'label', label: 'Label' }],

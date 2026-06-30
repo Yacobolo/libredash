@@ -50,9 +50,6 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForSemanticModel(t *testing.T) {
 		"Connections (1)",
 		"Sources (1)",
 		"Fields (1)",
-		`data-attr:grid="$assetDetailsSemanticConnectionsGrid"`,
-		`data-attr:grid="$assetDetailsSemanticSourcesGrid"`,
-		`data-attr:grid="$assetDetailsSemanticFieldsGrid"`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("semantic model details rendered non-composition content %q:\n%s", notWant, rendered)
@@ -96,23 +93,23 @@ func TestWorkspaceAssetDetailSignalsUseSharedGridShape(t *testing.T) {
 	}
 
 	semanticPage := workspaceAssetPageSignal(workspace, byType["semantic_model"], assets, edges, "details", assetLineage(workspace.ID, byType["semantic_model"], assets, edges))
-	modelTablesGrid := detailSectionGrid(t, semanticPage.Details.Sections, "Model tables")
-	relationshipsGrid := detailSectionGrid(t, semanticPage.Details.Sections, "Relationships")
-	assertGridHeaders(t, modelTablesGrid, []string{"Name", "Primary key", "Fields", "Measures", "Last refreshed", "Refresh status", "Description"})
-	assertGridHeaders(t, relationshipsGrid, []string{"ID", "From table", "From field", "To table", "To field", "Cardinality", "Active"})
-	assertGridMissingHeaders(t, modelTablesGrid, []string{"Source", "Reads", "SQL preview"})
+	modelTablesTable := detailSectionTable(t, semanticPage.Details.Sections, "Model tables")
+	relationshipsGrid := detailSectionTable(t, semanticPage.Details.Sections, "Relationships")
+	assertTableHeaders(t, modelTablesTable, []string{"Name", "Primary key", "Fields", "Measures", "Last refreshed", "Refresh status", "Description"})
+	assertTableHeaders(t, relationshipsGrid, []string{"ID", "From table", "From field", "To table", "To field", "Cardinality", "Active"})
+	assertTableMissingHeaders(t, modelTablesTable, []string{"Source", "Reads", "SQL preview"})
 	assertNoDetailSection(t, semanticPage.Details.Sections, "Connections")
 	assertNoDetailSection(t, semanticPage.Details.Sections, "Sources")
 	assertNoDetailSection(t, semanticPage.Details.Sections, "Fields")
 
 	dashboardPage := workspaceAssetPageSignal(workspace, byType["dashboard"], assets, edges, "details", assetLineage(workspace.ID, byType["dashboard"], assets, edges))
 	for _, title := range []string{"Pages", "Filters", "Visuals", "Tables"} {
-		detailSectionGrid(t, dashboardPage.Details.Sections, title)
+		detailSectionTable(t, dashboardPage.Details.Sections, title)
 	}
 
 	lineagePage := workspaceAssetPageSignal(workspace, byType["dashboard"], assets, edges, "lineage", assetLineage(workspace.ID, byType["dashboard"], assets, edges))
-	if len(lineagePage.Lineage.Graph.Nodes) == 0 || len(lineagePage.Lineage.UsesGrid.Columns) == 0 || len(lineagePage.Lineage.UsedByGrid.Columns) == 0 {
-		t.Fatalf("lineage page did not seed graph and relation grids: %#v", lineagePage.Lineage)
+	if len(lineagePage.Lineage.Graph.Nodes) == 0 || len(lineagePage.Lineage.UsesTable.Columns) == 0 || len(lineagePage.Lineage.UsedByTable.Columns) == 0 {
+		t.Fatalf("lineage page did not seed graph and relation tables: %#v", lineagePage.Lineage)
 	}
 }
 
@@ -224,13 +221,12 @@ func TestWorkspaceAssetDetailsRenderModelTableComposition(t *testing.T) {
 		"semantic-model-graph.js",
 		`"semanticModelGraph":`,
 		`<ld-code-block language="sql"`,
-		`data-attr:grid="$assetDetailsModelTableDefinitionGrid"`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("model table details rendered source definition content %q:\n%s", notWant, rendered)
 		}
 	}
-	if strings.Contains(rendered, "Measures (") || strings.Contains(rendered, `data-attr:grid="$assetDetailsModelTableMeasuresGrid"`) {
+	if strings.Contains(rendered, "Measures (") {
 		t.Fatalf("model table details rendered measures:\n%s", rendered)
 	}
 }
@@ -261,7 +257,6 @@ func TestWorkspaceAssetDetailsRenderDirectSourceModelTableWithoutSQL(t *testing.
 		"Source / transform",
 		"/static/code-block.js",
 		`<ld-code-block language="sql"`,
-		`data-attr:grid="$assetDetailsModelTableDefinitionGrid"`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("direct source model table details rendered %q:\n%s", notWant, rendered)
@@ -291,8 +286,8 @@ func TestWorkspaceAssetDetailsRenderSourceSchema(t *testing.T) {
 		}
 	}
 	page := workspaceAssetPageSignal(workspace, asset, assets, edges, "details", assetLineage(workspace.ID, asset, assets, edges))
-	grid := detailSectionGrid(t, page.Details.Sections, "Fields")
-	assertGridHeaders(t, grid, []string{"Name", "Description", "Physical type", "Nullable"})
+	grid := detailSectionTable(t, page.Details.Sections, "Fields")
+	assertTableHeaders(t, grid, []string{"Name", "Description", "Physical type", "Nullable"})
 	if len(grid.Rows) != 2 {
 		t.Fatalf("source field rows = %#v, want 2 rows", grid.Rows)
 	}
@@ -307,9 +302,9 @@ func TestWorkspaceAssetDetailSignalsIncludeModelTableDefinition(t *testing.T) {
 
 	directAsset := testAssetByID(t, assets, "table-model")
 	directPage := workspaceAssetPageSignal(workspace, directAsset, assets, edges, "details", assetLineage(workspace.ID, directAsset, assets, edges))
-	directFields := detailSectionGrid(t, directPage.Details.Sections, "Fields")
-	assertGridHeaders(t, directFields, []string{"Name", "Label", "Physical type", "Nullable", "Key", "Description"})
-	assertGridMissingHeaders(t, directFields, []string{"Expression", "Filter", "Order", "Model table", "Measures"})
+	directFields := detailSectionTable(t, directPage.Details.Sections, "Fields")
+	assertTableHeaders(t, directFields, []string{"Name", "Label", "Physical type", "Nullable", "Key", "Description"})
+	assertTableMissingHeaders(t, directFields, []string{"Expression", "Filter", "Order", "Model table", "Measures"})
 	assertNoDetailSection(t, directPage.Details.Sections, "Definition")
 	assertNoDetailSection(t, directPage.Details.Sections, "SQL")
 
@@ -327,7 +322,7 @@ func TestWorkspaceAssetDetailsRenderUnknownNullableAsDash(t *testing.T) {
 		"order_id": map[string]any{"Description": "Raw order identifier."},
 	}
 	sourcePage := workspaceAssetPageSignal(workspace, source, assets, edges, "details", assetLineage(workspace.ID, source, assets, edges))
-	sourceGrid := detailSectionGrid(t, sourcePage.Details.Sections, "Fields")
+	sourceGrid := detailSectionTable(t, sourcePage.Details.Sections, "Fields")
 	if len(sourceGrid.Rows) != 1 {
 		t.Fatalf("source fallback rows = %#v, want 1", sourceGrid.Rows)
 	}
@@ -340,7 +335,7 @@ func TestWorkspaceAssetDetailsRenderUnknownNullableAsDash(t *testing.T) {
 		map[string]any{"name": "order_id", "ordinal": float64(1), "physicalType": "VARCHAR", "primaryKey": true},
 	}}
 	modelPage := workspaceAssetPageSignal(workspace, modelTable, assets, edges, "details", assetLineage(workspace.ID, modelTable, assets, edges))
-	modelGrid := detailSectionGrid(t, modelPage.Details.Sections, "Fields")
+	modelGrid := detailSectionTable(t, modelPage.Details.Sections, "Fields")
 	if got := fmt.Sprint(modelGrid.Rows[0]["nullable"]); got != "-" {
 		t.Fatalf("model table missing nullable = %q, want -", got)
 	}
@@ -367,12 +362,12 @@ func TestAssetLineageProjectsRecursiveDependenciesAndContext(t *testing.T) {
 	})
 	assertLineageEdgesMoveLeftToRight(t, lineage.Graph)
 	assertLineageSelectedNode(t, lineage.Graph, "dashboard")
-	assertGridRelations(t, lineage.Uses, []string{"Powers dashboard"})
-	assertGridRelations(t, lineage.UsedBy, nil)
-	if gridHasRelation(lineage.Uses, "Contains") || gridHasRelation(lineage.UsedBy, "Contains") {
-		t.Fatalf("dependency grids included contains edges: uses=%#v usedBy=%#v", lineage.Uses.Rows, lineage.UsedBy.Rows)
+	assertTableRelations(t, lineage.Uses, []string{"Powers dashboard"})
+	assertTableRelations(t, lineage.UsedBy, nil)
+	if tableHasRelation(lineage.Uses, "Contains") || tableHasRelation(lineage.UsedBy, "Contains") {
+		t.Fatalf("dependency tables included contains edges: uses=%#v usedBy=%#v", lineage.Uses.Rows, lineage.UsedBy.Rows)
 	}
-	if gridHasRelation(lineage.Uses, "Uses measure") || gridHasRelation(lineage.UsedBy, "Uses measure") {
+	if tableHasRelation(lineage.Uses, "Uses measure") || tableHasRelation(lineage.UsedBy, "Uses measure") {
 		t.Fatalf("lineage tables included hidden measure edge: uses=%#v usedBy=%#v", lineage.Uses.Rows, lineage.UsedBy.Rows)
 	}
 	if lineage.Count != 1 {
@@ -395,12 +390,12 @@ func TestAssetLineageProjectsRecursiveConsumers(t *testing.T) {
 	})
 	assertLineageEdgesMoveLeftToRight(t, lineage.Graph)
 	assertLineageSelectedNode(t, lineage.Graph, "semantic_model")
-	assertGridRelations(t, lineage.Uses, []string{"Feeds semantic model"})
-	assertGridRelations(t, lineage.UsedBy, []string{"Powers dashboard"})
-	if gridHasRelation(lineage.Uses, "Contains") || gridHasRelation(lineage.UsedBy, "Contains") {
-		t.Fatalf("consumer/dependency grids included contains edges: uses=%#v usedBy=%#v", lineage.Uses.Rows, lineage.UsedBy.Rows)
+	assertTableRelations(t, lineage.Uses, []string{"Feeds semantic model"})
+	assertTableRelations(t, lineage.UsedBy, []string{"Powers dashboard"})
+	if tableHasRelation(lineage.Uses, "Contains") || tableHasRelation(lineage.UsedBy, "Contains") {
+		t.Fatalf("consumer/dependency tables included contains edges: uses=%#v usedBy=%#v", lineage.Uses.Rows, lineage.UsedBy.Rows)
 	}
-	if gridHasRelation(lineage.Uses, "Uses semantic table") || gridHasRelation(lineage.UsedBy, "Uses semantic table") {
+	if tableHasRelation(lineage.Uses, "Uses semantic table") || tableHasRelation(lineage.UsedBy, "Uses semantic table") {
 		t.Fatalf("lineage tables included hidden semantic table edge: uses=%#v usedBy=%#v", lineage.Uses.Rows, lineage.UsedBy.Rows)
 	}
 }
@@ -430,8 +425,8 @@ func TestAssetLineageDashboardDerivesMeasureConsumers(t *testing.T) {
 	if node.ContainedCount != 4 || node.ContainedSummary != "1 filter, 1 page, 1 table, 1 visual" {
 		t.Fatalf("dashboard contained summary = %d %q, want 4 dashboard children: %#v", node.ContainedCount, node.ContainedSummary, node)
 	}
-	assertGridRelations(t, lineage.Uses, []string{"Powers dashboard"})
-	assertGridRelations(t, lineage.UsedBy, nil)
+	assertTableRelations(t, lineage.Uses, []string{"Powers dashboard"})
+	assertTableRelations(t, lineage.UsedBy, nil)
 }
 
 func TestAssetLineageSemanticModelDerivesMeasureDashboardPath(t *testing.T) {
@@ -459,8 +454,8 @@ func TestAssetLineageSemanticModelDerivesMeasureDashboardPath(t *testing.T) {
 	if node.ContainedCount != 3 || node.ContainedSummary != "1 measure, 1 relationship, 1 semantic table" {
 		t.Fatalf("semantic model contained summary = %d %q, want 3 semantic children: %#v", node.ContainedCount, node.ContainedSummary, node)
 	}
-	assertGridRelations(t, lineage.Uses, []string{"Feeds semantic model"})
-	assertGridRelations(t, lineage.UsedBy, []string{"Powers dashboard"})
+	assertTableRelations(t, lineage.Uses, []string{"Feeds semantic model"})
+	assertTableRelations(t, lineage.UsedBy, []string{"Powers dashboard"})
 }
 
 func TestAssetLineageFallsBackToContainsWhenNoDependenciesExist(t *testing.T) {
@@ -470,8 +465,8 @@ func TestAssetLineageFallsBackToContainsWhenNoDependenciesExist(t *testing.T) {
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 
 	assertLineageEdgeKinds(t, lineage.Graph, []string{"contains"})
-	assertGridRelations(t, lineage.Uses, []string{"Contains"})
-	assertGridRelations(t, lineage.UsedBy, nil)
+	assertTableRelations(t, lineage.Uses, []string{"Contains"})
+	assertTableRelations(t, lineage.UsedBy, nil)
 	if lineage.Count != 5 {
 		t.Fatalf("contains fallback should count direct hierarchy context, got %d", lineage.Count)
 	}
@@ -943,15 +938,15 @@ var testAssetAliases = map[string]string{
 	"table":           "table:executive-sales.orders",
 }
 
-func detailSectionGrid(t *testing.T, sections []uisignals.WorkspaceDetailSectionSignal, title string) metricGrid {
+func detailSectionTable(t *testing.T, sections []uisignals.WorkspaceDetailSectionSignal, title string) recordTable {
 	t.Helper()
 	for _, section := range sections {
-		if detailSectionTitleMatches(section.Title, title) && len(section.Grid.Columns) > 0 {
-			return section.Grid
+		if detailSectionTitleMatches(section.Title, title) && len(section.Table.Columns) > 0 {
+			return section.Table
 		}
 	}
 	t.Fatalf("detail sections missing grid %q: %#v", title, sections)
-	return metricGrid{}
+	return recordTable{}
 }
 
 func graphNodeByID(t *testing.T, nodes []uisignals.SemanticModelGraphNodeSignal, id string) uisignals.SemanticModelGraphNodeSignal {
@@ -1034,7 +1029,7 @@ func assertLineageEdgeKinds(t *testing.T, graph assetLineageGraph, expected []st
 	}
 }
 
-func assertGridHeaders(t *testing.T, grid metricGrid, expected []string) {
+func assertTableHeaders(t *testing.T, grid recordTable, expected []string) {
 	t.Helper()
 	got := make([]string, 0, len(grid.Columns))
 	for _, column := range grid.Columns {
@@ -1045,7 +1040,7 @@ func assertGridHeaders(t *testing.T, grid metricGrid, expected []string) {
 	}
 }
 
-func assertGridMissingHeaders(t *testing.T, grid metricGrid, unexpected []string) {
+func assertTableMissingHeaders(t *testing.T, grid recordTable, unexpected []string) {
 	t.Helper()
 	got := map[string]struct{}{}
 	for _, column := range grid.Columns {
@@ -1058,7 +1053,7 @@ func assertGridMissingHeaders(t *testing.T, grid metricGrid, unexpected []string
 	}
 }
 
-func assertGridRowValue(t *testing.T, grid metricGrid, column, expected string) {
+func assertTableRowValue(t *testing.T, grid recordTable, column, expected string) {
 	t.Helper()
 	for _, row := range grid.Rows {
 		if fmt.Sprint(row[column]) == expected {
@@ -1068,7 +1063,7 @@ func assertGridRowValue(t *testing.T, grid metricGrid, column, expected string) 
 	t.Fatalf("grid missing row with %s=%q: %#v", column, expected, grid.Rows)
 }
 
-func assertGridNoRowValue(t *testing.T, grid metricGrid, column, unexpected string) {
+func assertTableNoRowValue(t *testing.T, grid recordTable, column, unexpected string) {
 	t.Helper()
 	for _, row := range grid.Rows {
 		if fmt.Sprint(row[column]) == unexpected {
@@ -1077,7 +1072,7 @@ func assertGridNoRowValue(t *testing.T, grid metricGrid, column, unexpected stri
 	}
 }
 
-func assertGridRowContains(t *testing.T, grid metricGrid, column, expected string) {
+func assertTableRowContains(t *testing.T, grid recordTable, column, expected string) {
 	t.Helper()
 	for _, row := range grid.Rows {
 		if strings.Contains(fmt.Sprint(row[column]), expected) {
@@ -1158,7 +1153,7 @@ func assertLineageMissingEdge(t *testing.T, graph assetLineageGraph, source, tar
 	}
 }
 
-func assertGridRelations(t *testing.T, grid metricGrid, expected []string) {
+func assertTableRelations(t *testing.T, grid recordTable, expected []string) {
 	t.Helper()
 	if len(expected) == 0 {
 		if len(grid.Rows) != 0 {
@@ -1177,7 +1172,7 @@ func assertGridRelations(t *testing.T, grid metricGrid, expected []string) {
 	}
 }
 
-func gridHasRelation(grid metricGrid, relation string) bool {
+func tableHasRelation(grid recordTable, relation string) bool {
 	for _, row := range grid.Rows {
 		if fmt.Sprint(row["relation"]) == relation {
 			return true

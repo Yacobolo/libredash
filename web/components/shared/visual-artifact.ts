@@ -36,7 +36,7 @@ class VisualArtifact extends LitElement {
     }
 
     ld-echart,
-    ld-data-table {
+    ld-report-table {
       display: block;
       width: 100%;
       height: 100%;
@@ -82,7 +82,7 @@ class VisualArtifact extends LitElement {
     }
     return html`
       <div class="artifact table">
-        <ld-data-table table-id=${this.artifactId} .table=${this.payload}></ld-data-table>
+        <ld-report-table table-id=${this.artifactId} .table=${this.payload}></ld-report-table>
       </div>
     `
   }
@@ -101,7 +101,7 @@ class VisualArtifact extends LitElement {
       if (kind === 'chart') {
         await defineElementOnce('ld-echart', () => import('../dashboard/charts/echart'))
       } else {
-        await defineElementOnce('ld-data-table', () => import('../dashboard/table/data-table'))
+        await defineElementOnce('ld-report-table', () => import('../dashboard/table/report-table'))
       }
       if (token !== this.loadToken) return
       this.rendererReady = true

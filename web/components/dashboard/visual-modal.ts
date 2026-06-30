@@ -3,6 +3,7 @@ import { state } from 'lit/decorators.js'
 import { X } from 'lucide'
 import { lucideIcon } from '../shared/lucide-icons'
 import { mountVisualFocus, restoreVisualFocus, visualSourceFromEvent, type VisualFocusMount } from './visual-modal-focus'
+import '../shared/record-table'
 
 type VisualActionName = 'focus' | 'show-data' | 'copy-data' | 'export-csv' | 'clear-selection'
 
@@ -210,40 +211,6 @@ class VisualModal extends LitElement {
       overflow: auto;
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: var(--ld-font-size-body-md);
-    }
-
-    th,
-    td {
-      max-width: 21.25rem;
-      border-bottom: var(--ld-border-muted);
-      padding: var(--ld-space-md) var(--ld-space-lg);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      text-align: left;
-    }
-
-    th {
-      position: sticky;
-      top: 0;
-      z-index: 1;
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-strong);
-      text-transform: uppercase;
-    }
-
-    td.right,
-    th.right {
-      text-align: right;
-      font-variant-numeric: tabular-nums;
-    }
-
     .empty {
       display: grid;
       height: 100%;
@@ -331,20 +298,18 @@ class VisualModal extends LitElement {
       <div class="data-shell">
         <div class="data-summary">${rows.length.toLocaleString()} row${rows.length === 1 ? '' : 's'} from current visual data</div>
         <div class="data-scroll">
-          <table>
-            <thead>
-              <tr>
-                ${columns.map((column) => html`<th class=${column.align === 'right' ? 'right' : ''}>${column.label}</th>`)}
-              </tr>
-            </thead>
-            <tbody>
-              ${rows.map((row) => html`
-                <tr>
-                  ${columns.map((column) => html`<td class=${column.align === 'right' ? 'right' : ''} title=${stringValue(row[column.key])}>${stringValue(row[column.key])}</td>`)}
-                </tr>
-              `)}
-            </tbody>
-          </table>
+          <ld-record-table
+            .table=${{
+              columns: columns.map((column) => ({
+                id: column.key,
+                header: column.label,
+                align: column.align,
+              })),
+              rows,
+              empty: 'No visual data',
+              minWidth: `${Math.max(columns.length * 160, 520)}px`,
+            }}
+          ></ld-record-table>
         </div>
       </div>
     `

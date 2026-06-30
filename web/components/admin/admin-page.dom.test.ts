@@ -55,7 +55,7 @@ for (const viewport of [
       await page.waitForFunction(() => (
         customElements.get('ld-admin-page')
           && customElements.get('ld-sub-sidebar')
-          && customElements.get('ld-data-grid')
+          && customElements.get('ld-record-table')
       ))
       await page.locator('ld-admin-page').evaluate((element: any) => element.updateComplete)
 
@@ -78,7 +78,8 @@ for (const viewport of [
           sidebarBackground: subSidebarAside ? getComputedStyle(subSidebarAside).backgroundColor : '',
           mainCentered: isMobile || Math.abs((mainRect.left + mainRect.width / 2) - availableCenter) <= 1,
           mainConstrained: isMobile || Math.round(mainRect.width) < Math.round(availableRight - availableLeft),
-          hasGrid: Boolean(root.querySelector('ld-data-grid')),
+          hasRecordTable: Boolean(root.querySelector('ld-record-table')),
+          recordTableVariant: root.querySelector('ld-record-table')?.getAttribute('variant'),
           text: root.textContent,
         }
       })
@@ -91,7 +92,8 @@ for (const viewport of [
         expect(state.mainCentered).toBe(true)
         expect(state.mainConstrained).toBe(true)
       }
-      expect(state.hasGrid).toBe(true)
+      expect(state.hasRecordTable).toBe(true)
+      expect(state.recordTableVariant).toBe('primary')
       expect(state.text ?? '').toMatch(/analyst@example\.com/)
     } finally {
       await page.close()
@@ -262,7 +264,7 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
         detail: detailText(),
       }
 
-      const schemaRowsBeforeBreadcrumb = root.querySelectorAll('.storage-schema-table tbody tr').length
+      const schemaRowsBeforeBreadcrumb = root.querySelectorAll('ld-record-table tbody tr').length
       ordersButton.click()
       await element.updateComplete
       const schemaBreadcrumb = root.querySelector<HTMLButtonElement>('button[data-breadcrumb-kind="schema"]')!
@@ -274,7 +276,7 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
       const afterBreadcrumb = {
         selectedNames: selectedNames(),
         detail: detailText(),
-        schemaRows: root.querySelectorAll('.storage-schema-table tbody tr').length,
+        schemaRows: root.querySelectorAll('ld-record-table tbody tr').length,
         schemaRowsBeforeBreadcrumb,
       }
 
@@ -325,7 +327,7 @@ function testDocument(): string {
     headerDetail: 'Users and service principals known to LibreDash.',
     sections: [{
       title: 'Principals',
-      grid: {
+      table: {
         columns: [
           { id: 'name', header: 'Name', kind: 'link', hrefKey: 'name_href' },
           { id: 'email', header: 'Email' },

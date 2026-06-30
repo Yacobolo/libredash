@@ -129,9 +129,9 @@ func CatalogPage(catalog dashboard.Catalog) g.Node {
 	})
 }
 
-type metricGrid = uisignals.MetricGridSignal
-type metricGridColumn = uisignals.MetricGridColumnSignal
-type metricGridBadge = uisignals.MetricGridBadgeSignal
+type recordTable = uisignals.RecordTableSignal
+type recordTableColumn = uisignals.RecordTableColumnSignal
+type recordTableBadge = uisignals.RecordTableBadgeSignal
 
 func catalogPageSignal(catalog dashboard.Catalog) uisignals.CatalogPageSignal {
 	dashboards := make([]uisignals.CatalogDashboardSignal, 0, len(catalog.Dashboards))
@@ -154,11 +154,11 @@ func catalogPageSignal(catalog dashboard.Catalog) uisignals.CatalogPageSignal {
 	}
 }
 
-func metricGridBadgeValue(value, tone string) any {
+func recordTableBadgeValue(value, tone string) any {
 	if strings.TrimSpace(value) == "" {
 		return ""
 	}
-	return metricGridBadge{Label: value, Tone: tone}
+	return recordTableBadge{Label: value, Tone: tone}
 }
 
 func loginBackgroundLoaderScript() g.Node {

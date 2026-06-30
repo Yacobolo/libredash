@@ -143,7 +143,7 @@ func assertNoDashboardProductDOM(t *testing.T, body string) {
 		"ld-filter-card",
 		"ld-kpi-card",
 		"ld-echart",
-		"ld-data-table",
+		"ld-report-table",
 		"ld-report-footer",
 		"ld-visual-modal",
 	} {

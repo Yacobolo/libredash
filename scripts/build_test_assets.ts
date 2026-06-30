@@ -28,6 +28,7 @@ const fixtures = new Map<string, FixtureBuild>([
   ['workspace-page', single('workspace-page', 'web/components/workspace/workspace-page.ts', '.tmp/workspace-page-test/workspace-page-under-test.js')],
   ['admin-page', single('admin-page', 'web/components/admin/admin-page.ts', '.tmp/admin-page-test/admin-page-under-test.js')],
   ['login-page', single('login-page', 'web/components/login/login-page.ts', '.tmp/login-page-test/login-page-under-test.js')],
+  ['record-table', single('record-table', 'web/components/shared/record-table.ts', '.tmp/record-table-test/record-table-under-test.js')],
   ['visual-modal', single('visual-modal', 'web/components/dashboard/visual-modal.ts', '.tmp/visual-modal-under-test.js')],
   [
     'semantic-model-graph',

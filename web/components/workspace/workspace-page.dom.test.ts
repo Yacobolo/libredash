@@ -56,7 +56,7 @@ for (const viewport of [
         customElements.get('ld-workspace-page')
           && customElements.get('ld-connections-page')
           && customElements.get('ld-workspace-asset-page')
-          && customElements.get('ld-data-grid')
+          && customElements.get('ld-record-table')
       ))
       await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
       await page.locator('ld-connections-page').evaluate((element: any) => element.updateComplete)
@@ -68,20 +68,21 @@ for (const viewport of [
         const asset = document.querySelector('ld-workspace-asset-page') as any
         const workspacePage = workspace.shadowRoot.querySelector('.page') as HTMLElement
         const workspaceToolbar = workspace.shadowRoot.querySelector('.toolbar') as HTMLElement
-        const workspaceGlyph = workspace.shadowRoot.querySelector('.asset-glyph') as HTMLElement
-        const workspaceRowActionIcon = workspace.shadowRoot.querySelector('.row-actions svg') as SVGElement
-        const workspaceRowActionLink = workspace.shadowRoot.querySelector('.row-actions .icon-link') as HTMLElement
-        const workspaceNameCell = workspace.shadowRoot.querySelector('tbody tr:first-child .name-col') as HTMLElement
-        const workspaceTypeCell = workspace.shadowRoot.querySelector('tbody tr:first-child .type-col') as HTMLElement
-        const workspaceAssetTitle = workspace.shadowRoot.querySelector('tbody tr:first-child .asset-title') as HTMLElement
-        const workspaceAssetDescription = workspace.shadowRoot.querySelector('tbody tr:first-child .name-col p') as HTMLElement
+        const workspaceRecordTable = workspace.shadowRoot.querySelector('ld-record-table') as HTMLElement
+        const workspaceGlyph = workspace.shadowRoot.querySelector('.record-entity-icon') as HTMLElement
+        const workspaceRowActionIcon = workspace.shadowRoot.querySelector('.record-actions svg') as SVGElement
+        const workspaceRowActionLink = workspace.shadowRoot.querySelector('.record-actions .record-icon-action') as HTMLElement
+        const workspaceNameCell = workspace.shadowRoot.querySelector('tbody tr:first-child td:first-child') as HTMLElement
+        const workspaceTypeCell = workspace.shadowRoot.querySelector('tbody tr:first-child td:nth-child(2)') as HTMLElement
+        const workspaceAssetTitle = workspace.shadowRoot.querySelector('tbody tr:first-child .record-entity-label') as HTMLElement
+        const workspaceAssetDescription = workspace.shadowRoot.querySelector('tbody tr:first-child .record-entity-description') as HTMLElement
         const connectionsPage = connections.shadowRoot.querySelector('.page') as HTMLElement
         const assetHeader = asset.shadowRoot.querySelector('.breadcrumb-header') as HTMLElement
         const assetTabs = asset.shadowRoot.querySelector('.asset-body > .tabs') as HTMLElement
         const assetFirstTab = asset.shadowRoot.querySelector('.asset-body > .tabs a') as HTMLElement
         const assetSectionBody = asset.shadowRoot.querySelector('.section-body') as HTMLElement
         const semanticGraph = asset.shadowRoot.querySelector('ld-semantic-model-graph') as HTMLElement
-        const firstGrid = asset.shadowRoot.querySelector('ld-data-grid') as HTMLElement
+        const firstRecordTable = asset.shadowRoot.querySelector('ld-record-table') as HTMLElement
         const semanticGraphSection = asset.shadowRoot.querySelector('.semantic-model-section') as HTMLElement
         const nameCellRight = workspaceNameCell.getBoundingClientRect().right
         const typeCellLeft = workspaceTypeCell.getBoundingClientRect().left
@@ -90,7 +91,8 @@ for (const viewport of [
         const isMobile = window.innerWidth <= 720
         return {
           workspaceTitle: workspace.shadowRoot.querySelector('h1')?.textContent?.trim(),
-          workspaceHasAsset: Boolean(workspace.shadowRoot.querySelector('.asset-title')),
+          workspaceHasAsset: Boolean(workspaceRecordTable && workspace.shadowRoot.querySelector('.record-entity-label')),
+          workspaceTableVariant: workspaceRecordTable.getAttribute('variant'),
           workspaceHasAccess: Boolean(workspace.shadowRoot.querySelector('ld-workspace-access-control')),
           workspaceIsStyled: getComputedStyle(workspacePage).paddingTop !== '0px',
           workspacePageCentered: isMobile || Math.abs((workspacePageRect.left + workspacePageRect.width / 2) - window.innerWidth / 2) <= 1,
@@ -101,8 +103,8 @@ for (const viewport of [
           workspaceGlyphHasIcon: Boolean(workspaceGlyph.querySelector('svg')),
           workspaceRowActionIconWidth: getComputedStyle(workspaceRowActionIcon).width,
           workspaceRowActionBorderColor: getComputedStyle(workspaceRowActionLink).borderTopColor,
-          workspaceTitleFitsNameColumn: workspaceAssetTitle.getBoundingClientRect().right <= nameCellRight && workspaceAssetTitle.getBoundingClientRect().right <= typeCellLeft,
-          workspaceDescriptionFitsNameColumn: workspaceAssetDescription.getBoundingClientRect().right <= nameCellRight && workspaceAssetDescription.getBoundingClientRect().right <= typeCellLeft,
+          workspaceTitleFitsNameColumn: workspaceAssetTitle.getBoundingClientRect().right <= nameCellRight,
+          workspaceDescriptionFitsNameColumn: workspaceAssetDescription.getBoundingClientRect().right <= nameCellRight,
           connectionsTitle: connections.shadowRoot.querySelector('h1')?.textContent?.trim(),
           connectionsHasSource: connections.shadowRoot.textContent?.includes('Orders source') ?? false,
           connectionsIsStyled: getComputedStyle(connectionsPage).paddingTop !== '0px',
@@ -110,9 +112,9 @@ for (const viewport of [
           connectionsPageConstrained: isMobile || Math.round(connectionsPageRect.width) < window.innerWidth,
           assetTitle: asset.shadowRoot.querySelector('h1 span:last-child')?.textContent?.trim(),
           assetHasOverview: asset.shadowRoot.textContent?.includes('Overview') ?? false,
-          assetHasGrid: Boolean(asset.shadowRoot.querySelector('ld-data-grid')),
+          assetHasRecordTable: Boolean(asset.shadowRoot.querySelector('ld-record-table')),
           assetHasSemanticGraph: Boolean(semanticGraph),
-          assetSemanticGraphBeforeGrid: Boolean(semanticGraph && firstGrid && semanticGraph.compareDocumentPosition(firstGrid) & Node.DOCUMENT_POSITION_FOLLOWING),
+          assetSemanticGraphBeforeRecordTable: Boolean(semanticGraph && firstRecordTable && semanticGraph.compareDocumentPosition(firstRecordTable) & Node.DOCUMENT_POSITION_FOLLOWING),
           assetHasDataModelHeading: Array.from(asset.shadowRoot.querySelectorAll('h2')).some((heading) => heading.textContent?.trim() === 'Data model'),
           assetGraphFlushLeft: semanticGraphSection ? Math.round(semanticGraphSection.getBoundingClientRect().left - assetSectionBody.getBoundingClientRect().left) : -1,
           assetHeaderDisplay: getComputedStyle(assetHeader).display,
@@ -124,6 +126,7 @@ for (const viewport of [
       expect(state).toEqual({
         workspaceTitle: 'LibreDash Workspace',
         workspaceHasAsset: true,
+        workspaceTableVariant: 'primary',
         workspaceHasAccess: true,
         workspaceIsStyled: true,
         workspacePageCentered: true,
@@ -143,9 +146,9 @@ for (const viewport of [
         connectionsPageConstrained: true,
         assetTitle: 'Olist Commerce',
         assetHasOverview: true,
-        assetHasGrid: true,
+        assetHasRecordTable: true,
         assetHasSemanticGraph: true,
-        assetSemanticGraphBeforeGrid: true,
+        assetSemanticGraphBeforeRecordTable: true,
         assetHasDataModelHeading: false,
         assetGraphFlushLeft: 0,
         assetHeaderDisplay: 'grid',
@@ -170,13 +173,13 @@ test('workspace asset search filters the current asset rows', async () => {
       const root = workspace.shadowRoot
       const input = root.querySelector('.toolbar .search input[type="search"]') as HTMLInputElement
       const form = root.querySelector('.toolbar .search') as HTMLFormElement
-      const before = Array.from(root.querySelectorAll('.asset-title')).map((link) => link.textContent?.trim())
+      const before = Array.from(root.querySelectorAll('.record-entity-label')).map((link) => link.textContent?.trim())
       input.value = 'customer'
       input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
       await workspace.updateComplete
       input.focus()
       const focusedStyle = getComputedStyle(input)
-      const after = Array.from(root.querySelectorAll('.asset-title')).map((link) => link.textContent?.trim())
+      const after = Array.from(root.querySelectorAll('.record-entity-label')).map((link) => link.textContent?.trim())
       return {
         before,
         after,
@@ -246,7 +249,7 @@ test('workspace asset refresh page renders refresh tab and emits refresh events'
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-workspace-asset-page') && customElements.get('ld-data-grid'))
+    await page.waitForFunction(() => customElements.get('ld-workspace-asset-page') && customElements.get('ld-record-table'))
 
     const state = await page.evaluate(async () => {
       const asset = document.querySelector('ld-workspace-asset-page') as any
@@ -286,7 +289,7 @@ test('workspace asset refresh page renders refresh tab and emits refresh events'
           status: 'succeeded',
           running: false,
           lastSuccessful: '2026-06-26 10:00:12',
-          runsGrid: {
+          runsTable: {
             columns: [
               { id: 'status', header: 'Status', kind: 'status' },
               { id: 'started', header: 'Started' },
@@ -303,14 +306,14 @@ test('workspace asset refresh page renders refresh tab and emits refresh events'
       return {
         activeTab: asset.shadowRoot.querySelector('.tabs a.active')?.textContent?.trim(),
         hasRefreshButton: Boolean(button),
-        gridText: asset.shadowRoot.querySelector('ld-data-grid')?.textContent,
+        recordTableText: asset.shadowRoot.querySelector('ld-record-table')?.textContent,
         refreshEvents,
       }
     })
 
     expect(state.activeTab).toBe('Refreshes')
     expect(state.hasRefreshButton).toBe(true)
-    expect(state.gridText ?? '').toMatch(/matrun_123/)
+    expect(state.recordTableText ?? '').toMatch(/matrun_123/)
     expect(state.refreshEvents).toBe(1)
   } finally {
     await page.close()
@@ -420,7 +423,7 @@ function testDocument(): string {
       },
       sections: [{
         title: 'Model tables (1)',
-        grid: {
+        table: {
           columns: [{ id: 'name', header: 'Name', kind: 'link', hrefKey: 'nameHref' }],
           rows: [{ name: 'orders', nameHref: '/workspaces/libredash/assets/model_table:olist.orders/details' }],
           empty: 'No model tables.',

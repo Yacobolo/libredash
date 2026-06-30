@@ -130,6 +130,7 @@ tasks:
       - bun run test:theme
       - bun run test:app-shell
       - bun run test:table-selection
+      - bun run test:record-table
       - bun run test:visual-modal
       - bun run test:catalog-page
       - bun run test:dashboard-page

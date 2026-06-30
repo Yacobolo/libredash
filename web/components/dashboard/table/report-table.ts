@@ -69,7 +69,7 @@ type ResizeDrag = {
   minSize: number
 }
 
-const dataTableFeatures = tableFeatures({
+const reportTableFeatures = tableFeatures({
   columnPinningFeature,
   columnResizingFeature,
   columnSizingFeature,
@@ -205,7 +205,7 @@ function columnVisibilityHandler(column: any, fallback: (checked: boolean) => vo
   }
 }
 
-class DataTable extends LitElement {
+class ReportTable extends LitElement {
   static properties = {
     tableId: { attribute: 'table-id' },
     table: { attribute: 'table', converter: tableConverter },
@@ -242,7 +242,7 @@ class DataTable extends LitElement {
   private resizeObserver?: ResizeObserver
   private resizeGuideFrame = 0
   private resizeDrag?: ResizeDrag
-  private tableController = new TableController<typeof dataTableFeatures, TanStackTableRow>(this)
+  private tableController = new TableController<typeof reportTableFeatures, TanStackTableRow>(this)
   private handleOutsidePointerDown = (event: PointerEvent) => {
     const details = this.renderRoot.querySelector<HTMLDetailsElement>('.visual-options')
     if (!details?.open) return
@@ -1198,7 +1198,7 @@ class DataTable extends LitElement {
       : []
     return this.tableController.table(
       {
-        features: dataTableFeatures,
+        features: reportTableFeatures,
         columns: this.tanstackColumnDefs(),
         data: rows,
         getRowId: (row) => row.__rowKey,
@@ -1859,4 +1859,4 @@ class DataTable extends LitElement {
   }
 }
 
-customElements.define('ld-data-table', DataTable)
+customElements.define('ld-report-table', ReportTable)

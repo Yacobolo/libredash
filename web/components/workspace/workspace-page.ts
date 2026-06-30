@@ -28,7 +28,7 @@ import {
 import type {
   ConnectionsPageSignal,
   DefinitionFactSignal,
-  MetricGridSignal,
+  RecordTableSignal,
   WorkspaceAccessSignal,
   WorkspaceAssetPageSignal,
   WorkspaceAssetSummarySignal,
@@ -39,7 +39,7 @@ import type {
 import { jsonAttribute } from '../shared/json-attribute'
 import { checkSignalContract } from '../shared/signal-contract'
 import { lucideIcon } from '../shared/lucide-icons'
-import '../shared/data-grid'
+import '../shared/record-table'
 import '../shared/code-block'
 import '../shared/workspace-access-control'
 
@@ -265,8 +265,8 @@ class LibreDashWorkspaceAssetPage extends LitElement {
       <section class="lineage" id="lineage" aria-label="Asset lineage">
         <ld-asset-lineage-graph class="lineage-graph" .graph=${page.lineage?.graph ?? { nodes: [], edges: [] }}></ld-asset-lineage-graph>
         <div class="lineage-grids">
-          ${renderGridSection('Uses', page.lineage?.usesGrid)}
-          ${renderGridSection('Used by', page.lineage?.usedByGrid)}
+          ${renderRecordTableSection('Uses', page.lineage?.usesTable)}
+          ${renderRecordTableSection('Used by', page.lineage?.usedByTable)}
         </div>
       </section>
     `
@@ -275,7 +275,7 @@ class LibreDashWorkspaceAssetPage extends LitElement {
   private renderRefreshes(page: WorkspaceAssetPageSignal) {
     return html`
       <section class="details" id="refreshes" aria-label="Refresh runs">
-        ${renderGridSection('Refreshes', page.refresh?.runsGrid)}
+        ${renderRecordTableSection('Refreshes', page.refresh?.runsTable)}
       </section>
     `
   }
@@ -320,47 +320,38 @@ function filterAssetSummaries(assets: WorkspaceAssetSummarySignal[], query: stri
 
 function renderAssetTable(assets: WorkspaceAssetSummarySignal[], empty: string) {
   if (!assets.length) return html`<div class="panel"><div class="empty">${empty}</div></div>`
+  const table: RecordTableSignal = {
+    columns: [
+      { id: 'name', header: 'Name', kind: 'entity', width: '38%' },
+      { id: 'type', header: 'Type', width: '150px' },
+      { id: 'key', header: 'Key', kind: 'code', width: '180px' },
+      { id: 'parent', header: 'Parent', kind: 'link', width: '200px' },
+      { id: 'actions', header: 'Actions', kind: 'actions', align: 'right', width: '104px', sortable: false } as any,
+    ],
+    rows: assets.map((asset) => ({
+      name: {
+        label: asset.title,
+        description: asset.description,
+        href: asset.detailHref,
+        icon: asset.type,
+      },
+      type: asset.typeLabel,
+      key: asset.key,
+      parent: {
+        label: asset.parentTitle || '-',
+        href: asset.parentHref,
+      },
+      actions: [
+        { label: 'View details', href: asset.detailHref, icon: 'details' },
+        { label: 'Open asset', href: asset.openHref, icon: 'open' },
+      ],
+    })),
+    empty,
+    minWidth: '1040px',
+  }
   return html`
     <div class="panel table-panel">
-      <table class="asset-table">
-        <thead>
-          <tr>
-            <th class="name-col">Name</th>
-            <th class="type-col">Type</th>
-            <th class="key-col hide-md">Key</th>
-            <th class="parent-col hide-lg">Parent</th>
-            <th class="action-col right">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${assets.map((asset) => html`
-            <tr>
-              <td class="name-col">
-                <div class="asset-name">
-                  ${assetTypeGlyph(asset.type)}
-                  <div>
-                    <a class="asset-title" href=${asset.detailHref}>${asset.title}</a>
-                    ${asset.description ? html`<p>${asset.description}</p>` : nothing}
-                  </div>
-                </div>
-              </td>
-              <td class="type-col">${asset.typeLabel}</td>
-              <td class="key-col hide-md"><code>${asset.key}</code></td>
-              <td class="parent-col hide-lg">
-                ${asset.parentHref
-                  ? html`<a class="muted-link" href=${asset.parentHref}>${asset.parentTitle}</a>`
-                  : html`<span class="muted">${asset.parentTitle || '-'}</span>`}
-              </td>
-              <td class="action-col right">
-                <span class="row-actions">
-                  <a class="icon-link" href=${asset.detailHref} title="View details" aria-label="View details">${lucideIcon(FileText)}</a>
-                  <a class="icon-link" href=${asset.openHref} title="Open asset" aria-label="Open asset">${lucideIcon(ExternalLink)}</a>
-                </span>
-              </td>
-            </tr>
-          `)}
-        </tbody>
-      </table>
+      <ld-record-table variant="primary" .table=${table}></ld-record-table>
     </div>
   `
 }
@@ -388,7 +379,7 @@ function renderDetailSection(section: WorkspaceDetailSectionSignal) {
       </section>
     `
   }
-  if (section.grid?.columns?.length) return renderGridSection(section.title, section.grid)
+  if (section.table?.columns?.length) return renderRecordTableSection(section.title, section.table)
   return renderFacts(section.title, section.facts ?? [], false)
 }
 
@@ -421,11 +412,11 @@ function renderFacts(title: string, facts: DefinitionFactSignal[], overview: boo
   `
 }
 
-function renderGridSection(title: string, grid?: MetricGridSignal) {
+function renderRecordTableSection(title: string, table?: RecordTableSignal) {
   return html`
     <section class="detail-section" aria-label=${title}>
       <h2>${title}</h2>
-      <ld-data-grid .grid=${grid ?? null}></ld-data-grid>
+      <ld-record-table .table=${table ?? null}></ld-record-table>
     </section>
   `
 }

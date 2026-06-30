@@ -304,7 +304,7 @@ type WorkspaceAssetDetailsSignal struct {
 type WorkspaceDetailSectionSignal struct {
 	Title string                 `json:"title"`
 	Facts []DefinitionFactSignal `json:"facts,omitempty"`
-	Grid  MetricGridSignal       `json:"grid,omitempty"`
+	Table RecordTableSignal      `json:"table,omitempty"`
 	Code  string                 `json:"code,omitempty"`
 	Lang  string                 `json:"lang,omitempty"`
 }
@@ -351,17 +351,17 @@ type SemanticModelGraphEdgeSignal struct {
 }
 
 type WorkspaceAssetLineageSignal struct {
-	Count      int                     `json:"count"`
-	Graph      AssetLineageGraphSignal `json:"graph"`
-	UsesGrid   MetricGridSignal        `json:"usesGrid"`
-	UsedByGrid MetricGridSignal        `json:"usedByGrid"`
+	Count       int                     `json:"count"`
+	Graph       AssetLineageGraphSignal `json:"graph"`
+	UsesTable   RecordTableSignal       `json:"usesTable"`
+	UsedByTable RecordTableSignal       `json:"usedByTable"`
 }
 
 type WorkspaceAssetRefreshSignal struct {
 	Status         string            `json:"status"`
 	Running        bool              `json:"running"`
 	LastSuccessful string            `json:"lastSuccessful"`
-	RunsGrid       *MetricGridSignal `json:"runsGrid,omitempty"`
+	RunsTable      *RecordTableSignal `json:"runsTable,omitempty"`
 }
 
 type AssetLineageGraphSignal struct {
@@ -394,14 +394,14 @@ type AssetLineageEdgeSignal struct {
 	Kind   string `json:"kind"`
 }
 
-type MetricGridSignal struct {
-	Columns  []MetricGridColumnSignal `json:"columns"`
-	Rows     []map[string]any         `json:"rows"`
-	Empty    string                   `json:"empty"`
-	MinWidth string                   `json:"minWidth,omitempty"`
+type RecordTableSignal struct {
+	Columns  []RecordTableColumnSignal `json:"columns"`
+	Rows     []map[string]any          `json:"rows"`
+	Empty    string                    `json:"empty"`
+	MinWidth string                    `json:"minWidth,omitempty"`
 }
 
-type MetricGridColumnSignal struct {
+type RecordTableColumnSignal struct {
 	ID      string `json:"id"`
 	Header  string `json:"header"`
 	Kind    string `json:"kind,omitempty"`
@@ -410,7 +410,7 @@ type MetricGridColumnSignal struct {
 	Width   string `json:"width,omitempty"`
 }
 
-type MetricGridBadgeSignal struct {
+type RecordTableBadgeSignal struct {
 	Label string `json:"label"`
 	Tone  string `json:"tone,omitempty"`
 }
@@ -444,7 +444,7 @@ type AdminMetricSignal struct {
 type AdminContentSectionSignal struct {
 	Title string                 `json:"title"`
 	Facts []DefinitionFactSignal `json:"facts,omitempty"`
-	Grid  MetricGridSignal       `json:"grid,omitempty"`
+	Table RecordTableSignal      `json:"table,omitempty"`
 }
 
 type AdminStorageData struct {

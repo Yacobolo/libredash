@@ -4,7 +4,7 @@ type DashboardComponentKind =
   | 'ld-filter-card'
   | 'ld-kpi-card'
   | 'ld-echart'
-  | 'ld-data-table'
+  | 'ld-report-table'
   | string
 
 const dashboardComponentLoaders: Record<string, () => Promise<unknown>> = {
@@ -12,7 +12,7 @@ const dashboardComponentLoaders: Record<string, () => Promise<unknown>> = {
   'ld-filter-card': () => import('./filters/filter-card'),
   'ld-kpi-card': () => import('./charts/echart'),
   'ld-echart': () => import('./charts/echart'),
-  'ld-data-table': () => import('./table/data-table'),
+  'ld-report-table': () => import('./table/report-table'),
 }
 
 export function loadDashboardComponent(kind: DashboardComponentKind): Promise<void> {

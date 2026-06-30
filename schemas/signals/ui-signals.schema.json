@@ -9,8 +9,8 @@
           },
           "type": "array"
         },
-        "grid": {
-          "$ref": "#/$defs/MetricGridSignal"
+        "table": {
+          "$ref": "#/$defs/RecordTableSignal"
         },
         "title": {
           "type": "string"
@@ -1825,7 +1825,7 @@
       ],
       "type": "object"
     },
-    "MetricGridBadgeSignal": {
+    "RecordTableBadgeSignal": {
       "additionalProperties": false,
       "properties": {
         "label": {
@@ -1840,7 +1840,7 @@
       ],
       "type": "object"
     },
-    "MetricGridColumnSignal": {
+    "RecordTableColumnSignal": {
       "additionalProperties": false,
       "properties": {
         "align": {
@@ -1868,12 +1868,12 @@
       ],
       "type": "object"
     },
-    "MetricGridSignal": {
+    "RecordTableSignal": {
       "additionalProperties": false,
       "properties": {
         "columns": {
           "items": {
-            "$ref": "#/$defs/MetricGridColumnSignal"
+            "$ref": "#/$defs/RecordTableColumnSignal"
           },
           "type": "array"
         },
@@ -2630,18 +2630,18 @@
         "graph": {
           "$ref": "#/$defs/AssetLineageGraphSignal"
         },
-        "usedByGrid": {
-          "$ref": "#/$defs/MetricGridSignal"
+        "usedByTable": {
+          "$ref": "#/$defs/RecordTableSignal"
         },
-        "usesGrid": {
-          "$ref": "#/$defs/MetricGridSignal"
+        "usesTable": {
+          "$ref": "#/$defs/RecordTableSignal"
         }
       },
       "required": [
         "count",
         "graph",
-        "usedByGrid",
-        "usesGrid"
+        "usedByTable",
+        "usesTable"
       ],
       "type": "object"
     },
@@ -2778,8 +2778,8 @@
         "running": {
           "type": "boolean"
         },
-        "runsGrid": {
-          "$ref": "#/$defs/MetricGridSignal"
+        "runsTable": {
+          "$ref": "#/$defs/RecordTableSignal"
         },
         "status": {
           "type": "string"
@@ -2895,11 +2895,11 @@
           },
           "type": "array"
         },
-        "grid": {
-          "$ref": "#/$defs/MetricGridSignal"
-        },
         "lang": {
           "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/RecordTableSignal"
         },
         "title": {
           "type": "string"
@@ -3075,13 +3075,13 @@
       "$ref": "#/$defs/LoginPageSignal"
     },
     {
-      "$ref": "#/$defs/MetricGridBadgeSignal"
+      "$ref": "#/$defs/RecordTableBadgeSignal"
     },
     {
-      "$ref": "#/$defs/MetricGridColumnSignal"
+      "$ref": "#/$defs/RecordTableColumnSignal"
     },
     {
-      "$ref": "#/$defs/MetricGridSignal"
+      "$ref": "#/$defs/RecordTableSignal"
     },
     {
       "$ref": "#/$defs/RouteRuntimeSignal"

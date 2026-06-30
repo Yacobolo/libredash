@@ -379,7 +379,7 @@ class LibreDashDashboardPage extends LitElement {
   private renderTable(component: DashboardComponentSignal) {
     const table = component.table ? this.tables[component.table] : undefined
     if (!table) return this.missingPayload('table')
-    return html`<ld-data-table table-id=${component.table ?? ''} .table=${table}></ld-data-table>`
+    return html`<ld-report-table table-id=${component.table ?? ''} .table=${table}></ld-report-table>`
   }
 
   private renderFilterDock() {
@@ -478,7 +478,7 @@ function tagForComponent(component: DashboardComponentSignal): string {
     case 'kpi_card':
       return 'ld-kpi-card'
     case 'table':
-      return 'ld-data-table'
+      return 'ld-report-table'
     default:
       return isChartKind(component.kind) ? 'ld-echart' : ''
   }

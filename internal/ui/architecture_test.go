@@ -18,14 +18,14 @@ func TestGoUIRenderersDoNotMountProductInternals(t *testing.T) {
 	for _, file := range files {
 		body := readArchitectureFile(t, file)
 		for _, forbidden := range []string{
-			`g.El("ld-data-grid"`,
+			`g.El("ld-record-table"`,
 			`g.El("ld-code-block"`,
 			`g.El("ld-report-canvas"`,
 			`g.El("ld-filter-panel"`,
 			`g.El("ld-filter-card"`,
 			`g.El("ld-kpi-card"`,
 			`g.El("ld-echart"`,
-			`g.El("ld-data-table"`,
+			`g.El("ld-report-table"`,
 			`g.El("ld-chat-thread"`,
 			`g.El("ld-chat-composer"`,
 			`g.El("ld-workspace-access-control"`,

@@ -1,9 +1,10 @@
 import { LitElement, html, type PropertyValues } from 'lit'
 import { property, state } from 'lit/decorators.js'
 import { ChevronRight, Database, Search, Server, Table2, Waves } from 'lucide'
-import type { AdminStorageSignal, AdminStorageTableSignal } from '../../generated/signals'
+import type { AdminStorageSignal, AdminStorageTableSignal, RecordTableSignal } from '../../generated/signals'
 import { jsonAttribute } from '../shared/json-attribute'
 import { lucideIcon } from '../shared/lucide-icons'
+import '../shared/record-table'
 
 const emptyStorage: AdminStorageSignal = {
   summary: { duckdbDir: '', databaseCount: 0, totalSizeLabel: '', tableCount: 0 },
@@ -69,7 +70,7 @@ class StorageExplorer extends LitElement {
       <style>
         ${storageExplorerStyles}
       </style>
-      <div class="storage-explorer">
+      <div class="storage-explorer" @ld-record-table-action=${this.handleRecordTableAction}>
         <div class="storage-explorer-header">
           <div class="storage-heading">
             <span class="storage-logo" aria-hidden="true">${lucideIcon(Database, { size: 18 })}</span>
@@ -209,33 +210,7 @@ class StorageExplorer extends LitElement {
           <h3>Schemas</h3>
         </div>
         <div class="storage-column-table-wrap">
-          <table class="storage-column-table storage-schema-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Schema</th>
-                <th>Tables</th>
-                <th>Known rows</th>
-                <th>Known size</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${database.schemas.map((schema, index) => html`
-                <tr>
-                  <td>${index + 1}</td>
-                  <td>
-                    <button type="button" class="storage-schema-table-link" @click=${() => this.selectSchemaByID(database.id, schema.schema)}>
-                      ${lucideIcon(Server, { size: 14 })}
-                      <span>${label(schema.schema)}</span>
-                    </button>
-                  </td>
-                  <td>${schema.tables.length}</td>
-                  <td>${sumKnownRows(schema.tables)}</td>
-                  <td>${sumKnownSizes(schema.tables)}</td>
-                </tr>
-              `)}
-            </tbody>
-          </table>
+          <ld-record-table .table=${this.databaseSchemasTable(database)}></ld-record-table>
         </div>
       </div>
     `
@@ -278,35 +253,7 @@ class StorageExplorer extends LitElement {
           <h3>Tables</h3>
         </div>
         <div class="storage-column-table-wrap">
-          <table class="storage-column-table storage-schema-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Table</th>
-                <th>Type</th>
-                <th>Rows</th>
-                <th>Columns</th>
-                <th>Estimated size</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${schema.tables.map((table, index) => html`
-                <tr>
-                  <td>${index + 1}</td>
-                  <td>
-                    <button type="button" class="storage-schema-table-link" @click=${() => this.selectTable(table)}>
-                      ${lucideIcon(table.type === 'view' ? Waves : Table2, { size: 14 })}
-                      <span>${label(table.name)}</span>
-                    </button>
-                  </td>
-                  <td>${label(table.type)}</td>
-                  <td>${label(table.rowCountLabel)}</td>
-                  <td>${table.columnCount ?? '-'}</td>
-                  <td>${label(table.sizeLabel)}</td>
-                </tr>
-              `)}
-            </tbody>
-          </table>
+          <ld-record-table .table=${this.schemaTablesTable(schema)}></ld-record-table>
         </div>
       </div>
     `
@@ -357,32 +304,92 @@ class StorageExplorer extends LitElement {
           ? html`<p class="storage-empty">No column metadata available.</p>`
           : html`
             <div class="storage-column-table-wrap">
-              <table class="storage-column-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Nullable</th>
-                    <th>Default</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${columns.map((column) => html`
-                    <tr>
-                      <td>${column.ordinal ?? ''}</td>
-                      <td><code>${label(column.name)}</code></td>
-                      <td><code>${label(column.type)}</code></td>
-                      <td>${label(column.nullable)}</td>
-                      <td>${column.default ? html`<code>${column.default}</code>` : html`<span class="storage-muted">-</span>`}</td>
-                    </tr>
-                  `)}
-                </tbody>
-              </table>
+              <ld-record-table .table=${this.tableColumnsTable(table)}></ld-record-table>
             </div>
           `}
       </div>
     `
+  }
+
+  private databaseSchemasTable(database: DatabaseGroup): RecordTableSignal {
+    return {
+      columns: [
+        { id: 'index', header: '#', kind: 'number', align: 'right', width: '64px' },
+        { id: 'schema', header: 'Schema', kind: 'button', width: '220px' },
+        { id: 'tables', header: 'Tables', kind: 'number', align: 'right', width: '120px' },
+        { id: 'rows', header: 'Known rows', align: 'right', width: '150px' },
+        { id: 'size', header: 'Known size', align: 'right', width: '150px' },
+      ],
+      rows: database.schemas.map((schema, index) => ({
+        index: index + 1,
+        schema: { label: schema.schema, icon: 'schema', action: 'select-schema' },
+        tables: schema.tables.length,
+        rows: sumKnownRows(schema.tables),
+        size: sumKnownSizes(schema.tables),
+        databaseId: database.id,
+        schemaName: schema.schema,
+      })),
+      empty: 'No schemas found.',
+      minWidth: '700px',
+    }
+  }
+
+  private schemaTablesTable(schema: SchemaGroup): RecordTableSignal {
+    return {
+      columns: [
+        { id: 'index', header: '#', kind: 'number', align: 'right', width: '64px' },
+        { id: 'table', header: 'Table', kind: 'button', width: '240px' },
+        { id: 'type', header: 'Type', width: '110px' },
+        { id: 'rows', header: 'Rows', align: 'right', width: '130px' },
+        { id: 'columns', header: 'Columns', kind: 'number', align: 'right', width: '120px' },
+        { id: 'size', header: 'Estimated size', align: 'right', width: '150px' },
+      ],
+      rows: schema.tables.map((table, index) => ({
+        index: index + 1,
+        table: { label: table.name, icon: table.type === 'view' ? 'view' : 'table', action: 'select-table' },
+        type: label(table.type),
+        rows: label(table.rowCountLabel),
+        columns: table.columnCount ?? '-',
+        size: label(table.sizeLabel),
+        tableKey: table.key,
+      })),
+      empty: 'No tables found.',
+      minWidth: '820px',
+    }
+  }
+
+  private tableColumnsTable(table: AdminStorageTableSignal): RecordTableSignal {
+    return {
+      columns: [
+        { id: 'ordinal', header: '#', kind: 'number', align: 'right', width: '64px' },
+        { id: 'name', header: 'Name', kind: 'code', width: '220px' },
+        { id: 'type', header: 'Type', kind: 'code', width: '180px' },
+        { id: 'nullable', header: 'Nullable', width: '120px' },
+        { id: 'default', header: 'Default', kind: 'code' },
+      ],
+      rows: (table.columns ?? []).map((column) => ({
+        ordinal: column.ordinal ?? '',
+        name: label(column.name),
+        type: label(column.type),
+        nullable: label(column.nullable),
+        default: column.default || '-',
+      })),
+      empty: 'No column metadata available.',
+      minWidth: '760px',
+    }
+  }
+
+  private handleRecordTableAction(event: CustomEvent): void {
+    const action = String(event.detail?.action ?? '')
+    const row = event.detail?.row ?? {}
+    if (action === 'select-schema') {
+      this.selectSchemaByID(String(row.databaseId ?? ''), String(row.schemaName ?? ''))
+      return
+    }
+    if (action === 'select-table') {
+      const table = this.findTableByKey(String(row.tableKey ?? ''))
+      if (table) this.selectTable(table)
+    }
   }
 
   private selectTable(table: AdminStorageTableSignal): void {

@@ -932,7 +932,7 @@ func TestConnectionAssetRoutesUseConnectionSurface(t *testing.T) {
 	if lineageRec.Code != http.StatusOK {
 		t.Fatalf("connection lineage status = %d body=%s", lineageRec.Code, lineageRec.Body.String())
 	}
-	for _, want := range []string{"<ld-workspace-asset-page", "/static/asset-lineage-graph.js", "lineage", "usesGrid"} {
+	for _, want := range []string{"<ld-workspace-asset-page", "/static/asset-lineage-graph.js", "lineage", "usesTable"} {
 		if !strings.Contains(lineageRec.Body.String(), want) {
 			t.Fatalf("connection lineage missing %q:\n%s", want, lineageRec.Body.String())
 		}
@@ -985,7 +985,7 @@ func TestConnectionSourceAssetRoutesUseConnectionScopedSurface(t *testing.T) {
 	if lineageRec.Code != http.StatusOK {
 		t.Fatalf("source lineage status = %d body=%s", lineageRec.Code, lineageRec.Body.String())
 	}
-	for _, want := range []string{"<ld-workspace-asset-page", "/static/asset-lineage-graph.js", "lineage", "usesGrid"} {
+	for _, want := range []string{"<ld-workspace-asset-page", "/static/asset-lineage-graph.js", "lineage", "usesTable"} {
 		if !strings.Contains(lineageRec.Body.String(), want) {
 			t.Fatalf("source lineage missing %q:\n%s", want, lineageRec.Body.String())
 		}
