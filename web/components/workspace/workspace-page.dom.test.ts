@@ -70,6 +70,7 @@ for (const viewport of [
         const workspaceToolbar = workspace.shadowRoot.querySelector('.toolbar') as HTMLElement
         const workspaceRecordTable = workspace.shadowRoot.querySelector('ld-record-table') as HTMLElement
         const workspaceGlyph = workspace.shadowRoot.querySelector('.record-entity-icon') as HTMLElement
+        const workspaceDashboardGlyph = workspace.shadowRoot.querySelector('.record-icon-dashboard') as HTMLElement
         const workspaceRowActionIcon = workspace.shadowRoot.querySelector('.record-actions svg') as SVGElement
         const workspaceRowActionLink = workspace.shadowRoot.querySelector('.record-actions .record-icon-action') as HTMLElement
         const workspaceNameCell = workspace.shadowRoot.querySelector('tbody tr:first-child td:first-child') as HTMLElement
@@ -103,6 +104,7 @@ for (const viewport of [
           workspaceGlyphText: workspaceGlyph.textContent?.trim(),
           workspaceGlyphBackground: getComputedStyle(workspaceGlyph).backgroundColor,
           workspaceGlyphHasIcon: Boolean(workspaceGlyph.querySelector('svg')),
+          workspaceDashboardGlyphBorderColor: getComputedStyle(workspaceDashboardGlyph).borderTopColor,
           workspaceRowActionIconWidth: getComputedStyle(workspaceRowActionIcon).width,
           workspaceRowActionBorderColor: getComputedStyle(workspaceRowActionLink).borderTopColor,
           workspaceTitleFitsNameColumn: workspaceAssetTitle.getBoundingClientRect().right <= nameCellRight,
@@ -139,6 +141,7 @@ for (const viewport of [
         workspaceGlyphText: '',
         workspaceGlyphBackground: 'rgb(221, 244, 255)',
         workspaceGlyphHasIcon: true,
+        workspaceDashboardGlyphBorderColor: 'rgb(210, 191, 255)',
         workspaceRowActionIconWidth: '16px',
         workspaceRowActionBorderColor: 'rgba(0, 0, 0, 0)',
         workspaceTitleFitsNameColumn: true,
@@ -457,7 +460,7 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-accent: #0969da; --ld-accent-fg: #fff; --ld-line-muted: #d8dee4; --ld-line-accent: #0969da; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-radius-default: 6px; --ld-radius-tight: 4px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; --ld-asset-semantic-model-bg: #ddf4ff; --ld-asset-semantic-model-accent: #0969da; --ld-asset-semantic-model-border: #b6e3ff; --z-index-inspector: 1000; --ld-modal-backdrop: rgb(0 0 0 / .28); }
+          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-accent: #0969da; --ld-accent-fg: #fff; --ld-line-muted: #d8dee4; --ld-line-accent: #0969da; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-radius-default: 6px; --ld-radius-tight: 4px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; --ld-asset-dashboard-bg: #fbefff; --ld-asset-dashboard-accent: #8250df; --ld-asset-dashboard-border: #d2bfff; --ld-asset-semantic-model-bg: #ddf4ff; --ld-asset-semantic-model-accent: #0969da; --ld-asset-semantic-model-border: #b6e3ff; --z-index-inspector: 1000; --ld-modal-backdrop: rgb(0 0 0 / .28); }
           ld-workspace-page, ld-connections-page, ld-workspace-asset-page { display: block; min-height: 720px; }
         </style>
       </head>

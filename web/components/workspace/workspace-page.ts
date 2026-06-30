@@ -345,7 +345,7 @@ function renderAssetTable(assets: WorkspaceAssetSummarySignal[], empty: string) 
     minWidth: '840px',
   }
   return html`
-    <div class="panel table-panel">
+    <div class="panel">
       <ld-record-table variant="primary" .table=${table}></ld-record-table>
     </div>
   `
@@ -591,8 +591,7 @@ const workspaceStyles = css`
   }
 
   .detail,
-  .muted,
-  .asset-table p {
+  .muted {
     margin-top: var(--base-size-4);
     overflow: hidden;
     color: var(--ld-fg-muted);
@@ -801,96 +800,6 @@ const workspaceStyles = css`
     color: var(--ld-fg-muted);
     padding: 0 var(--base-size-6);
     font-size: var(--ld-font-size-caption);
-  }
-
-  .table-panel {
-    overflow-x: auto;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
-    table-layout: fixed;
-  }
-
-  th,
-  td {
-    border-bottom: var(--ld-border-muted);
-    padding: var(--base-size-8) var(--base-size-12);
-    vertical-align: middle;
-  }
-
-  th {
-    background: var(--ld-bg-panel-muted);
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
-    text-transform: uppercase;
-  }
-
-  td {
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-body-sm);
-    font-weight: var(--ld-font-weight-medium);
-  }
-
-  tr:hover td {
-    background: var(--ld-bg-control-hover);
-  }
-
-  .right {
-    text-align: right;
-  }
-
-  .type-col {
-    width: 10rem;
-  }
-
-  .key-col {
-    width: 14rem;
-  }
-
-  .parent-col {
-    width: 12rem;
-  }
-
-  .action-col {
-    width: 6rem;
-  }
-
-  .asset-name {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: var(--base-size-12);
-  }
-
-  .asset-name > div {
-    min-width: 0;
-  }
-
-  .asset-title,
-  .muted-link {
-    color: var(--ld-fg-default);
-    text-decoration: none;
-  }
-
-  .asset-title {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: var(--ld-font-weight-strong);
-  }
-
-  .asset-title:hover,
-  .muted-link:hover {
-    text-decoration: underline;
-  }
-
-  .muted-link {
-    color: var(--ld-fg-link);
   }
 
   code {
@@ -1161,11 +1070,6 @@ const workspaceStyles = css`
       height: auto;
       min-height: 100svh;
       overflow: visible;
-    }
-
-    .hide-md,
-    .hide-lg {
-      display: none;
     }
 
     .section-body {
