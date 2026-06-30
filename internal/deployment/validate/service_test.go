@@ -90,12 +90,14 @@ func (a *fakeArtifacts) PromoteUploaded(_ context.Context, deploymentID deployme
 }
 
 type fakeValidator struct {
-	validation deployment.Validation
-	err        error
-	cleaned    bool
+	validation  deployment.Validation
+	err         error
+	cleaned     bool
+	environment deployment.Environment
 }
 
-func (v *fakeValidator) ValidateArtifact(string, deployment.WorkspaceID, deployment.ID) (deployment.Validation, error) {
+func (v *fakeValidator) ValidateArtifact(_ string, _ deployment.WorkspaceID, environment deployment.Environment, _ deployment.ID) (deployment.Validation, error) {
+	v.environment = environment
 	if v.err != nil {
 		return deployment.Validation{}, v.err
 	}

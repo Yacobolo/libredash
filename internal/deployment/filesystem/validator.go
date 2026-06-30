@@ -11,10 +11,11 @@ type Validator struct {
 	DuckDBDir string
 }
 
-func (v Validator) ValidateArtifact(path string, workspaceID deployment.WorkspaceID, deploymentID deployment.ID) (deployment.Validation, error) {
+func (v Validator) ValidateArtifact(path string, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID) (deployment.Validation, error) {
 	return ValidateArtifactWithOptions(path, workspaceID, deploymentID, ValidateOptions{
-		DataDir:   v.DataDir,
-		DuckDBDir: v.DuckDBDir,
+		DataDir:     v.DataDir,
+		DuckDBDir:   v.DuckDBDir,
+		Environment: environment,
 	})
 }
 

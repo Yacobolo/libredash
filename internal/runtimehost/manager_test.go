@@ -9,10 +9,25 @@ import (
 )
 
 func TestManagerReloadIgnoresMissingActiveDeployment(t *testing.T) {
-	manager := NewManagerWithFactory(&fakeRepo{activeErr: deployment.ErrNotFound}, "test", "/data", &fakeFactory{})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: &fakeRepo{activeErr: deployment.ErrNotFound}, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
 
 	if err := manager.Reload(context.Background()); err != nil {
 		t.Fatalf("reload: %v", err)
+	}
+}
+
+func TestManagerReloadUsesConfiguredEnvironment(t *testing.T) {
+	repo := &fakeRepo{
+		deployment: deployment.Deployment{ID: "dep_prod", WorkspaceID: "test", Environment: "prod", Status: deployment.StatusValidated},
+		artifact:   deployment.Artifact{DeploymentID: "dep_prod", Environment: "prod", Digest: "digest"},
+	}
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "prod", DataDir: "/data", Factory: &fakeFactory{}})
+
+	if err := manager.Reload(context.Background()); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if repo.activeEnvironment != "prod" {
+		t.Fatalf("active environment = %q, want prod", repo.activeEnvironment)
 	}
 }
 
@@ -23,7 +38,7 @@ func TestManagerPrepareCommitSwapsRuntimeAndClosesOld(t *testing.T) {
 		artifact:   deployment.Artifact{DeploymentID: "dep_1", Digest: "digest"},
 	}
 	factory := &fakeFactory{}
-	manager := NewManagerWithFactory(repo, "test", "/data", factory)
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: factory})
 
 	prepared, err := manager.PrepareDeployment(ctx, "dep_1")
 	if err != nil {
@@ -53,7 +68,7 @@ func TestManagerPrepareCommitSwapsRuntimeAndClosesOld(t *testing.T) {
 }
 
 func TestManagerRejectsPreparedFromDifferentHost(t *testing.T) {
-	manager := NewManagerWithFactory(&fakeRepo{}, "test", "/data", &fakeFactory{})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: &fakeRepo{}, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
 	if err := manager.CommitPrepared(fakePrepared{}); err == nil {
 		t.Fatal("expected wrong prepared runtime error")
 	}
@@ -65,7 +80,7 @@ func TestManagerCloseClearsActiveRuntime(t *testing.T) {
 		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Status: deployment.StatusValidated},
 		artifact:   deployment.Artifact{DeploymentID: "dep_1", Digest: "digest"},
 	}
-	manager := NewManagerWithFactory(repo, "test", "/data", &fakeFactory{})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
 	prepared, err := manager.PrepareDeployment(ctx, "dep_1")
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
@@ -83,12 +98,14 @@ func TestManagerCloseClearsActiveRuntime(t *testing.T) {
 }
 
 type fakeRepo struct {
-	deployment deployment.Deployment
-	artifact   deployment.Artifact
-	activeErr  error
+	deployment        deployment.Deployment
+	artifact          deployment.Artifact
+	activeErr         error
+	activeEnvironment deployment.Environment
 }
 
-func (r *fakeRepo) ActiveArtifact(context.Context, deployment.WorkspaceID, deployment.Environment) (deployment.Deployment, deployment.Artifact, error) {
+func (r *fakeRepo) ActiveArtifact(_ context.Context, _ deployment.WorkspaceID, environment deployment.Environment) (deployment.Deployment, deployment.Artifact, error) {
+	r.activeEnvironment = environment
 	if r.activeErr != nil {
 		return deployment.Deployment{}, deployment.Artifact{}, r.activeErr
 	}

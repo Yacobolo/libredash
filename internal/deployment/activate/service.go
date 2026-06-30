@@ -113,6 +113,9 @@ func (s Service) accessPolicy(ctx context.Context, current deployment.Deployment
 	if compiled.DeploymentID != string(current.ID) {
 		return workspace.AccessPolicy{}, fmt.Errorf("compiled artifact deployment = %q, want %q", compiled.DeploymentID, current.ID)
 	}
+	if deployment.Environment(compiled.Environment) != deployment.NormalizeEnvironment(current.Environment) {
+		return workspace.AccessPolicy{}, fmt.Errorf("compiled artifact environment = %q, want %q", compiled.Environment, deployment.NormalizeEnvironment(current.Environment))
+	}
 	if err := deploymentfs.ValidateCompiledWorkspaceArtifact(compiled); err != nil {
 		return workspace.AccessPolicy{}, err
 	}

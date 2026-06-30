@@ -36,6 +36,7 @@ func serveCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd.Flags().StringVar(&opts.addr, "addr", cfg.ListenAddr(), "listen address")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", cfg.DataDir, "dashboard source data directory")
 	cmd.Flags().StringVar(&opts.localCatalog, "local-project", "", "serve a filesystem project instead of active deployments")
+	cmd.Flags().StringVar(&opts.environment, "environment", string(deployment.DefaultEnvironment), "deployment environment")
 	cmd.Flags().BoolVar(&opts.production, "production", cfg.Production, "serve active deployment from the platform DB")
 	return cmd
 }
@@ -104,6 +105,7 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	if err := cfg.ValidateProductionAuth(); err != nil {
 		return err
 	}
+	environment := deployment.NormalizeEnvironment(deployment.Environment(opts.environment))
 	cookieSecure, err := cfg.CookieSecure()
 	if err != nil {
 		return err
@@ -128,10 +130,16 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	}
 	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
 	agentRepo := agentappsqlite.NewRepository(store.SQLDB())
-	manager := runtimehost.NewManagerWithFactory(deploymentRepo, deployment.WorkspaceID(opts.workspaceID), dataDir, deploymentRuntimeFactory{
-		dataDir:    dataDir,
-		duckDBDir:  cfg.DuckDBDirPath(),
-		runtimeDir: cfg.RuntimeDir(),
+	manager := runtimehost.NewManagerWithFactory(runtimehost.ManagerOptions{
+		Repo:        deploymentRepo,
+		WorkspaceID: deployment.WorkspaceID(opts.workspaceID),
+		Environment: environment,
+		DataDir:     dataDir,
+		Factory: deploymentRuntimeFactory{
+			dataDir:    dataDir,
+			duckDBDir:  cfg.DuckDBDirPath(),
+			runtimeDir: cfg.RuntimeDir(),
+		},
 	})
 	if err := manager.Reload(ctx); err != nil {
 		return err
@@ -167,6 +175,7 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 		ArtifactDir:        cfg.ArtifactDir(),
 		DuckDBDir:          cfg.DuckDBDirPath(),
 		DefaultWorkspaceID: opts.workspaceID,
+		DefaultEnvironment: string(environment),
 		RateLimits:         rateLimits,
 		SecurityHeaders:    app.SecurityHeaders(cfg.HSTSEnabled(cookieSecure)),
 		RequestLogging:     cfg.RequestLoggingEnabled(),

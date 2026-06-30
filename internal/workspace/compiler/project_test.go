@@ -447,6 +447,124 @@ func TestDiffAssetGraphsTreatsUsedFieldExpressionChangeAsBreaking(t *testing.T) 
 	}
 }
 
+func TestDiffAssetGraphsTreatsUnusedSourceFieldChangeAsNonBreaking(t *testing.T) {
+	workspaceID := workspace.WorkspaceID("sales")
+	activeDeployment := workspace.DeploymentID("dep_active")
+	authoredDeployment := workspace.DeploymentID("plan")
+	activeSource := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", sourcePayloadV1{
+		Fields: map[string]sourceFieldPayloadV1{
+			"order_id": {Name: "order_id", Type: "string"},
+			"unused":   {Name: "unused", Type: "string"},
+		},
+	})
+	authoredSource := testPlanAssetPayload(t, workspaceID, authoredDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", sourcePayloadV1{
+		Fields: map[string]sourceFieldPayloadV1{
+			"order_id": {Name: "order_id", Type: "string"},
+			"unused":   {Name: "unused", Type: "integer"},
+		},
+	})
+	modelTable := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales", modelTablePayloadV1{
+		SQL: "SELECT order_id FROM source.\"olist.orders\"",
+	})
+	active := workspace.AssetGraph{
+		Assets: []workspace.Asset{activeSource, modelTable},
+		Edges:  []workspace.AssetEdge{workspace.NewAssetEdge(workspaceID, activeDeployment, modelTable.ID, activeSource.ID, workspace.AssetEdgeReadsSource)},
+	}
+	authored := workspace.AssetGraph{Assets: []workspace.Asset{authoredSource, modelTable}}
+
+	changes, _, summary := diffAssetGraphs(authored, active)
+	if summary.Breaking || len(changes) != 1 || changes[0].Breaking {
+		t.Fatalf("summary = %#v changes=%#v, want non-breaking unused source field change", summary, changes)
+	}
+}
+
+func TestDiffAssetGraphsTreatsUsedSourceFieldChangeAsBreaking(t *testing.T) {
+	workspaceID := workspace.WorkspaceID("sales")
+	activeDeployment := workspace.DeploymentID("dep_active")
+	authoredDeployment := workspace.DeploymentID("plan")
+	activeSource := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", sourcePayloadV1{
+		Fields: map[string]sourceFieldPayloadV1{
+			"order_id": {Name: "order_id", Type: "string"},
+		},
+	})
+	authoredSource := testPlanAssetPayload(t, workspaceID, authoredDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", sourcePayloadV1{
+		Fields: map[string]sourceFieldPayloadV1{
+			"order_id": {Name: "order_id", Type: "integer"},
+		},
+	})
+	modelTable := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales", modelTablePayloadV1{
+		SQL: "SELECT order_id FROM source.\"olist.orders\"",
+	})
+	active := workspace.AssetGraph{
+		Assets: []workspace.Asset{activeSource, modelTable},
+		Edges:  []workspace.AssetEdge{workspace.NewAssetEdge(workspaceID, activeDeployment, modelTable.ID, activeSource.ID, workspace.AssetEdgeReadsSource)},
+	}
+	authored := workspace.AssetGraph{Assets: []workspace.Asset{authoredSource, modelTable}}
+
+	changes, _, summary := diffAssetGraphs(authored, active)
+	if !summary.Breaking || len(changes) != 1 || !changes[0].Breaking {
+		t.Fatalf("summary = %#v changes=%#v, want breaking used source field change", summary, changes)
+	}
+}
+
+func TestDiffAssetGraphsTreatsUnusedModelColumnChangeAsNonBreaking(t *testing.T) {
+	workspaceID := workspace.WorkspaceID("sales")
+	activeDeployment := workspace.DeploymentID("dep_active")
+	authoredDeployment := workspace.DeploymentID("plan")
+	activeModel := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales", modelTablePayloadV1{
+		Columns: map[string]modelColumnPayloadV1{
+			"order_id": {Name: "order_id", Type: "string"},
+			"unused":   {Name: "unused", Type: "string"},
+		},
+	})
+	authoredModel := testPlanAssetPayload(t, workspaceID, authoredDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales", modelTablePayloadV1{
+		Columns: map[string]modelColumnPayloadV1{
+			"order_id": {Name: "order_id", Type: "string"},
+			"unused":   {Name: "unused", Type: "integer"},
+		},
+	})
+	semanticTable := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeSemanticTable, "sales.sales.orders", "semantic_model:sales.sales")
+	active := workspace.AssetGraph{
+		Assets: []workspace.Asset{activeModel, semanticTable},
+		Edges:  []workspace.AssetEdge{workspace.NewAssetEdge(workspaceID, activeDeployment, semanticTable.ID, activeModel.ID, workspace.AssetEdgeUsesModelTable)},
+	}
+	authored := workspace.AssetGraph{Assets: []workspace.Asset{authoredModel, semanticTable}}
+
+	changes, _, summary := diffAssetGraphs(authored, active)
+	if summary.Breaking || len(changes) != 1 || changes[0].Breaking {
+		t.Fatalf("summary = %#v changes=%#v, want non-breaking unused model column change", summary, changes)
+	}
+}
+
+func TestDiffAssetGraphsTreatsUsedModelColumnChangeAsBreaking(t *testing.T) {
+	workspaceID := workspace.WorkspaceID("sales")
+	activeDeployment := workspace.DeploymentID("dep_active")
+	authoredDeployment := workspace.DeploymentID("plan")
+	activeModel := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales", modelTablePayloadV1{
+		Columns: map[string]modelColumnPayloadV1{"order_id": {Name: "order_id", Type: "string"}},
+	})
+	authoredModel := testPlanAssetPayload(t, workspaceID, authoredDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales", modelTablePayloadV1{
+		Columns: map[string]modelColumnPayloadV1{"order_id": {Name: "order_id", Type: "integer"}},
+	})
+	semanticField := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeField, "sales.sales.orders.order_id", "semantic_table:sales.sales.orders", fieldPayloadV1{
+		Field: "orders.order_id", Table: "orders", Name: "order_id", Type: "string", Expression: "order_id",
+	})
+	semanticTable := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeSemanticTable, "sales.sales.orders", "semantic_model:sales.sales")
+	active := workspace.AssetGraph{
+		Assets: []workspace.Asset{activeModel, semanticTable, semanticField},
+		Edges: []workspace.AssetEdge{
+			workspace.NewAssetEdge(workspaceID, activeDeployment, semanticTable.ID, activeModel.ID, workspace.AssetEdgeUsesModelTable),
+			workspace.NewAssetEdge(workspaceID, activeDeployment, semanticField.ID, semanticTable.ID, workspace.AssetEdgeUsesSemanticTable),
+		},
+	}
+	authored := workspace.AssetGraph{Assets: []workspace.Asset{authoredModel, semanticTable, semanticField}}
+
+	changes, _, summary := diffAssetGraphs(authored, active)
+	if !summary.Breaking || len(changes) != 1 || !changes[0].Breaking {
+		t.Fatalf("summary = %#v changes=%#v, want breaking used model column change", summary, changes)
+	}
+}
+
 func TestCompileProjectValidatesUnusedGlobalConnectionsAndSources(t *testing.T) {
 	t.Run("unused unsupported connection", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, minimalProjectFiles(map[string]string{

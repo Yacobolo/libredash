@@ -261,6 +261,10 @@ func requestDeploymentEnvironment(r *http.Request, fallback string) deployment.E
 	return deployment.NormalizeEnvironment(deployment.Environment(fallback))
 }
 
+func (s *Server) defaultDeploymentEnvironment() deployment.Environment {
+	return deployment.NormalizeEnvironment(deployment.Environment(s.defaultEnvironment))
+}
+
 func pageDeployments(rows []api.DeploymentResponse, limit int, pageToken string) ([]api.DeploymentResponse, string) {
 	cursorCreatedAt, cursorID := decodeCursor(pageToken)
 	start := 0

@@ -44,6 +44,14 @@ type Manager struct {
 	current          Runtime
 }
 
+type ManagerOptions struct {
+	Repo        DeploymentRepository
+	WorkspaceID deployment.WorkspaceID
+	Environment deployment.Environment
+	DataDir     string
+	Factory     RuntimeFactory
+}
+
 type Prepared struct {
 	deploymentID deployment.ID
 	digest       string
@@ -58,13 +66,13 @@ func (p *Prepared) Close() error {
 	return p.runtime.Close()
 }
 
-func NewManagerWithFactory(repo DeploymentRepository, workspaceID deployment.WorkspaceID, dataDir string, factory RuntimeFactory) *Manager {
+func NewManagerWithFactory(options ManagerOptions) *Manager {
 	return &Manager{
-		repo:        repo,
-		workspaceID: workspaceID,
-		environment: deployment.DefaultEnvironment,
-		dataDir:     dataDir,
-		factory:     factory,
+		repo:        options.Repo,
+		workspaceID: options.WorkspaceID,
+		environment: deployment.NormalizeEnvironment(options.Environment),
+		dataDir:     options.DataDir,
+		factory:     options.Factory,
 	}
 }
 

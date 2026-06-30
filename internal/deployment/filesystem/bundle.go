@@ -41,8 +41,9 @@ type ManifestFile struct {
 }
 
 type ValidateOptions struct {
-	DataDir   string
-	DuckDBDir string
+	DataDir     string
+	DuckDBDir   string
+	Environment deployment.Environment
 }
 
 type CompiledWorkspaceArtifact struct {
@@ -312,15 +313,24 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 		os.RemoveAll(root)
 		return deployment.Validation{}, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, workspaceID)
 	}
-	if compiled.Environment == "" {
-		compiled.Environment = manifest.Environment
+	if strings.TrimSpace(compiled.Environment) == "" {
+		os.RemoveAll(root)
+		return deployment.Validation{}, fmt.Errorf("compiled artifact requires environment")
 	}
-	if manifest.Environment == "" {
-		manifest.Environment = compiled.Environment
+	if strings.TrimSpace(manifest.Environment) == "" {
+		os.RemoveAll(root)
+		return deployment.Validation{}, fmt.Errorf("project artifact manifest requires environment")
 	}
-	if compiled.Environment != "" && manifest.Environment != "" && compiled.Environment != manifest.Environment {
+	if compiled.Environment != manifest.Environment {
 		os.RemoveAll(root)
 		return deployment.Validation{}, fmt.Errorf("compiled artifact environment = %q, manifest environment = %q", compiled.Environment, manifest.Environment)
+	}
+	if options.Environment != "" {
+		expectedEnvironment := deployment.NormalizeEnvironment(options.Environment)
+		if deployment.Environment(compiled.Environment) != expectedEnvironment {
+			os.RemoveAll(root)
+			return deployment.Validation{}, fmt.Errorf("compiled artifact environment = %q, want %q", compiled.Environment, expectedEnvironment)
+		}
 	}
 	if compiled.DeploymentID != string(deploymentID) {
 		os.RemoveAll(root)

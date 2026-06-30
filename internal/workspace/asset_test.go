@@ -45,9 +45,19 @@ func TestValidateAssetGraphForDeploymentRejectsInvalidGraph(t *testing.T) {
 		mutate func(*AssetGraph)
 	}{
 		{
-			name: "missing source file in provenance graph",
+			name: "missing source file",
 			mutate: func(graph *AssetGraph) {
-				graph.Assets[0].SourceFile = "dashboards/sales.yaml"
+				graph.Assets[1].SourceFile = ""
+			},
+		},
+		{
+			name: "generated child missing source file",
+			mutate: func(graph *AssetGraph) {
+				field, err := NewAsset(workspaceID, deploymentID, AssetTypeField, "sales.status", model.ID, "status", "", "field.v1", map[string]any{"key": "status"})
+				if err != nil {
+					panic(err)
+				}
+				graph.Assets = append(graph.Assets, field)
 			},
 		},
 		{
@@ -110,7 +120,7 @@ func TestValidateAssetGraphForDeploymentAcceptsValidGraph(t *testing.T) {
 }
 
 func mustTestAsset(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType, key string, parent AssetID) Asset {
-	asset, err := NewAsset(workspaceID, deploymentID, typ, key, parent, key, "", string(typ)+".v1", map[string]any{"key": key})
+	asset, err := NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parent, key, "", "testdata/"+string(typ)+"-"+key+".yaml", string(typ)+".v1", map[string]any{"key": key})
 	if err != nil {
 		panic(err)
 	}

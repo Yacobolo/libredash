@@ -18,7 +18,7 @@ type ArtifactStore interface {
 }
 
 type Validator interface {
-	ValidateArtifact(path string, workspaceID deployment.WorkspaceID, deploymentID deployment.ID) (deployment.Validation, error)
+	ValidateArtifact(path string, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID) (deployment.Validation, error)
 	Cleanup(validation deployment.Validation) error
 }
 
@@ -37,7 +37,7 @@ func (s Service) Validate(ctx context.Context, deploymentID deployment.ID) (depl
 	if err != nil {
 		return deployment.Deployment{}, err
 	}
-	validation, err := s.validator.ValidateArtifact(s.artifacts.UploadPath(current.ID), current.WorkspaceID, current.ID)
+	validation, err := s.validator.ValidateArtifact(s.artifacts.UploadPath(current.ID), current.WorkspaceID, current.Environment, current.ID)
 	if err != nil {
 		_ = s.repo.MarkFailed(ctx, current.ID, err)
 		return deployment.Deployment{}, err
@@ -48,5 +48,7 @@ func (s Service) Validate(ctx context.Context, deploymentID deployment.ID) (depl
 	if err != nil {
 		return deployment.Deployment{}, err
 	}
+	artifact.WorkspaceID = current.WorkspaceID
+	artifact.Environment = current.Environment
 	return s.repo.SaveValidated(ctx, current.ID, validation, artifact)
 }

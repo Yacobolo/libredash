@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
@@ -328,7 +329,7 @@ func diffAssetGraphs(authored, active workspace.AssetGraph) ([]ProjectPlanChange
 	for _, asset := range active.Assets {
 		activeAssets[asset.ID] = asset
 	}
-	impact := planImpactContext{activeIncomingUse: activeIncomingUseEdges(active.Edges)}
+	impact := newPlanImpactContext(active)
 	changes := []ProjectPlanChange{}
 	for _, id := range sortedAssetIDs(authoredAssets) {
 		asset := authoredAssets[id]
@@ -396,6 +397,20 @@ func diffAssetGraphs(authored, active workspace.AssetGraph) ([]ProjectPlanChange
 
 type planImpactContext struct {
 	activeIncomingUse map[workspace.AssetID]struct{}
+	activeAssets      map[workspace.AssetID]workspace.Asset
+	activeEdges       []workspace.AssetEdge
+}
+
+func newPlanImpactContext(active workspace.AssetGraph) planImpactContext {
+	assets := map[workspace.AssetID]workspace.Asset{}
+	for _, asset := range active.Assets {
+		assets[asset.ID] = asset
+	}
+	return planImpactContext{
+		activeIncomingUse: activeIncomingUseEdges(active.Edges),
+		activeAssets:      assets,
+		activeEdges:       active.Edges,
+	}
 }
 
 func activeIncomingUseEdges(edges []workspace.AssetEdge) map[workspace.AssetID]struct{} {
@@ -411,7 +426,7 @@ func activeIncomingUseEdges(edges []workspace.AssetEdge) map[workspace.AssetID]s
 
 func projectPlanChange(action string, asset, active workspace.Asset, reason string, impact planImpactContext) ProjectPlanChange {
 	breaking := action == "remove" && (breakingAssetType(asset.Type) || usedSemanticChild(asset, impact))
-	if action == "change" && semanticBreakingChange(asset, active) {
+	if action == "change" && semanticBreakingChange(asset, active, impact) {
 		breaking = true
 	}
 	return ProjectPlanChange{
@@ -543,20 +558,20 @@ func accessAssetType(typ workspace.AssetType) bool {
 	}
 }
 
-func semanticBreakingChange(authored, active workspace.Asset) bool {
+func semanticBreakingChange(authored, active workspace.Asset, impact planImpactContext) bool {
 	switch authored.Type {
 	case workspace.AssetTypeSource:
 		var next, prev sourcePayloadV1
 		if !decodeAssetPayload(authored, &next) || !decodeAssetPayload(active, &prev) {
 			return false
 		}
-		return sourceFieldsBreaking(next.Fields, prev.Fields)
+		return sourceFieldsBreaking(next.Fields, prev.Fields, sourceFieldUseNames(active.ID, impact))
 	case workspace.AssetTypeModelTable:
 		var next, prev modelTablePayloadV1
 		if !decodeAssetPayload(authored, &next) || !decodeAssetPayload(active, &prev) {
 			return false
 		}
-		return modelFieldsBreaking(next, prev)
+		return modelFieldsBreaking(next, prev, modelFieldUseNames(active, impact))
 	case workspace.AssetTypeField:
 		var next, prev fieldPayloadV1
 		if !decodeAssetPayload(authored, &next) || !decodeAssetPayload(active, &prev) {
@@ -581,8 +596,13 @@ func decodeAssetPayload(asset workspace.Asset, out any) bool {
 	return json.Unmarshal([]byte(asset.PayloadJSON), out) == nil
 }
 
-func sourceFieldsBreaking(next, prev map[string]sourceFieldPayloadV1) bool {
+func sourceFieldsBreaking(next, prev map[string]sourceFieldPayloadV1, used map[string]struct{}) bool {
 	for name, oldField := range prev {
+		if _, ok := used["*"]; !ok {
+			if _, ok := used[name]; !ok {
+				continue
+			}
+		}
 		newField, ok := next[name]
 		if !ok {
 			return true
@@ -594,8 +614,11 @@ func sourceFieldsBreaking(next, prev map[string]sourceFieldPayloadV1) bool {
 	return false
 }
 
-func modelFieldsBreaking(next, prev modelTablePayloadV1) bool {
+func modelFieldsBreaking(next, prev modelTablePayloadV1, used map[string]struct{}) bool {
 	for name, oldColumn := range prev.Columns {
+		if _, ok := used[name]; !ok {
+			continue
+		}
 		newColumn, ok := next.Columns[name]
 		if !ok {
 			return true
@@ -605,11 +628,110 @@ func modelFieldsBreaking(next, prev modelTablePayloadV1) bool {
 		}
 	}
 	for name := range prev.Fields {
+		if _, ok := used[name]; !ok {
+			continue
+		}
 		if _, ok := next.Fields[name]; !ok {
 			return true
 		}
 	}
 	return false
+}
+
+func sourceFieldUseNames(sourceID workspace.AssetID, impact planImpactContext) map[string]struct{} {
+	used := map[string]struct{}{}
+	for _, edge := range impact.activeEdges {
+		if edge.Type != workspace.AssetEdgeReadsSource || edge.ToAssetID != sourceID {
+			continue
+		}
+		asset, ok := impact.activeAssets[edge.FromAssetID]
+		if !ok {
+			continue
+		}
+		var table modelTablePayloadV1
+		if !decodeAssetPayload(asset, &table) {
+			continue
+		}
+		sql := table.SQL + " " + table.Transform.SQL
+		if strings.Contains(sql, "*") || (strings.TrimSpace(sql) == "" && len(table.Columns) == 0) {
+			used["*"] = struct{}{}
+		}
+		for _, column := range table.Columns {
+			if column.SourceField != "" {
+				used[column.SourceField] = struct{}{}
+			}
+			if column.Field != "" {
+				used[column.Field] = struct{}{}
+			}
+			if column.Name != "" {
+				used[column.Name] = struct{}{}
+			}
+		}
+		for _, fieldName := range identifiersInText(sql) {
+			used[fieldName] = struct{}{}
+		}
+	}
+	return used
+}
+
+func modelFieldUseNames(modelAsset workspace.Asset, impact planImpactContext) map[string]struct{} {
+	used := map[string]struct{}{}
+	semanticTables := map[workspace.AssetID]struct{}{}
+	for _, edge := range impact.activeEdges {
+		if edge.Type == workspace.AssetEdgeUsesModelTable && edge.ToAssetID == modelAsset.ID {
+			semanticTables[edge.FromAssetID] = struct{}{}
+		}
+	}
+	if len(semanticTables) == 0 {
+		return used
+	}
+	for _, asset := range impact.activeAssets {
+		if asset.Type != workspace.AssetTypeField {
+			continue
+		}
+		if _, ok := semanticTables[asset.ParentID]; !ok {
+			continue
+		}
+		var field fieldPayloadV1
+		if !decodeAssetPayload(asset, &field) {
+			continue
+		}
+		addFieldPayloadUseNames(used, field)
+	}
+	return used
+}
+
+func addFieldPayloadUseNames(used map[string]struct{}, field fieldPayloadV1) {
+	for _, value := range []string{field.Name, field.Field, field.Expression, field.Expr} {
+		for _, ident := range identifiersInText(value) {
+			used[ident] = struct{}{}
+		}
+	}
+}
+
+func identifiersInText(value string) []string {
+	out := []string{}
+	start := -1
+	for index, r := range value {
+		if isIdentifierRune(r) {
+			if start == -1 {
+				start = index
+			}
+			continue
+		}
+		if start != -1 {
+			out = append(out, value[start:index])
+			start = -1
+		}
+	}
+	if start != -1 {
+		out = append(out, value[start:])
+	}
+	return out
+}
+
+func isIdentifierRune(r rune) bool {
+	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
 func fieldPayloadBreaking(next, prev fieldPayloadV1) bool {

@@ -176,7 +176,7 @@ func TestRepositoryTracksActiveDeploymentsPerEnvironment(t *testing.T) {
 	if _, err := repo.SaveValidated(ctx, dev.ID, validationGraph(dev.ID), artifact(dev.ID, "test")); err != nil {
 		t.Fatalf("save dev: %v", err)
 	}
-	if _, err := repo.SaveValidated(ctx, prod.ID, validationGraph(prod.ID), artifact(prod.ID, "test")); err != nil {
+	if _, err := repo.SaveValidated(ctx, prod.ID, validationGraph(prod.ID), artifactForEnvironment(prod.ID, "test", "prod")); err != nil {
 		t.Fatalf("save prod: %v", err)
 	}
 	if _, err := repo.Activate(ctx, "test", "dev", dev.ID); err != nil {
@@ -202,6 +202,34 @@ func TestRepositoryTracksActiveDeploymentsPerEnvironment(t *testing.T) {
 	}
 	if len(devRows) != 1 || devRows[0].ID != dev.ID {
 		t.Fatalf("dev deployments = %#v, want only %s", devRows, dev.ID)
+	}
+}
+
+func TestRepositorySaveValidatedRejectsMismatchedArtifactEnvironment(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openRepo(t, ctx)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	created, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", Environment: "prod", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	wrongArtifact := artifact(created.ID, "test")
+	wrongArtifact.Environment = "dev"
+
+	if _, err := repo.SaveValidated(ctx, created.ID, validationGraph(created.ID), wrongArtifact); err == nil {
+		t.Fatal("SaveValidated() error = nil, want environment mismatch")
+	}
+	after, err := repo.ByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("get after rollback: %v", err)
+	}
+	if after.Status != deployment.StatusPending {
+		t.Fatalf("status = %q, want pending rollback", after.Status)
+	}
+	if _, err := repo.ArtifactByDeployment(ctx, created.ID); !errors.Is(err, deployment.ErrNotFound) {
+		t.Fatalf("artifact error = %v, want ErrNotFound", err)
 	}
 }
 
@@ -391,7 +419,7 @@ func validationGraph(deploymentID deployment.ID) deployment.Validation {
 }
 
 func mustTestAsset(workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, typ workspace.AssetType, key string, parent workspace.AssetID) workspace.Asset {
-	asset, err := workspace.NewAsset(workspaceID, deploymentID, typ, key, parent, key, "", string(typ)+".v1", map[string]any{"key": key})
+	asset, err := workspace.NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parent, key, "", "testdata/"+string(typ)+"-"+key+".yaml", string(typ)+".v1", map[string]any{"key": key})
 	if err != nil {
 		panic(err)
 	}
@@ -399,10 +427,15 @@ func mustTestAsset(workspaceID workspace.WorkspaceID, deploymentID workspace.Dep
 }
 
 func artifact(deploymentID deployment.ID, workspaceID deployment.WorkspaceID) deployment.Artifact {
+	return artifactForEnvironment(deploymentID, workspaceID, deployment.DefaultEnvironment)
+}
+
+func artifactForEnvironment(deploymentID deployment.ID, workspaceID deployment.WorkspaceID, environment deployment.Environment) deployment.Artifact {
 	return deployment.Artifact{
 		ID:           "artifact_" + string(deploymentID),
 		DeploymentID: deploymentID,
 		WorkspaceID:  workspaceID,
+		Environment:  environment,
 		Digest:       "digest",
 		Format:       "tar.gz",
 		Path:         "artifact.tar.gz",

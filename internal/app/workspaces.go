@@ -14,7 +14,6 @@ import (
 	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/assetnav"
 	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/deployment"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/go-chi/chi/v5"
@@ -324,7 +323,7 @@ func (s *Server) publishModelRefreshPatches(ctx context.Context, workspaceID, mo
 }
 
 func (s *Server) workspaceAssetsAndEdgesForRefresh(ctx context.Context, workspaceID string) ([]workspace.AssetView, []workspace.AssetEdgeView, bool) {
-	catalog, ok, err := s.workspaceAssetCatalog(ctx, workspaceID, string(deployment.DefaultEnvironment))
+	catalog, ok, err := s.workspaceAssetCatalog(ctx, workspaceID, string(s.defaultDeploymentEnvironment()))
 	if err != nil || !ok {
 		return nil, nil, false
 	}

@@ -103,13 +103,6 @@ func NewAssetEdge(workspaceID WorkspaceID, deploymentID DeploymentID, fromID, to
 
 func ValidateAssetGraphForDeployment(graph AssetGraph, workspaceID WorkspaceID, deploymentID DeploymentID) error {
 	assetIDs := make(map[AssetID]struct{}, len(graph.Assets))
-	provenanceEnabled := false
-	for _, asset := range graph.Assets {
-		if asset.SourceFile != "" {
-			provenanceEnabled = true
-			break
-		}
-	}
 	for _, asset := range graph.Assets {
 		if asset.ID == "" {
 			return fmt.Errorf("asset logical id is required")
@@ -130,7 +123,7 @@ func ValidateAssetGraphForDeployment(graph AssetGraph, workspaceID WorkspaceID, 
 		if err := validatePayloadSchema(asset.Type, asset.PayloadSchema); err != nil {
 			return fmt.Errorf("asset %s: %w", asset.ID, err)
 		}
-		if provenanceEnabled && resourceBackedAssetType(asset.Type) && asset.SourceFile == "" {
+		if asset.SourceFile == "" {
 			return fmt.Errorf("asset %s source file is required", asset.ID)
 		}
 	}
@@ -167,15 +160,6 @@ func ValidateAssetGraphForDeployment(graph AssetGraph, workspaceID WorkspaceID, 
 		edgeKeys[key] = struct{}{}
 	}
 	return nil
-}
-
-func resourceBackedAssetType(typ AssetType) bool {
-	switch typ {
-	case AssetTypeCatalog, AssetTypeConnection, AssetTypeSource, AssetTypeModelTable, AssetTypeSemanticModel, AssetTypeDashboard, AssetTypeWorkspaceGroup, AssetTypeWorkspaceRoleBinding:
-		return true
-	default:
-		return false
-	}
 }
 
 type assetEdgeKey struct {

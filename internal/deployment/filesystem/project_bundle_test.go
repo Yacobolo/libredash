@@ -118,6 +118,56 @@ func TestValidateArtifactRejectsWrongDeploymentCompiledGraph(t *testing.T) {
 	}
 }
 
+func TestValidateArtifactRejectsMissingOrMismatchedEnvironment(t *testing.T) {
+	tests := []struct {
+		name        string
+		environment deployment.Environment
+		mutate      func(*CompiledWorkspaceArtifact, *Manifest)
+	}{
+		{
+			name:        "missing compiled environment",
+			environment: "dev",
+			mutate: func(compiled *CompiledWorkspaceArtifact, manifest *Manifest) {
+				compiled.Environment = ""
+			},
+		},
+		{
+			name:        "missing manifest environment",
+			environment: "dev",
+			mutate: func(compiled *CompiledWorkspaceArtifact, manifest *Manifest) {
+				manifest.Environment = ""
+			},
+		},
+		{
+			name:        "manifest compiled mismatch",
+			environment: "dev",
+			mutate: func(compiled *CompiledWorkspaceArtifact, manifest *Manifest) {
+				compiled.Environment = "prod"
+				manifest.Environment = "dev"
+			},
+		},
+		{
+			name:        "target mismatch",
+			environment: "prod",
+			mutate: func(compiled *CompiledWorkspaceArtifact, manifest *Manifest) {
+				compiled.Environment = "dev"
+				manifest.Environment = "dev"
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := packedProjectArtifact(t, "sales", "dev", "dep_env")
+			mutateArtifactForTest(t, path, tt.mutate)
+
+			_, err := ValidateArtifactWithOptions(path, "sales", "dep_env", ValidateOptions{Environment: tt.environment})
+			if err == nil {
+				t.Fatal("ValidateArtifactWithOptions() error = nil, want environment mismatch")
+			}
+		})
+	}
+}
+
 func digestCompiledForTest(t *testing.T, compiled CompiledWorkspaceArtifact) string {
 	t.Helper()
 	raw, err := json.MarshalIndent(compiled, "", "  ")
@@ -125,6 +175,69 @@ func digestCompiledForTest(t *testing.T, compiled CompiledWorkspaceArtifact) str
 		t.Fatal(err)
 	}
 	return digestBytes(raw)
+}
+
+func packedProjectArtifact(t *testing.T, workspaceID string, environment deployment.Environment, deploymentID deployment.ID) string {
+	t.Helper()
+	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
+	var bundle bytes.Buffer
+	if _, _, err := PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, environment, deploymentID, workspace.AssetGraph{}, &bundle); err != nil {
+		t.Fatalf("PackProjectAgainstGraphForEnvironment() error = %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
+	if err := os.WriteFile(path, bundle.Bytes(), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func mutateArtifactForTest(t *testing.T, path string, mutate func(*CompiledWorkspaceArtifact, *Manifest)) {
+	t.Helper()
+	root := t.TempDir()
+	if err := ExtractArtifact(path, root); err != nil {
+		t.Fatalf("ExtractArtifact() error = %v", err)
+	}
+	compiled, manifest, err := LoadCompiledWorkspaceArtifact(root)
+	if err != nil {
+		t.Fatalf("LoadCompiledWorkspaceArtifact() error = %v", err)
+	}
+	mutate(&compiled, &manifest)
+	compiledRel, err := safeBundlePath(manifest.CompiledPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compiledBytes, err := json.MarshalIndent(compiled, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, compiledRel), compiledBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "manifest.json"), manifestBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".libredash-test-artifact-*.tar.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpPath := tmp.Name()
+	if err := writeExtractedRoot(root, tmp); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		t.Fatal(err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		t.Fatal(err)
+	}
 }
 
 func TestPackProjectRejectsUnknownWorkspace(t *testing.T) {

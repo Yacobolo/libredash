@@ -42,7 +42,7 @@ func TestRepositoryActiveDeploymentGraphUsesLogicalAssetIDs(t *testing.T) {
 			},
 		},
 	}
-	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, deployment.Artifact{ID: "artifact", DeploymentID: created.ID, WorkspaceID: "test", Digest: "digest", Format: "tar.gz", Path: "artifact.tar.gz", ManifestJSON: "{}"}); err != nil {
+	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, deployment.Artifact{ID: "artifact", DeploymentID: created.ID, WorkspaceID: "test", Environment: deployment.DefaultEnvironment, Digest: "digest", Format: "tar.gz", Path: "artifact.tar.gz", ManifestJSON: "{}"}); err != nil {
 		t.Fatalf("save validated: %v", err)
 	}
 	if _, err := deploymentRepo.Activate(ctx, "test", deployment.DefaultEnvironment, created.ID); err != nil {
@@ -82,7 +82,7 @@ func TestRepositoryActiveDeploymentGraphUsesLogicalAssetIDs(t *testing.T) {
 
 func mustAsset(t *testing.T, typ workspace.AssetType, key string, parent workspace.AssetID, deploymentID deployment.ID) workspace.Asset {
 	t.Helper()
-	asset, err := workspace.NewAsset("test", workspace.DeploymentID(deploymentID), typ, key, parent, key, "", string(typ)+".v1", map[string]any{"key": key})
+	asset, err := workspace.NewAssetWithSourceFile("test", workspace.DeploymentID(deploymentID), typ, key, parent, key, "", "testdata/"+string(typ)+"-"+key+".yaml", string(typ)+".v1", map[string]any{"key": key})
 	if err != nil {
 		t.Fatalf("new asset: %v", err)
 	}

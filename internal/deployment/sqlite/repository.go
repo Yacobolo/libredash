@@ -84,8 +84,12 @@ func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.
 	if err != nil {
 		return deployment.Deployment{}, mapNotFound(err)
 	}
-	artifact.WorkspaceID = deployment.WorkspaceID(current.WorkspaceID)
-	artifact.Environment = deployment.Environment(current.Environment)
+	if artifact.WorkspaceID != deployment.WorkspaceID(current.WorkspaceID) {
+		return deployment.Deployment{}, fmt.Errorf("artifact workspace = %q, want %q", artifact.WorkspaceID, current.WorkspaceID)
+	}
+	if deployment.NormalizeEnvironment(artifact.Environment) != deployment.Environment(current.Environment) {
+		return deployment.Deployment{}, fmt.Errorf("artifact environment = %q, want %q", deployment.NormalizeEnvironment(artifact.Environment), current.Environment)
+	}
 	if err := workspace.ValidateAssetGraphForDeployment(validation.Graph, workspace.WorkspaceID(current.WorkspaceID), workspace.DeploymentID(deploymentID)); err != nil {
 		return deployment.Deployment{}, err
 	}

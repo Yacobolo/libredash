@@ -15,6 +15,7 @@ import (
 	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
+	"github.com/Yacobolo/libredash/internal/deployment"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -90,6 +91,7 @@ type Server struct {
 	artifactDir        string
 	duckDBDir          string
 	defaultWorkspaceID string
+	defaultEnvironment string
 	rateLimits         RateLimitConfig
 	securityHeaders    SecurityHeadersConfig
 	requestLogging     bool
@@ -114,6 +116,7 @@ type Options struct {
 	ArtifactDir        string
 	DuckDBDir          string
 	DefaultWorkspaceID string
+	DefaultEnvironment string
 	RateLimits         RateLimitConfig
 	SecurityHeaders    SecurityHeadersConfig
 	RequestLogging     bool
@@ -133,6 +136,7 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.artifactDir = options.ArtifactDir
 	server.duckDBDir = options.DuckDBDir
 	server.defaultWorkspaceID = options.DefaultWorkspaceID
+	server.defaultEnvironment = string(deployment.NormalizeEnvironment(deployment.Environment(options.DefaultEnvironment)))
 	server.rateLimits = options.RateLimits
 	server.securityHeaders = options.SecurityHeaders
 	server.requestLogging = options.RequestLogging
