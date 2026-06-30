@@ -152,14 +152,14 @@ test('chat thread renders visual artifacts with dashboard web components', async
       .shadowRoot!
       .querySelector('ld-visual-artifact[artifact-id="agent_table_1"]')
       ?.shadowRoot
-      ?.querySelector('ld-data-table[table-id="agent_table_1"]'),
+      ?.querySelector('ld-report-table[table-id="agent_table_1"]'),
   ))
 
   const rendered = await page.evaluate(() => {
     const root = document.querySelector('ld-chat-thread')!.shadowRoot!
     return {
       chart: Boolean(root.querySelector('ld-visual-artifact[artifact-id="agent_chart_1"]')?.shadowRoot?.querySelector('ld-echart[visual-id="agent_chart_1"]')),
-      table: Boolean(root.querySelector('ld-visual-artifact[artifact-id="agent_table_1"]')?.shadowRoot?.querySelector('ld-data-table[table-id="agent_table_1"]')),
+      table: Boolean(root.querySelector('ld-visual-artifact[artifact-id="agent_table_1"]')?.shadowRoot?.querySelector('ld-report-table[table-id="agent_table_1"]')),
       jsonDetails: root.querySelectorAll('.tool-details').length,
       bodyText: root.textContent || '',
       artifactBackground: getComputedStyle(root.querySelector('ld-visual-artifact')!.shadowRoot!.querySelector('.artifact')!).backgroundColor,

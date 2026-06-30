@@ -140,7 +140,7 @@ func adminPageSignal(active string, data AdminData) uisignals.AdminPageSignal {
 	case "principals":
 		page.HeaderTitle = "Principals"
 		page.HeaderDetail = "Users and service principals known to LibreDash."
-		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Principals", Grid: adminPrincipalsGrid(data.Principals)}}
+		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Principals", Table: adminPrincipalsGrid(data.Principals)}}
 	case "principal-detail":
 		page.HeaderTitle = "Principals"
 		page.HeaderDetail = "Read-only principal access."
@@ -160,11 +160,11 @@ func adminPageSignal(active string, data AdminData) uisignals.AdminPageSignal {
 			{Label: "Created", Value: principal.CreatedAt},
 			{Label: "Updated", Value: principal.UpdatedAt},
 		}
-		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Groups", Grid: adminPrincipalGroupsGrid(principal, data.Groups)}}
+		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Groups", Table: adminPrincipalGroupsGrid(principal, data.Groups)}}
 	case "groups":
 		page.HeaderTitle = "Groups"
 		page.HeaderDetail = "Workspace groups and their read-only membership summaries."
-		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Groups", Grid: adminGroupsGrid(data.Groups)}}
+		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Groups", Table: adminGroupsGrid(data.Groups)}}
 	case "group-detail":
 		page.HeaderTitle = "Groups"
 		page.HeaderDetail = "Read-only group membership."
@@ -183,7 +183,7 @@ func adminPageSignal(active string, data AdminData) uisignals.AdminPageSignal {
 			{Label: "Roles", Value: strings.Join(group.Roles, ", ")},
 			{Label: "Member count", Value: fmt.Sprint(len(group.Members))},
 		}
-		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Members", Grid: adminGroupMembersGrid(group, data.Principals)}}
+		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Members", Table: adminGroupMembersGrid(group, data.Principals)}}
 	case "storage":
 		page.HeaderTitle = "Storage"
 		page.HeaderDetail = "Read-only DuckDB database and table inventory."
@@ -237,7 +237,7 @@ func adminSidebarSignal(active string) uisignals.SubSidebarSignal {
 	}
 }
 
-func adminPrincipalsGrid(principals []AdminPrincipal) metricGrid {
+func adminPrincipalsGrid(principals []AdminPrincipal) recordTable {
 	rows := make([]map[string]any, 0, len(principals))
 	for _, principal := range principals {
 		rows = append(rows, map[string]any{
@@ -250,8 +250,8 @@ func adminPrincipalsGrid(principals []AdminPrincipal) metricGrid {
 			"updated_at":  principal.UpdatedAt,
 		})
 	}
-	return metricGrid{
-		Columns: []metricGridColumn{
+	return recordTable{
+		Columns: []recordTableColumn{
 			{ID: "name", Header: "Name", Kind: "link", HrefKey: "name_href", Width: "150px"},
 			{ID: "email", Header: "Email", Width: "190px"},
 			{ID: "roles", Header: "Direct roles", Kind: "tags", Width: "135px"},
@@ -265,7 +265,7 @@ func adminPrincipalsGrid(principals []AdminPrincipal) metricGrid {
 	}
 }
 
-func adminPrincipalGroupsGrid(principal AdminPrincipal, groups []AdminGroup) metricGrid {
+func adminPrincipalGroupsGrid(principal AdminPrincipal, groups []AdminGroup) recordTable {
 	groupsByID := make(map[string]AdminGroup, len(groups))
 	for _, group := range groups {
 		groupsByID[group.ID] = group
@@ -282,8 +282,8 @@ func adminPrincipalGroupsGrid(principal AdminPrincipal, groups []AdminGroup) met
 			"member_count": len(group.Members),
 		})
 	}
-	return metricGrid{
-		Columns: []metricGridColumn{
+	return recordTable{
+		Columns: []recordTableColumn{
 			{ID: "name", Header: "Name", Kind: "link", HrefKey: "name_href", Width: "180px"},
 			{ID: "provider", Header: "Provider", Width: "120px"},
 			{ID: "external_id", Header: "External ID", Kind: "code", Width: "180px"},
@@ -296,7 +296,7 @@ func adminPrincipalGroupsGrid(principal AdminPrincipal, groups []AdminGroup) met
 	}
 }
 
-func adminGroupsGrid(groups []AdminGroup) metricGrid {
+func adminGroupsGrid(groups []AdminGroup) recordTable {
 	rows := make([]map[string]any, 0, len(groups))
 	for _, group := range groups {
 		rows = append(rows, map[string]any{
@@ -309,8 +309,8 @@ func adminGroupsGrid(groups []AdminGroup) metricGrid {
 			"member_count": len(group.Members),
 		})
 	}
-	return metricGrid{
-		Columns: []metricGridColumn{
+	return recordTable{
+		Columns: []recordTableColumn{
 			{ID: "name", Header: "Name", Kind: "link", HrefKey: "name_href", Width: "180px"},
 			{ID: "provider", Header: "Provider", Width: "120px"},
 			{ID: "external_id", Header: "External ID", Kind: "code", Width: "180px"},
@@ -324,7 +324,7 @@ func adminGroupsGrid(groups []AdminGroup) metricGrid {
 	}
 }
 
-func adminGroupMembersGrid(group AdminGroup, principals []AdminPrincipal) metricGrid {
+func adminGroupMembersGrid(group AdminGroup, principals []AdminPrincipal) recordTable {
 	principalsByID := make(map[string]AdminPrincipal, len(principals))
 	for _, principal := range principals {
 		principalsByID[principal.ID] = principal
@@ -340,8 +340,8 @@ func adminGroupMembersGrid(group AdminGroup, principals []AdminPrincipal) metric
 			"updated_at":   principal.UpdatedAt,
 		})
 	}
-	return metricGrid{
-		Columns: []metricGridColumn{
+	return recordTable{
+		Columns: []recordTableColumn{
 			{ID: "name", Header: "Name", Width: "150px"},
 			{ID: "email", Header: "Email", Width: "190px"},
 			{ID: "id", Header: "Principal ID", Kind: "code", Width: "180px"},

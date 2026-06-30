@@ -1,9 +1,10 @@
 import { LitElement, html, type PropertyValues } from 'lit'
 import { property, state } from 'lit/decorators.js'
 import { ChevronRight, Database, Search, Server, Table2, Waves } from 'lucide'
-import type { AdminStorageSignal, AdminStorageTableSignal } from '../../generated/signals'
+import type { AdminStorageSignal, AdminStorageTableSignal, RecordTableSignal } from '../../generated/signals'
 import { jsonAttribute } from '../shared/json-attribute'
 import { lucideIcon } from '../shared/lucide-icons'
+import '../shared/record-table'
 
 const emptyStorage: AdminStorageSignal = {
   summary: { duckdbDir: '', databaseCount: 0, totalSizeLabel: '', tableCount: 0 },
@@ -31,16 +32,28 @@ type SchemaSelection = {
   schema: string
 }
 
+type DatabaseSelection = {
+  databaseId: string
+}
+
 class StorageExplorer extends LitElement {
   @property({ converter: jsonAttribute<AdminStorageSignal>(emptyStorage) }) storage: AdminStorageSignal = emptyStorage
   @state() private search = ''
+  @state() private selectedDatabase: DatabaseSelection | null = null
   @state() private selectedSchema: SchemaSelection | null = null
+  @state() private localSelectedTable: AdminStorageTableSignal | null = null
 
   updated(changedProperties: PropertyValues<this>): void {
     if (!changedProperties.has('storage')) return
-    if (!this.selectedSchema) return
-    if (!this.resolveSelectedSchema(groupTables(this.resolvedStorage.tables ?? []))) {
+    const groups = groupTables(this.resolvedStorage.tables ?? [])
+    if (this.selectedDatabase && !this.resolveSelectedDatabase(groups)) {
+      this.selectedDatabase = null
+    }
+    if (this.selectedSchema && !this.resolveSelectedSchema(groups)) {
       this.selectedSchema = null
+    }
+    if (this.localSelectedTable) {
+      this.localSelectedTable = this.findTableByKey(this.localSelectedTable.key)
     }
   }
 
@@ -48,40 +61,55 @@ class StorageExplorer extends LitElement {
     const storage = this.resolvedStorage
     const tables = storage.tables ?? []
     const filtered = filterTables(tables, this.search)
-    const selected = storage.selectedTable ?? null
+    const selectedKey = this.selectedDatabase || this.selectedSchema ? '' : this.localSelectedTable?.key ?? storage.selectedKey ?? ''
+    const selected = this.selectedDatabase || this.selectedSchema ? null : this.localSelectedTable ?? storage.selectedTable ?? null
+    const selectedDatabase = this.resolveSelectedDatabase(groupTables(tables))
     const selectedSchema = this.resolveSelectedSchema(groupTables(tables))
 
     return html`
       <style>
         ${storageExplorerStyles}
       </style>
-      <div class="storage-explorer">
-        <aside class="storage-browser" aria-label="DuckDB table browser">
-          <div class="storage-browser-header">
+      <div class="storage-explorer" @ld-record-table-action=${this.handleRecordTableAction}>
+        <div class="storage-explorer-header">
+          <div class="storage-heading">
             <span class="storage-logo" aria-hidden="true">${lucideIcon(Database, { size: 18 })}</span>
-            <h2>Storage</h2>
-            <span>${filtered.length}/${tables.length}</span>
+            <div>
+              <h2>Storage</h2>
+              <p>DuckDB inventory · <span>${label(storage.summary?.duckdbDir)}</span></p>
+            </div>
           </div>
-          <label class="storage-search">
-            <span class="storage-search-icon" aria-hidden="true">${lucideIcon(Search, { size: 15 })}</span>
-            <input
-              type="search"
-              .value=${this.search}
-              @input=${this.onSearch}
-              placeholder="Schema, table, model"
-              autocomplete="off"
-            />
-          </label>
+        </div>
+        ${storage.warnings?.length ? html`
+          <div class="storage-warnings">
+            ${storage.warnings.map((warning) => html`<p class="storage-warning">${warning}</p>`)}
+          </div>
+        ` : html`<div class="storage-warnings storage-warnings-empty" aria-hidden="true"></div>`}
+        <aside class="storage-browser" aria-label="DuckDB table browser">
+          <div class="storage-browser-menu">
+            <label class="storage-search">
+              <span class="storage-search-icon" aria-hidden="true">${lucideIcon(Search, { size: 15 })}</span>
+              <input
+                type="search"
+                .value=${this.search}
+                @input=${this.onSearch}
+                placeholder="Schema, table, model"
+                autocomplete="off"
+              />
+            </label>
+          </div>
           <div class="storage-tree">
             ${storage.status && tables.length === 0
               ? html`<p class="storage-empty">${storage.status}</p>`
               : filtered.length === 0
                 ? html`<p class="storage-empty">No matching tables.</p>`
-                : this.renderDatabaseGroups(groupTables(filtered), storage.selectedKey ?? '')}
+                : this.renderDatabaseGroups(groupTables(filtered), selectedKey)}
           </div>
         </aside>
         <section class="storage-detail" aria-label="Selected DuckDB table details">
-          ${selectedSchema
+          ${selectedDatabase
+            ? this.renderSelectedDatabase(selectedDatabase.database)
+            : selectedSchema
             ? this.renderSelectedSchema(selectedSchema.database, selectedSchema.schema)
             : selected
               ? this.renderSelectedTable(selected)
@@ -106,7 +134,6 @@ class StorageExplorer extends LitElement {
           <span class="storage-chevron" aria-hidden="true">${lucideIcon(ChevronRight, { size: 14 })}</span>
           <span class="storage-node-icon" aria-hidden="true">${lucideIcon(Database, { size: 15 })}</span>
           <span>${label(database.name)}</span>
-          <em>${database.schemas.reduce((count, schema) => count + schema.tables.length, 0)}</em>
         </summary>
         ${database.schemas.map((schema) => html`
           <details class="storage-schema" open>
@@ -144,7 +171,48 @@ class StorageExplorer extends LitElement {
           <strong>${label(table.name)}</strong>
           <small>${label(table.schema)}.${label(table.name)}</small>
         </span>
+        <span class="storage-table-size">${label(table.sizeLabel)}</span>
       </button>
+    `
+  }
+
+  private renderSelectedDatabase(database: DatabaseGroup) {
+    const tables = database.schemas.flatMap((schema) => schema.tables)
+    return html`
+      <div class="storage-detail-header">
+        <nav aria-label="Selected database location">
+          <span class="storage-breadcrumb-current">
+            ${lucideIcon(Database, { size: 16 })}
+            <strong>${label(database.name)}</strong>
+          </span>
+        </nav>
+      </div>
+      <dl class="storage-metrics">
+        <div>
+          <dt>Database</dt>
+          <dd>${label(database.name)}</dd>
+        </div>
+        <div>
+          <dt>Model</dt>
+          <dd>${label(database.model)}</dd>
+        </div>
+        <div>
+          <dt>Schemas</dt>
+          <dd>${database.schemas.length}</dd>
+        </div>
+        <div>
+          <dt>Known size</dt>
+          <dd>${sumKnownSizes(tables)}</dd>
+        </div>
+      </dl>
+      <div class="storage-columns">
+        <div class="storage-columns-header">
+          <h3>Schemas</h3>
+        </div>
+        <div class="storage-column-table-wrap">
+          <ld-record-table .table=${this.databaseSchemasTable(database)}></ld-record-table>
+        </div>
+      </div>
     `
   }
 
@@ -152,14 +220,15 @@ class StorageExplorer extends LitElement {
     return html`
       <div class="storage-detail-header">
         <nav aria-label="Selected schema location">
-          <span>${label(database.name)}</span>
+          <button type="button" class="storage-breadcrumb-button" data-breadcrumb-kind="database" @click=${() => this.selectDatabase(database.id)}>
+            ${label(database.name)}
+          </button>
           <span class="storage-breadcrumb-separator" aria-hidden="true">${lucideIcon(ChevronRight, { size: 15 })}</span>
-          <span class="storage-breadcrumb-table">
+          <span class="storage-breadcrumb-current">
             ${lucideIcon(Server, { size: 16 })}
             <strong>${label(schema.schema)}</strong>
           </span>
         </nav>
-        <span>${schema.tables.length} ${schema.tables.length === 1 ? 'table' : 'tables'}</span>
       </div>
       <dl class="storage-metrics">
         <div>
@@ -182,38 +251,9 @@ class StorageExplorer extends LitElement {
       <div class="storage-columns">
         <div class="storage-columns-header">
           <h3>Tables</h3>
-          <span>${schema.tables.length}</span>
         </div>
         <div class="storage-column-table-wrap">
-          <table class="storage-column-table storage-schema-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Table</th>
-                <th>Type</th>
-                <th>Rows</th>
-                <th>Columns</th>
-                <th>Estimated size</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${schema.tables.map((table, index) => html`
-                <tr>
-                  <td>${index + 1}</td>
-                  <td>
-                    <button type="button" class="storage-schema-table-link" @click=${() => this.selectTable(table)}>
-                      ${lucideIcon(table.type === 'view' ? Waves : Table2, { size: 14 })}
-                      <span>${label(table.name)}</span>
-                    </button>
-                  </td>
-                  <td>${label(table.type)}</td>
-                  <td>${label(table.rowCountLabel)}</td>
-                  <td>${table.columnCount ?? '-'}</td>
-                  <td>${label(table.sizeLabel)}</td>
-                </tr>
-              `)}
-            </tbody>
-          </table>
+          <ld-record-table .table=${this.schemaTablesTable(schema)}></ld-record-table>
         </div>
       </div>
     `
@@ -224,16 +264,19 @@ class StorageExplorer extends LitElement {
     return html`
       <div class="storage-detail-header">
         <nav aria-label="Selected table location">
-          <span>${label(table.databaseName)}</span>
+          <button type="button" class="storage-breadcrumb-button" data-breadcrumb-kind="database" @click=${() => this.selectDatabase(table.databaseId)}>
+            ${label(table.databaseName)}
+          </button>
           <span class="storage-breadcrumb-separator" aria-hidden="true">${lucideIcon(ChevronRight, { size: 15 })}</span>
-          <span>${label(table.schema)}</span>
+          <button type="button" class="storage-breadcrumb-button" data-breadcrumb-kind="schema" @click=${() => this.selectSchemaByID(table.databaseId, table.schema)}>
+            ${label(table.schema)}
+          </button>
           <span class="storage-breadcrumb-separator" aria-hidden="true">${lucideIcon(ChevronRight, { size: 15 })}</span>
-          <span class="storage-breadcrumb-table">
+          <span class="storage-breadcrumb-current">
             ${lucideIcon(table.type === 'view' ? Waves : Table2, { size: 16 })}
             <strong>${label(table.name)}</strong>
           </span>
         </nav>
-        <span>${label(table.type)}</span>
       </div>
       <dl class="storage-metrics">
         <div>
@@ -256,42 +299,103 @@ class StorageExplorer extends LitElement {
       <div class="storage-columns">
         <div class="storage-columns-header">
           <h3>Columns</h3>
-          <span>${columns.length}</span>
         </div>
         ${columns.length === 0
           ? html`<p class="storage-empty">No column metadata available.</p>`
           : html`
             <div class="storage-column-table-wrap">
-              <table class="storage-column-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>Type</th>
-                    <th>Nullable</th>
-                    <th>Default</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${columns.map((column) => html`
-                    <tr>
-                      <td>${column.ordinal ?? ''}</td>
-                      <td><code>${label(column.name)}</code></td>
-                      <td><code>${label(column.type)}</code></td>
-                      <td>${label(column.nullable)}</td>
-                      <td>${column.default ? html`<code>${column.default}</code>` : html`<span class="storage-muted">-</span>`}</td>
-                    </tr>
-                  `)}
-                </tbody>
-              </table>
+              <ld-record-table .table=${this.tableColumnsTable(table)}></ld-record-table>
             </div>
           `}
       </div>
     `
   }
 
+  private databaseSchemasTable(database: DatabaseGroup): RecordTableSignal {
+    return {
+      columns: [
+        { id: 'index', header: '#', kind: 'number', align: 'right', width: '64px' },
+        { id: 'schema', header: 'Schema', kind: 'button', width: '220px' },
+        { id: 'tables', header: 'Tables', kind: 'number', align: 'right', width: '120px' },
+        { id: 'rows', header: 'Known rows', align: 'right', width: '150px' },
+        { id: 'size', header: 'Known size', align: 'right', width: '150px' },
+      ],
+      rows: database.schemas.map((schema, index) => ({
+        index: index + 1,
+        schema: { label: schema.schema, icon: 'schema', action: 'select-schema' },
+        tables: schema.tables.length,
+        rows: sumKnownRows(schema.tables),
+        size: sumKnownSizes(schema.tables),
+        databaseId: database.id,
+        schemaName: schema.schema,
+      })),
+      empty: 'No schemas found.',
+      minWidth: '700px',
+    }
+  }
+
+  private schemaTablesTable(schema: SchemaGroup): RecordTableSignal {
+    return {
+      columns: [
+        { id: 'index', header: '#', kind: 'number', align: 'right', width: '64px' },
+        { id: 'table', header: 'Table', kind: 'button', width: '240px' },
+        { id: 'type', header: 'Type', width: '110px' },
+        { id: 'rows', header: 'Rows', align: 'right', width: '130px' },
+        { id: 'columns', header: 'Columns', kind: 'number', align: 'right', width: '120px' },
+        { id: 'size', header: 'Estimated size', align: 'right', width: '150px' },
+      ],
+      rows: schema.tables.map((table, index) => ({
+        index: index + 1,
+        table: { label: table.name, icon: table.type === 'view' ? 'view' : 'table', action: 'select-table' },
+        type: label(table.type),
+        rows: label(table.rowCountLabel),
+        columns: table.columnCount ?? '-',
+        size: label(table.sizeLabel),
+        tableKey: table.key,
+      })),
+      empty: 'No tables found.',
+      minWidth: '820px',
+    }
+  }
+
+  private tableColumnsTable(table: AdminStorageTableSignal): RecordTableSignal {
+    return {
+      columns: [
+        { id: 'ordinal', header: '#', kind: 'number', align: 'right', width: '64px' },
+        { id: 'name', header: 'Name', kind: 'code', width: '220px' },
+        { id: 'type', header: 'Type', kind: 'code', width: '180px' },
+        { id: 'nullable', header: 'Nullable', width: '120px' },
+        { id: 'default', header: 'Default', kind: 'code' },
+      ],
+      rows: (table.columns ?? []).map((column) => ({
+        ordinal: column.ordinal ?? '',
+        name: label(column.name),
+        type: label(column.type),
+        nullable: label(column.nullable),
+        default: column.default || '-',
+      })),
+      empty: 'No column metadata available.',
+      minWidth: '760px',
+    }
+  }
+
+  private handleRecordTableAction(event: CustomEvent): void {
+    const action = String(event.detail?.action ?? '')
+    const row = event.detail?.row ?? {}
+    if (action === 'select-schema') {
+      this.selectSchemaByID(String(row.databaseId ?? ''), String(row.schemaName ?? ''))
+      return
+    }
+    if (action === 'select-table') {
+      const table = this.findTableByKey(String(row.tableKey ?? ''))
+      if (table) this.selectTable(table)
+    }
+  }
+
   private selectTable(table: AdminStorageTableSignal): void {
+    this.selectedDatabase = null
     this.selectedSchema = null
+    this.localSelectedTable = table
     this.dispatchEvent(new CustomEvent('ld-storage-table-select', {
       bubbles: true,
       composed: true,
@@ -303,16 +407,36 @@ class StorageExplorer extends LitElement {
     }))
   }
 
+  private selectDatabase(databaseId: string): void {
+    this.selectedDatabase = { databaseId }
+    this.selectedSchema = null
+    this.localSelectedTable = null
+  }
+
   private selectSchema(event: Event, databaseId: string, schema: string): void {
     if ((event.target as HTMLElement).closest('.storage-chevron')) {
       return
     }
     event.preventDefault()
+    this.selectSchemaByID(databaseId, schema)
+  }
+
+  private selectSchemaByID(databaseId: string, schema: string): void {
+    this.selectedDatabase = null
     this.selectedSchema = { databaseId, schema }
+    this.localSelectedTable = null
   }
 
   private isSelectedSchema(databaseId: string, schema: string): boolean {
     return this.selectedSchema?.databaseId === databaseId && this.selectedSchema.schema === schema
+  }
+
+  private resolveSelectedDatabase(groups: DatabaseGroup[]): { database: DatabaseGroup } | null {
+    const selection = this.selectedDatabase
+    if (!selection) return null
+    const database = groups.find((group) => group.id === selection.databaseId)
+    if (!database) return null
+    return { database }
   }
 
   private resolveSelectedSchema(groups: DatabaseGroup[]): { database: DatabaseGroup; schema: SchemaGroup } | null {
@@ -322,6 +446,11 @@ class StorageExplorer extends LitElement {
     const schema = database?.schemas.find((item) => item.schema === selection.schema)
     if (!database || !schema) return null
     return { database, schema }
+  }
+
+  private findTableByKey(key: string | undefined): AdminStorageTableSignal | null {
+    if (!key) return null
+    return this.resolvedStorage.tables?.find((table) => table.key === key) ?? null
   }
 }
 
@@ -426,18 +555,34 @@ const storageExplorerStyles = `
   :host {
     display: block;
     min-width: 0;
+    height: 100%;
     max-width: 100%;
   }
 
   .storage-explorer {
     display: grid;
-    height: min(46rem, calc(100svh - 13rem));
-    min-height: 34rem;
+    height: 100svh;
+    min-height: 0;
     min-width: 0;
     grid-template-columns: minmax(18rem, 22rem) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "header header"
+      "warnings warnings"
+      "browser detail";
     overflow: hidden;
-    border: var(--ld-border-default);
-    border-radius: var(--ld-radius-default);
+    border: 0;
+    border-radius: 0;
+    background: var(--ld-bg-panel);
+  }
+
+  .storage-explorer-header {
+    grid-area: header;
+    display: grid;
+    min-width: 0;
+    align-items: center;
+    border-bottom: var(--ld-border-muted);
+    padding: var(--base-size-12, 0.75rem) var(--base-size-16, 1rem);
     background: var(--ld-bg-panel);
   }
 
@@ -448,21 +593,20 @@ const storageExplorerStyles = `
   }
 
   .storage-browser {
+    grid-area: browser;
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     gap: 0;
     border-right: var(--ld-border-muted);
     background: var(--ld-bg-panel);
   }
 
-  .storage-browser-header {
+  .storage-heading {
     display: grid;
-    min-height: 3rem;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
     align-items: center;
-    gap: 0.5rem;
-    border-bottom: var(--ld-border-muted);
-    padding: 0.5rem 0.625rem;
+    gap: var(--base-size-4, 0.25rem);
   }
 
   .storage-detail-header,
@@ -482,9 +626,25 @@ const storageExplorerStyles = `
 
   h2 {
     color: var(--ld-fg-default);
-    font-size: 1rem;
-    line-height: 1.25;
-    font-weight: 800;
+    font-size: var(--ld-font-size-title-sm, 1rem);
+    line-height: var(--ld-line-height-tight, 1.2);
+    font-weight: var(--ld-font-weight-strong, 600);
+  }
+
+  .storage-heading p {
+    overflow: hidden;
+    color: var(--ld-fg-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--ld-font-size-caption, 0.75rem);
+    font-weight: var(--ld-font-weight-medium, 500);
+    line-height: var(--ld-line-height-tight, 1.2);
+  }
+
+  .storage-heading p span {
+    color: var(--ld-fg-default);
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+    font-weight: var(--ld-font-weight-medium, 500);
   }
 
   h3 {
@@ -495,7 +655,7 @@ const storageExplorerStyles = `
   }
 
   .storage-logo {
-    display: grid;
+    display: none;
     width: 1.875rem;
     height: 1.875rem;
     place-items: center;
@@ -505,30 +665,21 @@ const storageExplorerStyles = `
     background: var(--ld-bg-panel);
   }
 
-  .storage-browser-header > span:not(.storage-logo),
-  .storage-detail-header > span,
-  .storage-columns-header > span {
-    flex: none;
-    border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-small);
-    background: var(--ld-bg-panel);
-    padding: 0.1875rem 0.4375rem;
-    color: var(--ld-fg-muted);
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-  }
-
   .storage-search {
     position: relative;
     display: block;
+    min-width: 0;
+  }
+
+  .storage-browser-menu {
     border-bottom: var(--ld-border-muted);
-    padding: 0.625rem;
+    background: var(--ld-bg-panel);
+    padding: var(--base-size-4, 0.25rem) var(--base-size-8, 0.5rem);
   }
 
   .storage-search-icon {
     position: absolute;
-    left: 1.125rem;
+    left: 0.5rem;
     top: 50%;
     display: grid;
     width: 1rem;
@@ -541,9 +692,9 @@ const storageExplorerStyles = `
   .storage-search input {
     min-height: 2.125rem;
     width: 100%;
-    border: var(--ld-border-default);
-    border-radius: var(--ld-radius-small);
-    background: var(--ld-bg-panel);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     padding: 0 0.625rem 0 2rem;
     color: var(--ld-fg-default);
     font: inherit;
@@ -552,8 +703,30 @@ const storageExplorerStyles = `
   }
 
   .storage-search input:focus {
-    border-color: var(--ld-line-accent);
     background: var(--ld-bg-control-hover);
+  }
+
+  .storage-warnings {
+    grid-area: warnings;
+    display: grid;
+    gap: var(--base-size-8, 0.5rem);
+    border-bottom: var(--ld-border-muted);
+    background: var(--ld-bg-panel);
+    padding: var(--base-size-8, 0.5rem) var(--base-size-12, 0.75rem);
+  }
+
+  .storage-warnings-empty {
+    display: none;
+  }
+
+  .storage-warning {
+    border: var(--ld-border-attention, var(--ld-border-muted));
+    border-radius: var(--ld-radius-default);
+    background: var(--ld-bg-attention-muted, var(--ld-bg-panel-muted));
+    padding: var(--base-size-8, 0.5rem) var(--base-size-12, 0.75rem);
+    color: var(--ld-fg-default);
+    font-size: var(--ld-font-size-body-sm, 0.875rem);
+    font-weight: var(--ld-font-weight-medium, 500);
   }
 
   .storage-tree {
@@ -596,10 +769,12 @@ const storageExplorerStyles = `
   }
 
   .storage-db > summary {
+    grid-template-columns: 0.875rem 1rem minmax(0, 1fr);
     margin-bottom: 0.125rem;
   }
 
   .storage-schema > summary {
+    grid-template-columns: 0.875rem 1rem minmax(0, 1fr) auto;
     min-height: 1.75rem;
     font-size: 0.8125rem;
     font-weight: 700;
@@ -654,7 +829,7 @@ const storageExplorerStyles = `
     display: grid;
     min-height: 1.75rem;
     width: 100%;
-    grid-template-columns: 1rem minmax(0, 1fr);
+    grid-template-columns: 1rem minmax(0, 1fr) max-content;
     align-items: center;
     gap: 0.45rem;
     border: 0;
@@ -713,7 +888,20 @@ const storageExplorerStyles = `
     display: none;
   }
 
+  .storage-table-size {
+    overflow: hidden;
+    max-width: 4.75rem;
+    color: var(--ld-fg-muted);
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+    font-weight: var(--ld-font-weight-medium, 500);
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .storage-detail {
+    grid-area: detail;
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr);
     gap: 0;
@@ -741,11 +929,31 @@ const storageExplorerStyles = `
     min-width: 0;
   }
 
-  .storage-detail-header nav > span:not(.storage-breadcrumb-separator):not(.storage-breadcrumb-table) {
+  .storage-detail-header nav > span:not(.storage-breadcrumb-separator):not(.storage-breadcrumb-current),
+  .storage-breadcrumb-button {
     overflow: hidden;
     color: var(--ld-fg-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .storage-breadcrumb-button {
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    font-weight: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .storage-breadcrumb-button:hover,
+  .storage-breadcrumb-button:focus-visible {
+    color: var(--ld-fg-link);
+    outline: 0;
+    text-decoration: underline;
+    text-underline-offset: 0.125rem;
   }
 
   .storage-breadcrumb-separator {
@@ -755,7 +963,7 @@ const storageExplorerStyles = `
     color: var(--ld-fg-muted);
   }
 
-  .storage-breadcrumb-table {
+  .storage-breadcrumb-current {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
@@ -914,6 +1122,13 @@ const storageExplorerStyles = `
   @media (max-width: 820px) {
     .storage-explorer {
       grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto auto auto minmax(0, 1fr);
+      grid-template-areas:
+        "header"
+        "warnings"
+        "browser"
+        "detail";
+      height: auto;
       min-height: 0;
     }
 

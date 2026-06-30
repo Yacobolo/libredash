@@ -248,7 +248,7 @@ func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
 	if strings.Contains(body, `<ld-report-sidebar`) {
 		t.Fatalf("report page still rendered report sidebar:\n%s", body)
 	}
-	if strings.Contains(body, `<ld-sub-sidebar`) || strings.Contains(body, `<ld-report-canvas`) || strings.Contains(body, `<ld-echart`) || strings.Contains(body, `<ld-data-table`) {
+	if strings.Contains(body, `<ld-sub-sidebar`) || strings.Contains(body, `<ld-report-canvas`) || strings.Contains(body, `<ld-echart`) || strings.Contains(body, `<ld-report-table`) {
 		t.Fatalf("report page rendered dashboard product internals below route root:\n%s", body)
 	}
 	if !strings.Contains(body, `&#34;compact&#34;:true`) {
@@ -894,8 +894,8 @@ func TestWorkspaceAssetUpdatesStreamsInitialRefreshState(t *testing.T) {
 		if !ok {
 			continue
 		}
-		runsGrid, ok := refresh["runsGrid"].(map[string]any)
-		if ok && len(runsGrid) > 0 {
+		runsTable, ok := refresh["runsTable"].(map[string]any)
+		if ok && len(runsTable) > 0 {
 			found = true
 		}
 	}
@@ -904,7 +904,7 @@ func TestWorkspaceAssetUpdatesStreamsInitialRefreshState(t *testing.T) {
 	}
 }
 
-func TestWorkspaceAssetDetailsUpdatesExcludeRefreshesGridAndUnusedRefreshFields(t *testing.T) {
+func TestWorkspaceAssetDetailsUpdatesExcludeRefreshesTableAndUnusedRefreshFields(t *testing.T) {
 	store := testStore(t)
 	server := NewWithOptions(emptyPageRuntimeAssetMetrics{}, Options{Store: store, DefaultWorkspaceID: "test"})
 	assetID := workspace.NewAssetID(workspace.AssetTypeSemanticModel, "olist")
@@ -921,8 +921,8 @@ func TestWorkspaceAssetDetailsUpdatesExcludeRefreshesGridAndUnusedRefreshFields(
 		t.Fatalf("details updates did not stream patches:\n%s", body)
 	}
 	for _, patch := range patches {
-		if _, ok := patch["assetRefreshesGrid"]; ok {
-			t.Fatalf("details updates streamed refreshes grid: %#v", patch["assetRefreshesGrid"])
+		if _, ok := patch["assetRefreshesTable"]; ok {
+			t.Fatalf("details updates streamed refreshes table: %#v", patch["assetRefreshesTable"])
 		}
 		page, ok := patch["page"].(map[string]any)
 		if !ok {
@@ -932,8 +932,8 @@ func TestWorkspaceAssetDetailsUpdatesExcludeRefreshesGridAndUnusedRefreshFields(
 		if !ok {
 			continue
 		}
-		if _, ok := refresh["runsGrid"]; ok {
-			t.Fatalf("details updates streamed refreshes grid: %#v", refresh["runsGrid"])
+		if _, ok := refresh["runsTable"]; ok {
+			t.Fatalf("details updates streamed refreshes table: %#v", refresh["runsTable"])
 		}
 		for _, key := range []string{"error", "lastAttempt", "lastDuration"} {
 			if _, ok := refresh[key]; ok {

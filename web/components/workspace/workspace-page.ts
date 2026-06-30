@@ -1,5 +1,5 @@
-import { LitElement, css, html, nothing } from 'lit'
-import { property } from 'lit/decorators.js'
+import { LitElement, css, html, nothing, type PropertyValues } from 'lit'
+import { property, state } from 'lit/decorators.js'
 import {
   ArrowLeft,
   BookOpen,
@@ -28,7 +28,7 @@ import {
 import type {
   ConnectionsPageSignal,
   DefinitionFactSignal,
-  MetricGridSignal,
+  RecordTableSignal,
   WorkspaceAccessSignal,
   WorkspaceAssetPageSignal,
   WorkspaceAssetSummarySignal,
@@ -39,7 +39,7 @@ import type {
 import { jsonAttribute } from '../shared/json-attribute'
 import { checkSignalContract } from '../shared/signal-contract'
 import { lucideIcon } from '../shared/lucide-icons'
-import '../shared/data-grid'
+import '../shared/record-table'
 import '../shared/code-block'
 import '../shared/workspace-access-control'
 
@@ -57,12 +57,14 @@ const emptyWorkspaceAccess: WorkspaceAccessSignal = {
 class LibreDashWorkspacePage extends LitElement {
   @property({ converter: jsonAttribute<WorkspacePageSignal | null>(null) }) page: WorkspacePageSignal | null = null
   @property({ attribute: 'workspaceaccess', converter: jsonAttribute<WorkspaceAccessSignal>(emptyWorkspaceAccess) }) workspaceAccess: WorkspaceAccessSignal = emptyWorkspaceAccess
+  @state() private assetQuery: string | null = null
 
   static get styles() {
     return workspaceStyles
   }
 
-  updated(): void {
+  updated(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('page')) this.assetQuery = null
     checkSignalContract('workspace page', this.page, { kind: 'required', title: 'required' })
   }
 
@@ -98,11 +100,14 @@ class LibreDashWorkspacePage extends LitElement {
   }
 
   private renderAssetList(page: WorkspacePageSignal, eyebrow: string, label: string) {
+    const assetList = page.assetList
+    const query = this.assetQuery ?? assetList?.query ?? ''
+    const assets = filterAssetSummaries(assetList?.assets ?? [], query)
     return html`
       <section class="page" aria-label=${label}>
         ${this.renderHeader(eyebrow, page.title, page.description, this.renderAccessControl())}
-        ${renderAssetToolbar(page.assetList?.searchHref ?? '', page.assetList?.query ?? '', page.assetList?.activeType ?? '', page.assetList?.tabs ?? [], 'Search workspace assets...')}
-        ${renderAssetTable(page.assetList?.assets ?? [], page.assetList?.empty ?? 'No assets match this view.')}
+        ${renderAssetToolbar(query, assetList?.activeType ?? '', assetList?.tabs ?? [], 'Search workspace assets...', (event: Event) => this.assetQuery = (event.currentTarget as HTMLInputElement).value)}
+        ${renderAssetTable(assets, query ? 'No assets match this search.' : assetList?.empty ?? 'No assets match this view.')}
       </section>
     `
   }
@@ -141,18 +146,23 @@ class LibreDashWorkspacePage extends LitElement {
 
 class LibreDashConnectionsPage extends LitElement {
   @property({ converter: jsonAttribute<ConnectionsPageSignal | null>(null) }) page: ConnectionsPageSignal | null = null
+  @state() private assetQuery: string | null = null
 
   static get styles() {
     return workspaceStyles
   }
 
-  updated(): void {
+  updated(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('page')) this.assetQuery = null
     checkSignalContract('connections page', this.page, { kind: 'required', title: 'required', assetList: 'required' })
   }
 
   render() {
     const page = this.page
     if (!page) return html`<slot></slot>`
+    const assetList = page.assetList
+    const query = this.assetQuery ?? assetList?.query ?? ''
+    const assets = filterAssetSummaries(assetList?.assets ?? [], query)
     return html`
       <section class="page" aria-label="Connections and sources">
         <header class="header">
@@ -162,8 +172,8 @@ class LibreDashConnectionsPage extends LitElement {
             ${page.description ? html`<p class="detail">${page.description}</p>` : nothing}
           </div>
         </header>
-        ${renderAssetToolbar(page.assetList?.searchHref ?? '/connections', page.assetList?.query ?? '', page.assetList?.activeType ?? '', page.assetList?.tabs ?? [], 'Search connections and sources...')}
-        ${renderAssetTable(page.assetList?.assets ?? [], page.assetList?.empty ?? 'No connection assets match this view.')}
+        ${renderAssetToolbar(query, assetList?.activeType ?? '', assetList?.tabs ?? [], 'Search connections and sources...', (event: Event) => this.assetQuery = (event.currentTarget as HTMLInputElement).value)}
+        ${renderAssetTable(assets, query ? 'No connection assets match this search.' : assetList?.empty ?? 'No connection assets match this view.')}
       </section>
     `
   }
@@ -203,7 +213,7 @@ class LibreDashWorkspaceAssetPage extends LitElement {
         </header>
         <div class="asset-body">
           ${renderTabs(page.tabs)}
-          <div class=${page.activeSection === 'lineage' ? 'section-body lineage-body' : 'section-body'}>
+          <div class=${page.activeSection === 'lineage' ? 'section-body lineage-body' : page.activeSection === 'details' && page.details?.semanticModelGraph ? 'section-body graph-details-body' : 'section-body'}>
             ${page.activeSection === 'lineage'
               ? this.renderLineage(page)
               : page.activeSection === 'refreshes'
@@ -241,8 +251,11 @@ class LibreDashWorkspaceAssetPage extends LitElement {
   private renderDetails(page: WorkspaceAssetPageSignal) {
     return html`
       <section class="details" id="details" aria-label="Asset details">
-        ${renderFacts('Overview', page.details?.overview ?? [], true)}
-        ${(page.details?.sections ?? []).map(renderDetailSection)}
+        ${page.details?.semanticModelGraph ? renderSemanticModelGraph(page.details.semanticModelGraph, page) : nothing}
+        <div class="details-content">
+          ${renderFacts('Overview', page.details?.overview ?? [], true)}
+          ${(page.details?.sections ?? []).map(renderDetailSection)}
+        </div>
       </section>
     `
   }
@@ -252,8 +265,8 @@ class LibreDashWorkspaceAssetPage extends LitElement {
       <section class="lineage" id="lineage" aria-label="Asset lineage">
         <ld-asset-lineage-graph class="lineage-graph" .graph=${page.lineage?.graph ?? { nodes: [], edges: [] }}></ld-asset-lineage-graph>
         <div class="lineage-grids">
-          ${renderGridSection('Uses', page.lineage?.usesGrid)}
-          ${renderGridSection('Used by', page.lineage?.usedByGrid)}
+          ${renderRecordTableSection('Uses', page.lineage?.usesTable)}
+          ${renderRecordTableSection('Used by', page.lineage?.usedByTable)}
         </div>
       </section>
     `
@@ -262,68 +275,78 @@ class LibreDashWorkspaceAssetPage extends LitElement {
   private renderRefreshes(page: WorkspaceAssetPageSignal) {
     return html`
       <section class="details" id="refreshes" aria-label="Refresh runs">
-        ${renderGridSection('Refreshes', page.refresh?.runsGrid)}
+        ${renderRecordTableSection('Refreshes', page.refresh?.runsTable)}
       </section>
     `
   }
 }
 
-function renderAssetToolbar(action: string, query: string, activeType: string, tabs: WorkspaceTabSignal[], placeholder: string) {
+function renderAssetToolbar(query: string, activeType: string, tabs: WorkspaceTabSignal[], placeholder: string, onSearch: (event: Event) => void) {
   return html`
     <div class="toolbar">
-      <form method="get" action=${action} class="search">
-        <input type="search" name="q" value=${query} placeholder=${placeholder} />
+      <form class="search" @submit=${preventSubmit}>
+        <input
+          type="search"
+          name="q"
+          .value=${query}
+          placeholder=${placeholder}
+          autocomplete="off"
+          @input=${onSearch}
+        />
         ${activeType ? html`<input type="hidden" name="type" value=${activeType} />` : nothing}
-        <button type="submit" class="icon-button" title="Search" aria-label="Search">${lucideIcon(Search)}</button>
+        <span class="search-icon" aria-hidden="true">${lucideIcon(Search)}</span>
       </form>
       ${renderTabs(tabs)}
     </div>
   `
 }
 
+function preventSubmit(event: Event) {
+  event.preventDefault()
+}
+
+function filterAssetSummaries(assets: WorkspaceAssetSummarySignal[], query: string) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return assets
+  return assets.filter((asset) => [
+    asset.title,
+    asset.description,
+    asset.typeLabel,
+    asset.type,
+    asset.key,
+    asset.parentTitle,
+  ].some((value) => String(value ?? '').toLowerCase().includes(normalized)))
+}
+
 function renderAssetTable(assets: WorkspaceAssetSummarySignal[], empty: string) {
   if (!assets.length) return html`<div class="panel"><div class="empty">${empty}</div></div>`
+  const table: RecordTableSignal = {
+    columns: [
+      { id: 'name', header: 'Name', kind: 'entity', width: '42%' },
+      { id: 'type', header: 'Type', width: '150px' },
+      { id: 'key', header: 'Key', kind: 'code', width: '180px' },
+      { id: 'actions', header: 'Actions', kind: 'actions', align: 'right', width: '104px', sortable: false } as any,
+    ],
+    rows: assets.map((asset) => ({
+      name: {
+        label: asset.title,
+        description: asset.description,
+        href: asset.detailHref,
+        icon: asset.type,
+      },
+      type: asset.typeLabel,
+      key: asset.key,
+      actions: [
+        { label: 'View details', href: asset.detailHref, icon: 'details' },
+        { label: 'Open asset', href: asset.openHref, icon: 'open' },
+      ],
+    })),
+    empty,
+    minWidth: '840px',
+  }
   return html`
-    <div class="panel table-panel">
-      <table class="asset-table">
-        <thead>
-          <tr>
-            <th class="name-col">Name</th>
-            <th class="type-col">Type</th>
-            <th class="key-col hide-md">Key</th>
-            <th class="parent-col hide-lg">Parent</th>
-            <th class="action-col right">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${assets.map((asset) => html`
-            <tr>
-              <td class="name-col">
-                <div class="asset-name">
-                  ${assetTypeGlyph(asset.type)}
-                  <div>
-                    <a class="asset-title" href=${asset.detailHref}>${asset.title}</a>
-                    ${asset.description ? html`<p>${asset.description}</p>` : nothing}
-                  </div>
-                </div>
-              </td>
-              <td class="type-col">${asset.typeLabel}</td>
-              <td class="key-col hide-md"><code>${asset.key}</code></td>
-              <td class="parent-col hide-lg">
-                ${asset.parentHref
-                  ? html`<a class="muted-link" href=${asset.parentHref}>${asset.parentTitle}</a>`
-                  : html`<span class="muted">${asset.parentTitle || '-'}</span>`}
-              </td>
-              <td class="action-col right">
-                <span class="row-actions">
-                  <a class="icon-link" href=${asset.detailHref} title="View details" aria-label="View details">${lucideIcon(FileText)}</a>
-                  <a class="icon-link" href=${asset.openHref} title="Open asset" aria-label="Open asset">${lucideIcon(ExternalLink)}</a>
-                </span>
-              </td>
-            </tr>
-          `)}
-        </tbody>
-      </table>
+    <div class="panel">
+      <ld-record-table variant="primary" .table=${table}></ld-record-table>
     </div>
   `
 }
@@ -351,8 +374,16 @@ function renderDetailSection(section: WorkspaceDetailSectionSignal) {
       </section>
     `
   }
-  if (section.grid?.columns?.length) return renderGridSection(section.title, section.grid)
+  if (section.table?.columns?.length) return renderRecordTableSection(section.title, section.table)
   return renderFacts(section.title, section.facts ?? [], false)
+}
+
+function renderSemanticModelGraph(graph: NonNullable<NonNullable<WorkspaceAssetPageSignal['details']>['semanticModelGraph']>, page: WorkspaceAssetPageSignal) {
+  return html`
+    <section class="semantic-model-section" aria-label="Data model graph">
+      <ld-semantic-model-graph class="semantic-model-graph" .graph=${graph} storagekey=${`${page.workspaceId}:${page.assetId}`}></ld-semantic-model-graph>
+    </section>
+  `
 }
 
 function renderFacts(title: string, facts: DefinitionFactSignal[], overview: boolean) {
@@ -376,11 +407,11 @@ function renderFacts(title: string, facts: DefinitionFactSignal[], overview: boo
   `
 }
 
-function renderGridSection(title: string, grid?: MetricGridSignal) {
+function renderRecordTableSection(title: string, table?: RecordTableSignal) {
   return html`
     <section class="detail-section" aria-label=${title}>
       <h2>${title}</h2>
-      <ld-data-grid .grid=${grid ?? null}></ld-data-grid>
+      <ld-record-table .table=${table ?? null}></ld-record-table>
     </section>
   `
 }
@@ -485,18 +516,23 @@ const workspaceStyles = css`
   .page,
   .asset-page {
     display: grid;
+    width: min(100%, var(--ld-page-content-max-width, 72rem));
     min-width: 0;
     min-height: 100svh;
     align-content: start;
     gap: var(--base-size-12);
+    box-sizing: border-box;
+    margin-inline: auto;
     background: var(--ld-bg-app);
     padding: var(--base-size-16);
   }
 
   .asset-page {
+    width: 100%;
     grid-template-rows: auto minmax(0, 1fr);
     gap: 0;
     height: 100svh;
+    margin-inline: 0;
     padding: 0;
     overflow: hidden;
   }
@@ -555,8 +591,7 @@ const workspaceStyles = css`
   }
 
   .detail,
-  .muted,
-  .asset-table p {
+  .muted {
     margin-top: var(--base-size-4);
     overflow: hidden;
     color: var(--ld-fg-muted);
@@ -689,10 +724,10 @@ const workspaceStyles = css`
   }
 
   .search {
-    display: flex;
+    position: relative;
+    display: block;
     max-width: 34rem;
     min-width: 0;
-    gap: var(--base-size-8);
   }
 
   input[type='search'] {
@@ -703,7 +738,27 @@ const workspaceStyles = css`
     border-radius: var(--ld-radius-tight);
     background: var(--ld-bg-control);
     color: var(--ld-fg-default);
-    padding: 0 var(--base-size-12);
+    padding: 0 calc(var(--base-size-24) + var(--base-size-12)) 0 var(--base-size-12);
+  }
+
+  input[type='search']:focus {
+    border-color: var(--ld-line-accent, var(--ld-accent));
+    background: var(--ld-bg-panel);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ld-line-accent, var(--ld-accent)), transparent 84%);
+    outline: 0;
+  }
+
+  .search-icon {
+    position: absolute;
+    top: 50%;
+    right: var(--base-size-10);
+    display: grid;
+    width: var(--base-size-16);
+    height: var(--base-size-16);
+    place-items: center;
+    color: var(--ld-fg-muted);
+    pointer-events: none;
+    transform: translateY(-50%);
   }
 
   .tabs {
@@ -745,96 +800,6 @@ const workspaceStyles = css`
     color: var(--ld-fg-muted);
     padding: 0 var(--base-size-6);
     font-size: var(--ld-font-size-caption);
-  }
-
-  .table-panel {
-    overflow-x: auto;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    text-align: left;
-    table-layout: fixed;
-  }
-
-  th,
-  td {
-    border-bottom: var(--ld-border-muted);
-    padding: var(--base-size-8) var(--base-size-12);
-    vertical-align: middle;
-  }
-
-  th {
-    background: var(--ld-bg-panel-muted);
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-caption);
-    font-weight: var(--ld-font-weight-medium);
-    text-transform: uppercase;
-  }
-
-  td {
-    color: var(--ld-fg-muted);
-    font-size: var(--ld-font-size-body-sm);
-    font-weight: var(--ld-font-weight-medium);
-  }
-
-  tr:hover td {
-    background: var(--ld-bg-control-hover);
-  }
-
-  .right {
-    text-align: right;
-  }
-
-  .type-col {
-    width: 10rem;
-  }
-
-  .key-col {
-    width: 14rem;
-  }
-
-  .parent-col {
-    width: 12rem;
-  }
-
-  .action-col {
-    width: 6rem;
-  }
-
-  .asset-name {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: var(--base-size-12);
-  }
-
-  .asset-name > div {
-    min-width: 0;
-  }
-
-  .asset-title,
-  .muted-link {
-    color: var(--ld-fg-default);
-    text-decoration: none;
-  }
-
-  .asset-title {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-weight: var(--ld-font-weight-strong);
-  }
-
-  .asset-title:hover,
-  .muted-link:hover {
-    text-decoration: underline;
-  }
-
-  .muted-link {
-    color: var(--ld-fg-link);
   }
 
   code {
@@ -990,11 +955,20 @@ const workspaceStyles = css`
     padding: 0;
   }
 
+  .graph-details-body {
+    padding: 0;
+  }
+
   .details,
+  .details-content,
   .lineage-grids {
     display: grid;
     align-content: start;
     gap: var(--base-size-24);
+  }
+
+  .details-content {
+    padding: var(--base-size-16);
   }
 
   .lineage {
@@ -1007,6 +981,19 @@ const workspaceStyles = css`
     display: block;
     height: var(--ld-lineage-graph-height, 32rem);
     min-height: 0;
+    border-bottom: var(--ld-border-muted);
+    background: var(--ld-bg-panel);
+  }
+
+  .semantic-model-section {
+    min-height: 0;
+  }
+
+  .semantic-model-graph {
+    display: block;
+    height: min(72svh, 48rem);
+    min-height: 0;
+    overflow: hidden;
     border-bottom: var(--ld-border-muted);
     background: var(--ld-bg-panel);
   }
@@ -1085,13 +1072,16 @@ const workspaceStyles = css`
       overflow: visible;
     }
 
-    .hide-md,
-    .hide-lg {
-      display: none;
-    }
-
     .section-body {
       overflow: visible;
+    }
+
+    .graph-details-body {
+      overflow: visible;
+    }
+
+    .semantic-model-graph {
+      height: 32rem;
     }
   }
 `

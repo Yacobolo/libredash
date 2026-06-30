@@ -130,6 +130,7 @@ tasks:
       - bun run test:theme
       - bun run test:app-shell
       - bun run test:table-selection
+      - bun run test:record-table
       - bun run test:visual-modal
       - bun run test:catalog-page
       - bun run test:dashboard-page
@@ -139,6 +140,7 @@ tasks:
       - bun run test:admin-page
       - bun run test:login-page
       - bun run test:asset-lineage
+      - bun run test:semantic-model-graph
       - go test ./...
 
   ci:

@@ -56,7 +56,7 @@ for (const viewport of [
         customElements.get('ld-workspace-page')
           && customElements.get('ld-connections-page')
           && customElements.get('ld-workspace-asset-page')
-          && customElements.get('ld-data-grid')
+          && customElements.get('ld-record-table')
       ))
       await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
       await page.locator('ld-connections-page').evaluate((element: any) => element.updateComplete)
@@ -68,38 +68,59 @@ for (const viewport of [
         const asset = document.querySelector('ld-workspace-asset-page') as any
         const workspacePage = workspace.shadowRoot.querySelector('.page') as HTMLElement
         const workspaceToolbar = workspace.shadowRoot.querySelector('.toolbar') as HTMLElement
-        const workspaceGlyph = workspace.shadowRoot.querySelector('.asset-glyph') as HTMLElement
-        const workspaceRowActionIcon = workspace.shadowRoot.querySelector('.row-actions svg') as SVGElement
-        const workspaceRowActionLink = workspace.shadowRoot.querySelector('.row-actions .icon-link') as HTMLElement
-        const workspaceNameCell = workspace.shadowRoot.querySelector('tbody tr:first-child .name-col') as HTMLElement
-        const workspaceTypeCell = workspace.shadowRoot.querySelector('tbody tr:first-child .type-col') as HTMLElement
-        const workspaceAssetTitle = workspace.shadowRoot.querySelector('tbody tr:first-child .asset-title') as HTMLElement
-        const workspaceAssetDescription = workspace.shadowRoot.querySelector('tbody tr:first-child .name-col p') as HTMLElement
+        const workspaceRecordTable = workspace.shadowRoot.querySelector('ld-record-table') as HTMLElement
+        const workspaceGlyph = workspace.shadowRoot.querySelector('.record-entity-icon') as HTMLElement
+        const workspaceDashboardGlyph = workspace.shadowRoot.querySelector('.record-icon-dashboard') as HTMLElement
+        const workspaceRowActionIcon = workspace.shadowRoot.querySelector('.record-actions svg') as SVGElement
+        const workspaceRowActionLink = workspace.shadowRoot.querySelector('.record-actions .record-icon-action') as HTMLElement
+        const workspaceNameCell = workspace.shadowRoot.querySelector('tbody tr:first-child td:first-child') as HTMLElement
+        const workspaceTypeCell = workspace.shadowRoot.querySelector('tbody tr:first-child td:nth-child(2)') as HTMLElement
+        const workspaceAssetTitle = workspace.shadowRoot.querySelector('tbody tr:first-child .record-entity-label') as HTMLElement
+        const workspaceAssetDescription = workspace.shadowRoot.querySelector('tbody tr:first-child .record-entity-description') as HTMLElement
         const connectionsPage = connections.shadowRoot.querySelector('.page') as HTMLElement
         const assetHeader = asset.shadowRoot.querySelector('.breadcrumb-header') as HTMLElement
         const assetTabs = asset.shadowRoot.querySelector('.asset-body > .tabs') as HTMLElement
         const assetFirstTab = asset.shadowRoot.querySelector('.asset-body > .tabs a') as HTMLElement
+        const assetSectionBody = asset.shadowRoot.querySelector('.section-body') as HTMLElement
+        const semanticGraph = asset.shadowRoot.querySelector('ld-semantic-model-graph') as HTMLElement
+        const firstRecordTable = asset.shadowRoot.querySelector('ld-record-table') as HTMLElement
+        const semanticGraphSection = asset.shadowRoot.querySelector('.semantic-model-section') as HTMLElement
         const nameCellRight = workspaceNameCell.getBoundingClientRect().right
         const typeCellLeft = workspaceTypeCell.getBoundingClientRect().left
+        const workspacePageRect = workspacePage.getBoundingClientRect()
+        const connectionsPageRect = connectionsPage.getBoundingClientRect()
+        const isMobile = window.innerWidth <= 720
         return {
           workspaceTitle: workspace.shadowRoot.querySelector('h1')?.textContent?.trim(),
-          workspaceHasAsset: Boolean(workspace.shadowRoot.querySelector('.asset-title')),
+          workspaceHasAsset: Boolean(workspaceRecordTable && workspace.shadowRoot.querySelector('.record-entity-label')),
+          workspaceTableVariant: workspaceRecordTable.getAttribute('variant'),
+          workspaceTableHeaders: Array.from(workspaceRecordTable.querySelectorAll('thead th button span:first-child')).map((header) => header.textContent?.trim()),
+          workspaceTableHeaderBackground: getComputedStyle(workspaceRecordTable.querySelector('thead th') as HTMLElement).backgroundColor,
           workspaceHasAccess: Boolean(workspace.shadowRoot.querySelector('ld-workspace-access-control')),
           workspaceIsStyled: getComputedStyle(workspacePage).paddingTop !== '0px',
+          workspacePageCentered: isMobile || Math.abs((workspacePageRect.left + workspacePageRect.width / 2) - window.innerWidth / 2) <= 1,
+          workspacePageConstrained: isMobile || Math.round(workspacePageRect.width) < window.innerWidth,
           workspaceToolbarDisplay: getComputedStyle(workspaceToolbar).display,
           workspaceGlyphText: workspaceGlyph.textContent?.trim(),
           workspaceGlyphBackground: getComputedStyle(workspaceGlyph).backgroundColor,
           workspaceGlyphHasIcon: Boolean(workspaceGlyph.querySelector('svg')),
+          workspaceDashboardGlyphBorderColor: getComputedStyle(workspaceDashboardGlyph).borderTopColor,
           workspaceRowActionIconWidth: getComputedStyle(workspaceRowActionIcon).width,
           workspaceRowActionBorderColor: getComputedStyle(workspaceRowActionLink).borderTopColor,
-          workspaceTitleFitsNameColumn: workspaceAssetTitle.getBoundingClientRect().right <= nameCellRight && workspaceAssetTitle.getBoundingClientRect().right <= typeCellLeft,
-          workspaceDescriptionFitsNameColumn: workspaceAssetDescription.getBoundingClientRect().right <= nameCellRight && workspaceAssetDescription.getBoundingClientRect().right <= typeCellLeft,
+          workspaceTitleFitsNameColumn: workspaceAssetTitle.getBoundingClientRect().right <= nameCellRight,
+          workspaceDescriptionFitsNameColumn: workspaceAssetDescription.getBoundingClientRect().right <= nameCellRight,
           connectionsTitle: connections.shadowRoot.querySelector('h1')?.textContent?.trim(),
           connectionsHasSource: connections.shadowRoot.textContent?.includes('Orders source') ?? false,
           connectionsIsStyled: getComputedStyle(connectionsPage).paddingTop !== '0px',
+          connectionsPageCentered: isMobile || Math.abs((connectionsPageRect.left + connectionsPageRect.width / 2) - window.innerWidth / 2) <= 1,
+          connectionsPageConstrained: isMobile || Math.round(connectionsPageRect.width) < window.innerWidth,
           assetTitle: asset.shadowRoot.querySelector('h1 span:last-child')?.textContent?.trim(),
           assetHasOverview: asset.shadowRoot.textContent?.includes('Overview') ?? false,
-          assetHasGrid: Boolean(asset.shadowRoot.querySelector('ld-data-grid')),
+          assetHasRecordTable: Boolean(asset.shadowRoot.querySelector('ld-record-table')),
+          assetHasSemanticGraph: Boolean(semanticGraph),
+          assetSemanticGraphBeforeRecordTable: Boolean(semanticGraph && firstRecordTable && semanticGraph.compareDocumentPosition(firstRecordTable) & Node.DOCUMENT_POSITION_FOLLOWING),
+          assetHasDataModelHeading: Array.from(asset.shadowRoot.querySelectorAll('h2')).some((heading) => heading.textContent?.trim() === 'Data model'),
+          assetGraphFlushLeft: semanticGraphSection ? Math.round(semanticGraphSection.getBoundingClientRect().left - assetSectionBody.getBoundingClientRect().left) : -1,
           assetHeaderDisplay: getComputedStyle(assetHeader).display,
           assetTabsPaddingLeft: getComputedStyle(assetTabs).paddingLeft,
           assetFirstTabInset: Math.round(assetFirstTab.getBoundingClientRect().left - assetTabs.getBoundingClientRect().left),
@@ -109,12 +130,18 @@ for (const viewport of [
       expect(state).toEqual({
         workspaceTitle: 'LibreDash Workspace',
         workspaceHasAsset: true,
+        workspaceTableVariant: 'primary',
+        workspaceTableHeaders: ['Name', 'Type', 'Key', 'Actions'],
+        workspaceTableHeaderBackground: 'rgb(246, 248, 250)',
         workspaceHasAccess: true,
         workspaceIsStyled: true,
+        workspacePageCentered: true,
+        workspacePageConstrained: true,
         workspaceToolbarDisplay: 'grid',
         workspaceGlyphText: '',
         workspaceGlyphBackground: 'rgb(221, 244, 255)',
         workspaceGlyphHasIcon: true,
+        workspaceDashboardGlyphBorderColor: 'rgb(210, 191, 255)',
         workspaceRowActionIconWidth: '16px',
         workspaceRowActionBorderColor: 'rgba(0, 0, 0, 0)',
         workspaceTitleFitsNameColumn: true,
@@ -122,9 +149,15 @@ for (const viewport of [
         connectionsTitle: 'Connections',
         connectionsHasSource: true,
         connectionsIsStyled: true,
+        connectionsPageCentered: true,
+        connectionsPageConstrained: true,
         assetTitle: 'Olist Commerce',
         assetHasOverview: true,
-        assetHasGrid: true,
+        assetHasRecordTable: true,
+        assetHasSemanticGraph: true,
+        assetSemanticGraphBeforeRecordTable: true,
+        assetHasDataModelHeading: false,
+        assetGraphFlushLeft: 0,
         assetHeaderDisplay: 'grid',
         assetTabsPaddingLeft: '16px',
         assetFirstTabInset: 16,
@@ -134,6 +167,48 @@ for (const viewport of [
     }
   })
 }
+
+test('workspace asset search filters the current asset rows', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-workspace-page'))
+    await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
+
+    const state = await page.evaluate(async () => {
+      const workspace = document.querySelector('ld-workspace-page') as any
+      const root = workspace.shadowRoot
+      const input = root.querySelector('.toolbar .search input[type="search"]') as HTMLInputElement
+      const form = root.querySelector('.toolbar .search') as HTMLFormElement
+      const before = Array.from(root.querySelectorAll('.record-entity-label')).map((link) => link.textContent?.trim())
+      input.value = 'customer'
+      input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
+      await workspace.updateComplete
+      input.focus()
+      const focusedStyle = getComputedStyle(input)
+      const after = Array.from(root.querySelectorAll('.record-entity-label')).map((link) => link.textContent?.trim())
+      return {
+        before,
+        after,
+        focusedBorderColor: focusedStyle.borderTopColor,
+        focusedOutlineStyle: focusedStyle.outlineStyle,
+        hasSubmitButton: Boolean(root.querySelector('.toolbar .search button[type="submit"]')),
+        formAction: form.getAttribute('action'),
+        inputAutocomplete: input.getAttribute('autocomplete'),
+      }
+    })
+
+    expect(state.before).toEqual(['Executive Sales Dashboard', 'Customer Segments'])
+    expect(state.after).toEqual(['Customer Segments'])
+    expect(state.focusedBorderColor).toBe('rgb(9, 105, 218)')
+    expect(state.focusedOutlineStyle).toBe('none')
+    expect(state.hasSubmitButton).toBe(false)
+    expect(state.formAction).toBeNull()
+    expect(state.inputAutocomplete).toBe('off')
+  } finally {
+    await page.close()
+  }
+})
 
 test('workspace access modal normalizes Go-shaped access signals', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
@@ -181,7 +256,7 @@ test('workspace asset refresh page renders refresh tab and emits refresh events'
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-workspace-asset-page') && customElements.get('ld-data-grid'))
+    await page.waitForFunction(() => customElements.get('ld-workspace-asset-page') && customElements.get('ld-record-table'))
 
     const state = await page.evaluate(async () => {
       const asset = document.querySelector('ld-workspace-asset-page') as any
@@ -221,7 +296,7 @@ test('workspace asset refresh page renders refresh tab and emits refresh events'
           status: 'succeeded',
           running: false,
           lastSuccessful: '2026-06-26 10:00:12',
-          runsGrid: {
+          runsTable: {
             columns: [
               { id: 'status', header: 'Status', kind: 'status' },
               { id: 'started', header: 'Started' },
@@ -238,14 +313,14 @@ test('workspace asset refresh page renders refresh tab and emits refresh events'
       return {
         activeTab: asset.shadowRoot.querySelector('.tabs a.active')?.textContent?.trim(),
         hasRefreshButton: Boolean(button),
-        gridText: asset.shadowRoot.querySelector('ld-data-grid')?.textContent,
+        recordTableText: asset.shadowRoot.querySelector('ld-record-table')?.textContent,
         refreshEvents,
       }
     })
 
     expect(state.activeTab).toBe('Refreshes')
     expect(state.hasRefreshButton).toBe(true)
-    expect(state.gridText ?? '').toMatch(/matrun_123/)
+    expect(state.recordTableText ?? '').toMatch(/matrun_123/)
     expect(state.refreshEvents).toBe(1)
   } finally {
     await page.close()
@@ -260,17 +335,30 @@ function testDocument(): string {
       { id: '', label: 'All', href: '/workspaces/libredash', active: true },
       { id: 'dashboard', label: 'Dashboard', href: '/workspaces/libredash?type=dashboard', active: false },
     ],
-    assets: [{
-      id: 'semantic_model:olist',
-      title: 'Executive Sales Dashboard',
-      description: 'Sales, order, category, and delivery overview with deliberately long text for table fitting.',
-      type: 'semantic_model',
-      typeLabel: 'Semantic model',
-      key: 'olist',
-      parentTitle: '-',
-      detailHref: '/workspaces/libredash/assets/semantic_model:olist/details',
-      openHref: '/workspaces/libredash/assets/semantic_model:olist/details',
-    }],
+    assets: [
+      {
+        id: 'semantic_model:olist',
+        title: 'Executive Sales Dashboard',
+        description: 'Sales, order, category, and delivery overview with deliberately long text for table fitting.',
+        type: 'semantic_model',
+        typeLabel: 'Semantic model',
+        key: 'olist',
+        parentTitle: '-',
+        detailHref: '/workspaces/libredash/assets/semantic_model:olist/details',
+        openHref: '/workspaces/libredash/assets/semantic_model:olist/details',
+      },
+      {
+        id: 'dashboard:customers',
+        title: 'Customer Segments',
+        description: 'Customer cohort report.',
+        type: 'dashboard',
+        typeLabel: 'Dashboard',
+        key: 'customers',
+        parentTitle: '-',
+        detailHref: '/workspaces/libredash/assets/dashboard:customers/details',
+        openHref: '/dashboards/customers',
+      },
+    ],
     empty: 'No assets match this view.',
   }
   const workspacePage = {
@@ -313,9 +401,36 @@ function testDocument(): string {
         { label: 'Type', value: 'Semantic model' },
         { label: 'Key', value: 'olist', code: true },
       ],
+      semanticModelGraph: {
+        baseTable: 'orders',
+        nodes: [{
+          id: 'orders',
+          title: 'orders',
+          primaryKey: 'order_id',
+          fields: [
+            { name: 'order_id', label: 'Order ID', primaryKey: true },
+            { name: 'customer_id', label: 'Customer ID', join: true, relationships: ['orders_customers'] },
+          ],
+        }, {
+          id: 'customers',
+          title: 'customers',
+          primaryKey: 'customer_id',
+          fields: [{ name: 'customer_id', label: 'Customer ID', primaryKey: true, join: true, relationships: ['orders_customers'] }],
+        }],
+        edges: [{
+          id: 'orders_customers',
+          source: 'orders',
+          target: 'customers',
+          sourceField: 'customer_id',
+          targetField: 'customer_id',
+          cardinality: 'many_to_one',
+          label: '*:1',
+          active: true,
+        }],
+      },
       sections: [{
         title: 'Model tables (1)',
-        grid: {
+        table: {
           columns: [{ id: 'name', header: 'Name', kind: 'link', hrefKey: 'nameHref' }],
           rows: [{ name: 'orders', nameHref: '/workspaces/libredash/assets/model_table:olist.orders/details' }],
           empty: 'No model tables.',
@@ -345,7 +460,7 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-accent: #0969da; --ld-accent-fg: #fff; --ld-line-muted: #d8dee4; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-radius-default: 6px; --ld-radius-tight: 4px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; --ld-asset-semantic-model-bg: #ddf4ff; --ld-asset-semantic-model-accent: #0969da; --ld-asset-semantic-model-border: #b6e3ff; --z-index-inspector: 1000; --ld-modal-backdrop: rgb(0 0 0 / .28); }
+          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-accent: #0969da; --ld-accent-fg: #fff; --ld-line-muted: #d8dee4; --ld-line-accent: #0969da; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-radius-default: 6px; --ld-radius-tight: 4px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --control-medium-size: 32px; --control-xlarge-size: 40px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; --ld-asset-dashboard-bg: #fbefff; --ld-asset-dashboard-accent: #8250df; --ld-asset-dashboard-border: #d2bfff; --ld-asset-semantic-model-bg: #ddf4ff; --ld-asset-semantic-model-accent: #0969da; --ld-asset-semantic-model-border: #b6e3ff; --z-index-inspector: 1000; --ld-modal-backdrop: rgb(0 0 0 / .28); }
           ld-workspace-page, ld-connections-page, ld-workspace-asset-page { display: block; min-height: 720px; }
         </style>
       </head>

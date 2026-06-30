@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -230,7 +231,19 @@ func inspectDuckDBTables(ctx context.Context, file duckDBFile, modelTitles map[s
 }
 
 func openDuckDBForInspection(ctx context.Context, path string) (*sql.DB, error) {
-	db, err := sql.Open("duckdb", duckDBReadOnlyDSN(path))
+	db, err := openDuckDBConnection(ctx, duckDBReadOnlyDSN(path))
+	if err == nil {
+		return db, nil
+	}
+	fallbackDB, fallbackErr := openDuckDBConnection(ctx, path)
+	if fallbackErr == nil {
+		return fallbackDB, nil
+	}
+	return nil, errors.Join(err, fallbackErr)
+}
+
+func openDuckDBConnection(ctx context.Context, dsn string) (*sql.DB, error) {
+	db, err := sql.Open("duckdb", dsn)
 	if err == nil {
 		if pingErr := db.PingContext(ctx); pingErr == nil {
 			return db, nil

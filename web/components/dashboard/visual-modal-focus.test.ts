@@ -189,7 +189,7 @@ test('visualSourceFromEvent returns the first focusable visual in the composed p
   try {
     const button = new TestHTMLElement('button')
     const chart = new TestHTMLElement('ld-echart')
-    const table = new TestHTMLElement('ld-data-table')
+    const table = new TestHTMLElement('ld-report-table')
     const event = { composedPath: () => [button, chart, table] } as unknown as Event
 
     expect(visualSourceFromEvent(event)).toBe(chart)

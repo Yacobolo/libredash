@@ -529,7 +529,7 @@
     --ld-asset-connection-border: var(--borderColor-muted);
     --ld-asset-dashboard-bg: var(--data-purple-color-muted);
     --ld-asset-dashboard-accent: var(--data-purple-color-emphasis);
-    --ld-asset-dashboard-border: var(--borderColor-accent-muted);
+    --ld-asset-dashboard-border: color-mix(in srgb, var(--data-purple-color-emphasis), transparent 72%);
     --ld-asset-dimension-bg: var(--data-lemon-color-muted);
     --ld-asset-dimension-accent: var(--data-lemon-color-emphasis);
     --ld-asset-dimension-border: var(--borderColor-attention-muted);

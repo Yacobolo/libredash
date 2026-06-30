@@ -5,16 +5,40 @@ import type { LoginPageSignal } from '../../generated/signals'
 import { jsonAttribute } from '../shared/json-attribute'
 import { checkSignalContract } from '../shared/signal-contract'
 import { lucideIcon } from '../shared/lucide-icons'
+import './topology-background'
+
+type ThemeMode = 'system' | 'light' | 'dark'
+
+const nextThemeMode: Record<ThemeMode, ThemeMode> = {
+  system: 'light',
+  light: 'dark',
+  dark: 'system',
+}
+
+const themeLabels: Record<ThemeMode, string> = {
+  system: 'System theme',
+  light: 'Light theme',
+  dark: 'Dark theme',
+}
 
 class LibreDashLoginPage extends LitElement {
   @property({ converter: jsonAttribute<LoginPageSignal | null>(null) }) page: LoginPageSignal | null = null
+  private themeMode: ThemeMode = currentThemeMode()
+  private readonly handleThemeApplied = (event: Event) => {
+    const detail = (event as CustomEvent<{ mode?: string }>).detail
+    this.themeMode = normalizeThemeMode(detail?.mode)
+    this.requestUpdate()
+  }
 
   static styles = css`
     :host {
       position: relative;
       display: grid;
+      width: 100%;
+      height: 100svh;
       min-height: 100svh;
       place-items: center;
+      place-content: center;
       overflow: hidden;
       background: var(--ld-bg-app);
       color: var(--ld-fg-default);
@@ -37,7 +61,7 @@ class LibreDashLoginPage extends LitElement {
     .scrim {
       pointer-events: none;
       z-index: var(--zIndex-overlay, 20);
-      background: color-mix(in srgb, var(--ld-bg-app) 80%, transparent);
+      background: color-mix(in srgb, var(--ld-bg-app) 72%, transparent);
     }
 
     .theme {
@@ -64,7 +88,7 @@ class LibreDashLoginPage extends LitElement {
       outline: 0;
     }
 
-    .theme [data-theme-icon] {
+    .theme [hidden] {
       display: none;
     }
 
@@ -144,22 +168,43 @@ class LibreDashLoginPage extends LitElement {
     }
   `
 
+  connectedCallback(): void {
+    super.connectedCallback()
+    this.themeMode = currentThemeMode()
+    document.addEventListener('libredash-theme-applied', this.handleThemeApplied)
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    super.disconnectedCallback()
+  }
+
   updated(): void {
     checkSignalContract('login page', this.page, { kind: 'required', title: 'required', providerLabel: 'required' })
   }
 
   render() {
     const page = this.page
+    const nextMode = nextThemeMode[this.themeMode]
+    const themeLabel = `${themeLabels[this.themeMode]}. Switch to ${themeLabels[nextMode]}.`
     return html`
       <ld-topology-background
         data-login-background
         data-module-src=${page?.backgroundModuleSrc ?? '/static/topology-background.js?v=dev'}
       ></ld-topology-background>
       <div class="scrim" aria-hidden="true"></div>
-      <button class="theme" type="button" data-theme-toggle aria-label="Toggle theme" title="Toggle theme">
-        <span data-theme-icon="system">${lucideIcon(Monitor)}</span>
-        <span data-theme-icon="light">${lucideIcon(Sun)}</span>
-        <span data-theme-icon="dark">${lucideIcon(Moon)}</span>
+      <button
+        class="theme"
+        type="button"
+        data-theme-toggle
+        data-theme-mode=${this.themeMode}
+        aria-label=${themeLabel}
+        title=${themeLabel}
+        @click=${this.toggleTheme}
+      >
+        <span data-theme-icon="system" ?hidden=${this.themeMode !== 'system'}>${lucideIcon(Monitor)}</span>
+        <span data-theme-icon="light" ?hidden=${this.themeMode !== 'light'}>${lucideIcon(Sun)}</span>
+        <span data-theme-icon="dark" ?hidden=${this.themeMode !== 'dark'}>${lucideIcon(Moon)}</span>
       </button>
       <section class="panel" aria-label="LibreDash login">
         <h1>${page?.title ?? 'LibreDash'}</h1>
@@ -170,6 +215,26 @@ class LibreDashLoginPage extends LitElement {
       </section>
     `
   }
+
+  private toggleTheme(): void {
+    const mode = nextThemeMode[this.themeMode]
+    this.themeMode = mode
+    this.requestUpdate()
+    document.dispatchEvent(new CustomEvent('libredash-theme-change', { detail: { mode } }))
+  }
 }
 
 if (!customElements.get('ld-login-page')) customElements.define('ld-login-page', LibreDashLoginPage)
+
+function currentThemeMode(): ThemeMode {
+  try {
+    return normalizeThemeMode(localStorage.getItem('libredash-color-mode'))
+  } catch {
+    const colorMode = document.documentElement.dataset.colorMode
+    return colorMode === 'light' || colorMode === 'dark' ? colorMode : 'system'
+  }
+}
+
+function normalizeThemeMode(mode: string | null | undefined): ThemeMode {
+  return mode === 'light' || mode === 'dark' || mode === 'system' ? mode : 'system'
+}

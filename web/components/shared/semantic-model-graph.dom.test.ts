@@ -1,0 +1,285 @@
+import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { createServer, type Server } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { join, normalize } from 'node:path'
+import { chromium, type Browser } from '@playwright/test'
+
+let server: Server
+let baseURL = ''
+let browser: Browser
+
+const root = join(process.cwd(), '.tmp/semantic-model-graph-test')
+
+beforeAll(async () => {
+  server = createServer(async (request, response) => {
+    const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+    if (url.pathname === '/') {
+      response.setHeader('content-type', 'text/html')
+      response.end(testDocument())
+      return
+    }
+    const file = normalize(join(root, url.pathname))
+    if (!file.startsWith(root)) {
+      response.writeHead(404)
+      response.end('not found')
+      return
+    }
+    try {
+      response.setHeader('content-type', 'text/javascript')
+      response.end(await readFile(file))
+    } catch {
+      response.writeHead(404)
+      response.end('not found')
+    }
+  })
+  await new Promise<void>((resolve) => server.listen(0, resolve))
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('test server did not bind to a port')
+  baseURL = `http://127.0.0.1:${address.port}`
+  browser = await chromium.launch()
+})
+
+afterAll(async () => {
+  await browser?.close()
+  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+})
+
+for (const viewport of [
+  { name: 'desktop', width: 1180, height: 760 },
+  { name: 'mobile', width: 390, height: 720 },
+]) {
+  test(`semantic model graph renders table joins on ${viewport.name}`, async () => {
+    const page = await browser.newPage({ viewport })
+    try {
+      await page.goto(baseURL)
+      await page.waitForFunction(() => customElements.get('ld-semantic-model-graph'))
+      await page.waitForFunction(() => document.querySelectorAll('ld-semantic-model-graph .react-flow__node').length >= 2)
+
+      const state = await page.evaluate(() => {
+        const graph = document.querySelector('ld-semantic-model-graph') as HTMLElement
+        const flow = graph.querySelector('.react-flow') as HTMLElement
+        const nodes = Array.from(graph.querySelectorAll('.react-flow__node')) as HTMLElement[]
+        const edges = Array.from(graph.querySelectorAll('.react-flow__edge')) as HTMLElement[]
+        const labels = Array.from(graph.querySelectorAll('.semantic-model-edge-label')).map((label) => label.textContent?.trim())
+        const endpointLabels = Array.from(graph.querySelectorAll('.semantic-model-edge-endpoint')).map((label) => label.textContent?.trim())
+        const nodeTexts = nodes.map((node) => node.textContent ?? '')
+        const headerTexts = Array.from(graph.querySelectorAll('.semantic-model-node-header')).map((node) => node.textContent?.trim())
+        const baseTitle = graph.querySelector('.semantic-model-node-title-base')
+        const baseText = graph.querySelector<HTMLElement>('.semantic-model-node-base-text')
+        const joinRow = graph.querySelector<HTMLElement>('.semantic-model-field-join')
+        const primaryKeyName = graph.querySelector<HTMLElement>('.semantic-model-field-primary .semantic-model-field-name')
+        const primaryKeyMarker = graph.querySelector<HTMLElement>('.semantic-model-field-key')
+        const resetButton = graph.querySelector('.semantic-model-reset-button') as HTMLButtonElement | null
+        const flowRect = flow.getBoundingClientRect()
+        const nodeRects = nodes.map((node) => node.getBoundingClientRect())
+        const overlap = nodeRects.length >= 2 && !(
+          nodeRects[0].right <= nodeRects[1].left
+          || nodeRects[1].right <= nodeRects[0].left
+          || nodeRects[0].bottom <= nodeRects[1].top
+          || nodeRects[1].bottom <= nodeRects[0].top
+        )
+        return {
+          nodeCount: nodes.length,
+          edgeCount: edges.length,
+          labels,
+          endpointLabels,
+          hasOrders: nodeTexts.some((text) => text.includes('orders')),
+          hasCustomers: nodeTexts.some((text) => text.includes('customers')),
+          hasJoinLabel: nodeTexts.some((text) => text.includes('Join')),
+          hasJoinRow: Boolean(graph.querySelector('.semantic-model-field-join')),
+          hasPkMarker: nodeTexts.some((text) => text.includes('PK')),
+          primaryKeyText: primaryKeyName?.textContent?.trim(),
+          primaryKeyTitle: primaryKeyName?.getAttribute('title'),
+          primaryKeyFontWeight: primaryKeyName ? getComputedStyle(primaryKeyName).fontWeight : '',
+          primaryKeyMarkerText: primaryKeyMarker?.textContent?.trim(),
+          primaryKeyMarkerTitle: primaryKeyMarker?.getAttribute('title'),
+          hasBadgeElement: Boolean(graph.querySelector('.semantic-model-field-badge, .semantic-model-node-base')),
+          baseTitleText: baseTitle?.textContent?.trim(),
+          baseTitleFontStyle: baseTitle ? getComputedStyle(baseTitle).fontStyle : '',
+          baseText: baseText?.textContent?.trim(),
+          baseTextColor: baseText ? getComputedStyle(baseText).color : '',
+          hasBaseHeaderClass: Boolean(graph.querySelector('.semantic-model-node-header-base')),
+          joinRowBackground: joinRow ? getComputedStyle(joinRow).backgroundColor : '',
+          joinRowBoxShadow: joinRow ? getComputedStyle(joinRow).boxShadow : '',
+          hasTypeIcon: Boolean(graph.querySelector('.semantic-model-type-icon')),
+          headerTexts,
+          hasReset: Boolean(resetButton),
+          resetText: resetButton?.textContent?.trim(),
+          resetLabel: resetButton?.getAttribute('aria-label'),
+          resetTitle: resetButton?.getAttribute('title'),
+          hasResetIcon: Boolean(resetButton?.querySelector('.semantic-model-reset-icon')),
+          flowHeight: Math.round(flowRect.height),
+          nodesInsideFlow: nodeRects.every((rect) => rect.width > 0 && rect.height > 0 && rect.top >= flowRect.top && rect.bottom <= flowRect.bottom),
+          overlap,
+        }
+      })
+
+      expect(state.nodeCount).toBe(2)
+      expect(state.edgeCount).toBe(1)
+      expect(state.labels).toContain('*:1')
+      expect(state.endpointLabels).toEqual(['*', '1'])
+      expect(state.hasOrders).toBe(true)
+      expect(state.hasCustomers).toBe(true)
+      expect(state.hasJoinLabel).toBe(false)
+      expect(state.hasJoinRow).toBe(true)
+      expect(state.hasPkMarker).toBe(true)
+      expect(state.primaryKeyText).toBe('order_id')
+      expect(state.primaryKeyTitle).toBe('order_id (primary key)')
+      expect(Number(state.primaryKeyFontWeight)).toBeGreaterThanOrEqual(600)
+      expect(state.primaryKeyMarkerText).toBe('PK')
+      expect(state.primaryKeyMarkerTitle).toBe('Primary key')
+      expect(state.hasBadgeElement).toBe(false)
+      expect(state.baseTitleText).toBe('orders')
+      expect(state.baseTitleFontStyle).toBe('italic')
+      expect(state.baseText).toBe('\u00b7 base table')
+      expect(state.baseTextColor).not.toBe('')
+      expect(state.hasBaseHeaderClass).toBe(false)
+      expect(state.joinRowBackground).not.toBe('')
+      expect(state.joinRowBoxShadow).toContain('inset')
+      expect(state.hasTypeIcon).toBe(true)
+      expect(state.headerTexts).toEqual(['orders\u00b7 base table', 'customers'])
+      expect(state.hasReset).toBe(true)
+      expect(state.resetText).toBe('')
+      expect(state.resetLabel).toBe('Reset layout')
+      expect(state.resetTitle).toBe('Reset layout')
+      expect(state.hasResetIcon).toBe(true)
+      expect(state.flowHeight).toBe(460)
+      expect(state.nodesInsideFlow).toBe(true)
+      expect(state.overlap).toBe(false)
+    } finally {
+      await page.close()
+    }
+  })
+}
+
+test('semantic model graph persists dragged node layout and resets it', async () => {
+  const page = await browser.newPage({ viewport: { width: 1180, height: 760 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => document.querySelectorAll('ld-semantic-model-graph .react-flow__node').length >= 2)
+
+    const node = page.locator('ld-semantic-model-graph .react-flow__node').filter({ hasText: 'orders' })
+    const nodeCount = await node.count()
+    expect(nodeCount).toBe(1)
+    const before = await node.boundingBox()
+    if (!before) throw new Error('orders node has no bounding box')
+    await page.mouse.move(before.x + before.width / 2, before.y + 18)
+    await page.mouse.down()
+    await page.mouse.move(before.x + before.width / 2 + 90, before.y + 58, { steps: 8 })
+    await page.mouse.up()
+    await page.waitForFunction(() => localStorage.length > 0)
+
+    const after = await node.boundingBox()
+    if (!after) throw new Error('orders node has no bounding box after drag')
+    const customers = page.locator('ld-semantic-model-graph .react-flow__node').filter({ hasText: 'customers' })
+    const customersCount = await customers.count()
+    expect(customersCount).toBe(1)
+    await customers.click()
+    const afterSelect = await node.boundingBox()
+    if (!afterSelect) throw new Error('orders node has no bounding box after selection')
+    const persisted = await page.evaluate(() => {
+      const keys = Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index) ?? '')
+      const key = keys.find((candidate) => candidate.startsWith('libredash:semantic-model-graph:v1:'))
+      return {
+        keyFound: Boolean(key),
+        value: key ? localStorage.getItem(key) ?? '' : '',
+      }
+    })
+    expect(Math.round(after.x)).not.toBe(Math.round(before.x))
+    expect(Math.round(afterSelect.x)).toBe(Math.round(after.x))
+    expect(Math.round(afterSelect.y)).toBe(Math.round(after.y))
+    expect(persisted.keyFound).toBe(true)
+    expect(persisted.value).toContain('orders')
+
+    await page.locator('ld-semantic-model-graph .semantic-model-reset-button').click()
+    const remaining = await page.evaluate(() => Array.from({ length: localStorage.length }, (_, index) => localStorage.key(index) ?? '').filter((key) => key.startsWith('libredash:semantic-model-graph:v1:')).length)
+    expect(remaining).toBe(0)
+  } finally {
+    await page.close()
+  }
+})
+
+function testDocument(): string {
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <style>
+          body {
+            margin: 0;
+            --ld-bg-app: #f6f8fa;
+            --ld-bg-page: #f6f8fa;
+            --ld-bg-panel: #fff;
+            --ld-bg-panel-muted: #f6f8fa;
+            --ld-fg-default: #24292f;
+            --ld-fg-muted: #57606a;
+            --ld-fg-link: #0969da;
+            --ld-line-muted: #d8dee4;
+            --ld-line-accent: #0969da;
+            --ld-asset-model-table-bg: #ddf4ff;
+            --ld-asset-model-table-border: #b6e3ff;
+            --ld-font-family-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+            --ld-font-size-caption: 12px;
+            --ld-font-size-body-sm: 14px;
+            --ld-font-weight-strong: 600;
+            --ld-line-height-tight: 1.2;
+            --base-size-4: 4px;
+            --base-size-6: 6px;
+            --base-size-8: 8px;
+            --base-size-10: 10px;
+            --base-size-12: 12px;
+            --base-size-16: 16px;
+            --borderWidth-default: 1px;
+            --borderRadius-default: 6px;
+            --ld-border-default: 1px solid #d0d7de;
+            --ld-border-muted: 1px solid #d8dee4;
+            --ld-radius-full: 999px;
+          }
+        </style>
+      </head>
+      <body>
+        <ld-semantic-model-graph storagekey="test:semantic_model:olist" style="display:block;width:min(980px,100vw);height:460px"></ld-semantic-model-graph>
+        <script type="module" src="/semantic-model-graph-under-test.js"></script>
+        <script type="module">
+          const graph = {
+            baseTable: 'orders',
+            nodes: [
+              {
+                id: 'orders',
+                title: 'orders',
+                primaryKey: 'order_id',
+                fields: [
+                  { name: 'order_id', label: 'Order ID', type: 'VARCHAR', primaryKey: true },
+                  { name: 'customer_id', label: 'Customer ID', type: 'VARCHAR', join: true, relationships: ['orders_customers'] },
+                  { name: 'state', label: 'State', type: 'VARCHAR' },
+                ],
+              },
+              {
+                id: 'customers',
+                title: 'customers',
+                primaryKey: 'customer_id',
+                fields: [
+                  { name: 'customer_id', label: 'Customer ID', type: 'VARCHAR', primaryKey: true, join: true, relationships: ['orders_customers'] },
+                  { name: 'segment', label: 'Segment', type: 'VARCHAR' },
+                ],
+              },
+            ],
+            edges: [
+              {
+                id: 'orders_customers',
+                source: 'orders',
+                target: 'customers',
+                sourceField: 'customer_id',
+                targetField: 'customer_id',
+                cardinality: 'many_to_one',
+                label: '*:1',
+                active: true,
+              },
+            ],
+          }
+          document.querySelector('ld-semantic-model-graph').graph = graph
+        </script>
+      </body>
+    </html>
+  `
+}

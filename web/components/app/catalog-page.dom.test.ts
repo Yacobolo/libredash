@@ -53,20 +53,24 @@ test('catalog page composes dashboard cards', async () => {
 
     const state = await page.locator('ld-catalog-page').evaluate((element: any) => {
       const root = element.shadowRoot
+      const section = root.querySelector('section') as HTMLElement
+      const rect = section.getBoundingClientRect()
       return {
         title: root.querySelector('h1')?.textContent?.trim(),
         card: root.querySelector('article h2')?.textContent?.trim(),
         href: root.querySelector('article a')?.getAttribute('href'),
         pages: root.querySelector('article footer span')?.textContent?.trim(),
+        sectionWidth: Math.round(rect.width),
+        centeredDelta: Math.round(Math.abs((rect.left + rect.width / 2) - window.innerWidth / 2)),
       }
     })
 
-    expect(state).toEqual({
-      title: 'Dashboards',
-      card: 'Executive Sales Dashboard',
-      href: '/dashboards/executive-sales',
-      pages: '2 pages',
-    })
+    expect(state.title).toBe('Dashboards')
+    expect(state.card).toBe('Executive Sales Dashboard')
+    expect(state.href).toBe('/dashboards/executive-sales')
+    expect(state.pages).toBe('2 pages')
+    expect(state.sectionWidth).toBeLessThan(1280)
+    expect(state.centeredDelta).toBeLessThanOrEqual(1)
   } finally {
     await page.close()
   }

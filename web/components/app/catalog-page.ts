@@ -21,10 +21,13 @@ class LibreDashCatalogPage extends LitElement {
 
     section {
       display: grid;
+      width: min(100%, var(--ld-page-content-max-width, 72rem));
       min-width: 0;
       min-height: 100svh;
       align-content: start;
       gap: var(--base-size-16);
+      box-sizing: border-box;
+      margin-inline: auto;
       padding: var(--base-size-16);
     }
 

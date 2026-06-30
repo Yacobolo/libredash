@@ -59,7 +59,7 @@ for (const viewport of [
           && customElements.get('ld-filter-card')
           && customElements.get('ld-kpi-card')
           && customElements.get('ld-echart')
-          && customElements.get('ld-data-table')
+          && customElements.get('ld-report-table')
       ))
       await page.locator('ld-dashboard-page').evaluate((element: any) => element.updateComplete)
 
@@ -75,7 +75,7 @@ for (const viewport of [
           hasFilterCard: tags.includes('ld-filter-card'),
           hasKpi: tags.includes('ld-kpi-card'),
           hasChart: tags.includes('ld-echart'),
-          hasTable: tags.includes('ld-data-table'),
+          hasTable: tags.includes('ld-report-table'),
           hasFilterDock: tags.includes('ld-filter-dock'),
           hasFilterPanel: Boolean(filterDock?.shadowRoot?.querySelector('ld-filter-panel')),
           hasFooter: tags.includes('ld-report-footer'),
@@ -100,7 +100,7 @@ for (const viewport of [
       })
 
       const tableState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
-        const table = element.shadowRoot.querySelector('ld-data-table') as any
+        const table = element.shadowRoot.querySelector('ld-report-table') as any
         await table.updateComplete
         const root = table.shadowRoot
         return {

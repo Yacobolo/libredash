@@ -47,5 +47,5 @@ export function visualSourceFromEvent(event: Event): HTMLElement | null {
 }
 
 function isFocusableVisual(element: HTMLElement): boolean {
-  return element.localName === 'ld-echart' || element.localName === 'ld-data-table'
+  return element.localName === 'ld-echart' || element.localName === 'ld-report-table'
 }

@@ -4,7 +4,7 @@ import type { AdminPageSignal, AdminContentSectionSignal, AdminStorageSignal } f
 import { jsonAttribute } from '../shared/json-attribute'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../navigation/sub-sidebar'
-import '../shared/data-grid'
+import '../shared/record-table'
 import './storage-explorer'
 
 const emptyStorage: AdminStorageSignal = {
@@ -39,10 +39,23 @@ class LibreDashAdminPage extends LitElement {
 
     .main {
       display: grid;
+      width: min(100%, var(--ld-page-content-max-width, 72rem));
       min-width: 0;
+      min-height: 100svh;
       align-content: start;
       gap: var(--base-size-12);
+      box-sizing: border-box;
+      justify-self: center;
       padding: var(--base-size-16);
+    }
+
+    .main-storage {
+      width: 100%;
+      grid-template-rows: minmax(0, 1fr);
+      align-content: stretch;
+      gap: 0;
+      justify-self: stretch;
+      padding: 0;
     }
 
     header {
@@ -151,7 +164,9 @@ class LibreDashAdminPage extends LitElement {
     }
 
     ld-storage-explorer {
-      max-width: min(100%, 88rem);
+      width: 100%;
+      max-width: 100%;
+      min-height: 0;
     }
 
     .section {
@@ -194,14 +209,16 @@ class LibreDashAdminPage extends LitElement {
     return html`
       <div class="route">
         <ld-sub-sidebar .config=${page.sidebar}></ld-sub-sidebar>
-        <section class="main" aria-label="Admin">
-          <header>
-            <p class="eyebrow">Admin</p>
-            <h1>${page.headerTitle || page.title}</h1>
-            ${page.headerDetail ? html`<p class="detail">${page.headerDetail}</p>` : nothing}
-          </header>
+        <section class=${page.active === 'storage' ? 'main main-storage' : 'main'} aria-label="Admin">
+          ${page.active === 'storage' ? nothing : html`
+            <header>
+              <p class="eyebrow">Admin</p>
+              <h1>${page.headerTitle || page.title}</h1>
+              ${page.headerDetail ? html`<p class="detail">${page.headerDetail}</p>` : nothing}
+            </header>
+          `}
           ${page.empty && page.active !== 'storage' ? html`<div class="panel"><div class="empty">${page.empty}</div></div>` : nothing}
-          ${page.metrics?.length ? html`
+          ${page.metrics?.length && page.active !== 'storage' ? html`
             <div class="metrics">
               ${page.metrics.map((metric) => html`
                 <div class="metric">
@@ -221,11 +238,6 @@ class LibreDashAdminPage extends LitElement {
   private renderStorage(page: AdminPageSignal) {
     const storage = storageHasPayload(this.storage) ? this.storage : page.storage ?? emptyStorage
     return html`
-      ${storage.warnings?.length ? html`
-        <div class="warnings">
-          ${storage.warnings.map((warning) => html`<p class="warning">${warning}</p>`)}
-        </div>
-      ` : nothing}
       <ld-storage-explorer .storage=${storage}></ld-storage-explorer>
     `
   }
@@ -240,8 +252,8 @@ function renderSection(section: AdminContentSectionSignal) {
   return html`
     <section class="section" aria-label=${section.title}>
       <h2>${section.title}</h2>
-      ${section.grid?.columns?.length
-        ? html`<div class="panel"><ld-data-grid .grid=${section.grid}></ld-data-grid></div>`
+      ${section.table?.columns?.length
+        ? html`<div class="panel"><ld-record-table variant="compact" .table=${section.table}></ld-record-table></div>`
         : html`<div class="facts">${section.facts?.map((fact) => html`
           <div class="metric">
             <span class="label">${fact.label}</span>

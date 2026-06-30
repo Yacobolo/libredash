@@ -323,6 +323,39 @@ func TestAdminStorageRendersEmptyStateWithoutDuckDBFiles(t *testing.T) {
 	}
 }
 
+func TestAdminStorageInspectsDuckDBAlreadyOpenByRuntime(t *testing.T) {
+	dir := seedAdminStorageDuckDB(t)
+	dbPath := filepath.Join(dir, "libredash-test.duckdb")
+	runtimeDB, err := sql.Open("duckdb", dbPath)
+	if err != nil {
+		t.Fatalf("open runtime duckdb: %v", err)
+	}
+	defer runtimeDB.Close()
+	if err := runtimeDB.PingContext(context.Background()); err != nil {
+		t.Fatalf("ping runtime duckdb: %v", err)
+	}
+
+	tables, warning := inspectDuckDBTables(context.Background(), duckDBFile{
+		ID:      "libredash-test.duckdb",
+		Name:    "libredash-test.duckdb",
+		Path:    dbPath,
+		ModelID: "test",
+	}, nil)
+	if warning != "" {
+		t.Fatalf("warning = %q", warning)
+	}
+	var found bool
+	for _, table := range tables {
+		if table.Schema == "model" && table.Name == "orders" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("tables = %#v, want model.orders", tables)
+	}
+}
+
 func seedAdminStorageDuckDB(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
