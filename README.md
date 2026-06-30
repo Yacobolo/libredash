@@ -29,15 +29,16 @@ go run ./cmd/libredash
 
 ## Architecture
 
-- `GET /` renders the file-backed dashboard catalog by mounting `ld-catalog-page` in the server document shell.
-- `GET /dashboards/{dashboard}` opens a dashboard, and `GET /dashboards/{dashboard}/pages/{page}` renders a report page.
+- `GET /` redirects to the configured local workspace or workspace index.
+- `GET /workspaces/{workspace}/dashboards/{dashboard}` opens a dashboard, and `GET /workspaces/{workspace}/dashboards/{dashboard}/pages/{page}` renders a report page.
 - `GET /workspaces` renders published BI workspaces, and `GET /workspaces/{workspace}` renders canonical dashboard and semantic model assets.
 - `GET /connections` renders global connection administration and inspection.
 - `GET /workspaces/{workspace}/assets/{asset}/details` renders canonical asset details, including semantic model, model table, field, measure, source, and dashboard definitions.
 - `GET /workspaces/{workspace}/assets/{asset}/lineage` renders canonical asset lineage.
-- `GET /updates?dashboard={dashboard}&page={page}` opens a long-running Datastar SSE stream and patches signals with `datastar.MarshalAndPatchSignals`.
+- `GET /workspaces/{workspace}/updates?dashboard={dashboard}&page={page}` opens a long-running Datastar SSE stream and patches signals with `datastar.MarshalAndPatchSignals`.
+- `GET /workspaces/{workspace}/chat` renders workspace-scoped agent chat when the workspace policy enables it.
 - DuckDB registers local CSV files as views and materializes model-scoped import tables.
-- `dashboards/catalog.yaml` discovers semantic models and dashboards.
+- `dashboards/libredash.yaml` is the CaC project entrypoint for global connections/sources and workspace-scoped models, semantic models, dashboards, access, and agent policy.
 - Semantic model YAML follows `sources -> models -> semantic model`: sources are raw physical inputs, models are light DuckDB-backed preparation tables, and semantic models own tables, fields, relationships, and measures.
 - Dashboard YAML owns pages, filters, KPIs, visuals, tables, and interactions over semantic model fields and measures.
 - Lit route components consume typed Datastar-backed page signals; dashboard visuals bind to signal payloads such as `visuals.revenue`.
@@ -241,7 +242,7 @@ export LIBREDASH_API_TOKEN_ONLY_AUTH=1 # or configure Azure below
 export LIBREDASH_CSRF_KEY=<32+ byte secret>
 libredash serve --production
 libredash admin bootstrap
-libredash deploy --target http://localhost:8080 --token <token> --catalog dashboards/catalog.yaml
+libredash deploy --target http://localhost:8080 --token <token> --workspace sales --catalog dashboards/libredash.yaml --auto-approve
 ```
 
 Useful env vars:

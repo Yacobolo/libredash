@@ -49,8 +49,8 @@ export LIBREDASH_AGENT_API_KEY="$DEEPSEEK_KEY"
 export LIBREDASH_AGENT_BASE_URL="https://api.deepseek.com"
 export LIBREDASH_AGENT_MODEL="deepseek-v4-flash"
 
-TOKEN="$("$BIN" admin bootstrap --workspace libredash)"
-"$BIN" serve --workspace libredash > "$TMP_DIR/server.log" 2>&1 &
+TOKEN="$("$BIN" admin bootstrap --workspace sales)"
+"$BIN" serve --workspace sales > "$TMP_DIR/server.log" 2>&1 &
 SERVER_PID="$!"
 
 for _ in {1..80}; do
@@ -64,9 +64,9 @@ for _ in {1..80}; do
   sleep 0.25
 done
 
-"$BIN" deploy --target "$TARGET" --token "$TOKEN" --workspace libredash --catalog dashboards/catalog.yaml
+"$BIN" deploy --target "$TARGET" --token "$TOKEN" --workspace sales --catalog dashboards/libredash.yaml --auto-approve
 
-OUTPUT="$("$BIN" agent ask "List the dashboards I can use in this workspace and mention the Olist context." --target "$TARGET" --token "$TOKEN" --workspace libredash --json)"
+OUTPUT="$("$BIN" agent ask "List the dashboards I can use in this workspace and mention the Olist context." --target "$TARGET" --token "$TOKEN" --workspace sales --json)"
 echo "$OUTPUT"
 
 if ! grep -Eiq 'executive|sales|olist' <<<"$OUTPUT"; then

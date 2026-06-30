@@ -5,9 +5,9 @@ LibreDash UI is an MPA with Datastar-streamed page signals and Lit-rendered web 
 Server routes remain real URLs and full document navigations:
 
 ```text
-/dashboards/{dashboard}/pages/{page}
+/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}
 /
-/chat
+/workspaces/{workspace}/chat
 /workspaces
 /connections
 /admin
@@ -22,7 +22,7 @@ server route
   -> HTML document shell
   -> initial Datastar signals
   -> top-level web component call
-  -> /updates patches page signals
+  -> /workspaces/{workspace}/updates patches page signals
   -> Lit re-renders from signal-backed properties
   -> Lit emits domain events
   -> Datastar command wiring patches or posts signals
@@ -32,7 +32,7 @@ Lit components receive properties, render DOM, hold local UI state, and emit eve
 
 ## Ownership
 
-- Go: auth, permissions, HTTP routing, contracts, initial signal envelopes, commands, `/updates`, BI query/model logic.
+- Go: auth, permissions, HTTP routing, contracts, initial signal envelopes, commands, `/workspaces/{workspace}/updates`, BI query/model logic.
 - Datastar: page-local signal graph, signal patching, SSE transport, declarative event-to-command wiring.
 - Lit: layout, visual composition, local UI state, component events, lazy UI modules.
 - Gomponents: HTML document shell, assets, Datastar root, and explicit top-level custom element mounting.
@@ -44,7 +44,7 @@ Gomponents should not build product UI internals long term. Lit should not becom
 Go chooses the route component. `ld-app-shell` provides global chrome and a named page slot; it does not switch on route kind.
 
 ```html
-<main data-signals="{...}" data-init="@get('/updates?...')">
+<main data-signals="{...}" data-init="@get('/workspaces/{workspace}/updates?...')">
   <ld-app-shell data-attr:chrome="$chrome">
     <ld-dashboard-page
       slot="page"
@@ -122,7 +122,7 @@ Signals are product API contracts, not convenient maps.
 - Lit imports generated types for route props, visuals, tables, filters, status, and chrome.
 - Contract tests prove each page references existing visuals, tables, and filters.
 - Contract tests fail on unused visual/table/filter payloads unless explicitly marked as preloaded.
-- `/updates` patches dynamic signals such as `filters`, `filterOptions`, `visuals`, `tables`, and `status`.
+- `/workspaces/{workspace}/updates` patches dynamic signals such as `filters`, `filterOptions`, `visuals`, `tables`, and `status`.
 - Route and page view models are seeded by the first response unless a feature deliberately makes them dynamic.
 
 Recommended top-level dashboard signal shape:

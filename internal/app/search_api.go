@@ -33,8 +33,8 @@ func (s *Server) searchWorkspace(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) workspaceSearchResults(r *http.Request, workspaceID, query string, types workspacesearch.TypeSet) ([]api.SearchResult, error) {
 	documents := make([]workspacesearch.Document, 0)
-	if s.workspaceUsesRuntimeCatalog(workspaceID) {
-		documents = append(documents, s.workspaceSearchDocuments(workspaceID)...)
+	if metrics, ok := s.metricsForWorkspace(workspaceID); ok && metrics != nil {
+		documents = append(documents, workspaceSearchDocuments(workspaceID, metrics)...)
 	}
 	assets, _, err := s.workspaceAssetsAndEdges(r, workspaceID)
 	if err != nil {
@@ -57,29 +57,18 @@ func (s *Server) workspaceSearchResults(r *http.Request, workspaceID, query stri
 	return searchResultsFromWorkspaceResults(workspacesearch.Rank(documents, workspacesearch.Query{Text: query, Types: types})), nil
 }
 
-func (s *Server) workspaceUsesRuntimeCatalog(workspaceID string) bool {
-	workspaceID = s.workspaceID(workspaceID)
-	if workspaceID == s.workspaceID("") {
-		return true
-	}
-	if catalogWorkspaceID := s.metrics.Catalog().Workspace.ID; catalogWorkspaceID != "" && workspaceID == catalogWorkspaceID {
-		return true
-	}
-	return false
-}
-
-func (s *Server) workspaceSearchDocuments(workspaceID string) []workspacesearch.Document {
-	catalog := s.metrics.Catalog()
+func workspaceSearchDocuments(workspaceID string, metrics QueryMetrics) []workspacesearch.Document {
+	catalog := metrics.Catalog()
 	documents := make([]workspacesearch.Document, 0)
 	for _, dashboardSummary := range catalog.Dashboards {
-		report, model, ok := s.metrics.Report(dashboardSummary.ID)
+		report, model, ok := metrics.Report(dashboardSummary.ID)
 		if !ok {
 			continue
 		}
-		documents = append(documents, dashboardSearchDocuments(report, model, s.metrics.Pages(report.ID))...)
+		documents = append(documents, dashboardSearchDocuments(report, model, metrics.Pages(report.ID))...)
 	}
 	for _, modelSummary := range catalog.Models {
-		model := semanticModelForID(s.metrics, modelSummary.ID)
+		model := semanticModelForID(metrics, modelSummary.ID)
 		documents = append(documents, semanticModelSearchDocuments(modelSummary.ID, modelSummary.Title, modelSummary.Description, model)...)
 	}
 	if workspaceID != "" {
