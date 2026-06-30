@@ -12,14 +12,16 @@ SELECT * FROM workspaces WHERE id = ?;
 -- name: ListWorkspaces :many
 SELECT * FROM workspaces ORDER BY created_at;
 
--- name: SetWorkspaceActiveDeployment :exec
-UPDATE workspaces
-SET active_deployment_id = ?, updated_at = CURRENT_TIMESTAMP
-WHERE id = ?;
+-- name: SetActiveDeployment :exec
+INSERT INTO workspace_active_deployments (workspace_id, environment, deployment_id, updated_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(workspace_id, environment) DO UPDATE SET
+  deployment_id = excluded.deployment_id,
+  updated_at = CURRENT_TIMESTAMP;
 
 -- name: CreateDeployment :exec
-INSERT INTO deployments (id, workspace_id, status, created_by)
-VALUES (?, ?, ?, ?);
+INSERT INTO deployments (id, workspace_id, environment, status, created_by)
+VALUES (?, ?, ?, ?, ?);
 
 -- name: GetDeployment :one
 SELECT * FROM deployments WHERE id = ?;
@@ -27,12 +29,12 @@ SELECT * FROM deployments WHERE id = ?;
 -- name: GetActiveDeployment :one
 SELECT d.*
 FROM deployments d
-JOIN workspaces w ON w.active_deployment_id = d.id
-WHERE w.id = ?;
+JOIN workspace_active_deployments active ON active.deployment_id = d.id
+WHERE active.workspace_id = ? AND active.environment = ?;
 
 -- name: ListDeployments :many
 SELECT * FROM deployments
-WHERE workspace_id = ?
+WHERE workspace_id = ? AND environment = ?
 ORDER BY created_at DESC;
 
 -- name: UpdateDeploymentValidated :exec
@@ -53,12 +55,13 @@ WHERE id = ?;
 -- name: MarkOtherDeploymentsInactive :exec
 UPDATE deployments
 SET status = 'inactive'
-WHERE workspace_id = ? AND id <> ? AND status = 'active';
+WHERE workspace_id = ? AND environment = ? AND id <> ? AND status = 'active';
 
 -- name: InsertDeploymentArtifact :exec
-INSERT INTO deployment_artifacts (id, deployment_id, workspace_id, digest, format, path, manifest_json, size_bytes)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO deployment_artifacts (id, deployment_id, workspace_id, environment, digest, format, path, manifest_json, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(deployment_id) DO UPDATE SET
+  environment = excluded.environment,
   digest = excluded.digest,
   format = excluded.format,
   path = excluded.path,
@@ -75,8 +78,8 @@ DELETE FROM assets WHERE deployment_id = ?;
 DELETE FROM asset_edges WHERE deployment_id = ?;
 
 -- name: InsertAsset :exec
-INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, payload_schema, payload_json, content_hash)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, source_file, payload_schema, payload_json, content_hash)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertAssetEdge :exec
 INSERT INTO asset_edges (id, workspace_id, deployment_id, from_logical_asset_id, to_logical_asset_id, edge_type)

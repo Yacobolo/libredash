@@ -45,11 +45,11 @@ func TestRepositoryActiveDeploymentGraphUsesLogicalAssetIDs(t *testing.T) {
 	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, deployment.Artifact{ID: "artifact", DeploymentID: created.ID, WorkspaceID: "test", Digest: "digest", Format: "tar.gz", Path: "artifact.tar.gz", ManifestJSON: "{}"}); err != nil {
 		t.Fatalf("save validated: %v", err)
 	}
-	if _, err := deploymentRepo.Activate(ctx, "test", created.ID); err != nil {
+	if _, err := deploymentRepo.Activate(ctx, "test", deployment.DefaultEnvironment, created.ID); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
 
-	got, ok, err := workspaceRepo.ActiveDeploymentGraph(ctx, "test")
+	got, ok, err := workspaceRepo.ActiveDeploymentGraph(ctx, "test", string(deployment.DefaultEnvironment))
 	if err != nil {
 		t.Fatalf("active graph: %v", err)
 	}

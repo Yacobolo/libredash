@@ -10,7 +10,7 @@ import (
 )
 
 type DeploymentRepository interface {
-	ActiveArtifact(ctx context.Context, workspaceID deployment.WorkspaceID) (deployment.Deployment, deployment.Artifact, error)
+	ActiveArtifact(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) (deployment.Deployment, deployment.Artifact, error)
 	ByID(ctx context.Context, id deployment.ID) (deployment.Deployment, error)
 	ArtifactByDeployment(ctx context.Context, deploymentID deployment.ID) (deployment.Artifact, error)
 }
@@ -35,6 +35,7 @@ type Manager struct {
 	mu          sync.RWMutex
 	repo        DeploymentRepository
 	workspaceID deployment.WorkspaceID
+	environment deployment.Environment
 	dataDir     string
 	factory     RuntimeFactory
 
@@ -61,13 +62,14 @@ func NewManagerWithFactory(repo DeploymentRepository, workspaceID deployment.Wor
 	return &Manager{
 		repo:        repo,
 		workspaceID: workspaceID,
+		environment: deployment.DefaultEnvironment,
 		dataDir:     dataDir,
 		factory:     factory,
 	}
 }
 
 func (m *Manager) Reload(ctx context.Context) error {
-	current, artifact, err := m.repo.ActiveArtifact(ctx, m.workspaceID)
+	current, artifact, err := m.repo.ActiveArtifact(ctx, m.workspaceID, m.environment)
 	if err != nil {
 		if errors.Is(err, deployment.ErrNotFound) {
 			return nil

@@ -33,10 +33,11 @@ type CatalogDashboard struct {
 }
 
 type Definition struct {
-	Catalog    Catalog
-	Models     map[string]*model.Model
-	Dashboards map[string]*report.Dashboard
-	Access     AccessPolicy
-	BaseDir    string
-	SourceIDs  map[string]string
+	Catalog     Catalog
+	Models      map[string]*model.Model
+	Dashboards  map[string]*report.Dashboard
+	Access      AccessPolicy
+	BaseDir     string
+	SourceIDs   map[string]string
+	SourceFiles map[string]string
 }

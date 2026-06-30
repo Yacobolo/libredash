@@ -12,6 +12,7 @@ import (
 func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, definition *workspace.Definition) (workspace.AssetGraph, error) {
 	graph := workspace.AssetGraph{}
 	byKey := map[string]workspace.AssetID{}
+	sourceFilesByID := map[workspace.AssetID]string{}
 	seenEdges := map[string]struct{}{}
 	workspaceKey := func(name string) string {
 		return string(workspaceID) + "." + name
@@ -35,12 +36,21 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.De
 		if existing := byKey[lookupKey]; existing != "" {
 			return existing, nil
 		}
-		asset, err := workspace.NewAsset(workspaceID, deploymentID, typ, key, parentID, title, description, workspace.PayloadSchemaForAssetType(typ), payload)
+		id := workspace.NewAssetID(typ, key)
+		sourceFile := ""
+		if definition.SourceFiles != nil {
+			sourceFile = definition.SourceFiles[string(id)]
+		}
+		if sourceFile == "" && parentID != "" {
+			sourceFile = sourceFilesByID[parentID]
+		}
+		asset, err := workspace.NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parentID, title, description, sourceFile, workspace.PayloadSchemaForAssetType(typ), payload)
 		if err != nil {
 			return "", err
 		}
 		graph.Assets = append(graph.Assets, asset)
 		byKey[lookupKey] = asset.ID
+		sourceFilesByID[asset.ID] = sourceFile
 		return asset.ID, nil
 	}
 	edge := func(fromID, toID workspace.AssetID, typ workspace.AssetEdgeType) {

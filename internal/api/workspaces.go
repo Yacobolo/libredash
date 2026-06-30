@@ -19,6 +19,7 @@ type AssetResponse struct {
 	ParentID      string         `json:"parentId,omitempty"`
 	Title         string         `json:"title"`
 	Description   string         `json:"description"`
+	SourceFile    string         `json:"sourceFile,omitempty"`
 	PayloadSchema string         `json:"payloadSchema"`
 	Payload       map[string]any `json:"payload"`
 	Href          string         `json:"href,omitempty"`
@@ -34,6 +35,7 @@ type AssetSummaryResponse struct {
 	ParentID      string `json:"parentId,omitempty"`
 	Title         string `json:"title"`
 	Description   string `json:"description"`
+	SourceFile    string `json:"sourceFile,omitempty"`
 	PayloadSchema string `json:"payloadSchema"`
 	ContentHash   string `json:"contentHash"`
 	Href          string `json:"href,omitempty"`

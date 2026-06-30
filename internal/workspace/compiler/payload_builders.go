@@ -142,6 +142,7 @@ func fieldPayload(field semanticmodel.MetricDimension) fieldPayloadV1 {
 		Name:        field.Name,
 		Label:       field.Label,
 		Description: field.Description,
+		Type:        field.Type,
 		Expr:        field.Expr,
 		Expression:  field.Expression,
 	}

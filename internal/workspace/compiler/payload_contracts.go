@@ -109,6 +109,7 @@ type fieldPayloadV1 struct {
 	Name        string `json:"Name"`
 	Label       string `json:"Label"`
 	Description string `json:"Description"`
+	Type        string `json:"Type"`
 	Expr        string `json:"Expr"`
 	Expression  string `json:"Expression"`
 }

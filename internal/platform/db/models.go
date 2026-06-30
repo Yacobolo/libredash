@@ -83,6 +83,7 @@ type Asset struct {
 	ParentLogicalAssetID string `json:"parent_logical_asset_id"`
 	Title                string `json:"title"`
 	Description          string `json:"description"`
+	SourceFile           string `json:"source_file"`
 	PayloadSchema        string `json:"payload_schema"`
 	PayloadJson          string `json:"payload_json"`
 	ContentHash          string `json:"content_hash"`
@@ -113,6 +114,7 @@ type AuditEvent struct {
 type Deployment struct {
 	ID           string         `json:"id"`
 	WorkspaceID  string         `json:"workspace_id"`
+	Environment  string         `json:"environment"`
 	Status       string         `json:"status"`
 	Digest       string         `json:"digest"`
 	ManifestJson string         `json:"manifest_json"`
@@ -126,6 +128,7 @@ type DeploymentArtifact struct {
 	ID           string `json:"id"`
 	DeploymentID string `json:"deployment_id"`
 	WorkspaceID  string `json:"workspace_id"`
+	Environment  string `json:"environment"`
 	Digest       string `json:"digest"`
 	Format       string `json:"format"`
 	Path         string `json:"path"`
@@ -245,10 +248,16 @@ type Session struct {
 }
 
 type Workspace struct {
-	ID                 string         `json:"id"`
-	Title              string         `json:"title"`
-	Description        string         `json:"description"`
-	ActiveDeploymentID sql.NullString `json:"active_deployment_id"`
-	CreatedAt          string         `json:"created_at"`
-	UpdatedAt          string         `json:"updated_at"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type WorkspaceActiveDeployment struct {
+	WorkspaceID  string `json:"workspace_id"`
+	Environment  string `json:"environment"`
+	DeploymentID string `json:"deployment_id"`
+	UpdatedAt    string `json:"updated_at"`
 }

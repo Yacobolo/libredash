@@ -28,6 +28,7 @@ func deployCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
 	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
+	cmd.Flags().StringVar(&opts.environment, "environment", "dev", "deployment environment")
 	return cmd
 }
 
@@ -42,6 +43,7 @@ func deploymentsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	}
 	list.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
 	list.Flags().StringVar(&opts.token, "token", "", "API token")
+	list.Flags().StringVar(&opts.environment, "environment", "dev", "deployment environment")
 	addPaginationFlags(list, opts)
 	rollback := &cobra.Command{
 		Use:   "rollback",
@@ -53,6 +55,7 @@ func deploymentsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	rollback.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
 	rollback.Flags().StringVar(&opts.token, "token", "", "API token")
 	rollback.Flags().StringVar(&opts.deployment, "deployment", "", "deployment id")
+	rollback.Flags().StringVar(&opts.environment, "environment", "dev", "deployment environment")
 	parent.AddCommand(list, rollback)
 	return parent
 }
@@ -68,6 +71,7 @@ func rollbackCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
 	cmd.Flags().StringVar(&opts.deployment, "deployment", "", "deployment id")
+	cmd.Flags().StringVar(&opts.environment, "environment", "dev", "deployment environment")
 	return cmd
 }
 
@@ -92,11 +96,12 @@ func runDeploy(ctx context.Context, opts *rootOptions) error {
 		return err
 	}
 	createBody, _ := json.Marshal(map[string]any{
-		"title": workspaceProject.Title,
+		"title":       workspaceProject.Title,
+		"environment": cliEnvironment(opts),
 	})
 	var created api.DeploymentResponse
 	workspacePathParams := map[string]string{"workspace": opts.workspaceID}
-	createURL, err := apiOperationURL(target, "createDeployment", workspacePathParams, nil)
+	createURL, err := apiOperationURL(target, "createDeployment", workspacePathParams, environmentQuery(opts, nil))
 	if err != nil {
 		return err
 	}
@@ -105,11 +110,11 @@ func runDeploy(ctx context.Context, opts *rootOptions) error {
 	}
 	var buf bytes.Buffer
 	var digest string
-	_, digest, err = deploymentfs.PackProjectAgainstGraph(opts.catalog, opts.workspaceID, deployment.ID(created.ID), activeGraph, &buf)
+	_, digest, err = deploymentfs.PackProjectAgainstGraphForEnvironment(opts.catalog, opts.workspaceID, deployment.Environment(cliEnvironment(opts)), deployment.ID(created.ID), activeGraph, &buf)
 	if err != nil {
 		return err
 	}
-	uploadURL, err := apiOperationURL(target, "uploadDeploymentArtifact", map[string]string{"workspace": opts.workspaceID, "deployment": created.ID}, nil)
+	uploadURL, err := apiOperationURL(target, "uploadDeploymentArtifact", map[string]string{"workspace": opts.workspaceID, "deployment": created.ID}, environmentQuery(opts, nil))
 	if err != nil {
 		return err
 	}
@@ -117,7 +122,7 @@ func runDeploy(ctx context.Context, opts *rootOptions) error {
 		return err
 	}
 	var validated api.DeploymentResponse
-	validateURL, err := apiOperationURL(target, "validateDeployment", map[string]string{"workspace": opts.workspaceID, "deployment": created.ID}, nil)
+	validateURL, err := apiOperationURL(target, "validateDeployment", map[string]string{"workspace": opts.workspaceID, "deployment": created.ID}, environmentQuery(opts, nil))
 	if err != nil {
 		return err
 	}
@@ -125,14 +130,14 @@ func runDeploy(ctx context.Context, opts *rootOptions) error {
 		return err
 	}
 	var activated api.DeploymentResponse
-	activateURL, err := apiOperationURL(target, "activateDeployment", map[string]string{"workspace": opts.workspaceID, "deployment": created.ID}, nil)
+	activateURL, err := apiOperationURL(target, "activateDeployment", map[string]string{"workspace": opts.workspaceID, "deployment": created.ID}, environmentQuery(opts, nil))
 	if err != nil {
 		return err
 	}
 	if err := doJSON(ctx, http.MethodPost, activateURL, token, nil, &activated); err != nil {
 		return err
 	}
-	fmt.Printf("deployed %s digest=%s localDigest=%s status=%s\n", activated.ID, activated.Digest, digest, activated.Status)
+	fmt.Printf("deployed %s environment=%s digest=%s localDigest=%s status=%s\n", activated.ID, activated.Environment, activated.Digest, digest, activated.Status)
 	return nil
 }
 
@@ -144,7 +149,7 @@ func runDeploymentsList(ctx context.Context, opts *rootOptions) error {
 	if err != nil {
 		return err
 	}
-	listURL, err := apiOperationURL(target, "listDeployments", map[string]string{"workspace": opts.workspaceID}, paginationQuery(opts))
+	listURL, err := apiOperationURL(target, "listDeployments", map[string]string{"workspace": opts.workspaceID}, environmentQuery(opts, paginationQuery(opts)))
 	if err != nil {
 		return err
 	}
@@ -154,9 +159,9 @@ func runDeploymentsList(ctx context.Context, opts *rootOptions) error {
 	}
 	rows := response.Items
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "ID\tSTATUS\tDIGEST\tCREATED\tACTIVATED")
+	fmt.Fprintln(tw, "ID\tENVIRONMENT\tSTATUS\tDIGEST\tCREATED\tACTIVATED")
 	for _, row := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", row.ID, row.Status, shortDigest(row.Digest), row.CreatedAt, row.ActivatedAt)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", row.ID, row.Environment, row.Status, shortDigest(row.Digest), row.CreatedAt, row.ActivatedAt)
 	}
 	return tw.Flush()
 }
@@ -173,13 +178,20 @@ func runRollback(ctx context.Context, opts *rootOptions) error {
 		return err
 	}
 	var row api.DeploymentResponse
-	rollbackURL, err := apiOperationURL(target, "activateDeployment", map[string]string{"workspace": opts.workspaceID, "deployment": opts.deployment}, nil)
+	rollbackURL, err := apiOperationURL(target, "activateDeployment", map[string]string{"workspace": opts.workspaceID, "deployment": opts.deployment}, environmentQuery(opts, nil))
 	if err != nil {
 		return err
 	}
 	if err := doJSON(ctx, http.MethodPost, rollbackURL, token, nil, &row); err != nil {
 		return err
 	}
-	fmt.Printf("activated %s status=%s\n", row.ID, row.Status)
+	fmt.Printf("activated %s environment=%s status=%s\n", row.ID, row.Environment, row.Status)
 	return nil
+}
+
+func cliEnvironment(opts *rootOptions) string {
+	if opts.environment == "" {
+		return "dev"
+	}
+	return opts.environment
 }

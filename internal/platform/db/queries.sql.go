@@ -313,13 +313,14 @@ func (q *Queries) CreateAgentRun(ctx context.Context, arg CreateAgentRunParams) 
 }
 
 const createDeployment = `-- name: CreateDeployment :exec
-INSERT INTO deployments (id, workspace_id, status, created_by)
-VALUES (?, ?, ?, ?)
+INSERT INTO deployments (id, workspace_id, environment, status, created_by)
+VALUES (?, ?, ?, ?, ?)
 `
 
 type CreateDeploymentParams struct {
 	ID          string `json:"id"`
 	WorkspaceID string `json:"workspace_id"`
+	Environment string `json:"environment"`
 	Status      string `json:"status"`
 	CreatedBy   string `json:"created_by"`
 }
@@ -328,6 +329,7 @@ func (q *Queries) CreateDeployment(ctx context.Context, arg CreateDeploymentPara
 	_, err := q.db.ExecContext(ctx, createDeployment,
 		arg.ID,
 		arg.WorkspaceID,
+		arg.Environment,
 		arg.Status,
 		arg.CreatedBy,
 	)
@@ -519,18 +521,24 @@ func (q *Queries) GetAPITokenByHash(ctx context.Context, tokenHash string) (ApiT
 }
 
 const getActiveDeployment = `-- name: GetActiveDeployment :one
-SELECT d.id, d.workspace_id, d.status, d.digest, d.manifest_json, d.created_by, d.created_at, d.activated_at, d.error
+SELECT d.id, d.workspace_id, d.environment, d.status, d.digest, d.manifest_json, d.created_by, d.created_at, d.activated_at, d.error
 FROM deployments d
-JOIN workspaces w ON w.active_deployment_id = d.id
-WHERE w.id = ?
+JOIN workspace_active_deployments active ON active.deployment_id = d.id
+WHERE active.workspace_id = ? AND active.environment = ?
 `
 
-func (q *Queries) GetActiveDeployment(ctx context.Context, id string) (Deployment, error) {
-	row := q.db.QueryRowContext(ctx, getActiveDeployment, id)
+type GetActiveDeploymentParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	Environment string `json:"environment"`
+}
+
+func (q *Queries) GetActiveDeployment(ctx context.Context, arg GetActiveDeploymentParams) (Deployment, error) {
+	row := q.db.QueryRowContext(ctx, getActiveDeployment, arg.WorkspaceID, arg.Environment)
 	var i Deployment
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
+		&i.Environment,
 		&i.Status,
 		&i.Digest,
 		&i.ManifestJson,
@@ -574,7 +582,7 @@ func (q *Queries) GetAgentConversation(ctx context.Context, arg GetAgentConversa
 }
 
 const getArtifactByDeployment = `-- name: GetArtifactByDeployment :one
-SELECT id, deployment_id, workspace_id, digest, format, path, manifest_json, size_bytes, created_at FROM deployment_artifacts WHERE deployment_id = ?
+SELECT id, deployment_id, workspace_id, environment, digest, format, path, manifest_json, size_bytes, created_at FROM deployment_artifacts WHERE deployment_id = ?
 `
 
 func (q *Queries) GetArtifactByDeployment(ctx context.Context, deploymentID string) (DeploymentArtifact, error) {
@@ -584,6 +592,7 @@ func (q *Queries) GetArtifactByDeployment(ctx context.Context, deploymentID stri
 		&i.ID,
 		&i.DeploymentID,
 		&i.WorkspaceID,
+		&i.Environment,
 		&i.Digest,
 		&i.Format,
 		&i.Path,
@@ -595,7 +604,7 @@ func (q *Queries) GetArtifactByDeployment(ctx context.Context, deploymentID stri
 }
 
 const getDeployment = `-- name: GetDeployment :one
-SELECT id, workspace_id, status, digest, manifest_json, created_by, created_at, activated_at, error FROM deployments WHERE id = ?
+SELECT id, workspace_id, environment, status, digest, manifest_json, created_by, created_at, activated_at, error FROM deployments WHERE id = ?
 `
 
 func (q *Queries) GetDeployment(ctx context.Context, id string) (Deployment, error) {
@@ -604,6 +613,7 @@ func (q *Queries) GetDeployment(ctx context.Context, id string) (Deployment, err
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
+		&i.Environment,
 		&i.Status,
 		&i.Digest,
 		&i.ManifestJson,
@@ -815,7 +825,7 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash string) (
 }
 
 const getWorkspace = `-- name: GetWorkspace :one
-SELECT id, title, description, active_deployment_id, created_at, updated_at FROM workspaces WHERE id = ?
+SELECT id, title, description, created_at, updated_at FROM workspaces WHERE id = ?
 `
 
 func (q *Queries) GetWorkspace(ctx context.Context, id string) (Workspace, error) {
@@ -825,7 +835,6 @@ func (q *Queries) GetWorkspace(ctx context.Context, id string) (Workspace, error
 		&i.ID,
 		&i.Title,
 		&i.Description,
-		&i.ActiveDeploymentID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -833,8 +842,8 @@ func (q *Queries) GetWorkspace(ctx context.Context, id string) (Workspace, error
 }
 
 const insertAsset = `-- name: InsertAsset :exec
-INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, payload_schema, payload_json, content_hash)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, source_file, payload_schema, payload_json, content_hash)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertAssetParams struct {
@@ -847,6 +856,7 @@ type InsertAssetParams struct {
 	ParentLogicalAssetID string `json:"parent_logical_asset_id"`
 	Title                string `json:"title"`
 	Description          string `json:"description"`
+	SourceFile           string `json:"source_file"`
 	PayloadSchema        string `json:"payload_schema"`
 	PayloadJson          string `json:"payload_json"`
 	ContentHash          string `json:"content_hash"`
@@ -863,6 +873,7 @@ func (q *Queries) InsertAsset(ctx context.Context, arg InsertAssetParams) error 
 		arg.ParentLogicalAssetID,
 		arg.Title,
 		arg.Description,
+		arg.SourceFile,
 		arg.PayloadSchema,
 		arg.PayloadJson,
 		arg.ContentHash,
@@ -925,9 +936,10 @@ func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventPara
 }
 
 const insertDeploymentArtifact = `-- name: InsertDeploymentArtifact :exec
-INSERT INTO deployment_artifacts (id, deployment_id, workspace_id, digest, format, path, manifest_json, size_bytes)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO deployment_artifacts (id, deployment_id, workspace_id, environment, digest, format, path, manifest_json, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(deployment_id) DO UPDATE SET
+  environment = excluded.environment,
   digest = excluded.digest,
   format = excluded.format,
   path = excluded.path,
@@ -939,6 +951,7 @@ type InsertDeploymentArtifactParams struct {
 	ID           string `json:"id"`
 	DeploymentID string `json:"deployment_id"`
 	WorkspaceID  string `json:"workspace_id"`
+	Environment  string `json:"environment"`
 	Digest       string `json:"digest"`
 	Format       string `json:"format"`
 	Path         string `json:"path"`
@@ -951,6 +964,7 @@ func (q *Queries) InsertDeploymentArtifact(ctx context.Context, arg InsertDeploy
 		arg.ID,
 		arg.DeploymentID,
 		arg.WorkspaceID,
+		arg.Environment,
 		arg.Digest,
 		arg.Format,
 		arg.Path,
@@ -1305,7 +1319,7 @@ func (q *Queries) ListAssetEdgesByDeployment(ctx context.Context, deploymentID s
 }
 
 const listAssetsByDeployment = `-- name: ListAssetsByDeployment :many
-SELECT snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, payload_schema, payload_json, content_hash, created_at FROM assets WHERE deployment_id = ? ORDER BY asset_type, asset_key
+SELECT snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, source_file, payload_schema, payload_json, content_hash, created_at FROM assets WHERE deployment_id = ? ORDER BY asset_type, asset_key
 `
 
 func (q *Queries) ListAssetsByDeployment(ctx context.Context, deploymentID string) ([]Asset, error) {
@@ -1327,6 +1341,7 @@ func (q *Queries) ListAssetsByDeployment(ctx context.Context, deploymentID strin
 			&i.ParentLogicalAssetID,
 			&i.Title,
 			&i.Description,
+			&i.SourceFile,
 			&i.PayloadSchema,
 			&i.PayloadJson,
 			&i.ContentHash,
@@ -1434,13 +1449,18 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 }
 
 const listDeployments = `-- name: ListDeployments :many
-SELECT id, workspace_id, status, digest, manifest_json, created_by, created_at, activated_at, error FROM deployments
-WHERE workspace_id = ?
+SELECT id, workspace_id, environment, status, digest, manifest_json, created_by, created_at, activated_at, error FROM deployments
+WHERE workspace_id = ? AND environment = ?
 ORDER BY created_at DESC
 `
 
-func (q *Queries) ListDeployments(ctx context.Context, workspaceID string) ([]Deployment, error) {
-	rows, err := q.db.QueryContext(ctx, listDeployments, workspaceID)
+type ListDeploymentsParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	Environment string `json:"environment"`
+}
+
+func (q *Queries) ListDeployments(ctx context.Context, arg ListDeploymentsParams) ([]Deployment, error) {
+	rows, err := q.db.QueryContext(ctx, listDeployments, arg.WorkspaceID, arg.Environment)
 	if err != nil {
 		return nil, err
 	}
@@ -1451,6 +1471,7 @@ func (q *Queries) ListDeployments(ctx context.Context, workspaceID string) ([]De
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
+			&i.Environment,
 			&i.Status,
 			&i.Digest,
 			&i.ManifestJson,
@@ -1786,7 +1807,7 @@ func (q *Queries) ListSessionsByPrincipal(ctx context.Context, principalID strin
 }
 
 const listWorkspaces = `-- name: ListWorkspaces :many
-SELECT id, title, description, active_deployment_id, created_at, updated_at FROM workspaces ORDER BY created_at
+SELECT id, title, description, created_at, updated_at FROM workspaces ORDER BY created_at
 `
 
 func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
@@ -1802,7 +1823,6 @@ func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.ActiveDeploymentID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -1833,16 +1853,17 @@ func (q *Queries) MarkDeploymentActive(ctx context.Context, id string) error {
 const markOtherDeploymentsInactive = `-- name: MarkOtherDeploymentsInactive :exec
 UPDATE deployments
 SET status = 'inactive'
-WHERE workspace_id = ? AND id <> ? AND status = 'active'
+WHERE workspace_id = ? AND environment = ? AND id <> ? AND status = 'active'
 `
 
 type MarkOtherDeploymentsInactiveParams struct {
 	WorkspaceID string `json:"workspace_id"`
+	Environment string `json:"environment"`
 	ID          string `json:"id"`
 }
 
 func (q *Queries) MarkOtherDeploymentsInactive(ctx context.Context, arg MarkOtherDeploymentsInactiveParams) error {
-	_, err := q.db.ExecContext(ctx, markOtherDeploymentsInactive, arg.WorkspaceID, arg.ID)
+	_, err := q.db.ExecContext(ctx, markOtherDeploymentsInactive, arg.WorkspaceID, arg.Environment, arg.ID)
 	return err
 }
 
@@ -1925,19 +1946,22 @@ func (q *Queries) RevokeSessionForPrincipal(ctx context.Context, arg RevokeSessi
 	return i, err
 }
 
-const setWorkspaceActiveDeployment = `-- name: SetWorkspaceActiveDeployment :exec
-UPDATE workspaces
-SET active_deployment_id = ?, updated_at = CURRENT_TIMESTAMP
-WHERE id = ?
+const setActiveDeployment = `-- name: SetActiveDeployment :exec
+INSERT INTO workspace_active_deployments (workspace_id, environment, deployment_id, updated_at)
+VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(workspace_id, environment) DO UPDATE SET
+  deployment_id = excluded.deployment_id,
+  updated_at = CURRENT_TIMESTAMP
 `
 
-type SetWorkspaceActiveDeploymentParams struct {
-	ActiveDeploymentID sql.NullString `json:"active_deployment_id"`
-	ID                 string         `json:"id"`
+type SetActiveDeploymentParams struct {
+	WorkspaceID  string `json:"workspace_id"`
+	Environment  string `json:"environment"`
+	DeploymentID string `json:"deployment_id"`
 }
 
-func (q *Queries) SetWorkspaceActiveDeployment(ctx context.Context, arg SetWorkspaceActiveDeploymentParams) error {
-	_, err := q.db.ExecContext(ctx, setWorkspaceActiveDeployment, arg.ActiveDeploymentID, arg.ID)
+func (q *Queries) SetActiveDeployment(ctx context.Context, arg SetActiveDeploymentParams) error {
+	_, err := q.db.ExecContext(ctx, setActiveDeployment, arg.WorkspaceID, arg.Environment, arg.DeploymentID)
 	return err
 }
 

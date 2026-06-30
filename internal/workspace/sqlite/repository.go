@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/Yacobolo/libredash/internal/deployment"
 	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
@@ -54,19 +55,22 @@ func (r *Repository) ByID(ctx context.Context, id workspace.WorkspaceID) (worksp
 	return mapWorkspace(row), nil
 }
 
-func (r *Repository) ActiveDeploymentGraph(ctx context.Context, id workspace.WorkspaceID) (workspace.AssetGraph, bool, error) {
-	deployment, err := r.q.GetActiveDeployment(ctx, string(id))
+func (r *Repository) ActiveDeploymentGraph(ctx context.Context, id workspace.WorkspaceID, environment string) (workspace.AssetGraph, bool, error) {
+	activeDeployment, err := r.q.GetActiveDeployment(ctx, platformdb.GetActiveDeploymentParams{
+		WorkspaceID: string(id),
+		Environment: string(deployment.NormalizeEnvironment(deployment.Environment(environment))),
+	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return workspace.AssetGraph{}, false, nil
 		}
 		return workspace.AssetGraph{}, false, err
 	}
-	assetRows, err := r.q.ListAssetsByDeployment(ctx, deployment.ID)
+	assetRows, err := r.q.ListAssetsByDeployment(ctx, activeDeployment.ID)
 	if err != nil {
 		return workspace.AssetGraph{}, false, err
 	}
-	edgeRows, err := r.q.ListAssetEdgesByDeployment(ctx, deployment.ID)
+	edgeRows, err := r.q.ListAssetEdgesByDeployment(ctx, activeDeployment.ID)
 	if err != nil {
 		return workspace.AssetGraph{}, false, err
 	}
@@ -91,9 +95,6 @@ func mapWorkspace(row platformdb.Workspace) workspace.Summary {
 		CreatedAt:   row.CreatedAt,
 		UpdatedAt:   row.UpdatedAt,
 	}
-	if row.ActiveDeploymentID.Valid {
-		out.ActiveDeploymentID = workspace.DeploymentID(row.ActiveDeploymentID.String)
-	}
 	return out
 }
 
@@ -108,6 +109,7 @@ func mapAsset(row platformdb.Asset) workspace.Asset {
 		ParentID:      workspace.AssetID(row.ParentLogicalAssetID),
 		Title:         row.Title,
 		Description:   row.Description,
+		SourceFile:    row.SourceFile,
 		PayloadSchema: row.PayloadSchema,
 		PayloadJSON:   row.PayloadJson,
 		ContentHash:   row.ContentHash,

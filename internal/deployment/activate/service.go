@@ -16,8 +16,8 @@ var ErrInvalidStatus = errors.New("deployment cannot be activated")
 
 type Repository interface {
 	ByID(ctx context.Context, id deployment.ID) (deployment.Deployment, error)
-	Activate(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID) (deployment.Deployment, error)
-	ActivateWithWorkspacePolicy(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error)
+	Activate(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID) (deployment.Deployment, error)
+	ActivateWithWorkspacePolicy(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error)
 }
 
 type ArtifactRepository interface {
@@ -71,9 +71,9 @@ func (s Service) Activate(ctx context.Context, deploymentID deployment.ID) (depl
 
 	var activated deployment.Deployment
 	if policy != nil {
-		activated, err = s.repo.ActivateWithWorkspacePolicy(ctx, current.WorkspaceID, current.ID, *policy)
+		activated, err = s.repo.ActivateWithWorkspacePolicy(ctx, current.WorkspaceID, current.Environment, current.ID, *policy)
 	} else {
-		activated, err = s.repo.Activate(ctx, current.WorkspaceID, current.ID)
+		activated, err = s.repo.Activate(ctx, current.WorkspaceID, current.Environment, current.ID)
 	}
 	if err != nil {
 		if prepared != nil {

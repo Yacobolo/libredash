@@ -2,7 +2,6 @@ CREATE TABLE IF NOT EXISTS workspaces (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  active_deployment_id TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -10,6 +9,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
 CREATE TABLE IF NOT EXISTS deployments (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  environment TEXT NOT NULL DEFAULT 'dev',
   status TEXT NOT NULL,
   digest TEXT NOT NULL DEFAULT '',
   manifest_json TEXT NOT NULL DEFAULT '{}',
@@ -19,10 +19,19 @@ CREATE TABLE IF NOT EXISTS deployments (
   error TEXT NOT NULL DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS workspace_active_deployments (
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  environment TEXT NOT NULL,
+  deployment_id TEXT NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(workspace_id, environment)
+);
+
 CREATE TABLE IF NOT EXISTS deployment_artifacts (
   id TEXT PRIMARY KEY,
   deployment_id TEXT NOT NULL UNIQUE REFERENCES deployments(id) ON DELETE CASCADE,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  environment TEXT NOT NULL DEFAULT 'dev',
   digest TEXT NOT NULL,
   format TEXT NOT NULL,
   path TEXT NOT NULL,
@@ -41,6 +50,7 @@ CREATE TABLE IF NOT EXISTS assets (
   parent_logical_asset_id TEXT NOT NULL DEFAULT '',
   title TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
+  source_file TEXT NOT NULL DEFAULT '',
   payload_schema TEXT NOT NULL,
   payload_json TEXT NOT NULL DEFAULT '{}',
   content_hash TEXT NOT NULL,

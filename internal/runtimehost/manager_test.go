@@ -88,7 +88,7 @@ type fakeRepo struct {
 	activeErr  error
 }
 
-func (r *fakeRepo) ActiveArtifact(context.Context, deployment.WorkspaceID) (deployment.Deployment, deployment.Artifact, error) {
+func (r *fakeRepo) ActiveArtifact(context.Context, deployment.WorkspaceID, deployment.Environment) (deployment.Deployment, deployment.Artifact, error) {
 	if r.activeErr != nil {
 		return deployment.Deployment{}, deployment.Artifact{}, r.activeErr
 	}

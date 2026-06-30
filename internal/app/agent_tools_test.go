@@ -798,7 +798,7 @@ type fakeAssetCatalogReader struct {
 	err     error
 }
 
-func (f fakeAssetCatalogReader) ActiveAssetCatalog(_ context.Context, _ workspace.WorkspaceID) (workspace.AssetCatalog, bool, error) {
+func (f fakeAssetCatalogReader) ActiveAssetCatalog(_ context.Context, _ workspace.WorkspaceID, _ string) (workspace.AssetCatalog, bool, error) {
 	if f.err != nil {
 		return workspace.AssetCatalog{}, false, f.err
 	}

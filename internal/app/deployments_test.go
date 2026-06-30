@@ -131,7 +131,8 @@ func (emptyPageRuntimeAssetMetrics) RefreshModelTables(context.Context, string, 
 }
 
 func testWorkspaceAsset(workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, typ workspace.AssetType, key string, parentID workspace.AssetID, title, description, payloadSchema string, payload any) (workspace.Asset, error) {
-	return workspace.NewAsset(workspaceID, deploymentID, typ, key, parentID, title, description, payloadSchema, payload)
+	sourceFile := "testdata/" + strings.ReplaceAll(string(typ)+"-"+key, ".", "-") + ".yaml"
+	return workspace.NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parentID, title, description, sourceFile, payloadSchema, payload)
 }
 
 func (m dataDirMetrics) DataDir() string {
@@ -1100,7 +1101,7 @@ func TestWorkspaceAssetsDoesNotRefreshCleanGraphWithoutPageItems(t *testing.T) {
 	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, zeroArtifact(created.ID, "test")); err != nil {
 		t.Fatalf("save validated: %v", err)
 	}
-	if _, err := deploymentRepo.Activate(ctx, "test", created.ID); err != nil {
+	if _, err := deploymentRepo.Activate(ctx, "test", deployment.DefaultEnvironment, created.ID); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -1113,7 +1114,7 @@ func TestWorkspaceAssetsDoesNotRefreshCleanGraphWithoutPageItems(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
-	graph, ok, err := workspacesqlite.NewRepository(store.SQLDB()).ActiveDeploymentGraph(ctx, "test")
+	graph, ok, err := workspacesqlite.NewRepository(store.SQLDB()).ActiveDeploymentGraph(ctx, "test", string(deployment.DefaultEnvironment))
 	if err != nil {
 		t.Fatalf("active graph: %v", err)
 	}
@@ -1129,7 +1130,8 @@ func TestWorkspaceAssetsDoesNotRefreshCleanGraphWithoutPageItems(t *testing.T) {
 
 func mustWorkspaceAsset(t *testing.T, workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, typ workspace.AssetType, key string, parentID workspace.AssetID, title string, content any) workspace.Asset {
 	t.Helper()
-	asset, err := workspace.NewAsset(workspaceID, deploymentID, typ, key, parentID, title, "", string(typ)+".v1", content)
+	sourceFile := "testdata/" + strings.ReplaceAll(string(typ)+"-"+key, ".", "-") + ".yaml"
+	asset, err := workspace.NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parentID, title, "", sourceFile, string(typ)+".v1", content)
 	if err != nil {
 		t.Fatalf("new asset %s %s: %v", typ, key, err)
 	}
@@ -1514,6 +1516,7 @@ func seedActiveDeployment(t *testing.T, store *platform.Store, workspaceID strin
 	if workspaceDef == nil {
 		t.Fatal("compile project: missing sales workspace definition")
 	}
+	workspaceDef.SourceFiles = remapTestSourceFiles(workspaceDef.SourceFiles, "sales", workspaceID)
 	graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(created.ID), workspaceDef)
 	if err != nil {
 		t.Fatalf("extract assets: %v", err)
@@ -1526,15 +1529,25 @@ func seedActiveDeployment(t *testing.T, store *platform.Store, workspaceID strin
 	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, zeroArtifact(created.ID, workspaceID)); err != nil {
 		t.Fatalf("validate deployment: %v", err)
 	}
-	if _, err := deploymentRepo.Activate(ctx, deployment.WorkspaceID(workspaceID), created.ID); err != nil {
+	if _, err := deploymentRepo.Activate(ctx, deployment.WorkspaceID(workspaceID), deployment.DefaultEnvironment, created.ID); err != nil {
 		t.Fatalf("activate deployment: %v", err)
 	}
+}
+
+func remapTestSourceFiles(sourceFiles map[string]string, fromWorkspace, toWorkspace string) map[string]string {
+	out := map[string]string{}
+	for id, path := range sourceFiles {
+		next := strings.Replace(id, ":"+fromWorkspace+".", ":"+toWorkspace+".", 1)
+		next = strings.Replace(next, ":"+fromWorkspace, ":"+toWorkspace, 1)
+		out[next] = path
+	}
+	return out
 }
 
 func activeAssetID(t *testing.T, store *platform.Store, workspaceID, typ, key string) string {
 	t.Helper()
 	repo := workspacesqlite.NewRepository(store.SQLDB())
-	graph, ok, err := repo.ActiveDeploymentGraph(context.Background(), workspace.WorkspaceID(workspaceID))
+	graph, ok, err := repo.ActiveDeploymentGraph(context.Background(), workspace.WorkspaceID(workspaceID), string(deployment.DefaultEnvironment))
 	if err != nil {
 		t.Fatalf("active deployment graph: %v", err)
 	}

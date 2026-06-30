@@ -21,5 +21,5 @@ type Repository interface {
 	Ensure(ctx context.Context, input EnsureInput) error
 	List(ctx context.Context) ([]Summary, error)
 	ByID(ctx context.Context, id WorkspaceID) (Summary, error)
-	ActiveDeploymentGraph(ctx context.Context, id WorkspaceID) (AssetGraph, bool, error)
+	ActiveDeploymentGraph(ctx context.Context, id WorkspaceID, environment string) (AssetGraph, bool, error)
 }

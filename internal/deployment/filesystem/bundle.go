@@ -25,6 +25,7 @@ type Manifest struct {
 	Version        int            `json:"version"`
 	WorkspaceID    string         `json:"workspaceId"`
 	WorkspaceTitle string         `json:"workspaceTitle"`
+	Environment    string         `json:"environment"`
 	CatalogPath    string         `json:"catalogPath"`
 	CompiledPath   string         `json:"compiledPath"`
 	GraphHash      string         `json:"graphHash"`
@@ -48,6 +49,7 @@ type CompiledWorkspaceArtifact struct {
 	Version        int                                    `json:"version"`
 	WorkspaceID    string                                 `json:"workspaceId"`
 	WorkspaceTitle string                                 `json:"workspaceTitle"`
+	Environment    string                                 `json:"environment"`
 	DeploymentID   string                                 `json:"deploymentId"`
 	Validation     CompiledArtifactValidation             `json:"validation"`
 	Definition     *workspace.Definition                  `json:"definition"`
@@ -69,14 +71,19 @@ type CompiledArtifactDiagnostic struct {
 }
 
 func PackProject(projectPath, workspaceID string, deploymentID deployment.ID, out io.Writer) (Manifest, string, error) {
-	return PackProjectAgainstGraph(projectPath, workspaceID, deploymentID, workspace.AssetGraph{}, out)
+	return PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, deployment.DefaultEnvironment, deploymentID, workspace.AssetGraph{}, out)
 }
 
 func PackProjectAgainstGraph(projectPath, workspaceID string, deploymentID deployment.ID, active workspace.AssetGraph, out io.Writer) (Manifest, string, error) {
+	return PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, deployment.DefaultEnvironment, deploymentID, active, out)
+}
+
+func PackProjectAgainstGraphForEnvironment(projectPath, workspaceID string, environment deployment.Environment, deploymentID deployment.ID, active workspace.AssetGraph, out io.Writer) (Manifest, string, error) {
 	projectPath, err := filepath.Abs(projectPath)
 	if err != nil {
 		return Manifest{}, "", err
 	}
+	environment = deployment.NormalizeEnvironment(environment)
 	if workspaceID == "" {
 		return Manifest{}, "", fmt.Errorf("project deploy requires explicit workspace")
 	}
@@ -106,6 +113,7 @@ func PackProjectAgainstGraph(projectPath, workspaceID string, deploymentID deplo
 		Version:        1,
 		WorkspaceID:    workspaceID,
 		WorkspaceTitle: compiledWorkspace.Workspace.Title,
+		Environment:    string(environment),
 		DeploymentID:   string(deploymentID),
 		Validation: CompiledArtifactValidation{
 			Status:        "passed",
@@ -129,6 +137,7 @@ func PackProjectAgainstGraph(projectPath, workspaceID string, deploymentID deplo
 		Version:        1,
 		WorkspaceID:    workspaceID,
 		WorkspaceTitle: compiledWorkspace.Workspace.Title,
+		Environment:    string(environment),
 		CatalogPath:    ProjectFile,
 		CompiledPath:   CompiledProjectFile,
 		GraphHash:      digestBytes(compiledBytes),
@@ -302,6 +311,16 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 	if compiled.WorkspaceID != string(workspaceID) {
 		os.RemoveAll(root)
 		return deployment.Validation{}, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, workspaceID)
+	}
+	if compiled.Environment == "" {
+		compiled.Environment = manifest.Environment
+	}
+	if manifest.Environment == "" {
+		manifest.Environment = compiled.Environment
+	}
+	if compiled.Environment != "" && manifest.Environment != "" && compiled.Environment != manifest.Environment {
+		os.RemoveAll(root)
+		return deployment.Validation{}, fmt.Errorf("compiled artifact environment = %q, manifest environment = %q", compiled.Environment, manifest.Environment)
 	}
 	if compiled.DeploymentID != string(deploymentID) {
 		os.RemoveAll(root)

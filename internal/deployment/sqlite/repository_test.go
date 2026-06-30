@@ -94,10 +94,10 @@ func TestRepositorySaveValidatedReplacesDeploymentGraph(t *testing.T) {
 	if _, err := repo.SaveValidated(ctx, created.ID, replacement, artifact(created.ID, "test")); err != nil {
 		t.Fatalf("replacement save validated: %v", err)
 	}
-	if _, err := repo.Activate(ctx, "test", created.ID); err != nil {
+	if _, err := repo.Activate(ctx, "test", deployment.DefaultEnvironment, created.ID); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
-	graph, ok, err := workspaceRepo.ActiveDeploymentGraph(ctx, "test")
+	graph, ok, err := workspaceRepo.ActiveDeploymentGraph(ctx, "test", string(deployment.DefaultEnvironment))
 	if err != nil {
 		t.Fatalf("active graph: %v", err)
 	}
@@ -159,6 +159,52 @@ func TestRepositorySaveValidatedAllowsSameLogicalAssetsAcrossDeployments(t *test
 	}
 }
 
+func TestRepositoryTracksActiveDeploymentsPerEnvironment(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openRepo(t, ctx)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	dev, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", Environment: "dev", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create dev: %v", err)
+	}
+	prod, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", Environment: "prod", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create prod: %v", err)
+	}
+	if _, err := repo.SaveValidated(ctx, dev.ID, validationGraph(dev.ID), artifact(dev.ID, "test")); err != nil {
+		t.Fatalf("save dev: %v", err)
+	}
+	if _, err := repo.SaveValidated(ctx, prod.ID, validationGraph(prod.ID), artifact(prod.ID, "test")); err != nil {
+		t.Fatalf("save prod: %v", err)
+	}
+	if _, err := repo.Activate(ctx, "test", "dev", dev.ID); err != nil {
+		t.Fatalf("activate dev: %v", err)
+	}
+	if _, err := repo.Activate(ctx, "test", "prod", prod.ID); err != nil {
+		t.Fatalf("activate prod: %v", err)
+	}
+	activeDev, _, err := repo.ActiveArtifact(ctx, "test", "dev")
+	if err != nil {
+		t.Fatalf("active dev: %v", err)
+	}
+	activeProd, _, err := repo.ActiveArtifact(ctx, "test", "prod")
+	if err != nil {
+		t.Fatalf("active prod: %v", err)
+	}
+	if activeDev.ID != dev.ID || activeProd.ID != prod.ID {
+		t.Fatalf("active dev/prod = %s/%s, want %s/%s", activeDev.ID, activeProd.ID, dev.ID, prod.ID)
+	}
+	devRows, err := repo.List(ctx, "test", "dev")
+	if err != nil {
+		t.Fatalf("list dev: %v", err)
+	}
+	if len(devRows) != 1 || devRows[0].ID != dev.ID {
+		t.Fatalf("dev deployments = %#v, want only %s", devRows, dev.ID)
+	}
+}
+
 func TestRepositoryActivateWithWorkspacePolicyIsAtomic(t *testing.T) {
 	ctx := context.Background()
 	store, repo := openRepo(t, ctx)
@@ -188,7 +234,7 @@ func TestRepositoryActivateWithWorkspacePolicyIsAtomic(t *testing.T) {
 			"analysts-viewer": {Role: "viewer", Subject: workspace.WorkspaceRoleBindingSubject{Kind: "group", Group: "analysts"}},
 		},
 	}
-	if _, err := repo.ActivateWithWorkspacePolicy(ctx, "test", first.ID, initial); err != nil {
+	if _, err := repo.ActivateWithWorkspacePolicy(ctx, "test", deployment.DefaultEnvironment, first.ID, initial); err != nil {
 		t.Fatalf("activate first: %v", err)
 	}
 
@@ -197,11 +243,11 @@ func TestRepositoryActivateWithWorkspacePolicyIsAtomic(t *testing.T) {
 			"missing-viewer": {Role: "viewer", Subject: workspace.WorkspaceRoleBindingSubject{Kind: "group", Group: "missing"}},
 		},
 	}
-	if _, err := repo.ActivateWithWorkspacePolicy(ctx, "test", second.ID, invalid); err == nil {
+	if _, err := repo.ActivateWithWorkspacePolicy(ctx, "test", deployment.DefaultEnvironment, second.ID, invalid); err == nil {
 		t.Fatal("ActivateWithWorkspacePolicy() error = nil, want atomic policy failure")
 	}
 
-	active, _, err := repo.ActiveArtifact(ctx, "test")
+	active, _, err := repo.ActiveArtifact(ctx, "test", deployment.DefaultEnvironment)
 	if err != nil {
 		t.Fatalf("active artifact: %v", err)
 	}

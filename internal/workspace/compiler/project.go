@@ -414,9 +414,6 @@ func projectPlanChange(action string, asset, active workspace.Asset, reason stri
 	if action == "change" && semanticBreakingChange(asset, active) {
 		breaking = true
 	}
-	if action == "change" && usedSemanticChild(asset, impact) {
-		breaking = true
-	}
 	return ProjectPlanChange{
 		Action:                action,
 		ID:                    string(asset.ID),
@@ -560,6 +557,18 @@ func semanticBreakingChange(authored, active workspace.Asset) bool {
 			return false
 		}
 		return modelFieldsBreaking(next, prev)
+	case workspace.AssetTypeField:
+		var next, prev fieldPayloadV1
+		if !decodeAssetPayload(authored, &next) || !decodeAssetPayload(active, &prev) {
+			return false
+		}
+		return fieldPayloadBreaking(next, prev)
+	case workspace.AssetTypeMeasure:
+		var next, prev measurePayloadV1
+		if !decodeAssetPayload(authored, &next) || !decodeAssetPayload(active, &prev) {
+			return false
+		}
+		return measurePayloadBreaking(next, prev)
 	default:
 		return false
 	}
@@ -599,6 +608,29 @@ func modelFieldsBreaking(next, prev modelTablePayloadV1) bool {
 		if _, ok := next.Fields[name]; !ok {
 			return true
 		}
+	}
+	return false
+}
+
+func fieldPayloadBreaking(next, prev fieldPayloadV1) bool {
+	if prev.Field != next.Field || prev.Table != next.Table || prev.Name != next.Name {
+		return true
+	}
+	if prev.Type != "" && next.Type != "" && prev.Type != next.Type {
+		return true
+	}
+	return strings.TrimSpace(prev.Expr) != strings.TrimSpace(next.Expr) || strings.TrimSpace(prev.Expression) != strings.TrimSpace(next.Expression)
+}
+
+func measurePayloadBreaking(next, prev measurePayloadV1) bool {
+	if prev.Field != next.Field || prev.Table != next.Table || prev.Name != next.Name {
+		return true
+	}
+	if strings.TrimSpace(prev.Expr) != strings.TrimSpace(next.Expr) || strings.TrimSpace(prev.Expression) != strings.TrimSpace(next.Expression) {
+		return true
+	}
+	if prev.Time != next.Time || prev.Grain != next.Grain || !sameStringList(prev.Grains, next.Grains) {
+		return true
 	}
 	return false
 }
@@ -968,6 +1000,7 @@ func projectModelTable(spec projectModelTableSpec) semanticmodel.Table {
 		table.Dimensions[name] = semanticmodel.MetricDimension{
 			Label:       field.Label,
 			Description: field.Description,
+			Type:        field.Type,
 			Expr:        field.Expr,
 			Expression:  field.Expression,
 		}
@@ -1184,8 +1217,9 @@ func (workspaceProject *WorkspaceProject) definition(project Project) (*workspac
 			Groups:       copyWorkspaceGroups(workspaceProject.AccessGroups),
 			RoleBindings: copyWorkspaceRoleBindings(workspaceProject.AccessRoleBindings),
 		},
-		BaseDir:   project.BaseDir,
-		SourceIDs: sourceIDs,
+		BaseDir:     project.BaseDir,
+		SourceIDs:   sourceIDs,
+		SourceFiles: workspaceProject.sourceFiles(project),
 	}
 	for _, modelName := range sortedMapKeys(workspaceProject.SemanticModels) {
 		semanticSpec := workspaceProject.SemanticModels[modelName]
@@ -1216,6 +1250,42 @@ func (workspaceProject *WorkspaceProject) definition(project Project) (*workspac
 		return definition.Catalog.Dashboards[i].ID < definition.Catalog.Dashboards[j].ID
 	})
 	return definition, nil
+}
+
+func (workspaceProject *WorkspaceProject) sourceFiles(project Project) map[string]string {
+	sourceFiles := map[string]string{}
+	workspaceKey := func(name string) string {
+		return workspaceProject.ID + "." + name
+	}
+	sourceFiles[string(workspace.NewAssetID(workspace.AssetTypeCatalog, workspaceProject.ID))] = workspaceProject.Path
+	for name, path := range project.ConnectionPaths {
+		sourceFiles[string(workspace.NewAssetID(workspace.AssetTypeConnection, name))] = path
+	}
+	for name, path := range project.SourcePaths {
+		sourceFiles[string(workspace.NewAssetID(workspace.AssetTypeSource, name))] = path
+	}
+	for name, path := range workspaceProject.ModelPaths {
+		sourceFiles[string(workspace.NewAssetID(workspace.AssetTypeModelTable, workspaceKey(name)))] = path
+	}
+	for name, path := range workspaceProject.SemanticModelPaths {
+		sourceFiles[string(workspace.NewAssetID(workspace.AssetTypeSemanticModel, workspaceKey(name)))] = path
+	}
+	for name, path := range workspaceProject.DashboardPaths {
+		sourceFiles[string(workspace.NewAssetID(workspace.AssetTypeDashboard, workspaceKey(name)))] = path
+	}
+	for accessKey, path := range workspaceProject.AccessPaths {
+		kind, name, ok := strings.Cut(accessKey, ":")
+		if !ok {
+			continue
+		}
+		switch kind {
+		case "WorkspaceGroup":
+			sourceFiles[string(workspace.NewAssetID(workspace.AssetTypeWorkspaceGroup, workspaceKey(name)))] = path
+		case "WorkspaceRoleBinding":
+			sourceFiles[string(workspace.NewAssetID(workspace.AssetTypeWorkspaceRoleBinding, workspaceKey(name)))] = path
+		}
+	}
+	return sourceFiles
 }
 
 func (workspaceProject *WorkspaceProject) semanticModel(project Project, modelName string, semanticSpec projectSemanticModelSpec, sourceAliases map[string]string) (*semanticmodel.Model, error) {

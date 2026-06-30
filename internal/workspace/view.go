@@ -21,6 +21,7 @@ type AssetView struct {
 	ParentID      string
 	Title         string
 	Description   string
+	SourceFile    string
 	PayloadSchema string
 	Payload       map[string]any
 	ContentHash   string
@@ -81,6 +82,7 @@ func AssetViewFromCatalogRecord(row AssetRecord) AssetView {
 		ParentID:      string(row.ParentID),
 		Title:         row.Title,
 		Description:   row.Description,
+		SourceFile:    row.SourceFile,
 		PayloadSchema: row.PayloadSchema,
 		Payload:       row.Payload,
 		ContentHash:   row.ContentHash,

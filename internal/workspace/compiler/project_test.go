@@ -64,6 +64,8 @@ spec:
 	assertGraphAsset(t, compiled.Workspaces["sales"].Workspace.Graph, "dashboard:sales.executive-sales")
 	assertGraphAsset(t, compiled.Workspaces["sales"].Workspace.Graph, "workspace_group:sales.analysts")
 	assertGraphAsset(t, compiled.Workspaces["sales"].Workspace.Graph, "workspace_role_binding:sales.analysts-viewer")
+	assertAssetSourceFileContains(t, compiled.Workspaces["sales"].Workspace.Graph, "source:olist.orders", filepath.Join("sources", "olist.orders.yaml"))
+	assertAssetSourceFileContains(t, compiled.Workspaces["sales"].Workspace.Graph, "field:sales.sales.orders.order_id", filepath.Join("workspaces", "sales", "semantic-models", "sales.yaml"))
 	assertGraphMissingAsset(t, compiled.Workspaces["sales"].Workspace.Graph, "source:sales.olist_orders")
 	assertGraphAsset(t, compiled.Workspaces["operations"].Workspace.Graph, "source:olist.orders")
 	assertGraphAsset(t, compiled.Workspaces["operations"].Workspace.Graph, "model_table:operations.orders")
@@ -396,6 +398,55 @@ func TestDiffAssetGraphsMarksUsedSemanticChildrenBreaking(t *testing.T) {
 	}
 }
 
+func TestDiffAssetGraphsTreatsUsedFieldLabelChangeAsNonBreaking(t *testing.T) {
+	workspaceID := workspace.WorkspaceID("sales")
+	activeDeployment := workspace.DeploymentID("dep_active")
+	authoredDeployment := workspace.DeploymentID("plan")
+	activeField := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeField, "sales.sales.orders.status", "semantic_table:sales.sales.orders", fieldPayloadV1{
+		Field: "orders.status", Table: "orders", Name: "status", Label: "Status", Type: "string", Expression: "status",
+	})
+	authoredField := testPlanAssetPayload(t, workspaceID, authoredDeployment, workspace.AssetTypeField, "sales.sales.orders.status", "semantic_table:sales.sales.orders", fieldPayloadV1{
+		Field: "orders.status", Table: "orders", Name: "status", Label: "Order Status", Type: "string", Expression: "status",
+	})
+	visual := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeVisual, "sales.executive-sales.status", "dashboard:sales.executive-sales")
+	active := workspace.AssetGraph{
+		Assets: []workspace.Asset{activeField, visual},
+		Edges:  []workspace.AssetEdge{workspace.NewAssetEdge(workspaceID, activeDeployment, visual.ID, activeField.ID, workspace.AssetEdgeUsesField)},
+	}
+	authored := workspace.AssetGraph{Assets: []workspace.Asset{authoredField, visual}}
+
+	changes, _, summary := diffAssetGraphs(authored, active)
+	if summary.Breaking {
+		t.Fatalf("summary = %#v changes=%#v, want non-breaking label-only change", summary, changes)
+	}
+	if len(changes) != 1 || changes[0].ID != string(activeField.ID) || changes[0].Breaking {
+		t.Fatalf("changes = %#v, want one non-breaking field change", changes)
+	}
+}
+
+func TestDiffAssetGraphsTreatsUsedFieldExpressionChangeAsBreaking(t *testing.T) {
+	workspaceID := workspace.WorkspaceID("sales")
+	activeDeployment := workspace.DeploymentID("dep_active")
+	authoredDeployment := workspace.DeploymentID("plan")
+	activeField := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeField, "sales.sales.orders.status", "semantic_table:sales.sales.orders", fieldPayloadV1{
+		Field: "orders.status", Table: "orders", Name: "status", Label: "Status", Type: "string", Expression: "status",
+	})
+	authoredField := testPlanAssetPayload(t, workspaceID, authoredDeployment, workspace.AssetTypeField, "sales.sales.orders.status", "semantic_table:sales.sales.orders", fieldPayloadV1{
+		Field: "orders.status", Table: "orders", Name: "status", Label: "Status", Type: "string", Expression: "coalesce(status, 'unknown')",
+	})
+	visual := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeVisual, "sales.executive-sales.status", "dashboard:sales.executive-sales")
+	active := workspace.AssetGraph{
+		Assets: []workspace.Asset{activeField, visual},
+		Edges:  []workspace.AssetEdge{workspace.NewAssetEdge(workspaceID, activeDeployment, visual.ID, activeField.ID, workspace.AssetEdgeUsesField)},
+	}
+	authored := workspace.AssetGraph{Assets: []workspace.Asset{authoredField, visual}}
+
+	changes, _, summary := diffAssetGraphs(authored, active)
+	if !summary.Breaking || len(changes) != 1 || !changes[0].Breaking {
+		t.Fatalf("summary = %#v changes=%#v, want breaking expression change", summary, changes)
+	}
+}
+
 func TestCompileProjectValidatesUnusedGlobalConnectionsAndSources(t *testing.T) {
 	t.Run("unused unsupported connection", func(t *testing.T) {
 		projectPath := writeProjectFixture(t, minimalProjectFiles(map[string]string{
@@ -709,6 +760,15 @@ func testPlanAsset(t *testing.T, workspaceID workspace.WorkspaceID, deploymentID
 	return asset
 }
 
+func testPlanAssetPayload(t *testing.T, workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, typ workspace.AssetType, key string, parent workspace.AssetID, payload any) workspace.Asset {
+	t.Helper()
+	asset, err := workspace.NewAsset(workspaceID, deploymentID, typ, key, parent, key, "", workspace.PayloadSchemaForAssetType(typ), payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return asset
+}
+
 func connectionYAML(name string) string {
 	return `
 apiVersion: libredash.dev/v1
@@ -971,6 +1031,20 @@ func assertGraphAsset(t *testing.T, graph workspace.AssetGraph, id string) {
 		if string(asset.ID) == id {
 			return
 		}
+	}
+	t.Fatalf("asset %q missing from graph", id)
+}
+
+func assertAssetSourceFileContains(t *testing.T, graph workspace.AssetGraph, id, want string) {
+	t.Helper()
+	for _, asset := range graph.Assets {
+		if string(asset.ID) != id {
+			continue
+		}
+		if !strings.Contains(filepath.ToSlash(asset.SourceFile), filepath.ToSlash(want)) {
+			t.Fatalf("asset %q sourceFile = %q, want contains %q", id, asset.SourceFile, want)
+		}
+		return
 	}
 	t.Fatalf("asset %q missing from graph", id)
 }

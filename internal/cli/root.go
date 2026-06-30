@@ -13,6 +13,7 @@ type rootOptions struct {
 	localCatalog string
 	production   bool
 	workspaceID  string
+	environment  string
 	target       string
 	token        string
 	catalog      string

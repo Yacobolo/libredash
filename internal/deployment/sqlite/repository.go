@@ -32,6 +32,7 @@ func (r *Repository) Create(ctx context.Context, input deployment.CreateInput) (
 	if err := r.q.CreateDeployment(ctx, platformdb.CreateDeploymentParams{
 		ID:          string(id),
 		WorkspaceID: string(input.WorkspaceID),
+		Environment: string(deployment.NormalizeEnvironment(input.Environment)),
 		Status:      string(deployment.StatusPending),
 		CreatedBy:   input.CreatedBy,
 	}); err != nil {
@@ -48,8 +49,8 @@ func (r *Repository) ByID(ctx context.Context, id deployment.ID) (deployment.Dep
 	return mapDeployment(row), nil
 }
 
-func (r *Repository) List(ctx context.Context, workspaceID deployment.WorkspaceID) ([]deployment.Deployment, error) {
-	rows, err := r.q.ListDeployments(ctx, string(workspaceID))
+func (r *Repository) List(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) ([]deployment.Deployment, error) {
+	rows, err := r.q.ListDeployments(ctx, platformdb.ListDeploymentsParams{WorkspaceID: string(workspaceID), Environment: string(deployment.NormalizeEnvironment(environment))})
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +85,7 @@ func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.
 		return deployment.Deployment{}, mapNotFound(err)
 	}
 	artifact.WorkspaceID = deployment.WorkspaceID(current.WorkspaceID)
+	artifact.Environment = deployment.Environment(current.Environment)
 	if err := workspace.ValidateAssetGraphForDeployment(validation.Graph, workspace.WorkspaceID(current.WorkspaceID), workspace.DeploymentID(deploymentID)); err != nil {
 		return deployment.Deployment{}, err
 	}
@@ -107,6 +109,7 @@ func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.
 			ParentLogicalAssetID: string(asset.ParentID),
 			Title:                asset.Title,
 			Description:          asset.Description,
+			SourceFile:           asset.SourceFile,
 			PayloadSchema:        asset.PayloadSchema,
 			PayloadJson:          asset.PayloadJSON,
 			ContentHash:          asset.ContentHash,
@@ -140,15 +143,16 @@ func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.
 	return r.ByID(ctx, deploymentID)
 }
 
-func (r *Repository) Activate(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID) (deployment.Deployment, error) {
-	return r.activate(ctx, workspaceID, deploymentID, nil)
+func (r *Repository) Activate(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID) (deployment.Deployment, error) {
+	return r.activate(ctx, workspaceID, environment, deploymentID, nil)
 }
 
-func (r *Repository) ActivateWithWorkspacePolicy(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error) {
-	return r.activate(ctx, workspaceID, deploymentID, &policy)
+func (r *Repository) ActivateWithWorkspacePolicy(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error) {
+	return r.activate(ctx, workspaceID, environment, deploymentID, &policy)
 }
 
-func (r *Repository) activate(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID, policy *workspace.AccessPolicy) (deployment.Deployment, error) {
+func (r *Repository) activate(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID, policy *workspace.AccessPolicy) (deployment.Deployment, error) {
+	environment = deployment.NormalizeEnvironment(environment)
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return deployment.Deployment{}, err
@@ -163,6 +167,9 @@ func (r *Repository) activate(ctx context.Context, workspaceID deployment.Worksp
 	if current.WorkspaceID != workspaceID {
 		return deployment.Deployment{}, fmt.Errorf("deployment %s is not in workspace %s", deploymentID, workspaceID)
 	}
+	if current.Environment != environment {
+		return deployment.Deployment{}, fmt.Errorf("deployment %s environment = %q, want %q", deploymentID, current.Environment, environment)
+	}
 	if !current.CanActivate() {
 		return deployment.Deployment{}, fmt.Errorf("deployment %s has status %q, want validated", deploymentID, current.Status)
 	}
@@ -171,15 +178,16 @@ func (r *Repository) activate(ctx context.Context, workspaceID deployment.Worksp
 			return deployment.Deployment{}, err
 		}
 	}
-	if err := q.MarkOtherDeploymentsInactive(ctx, platformdb.MarkOtherDeploymentsInactiveParams{WorkspaceID: string(workspaceID), ID: string(deploymentID)}); err != nil {
+	if err := q.MarkOtherDeploymentsInactive(ctx, platformdb.MarkOtherDeploymentsInactiveParams{WorkspaceID: string(workspaceID), Environment: string(environment), ID: string(deploymentID)}); err != nil {
 		return deployment.Deployment{}, err
 	}
 	if err := q.MarkDeploymentActive(ctx, string(deploymentID)); err != nil {
 		return deployment.Deployment{}, err
 	}
-	if err := q.SetWorkspaceActiveDeployment(ctx, platformdb.SetWorkspaceActiveDeploymentParams{
-		ActiveDeploymentID: sql.NullString{String: string(deploymentID), Valid: true},
-		ID:                 string(workspaceID),
+	if err := q.SetActiveDeployment(ctx, platformdb.SetActiveDeploymentParams{
+		WorkspaceID:  string(workspaceID),
+		Environment:  string(environment),
+		DeploymentID: string(deploymentID),
 	}); err != nil {
 		return deployment.Deployment{}, err
 	}
@@ -291,8 +299,8 @@ func upsertPolicyPrincipalTx(ctx context.Context, q *platformdb.Queries, id, ema
 	return id, nil
 }
 
-func (r *Repository) ActiveArtifact(ctx context.Context, workspaceID deployment.WorkspaceID) (deployment.Deployment, deployment.Artifact, error) {
-	row, err := r.q.GetActiveDeployment(ctx, string(workspaceID))
+func (r *Repository) ActiveArtifact(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) (deployment.Deployment, deployment.Artifact, error) {
+	row, err := r.q.GetActiveDeployment(ctx, platformdb.GetActiveDeploymentParams{WorkspaceID: string(workspaceID), Environment: string(deployment.NormalizeEnvironment(environment))})
 	if err != nil {
 		return deployment.Deployment{}, deployment.Artifact{}, mapNotFound(err)
 	}
@@ -315,6 +323,7 @@ func mapDeployment(row platformdb.Deployment) deployment.Deployment {
 	out := deployment.Deployment{
 		ID:           deployment.ID(row.ID),
 		WorkspaceID:  deployment.WorkspaceID(row.WorkspaceID),
+		Environment:  deployment.Environment(row.Environment),
 		Status:       deployment.Status(row.Status),
 		Digest:       row.Digest,
 		ManifestJSON: row.ManifestJson,
@@ -333,6 +342,7 @@ func mapArtifact(row platformdb.DeploymentArtifact) deployment.Artifact {
 		ID:           row.ID,
 		DeploymentID: deployment.ID(row.DeploymentID),
 		WorkspaceID:  deployment.WorkspaceID(row.WorkspaceID),
+		Environment:  deployment.Environment(row.Environment),
 		Digest:       row.Digest,
 		Format:       row.Format,
 		Path:         row.Path,
@@ -347,6 +357,7 @@ func mapArtifactParams(artifact deployment.Artifact) platformdb.InsertDeployment
 		ID:           artifact.ID,
 		DeploymentID: string(artifact.DeploymentID),
 		WorkspaceID:  string(artifact.WorkspaceID),
+		Environment:  string(deployment.NormalizeEnvironment(artifact.Environment)),
 		Digest:       artifact.Digest,
 		Format:       artifact.Format,
 		Path:         artifact.Path,

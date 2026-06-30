@@ -111,7 +111,7 @@ func (r *fakeRepo) ByID(context.Context, deployment.ID) (deployment.Deployment, 
 	return r.deployment, nil
 }
 
-func (r *fakeRepo) Activate(context.Context, deployment.WorkspaceID, deployment.ID) (deployment.Deployment, error) {
+func (r *fakeRepo) Activate(context.Context, deployment.WorkspaceID, deployment.Environment, deployment.ID) (deployment.Deployment, error) {
 	r.activateCalls++
 	if r.activateErr != nil {
 		return deployment.Deployment{}, r.activateErr
@@ -120,7 +120,7 @@ func (r *fakeRepo) Activate(context.Context, deployment.WorkspaceID, deployment.
 	return r.deployment, nil
 }
 
-func (r *fakeRepo) ActivateWithWorkspacePolicy(_ context.Context, _ deployment.WorkspaceID, _ deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error) {
+func (r *fakeRepo) ActivateWithWorkspacePolicy(_ context.Context, _ deployment.WorkspaceID, _ deployment.Environment, _ deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error) {
 	r.activateWithPolicyCalls++
 	r.policy = policy
 	if r.activateErr != nil {

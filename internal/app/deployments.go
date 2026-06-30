@@ -33,7 +33,7 @@ type deploymentRepository interface {
 	activate.Repository
 	activate.ArtifactRepository
 	Create(ctx context.Context, input deployment.CreateInput) (deployment.Deployment, error)
-	List(ctx context.Context, workspaceID deployment.WorkspaceID) ([]deployment.Deployment, error)
+	List(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) ([]deployment.Deployment, error)
 }
 
 func (s *Server) createDeployment(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +67,8 @@ func (s *Server) createDeployment(w http.ResponseWriter, r *http.Request) {
 			createdBy = principal.ID
 		}
 	}
-	deployment, err := repo.Create(r.Context(), deployment.CreateInput{WorkspaceID: deployment.WorkspaceID(workspaceID), CreatedBy: createdBy})
+	environment := requestDeploymentEnvironment(r, input.Environment)
+	deployment, err := repo.Create(r.Context(), deployment.CreateInput{WorkspaceID: deployment.WorkspaceID(workspaceID), Environment: environment, CreatedBy: createdBy})
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
@@ -173,7 +174,7 @@ func (s *Server) listDeployments(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	rows, err := repo.List(r.Context(), deployment.WorkspaceID(workspaceID))
+	rows, err := repo.List(r.Context(), deployment.WorkspaceID(workspaceID), requestDeploymentEnvironment(r, ""))
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
@@ -212,6 +213,9 @@ func (s *Server) deploymentByIDForRequestWorkspace(r *http.Request, repo deploym
 	if workspaceID := chi.URLParam(r, "workspace"); workspaceID != "" && row.WorkspaceID != deployment.WorkspaceID(s.workspaceID(workspaceID)) {
 		return deployment.Deployment{}, deployment.ErrNotFound
 	}
+	if row.Environment != requestDeploymentEnvironment(r, "") {
+		return deployment.Deployment{}, deployment.ErrNotFound
+	}
 	return row, nil
 }
 
@@ -240,6 +244,7 @@ func deploymentDTO(row deployment.Deployment) api.DeploymentResponse {
 	out := api.DeploymentResponse{
 		ID:          string(row.ID),
 		WorkspaceID: string(row.WorkspaceID),
+		Environment: string(deployment.NormalizeEnvironment(row.Environment)),
 		Status:      string(row.Status),
 		Digest:      row.Digest,
 		CreatedAt:   row.CreatedAt,
@@ -247,6 +252,13 @@ func deploymentDTO(row deployment.Deployment) api.DeploymentResponse {
 	}
 	out.ActivatedAt = row.ActivatedAt
 	return out
+}
+
+func requestDeploymentEnvironment(r *http.Request, fallback string) deployment.Environment {
+	if fallback == "" {
+		fallback = r.URL.Query().Get("environment")
+	}
+	return deployment.NormalizeEnvironment(deployment.Environment(fallback))
 }
 
 func pageDeployments(rows []api.DeploymentResponse, limit int, pageToken string) ([]api.DeploymentResponse, string) {

@@ -60,6 +60,7 @@ func planCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
 	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL for active deployment diff")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
+	cmd.Flags().StringVar(&opts.environment, "environment", "dev", "deployment environment for active diff")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "emit JSON plan")
 	return cmd
 }
@@ -169,11 +170,11 @@ func fetchActiveWorkspaceGraph(ctx context.Context, opts *rootOptions) (workspac
 	if err != nil {
 		return workspace.AssetGraph{}, err
 	}
-	assets, err := fetchAllWorkspaceAssets(ctx, target, token, opts.workspaceID)
+	assets, err := fetchAllWorkspaceAssets(ctx, target, token, opts.workspaceID, cliEnvironment(opts))
 	if err != nil {
 		return workspace.AssetGraph{}, err
 	}
-	edges, err := fetchAllWorkspaceAssetEdges(ctx, target, token, opts.workspaceID)
+	edges, err := fetchAllWorkspaceAssetEdges(ctx, target, token, opts.workspaceID, cliEnvironment(opts))
 	if err != nil {
 		return workspace.AssetGraph{}, err
 	}
@@ -193,6 +194,7 @@ func fetchActiveWorkspaceGraph(ctx context.Context, opts *rootOptions) (workspac
 			Title:         asset.Title,
 			Description:   asset.Description,
 			PayloadSchema: asset.PayloadSchema,
+			SourceFile:    asset.SourceFile,
 			ContentHash:   asset.ContentHash,
 		})
 	}
@@ -209,7 +211,7 @@ func fetchActiveWorkspaceGraph(ctx context.Context, opts *rootOptions) (workspac
 	return graph, nil
 }
 
-func fetchAllWorkspaceAssets(ctx context.Context, target, token, workspaceID string) ([]api.AssetSummaryResponse, error) {
+func fetchAllWorkspaceAssets(ctx context.Context, target, token, workspaceID, environment string) ([]api.AssetSummaryResponse, error) {
 	var out []api.AssetSummaryResponse
 	pageToken := ""
 	for {
@@ -218,7 +220,7 @@ func fetchAllWorkspaceAssets(ctx context.Context, target, token, workspaceID str
 		if pageToken != "" {
 			query.Set("pageToken", pageToken)
 		}
-		endpoint, err := apiOperationURL(target, "listWorkspaceAssets", map[string]string{"workspace": workspaceID}, query)
+		endpoint, err := apiOperationURL(target, "listWorkspaceAssets", map[string]string{"workspace": workspaceID}, withEnvironmentQuery(environment, query))
 		if err != nil {
 			return nil, err
 		}
@@ -234,7 +236,7 @@ func fetchAllWorkspaceAssets(ctx context.Context, target, token, workspaceID str
 	}
 }
 
-func fetchAllWorkspaceAssetEdges(ctx context.Context, target, token, workspaceID string) ([]api.AssetEdgeResponse, error) {
+func fetchAllWorkspaceAssetEdges(ctx context.Context, target, token, workspaceID, environment string) ([]api.AssetEdgeResponse, error) {
 	var out []api.AssetEdgeResponse
 	pageToken := ""
 	for {
@@ -243,7 +245,7 @@ func fetchAllWorkspaceAssetEdges(ctx context.Context, target, token, workspaceID
 		if pageToken != "" {
 			query.Set("pageToken", pageToken)
 		}
-		endpoint, err := apiOperationURL(target, "listWorkspaceAssetEdges", map[string]string{"workspace": workspaceID}, query)
+		endpoint, err := apiOperationURL(target, "listWorkspaceAssetEdges", map[string]string{"workspace": workspaceID}, withEnvironmentQuery(environment, query))
 		if err != nil {
 			return nil, err
 		}
@@ -257,6 +259,21 @@ func fetchAllWorkspaceAssetEdges(ctx context.Context, target, token, workspaceID
 			return out, nil
 		}
 	}
+}
+
+func environmentQuery(opts *rootOptions, values url.Values) url.Values {
+	return withEnvironmentQuery(cliEnvironment(opts), values)
+}
+
+func withEnvironmentQuery(environment string, values url.Values) url.Values {
+	if values == nil {
+		values = url.Values{}
+	}
+	if environment == "" {
+		environment = "dev"
+	}
+	values.Set("environment", environment)
+	return values
 }
 
 func planChangeAnnotations(change workspacecompiler.ProjectPlanChange) string {

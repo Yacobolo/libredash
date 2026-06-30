@@ -17,6 +17,7 @@ type Asset struct {
 	ParentID      AssetID
 	Title         string
 	Description   string
+	SourceFile    string `json:"sourceFile,omitempty"`
 	PayloadSchema string
 	PayloadJSON   string
 	ContentHash   string
@@ -37,6 +38,10 @@ type AssetGraph struct {
 }
 
 func NewAsset(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType, key string, parentID AssetID, title, description, payloadSchema string, payload any) (Asset, error) {
+	return NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parentID, title, description, "", payloadSchema, payload)
+}
+
+func NewAssetWithSourceFile(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType, key string, parentID AssetID, title, description, sourceFile, payloadSchema string, payload any) (Asset, error) {
 	if err := validatePayloadSchema(typ, payloadSchema); err != nil {
 		return Asset{}, err
 	}
@@ -68,6 +73,7 @@ func NewAsset(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType,
 		ParentID:      parentID,
 		Title:         title,
 		Description:   description,
+		SourceFile:    sourceFile,
 		PayloadSchema: payloadSchema,
 		PayloadJSON:   string(payloadBytes),
 		ContentHash:   hex.EncodeToString(sum[:]),
@@ -97,6 +103,13 @@ func NewAssetEdge(workspaceID WorkspaceID, deploymentID DeploymentID, fromID, to
 
 func ValidateAssetGraphForDeployment(graph AssetGraph, workspaceID WorkspaceID, deploymentID DeploymentID) error {
 	assetIDs := make(map[AssetID]struct{}, len(graph.Assets))
+	provenanceEnabled := false
+	for _, asset := range graph.Assets {
+		if asset.SourceFile != "" {
+			provenanceEnabled = true
+			break
+		}
+	}
 	for _, asset := range graph.Assets {
 		if asset.ID == "" {
 			return fmt.Errorf("asset logical id is required")
@@ -116,6 +129,9 @@ func ValidateAssetGraphForDeployment(graph AssetGraph, workspaceID WorkspaceID, 
 		}
 		if err := validatePayloadSchema(asset.Type, asset.PayloadSchema); err != nil {
 			return fmt.Errorf("asset %s: %w", asset.ID, err)
+		}
+		if provenanceEnabled && resourceBackedAssetType(asset.Type) && asset.SourceFile == "" {
+			return fmt.Errorf("asset %s source file is required", asset.ID)
 		}
 	}
 	for _, asset := range graph.Assets {
@@ -151,6 +167,15 @@ func ValidateAssetGraphForDeployment(graph AssetGraph, workspaceID WorkspaceID, 
 		edgeKeys[key] = struct{}{}
 	}
 	return nil
+}
+
+func resourceBackedAssetType(typ AssetType) bool {
+	switch typ {
+	case AssetTypeCatalog, AssetTypeConnection, AssetTypeSource, AssetTypeModelTable, AssetTypeSemanticModel, AssetTypeDashboard, AssetTypeWorkspaceGroup, AssetTypeWorkspaceRoleBinding:
+		return true
+	default:
+		return false
+	}
 }
 
 type assetEdgeKey struct {

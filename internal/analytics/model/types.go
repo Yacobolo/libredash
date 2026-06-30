@@ -110,6 +110,7 @@ type MetricDimension struct {
 	Name        string `yaml:"-"`
 	Label       string `yaml:"label"`
 	Description string `yaml:"description"`
+	Type        string `yaml:"-" json:"-"`
 	Expr        string `yaml:"-" json:"-"`
 	Expression  string `yaml:"-" json:"-"`
 }

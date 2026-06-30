@@ -20,6 +20,20 @@ func TestNewAssetRequiresAllowedPayloadSchema(t *testing.T) {
 	}
 }
 
+func TestNewAssetContentHashIgnoresSourceFile(t *testing.T) {
+	first, err := NewAssetWithSourceFile("test", "dep", AssetTypeDashboard, "sales", "", "Sales", "", "dashboards/a.yaml", "dashboard.v1", map[string]any{"key": "sales"})
+	if err != nil {
+		t.Fatalf("first asset: %v", err)
+	}
+	second, err := NewAssetWithSourceFile("test", "dep", AssetTypeDashboard, "sales", "", "Sales", "", "dashboards/moved.yaml", "dashboard.v1", map[string]any{"key": "sales"})
+	if err != nil {
+		t.Fatalf("second asset: %v", err)
+	}
+	if first.ContentHash != second.ContentHash {
+		t.Fatalf("content hashes differ for sourceFile-only change: %s != %s", first.ContentHash, second.ContentHash)
+	}
+}
+
 func TestValidateAssetGraphForDeploymentRejectsInvalidGraph(t *testing.T) {
 	workspaceID := WorkspaceID("test")
 	deploymentID := DeploymentID("dep")
@@ -30,6 +44,12 @@ func TestValidateAssetGraphForDeploymentRejectsInvalidGraph(t *testing.T) {
 		name   string
 		mutate func(*AssetGraph)
 	}{
+		{
+			name: "missing source file in provenance graph",
+			mutate: func(graph *AssetGraph) {
+				graph.Assets[0].SourceFile = "dashboards/sales.yaml"
+			},
+		},
 		{
 			name: "duplicate logical asset",
 			mutate: func(graph *AssetGraph) {

@@ -227,7 +227,7 @@ func (a apiGenAdapter) CreateDeployment(w http.ResponseWriter, r *http.Request, 
 	a.server.createDeployment(w, r)
 }
 
-func (a apiGenAdapter) GetDeployment(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) GetDeployment(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenGetDeploymentParams) {
 	a.server.getDeployment(w, r)
 }
 
@@ -235,11 +235,11 @@ func (a apiGenAdapter) UploadDeploymentArtifact(w http.ResponseWriter, r *http.R
 	a.server.uploadDeploymentArtifact(w, r)
 }
 
-func (a apiGenAdapter) ActivateDeployment(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) ActivateDeployment(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenActivateDeploymentParams) {
 	a.server.activateDeployment(w, r)
 }
 
-func (a apiGenAdapter) ValidateDeployment(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) ValidateDeployment(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenValidateDeploymentParams) {
 	a.server.validateDeployment(w, r)
 }
 

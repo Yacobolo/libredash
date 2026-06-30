@@ -26,6 +26,7 @@ func TestDeploymentsListDecodesEnvelopePreservingTableOutput(t *testing.T) {
 			"items": []map[string]any{{
 				"id":          "dep_1",
 				"workspaceId": "test",
+				"environment": "dev",
 				"status":      "active",
 				"digest":      "sha256:1234567890abcdef",
 				"createdAt":   "2026-01-02T15:04:05Z",
@@ -47,10 +48,10 @@ func TestDeploymentsListDecodesEnvelopePreservingTableOutput(t *testing.T) {
 	if len(lines) != 2 {
 		t.Fatalf("output lines = %d, want 2:\n%s", len(lines), output)
 	}
-	if got := strings.Fields(lines[0]); strings.Join(got, "|") != "ID|STATUS|DIGEST|CREATED|ACTIVATED" {
+	if got := strings.Fields(lines[0]); strings.Join(got, "|") != "ID|ENVIRONMENT|STATUS|DIGEST|CREATED|ACTIVATED" {
 		t.Fatalf("header fields = %#v output=\n%s", got, output)
 	}
-	if got := strings.Fields(lines[1]); strings.Join(got, "|") != "dep_1|active|sha256:12345|2026-01-02T15:04:05Z|2026-01-02T15:05:05Z" {
+	if got := strings.Fields(lines[1]); strings.Join(got, "|") != "dep_1|dev|active|sha256:12345|2026-01-02T15:04:05Z|2026-01-02T15:05:05Z" {
 		t.Fatalf("row fields = %#v output=\n%s", got, output)
 	}
 	if strings.Contains(output, "items") || strings.Contains(output, "nextCursor") {

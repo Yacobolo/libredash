@@ -21,6 +21,7 @@ type AssetRecord struct {
 	ParentID      AssetID
 	Title         string
 	Description   string
+	SourceFile    string
 	PayloadSchema string
 	Payload       map[string]any
 	ContentHash   string
@@ -49,7 +50,7 @@ type RuntimeAssetGraphProvider interface {
 }
 
 type AssetCatalogReader interface {
-	ActiveAssetCatalog(ctx context.Context, id WorkspaceID) (AssetCatalog, bool, error)
+	ActiveAssetCatalog(ctx context.Context, id WorkspaceID, environment string) (AssetCatalog, bool, error)
 }
 
 func (s *AssetCatalogService) WithRuntimeProvider(provider RuntimeAssetGraphProvider) *AssetCatalogService {
@@ -57,12 +58,12 @@ func (s *AssetCatalogService) WithRuntimeProvider(provider RuntimeAssetGraphProv
 	return s
 }
 
-func (s *AssetCatalogService) ActiveAssetCatalog(ctx context.Context, id WorkspaceID) (AssetCatalog, bool, error) {
+func (s *AssetCatalogService) ActiveAssetCatalog(ctx context.Context, id WorkspaceID, environment string) (AssetCatalog, bool, error) {
 	if s == nil {
 		return AssetCatalog{}, false, nil
 	}
 	if s.repo != nil {
-		graph, ok, err := s.repo.ActiveDeploymentGraph(ctx, id)
+		graph, ok, err := s.repo.ActiveDeploymentGraph(ctx, id, environment)
 		if err != nil {
 			return AssetCatalog{}, false, err
 		}
@@ -104,6 +105,7 @@ func DecodeAssetCatalog(graph AssetGraph) (AssetCatalog, error) {
 			ParentID:      asset.ParentID,
 			Title:         asset.Title,
 			Description:   asset.Description,
+			SourceFile:    asset.SourceFile,
 			PayloadSchema: asset.PayloadSchema,
 			Payload:       payload,
 			ContentHash:   asset.ContentHash,

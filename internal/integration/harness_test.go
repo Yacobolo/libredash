@@ -592,7 +592,7 @@ func seedIntegrationActiveDeployment(t *testing.T, store *platform.Store, worksp
 	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, integrationZeroArtifact(created.ID, workspaceID)); err != nil {
 		t.Fatalf("save validated deployment: %v", err)
 	}
-	if _, err := deploymentRepo.Activate(ctx, deployment.WorkspaceID(workspaceID), created.ID); err != nil {
+	if _, err := deploymentRepo.Activate(ctx, deployment.WorkspaceID(workspaceID), deployment.DefaultEnvironment, created.ID); err != nil {
 		t.Fatalf("activate deployment: %v", err)
 	}
 }
@@ -600,7 +600,7 @@ func seedIntegrationActiveDeployment(t *testing.T, store *platform.Store, worksp
 func integrationAssetID(t *testing.T, store *platform.Store, workspaceID, assetType, key string) string {
 	t.Helper()
 	repo := workspacesqlite.NewRepository(store.SQLDB())
-	graph, ok, err := repo.ActiveDeploymentGraph(context.Background(), workspace.WorkspaceID(workspaceID))
+	graph, ok, err := repo.ActiveDeploymentGraph(context.Background(), workspace.WorkspaceID(workspaceID), string(deployment.DefaultEnvironment))
 	if err != nil {
 		t.Fatalf("active deployment graph: %v", err)
 	}

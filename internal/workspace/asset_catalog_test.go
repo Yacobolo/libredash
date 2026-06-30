@@ -17,7 +17,7 @@ func TestAssetCatalogServiceReadsActiveDeploymentBeforeRuntimeFallback(t *testin
 		ok:     true,
 	})
 
-	catalog, ok, err := service.ActiveAssetCatalog(ctx, "test")
+	catalog, ok, err := service.ActiveAssetCatalog(ctx, "test", "dev")
 	if err != nil {
 		t.Fatalf("ActiveAssetCatalog() error = %v", err)
 	}
@@ -37,7 +37,7 @@ func TestAssetCatalogServiceFallsBackToRuntimeGraph(t *testing.T) {
 		ok:     true,
 	})
 
-	catalog, ok, err := service.ActiveAssetCatalog(ctx, "test")
+	catalog, ok, err := service.ActiveAssetCatalog(ctx, "test", "dev")
 	if err != nil {
 		t.Fatalf("ActiveAssetCatalog() error = %v", err)
 	}
@@ -50,7 +50,7 @@ func TestAssetCatalogServiceFallsBackToRuntimeGraph(t *testing.T) {
 }
 
 func TestAssetCatalogServiceReturnsFalseWithoutActiveOrRuntimeGraph(t *testing.T) {
-	catalog, ok, err := NewAssetCatalogService(fakeCatalogRepo{}).ActiveAssetCatalog(context.Background(), "test")
+	catalog, ok, err := NewAssetCatalogService(fakeCatalogRepo{}).ActiveAssetCatalog(context.Background(), "test", "dev")
 	if err != nil {
 		t.Fatalf("ActiveAssetCatalog() error = %v", err)
 	}
@@ -77,7 +77,7 @@ func (r fakeCatalogRepo) ByID(context.Context, WorkspaceID) (Summary, error) {
 	return Summary{}, nil
 }
 
-func (r fakeCatalogRepo) ActiveDeploymentGraph(context.Context, WorkspaceID) (AssetGraph, bool, error) {
+func (r fakeCatalogRepo) ActiveDeploymentGraph(context.Context, WorkspaceID, string) (AssetGraph, bool, error) {
 	return r.graph, r.ok, r.err
 }
 
