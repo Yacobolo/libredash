@@ -640,12 +640,18 @@ const workspaceStyles = css`
   .card {
     display: grid;
     min-height: 10rem;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: 1fr auto;
     padding: var(--base-size-16);
+  }
+
+  .card > div {
+    min-width: 0;
   }
 
   .card footer {
     display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
     gap: var(--base-size-12);

@@ -20,6 +20,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	"github.com/Yacobolo/libredash/internal/workspace"
+	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
 
 func fieldRefs(fields ...string) []reportdef.FieldRef {
@@ -433,6 +434,48 @@ func TestHomeRouteRendersDashboardCatalog(t *testing.T) {
 	}
 	if strings.Contains(rendered, `<ld-sub-sidebar`) {
 		t.Fatalf("dashboard catalog should not render sub sidebar:\n%s", body)
+	}
+}
+
+func TestHomeRouteAggregatesDBBackedWorkspaceCatalogs(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
+	for _, row := range []workspace.EnsureInput{
+		{ID: "operations", Title: "Operations Workspace"},
+		{ID: "sales", Title: "Sales Workspace"},
+		{ID: "visuals", Title: "Visuals Workspace"},
+	} {
+		if err := workspaceRepo.Ensure(ctx, row); err != nil {
+			t.Fatalf("ensure workspace: %v", err)
+		}
+	}
+	metrics := NewMultiWorkspaceMetrics("operations", map[string]QueryMetrics{
+		"operations": namedWorkspaceMetrics{workspaceID: "operations", dashboardID: "fulfillment-operations", title: "Fulfillment Operations"},
+		"sales":      namedWorkspaceMetrics{workspaceID: "sales", dashboardID: "executive-sales", title: "Executive Sales"},
+		"visuals":    namedWorkspaceMetrics{workspaceID: "visuals", dashboardID: "visual-showcase", title: "Visual Showcase"},
+	})
+	server := NewWithOptions(metrics, Options{Store: store, WorkspaceRepo: workspaceRepo, DefaultWorkspaceID: "operations"})
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	rendered := html.UnescapeString(rec.Body.String())
+	for _, want := range []string{
+		`Fulfillment Operations`,
+		`Executive Sales`,
+		`Visual Showcase`,
+		`"href":"/workspaces/operations/dashboards/fulfillment-operations"`,
+		`"href":"/workspaces/sales/dashboards/executive-sales"`,
+		`"href":"/workspaces/visuals/dashboards/visual-showcase"`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("home catalog missing %q:\n%s", want, rendered)
+		}
 	}
 }
 

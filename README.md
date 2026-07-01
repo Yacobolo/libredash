@@ -251,10 +251,10 @@ export LIBREDASH_API_TOKEN_ONLY_AUTH=1 # or configure Azure below
 export LIBREDASH_CSRF_KEY=<32+ byte secret>
 libredash serve --production
 libredash admin bootstrap
-libredash deploy --project dashboards/libredash.yaml --target http://localhost:8080 --token <token> --environment prod --all-workspaces --auto-approve
+libredash deploy --project dashboards/libredash.yaml --target http://localhost:8080 --token <token> --environment prod --auto-approve
 ```
 
-Use `--workspace <id>` instead of `--all-workspaces` for a targeted deployment.
+Use `--workspace <id>` for a targeted deployment.
 
 Useful env vars:
 

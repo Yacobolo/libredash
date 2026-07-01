@@ -50,6 +50,27 @@ model AssetSummaryResponse {
   href?: string;
 }
 
+model AssetGraphAssetResponse {
+  id: string;
+  snapshotId: string;
+  workspaceId: string;
+  deploymentId: string;
+  type: string;
+  key: string;
+  parentId?: string;
+  title: string;
+  description: string;
+  sourceFile?: string;
+  payloadSchema: string;
+  payload: JSONObject;
+  contentHash: string;
+}
+
+model WorkspaceAssetGraphResponse {
+  assets: AssetGraphAssetResponse[];
+  edges: AssetEdgeResponse[];
+}
+
 model AssetListResponse {
   items: AssetSummaryResponse[];
   page: PageInfo;
@@ -84,7 +105,7 @@ alias ListWorkspacesOK = OkJson<WorkspaceListResponse>;
 @apigen.authz(#{ mode: "permission", permission: "workspace:read" })
 @apigen.cli(#{ command: #["workspaces", "list"], output: #{ mode: "raw" } })
 @extension("x-agent", #{ enabled: true, name: "list_workspaces", risk: "read", tags: #["workspace"], defaultLimit: 25 })
-op listWorkspaces(@query limit?: int32, @query pageToken?: string): ListWorkspacesOK | CommonErrors;
+op listWorkspaces(@query environment?: string, @query limit?: int32, @query pageToken?: string): ListWorkspacesOK | CommonErrors;
 
 alias ListWorkspaceAssetEdgesOK = OkJson<AssetEdgeListResponse>;
 
@@ -107,6 +128,13 @@ alias ListWorkspaceAssetsOK = OkJson<AssetListResponse>;
 @apigen.cli(#{ command: #["assets", "list"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
 @extension("x-agent", #{ enabled: true, name: "list_assets", risk: "read", tags: #["workspace", "asset", "lineage"], defaultLimit: 25 })
 op listWorkspaceAssets(@path workspace: string, @query type?: string, @query q?: string, @query limit?: int32, @query pageToken?: string): ListWorkspaceAssetsOK | CommonErrors;
+
+@tag("Workspaces")
+@summary("Get the active deployment asset graph")
+@route("/workspaces/{workspace}/active-deployment/graph")
+@get
+@apigen.authz(#{ mode: "permission", permission: "deployment:read" })
+op getWorkspaceActiveDeploymentGraph(@path workspace: string, @query environment?: string): OkJson<WorkspaceAssetGraphResponse> | CommonErrors;
 
 @tag("Workspaces")
 @summary("Describe a workspace asset")

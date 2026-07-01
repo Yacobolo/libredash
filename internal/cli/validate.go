@@ -180,27 +180,28 @@ func renderProjectPlan(out io.Writer, plan workspacecompiler.ProjectPlan) error 
 }
 
 func fetchActiveWorkspaceGraph(ctx context.Context, opts *rootOptions) (workspace.AssetGraph, error) {
-	return fetchActiveWorkspaceGraphForWorkspace(ctx, opts, opts.workspaceID)
+	return fetchActiveWorkspaceGraphFor(ctx, opts, opts.workspaceID)
 }
 
-func fetchActiveWorkspaceGraphForWorkspace(ctx context.Context, opts *rootOptions, workspaceID string) (workspace.AssetGraph, error) {
+func fetchActiveWorkspaceGraphFor(ctx context.Context, opts *rootOptions, workspaceID string) (workspace.AssetGraph, error) {
 	target, token, err := clientTargetAndToken(opts)
 	if err != nil {
 		return workspace.AssetGraph{}, err
 	}
-	assets, err := fetchAllWorkspaceAssets(ctx, target, token, workspaceID, cliEnvironment(opts))
+	query := url.Values{}
+	endpoint, err := apiOperationURL(target, "getWorkspaceActiveDeploymentGraph", map[string]string{"workspace": workspaceID}, withEnvironmentQuery(cliEnvironment(opts), query))
 	if err != nil {
 		return workspace.AssetGraph{}, err
 	}
-	edges, err := fetchAllWorkspaceAssetEdges(ctx, target, token, workspaceID, cliEnvironment(opts))
-	if err != nil {
+	var response api.WorkspaceAssetGraphResponse
+	if err := doJSON(ctx, http.MethodGet, endpoint, token, nil, &response); err != nil {
 		return workspace.AssetGraph{}, err
 	}
 	graph := workspace.AssetGraph{
-		Assets: make([]workspace.Asset, 0, len(assets)),
-		Edges:  make([]workspace.AssetEdge, 0, len(edges)),
+		Assets: make([]workspace.Asset, 0, len(response.Assets)),
+		Edges:  make([]workspace.AssetEdge, 0, len(response.Edges)),
 	}
-	for _, asset := range assets {
+	for _, asset := range response.Assets {
 		graph.Assets = append(graph.Assets, workspace.Asset{
 			ID:            workspace.AssetID(asset.ID),
 			SnapshotID:    workspace.AssetSnapshotID(asset.SnapshotID),
@@ -213,10 +214,11 @@ func fetchActiveWorkspaceGraphForWorkspace(ctx context.Context, opts *rootOption
 			Description:   asset.Description,
 			PayloadSchema: asset.PayloadSchema,
 			SourceFile:    asset.SourceFile,
+			PayloadJSON:   assetPayloadJSON(asset.Payload),
 			ContentHash:   asset.ContentHash,
 		})
 	}
-	for _, edge := range edges {
+	for _, edge := range response.Edges {
 		graph.Edges = append(graph.Edges, workspace.AssetEdge{
 			ID:           workspace.AssetEdgeID(edge.ID),
 			WorkspaceID:  workspace.WorkspaceID(edge.WorkspaceID),
@@ -229,54 +231,15 @@ func fetchActiveWorkspaceGraphForWorkspace(ctx context.Context, opts *rootOption
 	return graph, nil
 }
 
-func fetchAllWorkspaceAssets(ctx context.Context, target, token, workspaceID, environment string) ([]api.AssetSummaryResponse, error) {
-	var out []api.AssetSummaryResponse
-	pageToken := ""
-	for {
-		query := url.Values{}
-		query.Set("limit", "1000")
-		if pageToken != "" {
-			query.Set("pageToken", pageToken)
-		}
-		endpoint, err := apiOperationURL(target, "listWorkspaceAssets", map[string]string{"workspace": workspaceID}, withEnvironmentQuery(environment, query))
-		if err != nil {
-			return nil, err
-		}
-		var response apiListResponse[api.AssetSummaryResponse]
-		if err := doJSON(ctx, http.MethodGet, endpoint, token, nil, &response); err != nil {
-			return nil, err
-		}
-		out = append(out, response.Items...)
-		pageToken = response.Page.NextCursor
-		if pageToken == "" {
-			return out, nil
-		}
+func assetPayloadJSON(payload map[string]any) string {
+	if payload == nil {
+		return ""
 	}
-}
-
-func fetchAllWorkspaceAssetEdges(ctx context.Context, target, token, workspaceID, environment string) ([]api.AssetEdgeResponse, error) {
-	var out []api.AssetEdgeResponse
-	pageToken := ""
-	for {
-		query := url.Values{}
-		query.Set("limit", "1000")
-		if pageToken != "" {
-			query.Set("pageToken", pageToken)
-		}
-		endpoint, err := apiOperationURL(target, "listWorkspaceAssetEdges", map[string]string{"workspace": workspaceID}, withEnvironmentQuery(environment, query))
-		if err != nil {
-			return nil, err
-		}
-		var response apiListResponse[api.AssetEdgeResponse]
-		if err := doJSON(ctx, http.MethodGet, endpoint, token, nil, &response); err != nil {
-			return nil, err
-		}
-		out = append(out, response.Items...)
-		pageToken = response.Page.NextCursor
-		if pageToken == "" {
-			return out, nil
-		}
+	bytes, err := json.Marshal(payload)
+	if err != nil {
+		return ""
 	}
+	return string(bytes)
 }
 
 func environmentQuery(opts *rootOptions, values url.Values) url.Values {

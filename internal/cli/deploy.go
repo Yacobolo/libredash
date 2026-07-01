@@ -34,7 +34,6 @@ func deployCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
 	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
 	cmd.Flags().StringVar(&opts.environment, "environment", "dev", "deployment environment")
-	cmd.Flags().BoolVar(&opts.allWorkspaces, "all-workspaces", false, "deploy every workspace in the project")
 	cmd.Flags().BoolVar(&opts.autoApprove, "auto-approve", false, "approve and activate the deployment without prompting")
 	return cmd
 }
@@ -82,19 +81,7 @@ func rollbackCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	return cmd
 }
 
-type workspaceDeployPlan struct {
-	workspaceID    string
-	workspaceTitle string
-	activeGraph    workspace.AssetGraph
-}
-
 func runDeploy(ctx context.Context, opts *rootOptions) error {
-	if opts.workspaceID != "" && opts.allWorkspaces {
-		return fmt.Errorf("deploy accepts either --workspace or --all-workspaces, not both")
-	}
-	if opts.workspaceID == "" && !opts.allWorkspaces {
-		return fmt.Errorf("deploy requires --workspace or --all-workspaces")
-	}
 	target, token, err := clientTargetAndToken(opts)
 	if err != nil {
 		return err
@@ -103,98 +90,165 @@ func runDeploy(ctx context.Context, opts *rootOptions) error {
 	if err != nil {
 		return err
 	}
-	workspaceIDs := deployWorkspaceIDs(opts, project.Workspaces)
-	plans := make([]workspaceDeployPlan, 0, len(workspaceIDs))
-	for _, workspaceID := range workspaceIDs {
-		workspaceProject, ok := project.Workspaces[workspaceID]
-		if !ok {
-			return fmt.Errorf("project %q has no workspace %q", opts.catalog, workspaceID)
+	workspaceIDs := sortedDeployWorkspaceIDs(project.Workspaces, opts.workspaceID)
+	if len(workspaceIDs) == 0 {
+		if opts.workspaceID != "" {
+			return fmt.Errorf("project %q has no workspace %q", opts.catalog, opts.workspaceID)
 		}
-		activeGraph, err := fetchActiveWorkspaceGraphForWorkspace(ctx, opts, workspaceID)
+		return fmt.Errorf("project %q has no workspaces", opts.catalog)
+	}
+
+	results := make([]deployWorkspaceResult, 0, len(workspaceIDs))
+	needsApproval := false
+	for _, workspaceID := range workspaceIDs {
+		result := deployWorkspaceResult{WorkspaceID: workspaceID}
+		activeGraph, err := fetchActiveWorkspaceGraphFor(ctx, opts, workspaceID)
 		if err != nil {
-			return err
+			result.Err = err
+			results = append(results, result)
+			continue
 		}
 		plan, err := workspacecompiler.PlanProjectAgainstGraph(opts.catalog, workspaceID, activeGraph)
 		if err != nil {
-			return err
+			result.Err = err
+			results = append(results, result)
+			continue
 		}
-		if err := renderProjectPlan(os.Stdout, plan); err != nil {
-			return err
+		workspacePlan := plan.Workspaces[0]
+		if len(workspaceIDs) == 1 {
+			if err := renderProjectPlan(os.Stdout, plan); err != nil {
+				return err
+			}
+		} else {
+			printDeployPlanSummary(workspacePlan)
 		}
-		plans = append(plans, workspaceDeployPlan{
-			workspaceID:    workspaceID,
-			workspaceTitle: workspaceProject.Title,
-			activeGraph:    activeGraph,
-		})
+		if projectPlanWorkspaceUnchanged(workspacePlan) {
+			result.Status = "skipped"
+			results = append(results, result)
+			continue
+		}
+		result.Status = "pending"
+		result.ActiveGraph = activeGraph
+		needsApproval = true
+		results = append(results, result)
 	}
-	if err := confirmDeploy(opts, os.Stdin, os.Stdout); err != nil {
-		return err
-	}
-	for _, plan := range plans {
-		if err := deployWorkspace(ctx, opts, target, token, plan); err != nil {
+	if needsApproval {
+		if err := confirmDeploy(opts, os.Stdin, os.Stdout); err != nil {
 			return err
 		}
+	}
+
+	var failures []string
+	for index := range results {
+		result := &results[index]
+		if result.Err != nil {
+			result.Status = "failed"
+			failures = append(failures, fmt.Sprintf("%s: %v", result.WorkspaceID, result.Err))
+			fmt.Printf("failed %s: %v\n", result.WorkspaceID, result.Err)
+			continue
+		}
+		if result.Status == "skipped" {
+			fmt.Printf("skipped %s unchanged\n", result.WorkspaceID)
+			continue
+		}
+		workspaceProject := project.Workspaces[result.WorkspaceID]
+		activated, digest, err := deployWorkspace(ctx, opts, target, token, result.WorkspaceID, workspaceProject, result.ActiveGraph)
+		if err != nil {
+			result.Status = "failed"
+			failures = append(failures, fmt.Sprintf("%s: %v", result.WorkspaceID, err))
+			fmt.Printf("failed %s: %v\n", result.WorkspaceID, err)
+			continue
+		}
+		result.Status = "deployed"
+		fmt.Printf("deployed %s deployment=%s environment=%s digest=%s localDigest=%s status=%s\n", result.WorkspaceID, activated.ID, activated.Environment, activated.Digest, digest, activated.Status)
+	}
+	if len(failures) > 0 {
+		return fmt.Errorf("deploy failed: %s", strings.Join(failures, "; "))
 	}
 	return nil
 }
 
-func deployWorkspaceIDs(opts *rootOptions, projectWorkspaces map[string]*workspacecompiler.WorkspaceProject) []string {
-	if !opts.allWorkspaces {
-		return []string{opts.workspaceID}
-	}
-	workspaceIDs := make([]string, 0, len(projectWorkspaces))
-	for workspaceID := range projectWorkspaces {
-		workspaceIDs = append(workspaceIDs, workspaceID)
-	}
-	sort.Strings(workspaceIDs)
-	return workspaceIDs
+type deployWorkspaceResult struct {
+	WorkspaceID string
+	Status      string
+	ActiveGraph workspace.AssetGraph
+	Err         error
 }
 
-func deployWorkspace(ctx context.Context, opts *rootOptions, target, token string, plan workspaceDeployPlan) error {
+func sortedDeployWorkspaceIDs(workspaces map[string]*workspacecompiler.WorkspaceProject, filter string) []string {
+	if filter != "" {
+		if _, ok := workspaces[filter]; !ok {
+			return nil
+		}
+		return []string{filter}
+	}
+	ids := make([]string, 0, len(workspaces))
+	for id := range workspaces {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+func projectPlanWorkspaceUnchanged(workspacePlan workspacecompiler.ProjectPlanWorkspace) bool {
+	return workspacePlan.Summary.Added == 0 &&
+		workspacePlan.Summary.Changed == 0 &&
+		workspacePlan.Summary.Removed == 0 &&
+		workspacePlan.Summary.DependencyChanges == 0 &&
+		len(workspacePlan.Changes) == 0 &&
+		len(workspacePlan.DependencyChanges) == 0
+}
+
+func printDeployPlanSummary(workspacePlan workspacecompiler.ProjectPlanWorkspace) {
+	summary := workspacePlan.Summary
+	fmt.Printf("workspace %s changes +%d ~%d -%d dependencies %d\n", workspacePlan.ID, summary.Added, summary.Changed, summary.Removed, summary.DependencyChanges)
+}
+
+func deployWorkspace(ctx context.Context, opts *rootOptions, target, token, workspaceID string, workspaceProject *workspacecompiler.WorkspaceProject, activeGraph workspace.AssetGraph) (api.DeploymentResponse, string, error) {
 	createBody, _ := json.Marshal(map[string]any{
-		"title":       plan.workspaceTitle,
+		"title":       workspaceProject.Title,
+		"description": workspaceProject.Description,
 		"environment": cliEnvironment(opts),
 	})
 	var created api.DeploymentResponse
-	workspacePathParams := map[string]string{"workspace": plan.workspaceID}
+	workspacePathParams := map[string]string{"workspace": workspaceID}
 	createURL, err := apiOperationURL(target, "createDeployment", workspacePathParams, environmentQuery(opts, nil))
 	if err != nil {
-		return err
+		return api.DeploymentResponse{}, "", err
 	}
 	if err := doJSON(ctx, http.MethodPost, createURL, token, bytes.NewReader(createBody), &created); err != nil {
-		return err
+		return api.DeploymentResponse{}, "", err
 	}
 	var buf bytes.Buffer
 	var digest string
-	_, digest, err = deploymentfs.PackProjectAgainstGraphForEnvironment(opts.catalog, plan.workspaceID, deployment.Environment(cliEnvironment(opts)), deployment.ID(created.ID), plan.activeGraph, &buf)
+	_, digest, err = deploymentfs.PackProjectAgainstGraphForEnvironment(opts.catalog, workspaceID, deployment.Environment(cliEnvironment(opts)), deployment.ID(created.ID), activeGraph, &buf)
 	if err != nil {
-		return err
+		return api.DeploymentResponse{}, "", err
 	}
-	uploadURL, err := apiOperationURL(target, "uploadDeploymentArtifact", map[string]string{"workspace": plan.workspaceID, "deployment": created.ID}, environmentQuery(opts, nil))
+	uploadURL, err := apiOperationURL(target, "uploadDeploymentArtifact", map[string]string{"workspace": workspaceID, "deployment": created.ID}, environmentQuery(opts, nil))
 	if err != nil {
-		return err
+		return api.DeploymentResponse{}, "", err
 	}
 	if err := doJSON(ctx, http.MethodPut, uploadURL, token, bytes.NewReader(buf.Bytes()), nil); err != nil {
-		return err
+		return api.DeploymentResponse{}, "", err
 	}
 	var validated api.DeploymentResponse
-	validateURL, err := apiOperationURL(target, "validateDeployment", map[string]string{"workspace": plan.workspaceID, "deployment": created.ID}, environmentQuery(opts, nil))
+	validateURL, err := apiOperationURL(target, "validateDeployment", map[string]string{"workspace": workspaceID, "deployment": created.ID}, environmentQuery(opts, nil))
 	if err != nil {
-		return err
+		return api.DeploymentResponse{}, "", err
 	}
 	if err := doJSON(ctx, http.MethodPost, validateURL, token, nil, &validated); err != nil {
-		return err
+		return api.DeploymentResponse{}, "", err
 	}
 	var activated api.DeploymentResponse
-	activateURL, err := apiOperationURL(target, "activateDeployment", map[string]string{"workspace": plan.workspaceID, "deployment": created.ID}, environmentQuery(opts, nil))
+	activateURL, err := apiOperationURL(target, "activateDeployment", map[string]string{"workspace": workspaceID, "deployment": created.ID}, environmentQuery(opts, nil))
 	if err != nil {
-		return err
+		return api.DeploymentResponse{}, "", err
 	}
 	if err := doJSON(ctx, http.MethodPost, activateURL, token, nil, &activated); err != nil {
-		return err
+		return api.DeploymentResponse{}, "", err
 	}
-	fmt.Printf("deployed %s environment=%s workspace=%s digest=%s localDigest=%s status=%s\n", activated.ID, activated.Environment, plan.workspaceID, activated.Digest, digest, activated.Status)
-	return nil
+	return activated, digest, nil
 }
 
 func runDeploymentsList(ctx context.Context, opts *rootOptions) error {

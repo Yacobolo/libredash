@@ -23,6 +23,11 @@ import (
 
 var errWorkspaceRBACNotConfigured = errors.New("Workspace RBAC store is not configured.")
 
+type activeWorkspaceMetadataRepository interface {
+	ListWithActiveMetadata(context.Context, string) ([]workspace.Summary, error)
+	ByIDWithActiveMetadata(context.Context, workspace.WorkspaceID, string) (workspace.Summary, error)
+}
+
 func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 	workspaces, err := s.workspaceList(r)
 	if err != nil {
@@ -31,7 +36,7 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspacesPage(s.metrics.Catalog(), workspaces, s.currentRoleLabel(r)).Render(w); err != nil {
+	if err := ui.WorkspacesPage(s.catalogForWorkspacesPage(r, workspaces), workspaces, s.currentRoleLabel(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -57,7 +62,7 @@ func (s *Server) workspaceAssets(w http.ResponseWriter, r *http.Request) {
 	access := s.workspaceAccessResponse(r, workspace, canManage, ui.WorkspaceAccessStatus{})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspacePage(s.metrics.Catalog(), workspace, filtered, r.URL.Query().Get("type"), r.URL.Query().Get("q"), s.currentRoleLabel(r), access, csrfToken(r, s.auth)).Render(w); err != nil {
+	if err := ui.WorkspacePage(s.catalogForWorkspace(workspaceID), workspace, filtered, r.URL.Query().Get("type"), r.URL.Query().Get("q"), s.currentRoleLabel(r), access, csrfToken(r, s.auth)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -72,7 +77,7 @@ func (s *Server) connections(w http.ResponseWriter, r *http.Request) {
 	filtered := workspace.FilterConnectionAssets(assets, activeType, r.URL.Query().Get("q"))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionsPage(s.metrics.Catalog(), "platform", filtered, edges, activeType, r.URL.Query().Get("q"), s.currentRoleLabel(r)).Render(w); err != nil {
+	if err := ui.ConnectionsPage(s.catalogForWorkspacesPage(r, nil), "platform", filtered, edges, activeType, r.URL.Query().Get("q"), s.currentRoleLabel(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -166,7 +171,7 @@ func (s *Server) workspaceAssetSection(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspaceAssetPageWithRefreshAndVersions(s.metrics.Catalog(), workspace, selected, assets, edges, section, s.currentRoleLabel(r), refresh, versions).Render(w); err != nil {
+	if err := ui.WorkspaceAssetPageWithRefreshAndVersions(s.catalogForWorkspace(workspaceID), workspace, selected, assets, edges, section, s.currentRoleLabel(r), refresh, versions).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -302,7 +307,7 @@ func (s *Server) publishModelRefreshPatches(ctx context.Context, workspaceID, mo
 	if !ok {
 		return
 	}
-	view := catalogWorkspaceView(s.metrics.Catalog())
+	view := catalogWorkspaceView(s.catalogForWorkspace(workspaceID))
 	view.ID = workspaceID
 	for _, asset := range assets {
 		if asset.Type == string(workspace.AssetTypeSemanticModel) && semanticModelTargetID(asset) != modelID {
@@ -530,7 +535,7 @@ func (s *Server) connectionSourceAssetSection(w http.ResponseWriter, r *http.Req
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionSourceAssetPageWithVersions(s.metrics.Catalog(), workspace, connection, source, assets, edges, section, s.currentRoleLabel(r), versions).Render(w); err != nil {
+	if err := ui.ConnectionSourceAssetPageWithVersions(s.catalogForWorkspacesPage(r, nil), workspace, connection, source, assets, edges, section, s.currentRoleLabel(r), versions).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -586,7 +591,7 @@ func (s *Server) connectionAssetSection(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionAssetPageWithVersions(s.metrics.Catalog(), workspace, selected, assets, edges, section, s.currentRoleLabel(r), versions).Render(w); err != nil {
+	if err := ui.ConnectionAssetPageWithVersions(s.catalogForWorkspacesPage(r, nil), workspace, selected, assets, edges, section, s.currentRoleLabel(r), versions).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -600,7 +605,7 @@ func (s *Server) workspacePermissions(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspacePermissionsPage(s.metrics.Catalog(), s.workspaceResponse(r, workspaceID), bindings, roles, csrfToken(r, s.auth), s.currentRoleLabel(r)).Render(w); err != nil {
+	if err := ui.WorkspacePermissionsPage(s.catalogForWorkspace(workspaceID), s.workspaceResponse(r, workspaceID), bindings, roles, csrfToken(r, s.auth), s.currentRoleLabel(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -729,7 +734,38 @@ func (s *Server) apiWorkspaceAssets(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	_ = writePagedJSON(w, r, apiAssetSummaryDTOs(workspace.FilterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q"))))
+	filtered := workspace.FilterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q"))
+	if r.URL.Query().Get("include") == "all" {
+		filtered = workspace.FilterAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q"))
+	}
+	_ = writePagedJSON(w, r, apiAssetSummaryDTOs(filtered))
+}
+
+func (s *Server) apiWorkspaceActiveDeploymentGraph(w http.ResponseWriter, r *http.Request) {
+	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
+	repo, err := s.workspaceRepository()
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	graph := workspace.AssetGraph{}
+	if repo != nil {
+		var ok bool
+		graph, ok, err = repo.ActiveDeploymentGraph(r.Context(), workspace.WorkspaceID(workspaceID), string(s.requestDeploymentEnvironment(r)))
+		if err != nil {
+			writeJSONError(w, err, http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			graph = workspace.AssetGraph{}
+		}
+	}
+	response, err := apiWorkspaceAssetGraphDTO(graph)
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) apiWorkspaceAsset(w http.ResponseWriter, r *http.Request) {
@@ -866,24 +902,97 @@ func (s *Server) workspaceList(r *http.Request) ([]workspace.WorkspaceView, erro
 	if repo == nil {
 		return []workspace.WorkspaceView{catalogWorkspaceView(s.metrics.Catalog())}, nil
 	}
-	rows, err := repo.List(r.Context())
+	rows, err := listWorkspaceRows(r, repo, string(s.requestDeploymentEnvironment(r)))
 	if err != nil {
 		return nil, err
 	}
 	out := make([]workspace.WorkspaceView, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, workspace.WorkspaceViewFromSummary(row))
+		view := workspace.WorkspaceViewFromSummary(row)
+		if !s.canReadWorkspace(r, view.ID) {
+			continue
+		}
+		out = append(out, view)
 	}
 	return out, nil
 }
 
+func listWorkspaceRows(r *http.Request, repo workspace.Repository, environment string) ([]workspace.Summary, error) {
+	if activeRepo, ok := repo.(activeWorkspaceMetadataRepository); ok {
+		return activeRepo.ListWithActiveMetadata(r.Context(), environment)
+	}
+	return repo.List(r.Context())
+}
+
+func (s *Server) canReadWorkspace(r *http.Request, workspaceID string) bool {
+	if s.auth == nil {
+		return true
+	}
+	repo, err := s.accessRepository()
+	if err != nil || repo == nil {
+		return false
+	}
+	principal, ok := s.auth.Principal(r)
+	if !ok {
+		return false
+	}
+	allowed, err := repo.HasPermission(r.Context(), workspaceID, principal.ID, access.PermissionWorkspaceRead)
+	return err == nil && allowed
+}
+
+func (s *Server) catalogForWorkspacesPage(r *http.Request, workspaces []workspace.WorkspaceView) dashboard.Catalog {
+	if len(workspaces) == 0 {
+		var err error
+		workspaces, err = s.workspaceList(r)
+		if err != nil {
+			workspaces = nil
+		}
+	}
+	if len(workspaces) > 0 {
+		return s.catalogForWorkspace(workspaces[0].ID)
+	}
+	if s.metrics == nil {
+		return dashboard.Catalog{}
+	}
+	return s.metrics.Catalog()
+}
+
+func (s *Server) catalogsForVisibleWorkspaces(r *http.Request) []dashboard.Catalog {
+	workspaces, err := s.workspaceList(r)
+	if err != nil || len(workspaces) == 0 {
+		if s.metrics == nil {
+			return nil
+		}
+		return []dashboard.Catalog{s.metrics.Catalog()}
+	}
+	catalogs := make([]dashboard.Catalog, 0, len(workspaces))
+	for _, row := range workspaces {
+		metrics, ok := s.metricsForWorkspace(row.ID)
+		if !ok || metrics == nil {
+			continue
+		}
+		catalogs = append(catalogs, metrics.Catalog())
+	}
+	if len(catalogs) == 0 && s.metrics != nil {
+		catalogs = append(catalogs, s.metrics.Catalog())
+	}
+	return catalogs
+}
+
 func (s *Server) workspaceResponse(r *http.Request, workspaceID string) workspace.WorkspaceView {
 	if repo, _ := s.workspaceRepository(); repo != nil {
-		if row, err := repo.ByID(r.Context(), workspace.WorkspaceID(workspaceID)); err == nil {
+		var row workspace.Summary
+		var err error
+		if activeRepo, ok := repo.(activeWorkspaceMetadataRepository); ok {
+			row, err = activeRepo.ByIDWithActiveMetadata(r.Context(), workspace.WorkspaceID(workspaceID), string(s.requestDeploymentEnvironment(r)))
+		} else {
+			row, err = repo.ByID(r.Context(), workspace.WorkspaceID(workspaceID))
+		}
+		if err == nil {
 			return workspace.WorkspaceViewFromSummary(row)
 		}
 	}
-	view := catalogWorkspaceView(s.metrics.Catalog())
+	view := catalogWorkspaceView(s.catalogForWorkspace(workspaceID))
 	view.ID = workspaceID
 	return view
 }
@@ -1135,6 +1244,52 @@ func apiAssetSummaryDTOs(rows []workspace.AssetView) []api.AssetSummaryResponse 
 			PayloadSchema: row.PayloadSchema,
 			ContentHash:   row.ContentHash,
 			Href:          row.Href,
+		})
+	}
+	return out
+}
+
+func apiWorkspaceAssetGraphDTO(graph workspace.AssetGraph) (api.WorkspaceAssetGraphResponse, error) {
+	assets := make([]api.AssetGraphAssetResponse, 0, len(graph.Assets))
+	for _, row := range graph.Assets {
+		payload := map[string]any{}
+		if row.PayloadJSON != "" {
+			if err := json.Unmarshal([]byte(row.PayloadJSON), &payload); err != nil {
+				return api.WorkspaceAssetGraphResponse{}, err
+			}
+		}
+		assets = append(assets, api.AssetGraphAssetResponse{
+			ID:            string(row.ID),
+			SnapshotID:    string(row.SnapshotID),
+			WorkspaceID:   string(row.WorkspaceID),
+			DeploymentID:  string(row.DeploymentID),
+			Type:          string(row.Type),
+			Key:           row.Key,
+			ParentID:      string(row.ParentID),
+			Title:         row.Title,
+			Description:   row.Description,
+			SourceFile:    row.SourceFile,
+			PayloadSchema: row.PayloadSchema,
+			Payload:       payload,
+			ContentHash:   row.ContentHash,
+		})
+	}
+	return api.WorkspaceAssetGraphResponse{
+		Assets: assets,
+		Edges:  apiWorkspaceAssetGraphEdgeDTOs(graph.Edges),
+	}, nil
+}
+
+func apiWorkspaceAssetGraphEdgeDTOs(rows []workspace.AssetEdge) []api.AssetEdgeResponse {
+	out := make([]api.AssetEdgeResponse, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, api.AssetEdgeResponse{
+			ID:           string(row.ID),
+			WorkspaceID:  string(row.WorkspaceID),
+			DeploymentID: string(row.DeploymentID),
+			FromAssetID:  string(row.FromAssetID),
+			ToAssetID:    string(row.ToAssetID),
+			Type:         string(row.Type),
 		})
 	}
 	return out
