@@ -841,6 +841,52 @@ func (q *Queries) GetWorkspace(ctx context.Context, id string) (Workspace, error
 	return i, err
 }
 
+const getWorkspaceWithActiveMetadata = `-- name: GetWorkspaceWithActiveMetadata :one
+SELECT
+  w.id,
+  CASE WHEN a.title IS NOT NULL AND a.title <> '' THEN a.title ELSE w.title END AS title,
+  CASE WHEN a.description IS NOT NULL THEN a.description ELSE w.description END AS description,
+  COALESCE(active.deployment_id, '') AS active_deployment_id,
+  w.created_at,
+  w.updated_at
+FROM workspaces w
+LEFT JOIN workspace_active_deployments active
+  ON active.workspace_id = w.id AND active.environment = ?
+LEFT JOIN assets a
+  ON a.deployment_id = active.deployment_id
+ AND a.asset_type = 'catalog'
+ AND a.logical_asset_id = 'catalog:' || w.id
+WHERE w.id = ?
+`
+
+type GetWorkspaceWithActiveMetadataParams struct {
+	Environment string `json:"environment"`
+	ID          string `json:"id"`
+}
+
+type GetWorkspaceWithActiveMetadataRow struct {
+	ID                 string      `json:"id"`
+	Title              interface{} `json:"title"`
+	Description        interface{} `json:"description"`
+	ActiveDeploymentID string      `json:"active_deployment_id"`
+	CreatedAt          string      `json:"created_at"`
+	UpdatedAt          string      `json:"updated_at"`
+}
+
+func (q *Queries) GetWorkspaceWithActiveMetadata(ctx context.Context, arg GetWorkspaceWithActiveMetadataParams) (GetWorkspaceWithActiveMetadataRow, error) {
+	row := q.db.QueryRowContext(ctx, getWorkspaceWithActiveMetadata, arg.Environment, arg.ID)
+	var i GetWorkspaceWithActiveMetadataRow
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.ActiveDeploymentID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const insertAsset = `-- name: InsertAsset :exec
 INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, source_file, payload_schema, payload_json, content_hash)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1903,6 +1949,63 @@ func (q *Queries) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
 			&i.ID,
 			&i.Title,
 			&i.Description,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkspacesWithActiveMetadata = `-- name: ListWorkspacesWithActiveMetadata :many
+SELECT
+  w.id,
+  CASE WHEN a.title IS NOT NULL AND a.title <> '' THEN a.title ELSE w.title END AS title,
+  CASE WHEN a.description IS NOT NULL THEN a.description ELSE w.description END AS description,
+  COALESCE(active.deployment_id, '') AS active_deployment_id,
+  w.created_at,
+  w.updated_at
+FROM workspaces w
+LEFT JOIN workspace_active_deployments active
+  ON active.workspace_id = w.id AND active.environment = ?
+LEFT JOIN assets a
+  ON a.deployment_id = active.deployment_id
+ AND a.asset_type = 'catalog'
+ AND a.logical_asset_id = 'catalog:' || w.id
+ORDER BY w.created_at
+`
+
+type ListWorkspacesWithActiveMetadataRow struct {
+	ID                 string      `json:"id"`
+	Title              interface{} `json:"title"`
+	Description        interface{} `json:"description"`
+	ActiveDeploymentID string      `json:"active_deployment_id"`
+	CreatedAt          string      `json:"created_at"`
+	UpdatedAt          string      `json:"updated_at"`
+}
+
+func (q *Queries) ListWorkspacesWithActiveMetadata(ctx context.Context, environment string) ([]ListWorkspacesWithActiveMetadataRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkspacesWithActiveMetadata, environment)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkspacesWithActiveMetadataRow{}
+	for rows.Next() {
+		var i ListWorkspacesWithActiveMetadataRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.ActiveDeploymentID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {

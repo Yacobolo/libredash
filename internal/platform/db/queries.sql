@@ -12,6 +12,40 @@ SELECT * FROM workspaces WHERE id = ?;
 -- name: ListWorkspaces :many
 SELECT * FROM workspaces ORDER BY created_at;
 
+-- name: ListWorkspacesWithActiveMetadata :many
+SELECT
+  w.id,
+  CASE WHEN a.title IS NOT NULL AND a.title <> '' THEN a.title ELSE w.title END AS title,
+  CASE WHEN a.description IS NOT NULL THEN a.description ELSE w.description END AS description,
+  COALESCE(active.deployment_id, '') AS active_deployment_id,
+  w.created_at,
+  w.updated_at
+FROM workspaces w
+LEFT JOIN workspace_active_deployments active
+  ON active.workspace_id = w.id AND active.environment = ?
+LEFT JOIN assets a
+  ON a.deployment_id = active.deployment_id
+ AND a.asset_type = 'catalog'
+ AND a.logical_asset_id = 'catalog:' || w.id
+ORDER BY w.created_at;
+
+-- name: GetWorkspaceWithActiveMetadata :one
+SELECT
+  w.id,
+  CASE WHEN a.title IS NOT NULL AND a.title <> '' THEN a.title ELSE w.title END AS title,
+  CASE WHEN a.description IS NOT NULL THEN a.description ELSE w.description END AS description,
+  COALESCE(active.deployment_id, '') AS active_deployment_id,
+  w.created_at,
+  w.updated_at
+FROM workspaces w
+LEFT JOIN workspace_active_deployments active
+  ON active.workspace_id = w.id AND active.environment = ?
+LEFT JOIN assets a
+  ON a.deployment_id = active.deployment_id
+ AND a.asset_type = 'catalog'
+ AND a.logical_asset_id = 'catalog:' || w.id
+WHERE w.id = ?;
+
 -- name: SetActiveDeployment :exec
 INSERT INTO workspace_active_deployments (workspace_id, environment, deployment_id, updated_at)
 VALUES (?, ?, ?, CURRENT_TIMESTAMP)

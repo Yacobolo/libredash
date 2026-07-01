@@ -168,6 +168,50 @@ for (const viewport of [
   })
 }
 
+test('workspace catalog cards keep Open links visible with long descriptions', async () => {
+  const page = await browser.newPage({ viewport: { width: 1420, height: 1155 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-workspace-page'))
+    await page.locator('ld-workspace-page').evaluate((element: any) => {
+      element.page = {
+        kind: 'workspace',
+        title: 'Workspaces',
+        description: 'View published BI workspaces.',
+        cards: [
+          { id: 'operations', title: 'Operations Workspace', description: 'Fulfillment and delivery analysis.', href: '/workspaces/operations', deploymentLabel: 'Published deployment' },
+          { id: 'sales', title: 'Sales Workspace', description: 'Revenue, orders, and product category analysis.', href: '/workspaces/sales', deploymentLabel: 'Published deployment' },
+          { id: 'visuals', title: 'Visuals Workspace', description: 'Developer QA workspace for exhaustive dashboard visual and table renderer coverage.', href: '/workspaces/visuals', deploymentLabel: 'Published deployment' },
+        ],
+      }
+    })
+    await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
+
+    const state = await page.locator('ld-workspace-page').evaluate((element: any) => {
+      const cards = Array.from(element.shadowRoot.querySelectorAll('article.card')) as HTMLElement[]
+      const visualCard = cards[2]
+      const open = visualCard.querySelector('a.primary-link') as HTMLAnchorElement
+      const cardRect = visualCard.getBoundingClientRect()
+      const openRect = open.getBoundingClientRect()
+      return {
+        href: open.getAttribute('href'),
+        text: open.textContent?.trim(),
+        display: getComputedStyle(open).display,
+        visibleWithinCard: openRect.bottom <= cardRect.bottom && openRect.top >= cardRect.top,
+      }
+    })
+
+    expect(state).toEqual({
+      href: '/workspaces/visuals',
+      text: 'Open',
+      display: 'grid',
+      visibleWithinCard: true,
+    })
+  } finally {
+    await page.close()
+  }
+})
+
 test('workspace asset search filters the current asset rows', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {

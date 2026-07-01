@@ -388,7 +388,16 @@ func TestPlanProjectAgainstGraphReportsStableDiff(t *testing.T) {
 	activeGraph := active.Workspaces["sales"].Workspace.Graph
 	for index := range activeGraph.Assets {
 		if activeGraph.Assets[index].ID == "model_table:sales.orders" {
-			activeGraph.Assets[index].ContentHash = "changed"
+			var payload modelTablePayloadV1
+			if err := json.Unmarshal([]byte(activeGraph.Assets[index].PayloadJSON), &payload); err != nil {
+				t.Fatalf("unmarshal model table payload: %v", err)
+			}
+			payload.SQL = "SELECT order_id, order_status AS status, 'changed' AS changed FROM source.\"olist.orders\""
+			payloadBytes, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatalf("marshal model table payload: %v", err)
+			}
+			activeGraph.Assets[index].PayloadJSON = string(payloadBytes)
 		}
 	}
 	activeGraph.Assets = append(activeGraph.Assets, workspace.Asset{
@@ -746,6 +755,65 @@ func TestDiffAssetGraphsTreatsUsedSourceFieldChangeAsBreaking(t *testing.T) {
 	changes, _, summary := diffAssetGraphs(authored, active)
 	if !summary.Breaking || len(changes) != 1 || !changes[0].Breaking {
 		t.Fatalf("summary = %#v changes=%#v, want breaking used source field change", summary, changes)
+	}
+}
+
+func TestDiffAssetGraphsIgnoresRuntimeDiscoveredSchema(t *testing.T) {
+	workspaceID := workspace.WorkspaceID("sales")
+	activeDeployment := workspace.DeploymentID("dep_active")
+	authoredDeployment := workspace.DeploymentID("plan")
+	nullable := true
+	activeSource := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", sourcePayloadV1{
+		Connection: "olist",
+		Path:       "orders.csv",
+		Schema: schemaPayloadV1{Columns: []schemaColumnPayloadV1{
+			{Name: "order_id", Ordinal: 1, PhysicalType: "VARCHAR", Nullable: &nullable},
+		}},
+	})
+	authoredSource := testPlanAssetPayload(t, workspaceID, authoredDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", sourcePayloadV1{
+		Connection: "olist",
+		Path:       "orders.csv",
+	})
+	activeModel := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales", modelTablePayloadV1{
+		SQL: "SELECT order_id FROM source.\"olist.orders\"",
+		Schema: schemaPayloadV1{Columns: []schemaColumnPayloadV1{
+			{Name: "order_id", Ordinal: 1, PhysicalType: "VARCHAR", Nullable: &nullable},
+		}},
+	})
+	authoredModel := testPlanAssetPayload(t, workspaceID, authoredDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales", modelTablePayloadV1{
+		SQL: "SELECT order_id FROM source.\"olist.orders\"",
+	})
+	active := workspace.AssetGraph{Assets: []workspace.Asset{activeSource, activeModel}}
+	authored := workspace.AssetGraph{Assets: []workspace.Asset{authoredSource, authoredModel}}
+
+	changes, dependencyChanges, summary := diffAssetGraphs(authored, active)
+	if len(changes) != 0 || len(dependencyChanges) != 0 || summary != (ProjectPlanSummary{}) {
+		t.Fatalf("changes=%#v dependencyChanges=%#v summary=%#v, want no diff", changes, dependencyChanges, summary)
+	}
+}
+
+func TestDiffAssetGraphsKeepsAuthoredNestedSchemaFieldsSignificant(t *testing.T) {
+	workspaceID := workspace.WorkspaceID("sales")
+	activeDeployment := workspace.DeploymentID("dep_active")
+	authoredDeployment := workspace.DeploymentID("plan")
+	activeSource := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", map[string]any{
+		"Connection": "olist",
+		"Path":       "orders.csv",
+		"Options": map[string]any{
+			"Schema": "public",
+		},
+	})
+	authoredSource := testPlanAssetPayload(t, workspaceID, authoredDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", map[string]any{
+		"Connection": "olist",
+		"Path":       "orders.csv",
+		"Options": map[string]any{
+			"Schema": "private",
+		},
+	})
+
+	changes, _, summary := diffAssetGraphs(workspace.AssetGraph{Assets: []workspace.Asset{authoredSource}}, workspace.AssetGraph{Assets: []workspace.Asset{activeSource}})
+	if len(changes) != 1 || summary.Changed != 1 {
+		t.Fatalf("changes=%#v summary=%#v, want nested authored Schema change", changes, summary)
 	}
 }
 

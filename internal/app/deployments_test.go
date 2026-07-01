@@ -745,6 +745,193 @@ func TestWorkspaceAssetAPIListsActiveDeploymentAssets(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAssetAPIIncludeAllReturnsFullActiveDeploymentGraph(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	defaultReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/assets", nil)
+	defaultReq.Header.Set("Authorization", "Bearer dev")
+	defaultReq.Header.Set("Accept", "application/json")
+	defaultRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(defaultRec, defaultReq)
+	if defaultRec.Code != http.StatusOK {
+		t.Fatalf("default status = %d body=%s", defaultRec.Code, defaultRec.Body.String())
+	}
+	var defaultBody struct {
+		Items []api.AssetSummaryResponse `json:"items"`
+	}
+	if err := json.Unmarshal(defaultRec.Body.Bytes(), &defaultBody); err != nil {
+		t.Fatalf("decode default assets response: %v body=%s", err, defaultRec.Body.String())
+	}
+
+	fullReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/assets?include=all", nil)
+	fullReq.Header.Set("Authorization", "Bearer dev")
+	fullReq.Header.Set("Accept", "application/json")
+	fullRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(fullRec, fullReq)
+	if fullRec.Code != http.StatusOK {
+		t.Fatalf("full status = %d body=%s", fullRec.Code, fullRec.Body.String())
+	}
+	var fullBody struct {
+		Items []api.AssetSummaryResponse `json:"items"`
+	}
+	if err := json.Unmarshal(fullRec.Body.Bytes(), &fullBody); err != nil {
+		t.Fatalf("decode full assets response: %v body=%s", err, fullRec.Body.String())
+	}
+	if len(fullBody.Items) <= len(defaultBody.Items) {
+		t.Fatalf("full asset count = %d, default = %d", len(fullBody.Items), len(defaultBody.Items))
+	}
+	foundLowLevel := false
+	for _, asset := range fullBody.Items {
+		if asset.Type == string(workspace.AssetTypeField) || asset.Type == string(workspace.AssetTypeMeasure) {
+			foundLowLevel = true
+			break
+		}
+	}
+	if !foundLowLevel {
+		t.Fatalf("full asset list missing low-level graph assets: %#v", fullBody.Items)
+	}
+}
+
+func TestWorkspaceActiveDeploymentGraphAPIReturnsPayloadsAndEdges(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/active-deployment/graph?environment=dev", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var body api.WorkspaceAssetGraphResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode active graph response: %v body=%s", err, rec.Body.String())
+	}
+	if len(body.Assets) == 0 || len(body.Edges) == 0 {
+		t.Fatalf("active graph response assets=%d edges=%d, want both populated", len(body.Assets), len(body.Edges))
+	}
+	foundPayload := false
+	for _, asset := range body.Assets {
+		if asset.Type == string(workspace.AssetTypeDashboard) && asset.Payload["ID"] == "executive-sales" && asset.ContentHash != "" {
+			foundPayload = true
+			break
+		}
+	}
+	if !foundPayload {
+		t.Fatalf("active graph response missing dashboard payload/content hash: %#v", body.Assets)
+	}
+}
+
+func TestWorkspaceListUsesActiveDeploymentCatalogMetadata(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(context.Background(), workspace.EnsureInput{
+		ID:          "test",
+		Title:       "stale title",
+		Description: "stale description",
+	}); err != nil {
+		t.Fatalf("ensure stale workspace row: %v", err)
+	}
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Items []api.WorkspaceResponse `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode workspaces response: %v body=%s", err, rec.Body.String())
+	}
+	if len(body.Items) != 1 {
+		t.Fatalf("workspace count = %d body=%s", len(body.Items), rec.Body.String())
+	}
+	got := body.Items[0]
+	if got.Title != "Sales Workspace" || got.Description != "Revenue, orders, and product category analysis." || got.ActiveDeploymentID == "" {
+		t.Fatalf("workspace = %#v, want active catalog metadata", got)
+	}
+}
+
+func TestWorkspaceListUsesRepositoryActiveMetadataWithoutGraphLoads(t *testing.T) {
+	repo := &metadataWorkspaceRepo{}
+	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), WorkspaceRepo: repo, DefaultWorkspaceID: "sales"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces?environment=dev", nil)
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Items []api.WorkspaceResponse `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode workspaces response: %v body=%s", err, rec.Body.String())
+	}
+	if len(body.Items) != 1 {
+		t.Fatalf("workspace count = %d body=%s", len(body.Items), rec.Body.String())
+	}
+	got := body.Items[0]
+	if got.Title != "Active Sales" || got.Description != "from active catalog" || got.ActiveDeploymentID != "dep_active" {
+		t.Fatalf("workspace = %#v, want repository active metadata", got)
+	}
+	if repo.graphCalls != 0 {
+		t.Fatalf("ActiveDeploymentGraph calls = %d, want 0", repo.graphCalls)
+	}
+}
+
+type metadataWorkspaceRepo struct {
+	graphCalls int
+}
+
+func (r *metadataWorkspaceRepo) Ensure(context.Context, workspace.EnsureInput) error {
+	return nil
+}
+
+func (r *metadataWorkspaceRepo) List(context.Context) ([]workspace.Summary, error) {
+	return []workspace.Summary{{ID: "sales", Title: "stale", Description: "stale"}}, nil
+}
+
+func (r *metadataWorkspaceRepo) ByID(context.Context, workspace.WorkspaceID) (workspace.Summary, error) {
+	return workspace.Summary{ID: "sales", Title: "stale", Description: "stale"}, nil
+}
+
+func (r *metadataWorkspaceRepo) ActiveDeploymentGraph(context.Context, workspace.WorkspaceID, string) (workspace.AssetGraph, bool, error) {
+	r.graphCalls++
+	return workspace.AssetGraph{}, false, nil
+}
+
+func (r *metadataWorkspaceRepo) AssetVersions(context.Context, workspace.WorkspaceID, string, workspace.AssetID) ([]workspace.AssetVersion, error) {
+	return nil, nil
+}
+
+func (r *metadataWorkspaceRepo) ListWithActiveMetadata(context.Context, string) ([]workspace.Summary, error) {
+	return []workspace.Summary{{ID: "sales", Title: "Active Sales", Description: "from active catalog", ActiveDeploymentID: "dep_active"}}, nil
+}
+
+func (r *metadataWorkspaceRepo) ByIDWithActiveMetadata(context.Context, workspace.WorkspaceID, string) (workspace.Summary, error) {
+	return workspace.Summary{ID: "sales", Title: "Active Sales", Description: "from active catalog", ActiveDeploymentID: "dep_active"}, nil
+}
+
 func TestWorkspacePageDefaultsToTopLevelAssets(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)

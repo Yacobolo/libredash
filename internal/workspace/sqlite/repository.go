@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/deployment"
@@ -53,6 +54,29 @@ func (r *Repository) ByID(ctx context.Context, id workspace.WorkspaceID) (worksp
 		return workspace.Summary{}, err
 	}
 	return mapWorkspace(row), nil
+}
+
+func (r *Repository) ListWithActiveMetadata(ctx context.Context, environment string) ([]workspace.Summary, error) {
+	rows, err := r.q.ListWorkspacesWithActiveMetadata(ctx, normalizedEnvironment(environment))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]workspace.Summary, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, mapWorkspaceWithActiveMetadata(row.ID, queryText(row.Title), queryText(row.Description), row.ActiveDeploymentID, row.CreatedAt, row.UpdatedAt))
+	}
+	return out, nil
+}
+
+func (r *Repository) ByIDWithActiveMetadata(ctx context.Context, id workspace.WorkspaceID, environment string) (workspace.Summary, error) {
+	row, err := r.q.GetWorkspaceWithActiveMetadata(ctx, platformdb.GetWorkspaceWithActiveMetadataParams{
+		Environment: normalizedEnvironment(environment),
+		ID:          string(id),
+	})
+	if err != nil {
+		return workspace.Summary{}, err
+	}
+	return mapWorkspaceWithActiveMetadata(row.ID, queryText(row.Title), queryText(row.Description), row.ActiveDeploymentID, row.CreatedAt, row.UpdatedAt), nil
 }
 
 func (r *Repository) ActiveDeploymentGraph(ctx context.Context, id workspace.WorkspaceID, environment string) (workspace.AssetGraph, bool, error) {
@@ -118,6 +142,10 @@ func (r *Repository) AssetVersions(ctx context.Context, workspaceID workspace.Wo
 	return versions, nil
 }
 
+func normalizedEnvironment(environment string) string {
+	return string(deployment.NormalizeEnvironment(deployment.Environment(environment)))
+}
+
 func mapWorkspace(row platformdb.Workspace) workspace.Summary {
 	out := workspace.Summary{
 		ID:          workspace.WorkspaceID(row.ID),
@@ -127,6 +155,30 @@ func mapWorkspace(row platformdb.Workspace) workspace.Summary {
 		UpdatedAt:   row.UpdatedAt,
 	}
 	return out
+}
+
+func mapWorkspaceWithActiveMetadata(id, title, description, activeDeploymentID, createdAt, updatedAt string) workspace.Summary {
+	return workspace.Summary{
+		ID:                 workspace.WorkspaceID(id),
+		Title:              title,
+		Description:        description,
+		ActiveDeploymentID: workspace.DeploymentID(activeDeploymentID),
+		CreatedAt:          createdAt,
+		UpdatedAt:          updatedAt,
+	}
+}
+
+func queryText(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case []byte:
+		return string(typed)
+	default:
+		return fmt.Sprint(typed)
+	}
 }
 
 func mapAsset(row platformdb.Asset) workspace.Asset {

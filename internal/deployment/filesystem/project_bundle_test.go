@@ -258,7 +258,16 @@ func TestPackProjectStoresActiveDeploymentPlanDiff(t *testing.T) {
 	activeGraph := active.Workspaces["operations"].Workspace.Graph
 	for index := range activeGraph.Assets {
 		if activeGraph.Assets[index].ID == "model_table:operations.orders" {
-			activeGraph.Assets[index].ContentHash = "changed"
+			var payload map[string]any
+			if err := json.Unmarshal([]byte(activeGraph.Assets[index].PayloadJSON), &payload); err != nil {
+				t.Fatalf("unmarshal model table payload: %v", err)
+			}
+			payload["SQL"] = "SELECT *, 'changed' AS changed FROM source.\"olist.orders\""
+			payloadBytes, err := json.Marshal(payload)
+			if err != nil {
+				t.Fatalf("marshal model table payload: %v", err)
+			}
+			activeGraph.Assets[index].PayloadJSON = string(payloadBytes)
 		}
 	}
 	activeGraph.Assets = append(activeGraph.Assets, workspace.Asset{

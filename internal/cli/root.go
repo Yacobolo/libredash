@@ -8,29 +8,28 @@ import (
 )
 
 type rootOptions struct {
-	addr          string
-	dataDir       string
-	projectPath   string
-	production    bool
-	workspaceID   string
-	environment   string
-	target        string
-	token         string
-	catalog       string
-	deployment    string
-	conversation  string
-	jsonOutput    bool
-	pageID        string
-	count         int
-	filtersJSON   string
-	bodyJSON      string
-	schemaFormat  string
-	schemaOut     string
-	limit         int
-	pageToken     string
-	searchTypes   []string
-	autoApprove   bool
-	allWorkspaces bool
+	addr         string
+	dataDir      string
+	projectPath  string
+	production   bool
+	workspaceID  string
+	environment  string
+	target       string
+	token        string
+	catalog      string
+	deployment   string
+	conversation string
+	jsonOutput   bool
+	pageID       string
+	count        int
+	filtersJSON  string
+	bodyJSON     string
+	schemaFormat string
+	schemaOut    string
+	limit        int
+	pageToken    string
+	searchTypes  []string
+	autoApprove  bool
 }
 
 func Execute(ctx context.Context) error {
