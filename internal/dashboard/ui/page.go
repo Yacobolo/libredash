@@ -30,6 +30,8 @@ const (
 	appRootClass = "min-h-svh bg-app text-fg-default"
 )
 
+type ChromeDecorator func(*uisignals.ChromeSignal)
+
 func inspectorScript() g.Node {
 	return h.Script(h.Type("module"), h.Src(staticAsset("/static/datastar-inspector.js")))
 }
@@ -47,7 +49,7 @@ func pageHead(extra ...g.Node) []g.Node {
 	return append(nodes, extra...)
 }
 
-func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) g.Node {
+func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) g.Node {
 	if activePage.ID == "" {
 		activePage = defaultPage()
 	}
@@ -56,7 +58,7 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 	tableReset := tableResetExpression()
 	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + tableReset
 	initialFilters = report.NormalizeFiltersForPage(activePage.ID, initialFilters)
-	signals := initialSignals(dataDir, clientID, csrfToken, catalog, report, model, pages, activePage, initialFilters)
+	signals := initialSignals(dataDir, clientID, csrfToken, catalog, report, model, pages, activePage, initialFilters, chromeDecorators...)
 	return c.HTML5(c.HTML5Props{
 		Title:    "LibreDash",
 		Language: "en",
@@ -130,8 +132,13 @@ func jsonString(value any) string {
 	return string(bytes)
 }
 
-func initialSignals(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) map[string]any {
+func initialSignals(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) map[string]any {
 	envelope := uisignals.DashboardInitialEnvelope(dataDir, clientID, csrfToken, catalog, report, model, pages, activePage, initialFilters)
+	for _, decorate := range chromeDecorators {
+		if decorate != nil {
+			decorate(&envelope.Chrome)
+		}
+	}
 	return map[string]any{
 		"chrome":             envelope.Chrome,
 		"page":               envelope.Page,

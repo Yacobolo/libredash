@@ -32,16 +32,38 @@ type ChromeSignal struct {
 }
 
 type SidebarSignal struct {
-	WorkspaceTitle string               `json:"workspaceTitle"`
-	Active         string               `json:"active"`
-	DashboardID    string               `json:"dashboardId,omitempty"`
-	DashboardTitle string               `json:"dashboardTitle"`
-	PageTitle      string               `json:"pageTitle"`
-	ModelID        string               `json:"modelId,omitempty"`
-	ModelTitle     string               `json:"modelTitle,omitempty"`
-	Compact        bool                 `json:"compact"`
-	UserRole       string               `json:"userRole,omitempty"`
-	Groups         []SidebarGroupSignal `json:"groups"`
+	WorkspaceTitle string                `json:"workspaceTitle"`
+	Active         string                `json:"active"`
+	DashboardID    string                `json:"dashboardId,omitempty"`
+	DashboardTitle string                `json:"dashboardTitle"`
+	PageTitle      string                `json:"pageTitle"`
+	ModelID        string                `json:"modelId,omitempty"`
+	ModelTitle     string                `json:"modelTitle,omitempty"`
+	Compact        bool                  `json:"compact"`
+	UserRole       string                `json:"userRole,omitempty"`
+	PrimaryAction  *SidebarActionSignal  `json:"primaryAction,omitempty"`
+	History        *SidebarHistorySignal `json:"history,omitempty"`
+	Groups         []SidebarGroupSignal  `json:"groups"`
+}
+
+type SidebarActionSignal struct {
+	Label string `json:"label"`
+	Href  string `json:"href"`
+	Icon  string `json:"icon"`
+}
+
+type SidebarHistorySignal struct {
+	Label     string                     `json:"label"`
+	EmptyText string                     `json:"emptyText,omitempty"`
+	Items     []SidebarHistoryItemSignal `json:"items"`
+}
+
+type SidebarHistoryItemSignal struct {
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Href    string `json:"href"`
+	Active  bool   `json:"active"`
+	Pending bool   `json:"pending,omitempty"`
 }
 
 type SidebarGroupSignal struct {
@@ -162,10 +184,10 @@ type ChatEnvelope struct {
 }
 
 type ChatPageSignal struct {
-	Kind        RouteKind        `json:"kind"`
-	Title       string           `json:"title"`
-	Description string           `json:"description"`
-	Sidebar     SubSidebarSignal `json:"sidebar"`
+	Kind        RouteKind `json:"kind"`
+	View        string    `json:"view"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
 }
 
 type SubSidebarSignal struct {
@@ -740,10 +762,12 @@ func DashboardInitialEnvelope(dataDir, clientID, csrfToken string, catalog dashb
 	}
 }
 
-func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel string, agent ChatSignal) ChatEnvelope {
+func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view string, agent ChatSignal) ChatEnvelope {
+	chrome := ChromeSignal{Sidebar: SidebarConfigForChat(catalog, workspaceID, roleLabel)}
+	AttachChatSidebar(&chrome.Sidebar, agent)
 	return ChatEnvelope{
-		Chrome:    ChromeSignal{Sidebar: SidebarConfigForChat(catalog, workspaceID, roleLabel)},
-		Page:      ChatPage(workspaceID, agent),
+		Chrome:    chrome,
+		Page:      ChatPage(workspaceID, view, agent),
 		Runtime:   RouteRuntimeSignal{Kind: RouteChat},
 		CSRFToken: csrfToken,
 		Agent:     agent,
@@ -752,42 +776,46 @@ func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, csrfToken, role
 	}
 }
 
-func ChatPage(workspaceID string, agent ChatSignal) ChatPageSignal {
+func ChatPage(workspaceID, view string, agent ChatSignal) ChatPageSignal {
+	if strings.TrimSpace(view) == "" {
+		view = "conversation"
+	}
 	return ChatPageSignal{
 		Kind:        RouteChat,
+		View:        view,
 		Title:       "Chats",
 		Description: "Ask read-only questions about dashboards, semantic models, measures, and fields.",
-		Sidebar:     ChatSubSidebar(workspaceID, agent),
 	}
 }
 
-func ChatSubSidebar(workspaceID string, agent ChatSignal) SubSidebarSignal {
-	items := []SubSidebarItemSignal{{ID: "new", Title: "New chat", Href: chatPath(workspaceID, "new"), Active: agent.ActiveConversationID == ""}}
+func AttachChatSidebar(sidebar *SidebarSignal, agent ChatSignal) {
+	if sidebar == nil {
+		return
+	}
+	sidebar.PrimaryAction = &SidebarActionSignal{Label: "New chat", Href: chatPath("new"), Icon: "plus"}
+	sidebar.History = &SidebarHistorySignal{
+		Label:     "Chats",
+		EmptyText: "No chats yet.",
+		Items:     ChatHistoryItems(agent),
+	}
+}
+
+func ChatHistoryItems(agent ChatSignal) []SidebarHistoryItemSignal {
+	items := make([]SidebarHistoryItemSignal, 0, len(agent.Conversations))
 	for _, conversation := range agent.Conversations {
 		title := conversation.Title
 		if title == "" {
 			title = "Conversation"
 		}
-		items = append(items, SubSidebarItemSignal{
+		items = append(items, SidebarHistoryItemSignal{
 			ID:      conversation.ID,
 			Title:   title,
-			Href:    chatPath(workspaceID, conversation.ID),
+			Href:    chatPath(conversation.ID),
 			Active:  conversation.ID == agent.ActiveConversationID,
 			Pending: conversation.TitlePending,
 		})
 	}
-	return SubSidebarSignal{
-		Label:       "Chats",
-		RailLabel:   "Chats",
-		AriaLabel:   "Chat conversations",
-		StorageKey:  "libredash-chat-conversations-collapsed",
-		ActiveID:    agent.ActiveConversationID,
-		EmptyText:   "No conversations yet.",
-		Disabled:    agent.Status.Running,
-		Collapsible: false,
-		Numbered:    false,
-		Items:       items,
-	}
+	return items
 }
 
 func WorkspaceAccessSignals(access WorkspaceAccessResponse, csrfToken string) WorkspaceAccessSignal {
@@ -817,7 +845,6 @@ func SidebarConfigForChat(catalog dashboard.Catalog, workspaceID, roleLabel stri
 		catalog.Workspace.ID = workspaceID
 	}
 	config := SidebarConfigForWorkspace(catalog, "chat", roleLabel)
-	config.Compact = true
 	return config
 }
 
@@ -1024,7 +1051,7 @@ func sidebarGroups(catalog dashboard.Catalog) []SidebarGroupSignal {
 			Label: "Navigation",
 			Items: []SidebarItemSignal{
 				{ID: "dashboards", Label: "Dashboards", Href: "/", Icon: "dashboard", Meta: "Reports"},
-				{ID: "chat", Label: "Chats", Href: chatPath(catalog.Workspace.ID), Icon: "chat", Meta: "Agent interface"},
+				{ID: "chat", Label: "Chats", Href: chatPath(), Icon: "chat", Meta: "Agent interface"},
 				{ID: "workspaces", Label: "Workspaces", Href: "/workspaces", Icon: "catalog", Meta: "Published assets"},
 				{ID: "connections", Label: "Connections", Href: "/connections", Icon: "data", Meta: "Data access"},
 				{ID: "admin", Label: "Admin", Href: "/admin", Icon: "settings", Meta: "Read-only administration"},
@@ -1033,11 +1060,8 @@ func sidebarGroups(catalog dashboard.Catalog) []SidebarGroupSignal {
 	}
 }
 
-func chatPath(workspaceID string, parts ...string) string {
-	if strings.TrimSpace(workspaceID) == "" {
-		return "/workspaces"
-	}
-	path := "/workspaces/" + url.PathEscape(workspaceID) + "/chat"
+func chatPath(parts ...string) string {
+	path := "/chat"
 	for _, part := range parts {
 		part = strings.Trim(part, "/")
 		if part == "" {

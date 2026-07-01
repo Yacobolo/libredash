@@ -596,18 +596,18 @@
         "kind": {
           "type": "string"
         },
-        "sidebar": {
-          "$ref": "#/$defs/SubSidebarSignal"
-        },
         "title": {
+          "type": "string"
+        },
+        "view": {
           "type": "string"
         }
       },
       "required": [
         "description",
         "kind",
-        "sidebar",
-        "title"
+        "title",
+        "view"
       ],
       "type": "object"
     },
@@ -2292,12 +2292,81 @@
       ],
       "type": "object"
     },
+    "SidebarActionSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "href": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "href",
+        "icon",
+        "label"
+      ],
+      "type": "object"
+    },
     "SidebarGroupSignal": {
       "additionalProperties": false,
       "properties": {
         "items": {
           "items": {
             "$ref": "#/$defs/SidebarItemSignal"
+          },
+          "type": "array"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "items",
+        "label"
+      ],
+      "type": "object"
+    },
+    "SidebarHistoryItemSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "href": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "pending": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "active",
+        "href",
+        "id",
+        "title"
+      ],
+      "type": "object"
+    },
+    "SidebarHistorySignal": {
+      "additionalProperties": false,
+      "properties": {
+        "emptyText": {
+          "type": "string"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/SidebarHistoryItemSignal"
           },
           "type": "array"
         },
@@ -2362,6 +2431,9 @@
           },
           "type": "array"
         },
+        "history": {
+          "$ref": "#/$defs/SidebarHistorySignal"
+        },
         "modelId": {
           "type": "string"
         },
@@ -2370,6 +2442,9 @@
         },
         "pageTitle": {
           "type": "string"
+        },
+        "primaryAction": {
+          "$ref": "#/$defs/SidebarActionSignal"
         },
         "userRole": {
           "type": "string"
@@ -3118,7 +3193,16 @@
       "$ref": "#/$defs/SemanticModelGraphSignal"
     },
     {
+      "$ref": "#/$defs/SidebarActionSignal"
+    },
+    {
       "$ref": "#/$defs/SidebarGroupSignal"
+    },
+    {
+      "$ref": "#/$defs/SidebarHistoryItemSignal"
+    },
+    {
+      "$ref": "#/$defs/SidebarHistorySignal"
     },
     {
       "$ref": "#/$defs/SidebarItemSignal"

@@ -36,7 +36,7 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspacesPage(s.catalogForWorkspacesPage(r, workspaces), workspaces, s.currentRoleLabel(r)).Render(w); err != nil {
+	if err := ui.WorkspacesPage(s.catalogForWorkspacesPage(r, workspaces), workspaces, s.currentRoleLabel(r), s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -62,7 +62,7 @@ func (s *Server) workspaceAssets(w http.ResponseWriter, r *http.Request) {
 	access := s.workspaceAccessResponse(r, workspace, canManage, ui.WorkspaceAccessStatus{})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspacePage(s.catalogForWorkspace(workspaceID), workspace, filtered, r.URL.Query().Get("type"), r.URL.Query().Get("q"), s.currentRoleLabel(r), access, csrfToken(r, s.auth)).Render(w); err != nil {
+	if err := ui.WorkspacePage(s.catalogForWorkspace(workspaceID), workspace, filtered, r.URL.Query().Get("type"), r.URL.Query().Get("q"), s.currentRoleLabel(r), access, csrfToken(r, s.auth), s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -77,7 +77,7 @@ func (s *Server) connections(w http.ResponseWriter, r *http.Request) {
 	filtered := workspace.FilterConnectionAssets(assets, activeType, r.URL.Query().Get("q"))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionsPage(s.catalogForWorkspacesPage(r, nil), "platform", filtered, edges, activeType, r.URL.Query().Get("q"), s.currentRoleLabel(r)).Render(w); err != nil {
+	if err := ui.ConnectionsPage(s.catalogForWorkspacesPage(r, nil), "platform", filtered, edges, activeType, r.URL.Query().Get("q"), s.currentRoleLabel(r), s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -171,7 +171,7 @@ func (s *Server) workspaceAssetSection(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspaceAssetPageWithRefreshAndVersions(s.catalogForWorkspace(workspaceID), workspace, selected, assets, edges, section, s.currentRoleLabel(r), refresh, versions).Render(w); err != nil {
+	if err := ui.WorkspaceAssetPageWithRefreshAndVersions(s.catalogForWorkspace(workspaceID), workspace, selected, assets, edges, section, s.currentRoleLabel(r), refresh, versions, s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

@@ -10,6 +10,7 @@ import {
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
   Plug,
   Settings,
   Sun,
@@ -42,7 +43,29 @@ type SidebarConfig = {
   dashboardId?: string
   userRole?: string
   compact?: boolean
+  primaryAction?: SidebarAction
+  history?: SidebarHistory
   groups: NavGroup[]
+}
+
+type SidebarAction = {
+  label: string
+  href: string
+  icon: IconName
+}
+
+type SidebarHistory = {
+  label: string
+  emptyText?: string
+  items: SidebarHistoryItem[]
+}
+
+type SidebarHistoryItem = {
+  id: string
+  title: string
+  href: string
+  active?: boolean
+  pending?: boolean
 }
 
 type SidebarStatus = {
@@ -67,6 +90,7 @@ type IconName =
   | 'activity'
   | 'collapse'
   | 'expand'
+  | 'plus'
 
 const defaultConfig: SidebarConfig = {
   active: 'dashboards',
@@ -208,6 +232,96 @@ class LibreDashSidebar extends LitElement {
       gap: var(--base-size-4);
     }
 
+    .primary-action {
+      margin-bottom: var(--base-size-4);
+    }
+
+    .primary-action .nav-item {
+      min-height: var(--control-medium-size);
+      border-color: transparent;
+      background: transparent;
+      color: var(--ld-fg-default);
+      font-weight: var(--ld-font-weight-strong);
+    }
+
+    .primary-action .nav-item:hover,
+    .primary-action .nav-item:focus-visible {
+      border-color: transparent;
+      background: var(--ld-bg-hover, #f6f8fa);
+      color: var(--ld-fg-default);
+    }
+
+    .primary-action .nav-icon {
+      width: calc(var(--control-xsmall-size) + var(--base-size-2));
+      height: calc(var(--control-xsmall-size) + var(--base-size-2));
+      border-radius: var(--ld-radius-full);
+      background: var(--control-bgColor-active, #e6eaef);
+      color: var(--ld-fg-default);
+      transition:
+        background var(--motion-transition-stateChange),
+        transform var(--motion-transition-stateChange);
+    }
+
+    .primary-action .nav-item:hover .nav-icon,
+    .primary-action .nav-item:focus-visible .nav-icon {
+      background: var(--ld-bg-selected, #ddf4ff);
+      transform: rotate(-3deg) scale(1.06);
+    }
+
+    .history {
+      display: grid;
+      gap: var(--base-size-4);
+      min-height: 0;
+      padding-top: var(--base-size-8);
+      border-top: var(--ld-border-muted);
+    }
+
+    .history-label {
+      overflow: hidden;
+      padding: 0 var(--control-xsmall-paddingInline-normal);
+      color: var(--ld-fg-muted);
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: var(--ld-font-size-caption);
+      font-weight: var(--ld-font-weight-strong);
+      letter-spacing: 0;
+    }
+
+    .history-list {
+      display: grid;
+      gap: var(--base-size-4);
+      min-height: 0;
+    }
+
+    .history-item {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .history-title {
+      overflow: hidden;
+      min-width: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: var(--ld-font-size-caption);
+      font-weight: var(--ld-font-weight-medium);
+    }
+
+    .history-empty {
+      padding: var(--base-size-4) var(--control-xsmall-paddingInline-normal);
+      color: var(--ld-fg-muted);
+      font-size: var(--ld-font-size-caption);
+      line-height: var(--ld-line-height-compact);
+    }
+
+    .pending-spinner {
+      width: 10px;
+      height: 10px;
+      border: 1.5px solid var(--ld-line-muted);
+      border-top-color: var(--ld-fg-muted);
+      border-radius: var(--ld-radius-full);
+      animation: pending-spin var(--ld-transition-slow, 700ms) linear infinite;
+    }
+
     a,
     button {
       font: inherit;
@@ -253,18 +367,12 @@ class LibreDashSidebar extends LitElement {
 
     .nav-item[aria-current='page'] {
       border-color: transparent;
-      background: var(--ld-bg-hover);
+      background: var(--ld-bg-hover, #f6f8fa);
       color: var(--ld-fg-default);
     }
 
     .nav-item[aria-current='page']::before {
-      content: '';
-      position: absolute;
-      inset-block: var(--base-size-8);
-      left: 0;
-      width: var(--base-size-2);
-      border-radius: var(--ld-radius-full);
-      background: var(--ld-accent);
+      content: none;
     }
 
     .nav-item.disabled {
@@ -412,6 +520,7 @@ class LibreDashSidebar extends LitElement {
     :host([data-collapsed]) .name,
     :host([data-collapsed]) .nav-group-label,
     :host([data-collapsed]) .nav-text,
+    :host([data-collapsed]) .history,
     :host([data-collapsed]) .user-text {
       display: none;
     }
@@ -496,12 +605,22 @@ class LibreDashSidebar extends LitElement {
         overflow-x: auto;
       }
 
+      .history {
+        display: none;
+      }
+
       .nav-group {
         min-width: max-content;
       }
 
       .footer {
         display: none;
+      }
+    }
+
+    @keyframes pending-spin {
+      to {
+        transform: rotate(360deg);
       }
     }
   `
@@ -581,11 +700,22 @@ class LibreDashSidebar extends LitElement {
         </header>
 
         <nav aria-label="Primary">
+          ${this.config.primaryAction ? html`
+            <section class="nav-group primary-action" aria-label="Chat action">
+              ${this.renderLink({
+                id: 'primary-action',
+                label: this.config.primaryAction.label,
+                href: this.config.primaryAction.href,
+                icon: this.config.primaryAction.icon,
+              })}
+            </section>
+          ` : null}
           ${this.config.groups.map((group) => html`
             <section class="nav-group" aria-label=${group.label}>
               ${group.items.map((item) => item.disabled ? this.renderDisabledItem(item) : this.renderLink(item))}
             </section>
           `)}
+          ${this.renderHistory()}
         </nav>
 
         <footer class="footer">
@@ -638,7 +768,7 @@ class LibreDashSidebar extends LitElement {
     const current = item.id === this.config.active
     const label = item.meta ? `${item.label}: ${item.meta}` : item.label
     return html`
-      <a class="nav-item" href=${item.href} aria-current=${current ? 'page' : 'false'} aria-label=${label} title=${label}>
+      <a class="nav-item" href=${item.href} aria-current=${current ? 'page' : 'false'} aria-label=${label} title=${label} @click=${(event: MouseEvent) => this.followInternalLink(event, item.href)}>
         <span class="nav-icon">${icon(item.icon)}</span>
         <span class="nav-text">
           <strong>${item.label}</strong>
@@ -658,6 +788,39 @@ class LibreDashSidebar extends LitElement {
       </span>
     `
   }
+
+  private renderHistory() {
+    const history = this.config.history
+    if (!history) return null
+    const items = Array.isArray(history.items) ? history.items : []
+    return html`
+      <section class="history" aria-label=${history.label || 'Chats'}>
+        <strong class="history-label">${history.label || 'Chats'}</strong>
+        <div class="history-list">
+          ${items.length === 0 ? html`<span class="history-empty">${history.emptyText || 'No chats yet.'}</span>` : null}
+          ${items.map((item) => this.renderHistoryItem(item))}
+        </div>
+      </section>
+    `
+  }
+
+  private renderHistoryItem(item: SidebarHistoryItem) {
+    const title = item.title || 'Conversation'
+    return html`
+      <a class="nav-item history-item" href=${item.href} aria-current=${item.active ? 'page' : 'false'} aria-label=${title} title=${title} @click=${(event: MouseEvent) => this.followInternalLink(event, item.href)}>
+        <span class="history-title">${title}</span>
+        ${item.pending ? html`<span class="pending-spinner" aria-label="Title loading"></span>` : null}
+      </a>
+    `
+  }
+
+  private followInternalLink(event: MouseEvent, href: string): void {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    const target = new URL(href, window.location.href)
+    if (target.origin !== window.location.origin || target.href === window.location.href) return
+    event.preventDefault()
+    window.location.assign(target.href)
+  }
 }
 
 function icon(name: IconName) {
@@ -675,6 +838,7 @@ function icon(name: IconName) {
     activity: Activity,
     collapse: PanelLeftClose,
     expand: PanelLeftOpen,
+    plus: Plus,
   }
 
   return lucideIcon(icons[name])

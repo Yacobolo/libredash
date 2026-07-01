@@ -3,10 +3,10 @@ import { property } from 'lit/decorators.js'
 import type { ChatPageSignal, ChatSignal, DashboardTable, DashboardVisual } from '../../generated/signals'
 import { jsonAttribute } from '../shared/json-attribute'
 import { checkSignalContract } from '../shared/signal-contract'
-import '../navigation/sub-sidebar'
 import '../dashboard/visual-modal'
 import './chat-thread'
 import './chat-composer'
+import './chat-list'
 
 const emptyAgent: ChatSignal = {
   conversations: [],
@@ -35,9 +35,8 @@ class LibreDashChatPage extends LitElement {
     }
 
     .route {
-      display: grid;
+      display: block;
       min-height: 100svh;
-      grid-template-columns: auto minmax(0, 1fr);
       background: var(--ld-bg-app);
     }
 
@@ -49,6 +48,13 @@ class LibreDashChatPage extends LitElement {
       grid-template-rows: auto minmax(0, 1fr);
       overflow: hidden;
       background: var(--ld-bg-app);
+    }
+
+    .main.list-main {
+      height: auto;
+      min-height: 100svh;
+      grid-template-rows: minmax(0, 1fr);
+      overflow: visible;
     }
 
     header {
@@ -88,8 +94,13 @@ class LibreDashChatPage extends LitElement {
       display: grid;
       min-width: 0;
       min-height: 0;
-      overflow: hidden;
+      overflow: auto;
       background: var(--ld-bg-app);
+    }
+
+    .list-main .body {
+      min-height: auto;
+      overflow: visible;
     }
 
     .thread-stack {
@@ -129,7 +140,6 @@ class LibreDashChatPage extends LitElement {
   updated(): void {
     checkSignalContract('chat page', this.page, {
       title: 'required',
-      sidebar: 'required',
     })
     checkSignalContract('chat agent', this.agent, {
       transcript: 'required',
@@ -143,30 +153,40 @@ class LibreDashChatPage extends LitElement {
     const agent = this.agent ?? emptyAgent
     const status = agent.status ?? emptyAgent.status
     const composer = agent.composer ?? emptyAgent.composer
+    const view = page?.view ?? 'conversation'
+    const isList = view === 'list'
     return html`
       <div class="route">
-        <ld-sub-sidebar .config=${page?.sidebar ?? null}></ld-sub-sidebar>
-        <section class="main" aria-label="LibreDash chats">
-          <header>
-            <h1>${page?.title ?? 'Chats'}</h1>
-            <p>${page?.description ?? 'Ask read-only questions about dashboards, semantic models, measures, and fields.'}</p>
-          </header>
+        <section class=${isList ? 'main list-main' : 'main'} aria-label="LibreDash chats">
+          ${isList ? null : html`
+            <header>
+              <h1>${page?.title ?? 'Chats'}</h1>
+              <p>${page?.description ?? 'Ask read-only questions about dashboards, semantic models, measures, and fields.'}</p>
+            </header>
+          `}
           <div class="body">
-            <div class="thread-stack">
-              <ld-chat-thread
-                .transcript=${agent.transcript ?? []}
-                .visuals=${this.visuals ?? {}}
-                .tables=${this.tables ?? {}}
-                .status=${status}
-                conversation-id=${agent.activeConversationId ?? ''}
-              >${status.error ?? ''}</ld-chat-thread>
-              <ld-chat-composer
-                .value=${composer.value ?? ''}
-                .disabled=${this.composerDisabled || status.running || composer.disabled}
-                .pending=${this.pending || status.running}
-                .placeholder=${composer.placeholder ?? emptyAgent.composer.placeholder}
-              ></ld-chat-composer>
-            </div>
+            ${isList ? html`
+              <ld-chat-list
+                .conversations=${agent.conversations ?? []}
+                active-conversation-id=${agent.activeConversationId ?? ''}
+              ></ld-chat-list>
+            ` : html`
+              <div class="thread-stack">
+                <ld-chat-thread
+                  .transcript=${agent.transcript ?? []}
+                  .visuals=${this.visuals ?? {}}
+                  .tables=${this.tables ?? {}}
+                  .status=${status}
+                  conversation-id=${agent.activeConversationId ?? ''}
+                >${status.error ?? ''}</ld-chat-thread>
+                <ld-chat-composer
+                  .value=${composer.value ?? ''}
+                  .disabled=${this.composerDisabled || status.running || composer.disabled}
+                  .pending=${this.pending || status.running}
+                  .placeholder=${composer.placeholder ?? emptyAgent.composer.placeholder}
+                ></ld-chat-composer>
+              </div>
+            `}
           </div>
           <ld-visual-modal></ld-visual-modal>
         </section>

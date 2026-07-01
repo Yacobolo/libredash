@@ -217,8 +217,11 @@ func apigenAgentInputSchema(operation apigenAgentOperation) json.RawMessage {
 	properties := map[string]any{}
 	required := []string{}
 	for _, parameter := range operation.Parameters {
-		if parameter.Name == "" || parameter.Name == "workspace" {
+		if parameter.Name == "" {
 			continue
+		}
+		if parameter.Name == "workspace" {
+			parameter.Required = false
 		}
 		properties[parameter.Name] = parameter.Schema
 		if parameter.Required {
@@ -257,14 +260,18 @@ func agentStringSliceHas(values []string, want string) bool {
 }
 
 func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, operation apigenAgentOperation, rawArgs json.RawMessage) agent.ToolResult {
-	if errResult, ok := s.authorizeAPIGenAgentTool(ctx, scope, operation); !ok {
-		return errResult
-	}
 	args, err := decodeAPIGenAgentToolArguments(rawArgs)
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
 	}
-	request, err := apigenAgentToolRequest(ctx, scope, operation, args)
+	toolScope, err := apigenAgentToolScope(scope, operation, args)
+	if err != nil {
+		return apigenAgentToolError("invalid_arguments", err.Error())
+	}
+	if errResult, ok := s.authorizeAPIGenAgentTool(ctx, toolScope, operation); !ok {
+		return errResult
+	}
+	request, err := apigenAgentToolRequest(ctx, toolScope, operation, args)
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
 	}
@@ -384,11 +391,6 @@ func apigenAgentToolRequest(ctx context.Context, scope agentapp.Scope, operation
 
 func apigenAgentPathValue(scope agentapp.Scope, parameter apigenAgentParameter, args map[string]any) (string, error) {
 	if parameter.Name == "workspace" {
-		if workspace, ok, err := apigenAgentStringArgument("workspace", args); err != nil {
-			return "", err
-		} else if ok && workspace != "" && workspace != scope.WorkspaceID {
-			return "", fmt.Errorf("workspace must match the active agent workspace")
-		}
 		return scope.WorkspaceID, nil
 	}
 	value, ok, err := apigenAgentStringArgument(parameter.Name, args)
@@ -399,6 +401,26 @@ func apigenAgentPathValue(scope agentapp.Scope, parameter apigenAgentParameter, 
 		return "", fmt.Errorf("%s is required", parameter.Name)
 	}
 	return value, nil
+}
+
+func apigenAgentToolScope(scope agentapp.Scope, operation apigenAgentOperation, args map[string]any) (agentapp.Scope, error) {
+	for _, parameter := range operation.Parameters {
+		if parameter.In != "path" || parameter.Name != "workspace" {
+			continue
+		}
+		workspaceID, ok, err := apigenAgentStringArgument("workspace", args)
+		if err != nil {
+			return agentapp.Scope{}, err
+		}
+		if ok && strings.TrimSpace(workspaceID) != "" {
+			scope.WorkspaceID = strings.TrimSpace(workspaceID)
+		}
+		if strings.TrimSpace(scope.WorkspaceID) == "" {
+			return agentapp.Scope{}, fmt.Errorf("workspace is required")
+		}
+		return scope, nil
+	}
+	return scope, nil
 }
 
 func apigenAgentRequestBody(operation apigenAgentOperation, args map[string]any) (io.Reader, error) {

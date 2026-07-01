@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"net/url"
-
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	g "maragu.dev/gomponents"
@@ -11,9 +9,9 @@ import (
 	h "maragu.dev/gomponents/html"
 )
 
-func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel string, signal ChatSignal) g.Node {
-	envelope := uisignals.ChatInitialEnvelope(catalog, workspaceID, csrfToken, roleLabel, signal)
-	chatBasePath := "/workspaces/" + url.PathEscape(workspaceID) + "/chat"
+func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view string, signal ChatSignal) g.Node {
+	envelope := uisignals.ChatInitialEnvelope(catalog, workspaceID, csrfToken, roleLabel, view, signal)
+	chatBasePath := "/chat"
 	return c.HTML5(c.HTML5Props{
 		Title:    "LibreDash Chat",
 		Language: "en",

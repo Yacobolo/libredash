@@ -29,6 +29,30 @@ func TestAgentAPIReportsDisabledWhenProviderMissing(t *testing.T) {
 	}
 }
 
+func TestGlobalAgentAPIListsPrincipalConversations(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	principal := testPrincipal(t, ctx, store, "viewer@example.com", "Viewer", "viewer")
+	token := testAPIToken(t, ctx, store, principal.ID, "agent-global")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	agentService := agentapp.NewService(fakeMetrics{}, testAgentRepository(store), agentapp.Config{APIKey: "key", Model: "fake-model"})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agentService, DefaultWorkspaceID: "test"})
+
+	createReq := authedJSONRequest(http.MethodPost, "/api/v1/agent/conversations", token, `{"title":"Global ask"}`)
+	createRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d body=%s", createRec.Code, createRec.Body.String())
+	}
+
+	listReq := authedJSONRequest(http.MethodGet, "/api/v1/agent/conversations", token, "")
+	listRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK || !strings.Contains(listRec.Body.String(), "Global ask") {
+		t.Fatalf("list status=%d body=%s", listRec.Code, listRec.Body.String())
+	}
+}
+
 func TestAgentAPIConversationTurnPersistsMessagesAndEvents(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)

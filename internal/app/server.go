@@ -199,7 +199,7 @@ func (s *Server) home(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.CatalogPageForCatalogs(s.catalogsForVisibleWorkspaces(r)).Render(w); err != nil {
+	if err := ui.CatalogPageForCatalogs(s.catalogsForVisibleWorkspaces(r), s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -244,6 +244,7 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 			}
 			return csrf.Token(r)
 		},
+		ChromeDecorators: s.dashboardChromeDecorators,
 	}
 }
 

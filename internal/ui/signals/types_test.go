@@ -54,7 +54,7 @@ func TestDashboardEnvelopeRejectsUnusedPayload(t *testing.T) {
 }
 
 func TestChatInitialEnvelopeValidates(t *testing.T) {
-	envelope := ChatInitialEnvelope(dashboard.Catalog{}, "test", "csrf", "", ChatSignal{
+	envelope := ChatInitialEnvelope(dashboard.Catalog{}, "test", "csrf", "", "list", ChatSignal{
 		ActiveConversationID: "",
 		Conversations:        []ChatConversationSummary{},
 		Transcript:           nil,
@@ -65,8 +65,17 @@ func TestChatInitialEnvelopeValidates(t *testing.T) {
 	if err := ValidateChatEnvelope(envelope); err != nil {
 		t.Fatalf("validate chat envelope: %v", err)
 	}
-	if envelope.Page.Sidebar.Items[0].Href != "/workspaces/test/chat/new" {
-		t.Fatalf("chat sidebar = %#v", envelope.Page.Sidebar)
+	if envelope.Chrome.Sidebar.PrimaryAction == nil || envelope.Chrome.Sidebar.PrimaryAction.Href != "/chat/new" {
+		t.Fatalf("chat primary action = %#v", envelope.Chrome.Sidebar.PrimaryAction)
+	}
+	if envelope.Chrome.Sidebar.History == nil {
+		t.Fatalf("chat history missing: %#v", envelope.Chrome.Sidebar)
+	}
+	if envelope.Page.View != "list" {
+		t.Fatalf("chat page view = %q", envelope.Page.View)
+	}
+	if envelope.Chrome.Sidebar.History.Label != "Chats" {
+		t.Fatalf("chat history search config = %#v", envelope.Chrome.Sidebar.History)
 	}
 }
 

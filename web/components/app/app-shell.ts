@@ -63,6 +63,16 @@ class LibreDashAppShell extends LitElement {
     checkSignalContract('chrome', this.chrome, { sidebar: 'required' })
   }
 
+  connectedCallback(): void {
+    super.connectedCallback()
+    this.addEventListener('click', this.followSidebarLinkFromHost)
+  }
+
+  disconnectedCallback(): void {
+    this.removeEventListener('click', this.followSidebarLinkFromHost)
+    super.disconnectedCallback()
+  }
+
   render() {
     return html`
       <ld-sidebar .config=${this.chrome.sidebar}></ld-sidebar>
@@ -70,6 +80,30 @@ class LibreDashAppShell extends LitElement {
         <slot name="page"></slot>
       </main>
     `
+  }
+
+  private followSidebarLinkFromHost = (event: MouseEvent): void => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    if (event.composedPath().some((node) => node instanceof HTMLAnchorElement)) return
+
+    const sidebar = this.shadowRoot?.querySelector('ld-sidebar') as HTMLElement | null
+    const root = sidebar?.shadowRoot
+    if (!sidebar || !root) return
+
+    const sidebarRect = sidebar.getBoundingClientRect()
+    if (event.clientX < sidebarRect.left || event.clientX > sidebarRect.right || event.clientY < sidebarRect.top || event.clientY > sidebarRect.bottom) return
+
+    const link = Array.from(root.querySelectorAll<HTMLAnchorElement>('a[href]')).find((candidate) => {
+      const rect = candidate.getBoundingClientRect()
+      return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom
+    })
+    if (!link) return
+
+    const target = new URL(link.getAttribute('href') || '', window.location.href)
+    if (target.origin !== window.location.origin || target.href === window.location.href) return
+
+    event.preventDefault()
+    window.location.assign(target.href)
   }
 }
 

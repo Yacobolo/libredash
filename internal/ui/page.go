@@ -88,13 +88,13 @@ func LoginPage() g.Node {
 	})
 }
 
-func CatalogPage(catalog dashboard.Catalog) g.Node {
-	return catalogPageDocument(catalog, catalogPageSignal(catalog))
+func CatalogPage(catalog dashboard.Catalog, chromeOptions ...ChromeOption) g.Node {
+	return catalogPageDocument(catalog, catalogPageSignal(catalog), chromeOptions...)
 }
 
-func CatalogPageForCatalogs(catalogs []dashboard.Catalog) g.Node {
+func CatalogPageForCatalogs(catalogs []dashboard.Catalog, chromeOptions ...ChromeOption) g.Node {
 	if len(catalogs) == 0 {
-		return CatalogPage(dashboard.Catalog{})
+		return CatalogPage(dashboard.Catalog{}, chromeOptions...)
 	}
 	dashboards := []uisignals.CatalogDashboardSignal{}
 	for _, catalog := range catalogs {
@@ -112,11 +112,12 @@ func CatalogPageForCatalogs(catalogs []dashboard.Catalog) g.Node {
 	}
 	page := catalogPageSignal(catalogs[0])
 	page.Dashboards = dashboards
-	return catalogPageDocument(catalogs[0], page)
+	return catalogPageDocument(catalogs[0], page, chromeOptions...)
 }
 
-func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSignal) g.Node {
+func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSignal, chromeOptions ...ChromeOption) g.Node {
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForCatalog(catalog)}
+	applyChromeOptions(&chrome, chromeOptions)
 	signals := map[string]any{
 		"chrome":  chrome,
 		"page":    page,
@@ -158,6 +159,22 @@ func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSi
 type recordTable = uisignals.RecordTableSignal
 type recordTableColumn = uisignals.RecordTableColumnSignal
 type recordTableBadge = uisignals.RecordTableBadgeSignal
+
+type ChromeOption func(*uisignals.ChromeSignal)
+
+func WithChatSidebar(signal ChatSignal) ChromeOption {
+	return func(chrome *uisignals.ChromeSignal) {
+		uisignals.AttachChatSidebar(&chrome.Sidebar, signal)
+	}
+}
+
+func applyChromeOptions(chrome *uisignals.ChromeSignal, options []ChromeOption) {
+	for _, option := range options {
+		if option != nil {
+			option(chrome)
+		}
+	}
+}
 
 func catalogPageSignal(catalog dashboard.Catalog) uisignals.CatalogPageSignal {
 	dashboards := make([]uisignals.CatalogDashboardSignal, 0, len(catalog.Dashboards))

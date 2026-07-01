@@ -217,7 +217,7 @@ CREATE TABLE IF NOT EXISTS audit_events (
 
 CREATE TABLE IF NOT EXISTS agent_conversations (
   id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL DEFAULT '',
   principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
   title TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL,
@@ -287,7 +287,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS platform_role_bindings_principal_unique_idx
 CREATE INDEX IF NOT EXISTS sessions_token_hash_idx ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS api_tokens_principal_idx ON api_tokens(principal_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS audit_events_workspace_created_idx ON audit_events(workspace_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS agent_conversations_owner_updated_idx ON agent_conversations(workspace_id, principal_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS agent_conversations_owner_updated_idx ON agent_conversations(principal_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS agent_messages_conversation_seq_idx ON agent_messages(conversation_id, seq);
 CREATE INDEX IF NOT EXISTS agent_runs_conversation_started_idx ON agent_runs(conversation_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS agent_events_run_seq_idx ON agent_events(run_id, seq);

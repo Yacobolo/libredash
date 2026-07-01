@@ -28,32 +28,27 @@ type chatTurnCommandComposerSignal struct {
 
 func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 	scope := s.chatScope(r)
-	if s.agent == nil || !s.agent.Enabled() || scope.PrincipalID == "" {
-		s.renderChat(w, r, s.chatSignal(r.Context(), scope, "", "", false))
-		return
+	s.renderChat(w, r, "list", s.chatSignal(r.Context(), scope, "", "", false))
+}
+
+func (s *Server) legacyChatRedirect(w http.ResponseWriter, r *http.Request) {
+	status := http.StatusFound
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		status = http.StatusTemporaryRedirect
 	}
-	conversations, err := s.agent.ListConversations(r.Context(), scope)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if len(conversations) == 0 {
-		http.Redirect(w, r, chatRoutePath(scope.WorkspaceID, "new"), http.StatusFound)
-		return
-	}
-	http.Redirect(w, r, chatRoutePath(scope.WorkspaceID, conversations[0].ID), http.StatusFound)
+	http.Redirect(w, r, legacyGlobalChatPath(chi.URLParam(r, "conversation"), strings.TrimSuffix(r.URL.Path, "/")), status)
 }
 
 func (s *Server) chatNew(w http.ResponseWriter, r *http.Request) {
 	scope := s.chatScope(r)
-	s.renderChat(w, r, s.chatSignal(r.Context(), scope, "", "", false))
+	s.renderChat(w, r, "new", s.chatSignal(r.Context(), scope, "", "", false))
 }
 
 func (s *Server) chatConversation(w http.ResponseWriter, r *http.Request) {
 	scope := s.chatScope(r)
 	conversationID := strings.TrimSpace(chi.URLParam(r, "conversation"))
 	if s.agent == nil || !s.agent.Enabled() {
-		s.renderChat(w, r, s.chatSignal(r.Context(), scope, "", "", false))
+		s.renderChat(w, r, "conversation", s.chatSignal(r.Context(), scope, "", "", false))
 		return
 	}
 	if scope.PrincipalID == "" {
@@ -66,16 +61,16 @@ func (s *Server) chatConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.queueMissingChatTitle(r.Context(), scope, conversationID, chatClientID(r))
-	s.renderChat(w, r, s.chatSignalWith(r.Context(), scope, conversationID, state.Transcript, state.Artifacts, "", false))
+	s.renderChat(w, r, "conversation", s.chatSignalWith(r.Context(), scope, conversationID, state.Transcript, state.Artifacts, "", false))
 }
 
-func (s *Server) renderChat(w http.ResponseWriter, r *http.Request, signal ui.ChatSignal) {
+func (s *Server) renderChat(w http.ResponseWriter, r *http.Request, view string, signal ui.ChatSignal) {
 	_ = lddatastar.EnsureClientID(w, r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
+	workspaceID := s.chatDefaultWorkspaceID()
 	catalog := s.catalogForWorkspace(workspaceID)
-	if err := ui.ChatPage(catalog, workspaceID, csrfToken(r, s.auth), s.currentRoleLabel(r), signal).Render(w); err != nil {
+	if err := ui.ChatPage(catalog, workspaceID, csrfToken(r, s.auth), s.currentRoleLabel(r), view, signal).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -201,8 +196,11 @@ func (s *Server) chatScope(r *http.Request) agentapp.Scope {
 			principalID = principal.ID
 			devBypass = principal.DevBypass
 		}
+	} else if principal, ok := principalFromContext(r.Context()); ok {
+		principalID = principal.ID
+		devBypass = principal.DevBypass
 	}
-	return agentapp.Scope{WorkspaceID: s.workspaceID(strings.TrimSpace(chi.URLParam(r, "workspace"))), PrincipalID: principalID, DevAuthBypass: devBypass}
+	return agentapp.Scope{WorkspaceID: s.chatDefaultWorkspaceID(), PrincipalID: principalID, DevAuthBypass: devBypass}
 }
 
 func (s *Server) catalogForWorkspace(workspaceID string) dashboard.Catalog {
@@ -216,7 +214,7 @@ func (s *Server) catalogForWorkspace(workspaceID string) dashboard.Catalog {
 }
 
 func chatRoutePath(workspaceID string, parts ...string) string {
-	path := "/workspaces/" + url.PathEscape(workspaceID) + "/chat"
+	path := "/chat"
 	for _, part := range parts {
 		part = strings.Trim(part, "/")
 		if part == "" {
@@ -225,6 +223,28 @@ func chatRoutePath(workspaceID string, parts ...string) string {
 		path += "/" + url.PathEscape(part)
 	}
 	return path
+}
+
+func (s *Server) chatDefaultWorkspaceID() string {
+	if strings.TrimSpace(s.defaultWorkspaceID) != "" {
+		return s.defaultWorkspaceID
+	}
+	return s.workspaceID("")
+}
+
+func legacyGlobalChatPath(conversationID, path string) string {
+	switch {
+	case strings.HasSuffix(path, "/new"):
+		return chatRoutePath("", "new")
+	case strings.HasSuffix(path, "/updates"):
+		return chatRoutePath("", "updates")
+	case strings.HasSuffix(path, "/turns"):
+		return chatRoutePath("", "turns")
+	case strings.TrimSpace(conversationID) != "":
+		return chatRoutePath("", conversationID)
+	default:
+		return chatRoutePath("")
+	}
 }
 
 func chatClientID(r *http.Request) string {

@@ -32,7 +32,7 @@ func (s *Server) adminPrincipalDetail(w http.ResponseWriter, r *http.Request) {
 			data.SelectedPrincipal = &data.Principals[i]
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			if err := ui.AdminPage(s.metrics.Catalog(), "principal-detail", s.currentAdminRoleLabel(r), data).Render(w); err != nil {
+			if err := ui.AdminPage(s.metrics.Catalog(), "principal-detail", s.currentAdminRoleLabel(r), data, s.chatChromeOption(r)).Render(w); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 			return
@@ -62,7 +62,7 @@ func (s *Server) adminGroupDetail(w http.ResponseWriter, r *http.Request) {
 			data.SelectedGroup = &data.Groups[i]
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.WriteHeader(http.StatusOK)
-			if err := ui.AdminPage(s.metrics.Catalog(), "group-detail", s.currentAdminRoleLabel(r), data).Render(w); err != nil {
+			if err := ui.AdminPage(s.metrics.Catalog(), "group-detail", s.currentAdminRoleLabel(r), data, s.chatChromeOption(r)).Render(w); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 			return
@@ -79,7 +79,7 @@ func (s *Server) renderAdminPage(w http.ResponseWriter, r *http.Request, active 
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.AdminPage(s.metrics.Catalog(), active, s.currentAdminRoleLabel(r), data).Render(w); err != nil {
+	if err := ui.AdminPage(s.metrics.Catalog(), active, s.currentAdminRoleLabel(r), data, s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

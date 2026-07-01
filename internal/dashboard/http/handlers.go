@@ -35,6 +35,7 @@ type Handler struct {
 	Broker              *stream.Broker
 	TickerInterval      time.Duration
 	CSRFToken           func(r *nethttp.Request) string
+	ChromeDecorators    func(r *nethttp.Request) []reportui.ChromeDecorator
 }
 
 func (h Handler) Dashboard(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -85,7 +86,11 @@ func (h Handler) RenderPage(w nethttp.ResponseWriter, r *nethttp.Request, dashbo
 	if h.CSRFToken != nil {
 		csrfToken = h.CSRFToken(r)
 	}
-	if err := reportui.Page(metrics.DataDir(), clientID, csrfToken, metrics.Catalog(), reportDefinition, model, pages, activePage, initialFilters).Render(w); err != nil {
+	var chromeDecorators []reportui.ChromeDecorator
+	if h.ChromeDecorators != nil {
+		chromeDecorators = h.ChromeDecorators(r)
+	}
+	if err := reportui.Page(metrics.DataDir(), clientID, csrfToken, metrics.Catalog(), reportDefinition, model, pages, activePage, initialFilters, chromeDecorators...).Render(w); err != nil {
 		nethttp.Error(w, err.Error(), nethttp.StatusInternalServerError)
 	}
 }

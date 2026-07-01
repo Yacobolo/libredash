@@ -73,10 +73,11 @@ type AdminStorageTableSignal = uisignals.AdminStorageTableSignal
 type AdminStorageColumnSignal = uisignals.AdminStorageColumnSignal
 type AdminStorageCommand = uisignals.AdminStorageCommand
 
-func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminData) g.Node {
+func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminData, chromeOptions ...ChromeOption) g.Node {
 	title := adminPageTitle(active)
 	page := adminPageSignal(active, data)
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, "admin", roleLabel)}
+	applyChromeOptions(&chrome, chromeOptions)
 	storageSignal := page.Storage
 	signals := map[string]any{
 		"chrome":  chrome,

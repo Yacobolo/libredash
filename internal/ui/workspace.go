@@ -18,7 +18,7 @@ import (
 	h "maragu.dev/gomponents/html"
 )
 
-func WorkspacesPage(catalog dashboard.Catalog, workspaces []workspaceview.WorkspaceView, roleLabel string) g.Node {
+func WorkspacesPage(catalog dashboard.Catalog, workspaces []workspaceview.WorkspaceView, roleLabel string, chromeOptions ...ChromeOption) g.Node {
 	page := workspaceCatalogPageSignal(workspaces)
 	return workspaceRouteDocument("LibreDash Workspaces", catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspace,
 		g.El("ld-workspace-page",
@@ -27,10 +27,11 @@ func WorkspacesPage(catalog dashboard.Catalog, workspaces []workspaceview.Worksp
 			g.Attr("data-attr:page", "JSON.stringify($page)"),
 		),
 		nil,
+		chromeOptions,
 	)
 }
 
-func WorkspacePage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, assets []workspaceview.AssetView, activeType, query, roleLabel string, access WorkspaceAccessResponse, csrfToken string) g.Node {
+func WorkspacePage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, assets []workspaceview.AssetView, activeType, query, roleLabel string, access WorkspaceAccessResponse, csrfToken string, chromeOptions ...ChromeOption) g.Node {
 	page := workspacePageSignal(workspace, assets, nil, activeType, query)
 	attrs := []g.Node{
 		g.Attr("slot", "page"),
@@ -42,10 +43,11 @@ func WorkspacePage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceV
 	return workspaceRouteDocument(workspace.Title, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspace,
 		g.El("ld-workspace-page", attrs...),
 		extraSignals,
+		chromeOptions,
 	)
 }
 
-func ConnectionsPage(catalog dashboard.Catalog, workspaceID string, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeType, query, roleLabel string) g.Node {
+func ConnectionsPage(catalog dashboard.Catalog, workspaceID string, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeType, query, roleLabel string, chromeOptions ...ChromeOption) g.Node {
 	page := connectionsPageSignal(workspaceID, assets, edges, activeType, query)
 	return workspaceRouteDocument("Connections", catalog, "connections", roleLabel, page, uisignals.RouteConnections,
 		g.El("ld-connections-page",
@@ -54,6 +56,7 @@ func ConnectionsPage(catalog dashboard.Catalog, workspaceID string, assets []wor
 			g.Attr("data-attr:page", "JSON.stringify($page)"),
 		),
 		nil,
+		chromeOptions,
 	)
 }
 
@@ -420,15 +423,15 @@ func definitionFactSignals(facts []definitionFact) []uisignals.DefinitionFactSig
 	return out
 }
 
-func WorkspaceAssetPage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string) g.Node {
-	return WorkspaceAssetPageWithRefresh(catalog, workspace, asset, assets, edges, activeSection, roleLabel, AssetRefreshState{})
+func WorkspaceAssetPage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, chromeOptions ...ChromeOption) g.Node {
+	return WorkspaceAssetPageWithRefresh(catalog, workspace, asset, assets, edges, activeSection, roleLabel, AssetRefreshState{}, chromeOptions...)
 }
 
-func WorkspaceAssetPageWithRefresh(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, refresh AssetRefreshState) g.Node {
-	return WorkspaceAssetPageWithRefreshAndVersions(catalog, workspace, asset, assets, edges, activeSection, roleLabel, refresh, AssetVersionsState{})
+func WorkspaceAssetPageWithRefresh(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, refresh AssetRefreshState, chromeOptions ...ChromeOption) g.Node {
+	return WorkspaceAssetPageWithRefreshAndVersions(catalog, workspace, asset, assets, edges, activeSection, roleLabel, refresh, AssetVersionsState{}, chromeOptions...)
 }
 
-func WorkspaceAssetPageWithRefreshAndVersions(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, refresh AssetRefreshState, versions AssetVersionsState) g.Node {
+func WorkspaceAssetPageWithRefreshAndVersions(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, refresh AssetRefreshState, versions AssetVersionsState, chromeOptions ...ChromeOption) g.Node {
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 	page := workspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, refresh, versions)
@@ -446,12 +449,12 @@ func WorkspaceAssetPageWithRefreshAndVersions(catalog dashboard.Catalog, workspa
 			g.Attr("data-on:ld-refresh-materializations", "$page.refresh.status = 'running'; $page.refresh.running = true; "+postActionWithCSRFSignal(refreshPath, "$csrfToken")),
 		)
 		if activeSection == "versions" {
-			return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extraSignals, activeSection)
+			return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extraSignals, activeSection, chromeOptions)
 		}
 		extraHeadInit := ds.Init("@get('" + updatesURL + "', {openWhenHidden: true})")
-		return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extraSignals, activeSection, extraHeadInit)
+		return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extraSignals, activeSection, chromeOptions, extraHeadInit)
 	}
-	return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), nil, activeSection)
+	return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), nil, activeSection, chromeOptions)
 }
 
 func ConnectionAssetPageWithVersions(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, versions AssetVersionsState) g.Node {
@@ -462,7 +465,7 @@ func ConnectionAssetPageWithVersions(catalog dashboard.Catalog, workspace worksp
 		g.Attr("slot", "page"),
 		g.Attr("page", jsonString(page)),
 		g.Attr("data-attr:page", "JSON.stringify($page)"),
-	), nil, activeSection)
+	), nil, activeSection, nil)
 }
 
 func ConnectionSourceAssetPageWithVersions(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, connection workspaceview.AssetView, source workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, versions AssetVersionsState) g.Node {
@@ -473,10 +476,10 @@ func ConnectionSourceAssetPageWithVersions(catalog dashboard.Catalog, workspace 
 		g.Attr("slot", "page"),
 		g.Attr("page", jsonString(page)),
 		g.Attr("data-attr:page", "JSON.stringify($page)"),
-	), nil, activeSection)
+	), nil, activeSection, nil)
 }
 
-func workspaceAssetRouteDocument(asset workspaceview.AssetView, catalog dashboard.Catalog, active, roleLabel string, page any, routeKind uisignals.RouteKind, routeRoot g.Node, extraSignals map[string]any, activeSection string, bodyExtras ...g.Node) g.Node {
+func workspaceAssetRouteDocument(asset workspaceview.AssetView, catalog dashboard.Catalog, active, roleLabel string, page any, routeKind uisignals.RouteKind, routeRoot g.Node, extraSignals map[string]any, activeSection string, chromeOptions []ChromeOption, bodyExtras ...g.Node) g.Node {
 	extraHead := []g.Node{}
 	if activeSection == "lineage" {
 		extraHead = append(extraHead,
@@ -490,7 +493,7 @@ func workspaceAssetRouteDocument(asset workspaceview.AssetView, catalog dashboar
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/semantic-model-graph.js"))),
 		)
 	}
-	return workspaceRouteDocumentWithBodyExtras(asset.Title, catalog, active, roleLabel, page, routeKind, routeRoot, extraSignals, bodyExtras, extraHead...)
+	return workspaceRouteDocumentWithBodyExtras(asset.Title, catalog, active, roleLabel, page, routeKind, routeRoot, extraSignals, bodyExtras, chromeOptions, extraHead...)
 }
 
 func ConnectionAssetPage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string) g.Node {
@@ -510,6 +513,7 @@ func ConnectionAssetPage(catalog dashboard.Catalog, workspace workspaceview.Work
 			g.Attr("page", jsonString(page)),
 			g.Attr("data-attr:page", "JSON.stringify($page)"),
 		),
+		nil,
 		nil,
 		extraHead...,
 	)
@@ -532,6 +536,7 @@ func ConnectionSourceAssetPage(catalog dashboard.Catalog, workspace workspacevie
 			g.Attr("page", jsonString(page)),
 			g.Attr("data-attr:page", "JSON.stringify($page)"),
 		),
+		nil,
 		nil,
 		extraHead...,
 	)
@@ -560,15 +565,17 @@ func WorkspacePermissionsPage(catalog dashboard.Catalog, workspace workspaceview
 	return workspaceRouteDocument("Workspace permissions", catalog, "settings", roleLabel, page, uisignals.RouteWorkspace,
 		g.El("ld-workspace-page", attrs...),
 		extraSignals,
+		nil,
 	)
 }
 
-func workspaceRouteDocument(title string, catalog dashboard.Catalog, active, roleLabel string, page any, routeKind uisignals.RouteKind, routeRoot g.Node, extraSignals map[string]any, extraHead ...g.Node) g.Node {
-	return workspaceRouteDocumentWithBodyExtras(title, catalog, active, roleLabel, page, routeKind, routeRoot, extraSignals, nil, extraHead...)
+func workspaceRouteDocument(title string, catalog dashboard.Catalog, active, roleLabel string, page any, routeKind uisignals.RouteKind, routeRoot g.Node, extraSignals map[string]any, chromeOptions []ChromeOption, extraHead ...g.Node) g.Node {
+	return workspaceRouteDocumentWithBodyExtras(title, catalog, active, roleLabel, page, routeKind, routeRoot, extraSignals, nil, chromeOptions, extraHead...)
 }
 
-func workspaceRouteDocumentWithBodyExtras(title string, catalog dashboard.Catalog, active, roleLabel string, page any, routeKind uisignals.RouteKind, routeRoot g.Node, extraSignals map[string]any, bodyExtras []g.Node, extraHead ...g.Node) g.Node {
+func workspaceRouteDocumentWithBodyExtras(title string, catalog dashboard.Catalog, active, roleLabel string, page any, routeKind uisignals.RouteKind, routeRoot g.Node, extraSignals map[string]any, bodyExtras []g.Node, chromeOptions []ChromeOption, extraHead ...g.Node) g.Node {
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, active, roleLabel)}
+	applyChromeOptions(&chrome, chromeOptions)
 	signals := map[string]any{
 		"chrome":  chrome,
 		"page":    page,

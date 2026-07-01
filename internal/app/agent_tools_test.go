@@ -79,8 +79,8 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 	if err := json.Unmarshal(names["list_assets"].InputSchema, &schema); err != nil {
 		t.Fatalf("decode list_assets schema: %v", err)
 	}
-	if _, ok := schema.Properties["workspace"]; ok {
-		t.Fatalf("workspace should be injected from agent scope, not model arguments: %s", names["list_assets"].InputSchema)
+	if _, ok := schema.Properties["workspace"]; !ok {
+		t.Fatalf("workspace should be available as an optional tool target: %s", names["list_assets"].InputSchema)
 	}
 	for _, want := range []string{"type", "q", "limit", "pageToken"} {
 		if _, ok := schema.Properties[want]; !ok {
@@ -90,8 +90,8 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 	if err := json.Unmarshal(names["search_workspace"].InputSchema, &schema); err != nil {
 		t.Fatalf("decode search_workspace schema: %v", err)
 	}
-	if _, ok := schema.Properties["workspace"]; ok {
-		t.Fatalf("workspace should be injected from agent scope, not model arguments: %s", names["search_workspace"].InputSchema)
+	if _, ok := schema.Properties["workspace"]; !ok {
+		t.Fatalf("workspace should be available as an optional tool target: %s", names["search_workspace"].InputSchema)
 	}
 	for _, want := range []string{"q", "types", "limit", "pageToken"} {
 		if _, ok := schema.Properties[want]; !ok {
