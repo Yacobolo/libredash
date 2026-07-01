@@ -8,14 +8,8 @@ PORT_FILE="$TMP_DIR/dev-server.port"
 LOG_FILE="$TMP_DIR/dev-server.log"
 PORT_START="${LIBREDASH_DEV_PORT_START:-8100}"
 PORT_COUNT="${LIBREDASH_DEV_PORT_COUNT:-100}"
-START_TIMEOUT_SECONDS="${LIBREDASH_DEV_START_TIMEOUT_SECONDS:-120}"
 
 mkdir -p "$TMP_DIR"
-
-if ! [[ "$START_TIMEOUT_SECONDS" =~ ^[0-9]+$ ]] || (( START_TIMEOUT_SECONDS < 1 )); then
-  echo "LIBREDASH_DEV_START_TIMEOUT_SECONDS must be a positive integer" >&2
-  exit 2
-fi
 
 usage() {
   echo "Usage: $0 start|stop|status|logs"
@@ -208,22 +202,6 @@ runner_name() {
   fi
 }
 
-wait_for_port() {
-  local port="$1"
-  local pid="$2"
-  local attempts=$((START_TIMEOUT_SECONDS * 4))
-  for (( attempt = 0; attempt < attempts; attempt++ )); do
-    if [[ -n "$(port_pids "$port")" ]]; then
-      return 0
-    fi
-    if ! is_alive "$pid"; then
-      return 1
-    fi
-    sleep 0.25
-  done
-  return 1
-}
-
 start() {
   if [[ "${LIBREDASH_DEV_RESTART:-}" != "1" ]]; then
     local existing_pid
@@ -247,47 +225,28 @@ start() {
   local port
   port="$(ensure_port "$preferred")"
   echo "$port" > "$PORT_FILE"
-  : > "$LOG_FILE"
+  rm -f "$PID_FILE"
 
   local runner
   runner="$(runner_name)"
   echo "Starting LibreDash on http://localhost:$port"
-  echo "Logs: $LOG_FILE"
   if [[ "$runner" == "air" ]]; then
     echo "Runner: air"
   else
     echo "Runner: go run (install air for hot reload)"
   fi
+  echo "Press Ctrl-C to stop."
+
+  cd "$ROOT"
+  export PORT="$port"
+  export LIBREDASH_ADDR=":$port"
+  export LIBREDASH_DEV_WORKTREE="$ROOT"
 
   if [[ "$runner" == "air" ]]; then
-    (
-      cd "$ROOT"
-      export PORT="$port"
-      export LIBREDASH_ADDR=":$port"
-      export LIBREDASH_DEV_WORKTREE="$ROOT"
-      exec nohup air -c .air.toml
-    ) </dev/null >> "$LOG_FILE" 2>&1 &
+    exec air -c .air.toml
   else
-    (
-      cd "$ROOT"
-      export PORT="$port"
-      export LIBREDASH_ADDR=":$port"
-      export LIBREDASH_DEV_WORKTREE="$ROOT"
-      exec nohup go run ./cmd/libredash
-    ) </dev/null >> "$LOG_FILE" 2>&1 &
+    exec go run ./cmd/libredash
   fi
-
-  local pid=$!
-  echo "$pid" > "$PID_FILE"
-  if ! wait_for_port "$port" "$pid"; then
-    echo "LibreDash dev server did not start on port $port. Recent logs:" >&2
-    tail -n 80 "$LOG_FILE" >&2 || true
-    rm -f "$PID_FILE"
-    exit 1
-  fi
-
-  echo "PID: $pid"
-  echo "URL: http://localhost:$port"
 }
 
 stop() {
