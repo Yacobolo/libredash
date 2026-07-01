@@ -263,11 +263,19 @@ test('admin agent route renders prompt editor and emits save command', async () 
       const editorRoot = editor.shadowRoot
       await customElements.whenDefined('ld-code-editor')
       await waitFor(() => Boolean(editorRoot.querySelector('ld-code-editor')))
-      const previewFontSize = getComputedStyle(editorRoot.querySelector('.markdown-view')!).fontSize
+      const controlRow = editorRoot.querySelector('.prompt-control-row')!
+      const actions = editorRoot.querySelector('.prompt-actions')!
+      const body = editorRoot.querySelector('.prompt-body')!
+      const markdownView = editorRoot.querySelector('ld-markdown-view') as any
       const preSwitchState = {
         hasCodeEditor: Boolean(editorRoot.querySelector('ld-code-editor')),
+        hasMarkdownView: Boolean(markdownView),
+        markdownViewCompact: markdownView?.compact,
+        markdownValue: markdownView?.value,
         hasLoading: Boolean(editorRoot.querySelector('.editor-loading')),
         hasTextarea: Boolean(editorRoot.querySelector('textarea')),
+        hasSaveButton: Boolean(editorRoot.querySelector('.save-button')),
+        status: editorRoot.querySelector('.prompt-status')?.textContent?.trim() ?? '',
       }
       const editButton = editorRoot.querySelector<HTMLButtonElement>('.mode-toggle button[aria-label="Edit"]')!
       editButton.click()
@@ -290,6 +298,12 @@ test('admin agent route renders prompt editor and emits save command', async () 
         detail: { value: 'Updated prompt' },
       }))
       await codeEditor.updateComplete
+      await editor.updateComplete
+      const dirtyState = {
+        hasSaveButton: Boolean(editorRoot.querySelector('.save-button')),
+        saveText: editorRoot.querySelector('.save-button')?.textContent?.trim(),
+        status: editorRoot.querySelector('.prompt-status')?.textContent?.trim(),
+      }
       editorRoot.querySelector<HTMLButtonElement>('.save-button')?.click()
       await editor.updateComplete
       return {
@@ -298,11 +312,14 @@ test('admin agent route renders prompt editor and emits save command', async () 
         hasCodeEditor: Boolean(codeEditor),
         preSwitchState,
         immediateSwitchState,
-        previewFontSize,
+        actionsInControlRow: actions.parentElement === controlRow,
+        actionsBeforeBody: Boolean(actions.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING),
+        actionsAfterBody: Boolean(actions.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_PRECEDING),
+        dirtyState,
         editorFontSize,
         seededEditorValue,
         editorValue: codeEditor.value,
-        saveText: editorRoot.querySelector('.save-button')?.textContent?.trim(),
+        hasSaveAfterSave: Boolean(editorRoot.querySelector('.save-button')),
         activeMode: editorRoot.querySelector('.mode-toggle button[aria-pressed="true"]')?.getAttribute('aria-label'),
         toolText: root.textContent,
         status: editorRoot.querySelector('.prompt-status')?.textContent?.trim(),
@@ -313,13 +330,25 @@ test('admin agent route renders prompt editor and emits save command', async () 
     expect(state.title).toBe('Agent')
     expect(state.hasEditor).toBe(true)
     expect(state.hasCodeEditor).toBe(true)
-    expect(state.preSwitchState).toEqual({ hasCodeEditor: true, hasLoading: false, hasTextarea: false })
+    expect(state.preSwitchState).toEqual({
+      hasCodeEditor: true,
+      hasMarkdownView: true,
+      markdownViewCompact: true,
+      markdownValue: 'Signal prompt',
+      hasLoading: false,
+      hasTextarea: false,
+      hasSaveButton: false,
+      status: '',
+    })
     expect(state.immediateSwitchState).toEqual({ hasCodeEditor: true, hasLoading: false, hasTextarea: false })
-    expect(state.previewFontSize).toBe('12px')
+    expect(state.actionsInControlRow).toBe(true)
+    expect(state.actionsBeforeBody).toBe(true)
+    expect(state.actionsAfterBody).toBe(false)
     expect(state.editorFontSize).toBe('12px')
     expect(state.seededEditorValue).toBe('Signal prompt')
     expect(state.editorValue).toBe('Updated prompt')
-    expect(state.saveText).toBe('Save')
+    expect(state.dirtyState).toEqual({ hasSaveButton: true, saveText: 'Save', status: 'Unsaved' })
+    expect(state.hasSaveAfterSave).toBe(false)
     expect(state.activeMode).toBe('Edit')
     expect(state.toolText ?? '').toMatch(/query_visual/)
     expect(state.status).toBe('Saved')
@@ -385,18 +414,17 @@ test('admin agent prompt editor disables saves for read-only users', async () =>
       await editor.updateComplete
       const codeEditor = editorRoot.querySelector('ld-code-editor') as any
       await codeEditor.updateComplete
-      const saveButton = editorRoot.querySelector<HTMLButtonElement>('.save-button')!
-      saveButton.click()
+      const saveButton = editorRoot.querySelector<HTMLButtonElement>('.save-button')
       return {
         codeEditorDisabled: codeEditor.disabled,
-        saveDisabled: saveButton.disabled,
+        hasSaveButton: Boolean(saveButton),
         status: editorRoot.querySelector('.prompt-status')?.textContent?.trim(),
         command,
       }
     })
 
     expect(state.codeEditorDisabled).toBe(true)
-    expect(state.saveDisabled).toBe(true)
+    expect(state.hasSaveButton).toBe(false)
     expect(state.status).toBe('Read-only')
     expect(state.command).toBeNull()
   } finally {
@@ -438,6 +466,64 @@ test('agent prompt editor seeds edit mode from value attribute', async () => {
 
     expect(state.activeMode).toBe('Edit')
     expect(state.codeEditorValue).toBe('Attribute prompt')
+  } finally {
+    await page.close()
+  }
+})
+
+test('agent prompt preview delegates to compact markdown view', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-agent-prompt-editor') && customElements.get('ld-markdown-view'))
+
+    const state = await page.evaluate(async () => {
+      const element = document.createElement('ld-agent-prompt-editor') as any
+      element.value = [
+        '# Hello darkness',
+        '',
+        'A paragraph with **strong**, _emphasis_, ~~strike~~, `inline code`, and https://example.com.',
+        '',
+        '## Section',
+        '',
+        '- One',
+        '- Two',
+        '  - Nested',
+        '',
+        '> Quoted guidance',
+        '',
+        '---',
+        '',
+        '| Name | Value |',
+        '| --- | --- |',
+        '| Tool | Enabled |',
+        '',
+        '```json',
+        '{"enabled": true}',
+        '```',
+        '',
+        '![Alt text](https://example.com/image.png)',
+      ].join('\n')
+      document.body.append(element)
+      await element.updateComplete
+      const root = element.shadowRoot
+      const markdownView = root.querySelector('ld-markdown-view') as any
+      await markdownView.updateComplete
+      const h1 = markdownView.shadowRoot.querySelector('h1')!
+      return {
+        hasMarkdownView: Boolean(markdownView),
+        compact: markdownView.compact,
+        value: markdownView.value,
+        emptyText: markdownView.emptyText,
+        h1Text: h1.textContent,
+      }
+    })
+
+    expect(state.hasMarkdownView).toBe(true)
+    expect(state.compact).toBe(true)
+    expect(state.value).toMatch(/^# Hello darkness/)
+    expect(state.emptyText).toBe('No system prompt configured.')
+    expect(state.h1Text).toBe('Hello darkness')
   } finally {
     await page.close()
   }
@@ -590,7 +676,7 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-bg-accent: #0969da; --ld-bg-accent-muted: #ddf4ff; --ld-sidebar-bg: #f1f3f5; --ld-report-rail-bg: #ffffff; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-accent: #0969da; --ld-fg-link: #0969da; --ld-fg-on-accent: #fff; --ld-icon-muted: #57606a; --ld-line-muted: #d8dee4; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-radius-default: 6px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; }
+          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-bg-accent: #0969da; --ld-bg-accent-muted: #ddf4ff; --ld-sidebar-bg: #f1f3f5; --ld-report-rail-bg: #ffffff; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-accent: #0969da; --ld-fg-link: #0969da; --ld-fg-on-accent: #fff; --ld-icon-muted: #57606a; --ld-line-muted: #d8dee4; --ld-border-width: 1px; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-radius-default: 6px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-body-md: 16px; --ld-font-size-title-sm: 18px; --ld-font-size-title-md: 22px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; --ld-line-height-normal: 1.5; }
           ld-admin-page { min-height: 720px; }
         </style>
       </head>

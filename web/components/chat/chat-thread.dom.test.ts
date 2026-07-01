@@ -39,6 +39,55 @@ beforeAll(async () => {
             :root {
               --ld-chart-surface: rgb(1, 2, 3);
               --ld-border-default: 2px solid rgb(4, 5, 6);
+              --fontStack-system: system-ui;
+              --fontStack-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+              --ld-bg-page: #fff;
+              --ld-bg-panel: #fff;
+              --ld-bg-panel-muted: #f6f8fa;
+              --ld-bg-control: #f6f8fa;
+              --ld-fg-default: #24292f;
+              --ld-fg-muted: #57606a;
+              --ld-fg-accent: #0969da;
+              --ld-line-muted: #d8dee4;
+              --ld-border-width: 1px;
+              --ld-border-muted: 1px solid #d8dee4;
+              --ld-radius-default: 6px;
+              --base-size-4: 4px;
+              --base-size-8: 8px;
+              --base-size-12: 12px;
+              --base-size-16: 16px;
+              --base-size-20: 20px;
+              --ld-space-sm: 8px;
+              --ld-font-size-caption: 12px;
+              --ld-font-size-body-sm: 14px;
+              --ld-font-size-body-md: 16px;
+              --ld-font-size-title-sm: 18px;
+              --ld-font-size-title-md: 22px;
+              --ld-font-weight-strong: 600;
+              --ld-line-height-compact: 1.3;
+              --ld-line-height-normal: 1.5;
+              --ld-line-height-relaxed: 1.55;
+              --ld-chat-thread-padding: 16px;
+              --ld-chat-stack-width: 760px;
+              --ld-chat-stack-gap: 16px;
+              --ld-chat-message-width: 760px;
+              --ld-chat-message-gap: 8px;
+              --ld-chat-agent-item-gap: 8px;
+              --ld-chat-empty-min-height: 180px;
+              --ld-chat-bubble-padding-block: 12px;
+              --ld-chat-bubble-padding-inline: 16px;
+              --ld-chat-markdown-block-gap: 10px;
+              --ld-chat-markdown-list-indent: 20px;
+              --ld-chat-markdown-list-item-gap: 2px;
+              --ld-chat-code-radius: 4px;
+              --ld-chat-code-padding-block: 1px;
+              --ld-chat-code-padding-inline: 4px;
+              --ld-chat-code-font-scale: 0.92em;
+              --ld-chat-pre-padding-block: 9px;
+              --ld-chat-pre-padding-inline: 10px;
+              --ld-chat-quote-border-width: 2px;
+              --ld-chat-link-underline-thickness: 1px;
+              --ld-chat-link-underline-offset: 2px;
             }
           </style>
           <script type="module" src="/chat-under-test.js"></script>
@@ -58,6 +107,36 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+})
+
+test('chat thread preserves plain user message text without template whitespace', async () => {
+  const page = await browser.newPage()
+  await page.goto(baseURL)
+  await page.evaluate(async () => {
+    await customElements.whenDefined('ld-chat-thread')
+    const thread = document.querySelector('ld-chat-thread') as any
+    thread.transcript = [{
+      id: 'user-1',
+      kind: 'user',
+      text: '# nice!',
+    }]
+    await thread.updateComplete
+  })
+
+  const state = await page.locator('ld-chat-thread').evaluate((element: any) => {
+    const bubble = element.shadowRoot.querySelector('.message.user .bubble.plain') as HTMLElement
+    const rect = bubble.getBoundingClientRect()
+    return {
+      text: bubble.textContent,
+      width: Math.round(rect.width),
+      whiteSpace: getComputedStyle(bubble).whiteSpace,
+    }
+  })
+
+  expect(state.text).toBe('# nice!')
+  expect(state.whiteSpace).toBe('pre-wrap')
+  expect(state.width).toBeLessThan(140)
+  await page.close()
 })
 
 test('chat thread renders visual artifacts with dashboard web components', async () => {
@@ -236,6 +315,50 @@ test('chat thread renders visual artifacts with dashboard web components', async
   })
   const restored = await page.locator('ld-chat-thread').evaluate((element: any) => Boolean(element.shadowRoot.querySelector('ld-visual-artifact[artifact-id="agent_chart_1"]')?.shadowRoot?.querySelector('ld-echart[visual-id="agent_chart_1"]')))
   expect(restored).toBe(true)
+  await page.close()
+})
+
+test('chat thread renders assistant markdown through shared markdown view', async () => {
+  const page = await browser.newPage()
+  await page.goto(baseURL)
+  await page.evaluate(async () => {
+    await customElements.whenDefined('ld-chat-thread')
+    await customElements.whenDefined('ld-markdown-view')
+    const thread = document.querySelector('ld-chat-thread') as any
+    thread.transcript = [{
+      id: 'assistant-1',
+      kind: 'assistant',
+      markdown: [
+        '# Assistant heading',
+        '',
+        'A paragraph with **strong** text and `code`.',
+        '',
+        '- One',
+        '- Two',
+      ].join('\n'),
+    }]
+    await thread.updateComplete
+  })
+
+  const state = await page.locator('ld-chat-thread').evaluate(async (element: any) => {
+    const markdownView = element.shadowRoot.querySelector('ld-markdown-view') as any
+    await markdownView.updateComplete
+    return {
+      hasMarkdownView: Boolean(markdownView),
+      value: markdownView.value,
+      h1Text: markdownView.shadowRoot.querySelector('h1')?.textContent,
+      hasStrong: Boolean(markdownView.shadowRoot.querySelector('strong')),
+      hasCode: Boolean(markdownView.shadowRoot.querySelector('code')),
+      hasList: Boolean(markdownView.shadowRoot.querySelector('ul')),
+    }
+  })
+
+  expect(state.hasMarkdownView).toBe(true)
+  expect(state.value).toMatch(/^# Assistant heading/)
+  expect(state.h1Text).toBe('Assistant heading')
+  expect(state.hasStrong).toBe(true)
+  expect(state.hasCode).toBe(true)
+  expect(state.hasList).toBe(true)
   await page.close()
 })
 

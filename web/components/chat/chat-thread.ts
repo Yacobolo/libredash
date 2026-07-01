@@ -1,11 +1,9 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { property, state } from 'lit/decorators.js'
-import { unsafeHTML } from 'lit/directives/unsafe-html.js'
-import DOMPurify from 'dompurify'
-import MarkdownIt from 'markdown-it'
 import { Box, ChevronRight, FileText, LayoutDashboard, LayoutPanelTop, Table2, Wrench, type IconNode } from 'lucide'
 import type { ChatArtifactSignal, ChatStatus, ChatTranscriptItemSignal, DashboardTable, DashboardVisual } from '../../generated/signals'
 import { lucideIcon } from '../shared/lucide-icons'
+import '../shared/markdown-view'
 import '../shared/visual-artifact'
 
 type ChatRenderUnit =
@@ -18,12 +16,6 @@ type LegacyArtifact = ChatArtifactSignal & {
     tables?: Record<string, DashboardTable>
   }
 }
-
-const markdown = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: false,
-})
 
 const jsonConverter = <T,>(fallback: T) => ({
   fromAttribute(value: string | null): T {
@@ -149,10 +141,6 @@ class ChatThread extends LitElement {
       white-space: pre-wrap;
     }
 
-    .bubble.markdown {
-      display: block;
-    }
-
     .agent-turn {
       display: grid;
       max-width: min(var(--ld-chat-message-width), 100%);
@@ -164,62 +152,7 @@ class ChatThread extends LitElement {
     }
 
     .agent-markdown {
-      font-size: var(--ld-font-size-body-sm);
-      line-height: var(--ld-line-height-relaxed);
-      overflow-wrap: anywhere;
-    }
-
-    .markdown :is(p, ul, ol, pre, blockquote) {
-      margin-block: 0 var(--ld-chat-markdown-block-gap);
-    }
-
-    .markdown :is(p, ul, ol, pre, blockquote):last-child {
-      margin-bottom: 0;
-    }
-
-    .markdown ul,
-    .markdown ol {
-      padding-left: var(--ld-chat-markdown-list-indent);
-    }
-
-    .markdown li + li {
-      margin-top: var(--ld-chat-markdown-list-item-gap);
-    }
-
-    .markdown code {
-      border-radius: var(--ld-chat-code-radius);
-      background: var(--ld-bg-control);
-      padding: var(--ld-chat-code-padding-block) var(--ld-chat-code-padding-inline);
-      font-family: var(--fontStack-monospace);
-      font-size: var(--ld-chat-code-font-scale);
-    }
-
-    .markdown pre {
-      max-width: 100%;
-      overflow: auto;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      padding: var(--ld-chat-pre-padding-block) var(--ld-chat-pre-padding-inline);
-    }
-
-    .markdown pre code {
-      border-radius: 0;
-      background: transparent;
-      padding: 0;
-      font-size: var(--ld-font-size-caption);
-    }
-
-    .markdown blockquote {
-      border-left: var(--ld-chat-quote-border-width) solid var(--ld-line-muted);
-      padding-left: var(--ld-chat-bubble-padding-block);
-      color: var(--ld-fg-muted);
-    }
-
-    .markdown a {
-      color: var(--ld-fg-accent);
-      text-decoration-thickness: var(--ld-chat-link-underline-thickness);
-      text-underline-offset: var(--ld-chat-link-underline-offset);
+      display: block;
     }
 
     .user .bubble {
@@ -529,11 +462,12 @@ class ChatThread extends LitElement {
   }
 
   private renderBubble(content: string, renderMarkdown: boolean) {
-    return html`<div class=${['bubble', renderMarkdown ? 'markdown' : 'plain'].join(' ')}>${renderMarkdown ? unsafeHTML(renderMarkdownHTML(content)) : content}</div>`
+    const className = ['bubble', renderMarkdown ? 'markdown' : 'plain'].join(' ')
+    return html`<div class=${className}>${renderMarkdown ? html`<ld-markdown-view .value=${content}></ld-markdown-view>` : content}</div>`
   }
 
   private renderAssistantContent(content: string) {
-    return html`<div class="agent-markdown markdown">${unsafeHTML(renderMarkdownHTML(content))}</div>`
+    return html`<ld-markdown-view class="agent-markdown" .value=${content}></ld-markdown-view>`
   }
 
   private renderTool(item: ChatTranscriptItemSignal) {
@@ -629,12 +563,6 @@ function groupTranscript(transcript: ChatTranscriptItemSignal[]): ChatRenderUnit
   }
   flushAgent()
   return units
-}
-
-function renderMarkdownHTML(value: string): string {
-  return DOMPurify.sanitize(markdown.render(value), {
-    USE_PROFILES: { html: true },
-  })
 }
 
 function toolCallLabel(item: ChatTranscriptItemSignal): string {

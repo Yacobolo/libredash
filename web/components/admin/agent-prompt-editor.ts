@@ -1,17 +1,9 @@
 import { LitElement, css, html, nothing, type PropertyValues } from 'lit'
 import { property, state } from 'lit/decorators.js'
-import { unsafeHTML } from 'lit/directives/unsafe-html.js'
-import DOMPurify from 'dompurify'
-import MarkdownIt from 'markdown-it'
-import { Eye, SquarePen } from 'lucide'
+import { Eye, Save, SquarePen } from 'lucide'
 import { lucideIcon } from '../shared/lucide-icons'
 import '../shared/code-editor'
-
-const markdown = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: false,
-})
+import '../shared/markdown-view'
 
 type PromptMode = 'preview' | 'edit'
 
@@ -43,14 +35,6 @@ class AgentPromptEditor extends LitElement {
       background: var(--ld-bg-panel);
     }
 
-    .prompt-actions {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--base-size-8);
-      padding: var(--base-size-12);
-    }
-
     .prompt-status {
       color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-caption);
@@ -60,8 +44,25 @@ class AgentPromptEditor extends LitElement {
 
     .prompt-control-row {
       display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--base-size-8);
       justify-content: flex-end;
-      padding: var(--base-size-8) var(--base-size-8) 0;
+      padding: var(--base-size-8);
+    }
+
+    .prompt-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: var(--base-size-8);
+    }
+
+    .prompt-primary-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--base-size-8);
     }
 
     .mode-toggle {
@@ -113,20 +114,16 @@ class AgentPromptEditor extends LitElement {
     }
 
     ld-code-editor,
-    .markdown-view {
+    ld-markdown-view {
       box-sizing: border-box;
       width: 100%;
       min-height: 22rem;
     }
 
-    .markdown-view {
-      border: 0;
-      border-radius: 0;
-      background: var(--ld-bg-panel);
+    ld-markdown-view {
+      max-height: 42rem;
+      overflow: auto;
       padding: var(--base-size-16);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-agent-prompt-font-size);
-      line-height: var(--ld-agent-prompt-line-height);
     }
 
     ld-code-editor {
@@ -146,94 +143,10 @@ class AgentPromptEditor extends LitElement {
       pointer-events: none;
     }
 
-    .markdown-view {
-      max-height: 42rem;
-      overflow: auto;
-      overflow-wrap: anywhere;
-    }
-
-    .markdown-view :is(h1, h2, h3, h4, p, ul, ol, pre, blockquote) {
-      margin-block: 0 var(--base-size-12);
-    }
-
-    .markdown-view :is(h1, h2, h3, h4, p, ul, ol, pre, blockquote):last-child {
-      margin-bottom: 0;
-    }
-
-    .markdown-view h1,
-    .markdown-view h2,
-    .markdown-view h3,
-    .markdown-view h4 {
-      font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
-    }
-
-    .markdown-view h1 {
-      font-size: var(--ld-font-size-body-sm);
-    }
-
-    .markdown-view h2,
-    .markdown-view h3,
-    .markdown-view h4 {
-      font-size: var(--ld-agent-prompt-font-size);
-    }
-
-    .markdown-view ul,
-    .markdown-view ol {
-      padding-left: 1.35rem;
-    }
-
-    .markdown-view li + li {
-      margin-top: var(--base-size-4);
-    }
-
-    .markdown-view code {
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      padding: 0.1rem 0.25rem;
-      font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-      font-size: inherit;
-    }
-
-    .markdown-view pre {
-      max-width: 100%;
-      overflow: auto;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      padding: var(--base-size-12);
-    }
-
-    .markdown-view pre code {
-      border-radius: 0;
-      background: transparent;
-      padding: 0;
-      font-size: inherit;
-    }
-
-    .markdown-view blockquote {
-      border-left: 3px solid var(--ld-line-muted);
-      padding-left: var(--base-size-12);
-      color: var(--ld-fg-muted);
-    }
-
-    .markdown-view a {
-      color: var(--ld-fg-accent);
-      text-underline-offset: 0.15em;
-    }
-
-    .empty-preview {
-      margin: 0;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-body-sm);
-    }
-
-    .prompt-actions {
-      border-top: var(--ld-border-muted);
-      justify-content: flex-start;
-    }
-
     .save-button {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--base-size-6);
       background: var(--ld-bg-accent);
       padding: var(--base-size-6) var(--base-size-12);
       color: var(--ld-fg-on-accent);
@@ -247,6 +160,14 @@ class AgentPromptEditor extends LitElement {
     @media (max-width: 640px) {
       .prompt-control-row {
         padding-inline: var(--base-size-8);
+      }
+
+      .prompt-actions {
+        width: 100%;
+      }
+
+      .prompt-status {
+        margin-right: auto;
       }
     }
   `
@@ -274,12 +195,25 @@ class AgentPromptEditor extends LitElement {
   render() {
     const prompt = this.currentPrompt
     const canSave = !this.disabled && this.dirty && prompt.trim().length > 0
+    const status = this.statusLabel
+    const showSave = canSave
     return html`
       <div class="prompt-editor">
         <div class="prompt-control-row">
-          <div class="mode-toggle" role="group" aria-label="System prompt view mode">
-            ${this.renderModeButton('preview')}
-            ${this.renderModeButton('edit')}
+          <div class="prompt-actions">
+            <div class="prompt-primary-actions">
+              ${status ? html`<span class="prompt-status">${status}</span>` : nothing}
+              ${showSave ? html`
+                <button class="save-button" type="button" @click=${this.savePrompt}>
+                  ${lucideIcon(Save, { size: 14, strokeWidth: 2 })}
+                  <span>Save</span>
+                </button>
+              ` : nothing}
+            </div>
+            <div class="mode-toggle" role="group" aria-label="System prompt view mode">
+              ${this.renderModeButton('preview')}
+              ${this.renderModeButton('edit')}
+            </div>
           </div>
         </div>
         <div class="prompt-body">
@@ -297,10 +231,6 @@ class AgentPromptEditor extends LitElement {
           >
             ${this.renderEditor(prompt)}
           </div>
-        </div>
-        <div class="prompt-actions">
-          <button class="save-button" type="button" ?disabled=${!canSave} @click=${this.savePrompt}>Save</button>
-          <span class="prompt-status">${this.status || (this.disabled ? 'Read-only' : nothing)}</span>
         </div>
       </div>
     `
@@ -337,17 +267,13 @@ class AgentPromptEditor extends LitElement {
   }
 
   private renderPreview(prompt: string) {
-    const trimmed = prompt.trim()
-    if (!trimmed) {
-      return html`<div class="markdown-view"><p class="empty-preview">No system prompt configured.</p></div>`
-    }
-    return html`<article class="markdown-view">${unsafeHTML(renderMarkdownHTML(trimmed))}</article>`
+    return html`<ld-markdown-view compact .value=${prompt} emptyText="No system prompt configured."></ld-markdown-view>`
   }
 
   private updateDraftFromCodeEditor(event: CustomEvent<{ value: string }>): void {
     this.draft = event.detail.value
     this.dirty = true
-    this.status = 'Unsaved changes'
+    this.status = 'unsaved'
   }
 
   private savePrompt(): void {
@@ -359,7 +285,14 @@ class AgentPromptEditor extends LitElement {
       detail: { systemPrompt },
     }))
     this.dirty = false
-    this.status = 'Saved'
+    this.status = 'saved'
+  }
+
+  private get statusLabel(): string {
+    if (this.disabled) return 'Read-only'
+    if (this.dirty) return 'Unsaved'
+    if (this.status === 'saved' && this.mode === 'edit') return 'Saved'
+    return ''
   }
 
   private get promptSource(): string {
@@ -380,12 +313,6 @@ class AgentPromptEditor extends LitElement {
     this.draft = value
     this.draftInitialized = true
   }
-}
-
-function renderMarkdownHTML(value: string): string {
-  return DOMPurify.sanitize(markdown.render(value), {
-    USE_PROFILES: { html: true },
-  })
 }
 
 if (!customElements.get('ld-agent-prompt-editor')) customElements.define('ld-agent-prompt-editor', AgentPromptEditor)
