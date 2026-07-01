@@ -18,6 +18,7 @@
     "test:chat-thread": "playwright install chromium && bun scripts/build_test_assets.ts chat-thread && bun test web/components/chat/chat-thread.dom.test.ts",
     "test:workspace-page": "playwright install chromium && bun scripts/build_test_assets.ts workspace-page && bun test web/components/workspace/workspace-page.dom.test.ts",
     "test:admin-page": "playwright install chromium && bun scripts/build_test_assets.ts admin-page && bun test web/components/admin/admin-page.dom.test.ts",
+    "test:code-editor": "playwright install chromium && bun scripts/build_test_assets.ts code-editor && bun test web/components/shared/code-editor.dom.test.ts",
     "test:login-page": "playwright install chromium && bun scripts/build_test_assets.ts login-page && bun test web/components/login/login-page.dom.test.ts",
     "test:record-table": "playwright install chromium && bun scripts/build_test_assets.ts record-table && bun test web/components/shared/record-table.dom.test.ts",
     "test:asset-lineage": "playwright install chromium && bun scripts/build_test_assets.ts asset-lineage && bun test web/components/shared/asset-lineage-graph.dom.test.ts",
@@ -43,11 +44,13 @@
     "tailwindcss": "4.3.1"
   },
   "dependencies": {
+    "@shikijs/monaco": "^4.3.0",
     "dompurify": "^3.4.11",
     "lucide": "^1.21.0",
     "markdown-it": "^14.2.0",
+    "monaco-editor-core": "^0.55.1",
     "p5": "^1.11.13",
-    "shiki": "^4.2.0"
+    "shiki": "^4.3.0"
   },
   "trustedDependencies": [
     "@parcel/watcher"

@@ -45,6 +45,10 @@ func (s *Server) adminGroups(w http.ResponseWriter, r *http.Request) {
 	s.renderAdminPage(w, r, "groups")
 }
 
+func (s *Server) adminAgent(w http.ResponseWriter, r *http.Request) {
+	s.renderAdminPage(w, r, "agent")
+}
+
 func (s *Server) adminStorage(w http.ResponseWriter, r *http.Request) {
 	_ = lddatastar.EnsureClientID(w, r)
 	s.renderAdminPage(w, r, "storage")
@@ -103,6 +107,11 @@ func (s *Server) adminData(r *http.Request) (ui.AdminData, error) {
 		RBACConfigured:  s.store != nil,
 		RBACStatusLabel: "Configured",
 	}
+	var err error
+	data.Agent, err = s.adminAgentData(r)
+	if err != nil {
+		return data, err
+	}
 	repo, err := s.accessRepository()
 	if err != nil {
 		return data, err
@@ -146,6 +155,45 @@ func (s *Server) adminData(r *http.Request) (ui.AdminData, error) {
 	data.Storage = s.adminStorageData(r)
 	data.PrincipalCount = len(data.Principals)
 	data.GroupCount = len(data.Groups)
+	return data, nil
+}
+
+func (s *Server) adminAgentData(r *http.Request) (ui.AdminAgentData, error) {
+	details, err := s.adminAgentDetails(r.Context())
+	if err != nil {
+		return ui.AdminAgentData{}, err
+	}
+	data := ui.AdminAgentData{
+		Enabled:      details.Enabled,
+		Model:        details.Model,
+		SystemPrompt: details.SystemPrompt,
+		CSRFToken:    csrfToken(r, s.auth),
+		UpdatePath:   "/api/v1/admin/agent/config",
+		CanWrite:     true,
+	}
+	for _, tool := range details.Tools {
+		data.Tools = append(data.Tools, ui.AdminAgentTool{
+			Name:        tool.Name,
+			Description: tool.Description,
+			InputSchema: tool.InputSchema,
+		})
+	}
+	if s.auth == nil {
+		return data, nil
+	}
+	principal, ok := s.auth.Principal(r)
+	if !ok || principal.DevBypass {
+		return data, nil
+	}
+	repo, err := s.accessRepository()
+	if err != nil || repo == nil {
+		return data, err
+	}
+	allowed, err := repo.HasPermission(r.Context(), s.defaultWorkspaceID, principal.ID, access.PermissionRBACWrite)
+	if err != nil {
+		return data, err
+	}
+	data.CanWrite = allowed
 	return data, nil
 }
 

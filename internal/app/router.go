@@ -35,6 +35,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/admin/principals/{principal}", s.protected(access.PermissionRBACRead, s.adminPrincipalDetail))
 		r.Get("/admin/groups", s.protected(access.PermissionRBACRead, s.adminGroups))
 		r.Get("/admin/groups/{group}", s.protected(access.PermissionRBACRead, s.adminGroupDetail))
+		r.Get("/admin/agent", s.protected(access.PermissionRBACRead, s.adminAgent))
 		r.Get("/admin/storage", s.protected(access.PermissionRBACRead, s.adminStorage))
 		r.Get("/admin/storage/updates", s.protected(access.PermissionRBACRead, s.adminStorageUpdates))
 		r.Post("/admin/storage/select-table", s.protected(access.PermissionRBACRead, s.adminStorageSelectTable))

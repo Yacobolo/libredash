@@ -41,6 +41,9 @@ func (s *Server) configureAgentTools() {
 	if s.agent == nil {
 		return
 	}
+	if s.store != nil {
+		s.agent.SetSystemPromptProvider(s.agentSystemPrompt)
+	}
 	s.agent.SetPolicyProvider(s.agentPolicyForScope)
 	s.agent.AppendToolProviders(s.agentVisualToolDefinitions, s.agentAPIGenToolDefinitions)
 }

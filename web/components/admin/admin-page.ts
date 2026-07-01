@@ -5,6 +5,7 @@ import { jsonAttribute } from '../shared/json-attribute'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../navigation/sub-sidebar'
 import '../shared/record-table'
+import './agent-prompt-editor'
 import './storage-explorer'
 
 const emptyStorage: AdminStorageSignal = {
@@ -19,6 +20,7 @@ const emptyStorage: AdminStorageSignal = {
 class LibreDashAdminPage extends LitElement {
   @property({ converter: jsonAttribute<AdminPageSignal | null>(null) }) page: AdminPageSignal | null = null
   @property({ converter: jsonAttribute<AdminStorageSignal>(emptyStorage) }) storage: AdminStorageSignal = emptyStorage
+  @property({ attribute: 'agent-prompt' }) agentPrompt = ''
 
   static styles = css`
     :host {
@@ -229,9 +231,25 @@ class LibreDashAdminPage extends LitElement {
               `)}
             </div>
           ` : nothing}
-          ${page.active === 'storage' ? this.renderStorage(page) : page.sections?.map(renderSection)}
+          ${page.active === 'storage' ? this.renderStorage(page) : page.active === 'agent' ? this.renderAgent(page) : page.sections?.map(renderSection)}
         </section>
       </div>
+    `
+  }
+
+  private renderAgent(page: AdminPageSignal) {
+    const agent = page.agent
+    const systemPrompt = this.agentPrompt || agent?.systemPrompt || ''
+    return html`
+      ${agent ? html`
+        <section class="section" aria-label="System prompt">
+          <h2>System prompt</h2>
+          <slot name="agent-prompt">
+            <ld-agent-prompt-editor value=${systemPrompt} .value=${systemPrompt} ?disabled=${!agent.canWrite}></ld-agent-prompt-editor>
+          </slot>
+        </section>
+      ` : nothing}
+      ${page.sections?.map(renderSection)}
     `
   }
 
@@ -241,6 +259,7 @@ class LibreDashAdminPage extends LitElement {
       <ld-storage-explorer .storage=${storage}></ld-storage-explorer>
     `
   }
+
 }
 
 function storageHasPayload(storage: AdminStorageSignal | null | undefined): storage is AdminStorageSignal {

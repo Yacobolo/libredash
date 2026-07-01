@@ -112,6 +112,7 @@ func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/runs",
 		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/runs/{run}",
 		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/runs/{run}/events",
+		"/api/v1/admin/agent/config",
 		"/api/v1/workspaces/{workspace}/roles",
 		"/api/v1/workspaces/{workspace}/groups",
 		"/api/v1/workspaces/{workspace}/groups/{group}",

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/libredash/internal/agentconfig"
 	"github.com/Yacobolo/libredash/internal/platform/db"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
@@ -76,6 +77,21 @@ func (s *Store) SQLDB() *sql.DB {
 	return s.db
 }
 
+func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
+	var value string
+	err := s.db.QueryRowContext(ctx, `SELECT value FROM platform_settings WHERE key = ?`, key).Scan(&value)
+	return value, err
+}
+
+func (s *Store) UpsertSetting(ctx context.Context, key, value string) error {
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO platform_settings (key, value)
+VALUES (?, ?)
+ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
+`, key, value)
+	return err
+}
+
 func (s *Store) migrate(ctx context.Context) error {
 	for _, stmt := range []string{
 		"PRAGMA journal_mode=WAL",
@@ -97,6 +113,9 @@ func (s *Store) migrate(ctx context.Context) error {
 }
 
 func (s *Store) seedDefaults(ctx context.Context) error {
+	if err := s.insertSettingIfMissing(ctx, agentconfig.SystemPromptSettingKey, agentconfig.DefaultSystemPrompt); err != nil {
+		return err
+	}
 	for _, role := range access.DefaultRoles() {
 		bytes, err := json.Marshal(role.Permissions)
 		if err != nil {
@@ -126,4 +145,13 @@ func (s *Store) seedDefaults(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (s *Store) insertSettingIfMissing(ctx context.Context, key, value string) error {
+	_, err := s.db.ExecContext(ctx, `
+INSERT INTO platform_settings (key, value)
+VALUES (?, ?)
+ON CONFLICT(key) DO NOTHING
+`, key, value)
+	return err
 }

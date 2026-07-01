@@ -3,6 +3,8 @@ package signals
 func ContractTypes() map[string]any {
 	return map[string]any{
 		"AdminContentSectionSignal":     AdminContentSectionSignal{},
+		"AdminAgentSignal":              AdminAgentSignal{},
+		"AdminAgentToolSignal":          AdminAgentToolSignal{},
 		"AdminMetricSignal":             AdminMetricSignal{},
 		"AdminPageEnvelope":             AdminPageEnvelope{},
 		"AdminPageSignal":               AdminPageSignal{},
@@ -27,9 +29,9 @@ func ContractTypes() map[string]any {
 		"DashboardPageSignal":           DashboardPageSignal{},
 		"LoginPageEnvelope":             LoginPageEnvelope{},
 		"LoginPageSignal":               LoginPageSignal{},
-		"RecordTableBadgeSignal":         RecordTableBadgeSignal{},
-		"RecordTableColumnSignal":        RecordTableColumnSignal{},
-		"RecordTableSignal":              RecordTableSignal{},
+		"RecordTableBadgeSignal":        RecordTableBadgeSignal{},
+		"RecordTableColumnSignal":       RecordTableColumnSignal{},
+		"RecordTableSignal":             RecordTableSignal{},
 		"RouteRuntimeSignal":            RouteRuntimeSignal{},
 		"SemanticModelGraphEdgeSignal":  SemanticModelGraphEdgeSignal{},
 		"SemanticModelGraphFieldSignal": SemanticModelGraphFieldSignal{},

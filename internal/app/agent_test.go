@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/agentapp"
+	"github.com/Yacobolo/libredash/internal/agentconfig"
 )
 
 func TestAgentAPIReportsDisabledWhenProviderMissing(t *testing.T) {
@@ -34,8 +36,23 @@ func TestAgentAPIConversationTurnPersistsMessagesAndEvents(t *testing.T) {
 	store := testStore(t)
 	principal := testPrincipal(t, ctx, store, "viewer@example.com", "Viewer", "viewer")
 	token := testAPIToken(t, ctx, store, principal.ID, "agent-test")
+	if err := store.UpsertSetting(ctx, agentconfig.SystemPromptSettingKey, "Stored admin system prompt."); err != nil {
+		t.Fatalf("seed system prompt: %v", err)
+	}
 	var calls atomic.Int64
 	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode model request: %v", err)
+		}
+		if len(req.Messages) == 0 || req.Messages[0].Role != "system" || req.Messages[0].Content != "Stored admin system prompt." {
+			t.Fatalf("model request system prompt = %#v", req.Messages)
+		}
 		if calls.Add(1) == 1 {
 			writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"function","function":{"name":"list_dashboards","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`)
 			return
@@ -85,6 +102,84 @@ func TestAgentAPIConversationTurnPersistsMessagesAndEvents(t *testing.T) {
 	server.Routes().ServeHTTP(eventsRec, eventsReq)
 	if eventsRec.Code != http.StatusOK || !strings.Contains(eventsRec.Body.String(), "model_response") {
 		t.Fatalf("events status=%d body=%s", eventsRec.Code, eventsRec.Body.String())
+	}
+}
+
+func TestAdminAgentAPIReturnsAndUpdatesSystemPrompt(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleOwner)
+	token := testAPIToken(t, ctx, store, owner.ID, "test")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	agentService := agentapp.NewService(fakeMetrics{}, testAgentRepository(store), agentapp.Config{APIKey: "key", Model: "fake-model"})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agentService, DefaultWorkspaceID: "test"})
+
+	getReq := authedJSONRequest(http.MethodGet, "/api/v1/admin/agent/config", token, "")
+	getRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get status=%d body=%s", getRec.Code, getRec.Body.String())
+	}
+	if !strings.Contains(getRec.Body.String(), `"systemPrompt":"You are LibreDash`) || !strings.Contains(getRec.Body.String(), `"tools"`) || !strings.Contains(getRec.Body.String(), `"query_visual"`) {
+		t.Fatalf("get body missing prompt or tools: %s", getRec.Body.String())
+	}
+
+	putReq := authedJSONRequest(http.MethodPatch, "/api/v1/admin/agent/config", token, `{"systemPrompt":"  Updated platform prompt.  "}`)
+	putRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(putRec, putReq)
+	if putRec.Code != http.StatusOK {
+		t.Fatalf("put status=%d body=%s", putRec.Code, putRec.Body.String())
+	}
+	if !strings.Contains(putRec.Body.String(), `"systemPrompt":"Updated platform prompt."`) {
+		t.Fatalf("put body did not return trimmed prompt: %s", putRec.Body.String())
+	}
+
+	getUpdatedReq := authedJSONRequest(http.MethodGet, "/api/v1/admin/agent/config", token, "")
+	getUpdatedRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(getUpdatedRec, getUpdatedReq)
+	if getUpdatedRec.Code != http.StatusOK || !strings.Contains(getUpdatedRec.Body.String(), `"systemPrompt":"Updated platform prompt."`) {
+		t.Fatalf("updated get status=%d body=%s", getUpdatedRec.Code, getUpdatedRec.Body.String())
+	}
+}
+
+func TestAdminAgentAPIRejectsEmptySystemPrompt(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	owner := testPrincipal(t, ctx, store, "owner-empty@example.com", "Owner", access.RoleOwner)
+	token := testAPIToken(t, ctx, store, owner.ID, "test")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agentapp.NewService(fakeMetrics{}, testAgentRepository(store), agentapp.Config{APIKey: "key", Model: "fake-model"}), DefaultWorkspaceID: "test"})
+
+	req := authedJSONRequest(http.MethodPatch, "/api/v1/admin/agent/config", token, `{"systemPrompt":"   "}`)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d want 400 body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAdminAgentAPIRequiresRBACPermissions(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	viewer := testPrincipal(t, ctx, store, "viewer-admin-agent@example.com", "Viewer", access.RoleViewer)
+	token := testAPIToken(t, ctx, store, viewer.ID, "test")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agentapp.NewService(fakeMetrics{}, testAgentRepository(store), agentapp.Config{APIKey: "key", Model: "fake-model"}), DefaultWorkspaceID: "test"})
+
+	for _, tc := range []struct {
+		method string
+		path   string
+		body   string
+	}{
+		{method: http.MethodGet, path: "/api/v1/admin/agent/config"},
+		{method: http.MethodPatch, path: "/api/v1/admin/agent/config", body: `{"systemPrompt":"Updated"}`},
+	} {
+		req := authedJSONRequest(tc.method, tc.path, token, tc.body)
+		rec := httptest.NewRecorder()
+		server.Routes().ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("%s %s status=%d want 403 body=%s", tc.method, tc.path, rec.Code, rec.Body.String())
+		}
 	}
 }
 

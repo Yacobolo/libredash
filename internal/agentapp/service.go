@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
-	"strings"
 	"sync"
 
+	"github.com/Yacobolo/libredash/internal/agentconfig"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/agent"
 )
@@ -45,14 +45,17 @@ type ToolProvider func(scope Scope) []agent.ToolDefinition
 
 type PolicyProvider func(scope Scope) (workspace.AgentPolicy, bool)
 
+type SystemPromptProvider func(ctx context.Context) (string, error)
+
 type Service struct {
 	metrics any
 	repo    Repository
 	config  Config
 	model   agent.Model
 
-	toolProviders  []ToolProvider
-	policyProvider PolicyProvider
+	toolProviders        []ToolProvider
+	policyProvider       PolicyProvider
+	systemPromptProvider SystemPromptProvider
 
 	mu      sync.Mutex
 	running map[string]struct{}
@@ -80,8 +83,19 @@ func (s *Service) SetPolicyProvider(provider PolicyProvider) {
 	s.policyProvider = provider
 }
 
+func (s *Service) SetSystemPromptProvider(provider SystemPromptProvider) {
+	s.systemPromptProvider = provider
+}
+
 func (s *Service) Enabled() bool {
 	return s != nil && s.config.Enabled()
+}
+
+func (s *Service) Model() string {
+	if s == nil {
+		return ""
+	}
+	return s.config.Model
 }
 
 func (s *Service) CreateConversation(ctx context.Context, scope Scope, title string) (Conversation, error) {
@@ -212,15 +226,13 @@ func (s *Service) ConversationTranscriptState(ctx context.Context, scope Scope, 
 	return transcriptStateFromMessages(conversationID, messages), nil
 }
 
-func systemPrompt() string {
-	return `You are LibreDash's read-only BI assistant. Answer using only the provided tools and conversation context. You can help users understand dashboards, semantic models, measures, fields, filters, visuals, and table snapshots they are allowed to access. Use progressive disclosure: start with compact summaries, then drill into specific pages, semantic models, or tables only when needed. Do not invent dashboard IDs, measure names, field names, or data values. You cannot write data, deploy changes, edit permissions, run raw SQL, access files, or call external services.`
-}
-
-func (s *Service) systemPrompt(scope Scope) string {
-	base := systemPrompt()
-	policy, ok := s.policyForScope(scope)
-	if !ok || strings.TrimSpace(policy.Instructions) == "" {
-		return base
+func (s *Service) systemPrompt(ctx context.Context) (string, error) {
+	if s != nil && s.systemPromptProvider != nil {
+		prompt, err := s.systemPromptProvider(ctx)
+		if err != nil {
+			return "", err
+		}
+		return agentconfig.NormalizeSystemPrompt(prompt)
 	}
-	return base + "\n\nWorkspace instructions:\n" + strings.TrimSpace(policy.Instructions)
+	return agentconfig.DefaultSystemPrompt, nil
 }

@@ -25,7 +25,7 @@ beforeAll(async () => {
       return
     }
     try {
-      response.setHeader('content-type', 'text/javascript')
+      response.setHeader('content-type', file.endsWith('.css') ? 'text/css' : 'text/javascript')
       response.end(await readFile(file))
     } catch {
       response.writeHead(404)
@@ -198,6 +198,251 @@ test('admin storage route renders storage explorer from typed signal data', asyn
   }
 })
 
+test('admin agent route renders prompt editor and emits save command', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-admin-page') && customElements.get('ld-agent-prompt-editor'))
+
+    const state = await page.evaluate(async () => {
+      const waitFor = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
+        const started = performance.now()
+        while (!predicate()) {
+          if (performance.now() - started > timeoutMs) throw new Error('timed out waiting for condition')
+          await new Promise((resolve) => setTimeout(resolve, 20))
+        }
+      }
+      const element = document.createElement('ld-admin-page') as any
+      element.page = {
+        kind: 'admin',
+        title: 'Agent',
+        active: 'agent',
+        sidebar: {
+          label: 'Admin',
+          railLabel: 'Admin',
+          ariaLabel: 'Admin navigation',
+          storageKey: 'libredash-admin-sidebar-collapsed',
+          activeId: 'agent',
+          collapsible: false,
+          numbered: false,
+          items: [{ id: 'agent', title: 'Agent', href: '/admin/agent', active: true }],
+        },
+        headerTitle: 'Agent',
+        headerDetail: 'Platform agent prompt and read-only tool inventory.',
+        metrics: [{ label: 'Tools', value: '1' }],
+        agent: {
+          enabled: true,
+          model: 'fake-model',
+          systemPrompt: 'Initial prompt',
+          canWrite: true,
+          csrfToken: 'csrf-token',
+          updatePath: '/api/v1/admin/agent/config',
+          tools: [{
+            name: 'query_visual',
+            description: 'Query visual data.',
+            inputSchema: { type: 'object', additionalProperties: false },
+          }],
+        },
+        sections: [{
+          title: 'Tools',
+          table: {
+            columns: [{ id: 'name', header: 'Name', kind: 'code' }],
+            rows: [{ name: 'query_visual' }],
+            empty: 'No tools configured.',
+          },
+        }],
+      }
+      element.agentPrompt = 'Signal prompt'
+      document.body.append(element)
+      await element.updateComplete
+      let command: unknown = null
+      element.addEventListener('ld-agent-system-prompt-save', (event: CustomEvent) => { command = event.detail })
+      const root = element.shadowRoot
+      const editor = root.querySelector('ld-agent-prompt-editor') as any
+      await editor.updateComplete
+      const editorRoot = editor.shadowRoot
+      await customElements.whenDefined('ld-code-editor')
+      await waitFor(() => Boolean(editorRoot.querySelector('ld-code-editor')))
+      const previewFontSize = getComputedStyle(editorRoot.querySelector('.markdown-view')!).fontSize
+      const preSwitchState = {
+        hasCodeEditor: Boolean(editorRoot.querySelector('ld-code-editor')),
+        hasLoading: Boolean(editorRoot.querySelector('.editor-loading')),
+        hasTextarea: Boolean(editorRoot.querySelector('textarea')),
+      }
+      const editButton = editorRoot.querySelector<HTMLButtonElement>('.mode-toggle button[aria-label="Edit"]')!
+      editButton.click()
+      await editor.updateComplete
+      const immediateSwitchState = {
+        hasCodeEditor: Boolean(editorRoot.querySelector('ld-code-editor')),
+        hasLoading: Boolean(editorRoot.querySelector('.editor-loading')),
+        hasTextarea: Boolean(editorRoot.querySelector('textarea')),
+      }
+      await editor.updateComplete
+      const codeEditor = editorRoot.querySelector('ld-code-editor') as any
+      await codeEditor.updateComplete
+      await waitFor(() => Boolean(codeEditor.shadowRoot.querySelector('.view-line')))
+      const editorFontSize = getComputedStyle(codeEditor.shadowRoot.querySelector('.view-line')!).fontSize
+      const seededEditorValue = codeEditor.value
+      codeEditor.value = 'Updated prompt'
+      codeEditor.dispatchEvent(new CustomEvent('ld-code-editor-change', {
+        bubbles: true,
+        composed: true,
+        detail: { value: 'Updated prompt' },
+      }))
+      await codeEditor.updateComplete
+      editorRoot.querySelector<HTMLButtonElement>('.save-button')?.click()
+      await editor.updateComplete
+      return {
+        title: root.querySelector('h1')?.textContent?.trim(),
+        hasEditor: Boolean(editor),
+        hasCodeEditor: Boolean(codeEditor),
+        preSwitchState,
+        immediateSwitchState,
+        previewFontSize,
+        editorFontSize,
+        seededEditorValue,
+        editorValue: codeEditor.value,
+        saveText: editorRoot.querySelector('.save-button')?.textContent?.trim(),
+        activeMode: editorRoot.querySelector('.mode-toggle button[aria-pressed="true"]')?.getAttribute('aria-label'),
+        toolText: root.textContent,
+        status: editorRoot.querySelector('.prompt-status')?.textContent?.trim(),
+        command,
+      }
+    })
+
+    expect(state.title).toBe('Agent')
+    expect(state.hasEditor).toBe(true)
+    expect(state.hasCodeEditor).toBe(true)
+    expect(state.preSwitchState).toEqual({ hasCodeEditor: true, hasLoading: false, hasTextarea: false })
+    expect(state.immediateSwitchState).toEqual({ hasCodeEditor: true, hasLoading: false, hasTextarea: false })
+    expect(state.previewFontSize).toBe('12px')
+    expect(state.editorFontSize).toBe('12px')
+    expect(state.seededEditorValue).toBe('Signal prompt')
+    expect(state.editorValue).toBe('Updated prompt')
+    expect(state.saveText).toBe('Save')
+    expect(state.activeMode).toBe('Edit')
+    expect(state.toolText ?? '').toMatch(/query_visual/)
+    expect(state.status).toBe('Saved')
+    expect(state.command).toEqual({ systemPrompt: 'Updated prompt' })
+  } finally {
+    await page.close()
+  }
+})
+
+test('admin agent prompt editor disables saves for read-only users', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-admin-page') && customElements.get('ld-agent-prompt-editor'))
+
+    const state = await page.evaluate(async () => {
+      const waitFor = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
+        const started = performance.now()
+        while (!predicate()) {
+          if (performance.now() - started > timeoutMs) throw new Error('timed out waiting for condition')
+          await new Promise((resolve) => setTimeout(resolve, 20))
+        }
+      }
+      const element = document.createElement('ld-admin-page') as any
+      element.page = {
+        kind: 'admin',
+        title: 'Agent',
+        active: 'agent',
+        sidebar: {
+          label: 'Admin',
+          railLabel: 'Admin',
+          ariaLabel: 'Admin navigation',
+          storageKey: 'libredash-admin-sidebar-collapsed',
+          activeId: 'agent',
+          collapsible: false,
+          numbered: false,
+          items: [{ id: 'agent', title: 'Agent', href: '/admin/agent', active: true }],
+        },
+        headerTitle: 'Agent',
+        headerDetail: 'Platform agent prompt and read-only tool inventory.',
+        agent: {
+          enabled: true,
+          model: 'fake-model',
+          systemPrompt: 'Initial prompt',
+          canWrite: false,
+          csrfToken: '',
+          updatePath: '/api/v1/admin/agent/config',
+          tools: [],
+        },
+        sections: [],
+      }
+      document.body.append(element)
+      await element.updateComplete
+      let command: unknown = null
+      element.addEventListener('ld-agent-system-prompt-save', (event: CustomEvent) => { command = event.detail })
+      const editor = element.shadowRoot.querySelector('ld-agent-prompt-editor') as any
+      await editor.updateComplete
+      const editorRoot = editor.shadowRoot
+      const editButton = editorRoot.querySelector<HTMLButtonElement>('.mode-toggle button[aria-label="Edit"]')!
+      editButton.click()
+      await customElements.whenDefined('ld-code-editor')
+      await waitFor(() => Boolean(editorRoot.querySelector('ld-code-editor')))
+      await editor.updateComplete
+      const codeEditor = editorRoot.querySelector('ld-code-editor') as any
+      await codeEditor.updateComplete
+      const saveButton = editorRoot.querySelector<HTMLButtonElement>('.save-button')!
+      saveButton.click()
+      return {
+        codeEditorDisabled: codeEditor.disabled,
+        saveDisabled: saveButton.disabled,
+        status: editorRoot.querySelector('.prompt-status')?.textContent?.trim(),
+        command,
+      }
+    })
+
+    expect(state.codeEditorDisabled).toBe(true)
+    expect(state.saveDisabled).toBe(true)
+    expect(state.status).toBe('Read-only')
+    expect(state.command).toBeNull()
+  } finally {
+    await page.close()
+  }
+})
+
+test('agent prompt editor seeds edit mode from value attribute', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-agent-prompt-editor'))
+
+    const state = await page.evaluate(async () => {
+      const waitFor = async (predicate: () => boolean, timeoutMs = 5000): Promise<void> => {
+        const started = performance.now()
+        while (!predicate()) {
+          if (performance.now() - started > timeoutMs) throw new Error('timed out waiting for condition')
+          await new Promise((resolve) => setTimeout(resolve, 20))
+        }
+      }
+      const element = document.createElement('ld-agent-prompt-editor') as any
+      element.setAttribute('value', 'Attribute prompt')
+      document.body.append(element)
+      await element.updateComplete
+      const root = element.shadowRoot
+      const editButton = root.querySelector<HTMLButtonElement>('.mode-toggle button[aria-label="Edit"]')!
+      editButton.click()
+      await customElements.whenDefined('ld-code-editor')
+      await waitFor(() => Boolean(root.querySelector('ld-code-editor')))
+      await element.updateComplete
+      const codeEditor = root.querySelector('ld-code-editor') as any
+      await codeEditor.updateComplete
+      return {
+        activeMode: root.querySelector('.mode-toggle button[aria-pressed="true"]')?.getAttribute('aria-label'),
+        codeEditorValue: codeEditor.value,
+      }
+    })
+
+    expect(state.activeMode).toBe('Edit')
+    expect(state.codeEditorValue).toBe('Attribute prompt')
+  } finally {
+    await page.close()
+  }
+})
+
 test('admin storage explorer keeps table, schema, and breadcrumb selection coherent', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
@@ -345,7 +590,7 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-sidebar-bg: #f1f3f5; --ld-report-rail-bg: #ffffff; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-radius-default: 6px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; }
+          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-bg-accent: #0969da; --ld-bg-accent-muted: #ddf4ff; --ld-sidebar-bg: #f1f3f5; --ld-report-rail-bg: #ffffff; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-accent: #0969da; --ld-fg-link: #0969da; --ld-fg-on-accent: #fff; --ld-icon-muted: #57606a; --ld-line-muted: #d8dee4; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-radius-default: 6px; --ld-radius-full: 999px; --base-size-4: 4px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-weight-medium: 500; --ld-font-weight-strong: 600; --ld-line-height-tight: 1.2; --ld-line-height-compact: 1.3; }
           ld-admin-page { min-height: 720px; }
         </style>
       </head>

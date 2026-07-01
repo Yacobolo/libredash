@@ -26,7 +26,8 @@ const fixtures = new Map<string, FixtureBuild>([
   ],
   ['chat-thread', split('chat-thread', 'web/components/chat/chat-page.ts', '.tmp/chat-thread-test', 'chat-under-test.js', 'chunks/[name]-[hash].[ext]')],
   ['workspace-page', single('workspace-page', 'web/components/workspace/workspace-page.ts', '.tmp/workspace-page-test/workspace-page-under-test.js')],
-  ['admin-page', single('admin-page', 'web/components/admin/admin-page.ts', '.tmp/admin-page-test/admin-page-under-test.js')],
+  ['admin-page', pageWithMonacoWorker('admin-page', 'web/components/admin/admin-page.ts', '.tmp/admin-page-test', 'admin-page-under-test.js')],
+  ['code-editor', pageWithMonacoWorker('code-editor', 'web/components/shared/code-editor.ts', '.tmp/code-editor-test', 'code-editor-under-test.js')],
   ['login-page', single('login-page', 'web/components/login/login-page.ts', '.tmp/login-page-test/login-page-under-test.js')],
   ['record-table', single('record-table', 'web/components/shared/record-table.ts', '.tmp/record-table-test/record-table-under-test.js')],
   ['visual-modal', single('visual-modal', 'web/components/dashboard/visual-modal.ts', '.tmp/visual-modal-under-test.js')],
@@ -107,6 +108,27 @@ function split(label: string, entrypoint: string, outdir: string, entryName: str
   }
 }
 
+function pageWithMonacoWorker(label: string, entrypoint: string, outdir: string, entryName: string): FixtureBuild {
+  const entryBase = entryName.replace(/\.js$/, '')
+  return {
+    label,
+    clean: [outdir],
+    options: {
+      entrypoints: [entrypoint, 'web/components/shared/monaco-editor-worker.ts'],
+      target: 'browser',
+      format: 'esm',
+      splitting: true,
+      outdir,
+      naming: { entry: '[name].[ext]', chunk: `chunks/${entryBase}-[name]-[hash].[ext]` },
+    },
+    copy: [
+      { from: `${outdir}/${entrypointName(entrypoint)}.js`, to: `${outdir}/${entryName}` },
+      { from: `${outdir}/monaco-editor-worker.js`, to: `${outdir}/static/monaco-editor-worker.js` },
+      { from: `${outdir}/${entrypointName(entrypoint)}.css`, to: `${outdir}/static/monaco-editor-css.css` },
+    ],
+  }
+}
+
 async function runBuild(build: FixtureBuild): Promise<void> {
   await cleanPaths(build.clean)
   const result = await Bun.build(build.options)
@@ -117,6 +139,7 @@ async function runBuild(build: FixtureBuild): Promise<void> {
     throw new Error(`failed to build ${build.label}`)
   }
   for (const copy of build.copy ?? []) {
+    await ensureParentDir(copy.to)
     await Bun.write(copy.to, Bun.file(copy.from))
   }
 }
@@ -131,4 +154,16 @@ function outputParts(path: string): { dir: string; name: string } {
     return { dir: '.', name: path }
   }
   return { dir: path.slice(0, slash), name: path.slice(slash + 1) }
+}
+
+function entrypointName(path: string): string {
+  const slash = path.lastIndexOf('/')
+  const name = slash < 0 ? path : path.slice(slash + 1)
+  return name.replace(/\.[^.]+$/, '')
+}
+
+async function ensureParentDir(path: string): Promise<void> {
+  const slash = path.lastIndexOf('/')
+  if (slash < 0) return
+  await Bun.$`mkdir -p ${path.slice(0, slash)}`.quiet()
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/libredash/internal/agentapp"
 	"github.com/Yacobolo/libredash/internal/ui"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
@@ -29,6 +30,7 @@ func TestAdminRouteRejectsViewer(t *testing.T) {
 		body   string
 	}{
 		{method: http.MethodGet, path: "/admin"},
+		{method: http.MethodGet, path: "/admin/agent"},
 		{method: http.MethodGet, path: "/admin/storage"},
 		{method: http.MethodGet, path: "/admin/storage/updates"},
 		{method: http.MethodPost, path: "/admin/storage/select-table", body: `{}`},
@@ -63,7 +65,7 @@ func TestAdminPagesRenderReadOnlyAccessData(t *testing.T) {
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	duckDBDir := seedAdminStorageDuckDB(t)
-	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test", DuckDBDir: duckDBDir})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agentapp.NewService(fakeMetrics{}, testAgentRepository(store), agentapp.Config{APIKey: "key", Model: "fake-model"}), DefaultWorkspaceID: "test", DuckDBDir: duckDBDir})
 
 	cases := []struct {
 		path string
@@ -74,6 +76,7 @@ func TestAdminPagesRenderReadOnlyAccessData(t *testing.T) {
 		{path: "/admin/principals/" + analyst.ID, want: []string{"Principals / Analyst", "Email", "analyst@example.com", "Principal ID", analyst.ID, "Direct roles", "viewer", "Group count", "Groups", "/admin/groups/group_finance", "Finance", "local", "finance", "editor"}},
 		{path: "/admin/groups", want: []string{"<ld-admin-page", "Groups", "sections", "Member count", "/admin/groups/group_finance", "Finance", "local", "finance", "editor"}},
 		{path: "/admin/groups/group_finance", want: []string{"Groups / Finance", "Provider", "local", "External ID", "finance", "Group ID", "group_finance", "Members", "Principal ID", "analyst@example.com", "viewer", analyst.ID}},
+		{path: "/admin/agent", want: []string{"<ld-admin-page", "<ld-agent-prompt-editor", "slot=\"agent-prompt\"", `data-attr:value="$adminAgentCommand.systemPrompt"`, "agent-prompt", `data-attr:agent-prompt="$adminAgentCommand.systemPrompt"`, "systemPrompt", "You are LibreDash", "Tools", "query_visual", "/api/v1/admin/agent/config"}},
 		{path: "/admin/storage", want: []string{"<ld-admin-page", "Storage", "DuckDB directory", "Database files", "Total size", "Tables and views", "adminStorage", "storage=", "/admin/storage/updates", "/admin/storage/select-table", "libredash-test.duckdb", "orders", "rowCountLabel", "columnCount", "sizeLabel", "KiB", "customer_id", "VARCHAR", "amount", "DOUBLE"}},
 	}
 	for _, tc := range cases {

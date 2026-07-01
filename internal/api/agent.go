@@ -71,3 +71,20 @@ type AgentEventResponse struct {
 	Payload   map[string]any `json:"payload"`
 	CreatedAt string         `json:"createdAt"`
 }
+
+type AdminAgentToolResponse struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
+}
+
+type AdminAgentResponse struct {
+	Enabled      bool                     `json:"enabled"`
+	Model        string                   `json:"model,omitempty"`
+	SystemPrompt string                   `json:"systemPrompt"`
+	Tools        []AdminAgentToolResponse `json:"tools"`
+}
+
+type AdminAgentConfigPatchRequest struct {
+	SystemPrompt string `json:"systemPrompt"`
+}
