@@ -269,7 +269,11 @@ func workspaceAssetPageSignal(workspace workspaceview.WorkspaceView, asset works
 }
 
 func workspaceAssetPageSignalWithRefresh(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel, refresh AssetRefreshState) uisignals.WorkspaceAssetPageSignal {
-	page := baseWorkspaceAssetPageSignalWithRefresh(workspace, asset, assets, edges, activeSection, lineage, refresh)
+	return workspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, refresh, AssetVersionsState{})
+}
+
+func workspaceAssetPageSignalWithRefreshAndVersions(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel, refresh AssetRefreshState, versions AssetVersionsState) uisignals.WorkspaceAssetPageSignal {
+	page := baseWorkspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, refresh, versions)
 	page.Kind = uisignals.RouteWorkspaceAsset
 	page.Breadcrumbs = []uisignals.WorkspaceBreadcrumbSignal{
 		{Label: "Workspaces", Href: "/workspaces"},
@@ -295,11 +299,16 @@ func workspaceAssetPageSignalWithRefresh(workspace workspaceview.WorkspaceView, 
 		page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "refreshes", Label: "Refreshes", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "refreshes"), Active: activeSection == "refreshes"})
 	}
 	page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "lineage", Label: "Lineage", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "lineage"), Active: activeSection == "lineage", Count: lineage.Count})
+	page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "versions", Label: "Versions", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "versions"), Active: activeSection == "versions"})
 	return page
 }
 
 func connectionAssetPageSignal(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel) uisignals.WorkspaceAssetPageSignal {
-	page := baseWorkspaceAssetPageSignal(workspace, asset, assets, edges, activeSection, lineage)
+	return connectionAssetPageSignalWithVersions(workspace, asset, assets, edges, activeSection, lineage, AssetVersionsState{})
+}
+
+func connectionAssetPageSignalWithVersions(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel, versions AssetVersionsState) uisignals.WorkspaceAssetPageSignal {
+	page := baseWorkspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, AssetRefreshState{}, versions)
 	page.Kind = uisignals.RouteConnectionAsset
 	page.Breadcrumbs = []uisignals.WorkspaceBreadcrumbSignal{
 		{Label: "Connections", Href: "/connections"},
@@ -309,12 +318,17 @@ func connectionAssetPageSignal(workspace workspaceview.WorkspaceView, asset work
 	page.Tabs = []uisignals.WorkspaceTabSignal{
 		{ID: "details", Label: "Details", Href: assetnav.ConnectionAssetSectionHref(asset.ID, "details"), Active: activeSection == "details"},
 		{ID: "lineage", Label: "Lineage", Href: assetnav.ConnectionAssetSectionHref(asset.ID, "lineage"), Active: activeSection == "lineage", Count: lineage.Count},
+		{ID: "versions", Label: "Versions", Href: assetnav.ConnectionAssetSectionHref(asset.ID, "versions"), Active: activeSection == "versions"},
 	}
 	return page
 }
 
 func connectionSourceAssetPageSignal(workspace workspaceview.WorkspaceView, connection workspaceview.AssetView, source workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel) uisignals.WorkspaceAssetPageSignal {
-	page := baseWorkspaceAssetPageSignal(workspace, source, assets, edges, activeSection, lineage)
+	return connectionSourceAssetPageSignalWithVersions(workspace, connection, source, assets, edges, activeSection, lineage, AssetVersionsState{})
+}
+
+func connectionSourceAssetPageSignalWithVersions(workspace workspaceview.WorkspaceView, connection workspaceview.AssetView, source workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel, versions AssetVersionsState) uisignals.WorkspaceAssetPageSignal {
+	page := baseWorkspaceAssetPageSignalWithRefreshAndVersions(workspace, source, assets, edges, activeSection, lineage, AssetRefreshState{}, versions)
 	page.Kind = uisignals.RouteConnectionAsset
 	page.Breadcrumbs = []uisignals.WorkspaceBreadcrumbSignal{
 		{Label: "Connections", Href: "/connections"},
@@ -326,6 +340,7 @@ func connectionSourceAssetPageSignal(workspace workspaceview.WorkspaceView, conn
 	page.Tabs = []uisignals.WorkspaceTabSignal{
 		{ID: "details", Label: "Details", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "details"), Active: activeSection == "details"},
 		{ID: "lineage", Label: "Lineage", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "lineage"), Active: activeSection == "lineage", Count: lineage.Count},
+		{ID: "versions", Label: "Versions", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "versions"), Active: activeSection == "versions"},
 	}
 	return page
 }
@@ -335,6 +350,10 @@ func baseWorkspaceAssetPageSignal(workspace workspaceview.WorkspaceView, asset w
 }
 
 func baseWorkspaceAssetPageSignalWithRefresh(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel, refresh AssetRefreshState) uisignals.WorkspaceAssetPageSignal {
+	return baseWorkspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, refresh, AssetVersionsState{})
+}
+
+func baseWorkspaceAssetPageSignalWithRefreshAndVersions(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection string, lineage assetLineageModel, refresh AssetRefreshState, versions AssetVersionsState) uisignals.WorkspaceAssetPageSignal {
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	page := uisignals.WorkspaceAssetPageSignal{
 		Title:         assetTitle(asset),
@@ -351,8 +370,8 @@ func baseWorkspaceAssetPageSignalWithRefresh(workspace workspaceview.WorkspaceVi
 	}
 	if activeSection == "lineage" {
 		page.Lineage = uisignals.WorkspaceAssetLineageSignal{
-			Count:      lineage.Count,
-			Graph:      lineage.Graph,
+			Count:       lineage.Count,
+			Graph:       lineage.Graph,
 			UsesTable:   lineage.Uses,
 			UsedByTable: lineage.UsedBy,
 		}
@@ -360,6 +379,9 @@ func baseWorkspaceAssetPageSignalWithRefresh(workspace workspaceview.WorkspaceVi
 	if activeSection == "refreshes" && assetRefreshable(asset.Type) {
 		runsTable := assetRefreshesTable(refresh)
 		page.Refresh.RunsTable = &runsTable
+	}
+	if activeSection == "versions" {
+		page.Versions = assetVersionsSignal(versions)
 	}
 	return page
 }
@@ -375,7 +397,7 @@ func workspaceAssetDetailsSignalWithRefresh(workspace workspaceview.WorkspaceVie
 		sections = append(sections, uisignals.WorkspaceDetailSectionSignal{
 			Title: section.Title,
 			Facts: definitionFactSignals(section.Facts),
-			Table:  section.Table,
+			Table: section.Table,
 			Code:  section.Code,
 			Lang:  section.Lang,
 		})
@@ -403,9 +425,13 @@ func WorkspaceAssetPage(catalog dashboard.Catalog, workspace workspaceview.Works
 }
 
 func WorkspaceAssetPageWithRefresh(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, refresh AssetRefreshState) g.Node {
+	return WorkspaceAssetPageWithRefreshAndVersions(catalog, workspace, asset, assets, edges, activeSection, roleLabel, refresh, AssetVersionsState{})
+}
+
+func WorkspaceAssetPageWithRefreshAndVersions(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, refresh AssetRefreshState, versions AssetVersionsState) g.Node {
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
-	page := workspaceAssetPageSignalWithRefresh(workspace, asset, assets, edges, activeSection, lineage, refresh)
+	page := workspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, refresh, versions)
 	extraSignals := map[string]any{}
 	attrs := []g.Node{
 		g.Attr("slot", "page"),
@@ -419,10 +445,35 @@ func WorkspaceAssetPageWithRefresh(catalog dashboard.Catalog, workspace workspac
 		attrs = append(attrs,
 			g.Attr("data-on:ld-refresh-materializations", "$page.refresh.status = 'running'; $page.refresh.running = true; "+postActionWithCSRFSignal(refreshPath, "$csrfToken")),
 		)
+		if activeSection == "versions" {
+			return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extraSignals, activeSection)
+		}
 		extraHeadInit := ds.Init("@get('" + updatesURL + "', {openWhenHidden: true})")
 		return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extraSignals, activeSection, extraHeadInit)
 	}
 	return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), nil, activeSection)
+}
+
+func ConnectionAssetPageWithVersions(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, versions AssetVersionsState) g.Node {
+	activeSection = normalizeWorkspaceAssetSection(activeSection)
+	lineage := assetLineage(workspace.ID, asset, assets, edges)
+	page := connectionAssetPageSignalWithVersions(workspace, asset, assets, edges, activeSection, lineage, versions)
+	return workspaceAssetRouteDocument(asset, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset, g.El("ld-workspace-asset-page",
+		g.Attr("slot", "page"),
+		g.Attr("page", jsonString(page)),
+		g.Attr("data-attr:page", "JSON.stringify($page)"),
+	), nil, activeSection)
+}
+
+func ConnectionSourceAssetPageWithVersions(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, connection workspaceview.AssetView, source workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, versions AssetVersionsState) g.Node {
+	activeSection = normalizeWorkspaceAssetSection(activeSection)
+	lineage := assetLineage(workspace.ID, source, assets, edges)
+	page := connectionSourceAssetPageSignalWithVersions(workspace, connection, source, assets, edges, activeSection, lineage, versions)
+	return workspaceAssetRouteDocument(source, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset, g.El("ld-workspace-asset-page",
+		g.Attr("slot", "page"),
+		g.Attr("page", jsonString(page)),
+		g.Attr("data-attr:page", "JSON.stringify($page)"),
+	), nil, activeSection)
 }
 
 func workspaceAssetRouteDocument(asset workspaceview.AssetView, catalog dashboard.Catalog, active, roleLabel string, page any, routeKind uisignals.RouteKind, routeRoot g.Node, extraSignals map[string]any, activeSection string, bodyExtras ...g.Node) g.Node {
@@ -561,7 +612,7 @@ func workspaceRouteDocumentWithBodyExtras(title string, catalog dashboard.Catalo
 
 func activeDeploymentLabel(workspace workspaceview.WorkspaceView) string {
 	if workspace.ActiveDeploymentID == "" {
-		return "Local catalog"
+		return "No active deployment"
 	}
 	return "Published deployment"
 }
@@ -598,7 +649,7 @@ func workspaceAssetHref(workspaceID, typ, query string) string {
 
 func ValidWorkspaceAssetSection(section string) bool {
 	switch section {
-	case "details", "lineage", "refreshes":
+	case "details", "lineage", "refreshes", "versions":
 		return true
 	default:
 		return false
@@ -629,6 +680,21 @@ type AssetRefreshRun struct {
 	Error                string
 }
 
+type AssetVersionsState struct {
+	CurrentDeploymentID string
+	Versions            []AssetVersionState
+}
+
+type AssetVersionState struct {
+	DeploymentID string
+	Status       string
+	Digest       string
+	CreatedBy    string
+	CreatedAt    string
+	ActivatedAt  string
+	ContentHash  string
+}
+
 func WorkspaceAssetRefreshSignals(workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, refresh AssetRefreshState, activeSection string) map[string]any {
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 	return map[string]any{
@@ -646,6 +712,79 @@ func assetRefreshSignal(refresh AssetRefreshState) uisignals.WorkspaceAssetRefre
 		Running:        status == "queued" || status == "running",
 		LastSuccessful: refresh.LatestSuccessful.FinishedAt,
 	}
+}
+
+func assetVersionsSignal(state AssetVersionsState) uisignals.WorkspaceAssetVersionsSignal {
+	return uisignals.WorkspaceAssetVersionsSignal{
+		CurrentDeploymentID: state.CurrentDeploymentID,
+		Table:               assetVersionsTable(state),
+	}
+}
+
+func assetVersionsTable(state AssetVersionsState) recordTable {
+	rows := make([]map[string]any, 0, len(state.Versions))
+	current := strings.TrimSpace(state.CurrentDeploymentID)
+	for _, version := range state.Versions {
+		status := version.Status
+		if current != "" && version.DeploymentID == current {
+			status = "current"
+		}
+		rows = append(rows, map[string]any{
+			"version":           shortVersionID(version.DeploymentID),
+			"created":           emptyDash(version.CreatedAt),
+			"activated":         emptyDash(version.ActivatedAt),
+			"status":            recordTableBadge{Label: status, Tone: versionStatusTone(status)},
+			"asset_hash":        shortHash(version.ContentHash),
+			"deployment_digest": shortHash(version.Digest),
+			"created_by":        emptyDash(version.CreatedBy),
+		})
+	}
+	return recordTable{
+		Columns: []recordTableColumn{
+			{ID: "version", Header: "Version", Kind: "code", Width: "150px"},
+			{ID: "created", Header: "Created", Width: "180px"},
+			{ID: "activated", Header: "Activated", Width: "180px"},
+			{ID: "status", Header: "Status", Kind: "badge", Width: "120px"},
+			{ID: "asset_hash", Header: "Asset hash", Kind: "code", Width: "130px"},
+			{ID: "deployment_digest", Header: "Deployment digest", Kind: "code", Width: "160px"},
+			{ID: "created_by", Header: "Created by", Width: "150px"},
+		},
+		Rows:     rows,
+		Empty:    "No versions recorded for this asset yet.",
+		MinWidth: "1070px",
+	}
+}
+
+func versionStatusTone(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "current":
+		return "success"
+	case "active", "validated":
+		return "accent"
+	case "inactive":
+		return "muted"
+	default:
+		return "muted"
+	}
+}
+
+func shortVersionID(id string) string {
+	id = strings.TrimSpace(id)
+	if len(id) <= 18 {
+		return id
+	}
+	return id[:18]
+}
+
+func shortHash(hash string) string {
+	hash = strings.TrimSpace(hash)
+	if len(hash) == 0 {
+		return "-"
+	}
+	if len(hash) <= 12 {
+		return hash
+	}
+	return hash[:12]
 }
 
 func assetRefreshesTable(refresh AssetRefreshState) recordTable {
@@ -1438,7 +1577,7 @@ type assetDetailModel struct {
 type assetDetailSection struct {
 	Title  string
 	Signal string
-	Table   recordTable
+	Table  recordTable
 	Facts  []definitionFact
 	Code   string
 	Lang   string
@@ -2226,7 +2365,7 @@ func connectionDetailModel(model *assetDetailModel, workspace workspaceview.Work
 		assetDetailSection{
 			Title:  fmt.Sprintf("Sources (%d)", len(sources)),
 			Signal: "assetDetailsConnectionSourcesTable",
-			Table:   childAssetGrid(workspace.ID, sources, edges, "No sources use this connection."),
+			Table:  childAssetGrid(workspace.ID, sources, edges, "No sources use this connection."),
 		},
 	)
 }

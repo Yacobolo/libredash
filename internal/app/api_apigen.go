@@ -143,6 +143,10 @@ func (a apiGenAdapter) ListWorkspaceAssets(w http.ResponseWriter, r *http.Reques
 	a.server.apiWorkspaceAssets(w, r)
 }
 
+func (a apiGenAdapter) GetWorkspaceActiveDeploymentGraph(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenGetWorkspaceActiveDeploymentGraphParams) {
+	a.server.apiWorkspaceActiveDeploymentGraph(w, r)
+}
+
 func (a apiGenAdapter) GetWorkspaceAsset(w http.ResponseWriter, r *http.Request, _, _ string) {
 	a.server.apiWorkspaceAsset(w, r)
 }

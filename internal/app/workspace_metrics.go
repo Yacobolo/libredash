@@ -127,7 +127,7 @@ func (m multiWorkspaceMetrics) WorkspaceAssets(workspaceID, deploymentID string)
 	if !ok {
 		return nil, nil, false
 	}
-	provider, ok := metrics.(workspace.RuntimeAssetGraphProvider)
+	provider, ok := metrics.(workspaceAssetRuntime)
 	if !ok {
 		return nil, nil, false
 	}
@@ -251,7 +251,7 @@ func (m *dynamicRuntimeMetrics) WorkspaceAssets(workspaceID, deploymentID string
 	if !ok {
 		return nil, nil, false
 	}
-	provider, ok := metrics.(workspace.RuntimeAssetGraphProvider)
+	provider, ok := metrics.(workspaceAssetRuntime)
 	if !ok {
 		return nil, nil, false
 	}

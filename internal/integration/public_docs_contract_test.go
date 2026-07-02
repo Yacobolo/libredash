@@ -43,7 +43,7 @@ func TestPublicDocsAndScriptsDoNotAdvertiseRemovedCaCSurfaces(t *testing.T) {
 	script := readRepoFile(t, root, filepath.Join("scripts", "agent_e2e.sh"))
 	for _, want := range []string{
 		"--workspace sales",
-		"--catalog dashboards/libredash.yaml",
+		"--project dashboards/libredash.yaml",
 		"--auto-approve",
 	} {
 		if !strings.Contains(script, want) {

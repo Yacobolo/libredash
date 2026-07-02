@@ -444,7 +444,11 @@ func TestAPIGenAgentToolsExposeTypeSpecArgumentNamesAndBodyFields(t *testing.T) 
 }
 
 func TestAPIGenAgentToolDispatchesThroughGeneratedOperation(t *testing.T) {
-	server := NewWithOptions(manyEdgesMetrics{}, Options{DefaultWorkspaceID: "test"})
+	catalog := testAgentAssetCatalogFromProvider(t, manyEdgesMetrics{})
+	server := NewWithOptions(manyEdgesMetrics{}, Options{
+		AssetCatalog:       fakeAssetCatalogReader{catalog: catalog},
+		DefaultWorkspaceID: "test",
+	})
 	tools := server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"})
 	var listAssets agent.ToolDefinition
 	for _, tool := range tools {
@@ -562,7 +566,11 @@ func TestAPIGenAgentAssetDescribeAndLineageToolsUseTypeSpecContracts(t *testing.
 }
 
 func TestAPIGenAgentListToolInjectsDefaultLimit(t *testing.T) {
-	server := NewWithOptions(manyEdgesMetrics{}, Options{DefaultWorkspaceID: "test"})
+	catalog := testAgentAssetCatalogFromProvider(t, manyEdgesMetrics{})
+	server := NewWithOptions(manyEdgesMetrics{}, Options{
+		AssetCatalog:       fakeAssetCatalogReader{catalog: catalog},
+		DefaultWorkspaceID: "test",
+	})
 	tools := server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"})
 	var listEdges agent.ToolDefinition
 	for _, tool := range tools {
@@ -853,6 +861,19 @@ func testAgentAssetCatalog(t *testing.T) workspace.AssetCatalog {
 		},
 	}
 	catalog, err := workspace.DecodeAssetCatalog(graph)
+	if err != nil {
+		t.Fatalf("decode asset catalog: %v", err)
+	}
+	return catalog
+}
+
+func testAgentAssetCatalogFromProvider(t *testing.T, provider workspaceAssetGraphProvider) workspace.AssetCatalog {
+	t.Helper()
+	assets, edges, ok := provider.WorkspaceAssets("test", "deploy_a")
+	if !ok {
+		t.Fatal("workspace assets unavailable")
+	}
+	catalog, err := workspace.DecodeAssetCatalog(workspace.AssetGraph{Assets: assets, Edges: edges})
 	if err != nil {
 		t.Fatalf("decode asset catalog: %v", err)
 	}

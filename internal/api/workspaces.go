@@ -41,6 +41,27 @@ type AssetSummaryResponse struct {
 	Href          string `json:"href,omitempty"`
 }
 
+type AssetGraphAssetResponse struct {
+	ID            string         `json:"id"`
+	SnapshotID    string         `json:"snapshotId"`
+	WorkspaceID   string         `json:"workspaceId"`
+	DeploymentID  string         `json:"deploymentId"`
+	Type          string         `json:"type"`
+	Key           string         `json:"key"`
+	ParentID      string         `json:"parentId,omitempty"`
+	Title         string         `json:"title"`
+	Description   string         `json:"description"`
+	SourceFile    string         `json:"sourceFile,omitempty"`
+	PayloadSchema string         `json:"payloadSchema"`
+	Payload       map[string]any `json:"payload"`
+	ContentHash   string         `json:"contentHash"`
+}
+
+type WorkspaceAssetGraphResponse struct {
+	Assets []AssetGraphAssetResponse `json:"assets"`
+	Edges  []AssetEdgeResponse       `json:"edges"`
+}
+
 type AssetEdgeResponse struct {
 	ID           string `json:"id"`
 	WorkspaceID  string `json:"workspaceId"`

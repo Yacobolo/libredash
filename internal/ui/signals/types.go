@@ -214,18 +214,19 @@ type WorkspaceAssetPageEnvelope struct {
 }
 
 type WorkspaceAssetPageSignal struct {
-	Kind          RouteKind                   `json:"kind"`
-	Title         string                      `json:"title"`
-	WorkspaceID   string                      `json:"workspaceId"`
-	AssetID       string                      `json:"assetId"`
-	ActiveSection string                      `json:"activeSection"`
-	Asset         WorkspaceAssetSummarySignal `json:"asset"`
-	Breadcrumbs   []WorkspaceBreadcrumbSignal `json:"breadcrumbs"`
-	Actions       []WorkspaceActionSignal     `json:"actions,omitempty"`
-	Tabs          []WorkspaceTabSignal        `json:"tabs"`
-	Details       WorkspaceAssetDetailsSignal `json:"details,omitempty"`
-	Lineage       WorkspaceAssetLineageSignal `json:"lineage,omitempty"`
-	Refresh       WorkspaceAssetRefreshSignal `json:"refresh,omitempty"`
+	Kind          RouteKind                    `json:"kind"`
+	Title         string                       `json:"title"`
+	WorkspaceID   string                       `json:"workspaceId"`
+	AssetID       string                       `json:"assetId"`
+	ActiveSection string                       `json:"activeSection"`
+	Asset         WorkspaceAssetSummarySignal  `json:"asset"`
+	Breadcrumbs   []WorkspaceBreadcrumbSignal  `json:"breadcrumbs"`
+	Actions       []WorkspaceActionSignal      `json:"actions,omitempty"`
+	Tabs          []WorkspaceTabSignal         `json:"tabs"`
+	Details       WorkspaceAssetDetailsSignal  `json:"details,omitempty"`
+	Lineage       WorkspaceAssetLineageSignal  `json:"lineage,omitempty"`
+	Refresh       WorkspaceAssetRefreshSignal  `json:"refresh,omitempty"`
+	Versions      WorkspaceAssetVersionsSignal `json:"versions,omitempty"`
 }
 
 type ConnectionsPageEnvelope struct {
@@ -363,6 +364,11 @@ type WorkspaceAssetRefreshSignal struct {
 	Running        bool               `json:"running"`
 	LastSuccessful string             `json:"lastSuccessful"`
 	RunsTable      *RecordTableSignal `json:"runsTable,omitempty"`
+}
+
+type WorkspaceAssetVersionsSignal struct {
+	CurrentDeploymentID string            `json:"currentDeploymentId"`
+	Table               RecordTableSignal `json:"table"`
 }
 
 type AssetLineageGraphSignal struct {

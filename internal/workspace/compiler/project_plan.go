@@ -124,10 +124,10 @@ func diffAssetGraphs(authored, active workspace.AssetGraph) ([]ProjectPlanChange
 	authoredAssets := map[workspace.AssetID]workspace.Asset{}
 	activeAssets := map[workspace.AssetID]workspace.Asset{}
 	for _, asset := range authored.Assets {
-		authoredAssets[asset.ID] = asset
+		authoredAssets[asset.ID] = assetForPlanComparison(asset)
 	}
 	for _, asset := range active.Assets {
-		activeAssets[asset.ID] = asset
+		activeAssets[asset.ID] = assetForPlanComparison(asset)
 	}
 	impact := newPlanImpactContext(active)
 	changes := []ProjectPlanChange{}
@@ -245,6 +245,69 @@ func projectPlanChange(action string, asset, active workspace.Asset, reason stri
 		MaterializationImpact: materializationAssetType(asset.Type),
 		AccessImpact:          accessAssetType(asset.Type),
 		AgentPolicyImpact:     agentPolicyAssetType(asset.Type),
+	}
+}
+
+func assetForPlanComparison(asset workspace.Asset) workspace.Asset {
+	if asset.PayloadJSON == "" || !assetHasRuntimeSchema(asset.Type) {
+		return asset
+	}
+	payloadBytes, err := normalizedRuntimeSchemaPayloadJSON(asset.Type, []byte(asset.PayloadJSON))
+	if err != nil {
+		return asset
+	}
+	contentHash, err := workspace.AssetContentHash(workspace.AssetHashInput{
+		Type:          asset.Type,
+		Key:           asset.Key,
+		ParentID:      asset.ParentID,
+		Title:         asset.Title,
+		Description:   asset.Description,
+		PayloadSchema: asset.PayloadSchema,
+		PayloadJSON:   json.RawMessage(payloadBytes),
+	})
+	if err != nil {
+		return asset
+	}
+	asset.ContentHash = contentHash
+	return asset
+}
+
+func assetHasRuntimeSchema(typ workspace.AssetType) bool {
+	switch typ {
+	case workspace.AssetTypeSource, workspace.AssetTypeModelTable, workspace.AssetTypeSemanticTable, workspace.AssetTypeSemanticModel:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizedRuntimeSchemaPayloadJSON(typ workspace.AssetType, payloadJSON []byte) ([]byte, error) {
+	var payload map[string]any
+	if err := json.Unmarshal(payloadJSON, &payload); err != nil {
+		return nil, err
+	}
+	switch typ {
+	case workspace.AssetTypeSource, workspace.AssetTypeModelTable, workspace.AssetTypeSemanticTable:
+		delete(payload, "Schema")
+	case workspace.AssetTypeSemanticModel:
+		removeNestedRuntimeSchemas(payload, "Sources")
+		removeNestedRuntimeSchemas(payload, "Tables")
+		removeNestedRuntimeSchemas(payload, "Models")
+	}
+	return json.Marshal(payload)
+}
+
+func removeNestedRuntimeSchemas(payload map[string]any, key string) {
+	values, ok := payload[key].(map[string]any)
+	if !ok {
+		return
+	}
+	for _, child := range values {
+		childMap, ok := child.(map[string]any)
+		if !ok {
+			continue
+		}
+		delete(childMap, "Schema")
 	}
 }
 

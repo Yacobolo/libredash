@@ -10,7 +10,7 @@ import (
 type rootOptions struct {
 	addr         string
 	dataDir      string
-	localCatalog string
+	projectPath  string
 	production   bool
 	workspaceID  string
 	environment  string

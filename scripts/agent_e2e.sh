@@ -64,7 +64,7 @@ for _ in {1..80}; do
   sleep 0.25
 done
 
-"$BIN" deploy --target "$TARGET" --token "$TOKEN" --workspace sales --catalog dashboards/libredash.yaml --auto-approve
+"$BIN" deploy --target "$TARGET" --token "$TOKEN" --workspace sales --project dashboards/libredash.yaml --auto-approve
 
 OUTPUT="$("$BIN" agent ask "List the dashboards I can use in this workspace and mention the Olist context." --target "$TARGET" --token "$TOKEN" --workspace sales --json)"
 echo "$OUTPUT"

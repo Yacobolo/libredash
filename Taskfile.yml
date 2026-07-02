@@ -38,6 +38,15 @@ tasks:
     cmds:
       - ./scripts/dev-server.sh status
 
+  deploy:dev:
+    desc: Deploy all project workspaces to the managed dev server
+    cmds:
+      - |
+        test -f .tmp/dev-server.port || { echo "Dev server port file missing. Run task dev first."; exit 1; }
+        PORT="$(cat .tmp/dev-server.port)"
+        curl -fsS "http://localhost:${PORT}/workspaces" >/dev/null || { echo "Dev server is not running on http://localhost:${PORT}. Run task dev first."; exit 1; }
+        go run ./cmd/libredash deploy --project dashboards/libredash.yaml --target "http://localhost:${PORT}" --token dev --environment dev --auto-approve
+
   dev:quack:status:
     desc: Show managed LibreDash dev server status with the local Quack profile
     cmds:

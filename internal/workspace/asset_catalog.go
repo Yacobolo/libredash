@@ -37,49 +37,32 @@ type AssetEdgeRecord struct {
 }
 
 type AssetCatalogService struct {
-	repo    Repository
-	runtime RuntimeAssetGraphProvider
+	repo Repository
 }
 
 func NewAssetCatalogService(repo Repository) *AssetCatalogService {
 	return &AssetCatalogService{repo: repo}
 }
 
-type RuntimeAssetGraphProvider interface {
-	WorkspaceAssets(workspaceID, deploymentID string) ([]Asset, []AssetEdge, bool)
-}
-
 type AssetCatalogReader interface {
 	ActiveAssetCatalog(ctx context.Context, id WorkspaceID, environment string) (AssetCatalog, bool, error)
-}
-
-func (s *AssetCatalogService) WithRuntimeProvider(provider RuntimeAssetGraphProvider) *AssetCatalogService {
-	s.runtime = provider
-	return s
 }
 
 func (s *AssetCatalogService) ActiveAssetCatalog(ctx context.Context, id WorkspaceID, environment string) (AssetCatalog, bool, error) {
 	if s == nil {
 		return AssetCatalog{}, false, nil
 	}
-	if s.repo != nil {
-		graph, ok, err := s.repo.ActiveDeploymentGraph(ctx, id, environment)
-		if err != nil {
-			return AssetCatalog{}, false, err
-		}
-		if ok {
-			catalog, err := DecodeAssetCatalog(graph)
-			return catalog, true, err
-		}
-	}
-	if s.runtime == nil {
+	if s.repo == nil {
 		return AssetCatalog{}, false, nil
 	}
-	assets, edges, ok := s.runtime.WorkspaceAssets(string(id), "local")
+	graph, ok, err := s.repo.ActiveDeploymentGraph(ctx, id, environment)
+	if err != nil {
+		return AssetCatalog{}, false, err
+	}
 	if !ok {
 		return AssetCatalog{}, false, nil
 	}
-	catalog, err := DecodeAssetCatalog(AssetGraph{Assets: assets, Edges: edges})
+	catalog, err := DecodeAssetCatalog(graph)
 	return catalog, true, err
 }
 

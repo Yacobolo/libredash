@@ -11,6 +11,20 @@ type Summary struct {
 	UpdatedAt          string
 }
 
+type AssetVersion struct {
+	DeploymentID DeploymentID
+	WorkspaceID  WorkspaceID
+	Environment  string
+	Status       string
+	Digest       string
+	CreatedBy    string
+	CreatedAt    string
+	ActivatedAt  string
+	SnapshotID   AssetSnapshotID
+	AssetID      AssetID
+	ContentHash  string
+}
+
 type EnsureInput struct {
 	ID          WorkspaceID
 	Title       string
@@ -22,4 +36,5 @@ type Repository interface {
 	List(ctx context.Context) ([]Summary, error)
 	ByID(ctx context.Context, id WorkspaceID) (Summary, error)
 	ActiveDeploymentGraph(ctx context.Context, id WorkspaceID, environment string) (AssetGraph, bool, error)
+	AssetVersions(ctx context.Context, workspaceID WorkspaceID, environment string, assetID AssetID) ([]AssetVersion, error)
 }

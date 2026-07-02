@@ -37,6 +37,16 @@ type AssetGraph struct {
 	Edges  []AssetEdge
 }
 
+type AssetHashInput struct {
+	Type          AssetType
+	Key           string
+	ParentID      AssetID
+	Title         string
+	Description   string
+	PayloadSchema string
+	PayloadJSON   json.RawMessage
+}
+
 func NewAsset(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType, key string, parentID AssetID, title, description, payloadSchema string, payload any) (Asset, error) {
 	return NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parentID, title, description, "", payloadSchema, payload)
 }
@@ -50,7 +60,7 @@ func NewAssetWithSourceFile(workspaceID WorkspaceID, deploymentID DeploymentID, 
 		return Asset{}, err
 	}
 	id := NewAssetID(typ, key)
-	hashBytes, err := json.Marshal(assetHashPayload{
+	contentHash, err := AssetContentHash(AssetHashInput{
 		Type:          typ,
 		Key:           key,
 		ParentID:      parentID,
@@ -62,7 +72,6 @@ func NewAssetWithSourceFile(workspaceID WorkspaceID, deploymentID DeploymentID, 
 	if err != nil {
 		return Asset{}, err
 	}
-	sum := sha256.Sum256(hashBytes)
 	return Asset{
 		ID:            id,
 		SnapshotID:    NewAssetSnapshotID(deploymentID, id),
@@ -76,8 +85,25 @@ func NewAssetWithSourceFile(workspaceID WorkspaceID, deploymentID DeploymentID, 
 		SourceFile:    sourceFile,
 		PayloadSchema: payloadSchema,
 		PayloadJSON:   string(payloadBytes),
-		ContentHash:   hex.EncodeToString(sum[:]),
+		ContentHash:   contentHash,
 	}, nil
+}
+
+func AssetContentHash(input AssetHashInput) (string, error) {
+	hashBytes, err := json.Marshal(assetHashPayload{
+		Type:          input.Type,
+		Key:           input.Key,
+		ParentID:      input.ParentID,
+		Title:         input.Title,
+		Description:   input.Description,
+		PayloadSchema: input.PayloadSchema,
+		PayloadJSON:   input.PayloadJSON,
+	})
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(hashBytes)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 type assetHashPayload struct {

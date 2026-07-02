@@ -35,7 +35,7 @@ func serveCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cfg := config.MustLoad()
 	cmd.Flags().StringVar(&opts.addr, "addr", cfg.ListenAddr(), "listen address")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", cfg.DataDir, "dashboard source data directory")
-	cmd.Flags().StringVar(&opts.localCatalog, "local-project", "", "serve a filesystem project instead of active deployments")
+	cmd.Flags().StringVar(&opts.projectPath, "project", "", "project path override for dev serve")
 	cmd.Flags().StringVar(&opts.environment, "environment", string(deployment.DefaultEnvironment), "deployment environment")
 	cmd.Flags().BoolVar(&opts.production, "production", cfg.Production, "serve active deployment from the platform DB")
 	return cmd
@@ -55,14 +55,14 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 		dataDir = cfg.DataDir
 	}
 	if !opts.production {
-		catalogPath := opts.localCatalog
-		if catalogPath == "" {
-			catalogPath, err = dashboardruntime.DiscoverCatalogPath()
+		projectPath := opts.projectPath
+		if projectPath == "" {
+			projectPath, err = dashboardruntime.DiscoverCatalogPath()
 			if err != nil {
 				return err
 			}
 		} else {
-			if err := os.Setenv("LIBREDASH_CATALOG_PATH", catalogPath); err != nil {
+			if err := os.Setenv("LIBREDASH_CATALOG_PATH", projectPath); err != nil {
 				return err
 			}
 		}
@@ -70,7 +70,7 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 			metrics   app.QueryMetrics
 			closeFunc func()
 		)
-		projectMetrics, err := dashboardruntime.NewFromProject(dataDir, catalogPath, duckDBDirPath(cfg), dashboardDataRuntimeFactory{})
+		projectMetrics, err := dashboardruntime.NewFromProject(dataDir, projectPath, duckDBDirPath(cfg), dashboardDataRuntimeFactory{})
 		if err != nil {
 			return fmt.Errorf("initializing DuckDB metrics: %w", err)
 		}
@@ -93,7 +93,7 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 		}
 		opts.workspaceID = defaultWorkspaceID
 		defer closeFunc()
-		server, cleanup, err := localDevServer(ctx, metrics, cfg, opts.workspaceID)
+		server, cleanup, err := localDevServer(ctx, metrics, cfg, opts.workspaceID, deployment.NormalizeEnvironment(deployment.Environment(opts.environment)))
 		if err != nil {
 			return err
 		}
@@ -161,9 +161,6 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 		return registry.ProviderForWorkspace(deployment.WorkspaceID(workspaceID))
 	})
 	assetCatalog := workspace.NewAssetCatalogService(workspaceRepo)
-	if provider, ok := runtimeMetrics.(workspace.RuntimeAssetGraphProvider); ok {
-		assetCatalog.WithRuntimeProvider(provider)
-	}
 	auth := app.NewAuth(accessRepo, defaultWorkspaceID, app.AuthConfig{
 		DevBypass:       cfg.DevAuthBypass,
 		APITokenOnly:    cfg.APITokenOnlyAuth,
@@ -199,13 +196,18 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	return http.ListenAndServe(addr, server.Routes())
 }
 
-func localDevServer(ctx context.Context, metrics app.QueryMetrics, cfg config.Config, workspaceID string) (*app.Server, func(), error) {
+func localDevServer(ctx context.Context, metrics app.QueryMetrics, cfg config.Config, workspaceID string, environment deployment.Environment) (*app.Server, func(), error) {
 	duckDBDir := ""
 	if metrics != nil {
 		duckDBDir = metrics.DataDir()
 	}
 	if cfg.DuckDBDir != "" {
 		duckDBDir = cfg.DuckDBDirPath()
+	}
+	for _, dir := range []string{cfg.ArtifactDir(), cfg.DuckDBDirPath(), cfg.RuntimeDir()} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, nil, err
+		}
 	}
 	store, err := platform.Open(ctx, cfg.DBPath())
 	if err != nil {
@@ -223,11 +225,9 @@ func localDevServer(ctx context.Context, metrics app.QueryMetrics, cfg config.Co
 		cleanup()
 		return nil, nil, err
 	}
+	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
 	agentRepo := agentappsqlite.NewRepository(store.SQLDB())
 	assetCatalog := workspace.NewAssetCatalogService(workspaceRepo)
-	if provider, ok := metrics.(workspace.RuntimeAssetGraphProvider); ok {
-		assetCatalog = assetCatalog.WithRuntimeProvider(provider)
-	}
 	auth := app.NewAuth(accessRepo, workspaceID, app.AuthConfig{
 		DevBypass:    true,
 		CSRFKey:      cfg.CSRFKey,
@@ -240,13 +240,16 @@ func localDevServer(ctx context.Context, metrics app.QueryMetrics, cfg config.Co
 	}
 	server := app.NewWithOptions(metrics, app.Options{
 		Store:              store,
+		DeploymentRepo:     deploymentRepo,
 		WorkspaceRepo:      workspaceRepo,
 		AssetCatalog:       assetCatalog,
 		AccessRepo:         accessRepo,
 		Agent:              agent,
 		Auth:               auth,
+		ArtifactDir:        cfg.ArtifactDir(),
 		DuckDBDir:          duckDBDir,
 		DefaultWorkspaceID: workspaceID,
+		DefaultEnvironment: string(environment),
 	})
 	return server, cleanup, nil
 }

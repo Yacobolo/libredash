@@ -93,8 +93,34 @@ func LoginPage() g.Node {
 }
 
 func CatalogPage(catalog dashboard.Catalog) g.Node {
+	return catalogPageDocument(catalog, catalogPageSignal(catalog))
+}
+
+func CatalogPageForCatalogs(catalogs []dashboard.Catalog) g.Node {
+	if len(catalogs) == 0 {
+		return CatalogPage(dashboard.Catalog{})
+	}
+	dashboards := []uisignals.CatalogDashboardSignal{}
+	for _, catalog := range catalogs {
+		for _, report := range catalog.Dashboards {
+			dashboards = append(dashboards, uisignals.CatalogDashboardSignal{
+				ID:            catalog.Workspace.ID + "." + report.ID,
+				Title:         report.Title,
+				Description:   report.Description,
+				SemanticModel: report.SemanticModel,
+				PageCount:     report.PageCount,
+				Tags:          append([]string{}, report.Tags...),
+				Href:          "/workspaces/" + catalog.Workspace.ID + "/dashboards/" + report.ID,
+			})
+		}
+	}
+	page := catalogPageSignal(catalogs[0])
+	page.Dashboards = dashboards
+	return catalogPageDocument(catalogs[0], page)
+}
+
+func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSignal) g.Node {
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForCatalog(catalog)}
-	page := catalogPageSignal(catalog)
 	signals := map[string]any{
 		"chrome":  chrome,
 		"page":    page,
