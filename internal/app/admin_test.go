@@ -242,6 +242,44 @@ func TestAdminStorageInspectsDuckLakeCatalog(t *testing.T) {
 	}
 }
 
+func TestAdminStorageInspectsConfiguredDuckLakeCatalog(t *testing.T) {
+	dir := t.TempDir()
+	catalogPath := filepath.Join(dir, "libredash.db")
+	dataPath := filepath.Join(dir, "duckdb", "dev", "data")
+	seedAdminStorageDuckLakeAt(t, catalogPath, dataPath)
+	server := NewWithOptions(fakeMetrics{}, Options{
+		DefaultWorkspaceID:  "test",
+		DuckDBDir:           filepath.Join(dir, "duckdb"),
+		DuckLakeCatalogPath: catalogPath,
+		DuckLakeDataPath:    dataPath,
+	})
+
+	entries, err := server.discoverStorageFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("entries = %#v, want configured DuckLake catalog", entries)
+	}
+	if entries[0].Kind != "ducklake" || entries[0].Path != catalogPath || entries[0].DataPath != dataPath {
+		t.Fatalf("entry = %#v, want configured DuckLake catalog/data paths", entries[0])
+	}
+	tables, warning := inspectDuckDBTables(context.Background(), entries[0], nil)
+	if warning != "" {
+		t.Fatalf("warning = %q", warning)
+	}
+	var found bool
+	for _, table := range tables {
+		if table.Schema == "model" && table.Name == "orders" && table.RowCountLabel == "3" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("tables = %#v, want model.orders from configured DuckLake catalog", tables)
+	}
+}
+
 func TestAdminStorageSelectTableRejectsInvalidCommand(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
@@ -419,6 +457,12 @@ CREATE VIEW model.order_totals AS SELECT customer_id, amount FROM model.orders;
 func seedAdminStorageDuckLake(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
+	seedAdminStorageDuckLakeAt(t, filepath.Join(dir, "catalog.sqlite"), filepath.Join(dir, "data"))
+	return dir
+}
+
+func seedAdminStorageDuckLakeAt(t *testing.T, catalogPath, dataPath string) {
+	t.Helper()
 	db, err := sql.Open("duckdb", ":memory:")
 	if err != nil {
 		t.Fatalf("open duckdb: %v", err)
@@ -427,7 +471,7 @@ func seedAdminStorageDuckLake(t *testing.T) string {
 	for _, stmt := range []string{
 		"LOAD sqlite",
 		"LOAD ducklake",
-		"ATTACH 'ducklake:sqlite:" + strings.ReplaceAll(filepath.Join(dir, "catalog.sqlite"), "'", "''") + "' AS lake (DATA_PATH '" + strings.ReplaceAll(filepath.Join(dir, "data"), "'", "''") + "')",
+		"ATTACH 'ducklake:sqlite:" + strings.ReplaceAll(catalogPath, "'", "''") + "' AS lake (DATA_PATH '" + strings.ReplaceAll(dataPath, "'", "''") + "')",
 		"USE lake",
 		"CREATE SCHEMA model",
 		`CREATE TABLE model.orders AS
@@ -439,7 +483,6 @@ func seedAdminStorageDuckLake(t *testing.T) string {
 			t.Fatalf("seed ducklake %q: %v", stmt, err)
 		}
 	}
-	return dir
 }
 
 func TestDuckDBReadOnlyDSN(t *testing.T) {

@@ -1773,6 +1773,37 @@ func (q *Queries) ListPrincipalRolePermissions(ctx context.Context, arg ListPrin
 	return items, nil
 }
 
+const listReferencedDuckLakeSnapshots = `-- name: ListReferencedDuckLakeSnapshots :many
+SELECT DISTINCT ducklake_snapshot_id
+FROM deployments
+WHERE environment = ?
+  AND ducklake_snapshot_id > 0
+ORDER BY ducklake_snapshot_id
+`
+
+func (q *Queries) ListReferencedDuckLakeSnapshots(ctx context.Context, environment string) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listReferencedDuckLakeSnapshots, environment)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var ducklake_snapshot_id int64
+		if err := rows.Scan(&ducklake_snapshot_id); err != nil {
+			return nil, err
+		}
+		items = append(items, ducklake_snapshot_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRoleBindingsByWorkspace = `-- name: ListRoleBindingsByWorkspace :many
 SELECT
   rb.id,

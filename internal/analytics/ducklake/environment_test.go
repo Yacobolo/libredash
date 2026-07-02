@@ -3,12 +3,15 @@ package ducklake
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	_ "github.com/duckdb/duckdb-go/v2"
 )
+
+var errIntentionalFailure = errors.New("intentional failure")
 
 func TestLayoutUsesOneCatalogAndDataStore(t *testing.T) {
 	layout := NewLayout(filepath.Join("tmp", "env"))
@@ -119,6 +122,51 @@ func TestOpenSnapshotRejectsMissingSnapshot(t *testing.T) {
 
 	if _, err := OpenSnapshot(ctx, Config{RootDir: dir, SnapshotID: 999}); err == nil {
 		t.Fatal("OpenSnapshot missing snapshot error = nil")
+	}
+}
+
+func TestFailedCommitDoesNotAdvanceVisibleSnapshot(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	env, err := Open(ctx, Config{RootDir: dir})
+	if extensionUnavailable(err) {
+		t.Skipf("ducklake extension unavailable: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("open writer: %v", err)
+	}
+	defer env.Close()
+
+	snapshot1, err := env.Commit(ctx, "dep_1", nil, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, "CREATE TABLE model_orders AS SELECT 1 AS id")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("commit first snapshot: %v", err)
+	}
+	if _, err := env.Commit(ctx, "dep_fail", nil, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "CREATE OR REPLACE TABLE model_orders AS SELECT 2 AS id"); err != nil {
+			return err
+		}
+		return errIntentionalFailure
+	}); !errors.Is(err, errIntentionalFailure) {
+		t.Fatalf("failed commit error = %v, want intentional failure", err)
+	}
+	snapshots, err := env.Snapshots(ctx)
+	if err != nil {
+		t.Fatalf("snapshots: %v", err)
+	}
+	for _, snapshot := range snapshots {
+		if snapshot.ID > snapshot1 {
+			t.Fatalf("snapshots = %#v, want no committed snapshot after %d", snapshots, snapshot1)
+		}
+	}
+	var id int
+	if err := env.SQLDB().QueryRowContext(ctx, "SELECT id FROM model_orders").Scan(&id); err != nil {
+		t.Fatalf("query visible table: %v", err)
+	}
+	if id != 1 {
+		t.Fatalf("visible id = %d, want first committed value", id)
 	}
 }
 

@@ -71,6 +71,13 @@ SELECT * FROM deployments
 WHERE workspace_id = ? AND environment = ?
 ORDER BY created_at DESC;
 
+-- name: ListReferencedDuckLakeSnapshots :many
+SELECT DISTINCT ducklake_snapshot_id
+FROM deployments
+WHERE environment = ?
+  AND ducklake_snapshot_id > 0
+ORDER BY ducklake_snapshot_id;
+
 -- name: UpdateDeploymentValidated :exec
 UPDATE deployments
 SET status = ?, digest = ?, manifest_json = ?, error = ''

@@ -27,7 +27,7 @@ func (s *Server) adminStorageData(r interface{ Context() context.Context }) ui.A
 		data.Status = "DuckDB directory is not configured."
 		return data
 	}
-	entries, err := discoverDuckDBFiles(data.DuckDBDir)
+	entries, err := s.discoverStorageFiles()
 	if err != nil {
 		data.Status = err.Error()
 		return data
@@ -116,7 +116,7 @@ func (s *Server) adminStorageSelectedTable(ctx context.Context, command ui.Admin
 	if strings.TrimSpace(s.duckDBDir) == "" {
 		return nil, fmt.Errorf("DuckDB directory is not configured")
 	}
-	entries, err := discoverDuckDBFiles(s.duckDBDir)
+	entries, err := s.discoverStorageFiles()
 	if err != nil {
 		return nil, err
 	}
@@ -160,18 +160,53 @@ type duckDBFile struct {
 	DataPath  string
 }
 
-func discoverDuckDBFiles(root string) ([]duckDBFile, error) {
+func (s *Server) discoverStorageFiles() ([]duckDBFile, error) {
+	extra, ok := s.duckLakeCatalogFile()
+	if !ok {
+		return discoverDuckDBFiles(s.duckDBDir)
+	}
+	return discoverDuckDBFiles(s.duckDBDir, extra)
+}
+
+func (s *Server) duckLakeCatalogFile() (duckDBFile, bool) {
+	if strings.TrimSpace(s.duckLakeCatalogPath) == "" || strings.TrimSpace(s.duckLakeDataPath) == "" {
+		return duckDBFile{}, false
+	}
+	info, err := os.Stat(s.duckLakeCatalogPath)
+	if err != nil || info.IsDir() {
+		return duckDBFile{}, false
+	}
+	relPath, err := filepath.Rel(s.duckDBDir, s.duckLakeCatalogPath)
+	if err != nil || relPath == "." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) || relPath == ".." {
+		relPath = filepath.Base(s.duckLakeCatalogPath)
+	}
+	file := duckDBFile{
+		Name:      duckLakeCatalogName(relPath),
+		RelPath:   relPath,
+		Path:      s.duckLakeCatalogPath,
+		ModelID:   modelIDFromStorageFile(filepath.Base(s.duckLakeCatalogPath), relPath),
+		SizeBytes: info.Size(),
+		Kind:      "ducklake",
+		DataPath:  s.duckLakeDataPath,
+	}
+	if size, err := directorySize(file.DataPath); err == nil {
+		file.SizeBytes += size
+	}
+	return file, true
+}
+
+func discoverDuckDBFiles(root string, extraFiles ...duckDBFile) ([]duckDBFile, error) {
 	info, err := os.Stat(root)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return finalizeStorageFiles(extraFiles), nil
 		}
 		return nil, fmt.Errorf("DuckDB directory cannot be read: %w", err)
 	}
 	if !info.IsDir() {
 		return nil, fmt.Errorf("DuckDB path is not a directory.")
 	}
-	var files []duckDBFile
+	files := append([]duckDBFile(nil), extraFiles...)
 	err = filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -209,6 +244,30 @@ func discoverDuckDBFiles(root string) ([]duckDBFile, error) {
 		files = append(files, file)
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return finalizeStorageFiles(files), nil
+}
+
+func finalizeStorageFiles(files []duckDBFile) []duckDBFile {
+	if len(files) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	deduped := files[:0]
+	for _, file := range files {
+		if strings.TrimSpace(file.Path) == "" {
+			continue
+		}
+		key := file.Kind + "\x00" + file.Path
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		deduped = append(deduped, file)
+	}
+	files = deduped
 	nameCounts := map[string]int{}
 	for _, file := range files {
 		nameCounts[file.Name]++
@@ -222,7 +281,7 @@ func discoverDuckDBFiles(root string) ([]duckDBFile, error) {
 	sort.SliceStable(files, func(i, j int) bool {
 		return files[i].RelPath < files[j].RelPath
 	})
-	return files, err
+	return files
 }
 
 func inspectDuckDBTables(ctx context.Context, file duckDBFile, modelTitles map[string]string) ([]ui.AdminStorageTable, string) {

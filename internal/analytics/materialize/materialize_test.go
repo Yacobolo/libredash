@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,6 +15,7 @@ import (
 	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
 	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
@@ -357,6 +360,223 @@ WHERE snapshot_id = ?
 	}
 	if matchingSnapshots != 1 {
 		t.Fatalf("matching committed snapshots = %d, want 1", matchingSnapshots)
+	}
+}
+
+func TestWorkspaceRuntimeUsesPlatformDBAsDuckLakeCatalog(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "orders.csv"), []byte("order_id,status,revenue\no1,paid,10\no2,paid,15\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	catalogPath := filepath.Join(dir, "libredash.db")
+	store, err := platform.Open(ctx, catalogPath)
+	if err != nil {
+		t.Fatalf("open platform store: %v", err)
+	}
+	defer store.Close()
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "sales", Title: "Sales"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	model := &semanticmodel.Model{
+		Name:        "workspace",
+		Connections: map[string]semanticmodel.Connection{"local_files": {Kind: "local"}},
+		Sources: map[string]semanticmodel.Source{
+			"orders": {Path: "orders.csv", Format: "csv", Connection: "local_files"},
+		},
+		BaseTable: "orders",
+		Tables: map[string]semanticmodel.Table{
+			"orders": {
+				Source:     "orders",
+				PrimaryKey: "order_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{
+					"order_id": {Label: "Order ID"},
+					"status":   {Label: "Status"},
+					"revenue":  {Label: "Revenue"},
+				},
+			},
+		},
+		Measures: map[string]semanticmodel.MetricMeasure{
+			"revenue": {Table: "orders", Grain: "order_id", Expression: "SUM(orders.revenue)", Label: "Revenue"},
+		},
+	}
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	duckRoot := filepath.Join(dir, "duckdb", "dev")
+	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
+		Models:           map[string]*semanticmodel.Model{"sales": model},
+		DataDir:          dataDir,
+		DBDir:            duckRoot,
+		CatalogPath:      catalogPath,
+		DuckLakeDataPath: filepath.Join(duckRoot, "data"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	if runtime.DuckLakeSnapshotID() <= 0 {
+		t.Fatalf("DuckLakeSnapshotID = %d, want committed snapshot", runtime.DuckLakeSnapshotID())
+	}
+	if _, err := os.Stat(filepath.Join(duckRoot, "catalog.sqlite")); !os.IsNotExist(err) {
+		t.Fatalf("workspace-local catalog exists or stat failed: %v", err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, "SELECT 1 FROM workspaces WHERE id = 'sales'"); err != nil {
+		t.Fatalf("platform control-plane table unavailable after materialization: %v", err)
+	}
+
+	db, err := sql.Open("duckdb", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, stmt := range []string{
+		"LOAD sqlite",
+		"LOAD ducklake",
+		"ATTACH 'ducklake:sqlite:" + strings.ReplaceAll(catalogPath, "'", "''") + "' AS lake",
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var physicalTables int
+	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM ducklake_table_info('lake') WHERE table_name = 'orders'").Scan(&physicalTables); err != nil {
+		t.Fatal(err)
+	}
+	if physicalTables != 1 {
+		t.Fatalf("DuckLake physical tables = %d, want one orders table in platform catalog", physicalTables)
+	}
+}
+
+func TestWorkspaceRuntimeQueriesPinnedDuckLakeSnapshots(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	catalogPath := filepath.Join(dir, "libredash.db")
+	store, err := platform.Open(ctx, catalogPath)
+	if err != nil {
+		t.Fatalf("open platform store: %v", err)
+	}
+	defer store.Close()
+	model := simpleOrdersModel(t)
+	duckRoot := filepath.Join(dir, "duckdb", "dev")
+	config := analyticsduckdb.WorkspaceRuntimeConfig{
+		Models:           map[string]*semanticmodel.Model{"sales": model},
+		DataDir:          dataDir,
+		DBDir:            duckRoot,
+		CatalogPath:      catalogPath,
+		DuckLakeDataPath: filepath.Join(duckRoot, "data"),
+	}
+
+	writeOrdersCSV(t, dataDir, 10, 15)
+	writer, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot1 := writer.DuckLakeSnapshotID()
+	writeOrdersCSV(t, dataDir, 100, 150)
+	if err := writer.Refresh(ctx); err != nil {
+		t.Fatalf("refresh second snapshot: %v", err)
+	}
+	snapshot2 := writer.DuckLakeSnapshotID()
+	if snapshot2 <= snapshot1 {
+		t.Fatalf("snapshot2 = %d, want > snapshot1 %d", snapshot2, snapshot1)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	config.SnapshotID = snapshot1
+	first, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, config)
+	if err != nil {
+		t.Fatalf("open first snapshot: %v", err)
+	}
+	defer first.Close()
+	if got := queryRevenue(t, ctx, first); got != 25 {
+		t.Fatalf("first snapshot revenue = %v, want 25", got)
+	}
+
+	config.SnapshotID = snapshot2
+	second, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, config)
+	if err != nil {
+		t.Fatalf("open second snapshot: %v", err)
+	}
+	defer second.Close()
+	if got := queryRevenue(t, ctx, second); got != 250 {
+		t.Fatalf("second snapshot revenue = %v, want 250", got)
+	}
+}
+
+func simpleOrdersModel(t *testing.T) *semanticmodel.Model {
+	t.Helper()
+	model := &semanticmodel.Model{
+		Name:        "workspace",
+		Connections: map[string]semanticmodel.Connection{"local_files": {Kind: "local"}},
+		Sources: map[string]semanticmodel.Source{
+			"orders": {Path: "orders.csv", Format: "csv", Connection: "local_files"},
+		},
+		BaseTable: "orders",
+		Tables: map[string]semanticmodel.Table{
+			"orders": {
+				Source:     "orders",
+				PrimaryKey: "order_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{
+					"order_id": {Label: "Order ID"},
+					"status":   {Label: "Status"},
+					"revenue":  {Label: "Revenue"},
+				},
+			},
+		},
+		Measures: map[string]semanticmodel.MetricMeasure{
+			"revenue": {Table: "orders", Grain: "order_id", Expression: "SUM(orders.revenue)", Label: "Revenue"},
+		},
+	}
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	return model
+}
+
+func writeOrdersCSV(t *testing.T, dir string, firstRevenue, secondRevenue int) {
+	t.Helper()
+	content := fmt.Sprintf("order_id,status,revenue\no1,paid,%d\no2,paid,%d\n", firstRevenue, secondRevenue)
+	if err := os.WriteFile(filepath.Join(dir, "orders.csv"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func queryRevenue(t *testing.T, ctx context.Context, runtime *analyticsduckdb.WorkspaceRuntime) float64 {
+	t.Helper()
+	queries, err := runtime.Queries("sales")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := queries.Query(ctx, semanticquery.Request{
+		Measures: []semanticquery.Field{{Field: "revenue", Alias: "revenue"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("rows = %#v, want one row", rows)
+	}
+	switch value := rows[0]["revenue"].(type) {
+	case int64:
+		return float64(value)
+	case float64:
+		return value
+	case *big.Int:
+		return float64(value.Int64())
+	default:
+		t.Fatalf("revenue value = %#v (%T), want numeric", rows[0]["revenue"], rows[0]["revenue"])
+		return 0
 	}
 }
 

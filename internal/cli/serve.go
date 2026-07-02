@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/agentapp"
@@ -103,9 +104,10 @@ func deploymentBackedServer(ctx context.Context, cfg config.Config, dataDir stri
 		Environment:  environment,
 		DataDir:      dataDir,
 		Factory: deploymentRuntimeFactory{
-			dataDir:    dataDir,
-			duckDBDir:  cfg.DuckDBDirPath(),
-			runtimeDir: cfg.RuntimeDir(),
+			dataDir:     dataDir,
+			duckDBDir:   cfg.DuckDBDirPath(),
+			runtimeDir:  cfg.RuntimeDir(),
+			catalogPath: cfg.DBPath(),
 		},
 	})
 	if err := registry.Reload(ctx); err != nil {
@@ -138,21 +140,23 @@ func deploymentBackedServer(ctx context.Context, cfg config.Config, dataDir stri
 	rateLimits := app.ProductionRateLimitConfig()
 	rateLimits.Enabled = production && cfg.RateLimitingEnabled()
 	server := app.NewWithOptions(runtimeMetrics, app.Options{
-		Store:              store,
-		DeploymentRepo:     deploymentRepo,
-		WorkspaceRepo:      workspaceRepo,
-		AssetCatalog:       assetCatalog,
-		AccessRepo:         accessRepo,
-		Agent:              agentapp.NewService(runtimeMetrics, agentRepo, agentapp.Config{APIKey: cfg.AgentAPIKey, BaseURL: cfg.AgentBaseURL, Model: cfg.AgentModel}),
-		Auth:               auth,
-		Reloader:           registry,
-		ArtifactDir:        cfg.ArtifactDir(),
-		DuckDBDir:          cfg.DuckDBDirPath(),
-		DefaultEnvironment: string(environment),
-		RateLimits:         rateLimits,
-		SecurityHeaders:    app.SecurityHeaders(production && cfg.HSTSEnabled(cookieSecure)),
-		RequestLogging:     production && cfg.RequestLoggingEnabled(),
-		Logger:             slog.Default(),
+		Store:               store,
+		DeploymentRepo:      deploymentRepo,
+		WorkspaceRepo:       workspaceRepo,
+		AssetCatalog:        assetCatalog,
+		AccessRepo:          accessRepo,
+		Agent:               agentapp.NewService(runtimeMetrics, agentRepo, agentapp.Config{APIKey: cfg.AgentAPIKey, BaseURL: cfg.AgentBaseURL, Model: cfg.AgentModel}),
+		Auth:                auth,
+		Reloader:            registry,
+		ArtifactDir:         cfg.ArtifactDir(),
+		DuckDBDir:           cfg.DuckDBDirPath(),
+		DuckLakeCatalogPath: cfg.DBPath(),
+		DuckLakeDataPath:    filepath.Join(cfg.DuckDBDirPath(), string(environment), "data"),
+		DefaultEnvironment:  string(environment),
+		RateLimits:          rateLimits,
+		SecurityHeaders:     app.SecurityHeaders(production && cfg.HSTSEnabled(cookieSecure)),
+		RequestLogging:      production && cfg.RequestLoggingEnabled(),
+		Logger:              slog.Default(),
 	})
 	return server, cleanupWithRegistry, nil
 }

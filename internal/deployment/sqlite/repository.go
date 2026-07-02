@@ -82,6 +82,10 @@ func (r *Repository) RecordDuckLakeSnapshot(ctx context.Context, deploymentID de
 	})
 }
 
+func (r *Repository) ReferencedDuckLakeSnapshots(ctx context.Context, environment deployment.Environment) ([]int64, error) {
+	return r.q.ListReferencedDuckLakeSnapshots(ctx, string(deployment.NormalizeEnvironment(environment)))
+}
+
 func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.ID, validation deployment.Validation, artifact deployment.Artifact) (deployment.Deployment, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {

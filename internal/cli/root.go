@@ -29,6 +29,7 @@ type rootOptions struct {
 	pageToken    string
 	searchTypes  []string
 	autoApprove  bool
+	apply        bool
 }
 
 func Execute(ctx context.Context) error {

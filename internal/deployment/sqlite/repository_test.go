@@ -240,6 +240,56 @@ func TestRepositoryRecordsDuckLakeSnapshot(t *testing.T) {
 	}
 }
 
+func TestRepositoryListsReferencedDuckLakeSnapshots(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openRepo(t, ctx)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	first, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create first: %v", err)
+	}
+	second, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create second: %v", err)
+	}
+	third, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create third: %v", err)
+	}
+	prod, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", Environment: "prod", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create prod: %v", err)
+	}
+	if err := repo.RecordDuckLakeSnapshot(ctx, first.ID, 7); err != nil {
+		t.Fatalf("record first: %v", err)
+	}
+	if err := repo.RecordDuckLakeSnapshot(ctx, second.ID, 9); err != nil {
+		t.Fatalf("record second: %v", err)
+	}
+	if err := repo.RecordDuckLakeSnapshot(ctx, third.ID, 7); err != nil {
+		t.Fatalf("record third: %v", err)
+	}
+	if err := repo.RecordDuckLakeSnapshot(ctx, prod.ID, 11); err != nil {
+		t.Fatalf("record prod: %v", err)
+	}
+
+	got, err := repo.ReferencedDuckLakeSnapshots(ctx, deployment.DefaultEnvironment)
+	if err != nil {
+		t.Fatalf("referenced snapshots: %v", err)
+	}
+	want := []int64{7, 9}
+	if len(got) != len(want) {
+		t.Fatalf("referenced snapshots = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("referenced snapshots = %#v, want %#v", got, want)
+		}
+	}
+}
+
 func TestRepositorySaveValidatedRejectsMismatchedArtifactEnvironment(t *testing.T) {
 	ctx := context.Background()
 	store, repo := openRepo(t, ctx)

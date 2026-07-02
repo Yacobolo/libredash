@@ -95,6 +95,43 @@ func TestManagerPreparedRuntimeExposesDuckLakeSnapshot(t *testing.T) {
 	}
 }
 
+func TestManagerReloadRoutesWhenOnlyActiveDeploymentPointerChanges(t *testing.T) {
+	ctx := context.Background()
+	repo := &fakeRepo{
+		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 11},
+		artifact:   deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"},
+	}
+	factory := &fakeFactory{}
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: factory})
+
+	if err := manager.Reload(ctx); err != nil {
+		t.Fatalf("first reload: %v", err)
+	}
+	active, err := manager.Active()
+	if err != nil {
+		t.Fatalf("first active: %v", err)
+	}
+	if got := active.(RuntimeSnapshot).DuckLakeSnapshotID(); got != 11 {
+		t.Fatalf("first active snapshot = %d, want 11", got)
+	}
+
+	repo.deployment = deployment.Deployment{ID: "dep_2", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 22}
+	repo.artifact = deployment.Artifact{DeploymentID: "dep_2", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"}
+	if err := manager.Reload(ctx); err != nil {
+		t.Fatalf("second reload: %v", err)
+	}
+	active, err = manager.Active()
+	if err != nil {
+		t.Fatalf("second active: %v", err)
+	}
+	if got := active.(RuntimeSnapshot).DuckLakeSnapshotID(); got != 22 {
+		t.Fatalf("second active snapshot = %d, want 22", got)
+	}
+	if factory.prepareCalls != 2 {
+		t.Fatalf("prepare calls = %d, want reload to prepare both deployment pointers", factory.prepareCalls)
+	}
+}
+
 func TestManagerRejectsPreparedFromDifferentHost(t *testing.T) {
 	manager := NewManagerWithFactory(ManagerOptions{Repo: &fakeRepo{}, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
 	if err := manager.CommitPrepared(fakePrepared{}); err == nil {
@@ -283,10 +320,13 @@ type fakeFactory struct {
 	snapshotID   int64
 }
 
-func (f *fakeFactory) Prepare(context.Context, RuntimeInput) (Runtime, error) {
+func (f *fakeFactory) Prepare(_ context.Context, input RuntimeInput) (Runtime, error) {
 	f.prepareCalls++
 	if f.err != nil {
 		return nil, f.err
+	}
+	if input.Deployment.DuckLakeSnapshotID > 0 {
+		return &fakeRuntime{snapshotID: input.Deployment.DuckLakeSnapshotID}, nil
 	}
 	return &fakeRuntime{snapshotID: f.snapshotID}, nil
 }

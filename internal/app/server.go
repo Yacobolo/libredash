@@ -78,26 +78,28 @@ func (m multiWorkspaceMetrics) defaultMetrics() QueryMetrics {
 }
 
 type Server struct {
-	metrics            QueryMetrics
-	broker             *dashboardstream.Broker
-	store              *platform.Store
-	deploymentRepo     deploymentRepository
-	workspaceRepo      workspace.Repository
-	assetCatalog       workspace.AssetCatalogReader
-	accessRepo         access.Repository
-	agent              *agentapp.Service
-	auth               *Auth
-	reloader           runtimeReloader
-	artifactDir        string
-	duckDBDir          string
-	defaultWorkspaceID string
-	defaultEnvironment string
-	rateLimits         RateLimitConfig
-	securityHeaders    SecurityHeadersConfig
-	requestLogging     bool
-	logger             *slog.Logger
-	chatTitleMu        sync.Mutex
-	pendingChatTitles  map[string]struct{}
+	metrics             QueryMetrics
+	broker              *dashboardstream.Broker
+	store               *platform.Store
+	deploymentRepo      deploymentRepository
+	workspaceRepo       workspace.Repository
+	assetCatalog        workspace.AssetCatalogReader
+	accessRepo          access.Repository
+	agent               *agentapp.Service
+	auth                *Auth
+	reloader            runtimeReloader
+	artifactDir         string
+	duckDBDir           string
+	duckLakeCatalogPath string
+	duckLakeDataPath    string
+	defaultWorkspaceID  string
+	defaultEnvironment  string
+	rateLimits          RateLimitConfig
+	securityHeaders     SecurityHeadersConfig
+	requestLogging      bool
+	logger              *slog.Logger
+	chatTitleMu         sync.Mutex
+	pendingChatTitles   map[string]struct{}
 }
 
 func New(metrics QueryMetrics) *Server {
@@ -105,22 +107,24 @@ func New(metrics QueryMetrics) *Server {
 }
 
 type Options struct {
-	Store              *platform.Store
-	DeploymentRepo     deploymentRepository
-	WorkspaceRepo      workspace.Repository
-	AssetCatalog       workspace.AssetCatalogReader
-	AccessRepo         access.Repository
-	Agent              *agentapp.Service
-	Auth               *Auth
-	Reloader           runtimeReloader
-	ArtifactDir        string
-	DuckDBDir          string
-	DefaultWorkspaceID string
-	DefaultEnvironment string
-	RateLimits         RateLimitConfig
-	SecurityHeaders    SecurityHeadersConfig
-	RequestLogging     bool
-	Logger             *slog.Logger
+	Store               *platform.Store
+	DeploymentRepo      deploymentRepository
+	WorkspaceRepo       workspace.Repository
+	AssetCatalog        workspace.AssetCatalogReader
+	AccessRepo          access.Repository
+	Agent               *agentapp.Service
+	Auth                *Auth
+	Reloader            runtimeReloader
+	ArtifactDir         string
+	DuckDBDir           string
+	DuckLakeCatalogPath string
+	DuckLakeDataPath    string
+	DefaultWorkspaceID  string
+	DefaultEnvironment  string
+	RateLimits          RateLimitConfig
+	SecurityHeaders     SecurityHeadersConfig
+	RequestLogging      bool
+	Logger              *slog.Logger
 }
 
 func NewWithOptions(metrics QueryMetrics, options Options) *Server {
@@ -135,6 +139,8 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.reloader = options.Reloader
 	server.artifactDir = options.ArtifactDir
 	server.duckDBDir = options.DuckDBDir
+	server.duckLakeCatalogPath = options.DuckLakeCatalogPath
+	server.duckLakeDataPath = options.DuckLakeDataPath
 	server.defaultWorkspaceID = options.DefaultWorkspaceID
 	server.defaultEnvironment = string(deployment.NormalizeEnvironment(deployment.Environment(options.DefaultEnvironment)))
 	server.rateLimits = options.RateLimits
