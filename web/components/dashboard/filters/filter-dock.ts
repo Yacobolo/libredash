@@ -26,7 +26,7 @@ class LibreDashFilterDock extends LitElement {
 
     aside {
       display: grid;
-      width: var(--ld-dashboard-filter-width, 44px);
+      width: var(--ld-dashboard-filter-width);
       box-sizing: border-box;
       min-width: 0;
       min-height: 0;
@@ -35,13 +35,13 @@ class LibreDashFilterDock extends LitElement {
       border-left: var(--ld-border-default);
       background: var(--ld-bg-panel-muted);
       transition:
-        width var(--motion-duration-fast, 160ms) var(--motion-easing-move, ease),
-        background-color var(--motion-duration-fast, 160ms) var(--motion-easing-move, ease);
+        width var(--ld-duration-fast) var(--motion-easing-move),
+        background-color var(--ld-duration-fast) var(--motion-easing-move);
     }
 
     aside[data-open] {
       grid-template-rows: minmax(0, 1fr);
-      width: var(--ld-dashboard-filter-open-width, 320px);
+      width: var(--ld-dashboard-filter-open-width);
       background: var(--ld-bg-app);
     }
 

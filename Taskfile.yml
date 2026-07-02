@@ -136,6 +136,8 @@ tasks:
       - generate
       - build
     cmds:
+      - bun run test:primer-primitives
+      - bun run test:primer-alignment
       - bun run test:theme
       - bun run test:app-shell
       - bun run test:table-selection

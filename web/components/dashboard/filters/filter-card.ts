@@ -137,13 +137,13 @@ const filterCardStyles = css`
 
     .chip,
     .action {
-      min-height: var(--control-small-size);
-      border: var(--ld-border-default);
+      min-height: var(--ld-button-height-sm);
+      border: var(--borderWidth-default) solid var(--ld-button-border-rest);
       border-radius: var(--ld-radius-tight);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
+      background: var(--ld-button-bg-rest);
+      color: var(--ld-button-fg-rest);
       cursor: pointer;
-      padding: 0 var(--control-xsmall-paddingInline-normal);
+      padding: 0 var(--ld-button-padding-inline-xs);
       font-size: var(--ld-font-size-caption);
       font-weight: var(--ld-font-weight-strong);
     }
@@ -153,8 +153,8 @@ const filterCardStyles = css`
     }
 
     .chip[aria-pressed='true'] {
-      border-color: var(--ld-accent);
-      background: color-mix(in srgb, var(--ld-accent) 20%, var(--ld-bg-control));
+      border-color: var(--borderColor-accent-muted);
+      background: var(--bgColor-accent-muted);
     }
 
     .date-row,
@@ -169,9 +169,9 @@ const filterCardStyles = css`
     }
 
     .action.primary {
-      border-color: var(--ld-accent);
-      background: var(--ld-accent);
-      color: var(--ld-accent-fg);
+      border-color: var(--ld-button-accent-border-rest);
+      background: var(--ld-button-accent-bg-rest);
+      color: var(--ld-button-accent-fg-rest);
     }
 
     .checks {

@@ -498,7 +498,7 @@ const recordTableStyles = `
 
   ld-record-table .record-table th,
   ld-record-table .record-table td {
-    border-bottom: var(--borderWidth-default, 1px) solid color-mix(in srgb, var(--ld-line-muted), transparent 28%);
+    border-bottom: var(--ld-border-muted);
     padding: var(--base-size-8);
     text-align: left;
     vertical-align: top;
@@ -562,7 +562,7 @@ const recordTableStyles = `
   }
 
   ld-record-table .record-table tbody tr {
-    transition: background-color var(--motion-transition-hover, 120ms ease);
+    transition: background-color var(--motion-transition-hover);
   }
 
   ld-record-table .record-table tbody tr:hover {
@@ -571,7 +571,7 @@ const recordTableStyles = `
 
   ld-record-table .variant-primary .record-table tbody tr:hover,
   ld-record-table .variant-compact .record-table tbody tr:hover {
-    background: color-mix(in srgb, var(--ld-bg-panel-muted), transparent 35%);
+    background: var(--control-transparent-bgColor-hover);
   }
 
   ld-record-table .record-table-sort {
@@ -651,19 +651,19 @@ const recordTableStyles = `
   }
 
   ld-record-table .record-badge-success {
-    border: var(--borderWidth-default, 1px) solid var(--ld-line-success-muted, var(--ld-line-muted));
+    border: var(--borderWidth-default) solid var(--ld-line-success-muted, var(--ld-line-muted));
     background: var(--ld-bg-success-muted, var(--ld-bg-panel-muted));
     color: var(--ld-fg-default);
   }
 
   ld-record-table .record-badge-accent {
-    border: var(--borderWidth-default, 1px) solid var(--ld-line-accent-muted, var(--ld-line-muted));
+    border: var(--borderWidth-default) solid var(--ld-line-accent-muted, var(--ld-line-muted));
     background: var(--ld-bg-accent-muted, var(--ld-bg-panel-muted));
     color: var(--ld-fg-default);
   }
 
   ld-record-table .record-badge-attention {
-    border: var(--borderWidth-default, 1px) solid var(--ld-line-warning-muted, var(--ld-line-muted));
+    border: var(--borderWidth-default) solid var(--ld-line-warning-muted, var(--ld-line-muted));
     background: var(--ld-bg-warning-muted, var(--ld-bg-panel-muted));
     color: var(--ld-fg-default);
   }
@@ -777,8 +777,8 @@ const recordTableStyles = `
   ld-record-table .record-entity-icon,
   ld-record-table .record-button-icon {
     display: inline-flex;
-    width: var(--control-medium-size, 32px);
-    height: var(--control-medium-size, 32px);
+    width: var(--control-medium-size);
+    height: var(--control-medium-size);
     align-items: center;
     justify-content: center;
     border: var(--ld-border-muted);
@@ -871,11 +871,11 @@ const recordTableStyles = `
 
   ld-record-table .record-icon-action {
     display: inline-flex;
-    width: var(--control-medium-size, 32px);
-    height: var(--control-medium-size, 32px);
+    width: var(--control-medium-size);
+    height: var(--control-medium-size);
     align-items: center;
     justify-content: center;
-    border: var(--ld-border-transparent, 1px solid transparent);
+    border: var(--ld-border-transparent);
     border-radius: var(--ld-radius-default);
     background: transparent;
     color: var(--ld-fg-muted);

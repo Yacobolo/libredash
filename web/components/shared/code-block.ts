@@ -109,7 +109,7 @@ const codeBlockStyles = `
     max-width: 100%;
     overflow: hidden;
     border: var(--ld-border-muted);
-    border-radius: var(--borderRadius-medium, 6px);
+    border-radius: var(--borderRadius-medium);
     background: var(--ld-bg-panel-muted);
   }
 
@@ -122,7 +122,7 @@ const codeBlockStyles = `
     overflow: auto;
     padding: var(--base-size-16);
     font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, SFMono-Regular, Consolas, Liberation Mono, monospace);
-    font-size: var(--ld-font-size-body-sm, 0.875rem);
+    font-size: var(--ld-font-size-body-sm);
     line-height: 1.65;
     tab-size: 2;
   }

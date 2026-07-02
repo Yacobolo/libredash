@@ -116,7 +116,7 @@ class LibreDashChatPage extends LitElement {
     }
 
     .new-chat-stage > * {
-      animation: new-chat-enter var(--ld-transition-medium, 260ms ease) both;
+      animation: new-chat-enter var(--ld-transition-medium) both;
     }
 
     .new-chat-stage ld-chat-composer {

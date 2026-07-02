@@ -97,7 +97,7 @@ class AgentPromptEditor extends LitElement {
     .mode-toggle button.is-active {
       background: var(--ld-bg-panel);
       color: var(--ld-fg-default);
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--ld-fg-default) 8%, transparent);
+      box-shadow: var(--shadow-inset);
     }
 
     .mode-toggle button:focus-visible,

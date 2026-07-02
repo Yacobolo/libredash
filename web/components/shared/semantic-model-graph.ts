@@ -639,7 +639,7 @@ const semanticModelGraphStyles = `
     align-items: center;
     justify-content: center;
     border: var(--ld-border-default);
-    border-radius: var(--ld-radius-tight, 4px);
+    border-radius: var(--ld-radius-tight);
     background: var(--ld-bg-panel);
     color: var(--ld-fg-default);
     padding: 0;
@@ -669,7 +669,7 @@ const semanticModelGraphStyles = `
     display: inline-grid;
     place-items: center;
     border: var(--ld-border-muted);
-    border-radius: var(--ld-radius-full, 999px);
+    border-radius: var(--ld-radius-full);
     background: var(--ld-bg-panel);
     box-shadow: var(--shadow-resting-small, none);
     color: var(--ld-fg-default);
@@ -708,8 +708,8 @@ const semanticModelGraphStyles = `
   ld-semantic-model-graph .semantic-model-node {
     width: ${NODE_WIDTH}px;
     overflow: hidden;
-    border: var(--borderWidth-default, 1px) solid var(--ld-line-muted);
-    border-radius: var(--borderRadius-default, 6px);
+    border: var(--borderWidth-default) solid var(--ld-line-muted);
+    border-radius: var(--borderRadius-default);
     background: var(--ld-bg-panel);
     box-shadow: var(--shadow-resting-small, none);
     color: var(--ld-fg-default);
@@ -786,7 +786,7 @@ const semanticModelGraphStyles = `
     gap: var(--base-size-6);
     border-bottom: var(--ld-border-muted);
     box-shadow: inset 0 0 0 0 transparent;
-    padding: 0 var(--base-size-10);
+    padding: 0 var(--ld-space-control);
   }
 
   ld-semantic-model-graph .semantic-model-field:last-child {

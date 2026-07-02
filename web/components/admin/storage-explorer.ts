@@ -582,7 +582,7 @@ const storageExplorerStyles = `
     min-width: 0;
     align-items: center;
     border-bottom: var(--ld-border-muted);
-    padding: var(--base-size-12, 0.75rem) var(--base-size-16, 1rem);
+    padding: var(--base-size-12) var(--base-size-16);
     background: var(--ld-bg-panel);
   }
 
@@ -606,7 +606,7 @@ const storageExplorerStyles = `
     min-width: 0;
     grid-template-columns: minmax(0, 1fr);
     align-items: center;
-    gap: var(--base-size-4, 0.25rem);
+    gap: var(--base-size-4);
   }
 
   .storage-detail-header,
@@ -626,7 +626,7 @@ const storageExplorerStyles = `
 
   h2 {
     color: var(--ld-fg-default);
-    font-size: var(--ld-font-size-title-sm, 1rem);
+    font-size: var(--ld-font-size-title-sm);
     line-height: var(--ld-line-height-tight, 1.2);
     font-weight: var(--ld-font-weight-strong, 600);
   }
@@ -636,7 +636,7 @@ const storageExplorerStyles = `
     color: var(--ld-fg-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ld-font-size-caption, 0.75rem);
+    font-size: var(--ld-font-size-caption);
     font-weight: var(--ld-font-weight-medium, 500);
     line-height: var(--ld-line-height-tight, 1.2);
   }
@@ -674,7 +674,7 @@ const storageExplorerStyles = `
   .storage-browser-menu {
     border-bottom: var(--ld-border-muted);
     background: var(--ld-bg-panel);
-    padding: var(--base-size-4, 0.25rem) var(--base-size-8, 0.5rem);
+    padding: var(--base-size-4) var(--base-size-8);
   }
 
   .storage-search-icon {
@@ -709,10 +709,10 @@ const storageExplorerStyles = `
   .storage-warnings {
     grid-area: warnings;
     display: grid;
-    gap: var(--base-size-8, 0.5rem);
+    gap: var(--base-size-8);
     border-bottom: var(--ld-border-muted);
     background: var(--ld-bg-panel);
-    padding: var(--base-size-8, 0.5rem) var(--base-size-12, 0.75rem);
+    padding: var(--base-size-8) var(--base-size-12);
   }
 
   .storage-warnings-empty {
@@ -723,9 +723,9 @@ const storageExplorerStyles = `
     border: var(--ld-border-attention, var(--ld-border-muted));
     border-radius: var(--ld-radius-default);
     background: var(--ld-bg-attention-muted, var(--ld-bg-panel-muted));
-    padding: var(--base-size-8, 0.5rem) var(--base-size-12, 0.75rem);
+    padding: var(--base-size-8) var(--base-size-12);
     color: var(--ld-fg-default);
-    font-size: var(--ld-font-size-body-sm, 0.875rem);
+    font-size: var(--ld-font-size-body-sm);
     font-weight: var(--ld-font-weight-medium, 500);
   }
 
@@ -827,17 +827,17 @@ const storageExplorerStyles = `
 
   .storage-table-button {
     display: grid;
-    min-height: 1.75rem;
+    min-height: var(--ld-button-height-sm, var(--control-small-size));
     width: 100%;
     grid-template-columns: 1rem minmax(0, 1fr) max-content;
     align-items: center;
     gap: 0.45rem;
-    border: 0;
-    border-left: 2px solid transparent;
+    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
+    border-left: var(--borderWidth-thick, var(--ld-border-width-focus)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
     border-radius: var(--ld-radius-small);
-    background: transparent;
-    padding: 0 0.5rem;
-    color: var(--ld-fg-default);
+    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+    padding: 0 var(--ld-button-padding-inline-xs, var(--control-xsmall-paddingInline-normal));
+    color: var(--ld-button-invisible-fg-rest, var(--ld-fg-default));
     text-align: left;
     font: inherit;
     cursor: pointer;
@@ -845,8 +845,11 @@ const storageExplorerStyles = `
 
   .storage-table-button:hover,
   .storage-table-button:focus-visible {
-    background: var(--ld-bg-control-hover);
-    outline: 0;
+    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-muted)));
+    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-control-hover)));
+    outline: var(--focus-outline, var(--ld-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
   .storage-table-button.is-selected {
@@ -939,8 +942,9 @@ const storageExplorerStyles = `
 
   .storage-breadcrumb-button {
     min-width: 0;
-    border: 0;
-    background: transparent;
+    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
+    border-radius: var(--ld-radius-tight);
+    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
     padding: 0;
     font: inherit;
     font-weight: inherit;
@@ -950,8 +954,12 @@ const storageExplorerStyles = `
 
   .storage-breadcrumb-button:hover,
   .storage-breadcrumb-button:focus-visible {
+    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-muted)));
+    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
     color: var(--ld-fg-link);
-    outline: 0;
+    outline: var(--focus-outline, var(--ld-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    outline-offset: var(--focus-outline-offset, var(--base-size-2));
     text-decoration: underline;
     text-underline-offset: 0.125rem;
   }
@@ -1077,8 +1085,9 @@ const storageExplorerStyles = `
     max-width: 100%;
     align-items: center;
     gap: 0.375rem;
-    border: 0;
-    background: transparent;
+    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
+    border-radius: var(--ld-radius-tight);
+    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
     padding: 0;
     color: var(--ld-fg-default);
     font: inherit;
@@ -1089,8 +1098,12 @@ const storageExplorerStyles = `
 
   .storage-schema-table-link:hover,
   .storage-schema-table-link:focus-visible {
+    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-muted)));
+    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
     color: var(--ld-fg-link);
-    outline: 0;
+    outline: var(--focus-outline, var(--ld-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
   .storage-schema-table-link span {

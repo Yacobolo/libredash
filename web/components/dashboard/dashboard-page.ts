@@ -75,7 +75,7 @@ class LibreDashDashboardPage extends LitElement {
       align-items: center;
       gap: var(--base-size-8);
       border-bottom: var(--ld-border-muted);
-      padding: var(--base-size-10) var(--base-size-16);
+      padding: var(--ld-space-control) var(--base-size-16);
     }
 
     .title-block {

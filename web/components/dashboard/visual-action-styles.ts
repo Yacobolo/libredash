@@ -10,14 +10,14 @@ export const visualActionStyles = css`
 
   .icon-action {
     display: grid;
-    width: var(--control-xsmall-size);
-    height: var(--control-xsmall-size);
-    min-height: var(--control-xsmall-size);
+    width: var(--ld-button-height-xs, var(--control-xsmall-size));
+    height: var(--ld-button-height-xs, var(--control-xsmall-size));
+    min-height: var(--ld-button-height-xs, var(--control-xsmall-size));
     place-items: center;
-    border: var(--ld-border-transparent);
+    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
     border-radius: var(--ld-radius-tight);
-    background: transparent;
-    color: var(--ld-icon-muted, var(--ld-fg-muted));
+    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+    color: var(--ld-button-invisible-icon-rest, var(--ld-icon-muted, var(--ld-fg-muted)));
     cursor: pointer;
     padding: 0;
     font: inherit;
@@ -31,9 +31,11 @@ export const visualActionStyles = css`
 
   .icon-action:hover,
   .icon-action:focus-visible {
-    border-color: var(--ld-line-default);
-    background: var(--ld-bg-panel-muted);
+    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
+    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
     color: var(--ld-icon-default, var(--ld-fg-default));
-    outline: 0;
+    outline: var(--focus-outline, var(--ld-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 `

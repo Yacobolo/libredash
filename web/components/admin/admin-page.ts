@@ -50,7 +50,7 @@ class LibreDashAdminPage extends LitElement {
 
     .main {
       display: grid;
-      width: min(100%, var(--ld-page-content-max-width, 72rem));
+      width: min(100%, var(--ld-page-content-max-width));
       min-width: 0;
       min-height: 100svh;
       align-content: start;
@@ -110,7 +110,7 @@ class LibreDashAdminPage extends LitElement {
 
     .metrics {
       display: grid;
-      max-width: var(--ld-workspace-detail-max-width, 72rem);
+      max-width: var(--ld-workspace-detail-max-width);
       grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
       gap: var(--base-size-12);
     }
@@ -160,15 +160,15 @@ class LibreDashAdminPage extends LitElement {
 
     .warnings {
       display: grid;
-      max-width: var(--ld-workspace-detail-max-width, 72rem);
+      max-width: var(--ld-workspace-detail-max-width);
       gap: var(--base-size-8);
     }
 
     .warning {
-      border: var(--ld-border-attention, var(--ld-border-muted));
+      border: var(--ld-border-attention);
       border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-attention-muted, var(--ld-bg-panel-muted));
-      padding: var(--base-size-10) var(--base-size-12);
+      background: var(--ld-bg-attention-muted);
+      padding: var(--ld-space-control) var(--base-size-12);
       color: var(--ld-fg-default);
       font-size: var(--ld-font-size-body-sm);
       font-weight: var(--ld-font-weight-medium);
