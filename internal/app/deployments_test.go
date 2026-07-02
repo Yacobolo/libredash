@@ -899,6 +899,35 @@ func TestWorkspaceListUsesRepositoryActiveMetadataWithoutGraphLoads(t *testing.T
 	}
 }
 
+func TestWorkspaceListPageDoesNotRenderWorkspaceScopedChat(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	req := httptest.NewRequest(http.MethodGet, "/workspaces", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	rendered := html.UnescapeString(rec.Body.String())
+	for _, notWant := range []string{`/workspaces/test/chat`, `"workspaceTitle":"LibreDash Workspace"`} {
+		if strings.Contains(rendered, notWant) {
+			t.Fatalf("workspace list rendered workspace-scoped chat %q:\n%s", notWant, rec.Body.String())
+		}
+	}
+	if !strings.Contains(rendered, `"id":"chat"`) || !strings.Contains(rendered, `"href":"/chat"`) {
+		t.Fatalf("workspace list did not render global chat navigation:\n%s", rec.Body.String())
+	}
+	if !strings.Contains(rendered, `"workspaceTitle":"LibreDash"`) {
+		t.Fatalf("workspace list did not render global app chrome:\n%s", rec.Body.String())
+	}
+}
+
 type metadataWorkspaceRepo struct {
 	graphCalls int
 }
@@ -1723,6 +1752,19 @@ func testPrincipal(t *testing.T, ctx context.Context, store *platform.Store, ema
 	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{Email: email, DisplayName: displayName})
 	if err != nil {
 		t.Fatalf("upsert principal: %v", err)
+	}
+	return principal
+}
+
+func testPlatformPrincipal(t *testing.T, ctx context.Context, store *platform.Store, email, displayName, role string) access.Principal {
+	t.Helper()
+	principal, err := testAccessRepository(store).SetPlatformRole(ctx, access.PlatformRoleInput{
+		Email:       email,
+		DisplayName: displayName,
+		Role:        role,
+	})
+	if err != nil {
+		t.Fatalf("bind platform role: %v", err)
 	}
 	return principal
 }

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
@@ -26,11 +27,10 @@ type runtimeMetrics struct {
 }
 
 type dynamicRuntimeMetrics struct {
-	defaultID string
-	dataDir   string
-	factory   func(workspaceID string) RuntimeProvider
-	mu        sync.Mutex
-	metrics   map[string]QueryMetrics
+	dataDir string
+	factory func(workspaceID string) RuntimeProvider
+	mu      sync.Mutex
+	metrics map[string]QueryMetrics
 }
 
 type catalogRuntime interface {
@@ -78,17 +78,13 @@ func NewRuntimeMetrics(provider runtimeProvider, dataDir, workspaceID string) Qu
 
 func NewDynamicRuntimeMetrics(defaultWorkspaceID, dataDir string, factory func(workspaceID string) RuntimeProvider) QueryMetrics {
 	return &dynamicRuntimeMetrics{
-		defaultID: defaultWorkspaceID,
-		dataDir:   dataDir,
-		factory:   factory,
-		metrics:   map[string]QueryMetrics{},
+		dataDir: dataDir,
+		factory: factory,
+		metrics: map[string]QueryMetrics{},
 	}
 }
 
 func (m *dynamicRuntimeMetrics) MetricsForWorkspace(workspaceID string) (QueryMetrics, bool) {
-	if workspaceID == "" {
-		workspaceID = m.defaultID
-	}
 	if workspaceID == "" || m.factory == nil {
 		return nil, false
 	}
@@ -107,17 +103,18 @@ func (m *dynamicRuntimeMetrics) MetricsForWorkspace(workspaceID string) (QueryMe
 }
 
 func (m *dynamicRuntimeMetrics) defaultMetrics() QueryMetrics {
-	if metrics, ok := m.MetricsForWorkspace(m.defaultID); ok {
-		return metrics
-	}
 	return nil
 }
 
 func (m runtimeMetrics) Catalog() dashboard.Catalog {
 	runtime, err := m.catalogRuntime()
 	if err != nil {
+		title := strings.TrimSpace(m.workspaceID)
+		if title == "" {
+			title = "LibreDash"
+		}
 		return dashboard.Catalog{
-			Workspace: dashboard.CatalogWorkspace{ID: m.workspaceID, Title: "LibreDash Workspace", Description: "No active deployment."},
+			Workspace: dashboard.CatalogWorkspace{ID: m.workspaceID, Title: title, Description: "No active deployment."},
 		}
 	}
 	return runtime.Catalog()

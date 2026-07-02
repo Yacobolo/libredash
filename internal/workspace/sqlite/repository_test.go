@@ -3,6 +3,7 @@ package sqlite_test
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/deployment"
@@ -11,6 +12,29 @@ import (
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
+
+func TestRepositoryEnsureRejectsBlankWorkspaceID(t *testing.T) {
+	ctx := context.Background()
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
+	err = workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: " \t\n", Title: "Fallback"})
+	if err == nil || !strings.Contains(err.Error(), "workspace id is required") {
+		t.Fatalf("Ensure(blank) error = %v, want workspace id required", err)
+	}
+
+	workspaces, err := workspaceRepo.List(ctx)
+	if err != nil {
+		t.Fatalf("list workspaces: %v", err)
+	}
+	if len(workspaces) != 0 {
+		t.Fatalf("workspaces = %#v, want none", workspaces)
+	}
+}
 
 func TestRepositoryActiveDeploymentGraphUsesLogicalAssetIDs(t *testing.T) {
 	ctx := context.Background()

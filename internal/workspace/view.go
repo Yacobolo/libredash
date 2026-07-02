@@ -1,6 +1,9 @@
 package workspace
 
-import "strings"
+import (
+	"net/url"
+	"strings"
+)
 
 type WorkspaceView struct {
 	ID                 string
@@ -86,7 +89,7 @@ func AssetViewFromCatalogRecord(row AssetRecord) AssetView {
 		PayloadSchema: row.PayloadSchema,
 		Payload:       row.Payload,
 		ContentHash:   row.ContentHash,
-		Href:          AssetHref(string(row.WorkspaceID), string(row.Type), row.Key),
+		Href:          AssetHrefForAsset(string(row.WorkspaceID), string(row.Type), row.Key, row.Payload),
 	}
 }
 
@@ -102,12 +105,33 @@ func AssetEdgeViewFromCatalogRecord(row AssetEdgeRecord) AssetEdgeView {
 }
 
 func AssetHref(workspaceID, assetType, key string) string {
+	return AssetHrefForAsset(workspaceID, assetType, key, nil)
+}
+
+func AssetHrefForAsset(workspaceID, assetType, key string, payload map[string]any) string {
 	switch assetType {
 	case string(AssetTypeDashboard):
-		return "/workspaces/" + workspaceID + "/dashboards/" + key
+		return "/workspaces/" + url.PathEscape(workspaceID) + "/dashboards/" + url.PathEscape(dashboardRouteID(workspaceID, key, payload))
 	default:
 		return ""
 	}
+}
+
+func dashboardRouteID(workspaceID, key string, payload map[string]any) string {
+	if payload != nil {
+		if id, ok := payload["ID"].(string); ok && strings.TrimSpace(id) != "" {
+			return id
+		}
+		if id, ok := payload["id"].(string); ok && strings.TrimSpace(id) != "" {
+			return id
+		}
+	}
+	if workspaceID != "" {
+		if routeID, ok := strings.CutPrefix(key, workspaceID+"."); ok {
+			return routeID
+		}
+	}
+	return key
 }
 
 func FilterAssets(assets []AssetView, typ, query string) []AssetView {

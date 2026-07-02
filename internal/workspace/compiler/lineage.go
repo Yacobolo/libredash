@@ -72,7 +72,7 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.De
 		return id, nil
 	}
 
-	catalogID, err := add(workspace.AssetTypeCatalog, string(workspaceID), "", workspaceTitle(definition.Catalog.Workspace.Title), definition.Catalog.Workspace.Description, catalogPayload(definition))
+	catalogID, err := add(workspace.AssetTypeCatalog, string(workspaceID), "", workspaceTitle(definition.Catalog.Workspace.Title, string(workspaceID)), definition.Catalog.Workspace.Description, catalogPayload(definition))
 	if err != nil {
 		return workspace.AssetGraph{}, err
 	}

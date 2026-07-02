@@ -427,10 +427,13 @@ func TestHomeRouteRendersDashboardCatalog(t *testing.T) {
 			t.Fatalf("home sidebar missing %q:\n%s", want, body)
 		}
 	}
-	for _, notWant := range []string{`Metric Views`, `/metrics`, `Semantic Models`, `/models`, `Settings`, `/workspaces/test-workspace/permissions`} {
+	for _, notWant := range []string{`Metric Views`, `/metrics`, `Semantic Models`, `/models`, `Settings`, `/workspaces/test-workspace/permissions`, `/workspaces/test-workspace/chat`} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("home sidebar rendered removed navigation %q:\n%s", notWant, body)
 		}
+	}
+	if !strings.Contains(rendered, `"id":"chat"`) || !strings.Contains(rendered, `"href":"/chat"`) {
+		t.Fatalf("home sidebar did not render global chat navigation:\n%s", body)
 	}
 	if strings.Contains(rendered, `<ld-sub-sidebar`) {
 		t.Fatalf("dashboard catalog should not render sub sidebar:\n%s", body)
@@ -517,6 +520,17 @@ func TestDashboardRouteRedirectsToFirstPage(t *testing.T) {
 	}
 	if got := rec.Header().Get("Location"); got != "/workspaces/test-workspace/dashboards/executive-sales/pages/overview" {
 		t.Fatalf("Location = %q, want first page", got)
+	}
+}
+
+func TestServerDoesNotResolveBlankWorkspaceToDefault(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+
+	if got := server.workspaceID(""); got != "" {
+		t.Fatalf("workspaceID(\"\") = %q, want blank", got)
+	}
+	if _, ok := server.metricsForWorkspace(""); ok {
+		t.Fatal("metricsForWorkspace(\"\") returned metrics, want no implicit workspace")
 	}
 }
 

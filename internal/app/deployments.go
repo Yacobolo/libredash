@@ -17,7 +17,6 @@ import (
 	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
 	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/deployment/validate"
-	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/go-chi/chi/v5"
 )
@@ -220,13 +219,7 @@ func (s *Server) deploymentByIDForRequestWorkspace(r *http.Request, repo deploym
 }
 
 func (s *Server) workspaceID(candidate string) string {
-	if candidate != "" {
-		return candidate
-	}
-	if s.defaultWorkspaceID != "" {
-		return s.defaultWorkspaceID
-	}
-	return platform.DefaultWorkspaceID
+	return candidate
 }
 
 func (s *Server) deploymentRepository() (deploymentRepository, error) {

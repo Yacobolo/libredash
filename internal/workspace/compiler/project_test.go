@@ -94,6 +94,32 @@ spec:
 	}
 }
 
+func TestCompileRequiresExplicitWorkspaceID(t *testing.T) {
+	projectPath := writeProjectFixture(t, map[string]string{
+		"libredash.yaml":                                   projectYAML(),
+		"connections/olist.yaml":                           connectionYAML("olist"),
+		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
+		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
+		"workspaces/sales/workspace.yaml":                  workspaceYAML("sales"),
+		"workspaces/sales/models/orders.yaml":              modelTableYAML("sales", "orders", "olist.orders", "order_id", "SELECT order_id, order_status AS status FROM source.\"olist.orders\""),
+		"workspaces/sales/semantic-models/sales.yaml":      semanticModelYAML("sales", "orders", "order_count"),
+		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
+	})
+
+	_, err := Compile(projectPath, Options{DeploymentID: "dep_test"})
+	if err == nil || !strings.Contains(err.Error(), "workspace id is required") {
+		t.Fatalf("Compile(blank workspace) error = %v, want workspace id required", err)
+	}
+
+	compiled, err := Compile(projectPath, Options{WorkspaceID: "sales", DeploymentID: "dep_test"})
+	if err != nil {
+		t.Fatalf("Compile(sales) error = %v", err)
+	}
+	if got := compiled.Workspace.ID; got != "sales" {
+		t.Fatalf("compiled workspace = %q, want sales", got)
+	}
+}
+
 func TestCompileProjectCompilesWorkspaceAgentPolicy(t *testing.T) {
 	projectPath := writeProjectFixture(t, map[string]string{
 		"libredash.yaml":                                   projectYAML(),

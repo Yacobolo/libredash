@@ -120,6 +120,59 @@ func TestChatInitialEnvelopeOnlyListActivatesChatNav(t *testing.T) {
 	}
 }
 
+func TestCatalogSidebarUsesGlobalChat(t *testing.T) {
+	sidebar := SidebarConfigForCatalog(dashboard.Catalog{
+		Workspace: dashboard.CatalogWorkspace{ID: "operations", Title: "Operations"},
+	})
+
+	item, ok := sidebarItem(sidebar, "chat")
+	if !ok {
+		t.Fatalf("catalog sidebar missing chat item: %#v", sidebar.Groups)
+	}
+	if item.Href != "/chat" {
+		t.Fatalf("catalog chat href = %q, want global chat", item.Href)
+	}
+}
+
+func TestWorkspaceSidebarUsesGlobalChat(t *testing.T) {
+	sidebar := SidebarConfigForWorkspace(dashboard.Catalog{
+		Workspace: dashboard.CatalogWorkspace{ID: "operations", Title: "Operations"},
+	}, "workspaces", "Viewer")
+
+	item, ok := sidebarItem(sidebar, "chat")
+	if !ok {
+		t.Fatalf("workspace sidebar missing chat item: %#v", sidebar.Groups)
+	}
+	if item.Href != "/chat" {
+		t.Fatalf("chat href = %q, want global chat", item.Href)
+	}
+}
+
+func TestSidebarWorkspaceTitleDoesNotInventDefaultWorkspace(t *testing.T) {
+	global := SidebarConfigForCatalog(dashboard.Catalog{})
+	if global.WorkspaceTitle != "LibreDash" {
+		t.Fatalf("global workspace title = %q, want app title", global.WorkspaceTitle)
+	}
+
+	workspace := SidebarConfigForWorkspace(dashboard.Catalog{
+		Workspace: dashboard.CatalogWorkspace{ID: "operations"},
+	}, "workspaces", "Viewer")
+	if workspace.WorkspaceTitle != "operations" {
+		t.Fatalf("workspace title = %q, want workspace id fallback", workspace.WorkspaceTitle)
+	}
+}
+
+func sidebarItem(sidebar SidebarSignal, id string) (SidebarItemSignal, bool) {
+	for _, group := range sidebar.Groups {
+		for _, item := range group.Items {
+			if item.ID == id {
+				return item, true
+			}
+		}
+	}
+	return SidebarItemSignal{}, false
+}
+
 func testDashboardReport() reportdef.Dashboard {
 	return reportdef.Dashboard{
 		ID:            "report",

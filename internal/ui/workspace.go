@@ -20,6 +20,7 @@ import (
 
 func WorkspacesPage(catalog dashboard.Catalog, workspaces []workspaceview.WorkspaceView, roleLabel string, chromeOptions ...ChromeOption) g.Node {
 	page := workspaceCatalogPageSignal(workspaces)
+	catalog = catalogWithoutWorkspaceContext(catalog)
 	return workspaceRouteDocument("LibreDash Workspaces", catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspace,
 		g.El("ld-workspace-page",
 			g.Attr("slot", "page"),
@@ -49,6 +50,9 @@ func WorkspacePage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceV
 
 func ConnectionsPage(catalog dashboard.Catalog, workspaceID string, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeType, query, roleLabel string, chromeOptions ...ChromeOption) g.Node {
 	page := connectionsPageSignal(workspaceID, assets, edges, activeType, query)
+	if strings.TrimSpace(workspaceID) == "" {
+		catalog = catalogWithoutWorkspaceContext(catalog)
+	}
 	return workspaceRouteDocument("Connections", catalog, "connections", roleLabel, page, uisignals.RouteConnections,
 		g.El("ld-connections-page",
 			g.Attr("slot", "page"),
@@ -58,6 +62,11 @@ func ConnectionsPage(catalog dashboard.Catalog, workspaceID string, assets []wor
 		nil,
 		chromeOptions,
 	)
+}
+
+func catalogWithoutWorkspaceContext(catalog dashboard.Catalog) dashboard.Catalog {
+	catalog.Workspace = dashboard.CatalogWorkspace{}
+	return catalog
 }
 
 type workspaceAccessSignalState struct {

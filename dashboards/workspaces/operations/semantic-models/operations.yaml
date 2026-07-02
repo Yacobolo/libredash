@@ -21,7 +21,7 @@ spec:
       grain: order_id
     order_count:
       label: Orders
-      expression: count_distinct(orders.order_id)
+      expression: COUNT(DISTINCT orders.order_id)
     review_score:
       label: Review score
       expression: avg(orders.review_score)

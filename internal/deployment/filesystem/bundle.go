@@ -725,10 +725,3 @@ func safeBundlePath(path string) (string, error) {
 	}
 	return clean, nil
 }
-
-func workspaceTitle(value string) string {
-	if strings.TrimSpace(value) != "" {
-		return value
-	}
-	return "LibreDash Workspace"
-}

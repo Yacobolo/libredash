@@ -12,13 +12,14 @@ import (
 	"github.com/Yacobolo/libredash/internal/deployment"
 	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
+	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
 
-func TestLocalDevServerAlwaysOpensPlatformStore(t *testing.T) {
+func TestDeploymentBackedDevServerAlwaysOpensPlatformStore(t *testing.T) {
 	home := t.TempDir()
-	_, cleanup, err := localDevServer(context.Background(), nil, config.Config{HomeDir: home}, "test", deployment.DefaultEnvironment)
+	_, cleanup, err := deploymentBackedServer(context.Background(), config.Config{HomeDir: home}, "", false, deployment.DefaultEnvironment)
 	if err != nil {
-		t.Fatalf("local dev server: %v", err)
+		t.Fatalf("deployment-backed dev server: %v", err)
 	}
 	defer cleanup()
 
@@ -30,12 +31,12 @@ func TestLocalDevServerAlwaysOpensPlatformStore(t *testing.T) {
 	}
 }
 
-func TestLocalDevServerSeedsPlatformAdminPrincipal(t *testing.T) {
+func TestDeploymentBackedDevServerSeedsPlatformAdminPrincipal(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
-	_, cleanup, err := localDevServer(ctx, nil, config.Config{HomeDir: home}, "test", deployment.DefaultEnvironment)
+	_, cleanup, err := deploymentBackedServer(ctx, config.Config{HomeDir: home}, "", false, deployment.DefaultEnvironment)
 	if err != nil {
-		t.Fatalf("local dev server: %v", err)
+		t.Fatalf("deployment-backed dev server: %v", err)
 	}
 	defer cleanup()
 
@@ -61,12 +62,12 @@ func TestLocalDevServerSeedsPlatformAdminPrincipal(t *testing.T) {
 	}
 }
 
-func TestLocalDevServerDoesNotCreateDeployments(t *testing.T) {
+func TestDeploymentBackedDevServerDoesNotCreateWorkspacesOrDeployments(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
-	_, cleanup, err := localDevServer(ctx, nil, config.Config{HomeDir: home}, "test", deployment.DefaultEnvironment)
+	_, cleanup, err := deploymentBackedServer(ctx, config.Config{HomeDir: home}, "", false, deployment.DefaultEnvironment)
 	if err != nil {
-		t.Fatalf("local dev server: %v", err)
+		t.Fatalf("deployment-backed dev server: %v", err)
 	}
 	defer cleanup()
 
@@ -75,6 +76,14 @@ func TestLocalDevServerDoesNotCreateDeployments(t *testing.T) {
 		t.Fatalf("open platform store: %v", err)
 	}
 	defer store.Close()
+	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
+	workspaces, err := workspaceRepo.List(ctx)
+	if err != nil {
+		t.Fatalf("list workspaces: %v", err)
+	}
+	if len(workspaces) != 0 {
+		t.Fatalf("workspaces = %#v, want none before explicit deploy", workspaces)
+	}
 	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
 	deployments, err := deploymentRepo.List(ctx, deployment.WorkspaceID("test"), deployment.DefaultEnvironment)
 	if err != nil {

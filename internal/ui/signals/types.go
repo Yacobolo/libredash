@@ -850,11 +850,11 @@ func SidebarConfigForCatalog(catalog dashboard.Catalog) SidebarSignal {
 		modelID = catalog.Models[0].ID
 		modelTitle = catalog.Models[0].Title
 	}
-	return SidebarConfig(catalog, "dashboards", "", workspaceDisplayTitle(catalog), "Dashboards", "Discovery", modelID, modelTitle, false, "")
+	return sidebarConfig(catalog, "dashboards", "", "LibreDash", "Dashboards", "Discovery", modelID, modelTitle, false, "", false)
 }
 
 func SidebarConfigForWorkspace(catalog dashboard.Catalog, active, roleLabel string) SidebarSignal {
-	return SidebarConfig(catalog, active, "", workspaceDisplayTitle(catalog), "Workspace", "Published assets", "", "", false, roleLabel)
+	return sidebarConfig(catalog, active, "", workspaceDisplayTitle(catalog), "Workspace", "Published assets", "", "", false, roleLabel, strings.TrimSpace(catalog.Workspace.ID) != "")
 }
 
 func SidebarConfigForChat(catalog dashboard.Catalog, workspaceID, roleLabel, view string) SidebarSignal {
@@ -870,6 +870,10 @@ func SidebarConfigForChat(catalog dashboard.Catalog, workspaceID, roleLabel, vie
 }
 
 func SidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitle, dashboardTitle, pageTitle, modelID, modelTitle string, compact bool, roleLabel string) SidebarSignal {
+	return sidebarConfig(catalog, active, dashboardID, workspaceTitle, dashboardTitle, pageTitle, modelID, modelTitle, compact, roleLabel, strings.TrimSpace(catalog.Workspace.ID) != "")
+}
+
+func sidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitle, dashboardTitle, pageTitle, modelID, modelTitle string, compact bool, roleLabel string, includeWorkspaceScoped bool) SidebarSignal {
 	return SidebarSignal{
 		WorkspaceTitle: workspaceTitle,
 		Active:         active,
@@ -880,7 +884,7 @@ func SidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitl
 		ModelTitle:     modelTitle,
 		Compact:        compact,
 		UserRole:       roleLabel,
-		Groups:         sidebarGroups(catalog),
+		Groups:         sidebarGroups(catalog, includeWorkspaceScoped),
 	}
 }
 
@@ -1066,7 +1070,7 @@ func dashboardComponents(page dashboard.Page) []DashboardComponentSignal {
 	return components
 }
 
-func sidebarGroups(catalog dashboard.Catalog) []SidebarGroupSignal {
+func sidebarGroups(catalog dashboard.Catalog, includeWorkspaceScoped bool) []SidebarGroupSignal {
 	return []SidebarGroupSignal{
 		{
 			Label: "Navigation",
@@ -1097,7 +1101,10 @@ func workspaceDisplayTitle(catalog dashboard.Catalog) string {
 	if strings.TrimSpace(catalog.Workspace.Title) != "" {
 		return catalog.Workspace.Title
 	}
-	return "LibreDash Workspace"
+	if strings.TrimSpace(catalog.Workspace.ID) != "" {
+		return catalog.Workspace.ID
+	}
+	return "LibreDash"
 }
 
 func pageVisualIDs(page dashboard.Page) []string {

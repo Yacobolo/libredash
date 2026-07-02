@@ -61,7 +61,7 @@ func NewMultiWorkspaceMetrics(defaultWorkspaceID string, workspaces map[string]Q
 
 func (m multiWorkspaceMetrics) MetricsForWorkspace(workspaceID string) (QueryMetrics, bool) {
 	if workspaceID == "" {
-		workspaceID = m.defaultID
+		return nil, false
 	}
 	metrics, ok := m.workspaces[workspaceID]
 	return metrics, ok
@@ -249,16 +249,16 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 }
 
 func (s *Server) metricsForWorkspace(workspaceID string) (QueryMetrics, bool) {
+	if workspaceID == "" {
+		return nil, false
+	}
 	if provider, ok := s.metrics.(workspaceMetrics); ok {
 		return provider.MetricsForWorkspace(workspaceID)
-	}
-	if workspaceID == "" {
-		return s.metrics, s.metrics != nil
 	}
 	if s.metrics == nil {
 		return nil, false
 	}
-	if workspaceID == s.defaultWorkspaceID {
+	if s.defaultWorkspaceID != "" && workspaceID == s.defaultWorkspaceID {
 		return s.metrics, true
 	}
 	catalog := s.metrics.Catalog()
@@ -281,7 +281,7 @@ func (m dashboardCommandMetrics) RefreshMaterializations(ctx context.Context, mo
 }
 
 func (s *Server) refreshMaterializationsWithRun(ctx context.Context, modelID string) error {
-	return s.refreshMaterializationsWithRunForWorkspace(ctx, s.workspaceID(""), modelID)
+	return s.refreshMaterializationsWithRunForWorkspace(ctx, "", modelID)
 }
 
 func (s *Server) refreshMaterializationsWithRunForWorkspace(ctx context.Context, workspaceID, modelID string) error {

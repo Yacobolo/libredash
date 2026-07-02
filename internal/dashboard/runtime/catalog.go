@@ -105,12 +105,15 @@ func workspaceID(workspace workspace.CatalogWorkspace) string {
 	if strings.TrimSpace(workspace.ID) != "" {
 		return workspace.ID
 	}
-	return "libredash"
+	return ""
 }
 
 func workspaceTitle(workspace workspace.CatalogWorkspace) string {
 	if strings.TrimSpace(workspace.Title) != "" {
 		return workspace.Title
 	}
-	return "LibreDash Workspace"
+	if strings.TrimSpace(workspace.ID) != "" {
+		return workspace.ID
+	}
+	return "LibreDash"
 }

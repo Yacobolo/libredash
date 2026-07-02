@@ -202,6 +202,56 @@ runner_name() {
   fi
 }
 
+wait_ready() {
+  local port="$1"
+  local pid="$2"
+
+  for _ in {1..150}; do
+    if curl -fsS "http://localhost:$port/workspaces" >/dev/null 2>&1; then
+      return 0
+    fi
+    if ! is_alive "$pid"; then
+      echo "LibreDash dev server exited before it became ready" >&2
+      return 1
+    fi
+    sleep 0.2
+  done
+
+  echo "LibreDash dev server did not become ready on http://localhost:$port" >&2
+  return 1
+}
+
+deploy_project() {
+  local port="$1"
+  go run ./cmd/libredash deploy --project dashboards/libredash.yaml --target "http://localhost:${port}" --token dev --environment dev --auto-approve
+}
+
+attach_server() {
+  local pid="$1"
+  local port="$2"
+  local tail_pid=""
+
+  touch "$LOG_FILE"
+  tail -n "${LIBREDASH_DEV_LOG_LINES:-120}" -f "$LOG_FILE" &
+  tail_pid="$!"
+
+  cleanup_attach() {
+    [[ -n "$tail_pid" ]] && kill "$tail_pid" 2>/dev/null || true
+    if is_alive "$pid"; then
+      stop_pid "$pid" "LibreDash dev server"
+    fi
+    stop_port "$port"
+  }
+  trap cleanup_attach INT TERM
+
+  while is_alive "$pid"; do
+    sleep 1
+  done
+  [[ -n "$tail_pid" ]] && kill "$tail_pid" 2>/dev/null || true
+  stop_port "$port"
+  trap - INT TERM
+}
+
 start() {
   if [[ "${LIBREDASH_DEV_RESTART:-}" != "1" ]]; then
     local existing_pid
@@ -213,7 +263,10 @@ start() {
       echo "PID: $existing_pid"
       echo "URL: http://localhost:$existing_port"
       echo "Logs: $LOG_FILE"
-      echo "Set LIBREDASH_DEV_RESTART=1 to force a restart."
+      echo "Deploying project to existing server..."
+      deploy_project "$existing_port"
+      echo "Attached to LibreDash logs. Press Ctrl-C to stop."
+      attach_server "$existing_pid" "$existing_port"
       return 0
     fi
   fi
@@ -235,18 +288,35 @@ start() {
   else
     echo "Runner: go run (install air for hot reload)"
   fi
-  echo "Press Ctrl-C to stop."
+  echo "Deploying project after startup. Press Ctrl-C to stop."
 
   cd "$ROOT"
   export PORT="$port"
   export LIBREDASH_ADDR=":$port"
   export LIBREDASH_DEV_WORKTREE="$ROOT"
 
+  : > "$LOG_FILE"
   if [[ "$runner" == "air" ]]; then
-    exec air -c .air.toml
+    air -c .air.toml >> "$LOG_FILE" 2>&1 &
   else
-    exec go run ./cmd/libredash
+    go run ./cmd/libredash >> "$LOG_FILE" 2>&1 &
   fi
+  local pid="$!"
+  echo "$pid" > "$PID_FILE"
+
+  if ! wait_ready "$port" "$pid"; then
+    stop_pid "$pid" "LibreDash dev server"
+    exit 1
+  fi
+
+  if ! deploy_project "$port"; then
+    stop_pid "$pid" "LibreDash dev server"
+    exit 1
+  fi
+
+  echo "LibreDash listening at http://localhost:$port"
+  echo "Attached to LibreDash logs. Press Ctrl-C to stop."
+  attach_server "$pid" "$port"
 }
 
 stop() {

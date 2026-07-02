@@ -11,7 +11,7 @@ func catalogPayload(definition *workspace.Definition) catalogPayloadV1 {
 	return catalogPayloadV1{
 		Workspace: catalogWorkspacePayloadV1{
 			ID:          definition.Catalog.Workspace.ID,
-			Title:       workspaceTitle(definition.Catalog.Workspace.Title),
+			Title:       workspaceTitle(definition.Catalog.Workspace.Title, definition.Catalog.Workspace.ID),
 			Description: definition.Catalog.Workspace.Description,
 		},
 		SemanticModels: catalogModelsPayload(definition.Catalog.SemanticModels),

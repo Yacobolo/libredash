@@ -23,7 +23,7 @@ func NewRepository(sqlDB *sql.DB) *Repository {
 func (r *Repository) Ensure(ctx context.Context, input workspace.EnsureInput) error {
 	id := strings.TrimSpace(string(input.ID))
 	if id == "" {
-		id = "libredash"
+		return fmt.Errorf("workspace id is required")
 	}
 	title := strings.TrimSpace(input.Title)
 	if title == "" {

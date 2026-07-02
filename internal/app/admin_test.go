@@ -49,7 +49,7 @@ func TestAdminRouteRejectsViewer(t *testing.T) {
 func TestAdminPagesRenderReadOnlyAccessData(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
-	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleOwner)
+	owner := testPlatformPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleAdmin)
 	analyst := testPrincipal(t, ctx, store, "analyst@example.com", "Analyst", access.RoleViewer)
 	repo := testAccessRepository(store)
 	group, err := repo.UpsertGroup(ctx, access.GroupInput{ID: "group_finance", WorkspaceID: "test", Provider: "local", ExternalID: "finance", Name: "Finance"})
@@ -104,7 +104,7 @@ func TestAdminPagesRenderReadOnlyAccessData(t *testing.T) {
 func TestAdminStorageDetailRouteIsDropped(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
-	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleOwner)
+	owner := testPlatformPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleAdmin)
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test", DuckDBDir: seedAdminStorageDuckDB(t)})
@@ -122,7 +122,7 @@ func TestAdminStorageDetailRouteIsDropped(t *testing.T) {
 func TestAdminStorageUpdatesSubscribesWithoutInitialRescan(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
-	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleOwner)
+	owner := testPlatformPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleAdmin)
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test", DuckDBDir: seedAdminStorageDuckDB(t)})
@@ -171,7 +171,7 @@ func TestAdminStorageUpdatesSubscribesWithoutInitialRescan(t *testing.T) {
 func TestAdminStorageSelectTablePublishesSelectedTablePatch(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
-	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleOwner)
+	owner := testPlatformPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleAdmin)
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test", DuckDBDir: seedAdminStorageDuckDB(t)})
@@ -213,7 +213,7 @@ func TestAdminStorageSelectTablePublishesSelectedTablePatch(t *testing.T) {
 func TestAdminStorageSelectTableRejectsInvalidCommand(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
-	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleOwner)
+	owner := testPlatformPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleAdmin)
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test", DuckDBDir: seedAdminStorageDuckDB(t)})
@@ -241,7 +241,7 @@ func TestAdminStorageSelectTableRejectsInvalidCommand(t *testing.T) {
 func TestAdminAccessRouteIsDropped(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
-	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleOwner)
+	owner := testPlatformPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleAdmin)
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
@@ -259,7 +259,7 @@ func TestAdminAccessRouteIsDropped(t *testing.T) {
 func TestAdminPrincipalDetailReturnsNotFoundForMissingPrincipal(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
-	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleOwner)
+	owner := testPlatformPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleAdmin)
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
@@ -277,7 +277,7 @@ func TestAdminPrincipalDetailReturnsNotFoundForMissingPrincipal(t *testing.T) {
 func TestAdminGroupDetailReturnsNotFoundForMissingGroup(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
-	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleOwner)
+	owner := testPlatformPrincipal(t, ctx, store, "owner@example.com", "Owner", access.RoleAdmin)
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})

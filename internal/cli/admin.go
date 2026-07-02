@@ -8,8 +8,6 @@ import (
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/config"
 	"github.com/Yacobolo/libredash/internal/platform"
-	"github.com/Yacobolo/libredash/internal/workspace"
-	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 	"github.com/spf13/cobra"
 )
 
@@ -29,15 +27,8 @@ func adminCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 			if email == "" {
 				email = "admin@localhost"
 			}
-			workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
-			if err := workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: workspace.WorkspaceID(opts.workspaceID), Title: opts.workspaceID}); err != nil {
-				return err
-			}
 			accessRepo := accesssqlite.NewRepository(store.SQLDB())
-			if err := accessRepo.BootstrapAdmin(ctx, opts.workspaceID, email); err != nil {
-				return err
-			}
-			principal, err := accessRepo.PrincipalByID(ctx, access.PrincipalIDForEmail(email))
+			principal, err := accessRepo.SetPlatformRole(ctx, access.PlatformRoleInput{Email: email, DisplayName: email, Role: access.RoleAdmin})
 			if err != nil {
 				return err
 			}

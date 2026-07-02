@@ -45,3 +45,11 @@ func TestAssetViewFromCatalogRecordKeepsPayloadContract(t *testing.T) {
 		t.Fatalf("asset view payload = %#v", view)
 	}
 }
+
+func TestDashboardAssetHrefUsesRuntimeDashboardID(t *testing.T) {
+	got := AssetHref("operations", string(AssetTypeDashboard), "operations.fulfillment-operations")
+	want := "/workspaces/operations/dashboards/fulfillment-operations"
+	if got != want {
+		t.Fatalf("dashboard asset href = %q, want %q", got, want)
+	}
+}

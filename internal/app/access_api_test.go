@@ -83,8 +83,8 @@ func TestAPITokenWorkspaceAndPermissionAllowlistAreEnforced(t *testing.T) {
 func TestCurrentAPITokenRevocationIsScopedToAuthenticatedPrincipal(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
-	owner := testPrincipal(t, ctx, store, "token-revoke-owner@example.com", "Token Owner", access.RoleOwner)
-	foreign := testPrincipal(t, ctx, store, "token-revoke-foreign@example.com", "Token Foreign", access.RoleOwner)
+	owner := testPlatformPrincipal(t, ctx, store, "token-revoke-owner@example.com", "Token Owner", access.RoleAdmin)
+	foreign := testPlatformPrincipal(t, ctx, store, "token-revoke-foreign@example.com", "Token Foreign", access.RoleAdmin)
 	authSecret, _ := testScopedAPIToken(t, ctx, store, access.APITokenInput{
 		PrincipalID: owner.ID,
 		WorkspaceID: "test",
@@ -124,8 +124,8 @@ func TestCurrentSessionRevocationIsScopedToAuthenticatedPrincipal(t *testing.T) 
 	store := testStore(t)
 	ctx := context.Background()
 	repo := testAccessRepository(store)
-	owner := testPrincipal(t, ctx, store, "session-revoke-owner@example.com", "Session Owner", access.RoleOwner)
-	foreign := testPrincipal(t, ctx, store, "session-revoke-foreign@example.com", "Session Foreign", access.RoleOwner)
+	owner := testPlatformPrincipal(t, ctx, store, "session-revoke-owner@example.com", "Session Owner", access.RoleAdmin)
+	foreign := testPlatformPrincipal(t, ctx, store, "session-revoke-foreign@example.com", "Session Foreign", access.RoleAdmin)
 	authSecret, _ := testScopedAPIToken(t, ctx, store, access.APITokenInput{
 		PrincipalID: owner.ID,
 		WorkspaceID: "test",

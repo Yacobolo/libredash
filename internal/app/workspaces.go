@@ -999,8 +999,11 @@ func (s *Server) workspaceResponse(r *http.Request, workspaceID string) workspac
 
 func (s *Server) workspaceAssetsAndEdges(r *http.Request, workspaceID string) ([]workspace.AssetView, []workspace.AssetEdgeView, error) {
 	catalog, ok, err := s.workspaceAssetCatalog(r.Context(), workspaceID, string(s.requestDeploymentEnvironment(r)))
-	if err != nil || !ok {
+	if err != nil {
 		return nil, nil, err
+	}
+	if !ok {
+		return []workspace.AssetView{}, []workspace.AssetEdgeView{}, nil
 	}
 	return assetCatalogViews(catalog), assetCatalogEdgeViews(catalog), nil
 }

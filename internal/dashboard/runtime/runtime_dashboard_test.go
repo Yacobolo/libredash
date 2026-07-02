@@ -30,6 +30,20 @@ func newLegacyRuntime(t *testing.T, dataDir string) (*Service, error) {
 	return service, nil
 }
 
+func newOperationsRuntime(t *testing.T, dataDir string) (*Service, error) {
+	t.Helper()
+	projectPath := filepath.Join("..", "..", "..", "dashboards", "libredash.yaml")
+	services, err := NewFromProject(dataDir, projectPath, dataDir, testDataRuntimeFactory{})
+	if err != nil {
+		return nil, err
+	}
+	service, ok := services["operations"]
+	if !ok {
+		return nil, fmt.Errorf("showcase project has no operations workspace")
+	}
+	return service, nil
+}
+
 func TestMissingDataReturnsSetupPatch(t *testing.T) {
 	dir := t.TempDir()
 	metrics, err := newLegacyRuntime(t, dir)
@@ -51,6 +65,43 @@ func TestMissingDataReturnsSetupPatch(t *testing.T) {
 	var missing *materializeruntime.MissingDataError
 	if !errors.As(metrics.runtimes["sales"].missing, &missing) {
 		t.Fatalf("missing error type = %T, want *MissingDataError", metrics.runtimes["sales"].missing)
+	}
+}
+
+func TestOperationsFulfillmentDashboardQueryFixture(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "olist_orders_dataset.csv", `order_id,customer_id,order_status,order_purchase_timestamp,order_delivered_customer_date
+o1,c1,delivered,2018-01-01 10:00:00,2018-01-03 10:00:00
+o2,c2,shipped,2018-01-05 10:00:00,2018-01-15 10:00:00
+`)
+	writeFixture(t, dir, "olist_order_reviews_dataset.csv", `order_id,review_score
+o1,5
+o2,3
+`)
+	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_state
+c1,SP
+c2,RJ
+`)
+
+	metrics, err := newOperationsRuntime(t, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer metrics.Close()
+
+	patch, err := metrics.QueryDashboardPage(context.Background(), "fulfillment-operations", "overview", dashboard.Filters{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patch.Status.Error != "" {
+		t.Fatalf("unexpected status error: %s", patch.Status.Error)
+	}
+	assertVisualKeys(t, patch, []string{"delivery_days", "delivery_speed", "orders_by_status", "review_by_status", "review_score", "total_orders"})
+	if got := datumInt(patch.Visuals["total_orders"].Data[0], "value"); got != 2 {
+		t.Fatalf("orders KPI value = %d, want 2", got)
+	}
+	if len(patch.Visuals["orders_by_status"].Data) == 0 {
+		t.Fatal("orders by status chart has no data")
 	}
 }
 
