@@ -14,6 +14,7 @@
     "test:visual-modal": "playwright install chromium && bun scripts/build_test_assets.ts visual-modal && bun test web/components/dashboard/visual-modal-focus.test.ts web/components/dashboard/visual-modal.dom.test.ts",
     "test:catalog-page": "playwright install chromium && bun scripts/build_test_assets.ts catalog-page && bun test web/components/app/catalog-page.dom.test.ts",
     "test:dashboard-page": "playwright install chromium && bun scripts/build_test_assets.ts dashboard-page && bun test web/components/dashboard/dashboard-page.dom.test.ts",
+    "test:chat-composer": "playwright install chromium && bun scripts/build_test_assets.ts chat-composer && bun test web/components/chat/chat-composer.dom.test.ts",
     "test:chat-page": "playwright install chromium && bun scripts/build_test_assets.ts chat-page && bun test web/components/chat/chat-page.dom.test.ts",
     "test:chat-thread": "playwright install chromium && bun scripts/build_test_assets.ts chat-thread && bun test web/components/chat/chat-thread.dom.test.ts",
     "test:workspace-page": "playwright install chromium && bun scripts/build_test_assets.ts workspace-page && bun test web/components/workspace/workspace-page.dom.test.ts",

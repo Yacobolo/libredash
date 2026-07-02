@@ -23,6 +23,11 @@ beforeAll(async () => {
       response.end(testDocument('list'))
       return
     }
+    if (url.pathname === '/new') {
+      response.setHeader('content-type', 'text/html')
+      response.end(testDocument('conversation', 'new'))
+      return
+    }
     const file = normalize(join(root, url.pathname))
     if (!file.startsWith(root)) {
       response.writeHead(404)
@@ -68,11 +73,15 @@ for (const viewport of [
         const root = element.shadowRoot
         const composer = root.querySelector('ld-chat-composer') as any
         const thread = root.querySelector('ld-chat-thread') as any
+        const threadRoot = thread?.shadowRoot
         return {
           title: root.querySelector('h1')?.textContent?.trim(),
+          hasRouteHeader: Boolean(root.querySelector('header')),
+          hasDescription: Boolean(root.querySelector('.conversation-description')),
           hasSubSidebar: Boolean(root.querySelector('ld-sub-sidebar')),
           hasThread: Boolean(thread),
           hasComposer: Boolean(composer),
+          emptyState: threadRoot?.querySelector('.empty')?.textContent?.trim() ?? null,
           conversationId: thread?.conversationId,
           composerDisabled: composer?.disabled,
           composerPending: composer?.pending,
@@ -80,10 +89,13 @@ for (const viewport of [
       })
 
       expect(state).toEqual({
-        title: 'Chats',
+        title: 'Revenue check',
+        hasRouteHeader: false,
+        hasDescription: false,
         hasSubSidebar: false,
         hasThread: true,
         hasComposer: true,
+        emptyState: null,
         conversationId: 'c1',
         composerDisabled: false,
         composerPending: false,
@@ -93,6 +105,66 @@ for (const viewport of [
     }
   })
 }
+
+test('new chat page keeps the composer and removes the empty prompt box', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(`${baseURL}/new`)
+    await page.waitForFunction(() => (
+      customElements.get('ld-chat-page')
+        && customElements.get('ld-chat-thread')
+        && customElements.get('ld-chat-composer')
+    ))
+    await page.locator('ld-chat-page').evaluate((element: any) => element.updateComplete)
+
+    const state = await page.locator('ld-chat-page').evaluate((element: any) => {
+      const root = element.shadowRoot
+      const title = root.querySelector('h1') as HTMLElement
+      const thread = root.querySelector('ld-chat-thread') as any
+      const composer = root.querySelector('ld-chat-composer') as any
+      const composerRoot = composer?.shadowRoot
+      const composerSurface = composerRoot?.querySelector('.composer-surface') as HTMLElement
+      const titleRect = title.getBoundingClientRect()
+      const composerRect = composer.getBoundingClientRect()
+      const surfaceRect = composerSurface.getBoundingClientRect()
+      return {
+        title: title.textContent?.trim(),
+        hasRouteHeader: Boolean(root.querySelector('header')),
+        hasDescription: Boolean(root.querySelector('.conversation-description')),
+        hasStartConversationBox: Boolean(thread?.shadowRoot?.querySelector('.empty')),
+        hasComposer: Boolean(composer),
+        conversationId: thread?.conversationId,
+        composerDisabled: composer?.disabled,
+        titleLeft: Math.round(titleRect.left),
+        titleTop: Math.round(titleRect.top),
+        composerBottomDistance: Math.round(window.innerHeight - composerRect.bottom),
+        composerBorderTopWidth: getComputedStyle(composer).borderTopWidth,
+        composerSurfaceWidth: Math.round(surfaceRect.width),
+        composerSurfaceLeft: Math.round(surfaceRect.left),
+        hasVerticalOverflow: document.documentElement.scrollHeight > window.innerHeight,
+      }
+    })
+
+    expect(state).toEqual({
+      title: 'New chat',
+      hasRouteHeader: false,
+      hasDescription: false,
+      hasStartConversationBox: false,
+      hasComposer: true,
+      conversationId: '',
+      composerDisabled: false,
+      titleLeft: 16,
+      titleTop: 14,
+      composerBottomDistance: 0,
+      composerBorderTopWidth: '0px',
+      composerSurfaceWidth: 760,
+      composerSurfaceLeft: 260,
+      hasVerticalOverflow: false,
+    })
+  } finally {
+    await page.close()
+  }
+})
 
 test('chat list page renders searchable conversation history', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
@@ -199,7 +271,7 @@ test('chat list page renders searchable conversation history', async () => {
   }
 })
 
-function testDocument(view = 'conversation'): string {
+function testDocument(view = 'conversation', scenario: 'active' | 'new' = 'active'): string {
   const page = {
     kind: 'chat',
     view,
@@ -211,8 +283,8 @@ function testDocument(view = 'conversation'): string {
       { id: 'c1', title: 'Revenue check', href: '/chat/c1', updatedAt: '2026-01-02T10:00:00Z' },
       { id: 'c2', title: 'Inventory status', href: '/chat/c2', updatedAt: '2026-01-03T10:00:00Z' },
     ],
-    activeConversationId: 'c1',
-    transcript: [{ role: 'assistant', content: 'Ready.' }],
+    activeConversationId: scenario === 'new' ? '' : 'c1',
+    transcript: scenario === 'new' ? [] : [{ role: 'assistant', content: 'Ready.' }],
     status: { enabled: true, running: false },
     composer: { value: '', disabled: false, placeholder: 'Ask about dashboards, metrics, or models...' },
   }
@@ -223,7 +295,7 @@ function testDocument(view = 'conversation'): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-bg-accent-muted: #ddf4ff; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-accent: #0969da; --ld-accent-fg: #fff; --ld-line-default: #d0d7de; --ld-line-muted: #d8dee4; --ld-line-accent: #0969da; --ld-line-accent-muted: #54aeff; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-border-width-focus: 2px; --ld-radius-default: 6px; --ld-radius-tight: 4px; --base-size-4: 4px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-36: 36px; --ld-space-2xs: 2px; --ld-space-xs: 4px; --ld-space-sm: 8px; --ld-space-md: 12px; --ld-space-lg: 16px; --control-medium-size: 32px; --control-large-size: 40px; --control-medium-paddingInline-spacious: 16px; --button-primary-bgColor-rest: #0969da; --button-primary-bgColor-hover: #0757b3; --button-primary-fgColor-rest: #fff; --ld-chat-stack-width: 760px; --ld-chat-thread-padding: 16px; --ld-chat-thread-padding-compact: 12px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-size-title-md: 20px; --ld-font-weight-strong: 600; --ld-font-weight-medium: 500; --ld-line-height-compact: 1.3; --ld-line-height-normal: 1.5; --shadow-resting-small: 0 1px 2px rgb(0 0 0 / .08); --duration-fast: 160ms; --ease-ld: ease; }
+          body { --fontStack-system: system-ui; --ld-bg-app: #f6f8fa; --ld-bg-panel: #fff; --ld-bg-control: #f6f8fa; --ld-bg-control-hover: #f3f4f6; --ld-bg-hover: #eff2f5; --ld-bg-accent-muted: #ddf4ff; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-link: #0969da; --ld-accent: #0969da; --ld-accent-fg: #fff; --ld-line-default: #d0d7de; --ld-line-muted: #d8dee4; --ld-line-accent: #0969da; --ld-line-accent-muted: #54aeff; --ld-border-default: 1px solid #d0d7de; --ld-border-muted: 1px solid #d8dee4; --ld-border-transparent: 1px solid transparent; --ld-border-width-focus: 2px; --ld-radius-default: 6px; --ld-radius-tight: 4px; --ld-radius-large: 12px; --base-size-4: 4px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-36: 36px; --ld-space-2xs: 2px; --ld-space-xs: 4px; --ld-space-sm: 8px; --ld-space-md: 12px; --ld-space-lg: 16px; --control-medium-size: 32px; --control-large-size: 40px; --control-medium-paddingInline-spacious: 16px; --ld-control-medium: 32px; --button-primary-bgColor-rest: #0969da; --button-primary-bgColor-hover: #0757b3; --button-primary-fgColor-rest: #fff; --ld-chat-stack-width: 760px; --ld-chat-thread-padding: 16px; --ld-chat-thread-padding-compact: 12px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-title-sm: 16px; --ld-font-size-title-md: 20px; --ld-font-weight-strong: 600; --ld-font-weight-medium: 500; --ld-line-height-compact: 1.3; --ld-line-height-normal: 1.5; --ld-transition-fast: 160ms ease; --shadow-resting-small: 0 1px 2px rgb(0 0 0 / .08); --ld-shadow-floating-sm: 0 8px 24px rgb(0 0 0 / .12); --duration-fast: 160ms; --ease-ld: ease; }
           ld-chat-page { min-height: 720px; }
         </style>
       </head>

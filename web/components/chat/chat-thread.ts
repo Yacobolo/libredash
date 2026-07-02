@@ -92,12 +92,10 @@ class ChatThread extends LitElement {
       gap: var(--ld-chat-stack-gap);
     }
 
-    .empty,
     .alert {
       display: grid;
       gap: var(--ld-space-sm);
       align-content: center;
-      min-height: var(--ld-chat-empty-min-height);
       border: var(--ld-border-muted);
       border-radius: var(--ld-radius-default);
       background: var(--ld-bg-panel);
@@ -108,7 +106,6 @@ class ChatThread extends LitElement {
     }
 
     .alert {
-      min-height: auto;
       border-color: var(--ld-line-danger-muted);
       background: var(--ld-bg-danger-muted);
       color: var(--ld-fg-default);
@@ -444,9 +441,6 @@ class ChatThread extends LitElement {
         <div class="scroll">
           <div class="stack">
             ${this.status.error ? html`<div class="alert">${this.status.error}</div>` : nothing}
-            ${transcript.length === 0
-              ? html`<div class="empty">Start a conversation from the composer.</div>`
-              : nothing}
             ${groupTranscript(transcript).map((unit) => this.renderUnit(unit))}
           </div>
         </div>

@@ -24,6 +24,10 @@ const fixtures = new Map<string, FixtureBuild>([
     'chat-page',
     split('chat-page', 'web/components/chat/chat-page.ts', '.tmp/chat-page-test', 'chat-page-under-test.js', 'chunks/[name]-[hash].[ext]'),
   ],
+  [
+    'chat-composer',
+    single('chat-composer', 'web/components/chat/chat-composer.ts', '.tmp/chat-composer-test/chat-composer-under-test.js'),
+  ],
   ['chat-thread', split('chat-thread', 'web/components/chat/chat-page.ts', '.tmp/chat-thread-test', 'chat-under-test.js', 'chunks/[name]-[hash].[ext]')],
   ['workspace-page', single('workspace-page', 'web/components/workspace/workspace-page.ts', '.tmp/workspace-page-test/workspace-page-under-test.js')],
   ['admin-page', single('admin-page', 'web/components/admin/admin-page.ts', '.tmp/admin-page-test/admin-page-under-test.js')],

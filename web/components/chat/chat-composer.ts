@@ -20,39 +20,48 @@ class ChatComposer extends LitElement {
     form {
       width: min(100%, var(--ld-chat-stack-width));
       margin-inline: auto;
-      padding: var(--ld-space-md) var(--ld-space-lg);
+      padding: var(--ld-space-lg) var(--ld-space-lg) var(--ld-space-md);
     }
 
-    .composer {
+    .composer-surface {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: end;
-      gap: var(--ld-space-sm);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
+      gap: var(--ld-space-md);
+      border: var(--ld-border-muted);
+      border-radius: var(--ld-radius-large);
       background: var(--ld-bg-panel);
-      padding: var(--ld-space-sm);
+      padding: var(--ld-space-md);
+      box-shadow: var(--ld-shadow-floating-sm);
       transition:
+        background var(--ld-transition-fast),
         border-color var(--ld-transition-fast),
         box-shadow var(--ld-transition-fast);
     }
 
-    .composer:focus-within {
-      border-color: var(--ld-line-accent-muted);
-      box-shadow: 0 0 0 2px var(--ld-bg-accent-muted);
+    .composer-surface:hover:not(.is-disabled) {
+      border-color: var(--ld-line-muted);
+      box-shadow: var(--ld-shadow-floating-sm);
     }
 
-    .composer.is-disabled {
+    .composer-surface:focus-within {
+      border-color: var(--ld-line-accent-muted);
+      box-shadow:
+        var(--ld-shadow-floating-sm),
+        0 0 0 var(--ld-border-width-focus) var(--ld-bg-accent-muted);
+    }
+
+    .composer-surface.is-disabled {
       background: var(--ld-bg-control);
       color: var(--ld-fg-muted);
+      box-shadow: none;
     }
 
     textarea {
       box-sizing: border-box;
-      min-height: 40px;
+      min-height: 36px;
       max-height: 160px;
       width: 100%;
-      resize: vertical;
+      resize: none;
+      overflow-y: auto;
       border: 0;
       border-radius: calc(var(--ld-radius-default) - var(--ld-space-2xs));
       background: transparent;
@@ -64,18 +73,28 @@ class ChatComposer extends LitElement {
       outline: 0;
     }
 
+    textarea:focus {
+      outline: 0;
+    }
+
     textarea::placeholder {
       color: var(--ld-fg-muted);
     }
 
+    .actions {
+      display: flex;
+      min-height: var(--ld-control-medium);
+      align-items: center;
+      justify-content: flex-end;
+    }
+
     button {
       display: inline-flex;
-      min-height: 40px;
-      min-width: 40px;
+      width: var(--ld-control-medium);
+      height: var(--ld-control-medium);
+      min-width: var(--ld-control-medium);
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      align-self: end;
       border: 1px solid var(--ld-accent);
       border-radius: var(--ld-radius-default);
       background: var(--ld-accent);
@@ -89,7 +108,8 @@ class ChatComposer extends LitElement {
       transition:
         background var(--duration-fast) var(--ease-ld),
         border-color var(--duration-fast) var(--ease-ld),
-        color var(--duration-fast) var(--ease-ld);
+        color var(--duration-fast) var(--ease-ld),
+        transform var(--duration-fast) var(--ease-ld);
     }
 
     button svg {
@@ -99,6 +119,7 @@ class ChatComposer extends LitElement {
 
     button:hover:not(:disabled) {
       background: color-mix(in srgb, var(--ld-accent), var(--ld-bg-panel) 10%);
+      transform: translateY(-1px);
     }
 
     button:focus-visible {
@@ -135,13 +156,9 @@ class ChatComposer extends LitElement {
       color: var(--ld-fg-muted);
       opacity: 1;
     }
-
     @media (max-width: 560px) {
-      .composer {
-        grid-template-columns: 1fr;
-      }
-      button {
-        width: 100%;
+      form {
+        padding-inline: var(--ld-space-md);
       }
     }
   `
@@ -149,6 +166,7 @@ class ChatComposer extends LitElement {
   updated(changed: Map<string, unknown>) {
     if (changed.has('value')) {
       this.draft = this.value || ''
+      void this.updateComplete.then(() => this.resizeTextarea())
     }
   }
 
@@ -157,34 +175,42 @@ class ChatComposer extends LitElement {
     this.draft = this.value || ''
   }
 
+  protected firstUpdated() {
+    this.resizeTextarea()
+  }
+
   render() {
     const blocked = this.disabled || this.pending
     return html`
       <form @submit=${this.submit}>
-        <div class=${['composer', blocked ? 'is-disabled' : ''].filter(Boolean).join(' ')}>
+        <div class=${['composer-surface', blocked ? 'is-disabled' : ''].filter(Boolean).join(' ')}>
           <textarea
             .value=${this.draft}
             ?disabled=${this.disabled}
             placeholder=${this.placeholder}
-            rows="2"
+            rows="1"
             @input=${this.input}
             @keydown=${this.keydown}
           ></textarea>
-          <button
-            type="submit"
-            aria-label=${this.pending ? 'Sending' : 'Send'}
-            title="Send"
-            ?disabled=${this.disabled || this.pending || this.draft.trim() === ''}
-          >
-            ${this.pending ? html`<span class="spinner" aria-hidden="true"></span>` : lucideIcon(Send)}
-          </button>
+          <div class="actions">
+            <button
+              type="submit"
+              aria-label=${this.pending ? 'Sending' : 'Send'}
+              title="Send"
+              ?disabled=${this.disabled || this.pending || this.draft.trim() === ''}
+            >
+              ${this.pending ? html`<span class="spinner" aria-hidden="true"></span>` : lucideIcon(Send)}
+            </button>
+          </div>
         </div>
       </form>
     `
   }
 
   private input(event: Event) {
-    this.draft = (event.target as HTMLTextAreaElement).value
+    const textarea = event.target as HTMLTextAreaElement
+    this.draft = textarea.value
+    this.resizeTextarea(textarea)
   }
 
   private keydown(event: KeyboardEvent) {
@@ -206,6 +232,15 @@ class ChatComposer extends LitElement {
       composed: true,
       detail: { input },
     }))
+  }
+
+  private resizeTextarea(textarea = this.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null) {
+    if (!textarea) return
+    const maxHeight = 160
+    textarea.style.height = 'auto'
+    const height = Math.min(textarea.scrollHeight, maxHeight)
+    textarea.style.height = `${height}px`
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden'
   }
 }
 

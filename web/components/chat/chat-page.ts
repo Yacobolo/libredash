@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit'
 import { property } from 'lit/decorators.js'
-import type { ChatPageSignal, ChatSignal, DashboardTable, DashboardVisual } from '../../generated/signals'
+import type { ChatConversationSummary, ChatPageSignal, ChatSignal, DashboardTable, DashboardVisual } from '../../generated/signals'
 import { jsonAttribute } from '../shared/json-attribute'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../dashboard/visual-modal'
@@ -57,17 +57,14 @@ class LibreDashChatPage extends LitElement {
       overflow: visible;
     }
 
-    header {
+    .conversation-titlebar {
       display: grid;
       min-width: 0;
       grid-template-columns: minmax(0, 1fr);
-      gap: var(--base-size-4);
-      border-bottom: var(--ld-border-muted);
-      padding: var(--base-size-10) var(--base-size-16);
+      padding: 14px var(--base-size-16) var(--base-size-8);
     }
 
-    h1,
-    p {
+    h1 {
       margin: 0;
     }
 
@@ -78,15 +75,6 @@ class LibreDashChatPage extends LitElement {
       white-space: nowrap;
       font-size: var(--ld-font-size-title-sm);
       font-weight: var(--ld-font-weight-strong);
-      line-height: var(--ld-line-height-compact);
-    }
-
-    p {
-      overflow: hidden;
-      color: var(--ld-fg-muted);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: var(--ld-font-size-body-sm);
       line-height: var(--ld-line-height-compact);
     }
 
@@ -121,7 +109,6 @@ class LibreDashChatPage extends LitElement {
 
     ld-chat-composer {
       display: block;
-      border-top: var(--ld-border-default);
       background: var(--ld-bg-app);
     }
 
@@ -155,14 +142,14 @@ class LibreDashChatPage extends LitElement {
     const composer = agent.composer ?? emptyAgent.composer
     const view = page?.view ?? 'conversation'
     const isList = view === 'list'
+    const title = conversationTitle(agent)
     return html`
       <div class="route">
         <section class=${isList ? 'main list-main' : 'main'} aria-label="LibreDash chats">
           ${isList ? null : html`
-            <header>
-              <h1>${page?.title ?? 'Chats'}</h1>
-              <p>${page?.description ?? 'Ask read-only questions about dashboards, semantic models, measures, and fields.'}</p>
-            </header>
+            <div class="conversation-titlebar">
+              <h1>${title}</h1>
+            </div>
           `}
           <div class="body">
             ${isList ? html`
@@ -193,6 +180,14 @@ class LibreDashChatPage extends LitElement {
       </div>
     `
   }
+}
+
+function conversationTitle(agent: ChatSignal): string {
+  const activeID = agent.activeConversationId?.trim()
+  if (!activeID) return 'New chat'
+  const active = (agent.conversations ?? []).find((conversation: ChatConversationSummary) => conversation.id === activeID)
+  const title = active?.title?.trim()
+  return title || 'New chat'
 }
 
 if (!customElements.get('ld-chat-page')) customElements.define('ld-chat-page', LibreDashChatPage)

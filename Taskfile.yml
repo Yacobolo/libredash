@@ -143,6 +143,7 @@ tasks:
       - bun run test:visual-modal
       - bun run test:catalog-page
       - bun run test:dashboard-page
+      - bun run test:chat-composer
       - bun run test:chat-page
       - bun run test:chat-thread
       - bun run test:workspace-page
