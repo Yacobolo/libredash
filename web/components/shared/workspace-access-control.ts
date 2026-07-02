@@ -91,19 +91,19 @@ class WorkspaceAccessControl extends LitElement {
 
     .trigger {
       display: inline-flex;
-      min-height: var(--ld-control-medium);
+      min-height: var(--ld-button-height);
       align-items: center;
       justify-content: center;
       gap: var(--base-size-6);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
-      color: var(--ld-fg-default);
+      border: var(--borderWidth-default) solid var(--ld-button-border-rest);
+      border-radius: var(--ld-button-radius);
+      background: var(--ld-button-bg-rest);
+      color: var(--ld-button-fg-rest);
       cursor: pointer;
       font-size: var(--ld-font-size-body-sm);
       font-weight: var(--ld-font-weight-strong);
       line-height: var(--ld-line-height-tight);
-      padding: 0 var(--ld-space-control);
+      padding: 0 var(--ld-button-padding-inline);
       transition:
         color var(--ld-transition-fast),
         background-color var(--ld-transition-fast),
@@ -112,10 +112,12 @@ class WorkspaceAccessControl extends LitElement {
 
     .trigger:hover,
     .trigger:focus-visible {
-      border-color: var(--ld-line-default);
-      background: var(--ld-bg-control-hover);
+      border-color: var(--ld-button-border-hover);
+      background: var(--ld-button-bg-hover);
       color: var(--ld-fg-default);
-      outline: 0;
+      outline: var(--focus-outline, var(--ld-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
     .icon {
@@ -331,23 +333,32 @@ class WorkspaceAccessControl extends LitElement {
     }
 
     .submit {
-      min-height: var(--ld-control-medium);
+      min-height: var(--ld-button-height);
       min-width: var(--base-size-80);
-      border: 0;
-      border-radius: var(--ld-radius-tight);
-      background: var(--button-primary-bgColor-rest);
-      color: var(--button-primary-fgColor-rest);
+      border: var(--borderWidth-default) solid var(--ld-button-accent-border-rest);
+      border-radius: var(--ld-button-radius);
+      background: var(--ld-button-accent-bg-rest);
+      color: var(--ld-button-accent-fg-rest);
       cursor: pointer;
       font-size: var(--ld-font-size-body-sm);
       font-weight: var(--ld-font-weight-strong);
       line-height: var(--ld-line-height-tight);
-      padding: 0 var(--base-size-16);
+      padding: 0 var(--ld-button-padding-inline-spacious);
     }
 
     .submit:hover,
     .submit:focus-visible {
-      background: var(--button-primary-bgColor-hover);
-      outline: 0;
+      border-color: var(--ld-button-accent-border-hover);
+      background: var(--ld-button-accent-bg-hover);
+      outline: var(--focus-outline, var(--ld-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      outline-offset: var(--focus-outline-offset, var(--base-size-2));
+    }
+
+    .submit:disabled {
+      border-color: var(--ld-button-accent-border-disabled);
+      background: var(--ld-button-accent-bg-disabled);
+      color: var(--ld-button-accent-fg-disabled);
     }
 
     .submit:disabled,

@@ -282,7 +282,7 @@ class AgentTools extends LitElement {
     .tabs button.is-active {
       background: var(--ld-bg-panel);
       color: var(--ld-fg-default);
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--ld-fg-default) 8%, transparent);
+      box-shadow: var(--shadow-inset);
     }
 
     .tabs button:focus-visible {

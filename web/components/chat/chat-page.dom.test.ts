@@ -255,7 +255,7 @@ test('chat list page renders searchable conversation history', async () => {
     expect(initial.metrics).toEqual({
       titleFontSize: '20px',
       searchHeight: 40,
-      buttonHeight: 34,
+      buttonHeight: 32,
       buttonBackground: 'rgb(255, 255, 255)',
       buttonColor: 'rgb(36, 41, 47)',
       rowHeight: 53,

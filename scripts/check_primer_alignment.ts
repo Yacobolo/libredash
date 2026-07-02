@@ -4,7 +4,15 @@ import path from "node:path";
 export type PrimerAlignmentViolation = {
   file: string;
   line: number;
-  kind: "raw-color" | "raw-var-fallback" | "undefined-token" | "local-primer-token";
+  kind:
+    | "raw-color"
+    | "raw-var-fallback"
+    | "undefined-token"
+    | "local-primer-token"
+    | "standard-state-color-mix"
+    | "asset-token"
+    | "primer-primary-button-token"
+    | "button-contract";
   message: string;
 };
 
@@ -38,7 +46,13 @@ const runtimeTokenNames = new Set([
   "--report-canvas-width",
 ]);
 const checkedTokenPattern =
-  /^--(?:ld|base|motion|control|controlStack|border|borderColor|zIndex|shadow|fgColor|bgColor|data|button|overlay|text|fontStack|stack|selection|card|dashboard|report|color|spacing|container|radius|duration|ease|breakpoint|outline|focus)-/;
+  /^--(?:ld|base|motion|control|controlStack|border|borderColor|zIndex|shadow|fgColor|bgColor|data|label|button|overlay|text|fontStack|stack|selection|card|dashboard|report|color|spacing|container|radius|duration|ease|breakpoint|outline|focus)-/;
+const standardStateTokenPattern = /^--ld-bg-(?:hover|control-hover|control-active|selected)$/;
+const standardStateSelectorPattern = /(?:\[aria-pressed=['"]true['"]\]|:focus-visible|:focus(?![-\w])|\.day\.in-range)/;
+const standardButtonContractSelectorPattern =
+  /(?:\.icon-action|\.options\s+summary|\.visual-options\s+summary|\.menu\s+button|button\.header-button|\.collapse-button|\.theme-button|\.storage-(?:table-button|breadcrumb-button|schema-table-link))/;
+const directButtonStylingPattern =
+  /(?:\b(?:min-height|width|height|padding)\s*:\s*[^;]*var\(--control-|\bborder\s*:\s*0\b|\bbackground\s*:\s*(?:transparent|var\(--(?:control|ld-bg-panel-muted|ld-bg-control-hover))|\boutline\s*:\s*0\b)/;
 
 async function listFiles(root: string, relativeDir: string): Promise<string[]> {
   const absoluteDir = path.join(root, relativeDir);
@@ -143,6 +157,39 @@ function scanCssForValueViolations(file: string, css: string, violations: Primer
     const tokenName = match[1];
     if (runtimeTokenNames.has(tokenName)) continue;
     addViolation(violations, file, uncommented, match.index ?? 0, "raw-var-fallback", `Use a central token fallback for ${tokenName}, not a raw design value.`);
+  }
+
+  for (const match of uncommented.matchAll(/(--ld-bg-[A-Za-z0-9_-]+)\s*:\s*([^;]*color-mix\([^;]+);/g)) {
+    const tokenName = match[1];
+    if (!standardStateTokenPattern.test(tokenName)) continue;
+    addViolation(violations, file, uncommented, match.index ?? 0, "standard-state-color-mix", `${tokenName} is a standard UI state token; map it directly to Primer control tokens.`);
+  }
+
+  for (const match of uncommented.matchAll(/([^{}]+)\{([^{}]*color-mix\([^{}]+)\}/g)) {
+    const selector = match[1] ?? "";
+    if (!standardStateSelectorPattern.test(selector)) continue;
+    addViolation(violations, file, uncommented, match.index ?? 0, "standard-state-color-mix", "Standard pressed, focus, and date-range states must use Primer state tokens instead of color-mix().");
+  }
+
+  for (const match of uncommented.matchAll(/(--ld-asset-[A-Za-z0-9_-]+)\s*:\s*([^;]+);/g)) {
+    const tokenName = match[1];
+    const value = match[2] ?? "";
+    if (!value.includes("color-mix(") && !value.includes("--data-")) continue;
+    addViolation(violations, file, uncommented, match.index ?? 0, "asset-token", `${tokenName} styles standard asset labels; use Primer label tokens instead of data palette or color-mix values.`);
+  }
+
+  for (const match of uncommented.matchAll(/var\(\s*(--button-primary-[A-Za-z0-9_-]+)/g)) {
+    const tokenName = match[1];
+    addViolation(violations, file, uncommented, match.index ?? 0, "primer-primary-button-token", `${tokenName} is Primer's success-colored primary button token; use LibreDash accent button aliases instead.`);
+  }
+
+  for (const match of uncommented.matchAll(/([^{}]+)\{([^{}]+)\}/g)) {
+    const selector = match[1] ?? "";
+    const body = match[2] ?? "";
+    if (!standardButtonContractSelectorPattern.test(selector)) continue;
+    if (body.includes("--ld-button-")) continue;
+    if (!directButtonStylingPattern.test(body)) continue;
+    addViolation(violations, file, uncommented, match.index ?? 0, "button-contract", "Standard button selectors must use LibreDash --ld-button-* aliases instead of direct control sizing, transparent backgrounds, or outline resets.");
   }
 }
 

@@ -186,25 +186,26 @@ class LibreDashSidebar extends LitElement {
 
     .collapse-button {
       display: grid;
-      width: calc(var(--control-xsmall-size) + var(--base-size-2));
-      height: calc(var(--control-xsmall-size) + var(--base-size-2));
+      width: var(--ld-button-height-xs);
+      height: var(--ld-button-height-xs);
       flex: 0 0 auto;
       place-items: center;
       margin-left: auto;
-      border: var(--ld-border-transparent);
-      border-radius: var(--ld-radius-default);
-      background: transparent;
-      color: var(--ld-fg-muted);
+      border: var(--borderWidth-default) solid var(--ld-button-invisible-border-rest);
+      border-radius: var(--ld-button-radius);
+      background: var(--ld-button-invisible-bg-rest);
+      color: var(--ld-button-invisible-icon-rest);
       cursor: pointer;
       padding: 0;
     }
 
     .collapse-button:hover,
     .collapse-button:focus-visible {
-      border-color: var(--ld-line-muted);
-      background: var(--control-bgColor-hover);
+      border-color: var(--ld-button-invisible-border-hover);
+      background: var(--ld-button-invisible-bg-hover);
       color: var(--ld-fg-default);
-      outline: 0;
+      outline: var(--focus-outline);
+      outline-offset: var(--focus-outline-offset);
     }
 
     .collapse-button:disabled {
@@ -213,8 +214,8 @@ class LibreDashSidebar extends LitElement {
     }
 
     .collapse-button:disabled:hover {
-      border-color: var(--ld-line-default);
-      color: var(--ld-fg-muted);
+      border-color: var(--ld-button-invisible-border-rest);
+      color: var(--fgColor-disabled);
     }
 
     nav {
@@ -282,7 +283,7 @@ class LibreDashSidebar extends LitElement {
         var(--control-xsmall-paddingInline-normal)
         0
         calc(var(--control-xsmall-paddingInline-normal) + var(--ld-border-width));
-      color: color-mix(in srgb, var(--ld-fg-muted), transparent 32%);
+      color: var(--fgColor-disabled);
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: var(--ld-font-size-caption);
@@ -434,7 +435,7 @@ class LibreDashSidebar extends LitElement {
       height: var(--control-xsmall-size);
       place-items: center;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--ld-fg-muted), transparent 78%);
+      background: var(--bgColor-neutral-muted);
       color: var(--ld-fg-default);
       font-size: var(--ld-font-size-caption);
       font-weight: var(--ld-font-weight-strong);
@@ -474,16 +475,16 @@ class LibreDashSidebar extends LitElement {
 
     .theme-button {
       display: inline-flex;
-      width: var(--control-medium-size);
-      height: var(--control-medium-size);
-      min-height: var(--control-medium-size);
+      width: var(--ld-button-height);
+      height: var(--ld-button-height);
+      min-height: var(--ld-button-height);
       align-items: center;
       justify-content: center;
       gap: var(--base-size-8);
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: transparent;
-      color: var(--ld-fg-default);
+      border: var(--borderWidth-default) solid var(--ld-button-border-rest);
+      border-radius: var(--ld-button-radius);
+      background: var(--ld-button-bg-rest);
+      color: var(--ld-button-fg-rest);
       cursor: pointer;
       padding: 0;
       font-size: var(--ld-font-size-caption);
@@ -492,16 +493,17 @@ class LibreDashSidebar extends LitElement {
 
     .theme-button:hover,
     .theme-button:focus-visible {
-      border-color: var(--ld-line-muted);
-      background: var(--control-bgColor-hover);
+      border-color: var(--ld-button-border-hover);
+      background: var(--ld-button-bg-hover);
       color: var(--ld-fg-default);
-      outline: 0;
+      outline: var(--focus-outline);
+      outline-offset: var(--focus-outline-offset);
     }
 
     .theme-button {
-      border-color: var(--ld-line-default);
-      background: transparent;
-      color: var(--ld-fg-default);
+      border-color: var(--ld-button-border-rest);
+      background: var(--ld-button-bg-rest);
+      color: var(--ld-button-fg-rest);
     }
 
     :host([data-collapsed]) .brand {
@@ -568,9 +570,9 @@ class LibreDashSidebar extends LitElement {
     }
 
     :host([data-collapsed]) .theme-button {
-      width: calc(var(--control-medium-size) + var(--base-size-2));
-      min-height: calc(var(--control-medium-size) + var(--base-size-2));
-      height: calc(var(--control-medium-size) + var(--base-size-2));
+      width: calc(var(--ld-button-height) + var(--base-size-2));
+      min-height: calc(var(--ld-button-height) + var(--base-size-2));
+      height: calc(var(--ld-button-height) + var(--base-size-2));
       padding: 0;
     }
 

@@ -70,12 +70,13 @@ const chartStyles = css`
 
   .options summary {
     display: grid;
-    width: var(--control-xsmall-size);
-    height: var(--control-xsmall-size);
+    width: var(--ld-button-height-xs, var(--control-xsmall-size));
+    height: var(--ld-button-height-xs, var(--control-xsmall-size));
     place-items: center;
-    border: var(--ld-border-transparent);
+    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
     border-radius: var(--ld-radius-tight);
-    color: var(--ld-icon-muted);
+    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+    color: var(--ld-button-invisible-icon-rest, var(--ld-icon-muted));
     cursor: pointer;
     font-size: var(--ld-font-size-body-lg);
     font-weight: var(--ld-font-weight-strong);
@@ -95,10 +96,12 @@ const chartStyles = css`
   .options summary:hover,
   .options summary:focus-visible,
   .options[open] summary {
-    border-color: var(--ld-line-default);
-    background: var(--ld-bg-panel-muted);
+    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
+    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
     color: var(--ld-icon-default);
-    outline: 0;
+    outline: var(--focus-outline, var(--ld-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
   .menu {
@@ -119,13 +122,13 @@ const chartStyles = css`
     display: flex;
     align-items: center;
     gap: var(--base-size-8);
-    min-height: var(--control-small-size);
-    border: 0;
+    min-height: var(--ld-button-height-sm, var(--control-small-size));
+    border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
     border-radius: var(--ld-radius-tight);
-    background: transparent;
-    color: var(--ld-fg-default);
+    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+    color: var(--ld-button-invisible-fg-rest, var(--ld-fg-default));
     cursor: pointer;
-    padding: 0 var(--control-xsmall-paddingInline-normal);
+    padding: 0 var(--ld-button-padding-inline-xs, var(--control-xsmall-paddingInline-normal));
     font: inherit;
     font-size: var(--ld-font-size-caption);
     font-weight: var(--ld-font-weight-medium);
@@ -145,8 +148,11 @@ const chartStyles = css`
 
   .menu button:hover,
   .menu button:focus-visible {
-    background: var(--ld-bg-panel-muted);
-    outline: 0;
+    border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
+    background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
+    outline: var(--focus-outline, var(--ld-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
   .menu button:disabled {
@@ -155,7 +161,7 @@ const chartStyles = css`
   }
 
   .menu button:disabled:hover {
-    background: transparent;
+    background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
   }
 
   .canvas {

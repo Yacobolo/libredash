@@ -673,12 +673,13 @@ const workspaceStyles = css`
   }
 
   .primary-link {
-    min-height: var(--control-small-size);
+    min-height: var(--ld-button-height-sm);
     grid-auto-flow: column;
     gap: var(--base-size-6);
-    background: var(--ld-accent);
-    color: var(--ld-accent-fg);
-    padding: 0 var(--ld-space-control);
+    border: var(--borderWidth-default) solid var(--ld-button-accent-border-rest);
+    background: var(--ld-button-accent-bg-rest);
+    color: var(--ld-button-accent-fg-rest);
+    padding: 0 var(--ld-button-padding-inline-sm);
     font-size: var(--ld-font-size-caption);
     font-weight: var(--ld-font-weight-strong);
   }
@@ -758,10 +759,11 @@ const workspaceStyles = css`
   }
 
   input[type='search']:focus {
-    border-color: var(--ld-line-accent, var(--ld-accent));
+    border-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
     background: var(--ld-bg-panel);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ld-line-accent, var(--ld-accent)), transparent 84%);
-    outline: 0;
+    outline: var(--focus-outline, var(--ld-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
   .search-icon {

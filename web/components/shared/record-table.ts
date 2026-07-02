@@ -498,7 +498,7 @@ const recordTableStyles = `
 
   ld-record-table .record-table th,
   ld-record-table .record-table td {
-    border-bottom: var(--borderWidth-default) solid color-mix(in srgb, var(--ld-line-muted), transparent 28%);
+    border-bottom: var(--ld-border-muted);
     padding: var(--base-size-8);
     text-align: left;
     vertical-align: top;
@@ -571,7 +571,7 @@ const recordTableStyles = `
 
   ld-record-table .variant-primary .record-table tbody tr:hover,
   ld-record-table .variant-compact .record-table tbody tr:hover {
-    background: color-mix(in srgb, var(--ld-bg-panel-muted), transparent 35%);
+    background: var(--control-transparent-bgColor-hover);
   }
 
   ld-record-table .record-table-sort {

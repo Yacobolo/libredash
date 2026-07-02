@@ -150,7 +150,7 @@ class SubSidebar extends LitElement {
       border: var(--ld-border-transparent);
       border-radius: var(--ld-radius-default);
       background: transparent;
-      color: var(--ld-fg-muted);
+      color: var(--fgColor-disabled);
       cursor: pointer;
       padding: 0;
     }
@@ -223,7 +223,7 @@ class SubSidebar extends LitElement {
       border: var(--ld-border-transparent);
       border-radius: var(--ld-radius-default);
       background: transparent;
-      color: color-mix(in srgb, var(--ld-fg-muted), transparent 8%);
+      color: var(--fgColor-disabled);
       cursor: pointer;
       padding: 0 var(--control-xsmall-paddingInline-normal);
       text-align: left;
@@ -270,7 +270,7 @@ class SubSidebar extends LitElement {
       width: var(--control-xsmall-size);
       height: var(--control-xsmall-size);
       place-items: center;
-      color: color-mix(in srgb, var(--ld-fg-muted), transparent 24%);
+      color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-caption);
       font-variant-numeric: tabular-nums;
       font-weight: var(--ld-font-weight-strong);

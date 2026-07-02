@@ -245,7 +245,7 @@ test('workspace asset search filters the current asset rows', async () => {
     expect(state.before).toEqual(['Executive Sales Dashboard', 'Customer Segments'])
     expect(state.after).toEqual(['Customer Segments'])
     expect(state.focusedBorderColor).toBe('rgb(9, 105, 218)')
-    expect(state.focusedOutlineStyle).toBe('none')
+    expect(state.focusedOutlineStyle).toBe('solid')
     expect(state.hasSubmitButton).toBe(false)
     expect(state.formAction).toBeNull()
     expect(state.inputAutocomplete).toBe('off')

@@ -90,21 +90,21 @@ class ChatComposer extends LitElement {
 
     button {
       display: inline-flex;
-      width: var(--ld-control-medium);
-      height: var(--ld-control-medium);
-      min-width: var(--ld-control-medium);
+      width: var(--ld-button-height, var(--ld-control-medium));
+      height: var(--ld-button-height, var(--ld-control-medium));
+      min-width: var(--ld-button-height, var(--ld-control-medium));
       align-items: center;
       justify-content: center;
-      border: 1px solid var(--ld-accent);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-accent);
-      color: var(--ld-accent-fg);
+      border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-accent-border-rest, var(--ld-accent));
+      border-radius: var(--ld-button-radius, var(--ld-radius-default));
+      background: var(--ld-button-accent-bg-rest, var(--ld-accent));
+      color: var(--ld-button-accent-fg-rest, var(--ld-accent-fg));
       cursor: pointer;
       font: inherit;
       font-size: var(--ld-font-size-body-sm);
       font-weight: var(--ld-font-weight-strong);
       padding: 0;
-      box-shadow: var(--shadow-resting-small);
+      box-shadow: var(--ld-button-shadow-resting, var(--shadow-resting-small));
       transition:
         background var(--duration-fast) var(--ease-ld),
         border-color var(--duration-fast) var(--ease-ld),
@@ -113,24 +113,26 @@ class ChatComposer extends LitElement {
     }
 
     button svg {
-      width: 18px;
-      height: 18px;
+      width: var(--ld-button-icon-size, var(--base-size-16));
+      height: var(--ld-button-icon-size, var(--base-size-16));
     }
 
     button:hover:not(:disabled) {
-      background: color-mix(in srgb, var(--ld-accent), var(--ld-bg-panel) 10%);
+      border-color: var(--ld-button-accent-border-hover, var(--ld-accent));
+      background: var(--ld-button-accent-bg-hover, var(--ld-accent));
       transform: translateY(-1px);
     }
 
     button:focus-visible {
-      outline: var(--ld-border-width-focus) solid var(--ld-line-accent);
-      outline-offset: var(--ld-space-xs);
+      outline: var(--focus-outline, var(--ld-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      outline-offset: var(--focus-outline-offset, var(--ld-space-xs));
     }
 
     .spinner {
       width: 14px;
       height: 14px;
-      border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+      border: var(--borderWidth-thick) solid transparent;
       border-top-color: currentColor;
       border-radius: 999px;
       animation: spin 0.8s linear infinite;
@@ -143,9 +145,9 @@ class ChatComposer extends LitElement {
     }
 
     button:disabled {
-      border-color: var(--ld-line-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-muted);
+      border-color: var(--ld-button-accent-border-disabled, var(--ld-line-default));
+      background: var(--ld-button-accent-bg-disabled, var(--ld-bg-control));
+      color: var(--ld-button-accent-fg-disabled, var(--ld-fg-muted));
       cursor: not-allowed;
       opacity: 1;
       box-shadow: none;
