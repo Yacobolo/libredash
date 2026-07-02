@@ -606,44 +606,94 @@ const agentVisualToolSchema = `{
   "additionalProperties": false,
   "required": ["kind", "model", "dataset"],
   "properties": {
-    "kind": {"type": "string", "enum": ["chart", "table"]},
-    "model": {"type": "string", "minLength": 1},
-    "dataset": {"type": "string", "minLength": 1},
-    "title": {"type": "string"},
-    "type": {"type": "string"},
-    "shape": {"type": "string"},
-    "dimensions": {"type": "array", "items": {"$ref": "#/$defs/fieldRef"}},
-    "series": {"$ref": "#/$defs/fieldRef"},
-    "measures": {"type": "array", "items": {"$ref": "#/$defs/fieldRef"}},
-    "fields": {"type": "array", "items": {"$ref": "#/$defs/fieldRef"}},
-    "rows": {"type": "array", "items": {"$ref": "#/$defs/fieldRef"}},
-    "columns": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
-    "sort": {"type": "array", "items": {"$ref": "#/$defs/sort"}},
-    "limit": {"type": "integer", "minimum": 1, "maximum": 50},
-    "options": {"type": "object", "additionalProperties": true},
-    "rendererOptions": {
-      "type": "object",
-      "additionalProperties": {"type": "object", "additionalProperties": true}
-    }
-  },
-  "$defs": {
-    "fieldRef": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["field"],
-      "properties": {
-        "field": {"type": "string", "minLength": 1},
-        "alias": {"type": "string"}
+    "kind": {"type": "string", "enum": ["chart", "table"], "description": "Artifact kind to create."},
+    "model": {"type": "string", "minLength": 1, "description": "Semantic model ID."},
+    "dataset": {"type": "string", "minLength": 1, "description": "Semantic dataset/table ID."},
+    "title": {"type": "string", "description": "Optional display title."},
+    "type": {"type": "string", "description": "Optional chart or table renderer type."},
+    "shape": {"type": "string", "description": "Optional visual shape override."},
+    "dimensions": {
+      "type": "array",
+      "description": "Dimension fields for chart grouping.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field"],
+        "properties": {
+          "field": {"type": "string", "minLength": 1, "description": "Semantic field ID."},
+          "alias": {"type": "string", "description": "Optional output alias."}
+        }
       }
     },
-    "sort": {
+    "series": {
       "type": "object",
       "additionalProperties": false,
       "required": ["field"],
+      "description": "Optional series field for split charts.",
       "properties": {
-        "field": {"type": "string", "minLength": 1},
-        "direction": {"type": "string", "enum": ["asc", "desc"]}
+        "field": {"type": "string", "minLength": 1, "description": "Semantic field ID."},
+        "alias": {"type": "string", "description": "Optional output alias."}
       }
+    },
+    "measures": {
+      "type": "array",
+      "description": "Measure fields for chart values.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field"],
+        "properties": {
+          "field": {"type": "string", "minLength": 1, "description": "Semantic field ID."},
+          "alias": {"type": "string", "description": "Optional output alias."}
+        }
+      }
+    },
+    "fields": {
+      "type": "array",
+      "description": "Fields for table output.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field"],
+        "properties": {
+          "field": {"type": "string", "minLength": 1, "description": "Semantic field ID."},
+          "alias": {"type": "string", "description": "Optional output alias."}
+        }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "description": "Row fields for matrix-style table output.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field"],
+        "properties": {
+          "field": {"type": "string", "minLength": 1, "description": "Semantic field ID."},
+          "alias": {"type": "string", "description": "Optional output alias."}
+        }
+      }
+    },
+    "columns": {"type": "array", "description": "Optional table column display configuration.", "items": {"type": "object", "additionalProperties": true}},
+    "sort": {
+      "type": "array",
+      "description": "Sort fields applied to the query result.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field"],
+        "properties": {
+          "field": {"type": "string", "minLength": 1, "description": "Semantic field ID."},
+          "direction": {"type": "string", "enum": ["asc", "desc"], "description": "Sort direction."}
+        }
+      }
+    },
+    "limit": {"type": "integer", "minimum": 1, "maximum": 50, "description": "Maximum result rows."},
+    "options": {"type": "object", "additionalProperties": true, "description": "Renderer-neutral options."},
+    "rendererOptions": {
+      "type": "object",
+      "description": "Renderer-specific options keyed by renderer name.",
+      "additionalProperties": {"type": "object", "additionalProperties": true}
     }
   }
 }`

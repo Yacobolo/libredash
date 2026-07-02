@@ -110,6 +110,136 @@ func TestNewAppliesDefaultsAndValidatesDefinition(t *testing.T) {
 	}
 }
 
+func TestToolSchemasRequireProviderPortableSubset(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{{Content: "ok", FinishReason: FinishReasonStop}}}
+	portableSchema := json.RawMessage(`{
+		"type": "object",
+		"additionalProperties": false,
+		"required": ["kind", "model"],
+		"properties": {
+			"kind": {"type": "string", "enum": ["chart", "table"], "description": "Artifact kind."},
+			"model": {"type": "string", "minLength": 1},
+			"dimensions": {
+				"type": "array",
+				"items": {
+					"type": "object",
+					"additionalProperties": false,
+					"required": ["field"],
+					"properties": {
+						"field": {"type": "string", "minLength": 1},
+						"alias": {"type": "string"}
+					}
+				}
+			},
+			"options": {"type": "object", "additionalProperties": true}
+		}
+	}`)
+	if _, err := New(Definition{
+		Name:         "portable",
+		SystemPrompt: "x",
+		Model:        model,
+		Tools: []ToolDefinition{{
+			Name:        "portable_tool",
+			Description: "portable",
+			InputSchema: portableSchema,
+			Handler:     noopTool(),
+		}},
+	}); err != nil {
+		t.Fatalf("New with portable schema returned error: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		schema json.RawMessage
+		want   string
+	}{
+		{
+			name:   "root string",
+			schema: json.RawMessage(`{"type":"string"}`),
+			want:   "root type must be object",
+		},
+		{
+			name:   "root type array",
+			schema: json.RawMessage(`{"type":["object","null"]}`),
+			want:   "root type must be object",
+		},
+		{
+			name:   "ref",
+			schema: json.RawMessage(`{"type":"object","properties":{"id":{"$ref":"#/properties/other"},"other":{"type":"string"}}}`),
+			want:   "$ref",
+		},
+		{
+			name:   "defs",
+			schema: json.RawMessage(`{"type":"object","$defs":{"id":{"type":"string"}}}`),
+			want:   "$defs",
+		},
+		{
+			name:   "oneOf",
+			schema: json.RawMessage(`{"type":"object","properties":{"id":{"oneOf":[{"type":"string"},{"type":"integer"}]}}}`),
+			want:   "oneOf",
+		},
+		{
+			name:   "anyOf",
+			schema: json.RawMessage(`{"type":"object","properties":{"id":{"anyOf":[{"type":"string"},{"type":"integer"}]}}}`),
+			want:   "anyOf",
+		},
+		{
+			name:   "allOf",
+			schema: json.RawMessage(`{"type":"object","properties":{"id":{"allOf":[{"type":"string"}]}}}`),
+			want:   "allOf",
+		},
+		{
+			name:   "patternProperties",
+			schema: json.RawMessage(`{"type":"object","patternProperties":{"^x-":{"type":"string"}}}`),
+			want:   "patternProperties",
+		},
+		{
+			name:   "not",
+			schema: json.RawMessage(`{"type":"object","properties":{"id":{"not":{"type":"string"}}}}`),
+			want:   "not",
+		},
+		{
+			name:   "if",
+			schema: json.RawMessage(`{"type":"object","if":{"properties":{"kind":{"const":"chart"}}},"then":{"required":["measures"]}}`),
+			want:   "if",
+		},
+		{
+			name:   "then",
+			schema: json.RawMessage(`{"type":"object","then":{"required":["measures"]}}`),
+			want:   "then",
+		},
+		{
+			name:   "const",
+			schema: json.RawMessage(`{"type":"object","properties":{"kind":{"const":"chart"}}}`),
+			want:   "const",
+		},
+		{
+			name:   "format",
+			schema: json.RawMessage(`{"type":"object","properties":{"date":{"type":"string","format":"date"}}}`),
+			want:   "format",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := New(Definition{
+				Name:         "bad",
+				SystemPrompt: "x",
+				Model:        model,
+				Tools: []ToolDefinition{{
+					Name:        "query_visual",
+					Description: "bad",
+					InputSchema: tc.schema,
+					Handler:     noopTool(),
+				}},
+			})
+			if !IsCode(err, ErrorCodeInvalidArgument) || !strings.Contains(err.Error(), `tool "query_visual"`) || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("New error = %v, want invalid argument mentioning tool and %s", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestPromptSingleTurnLifecycle(t *testing.T) {
 	events := &recordingEvents{}
 	clock := &stepClock{next: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
