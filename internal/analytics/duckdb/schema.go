@@ -11,6 +11,10 @@ import (
 )
 
 func DiscoverSchemas(ctx context.Context, db *Database, model *semanticmodel.Model) error {
+	return DiscoverSchemasWithDataDir(ctx, db, model, "")
+}
+
+func DiscoverSchemasWithDataDir(ctx context.Context, db *Database, model *semanticmodel.Model, dataDir string) error {
 	if db == nil || db.SQLDB() == nil {
 		return fmt.Errorf("schema discovery requires a DuckDB database")
 	}
@@ -66,7 +70,7 @@ ORDER BY schema_name, table_name, column_index`, databaseName)
 	}
 
 	for name, source := range model.Sources {
-		columns, err := discoverSourceSchema(ctx, db.SQLDB(), model, source)
+		columns, err := discoverSourceSchemaWithDataDir(ctx, db.SQLDB(), model, source, dataDir)
 		if err != nil {
 			return fmt.Errorf("discovering source %s schema: %w", name, err)
 		}

@@ -205,8 +205,10 @@ runner_name() {
 wait_ready() {
   local port="$1"
   local pid="$2"
+  local attempts="${LIBREDASH_DEV_READY_ATTEMPTS:-150}"
+  local interval="${LIBREDASH_DEV_READY_INTERVAL:-0.2}"
 
-  for _ in {1..150}; do
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
     if curl -fsS "http://localhost:$port/workspaces" >/dev/null 2>&1; then
       return 0
     fi
@@ -214,7 +216,7 @@ wait_ready() {
       echo "LibreDash dev server exited before it became ready" >&2
       return 1
     fi
-    sleep 0.2
+    sleep "$interval"
   done
 
   echo "LibreDash dev server did not become ready on http://localhost:$port" >&2
@@ -223,7 +225,8 @@ wait_ready() {
 
 deploy_project() {
   local port="$1"
-  go run ./cmd/libredash deploy --project dashboards/libredash.yaml --target "http://localhost:${port}" --token dev --environment dev --auto-approve
+  local project="${LIBREDASH_DEV_PROJECT:-dashboards/libredash.yaml}"
+  go run ./cmd/libredash deploy --project "$project" --target "http://localhost:${port}" --token dev --environment dev --auto-approve
 }
 
 attach_server() {

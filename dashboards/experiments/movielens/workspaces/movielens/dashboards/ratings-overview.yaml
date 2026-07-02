@@ -1,0 +1,235 @@
+apiVersion: libredash.dev/v1
+kind: Dashboard
+metadata:
+  workspace: movielens
+  name: ratings-overview
+  title: Ratings Overview
+  description: MovieLens rating volume, rating quality, users, movies, and trend overview.
+  tags: [movies, ratings, experiment]
+spec:
+  semanticModel: movie_ratings
+  filters:
+    rating_date:
+      type: date_range
+      label: Rating date
+      url_param: period
+      from_url_param: from
+      to_url_param: to
+      field: ratings.rating_date
+      default:
+        preset: all
+      presets:
+        - value: all
+          label: All time
+        - value: "2023"
+          label: "2023"
+          from: "2023-01-01"
+          to: "2023-12-31"
+        - value: "2020s"
+          label: 2020s
+          from: "2020-01-01"
+          to: "2030-01-01"
+    release_decade:
+      type: multi_select
+      label: Release decade
+      url_param: decade
+      operator: in
+      values:
+        source: distinct
+        limit: 20
+      field: movies.release_decade
+    rating_bucket:
+      type: multi_select
+      label: Rating
+      url_param: rating
+      operator: in
+      values:
+        source: distinct
+        limit: 10
+      field: ratings.rating_bucket
+    title:
+      type: text
+      label: Title
+      url_param: title
+      operator_url_param: title_op
+      default_operator: contains
+      operators: [contains, equals, starts_with, not_contains]
+      field: movies.title
+  visuals:
+    rating_count:
+      kind: kpi
+      shape: single_value
+      query:
+        measures:
+          rating_count:
+      options:
+        note: Rating events
+        tone: ink
+    average_rating:
+      kind: kpi
+      shape: single_value
+      query:
+        measures:
+          average_rating:
+      options:
+        note: Mean rating
+        tone: amber
+    active_users:
+      kind: kpi
+      shape: single_value
+      query:
+        measures:
+          active_users:
+      options:
+        note: Distinct users
+        tone: green
+    rated_movies:
+      kind: kpi
+      shape: single_value
+      query:
+        measures:
+          rated_movies:
+      options:
+        note: Distinct movies
+        tone: coral
+    ratings_by_month:
+      title: Ratings by month
+      type: area
+      query:
+        dimensions:
+          rating_month: ratings.rating_month
+        measures:
+          rating_count:
+        sort:
+          - field: rating_month
+            direction: asc
+        limit: 360
+    rating_distribution:
+      title: Rating distribution
+      type: bar
+      query:
+        dimensions:
+          rating: ratings.rating_bucket
+        measures:
+          rating_count:
+        sort:
+          - field: rating
+            direction: asc
+    top_movies:
+      title: Most rated movies
+      type: bar
+      query:
+        dimensions:
+          title: movies.title
+        measures:
+          rating_count:
+        sort:
+          - field: value
+            direction: desc
+        limit: 15
+    average_by_decade:
+      title: Average rating by release decade
+      type: bar
+      query:
+        dimensions:
+          release_decade: movies.release_decade
+        measures:
+          average_rating:
+        sort:
+          - field: release_decade
+            direction: asc
+        limit: 20
+  tables:
+    movie_table:
+      title: Movie ratings
+      kind: data_table
+      query:
+        table: ratings
+        fields:
+          - movies.title
+          - movies.release_year
+          - movies.release_decade
+          - ratings.rating_bucket
+          - ratings.rating_month
+          - ratings.rating
+      default_sort:
+        key: rating_month
+        direction: desc
+      columns:
+        - key: title
+          label: Title
+        - key: release_year
+          label: Year
+        - key: release_decade
+          label: Decade
+        - key: rating_bucket
+          label: Rating
+        - key: rating_month
+          label: Rated month
+        - key: rating
+          label: Rating value
+          align: right
+  pages:
+    - name: overview
+      title: Overview
+      canvas:
+        width: 1366
+        height: 980
+      grid:
+        columns: 12
+        row_height: 48
+        gap: 16
+        padding: 16
+      visuals:
+        - id: rating-date-filter
+          kind: filter_card
+          filter: rating_date
+          placement: {col: 1, row: 1, col_span: 3, row_span: 2}
+        - id: decade-filter
+          kind: filter_card
+          filter: release_decade
+          placement: {col: 4, row: 1, col_span: 3, row_span: 2}
+        - id: rating-filter
+          kind: filter_card
+          filter: rating_bucket
+          placement: {col: 7, row: 1, col_span: 3, row_span: 2}
+        - id: title-filter
+          kind: filter_card
+          filter: title
+          placement: {col: 10, row: 1, col_span: 3, row_span: 2}
+        - id: rating-count
+          kind: kpi_card
+          visual: rating_count
+          placement: {col: 1, row: 4, col_span: 3, row_span: 3}
+        - id: average-rating
+          kind: kpi_card
+          visual: average_rating
+          placement: {col: 4, row: 4, col_span: 3, row_span: 3}
+        - id: active-users
+          kind: kpi_card
+          visual: active_users
+          placement: {col: 7, row: 4, col_span: 3, row_span: 3}
+        - id: rated-movies
+          kind: kpi_card
+          visual: rated_movies
+          placement: {col: 10, row: 4, col_span: 3, row_span: 3}
+        - id: ratings-trend
+          kind: area_chart
+          visual: ratings_by_month
+          placement: {col: 1, row: 8, col_span: 8, row_span: 6}
+        - id: rating-distribution
+          kind: bar_chart
+          visual: rating_distribution
+          placement: {col: 9, row: 8, col_span: 4, row_span: 6}
+        - id: top-movies
+          kind: bar_chart
+          visual: top_movies
+          placement: {col: 1, row: 15, col_span: 6, row_span: 7}
+        - id: decade-average
+          kind: bar_chart
+          visual: average_by_decade
+          placement: {col: 7, row: 15, col_span: 6, row_span: 7}
+        - id: movie-table
+          kind: table
+          table: movie_table
+          placement: {col: 1, row: 23, col_span: 12, row_span: 8}

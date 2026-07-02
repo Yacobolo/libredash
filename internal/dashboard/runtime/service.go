@@ -27,6 +27,16 @@ type DataRuntimeFactory interface {
 	OpenDashboardDataRuntime(ctx context.Context, config DataRuntimeConfig) (DataRuntime, error)
 }
 
+type WorkspaceDataRuntimeConfig struct {
+	Definition *workspace.Definition
+	DataDir    string
+	DBDir      string
+}
+
+type WorkspaceDataRuntimeFactory interface {
+	OpenDashboardWorkspaceDataRuntimes(ctx context.Context, config WorkspaceDataRuntimeConfig) (map[string]DataRuntime, error)
+}
+
 type DataRuntime interface {
 	reportdef.DataService
 	Refresh(ctx context.Context) error
@@ -97,7 +107,7 @@ func NewFromProject(dataDir, projectPath, duckDBDir string, factory DataRuntimeF
 	}
 	services := make(map[string]*Service, len(compiled.Workspaces))
 	for workspaceID, compiledWorkspace := range compiled.Workspaces {
-		service, err := newFromDefinition(dataDir, duckDBDir, factory, compiledWorkspace.Definition)
+		service, err := newFromDefinition(dataDir, filepath.Join(duckDBDir, workspaceID), factory, compiledWorkspace.Definition)
 		if err != nil {
 			return nil, fmt.Errorf("loading workspace %q: %w", workspaceID, err)
 		}
@@ -152,10 +162,41 @@ func newFromDefinition(dataDir, duckDBDir string, factory DataRuntimeFactory, de
 	}
 
 	for modelID, model := range definition.Models {
-		runtime := &modelRuntime{
-			model: model,
+		service.runtimes[modelID] = &modelRuntime{model: model}
+	}
+	if workspaceFactory, ok := factory.(WorkspaceDataRuntimeFactory); ok {
+		dataRuntimes, err := workspaceFactory.OpenDashboardWorkspaceDataRuntimes(context.Background(), WorkspaceDataRuntimeConfig{
+			Definition: definition,
+			DataDir:    dataDir,
+			DBDir:      duckDBDir,
+		})
+		if err != nil {
+			if setupRequired(err) {
+				for _, runtime := range service.runtimes {
+					runtime.missing = err
+				}
+				return service, nil
+			}
+			return nil, err
 		}
-		service.runtimes[modelID] = runtime
+		for modelID, runtime := range service.runtimes {
+			dataRuntime, ok := dataRuntimes[modelID]
+			if !ok {
+				return nil, fmt.Errorf("workspace data runtime missing semantic model %q", modelID)
+			}
+			runtime.data = dataRuntime
+			runtime.ready = true
+		}
+		for modelID := range dataRuntimes {
+			if _, ok := service.runtimes[modelID]; !ok {
+				return nil, fmt.Errorf("workspace data runtime returned unknown semantic model %q", modelID)
+			}
+		}
+		return service, nil
+	}
+
+	for modelID, model := range definition.Models {
+		runtime := service.runtimes[modelID]
 		dataRuntime, err := factory.OpenDashboardDataRuntime(context.Background(), DataRuntimeConfig{
 			ModelID: modelID,
 			Model:   model,

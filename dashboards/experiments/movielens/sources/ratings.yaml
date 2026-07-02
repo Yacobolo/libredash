@@ -1,0 +1,13 @@
+apiVersion: libredash.dev/v1
+kind: Source
+metadata:
+  name: movielens.ratings
+  title: Ratings
+spec:
+  connection: movielens
+  path: ratings.csv
+  fields:
+    userId: {type: integer, description: Anonymized MovieLens user identifier.}
+    movieId: {type: integer, description: MovieLens movie identifier.}
+    rating: {type: double, description: Five-star rating in half-star increments.}
+    timestamp: {type: integer, description: Rating timestamp as Unix epoch seconds.}

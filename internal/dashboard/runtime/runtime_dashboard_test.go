@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
 func newLegacyRuntime(t *testing.T, dataDir string) (*Service, error) {
@@ -42,6 +44,127 @@ func newOperationsRuntime(t *testing.T, dataDir string) (*Service, error) {
 		return nil, fmt.Errorf("showcase project has no operations workspace")
 	}
 	return service, nil
+}
+
+func TestWorkspaceRuntimeUsesSingleDuckDBForSharedModelTables(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "orders.csv", `order_id,revenue
+o1,10
+o2,20
+`)
+	if err := os.WriteFile(filepath.Join(dir, "libredash-model_a.duckdb"), []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "libredash-model_b.duckdb.wal"), []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	definition := sharedOrdersWorkspaceDefinition(t)
+	metrics, err := NewFromDefinition(dir, dir, testDataRuntimeFactory{}, definition)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, modelID := range []string{"model_a", "model_b"} {
+		runtime := metrics.runtimes[modelID]
+		if runtime == nil || !runtime.ready {
+			t.Fatalf("%s runtime is not ready: %#v", modelID, runtime)
+		}
+		count, err := runtime.data.Count(context.Background(), reportdef.CountQuery{Table: "orders"})
+		if err != nil {
+			t.Fatalf("%s count: %v", modelID, err)
+		}
+		if count != 2 {
+			t.Fatalf("%s count = %d, want 2", modelID, count)
+		}
+	}
+	if err := metrics.RefreshTables(context.Background(), "model_b", []string{"orders"}); err != nil {
+		t.Fatalf("refresh shared orders table: %v", err)
+	}
+	if err := metrics.Close(); err != nil {
+		t.Fatalf("close runtime: %v", err)
+	}
+
+	matches, err := filepath.Glob(filepath.Join(dir, "libredash-*.duckdb"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(matches)
+	if len(matches) != 1 || filepath.Base(matches[0]) != "libredash-workspace.duckdb" {
+		t.Fatalf("duckdb files = %v, want only libredash-workspace.duckdb", matches)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "libredash-model_b.duckdb.wal")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("stale model WAL stat error = %v, want not exist", err)
+	}
+
+	db, err := sql.Open("duckdb", matches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var physicalTables int
+	if err := db.QueryRowContext(context.Background(), "SELECT count(*) FROM duckdb_tables() WHERE schema_name = 'model' AND table_name = 'orders'").Scan(&physicalTables); err != nil {
+		t.Fatal(err)
+	}
+	if physicalTables != 1 {
+		t.Fatalf("physical model.orders tables = %d, want 1", physicalTables)
+	}
+}
+
+func sharedOrdersWorkspaceDefinition(t *testing.T) *workspace.Definition {
+	t.Helper()
+	modelA := sharedOrdersModel("model_a")
+	modelA.Measures = map[string]semanticmodel.MetricMeasure{
+		"order_count": {Table: "orders", Grain: "order_id", Expression: "COUNT(*)", Label: "Orders"},
+	}
+	modelB := sharedOrdersModel("model_b")
+	modelB.Measures = map[string]semanticmodel.MetricMeasure{
+		"revenue": {Table: "orders", Grain: "order_id", Expression: "SUM(orders.revenue)", Label: "Revenue"},
+	}
+	if err := modelA.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := modelB.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	return &workspace.Definition{
+		Catalog: workspace.Catalog{
+			Workspace: workspace.CatalogWorkspace{ID: "shared", Title: "Shared"},
+			SemanticModels: []workspace.CatalogModel{
+				{ID: "model_a", Title: "Model A"},
+				{ID: "model_b", Title: "Model B"},
+			},
+			Dashboards: []workspace.CatalogDashboard{{ID: "dashboard", Title: "Dashboard"}},
+		},
+		Models: map[string]*semanticmodel.Model{
+			"model_a": modelA,
+			"model_b": modelB,
+		},
+		Dashboards: map[string]*reportdef.Dashboard{"dashboard": {ID: "dashboard", Title: "Dashboard", SemanticModel: "model_a"}},
+	}
+}
+
+func sharedOrdersModel(name string) *semanticmodel.Model {
+	return &semanticmodel.Model{
+		Name:              name,
+		DefaultConnection: "local",
+		Connections:       map[string]semanticmodel.Connection{"local": {Kind: "local"}},
+		Sources: map[string]semanticmodel.Source{
+			"orders": {Connection: "local", Path: "orders.csv", Format: "csv"},
+		},
+		Tables: map[string]semanticmodel.Table{
+			"orders": {
+				Source:     "orders",
+				PrimaryKey: "order_id",
+				Grain:      "order_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{
+					"order_id": {Label: "Order ID"},
+					"revenue":  {Label: "Revenue"},
+				},
+			},
+		},
+		BaseTable: "orders",
+	}
 }
 
 func TestMissingDataReturnsSetupPatch(t *testing.T) {
@@ -195,7 +318,7 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	defer metrics.Close()
-	if _, err := os.Stat(filepath.Join(dir, "libredash-sales"+"."+"duck"+"db")); err != nil {
+	if _, err := os.Stat(filepath.Join(dir, "sales", "libredash-workspace"+"."+"duck"+"db")); err != nil {
 		t.Fatalf("expected DuckDB materialization file: %v", err)
 	}
 

@@ -1,0 +1,57 @@
+apiVersion: libredash.dev/v1
+kind: SemanticModel
+metadata:
+  workspace: movielens
+  name: movie_ratings
+  title: Movie Ratings Semantic Model
+  description: Rating-grain semantic model for movie, user, and rating trend analysis.
+spec:
+  baseTable: ratings
+  tables:
+    - ratings
+    - movies
+    - users
+  relationships:
+    - id: ratings_movies
+      description: Links each rating to the rated movie.
+      from: ratings.movie_id
+      to: movies.movie_id
+      cardinality: many_to_one
+      active: true
+    - id: ratings_users
+      description: Links each rating to the anonymized user who made it.
+      from: ratings.user_id
+      to: users.user_id
+      cardinality: many_to_one
+      active: true
+  measures:
+    defaults:
+      table: ratings
+      grain: rating_id
+      time: ratings.rated_at
+      grains: [month, year]
+    rating_count:
+      label: Ratings
+      description: Count of rating events.
+      expression: COUNT(*)
+      format: integer
+    average_rating:
+      label: Average rating
+      description: Average MovieLens rating.
+      expression: AVG(ratings.rating)
+      format: decimal
+    active_users:
+      label: Active users
+      description: Distinct users who submitted ratings.
+      expression: COUNT(DISTINCT ratings.user_id)
+      format: integer
+    rated_movies:
+      label: Rated movies
+      description: Distinct movies with ratings.
+      expression: COUNT(DISTINCT ratings.movie_id)
+      format: integer
+    five_star_share:
+      label: Five-star share
+      description: Share of ratings that are exactly five stars.
+      expression: SUM(CASE WHEN ratings.rating = 5 THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0)
+      format: percent

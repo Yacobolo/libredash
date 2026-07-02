@@ -213,6 +213,69 @@ func TestModelTablesMaterializeAfterModelDependencies(t *testing.T) {
 	}
 }
 
+func TestMovieLensModelTableOrderMaterializesDimensionsBeforeFacts(t *testing.T) {
+	model := &semanticmodel.Model{
+		Name:        "movielens",
+		Connections: map[string]semanticmodel.Connection{"movielens": {Kind: "local"}},
+		Sources: map[string]semanticmodel.Source{
+			"ratings": {Path: "ratings.csv", Format: "csv", Connection: "movielens"},
+			"movies":  {Path: "movies.csv", Format: "csv", Connection: "movielens"},
+			"tags":    {Path: "tags.csv", Format: "csv", Connection: "movielens"},
+			"links":   {Path: "links.csv", Format: "csv", Connection: "movielens"},
+		},
+		BaseTable: "ratings",
+		Tables: map[string]semanticmodel.Table{
+			"ratings": {
+				Source:     "ratings",
+				PrimaryKey: "rating_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{"rating_id": {Label: "Rating ID"}},
+			},
+			"movies": {
+				Sources:    []string{"movies", "links"},
+				Transform:  semanticmodel.Transform{SQL: "SELECT m.movieId AS movie_id FROM source.movies m LEFT JOIN source.links l ON l.movieId = m.movieId"},
+				PrimaryKey: "movie_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{"movie_id": {Label: "Movie ID"}},
+			},
+			"users": {
+				Sources:    []string{"ratings", "tags"},
+				Transform:  semanticmodel.Transform{SQL: "SELECT r.userId AS user_id FROM source.ratings r LEFT JOIN source.tags t ON t.userId = r.userId"},
+				PrimaryKey: "user_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{"user_id": {Label: "User ID"}},
+			},
+			"rating_genres": {
+				Transform:  semanticmodel.Transform{SQL: "SELECT rating_id, genre FROM model.ratings JOIN model.movies USING (movie_id)"},
+				PrimaryKey: "rating_genre_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{"rating_genre_id": {Label: "Rating Genre ID"}},
+			},
+			"tags": {
+				Source:     "tags",
+				PrimaryKey: "tag_id",
+				Dimensions: map[string]semanticmodel.MetricDimension{"tag_id": {Label: "Tag ID"}},
+			},
+		},
+		Measures: map[string]semanticmodel.MetricMeasure{
+			"rating_count": {Table: "ratings", Grain: "rating_id", Expression: "COUNT(*)", Label: "Ratings"},
+		},
+	}
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	order, err := analyticsmaterialize.ModelTableOrder(model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ratingsIndex := indexOf(order, "ratings")
+	moviesIndex := indexOf(order, "movies")
+	ratingGenresIndex := indexOf(order, "rating_genres")
+	if ratingsIndex < 0 || moviesIndex < 0 || ratingGenresIndex < 0 {
+		t.Fatalf("order = %#v, want ratings, movies, and rating_genres", order)
+	}
+	if ratingGenresIndex < ratingsIndex || ratingGenresIndex < moviesIndex {
+		t.Fatalf("order = %#v, want rating_genres after ratings and movies", order)
+	}
+}
+
 func TestModelTableDependencyOrderIncludesUpstreamBeforeSelected(t *testing.T) {
 	model := &semanticmodel.Model{
 		Name:      "test",
@@ -233,6 +296,15 @@ func TestModelTableDependencyOrderIncludesUpstreamBeforeSelected(t *testing.T) {
 	if !reflect.DeepEqual(order, want) {
 		t.Fatalf("dependency order = %#v, want %#v", order, want)
 	}
+}
+
+func indexOf(values []string, target string) int {
+	for index, value := range values {
+		if value == target {
+			return index
+		}
+	}
+	return -1
 }
 
 func TestModelTablesNamedMaterializesOnlyRequestedOrder(t *testing.T) {

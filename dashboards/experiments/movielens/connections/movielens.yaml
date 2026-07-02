@@ -1,0 +1,13 @@
+apiVersion: libredash.dev/v1
+kind: Connection
+metadata:
+  name: movielens
+  title: MovieLens CSV files
+spec:
+  kind: local
+  description: Local CSV files for the MovieLens 32M experimental dataset.
+  credentials:
+    provider: none
+  defaults:
+    options:
+      header: true

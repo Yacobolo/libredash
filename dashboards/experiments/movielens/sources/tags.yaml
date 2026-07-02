@@ -1,0 +1,13 @@
+apiVersion: libredash.dev/v1
+kind: Source
+metadata:
+  name: movielens.tags
+  title: Tags
+spec:
+  connection: movielens
+  path: tags.csv
+  fields:
+    userId: {type: integer, description: Anonymized MovieLens user identifier.}
+    movieId: {type: integer, description: MovieLens movie identifier.}
+    tag: {type: string, description: User-generated movie tag.}
+    timestamp: {type: integer, description: Tag timestamp as Unix epoch seconds.}

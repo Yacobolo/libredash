@@ -78,6 +78,13 @@ func DatabasePath(dbDir, modelID string) string {
 	return filepath.Join(dbDir, "libredash-"+modelID+".duckdb")
 }
 
+func WorkspaceDatabasePath(dbDir string) string {
+	if path := os.Getenv("LIBREDASH_DUCKDB_PATH"); path != "" {
+		return path
+	}
+	return filepath.Join(dbDir, "libredash-workspace.duckdb")
+}
+
 func (r *Runtime) Close() error {
 	if r == nil {
 		return nil

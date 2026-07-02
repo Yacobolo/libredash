@@ -10,6 +10,15 @@ tasks:
     cmds:
       - ./scripts/dev-server.sh start
 
+  dev:movielens:
+    desc: Start the managed LibreDash dev server with the MovieLens 32M experiment project
+    deps:
+      - generate
+      - build
+      - bootstrap:movielens
+    cmds:
+      - LIBREDASH_DEV_RESTART=1 LIBREDASH_DEV_READY_ATTEMPTS=1800 LIBREDASH_DATA_DIR=.data/movielens LIBREDASH_DEV_PROJECT=dashboards/experiments/movielens/libredash.yaml ./scripts/dev-server.sh start
+
   dev:quack:
     desc: Start the managed LibreDash dev server with the local Quack profile
     deps:
@@ -22,6 +31,11 @@ tasks:
     desc: Download/sync Olist CSVs if missing
     cmds:
       - go run ./internal/tools/bootstrapolist
+
+  bootstrap:movielens:
+    desc: Download/sync MovieLens 32M CSVs if missing
+    cmds:
+      - LIBREDASH_DATA_DIR=.data/movielens go run ./internal/tools/bootstrapmovielens
 
   dev:stop:
     desc: Stop the managed LibreDash dev server for this worktree

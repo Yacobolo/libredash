@@ -1,0 +1,12 @@
+apiVersion: libredash.dev/v1
+kind: Source
+metadata:
+  name: movielens.links
+  title: External Links
+spec:
+  connection: movielens
+  path: links.csv
+  fields:
+    movieId: {type: integer, description: MovieLens movie identifier.}
+    imdbId: {type: string, description: IMDb identifier without the tt prefix.}
+    tmdbId: {type: string, description: TMDb movie identifier.}

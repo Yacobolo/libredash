@@ -1,0 +1,198 @@
+apiVersion: libredash.dev/v1
+kind: Dashboard
+metadata:
+  workspace: movielens
+  name: genre-analysis
+  title: Genre Analysis
+  description: Genre-level rating volume, rating quality, trends, and release-decade comparisons.
+  tags: [movies, genres, ratings, experiment]
+spec:
+  semanticModel: genre_ratings
+  filters:
+    rating_date:
+      type: date_range
+      label: Rating date
+      url_param: period
+      from_url_param: from
+      to_url_param: to
+      field: rating_genres.rating_date
+      default:
+        preset: all
+      presets:
+        - value: all
+          label: All time
+        - value: "2023"
+          label: "2023"
+          from: "2023-01-01"
+          to: "2023-12-31"
+    genre:
+      type: multi_select
+      label: Genre
+      url_param: genre
+      operator: in
+      values:
+        source: distinct
+        limit: 30
+      field: rating_genres.genre
+    release_decade:
+      type: multi_select
+      label: Release decade
+      url_param: decade
+      operator: in
+      values:
+        source: distinct
+        limit: 20
+      field: rating_genres.release_decade
+  visuals:
+    genre_rating_count:
+      kind: kpi
+      shape: single_value
+      query:
+        measures:
+          genre_rating_count:
+      options:
+        note: Rating-genre rows
+        tone: ink
+    average_rating:
+      kind: kpi
+      shape: single_value
+      query:
+        measures:
+          average_rating:
+      options:
+        note: Mean rating
+        tone: amber
+    active_users:
+      kind: kpi
+      shape: single_value
+      query:
+        measures:
+          active_users:
+      options:
+        note: Distinct users
+        tone: green
+    rated_movies:
+      kind: kpi
+      shape: single_value
+      query:
+        measures:
+          rated_movies:
+      options:
+        note: Distinct movies
+        tone: coral
+    ratings_by_genre:
+      title: Ratings by genre
+      type: bar
+      query:
+        dimensions:
+          genre: rating_genres.genre
+        measures:
+          genre_rating_count:
+        sort:
+          - field: value
+            direction: desc
+        limit: 20
+    average_by_genre:
+      title: Average rating by genre
+      type: bar
+      query:
+        dimensions:
+          genre: rating_genres.genre
+        measures:
+          average_rating:
+        sort:
+          - field: value
+            direction: desc
+        limit: 20
+    genre_trend:
+      title: Genre ratings by year
+      shape: category_series_value
+      renderer: echarts
+      type: column
+      options:
+        stacked: true
+      query:
+        dimensions:
+          rating_year: rating_genres.rating_year
+        series:
+          field: rating_genres.genre
+          alias: genre
+        measures:
+          genre_rating_count:
+        sort:
+          - field: rating_year
+            direction: asc
+        limit: 120
+    decade_genres:
+      title: Release decade by genre
+      shape: matrix
+      renderer: echarts
+      type: heatmap
+      query:
+        dimensions:
+          decade: rating_genres.release_decade
+          genre: rating_genres.genre
+        measures:
+          average_rating:
+        sort:
+          - field: decade
+            direction: asc
+          - field: genre
+            direction: asc
+        limit: 240
+  pages:
+    - name: overview
+      title: Overview
+      canvas:
+        width: 1366
+        height: 920
+      grid:
+        columns: 12
+        row_height: 48
+        gap: 16
+        padding: 16
+      visuals:
+        - id: rating-date-filter
+          kind: filter_card
+          filter: rating_date
+          placement: {col: 1, row: 1, col_span: 4, row_span: 2}
+        - id: genre-filter
+          kind: filter_card
+          filter: genre
+          placement: {col: 5, row: 1, col_span: 4, row_span: 2}
+        - id: decade-filter
+          kind: filter_card
+          filter: release_decade
+          placement: {col: 9, row: 1, col_span: 4, row_span: 2}
+        - id: genre-ratings
+          kind: kpi_card
+          visual: genre_rating_count
+          placement: {col: 1, row: 4, col_span: 3, row_span: 3}
+        - id: average-rating
+          kind: kpi_card
+          visual: average_rating
+          placement: {col: 4, row: 4, col_span: 3, row_span: 3}
+        - id: active-users
+          kind: kpi_card
+          visual: active_users
+          placement: {col: 7, row: 4, col_span: 3, row_span: 3}
+        - id: rated-movies
+          kind: kpi_card
+          visual: rated_movies
+          placement: {col: 10, row: 4, col_span: 3, row_span: 3}
+        - id: ratings-by-genre
+          kind: bar_chart
+          visual: ratings_by_genre
+          placement: {col: 1, row: 8, col_span: 6, row_span: 7}
+        - id: average-by-genre
+          kind: bar_chart
+          visual: average_by_genre
+          placement: {col: 7, row: 8, col_span: 6, row_span: 7}
+        - id: genre-trend
+          kind: column_chart
+          visual: genre_trend
+          placement: {col: 1, row: 16, col_span: 6, row_span: 7}
+        - id: decade-genres
+          kind: heatmap_chart
+          visual: decade_genres
+          placement: {col: 7, row: 16, col_span: 6, row_span: 7}

@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
-	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
@@ -501,29 +500,16 @@ func discoverSchemasForDefinition(ctx context.Context, definition *workspace.Def
 	if removeDuckDBRoot {
 		defer os.RemoveAll(duckDBRoot)
 	}
-	for _, entry := range definition.Catalog.SemanticModels {
-		model := definition.Models[entry.ID]
-		dbDir := filepath.Join(duckDBRoot, entry.ID)
-		dbPath := analyticsmaterialize.DatabasePath(dbDir, entry.ID)
-		if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-			return err
-		}
-		db, err := analyticsduckdb.Open(ctx, dbPath)
-		if err != nil {
-			return err
-		}
-		sources := analyticsduckdb.NewSourceRuntime(db, options.DataDir)
-		if _, err := analyticsmaterialize.Refresh(ctx, db, sources, model); err != nil {
-			db.Close()
-			return err
-		}
-		if err := analyticsduckdb.DiscoverSchemas(ctx, db, model); err != nil {
-			db.Close()
-			return err
-		}
-		if err := db.Close(); err != nil {
-			return err
-		}
+	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
+		Models:  definition.Models,
+		DataDir: options.DataDir,
+		DBDir:   duckDBRoot,
+	})
+	if err != nil {
+		return err
+	}
+	if err := runtime.Close(); err != nil {
+		return err
 	}
 	return nil
 }
