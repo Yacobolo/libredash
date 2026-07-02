@@ -7,7 +7,9 @@
   "scripts": {
     "build": "bun run build:css && bun scripts/build_assets.ts",
     "build:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css",
+    "generate:primer-primitives": "bun scripts/primer_primitives_reference.ts",
     "watch:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css --watch",
+    "test:primer-primitives": "bun test scripts/primer_primitives_reference.test.ts",
     "test:theme": "playwright install chromium && bun test static/theme.dom.test.ts",
     "test:app-shell": "playwright install chromium && bun scripts/build_test_assets.ts app-shell && bun test web/components/app/app-shell.dom.test.ts",
     "test:table-selection": "bun test web/components/dashboard/table/selection.test.ts",
