@@ -48,6 +48,10 @@ func (s *Service) Prompt(ctx context.Context, input PromptInput) (PromptResult, 
 	if err != nil {
 		return PromptResult{}, err
 	}
+	systemPrompt, err := s.systemPrompt(ctx)
+	if err != nil {
+		return PromptResult{}, err
+	}
 	runID := newID("run")
 	run, err := s.repo.CreateRun(ctx, RunInput{
 		WorkspaceID:    input.Scope.WorkspaceID,
@@ -63,7 +67,7 @@ func (s *Service) Prompt(ctx context.Context, input PromptInput) (PromptResult, 
 	sink := &storeEventSink{repo: s.repo, scope: input.Scope, conversationID: input.ConversationID, runID: run.ID, onEvent: input.OnEvent}
 	def := agent.Definition{
 		Name:              "libredash-readonly",
-		SystemPrompt:      s.systemPrompt(input.Scope),
+		SystemPrompt:      systemPrompt,
 		Model:             s.model,
 		Tools:             s.toolDefinitions(input.Scope),
 		InitialTranscript: initial,

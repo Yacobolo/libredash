@@ -128,15 +128,21 @@ func TestServiceRejectsGloballyDisabledAgentSeparatelyFromPolicy(t *testing.T) {
 	}
 }
 
-func TestServiceAppendsWorkspaceAgentPolicyInstructions(t *testing.T) {
+func TestServiceUsesConfiguredSystemPromptWithoutWorkspaceInstructionComposition(t *testing.T) {
 	service := NewService(fakeAgentMetrics{}, nil, Config{APIKey: "key", Model: "model"})
+	service.SetSystemPromptProvider(func(context.Context) (string, error) {
+		return "Stored platform system prompt.", nil
+	})
 	service.SetPolicyProvider(func(Scope) (workspace.AgentPolicy, bool) {
 		return workspace.AgentPolicy{Enabled: true, Instructions: "Prefer sales semantic models."}, true
 	})
 
-	prompt := service.systemPrompt(Scope{WorkspaceID: "test", PrincipalID: "principal"})
-	if !strings.Contains(prompt, "read-only BI assistant") || !strings.Contains(prompt, "Prefer sales semantic models.") {
-		t.Fatalf("system prompt missing base or policy instructions: %q", prompt)
+	prompt, err := service.systemPrompt(context.Background())
+	if err != nil {
+		t.Fatalf("system prompt: %v", err)
+	}
+	if prompt != "Stored platform system prompt." {
+		t.Fatalf("system prompt = %q, want stored prompt only", prompt)
 	}
 }
 

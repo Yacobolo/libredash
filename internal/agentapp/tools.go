@@ -18,6 +18,10 @@ func (s *Service) toolDefinitions(scope Scope) []agent.ToolDefinition {
 	return s.filterToolDefinitions(scope, tools)
 }
 
+func (s *Service) ToolDefinitions(scope Scope) []agent.ToolDefinition {
+	return s.toolDefinitions(scope)
+}
+
 func (s *Service) filterToolDefinitions(scope Scope, tools []agent.ToolDefinition) []agent.ToolDefinition {
 	policy, _ := s.policyForScope(scope)
 	if !policy.Enabled {

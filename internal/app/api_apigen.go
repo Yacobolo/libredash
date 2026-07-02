@@ -299,6 +299,14 @@ func (a apiGenAdapter) ListAgentEvents(w http.ResponseWriter, r *http.Request, _
 	a.server.listAgentEvents(w, r)
 }
 
+func (a apiGenAdapter) GetAdminAgentConfig(w http.ResponseWriter, r *http.Request) {
+	a.server.getAdminAgentConfig(w, r)
+}
+
+func (a apiGenAdapter) UpdateAdminAgentConfig(w http.ResponseWriter, r *http.Request) {
+	a.server.updateAdminAgentConfig(w, r)
+}
+
 func (a apiGenAdapter) ListPrincipals(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListPrincipalsParams) {
 	a.server.apiListPrincipals(w, r)
 }

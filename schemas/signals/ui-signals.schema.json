@@ -1,5 +1,64 @@
 {
   "$defs": {
+    "AdminAgentSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "canWrite": {
+          "type": "boolean"
+        },
+        "csrfToken": {
+          "type": "string"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "model": {
+          "type": "string"
+        },
+        "systemPrompt": {
+          "type": "string"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/AdminAgentToolSignal"
+          },
+          "type": "array"
+        },
+        "updatePath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "canWrite",
+        "csrfToken",
+        "enabled",
+        "systemPrompt",
+        "tools",
+        "updatePath"
+      ],
+      "type": "object"
+    },
+    "AdminAgentToolSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "inputSchema": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "description",
+        "inputSchema",
+        "name"
+      ],
+      "type": "object"
+    },
     "AdminContentSectionSignal": {
       "additionalProperties": false,
       "properties": {
@@ -69,6 +128,9 @@
       "properties": {
         "active": {
           "type": "string"
+        },
+        "agent": {
+          "$ref": "#/$defs/AdminAgentSignal"
         },
         "empty": {
           "type": "string"
@@ -3018,6 +3080,12 @@
   "$id": "https://libredash.local/schemas/ui-signals.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "anyOf": [
+    {
+      "$ref": "#/$defs/AdminAgentSignal"
+    },
+    {
+      "$ref": "#/$defs/AdminAgentToolSignal"
+    },
     {
       "$ref": "#/$defs/AdminContentSectionSignal"
     },

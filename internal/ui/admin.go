@@ -28,7 +28,24 @@ type AdminData struct {
 	SelectedPrincipal *AdminPrincipal
 	Groups            []AdminGroup
 	SelectedGroup     *AdminGroup
+	Agent             AdminAgentData
 	Storage           AdminStorageData
+}
+
+type AdminAgentData struct {
+	Enabled      bool
+	Model        string
+	SystemPrompt string
+	CanWrite     bool
+	CSRFToken    string
+	UpdatePath   string
+	Tools        []AdminAgentTool
+}
+
+type AdminAgentTool struct {
+	Name        string
+	Description string
+	InputSchema map[string]any
 }
 
 type AdminPrincipal struct {
@@ -79,10 +96,14 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, "admin", roleLabel)}
 	storageSignal := page.Storage
 	signals := map[string]any{
-		"chrome":  chrome,
-		"page":    page,
-		"runtime": uisignals.RouteRuntimeSignal{Kind: uisignals.RouteAdmin},
-		"status":  dashboard.Status{},
+		"chrome":    chrome,
+		"page":      page,
+		"runtime":   uisignals.RouteRuntimeSignal{Kind: uisignals.RouteAdmin},
+		"status":    dashboard.Status{},
+		"csrfToken": data.CSRFToken,
+	}
+	if active == "agent" {
+		signals["adminAgentCommand"] = map[string]string{"systemPrompt": data.Agent.SystemPrompt}
 	}
 	if active == "storage" {
 		signals["adminStorage"] = storageSignal
@@ -100,6 +121,25 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 			g.Attr("data-on:ld-storage-table-select", "$adminStorageCommand = evt.detail; "+postAction("/admin/storage/select-table")),
 		)
 	}
+	if active == "agent" {
+		adminAttrs = append(adminAttrs,
+			g.Attr("agent-prompt", data.Agent.SystemPrompt),
+			g.Attr("data-attr:agent-prompt", "$adminAgentCommand.systemPrompt"),
+			g.Attr("data-on:ld-agent-system-prompt-save", "$adminAgentCommand = evt.detail; "+patchAction("/api/v1/admin/agent/config")),
+		)
+	}
+	adminChildren := []g.Node{}
+	if active == "agent" {
+		promptAttrs := []g.Node{
+			g.Attr("slot", "agent-prompt"),
+			g.Attr("value", data.Agent.SystemPrompt),
+			g.Attr("data-attr:value", "$adminAgentCommand.systemPrompt"),
+		}
+		if !data.Agent.CanWrite {
+			promptAttrs = append(promptAttrs, g.Attr("disabled", ""))
+		}
+		adminChildren = append(adminChildren, g.El("ld-agent-prompt-editor", promptAttrs...))
+	}
 	return c.HTML5(c.HTML5Props{
 		Title:    "Admin - " + title,
 		Language: "en",
@@ -109,6 +149,7 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 			g.Attr("data-dark-theme", "dark"),
 		},
 		Head: pageHead(
+			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/admin-page.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/app-shell.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/admin-page.js"))),
 			inspectorScript(),
@@ -121,7 +162,7 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 				g.El("ld-app-shell",
 					g.Attr("chrome", jsonString(chrome)),
 					g.Attr("data-attr:chrome", "JSON.stringify($chrome)"),
-					g.El("ld-admin-page", adminAttrs...),
+					g.El("ld-admin-page", append(adminAttrs, adminChildren...)...),
 				),
 				inspectorElement(),
 			),
@@ -184,6 +225,15 @@ func adminPageSignal(active string, data AdminData) uisignals.AdminPageSignal {
 			{Label: "Member count", Value: fmt.Sprint(len(group.Members))},
 		}
 		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Members", Table: adminGroupMembersGrid(group, data.Principals)}}
+	case "agent":
+		page.HeaderTitle = "Agent"
+		page.HeaderDetail = "Platform agent prompt and read-only tool inventory."
+		page.Agent = adminAgentSignal(data.Agent)
+		page.Metrics = []uisignals.AdminMetricSignal{
+			{Label: "Status", Value: configuredLabel(data.Agent.Enabled)},
+			{Label: "Model", Value: data.Agent.Model},
+			{Label: "Tools", Value: fmt.Sprint(len(data.Agent.Tools))},
+		}
 	case "storage":
 		page.HeaderTitle = "Storage"
 		page.HeaderDetail = "Read-only DuckDB database and table inventory."
@@ -219,6 +269,7 @@ func adminPageSignal(active string, data AdminData) uisignals.AdminPageSignal {
 func adminSidebarSignal(active string) uisignals.SubSidebarSignal {
 	principalsActive := active == "principals" || active == "principal-detail"
 	groupsActive := active == "groups" || active == "group-detail"
+	agentActive := active == "agent"
 	storageActive := active == "storage"
 	return uisignals.SubSidebarSignal{
 		Label:       "Admin",
@@ -232,8 +283,29 @@ func adminSidebarSignal(active string) uisignals.SubSidebarSignal {
 			{ID: "general", Title: "General", Href: "/admin", Active: active == "general"},
 			{ID: "principals", Title: "Principals", Href: "/admin/principals", Active: principalsActive},
 			{ID: "groups", Title: "Groups", Href: "/admin/groups", Active: groupsActive},
+			{ID: "agent", Title: "Agent", Href: "/admin/agent", Active: agentActive},
 			{ID: "storage", Title: "Storage", Href: "/admin/storage", Active: storageActive},
 		},
+	}
+}
+
+func adminAgentSignal(data AdminAgentData) uisignals.AdminAgentSignal {
+	tools := make([]uisignals.AdminAgentToolSignal, 0, len(data.Tools))
+	for _, tool := range data.Tools {
+		tools = append(tools, uisignals.AdminAgentToolSignal{
+			Name:        tool.Name,
+			Description: tool.Description,
+			InputSchema: tool.InputSchema,
+		})
+	}
+	return uisignals.AdminAgentSignal{
+		Enabled:      data.Enabled,
+		Model:        data.Model,
+		SystemPrompt: data.SystemPrompt,
+		CanWrite:     data.CanWrite,
+		CSRFToken:    data.CSRFToken,
+		UpdatePath:   data.UpdatePath,
+		Tools:        tools,
 	}
 }
 
@@ -372,6 +444,8 @@ func adminPageTitle(active string) string {
 		return "Groups"
 	case "group-detail":
 		return "Group"
+	case "agent":
+		return "Agent"
 	case "storage":
 		return "Storage"
 	default:

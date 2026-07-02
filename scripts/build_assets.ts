@@ -12,8 +12,9 @@ const builds: AssetBuild[] = [
   split('dashboard-page', 'web/components/dashboard/dashboard-page.ts', 'static', 'dashboard-page.js', 'chunks/dashboard-[name]-[hash].[ext]'),
   single('workspace-page', 'web/components/workspace/workspace-page.ts', 'static/workspace-page.js'),
   split('chat-page', 'web/components/chat/chat-page.ts', 'static', 'chat-page.js', 'chunks/chat-[name]-[hash].[ext]'),
-  single('admin-page', 'web/components/admin/admin-page.ts', 'static/admin-page.js'),
+  splitByName('admin-page', 'web/components/admin/admin-page.ts', 'static', 'chunks/admin-[name]-[hash].[ext]'),
   single('login-page', 'web/components/login/login-page.ts', 'static/login-page.js'),
+  single('monaco-editor-worker', 'web/components/shared/monaco-editor-worker.ts', 'static/monaco-editor-worker.js'),
   single('url-sync', 'web/components/dashboard/filters/url-sync.ts', 'static/url-sync.js'),
   single('datastar-inspector', 'web/components/inspector/index.ts', 'static/datastar-inspector.js'),
   single('topology-background', 'web/components/login/topology-background.ts', 'static/topology-background.js'),
@@ -44,6 +45,7 @@ const builds: AssetBuild[] = [
 for (const build of builds) {
   await runBuild(build)
 }
+await Bun.write('static/monaco-editor-css.css', Bun.file('static/admin-page.css'))
 
 function single(label: string, entrypoint: string, outputPath: string): AssetBuild {
   const output = outputParts(outputPath)
@@ -72,6 +74,23 @@ function split(label: string, entrypoint: string, outdir: string, entryName: str
       splitting: true,
       outdir,
       naming: { entry: entryName, chunk: chunkName },
+    },
+  }
+}
+
+function splitByName(label: string, entrypoint: string, outdir: string, chunkName: string): AssetBuild {
+  const name = entrypointName(entrypoint)
+  const chunkPrefix = chunkName.slice(0, chunkName.indexOf('['))
+  return {
+    label,
+    clean: [`${outdir}/${name}.js`, `${outdir}/${chunkPrefix}*.js`, `${outdir}/chunk-*.js`],
+    options: {
+      entrypoints: [entrypoint],
+      target: 'browser',
+      format: 'esm',
+      splitting: true,
+      outdir,
+      naming: { entry: '[name].[ext]', chunk: chunkName },
     },
   }
 }
@@ -109,4 +128,10 @@ function outputParts(path: string): { dir: string; name: string } {
     return { dir: '.', name: path }
   }
   return { dir: path.slice(0, slash), name: path.slice(slash + 1) }
+}
+
+function entrypointName(path: string): string {
+  const slash = path.lastIndexOf('/')
+  const name = slash < 0 ? path : path.slice(slash + 1)
+  return name.replace(/\.[^.]+$/, '')
 }

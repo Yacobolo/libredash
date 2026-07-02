@@ -41,6 +41,9 @@ func (s *Server) configureAgentTools() {
 	if s.agent == nil {
 		return
 	}
+	if s.store != nil {
+		s.agent.SetSystemPromptProvider(s.agentSystemPrompt)
+	}
 	s.agent.SetPolicyProvider(s.agentPolicyForScope)
 	s.agent.AppendToolProviders(s.agentVisualToolDefinitions, s.agentAPIGenToolDefinitions)
 }
@@ -124,7 +127,7 @@ func apigenAgentParameters(operation map[string]any) []apigenAgentParameter {
 			Name:     stringFromMap(param, "name"),
 			In:       stringFromMap(param, "in"),
 			Required: boolFromMap(param, "required"),
-			Schema:   cloneStringAnyMap(schema),
+			Schema:   portableAgentToolSchema(cloneStringAnyMap(schema)),
 		})
 	}
 	return parameters
@@ -139,7 +142,7 @@ func apigenAgentBodyProperties(spec map[string]any, operation map[string]any) ma
 	out := make(map[string]any, len(properties))
 	for name, value := range properties {
 		if property, ok := value.(map[string]any); ok {
-			out[name] = inlineOpenAPISchemaRefs(spec, property, map[string]bool{})
+			out[name] = portableAgentToolSchema(inlineOpenAPISchemaRefs(spec, property, map[string]bool{}))
 		}
 	}
 	return out
@@ -204,6 +207,56 @@ func inlineOpenAPISchemaRefs(spec map[string]any, schema map[string]any, seen ma
 		}
 	}
 	return out
+}
+
+func portableAgentToolSchema(schema map[string]any) map[string]any {
+	out := make(map[string]any, len(schema))
+	for key, value := range schema {
+		if !portableAgentToolSchemaKeys[key] {
+			continue
+		}
+		switch key {
+		case "properties":
+			properties, ok := value.(map[string]any)
+			if !ok {
+				continue
+			}
+			cleanProperties := make(map[string]any, len(properties))
+			for name, rawProperty := range properties {
+				if property, ok := rawProperty.(map[string]any); ok {
+					cleanProperties[name] = portableAgentToolSchema(property)
+				}
+			}
+			out[key] = cleanProperties
+		case "items":
+			if items, ok := value.(map[string]any); ok {
+				out[key] = portableAgentToolSchema(items)
+			}
+		case "additionalProperties":
+			if nested, ok := value.(map[string]any); ok {
+				out[key] = portableAgentToolSchema(nested)
+			} else {
+				out[key] = value
+			}
+		default:
+			out[key] = value
+		}
+	}
+	return out
+}
+
+var portableAgentToolSchemaKeys = map[string]bool{
+	"additionalProperties": true,
+	"description":          true,
+	"enum":                 true,
+	"items":                true,
+	"maximum":              true,
+	"maxLength":            true,
+	"minimum":              true,
+	"minLength":            true,
+	"properties":           true,
+	"required":             true,
+	"type":                 true,
 }
 
 func apigenAgentToolDescription(operation apigenAgentOperation) string {

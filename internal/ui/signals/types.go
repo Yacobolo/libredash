@@ -439,7 +439,24 @@ type AdminPageSignal struct {
 	Empty        string                      `json:"empty,omitempty"`
 	Metrics      []AdminMetricSignal         `json:"metrics,omitempty"`
 	Sections     []AdminContentSectionSignal `json:"sections,omitempty"`
+	Agent        AdminAgentSignal            `json:"agent,omitempty"`
 	Storage      AdminStorageSignal          `json:"storage,omitempty"`
+}
+
+type AdminAgentSignal struct {
+	Enabled      bool                   `json:"enabled"`
+	Model        string                 `json:"model,omitempty"`
+	SystemPrompt string                 `json:"systemPrompt"`
+	CanWrite     bool                   `json:"canWrite"`
+	CSRFToken    string                 `json:"csrfToken"`
+	UpdatePath   string                 `json:"updatePath"`
+	Tools        []AdminAgentToolSignal `json:"tools"`
+}
+
+type AdminAgentToolSignal struct {
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
 }
 
 type AdminMetricSignal struct {

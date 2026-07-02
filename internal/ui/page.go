@@ -21,6 +21,10 @@ func postActionWithCSRFSignal(path, signal string) string {
 	return "@post('" + path + "', {headers: {'X-CSRF-Token': " + signal + "}})"
 }
 
+func patchAction(path string) string {
+	return "@patch('" + path + "', {headers: {'X-CSRF-Token': $csrfToken}})"
+}
+
 func staticAsset(path string) string {
 	return path + "?v=dev"
 }

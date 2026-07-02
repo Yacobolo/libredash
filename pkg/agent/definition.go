@@ -62,6 +62,9 @@ func compileTools(tools []ToolDefinition) (map[string]*compiledTool, []ToolSpec,
 		if !json.Valid(schemaRaw) {
 			return nil, nil, NewError(ErrorCodeInvalidArgument, fmt.Sprintf("tool %q schema is invalid JSON", tool.Name), nil)
 		}
+		if err := validatePortableToolSchema(tool.Name, schemaRaw); err != nil {
+			return nil, nil, err
+		}
 		schema, err := compileSchema(tool.Name, schemaRaw)
 		if err != nil {
 			return nil, nil, NewError(ErrorCodeInvalidArgument, fmt.Sprintf("tool %q schema did not compile", tool.Name), err)
@@ -84,4 +87,64 @@ func compileSchema(name string, raw json.RawMessage) (*jsonschema.Schema, error)
 		return nil, err
 	}
 	return compiler.Compile(loc)
+}
+
+func validatePortableToolSchema(name string, raw json.RawMessage) error {
+	var schema map[string]any
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		return NewError(ErrorCodeInvalidArgument, fmt.Sprintf("tool %q schema is invalid JSON", name), err)
+	}
+	if schema["type"] != "object" {
+		return NewError(ErrorCodeInvalidArgument, fmt.Sprintf("tool %q schema root type must be object for provider portability", name), nil)
+	}
+	if key, path, ok := findNonPortableToolSchemaKeyword(schema, "$"); ok {
+		return NewError(ErrorCodeInvalidArgument, fmt.Sprintf("tool %q schema uses %q at %s; use the portable tool schema subset", name, key, path), nil)
+	}
+	return nil
+}
+
+func findNonPortableToolSchemaKeyword(value any, path string) (string, string, bool) {
+	object, ok := value.(map[string]any)
+	if !ok {
+		if items, ok := value.([]any); ok {
+			for i, item := range items {
+				if key, foundPath, found := findNonPortableToolSchemaKeyword(item, fmt.Sprintf("%s[%d]", path, i)); found {
+					return key, foundPath, true
+				}
+			}
+		}
+		return "", "", false
+	}
+	for key, child := range object {
+		if !portableToolSchemaKeywords[key] {
+			return key, path + "." + key, true
+		}
+		if key == "properties" {
+			properties, _ := child.(map[string]any)
+			for name, propertySchema := range properties {
+				if foundKey, foundPath, found := findNonPortableToolSchemaKeyword(propertySchema, path+".properties."+name); found {
+					return foundKey, foundPath, true
+				}
+			}
+			continue
+		}
+		if foundKey, foundPath, found := findNonPortableToolSchemaKeyword(child, path+"."+key); found {
+			return foundKey, foundPath, true
+		}
+	}
+	return "", "", false
+}
+
+var portableToolSchemaKeywords = map[string]bool{
+	"additionalProperties": true,
+	"description":          true,
+	"enum":                 true,
+	"items":                true,
+	"maximum":              true,
+	"maxLength":            true,
+	"minimum":              true,
+	"minLength":            true,
+	"properties":           true,
+	"required":             true,
+	"type":                 true,
 }

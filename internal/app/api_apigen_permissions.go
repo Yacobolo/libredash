@@ -54,6 +54,8 @@ var apigenOperationPermissions = map[string]string{
 	"listAgentRuns":                     access.PermissionAgentRead,
 	"getAgentRun":                       access.PermissionAgentRead,
 	"listAgentEvents":                   access.PermissionAgentRead,
+	"getAdminAgentConfig":               access.PermissionRBACRead,
+	"updateAdminAgentConfig":            access.PermissionRBACWrite,
 	"listPrincipals":                    access.PermissionRBACRead,
 	"getPrincipal":                      access.PermissionRBACRead,
 	"updatePrincipal":                   access.PermissionRBACWrite,

@@ -27,6 +27,13 @@ CREATE TABLE IF NOT EXISTS workspace_active_deployments (
   PRIMARY KEY(workspace_id, environment)
 );
 
+CREATE TABLE IF NOT EXISTS platform_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS deployment_artifacts (
   id TEXT PRIMARY KEY,
   deployment_id TEXT NOT NULL UNIQUE REFERENCES deployments(id) ON DELETE CASCADE,

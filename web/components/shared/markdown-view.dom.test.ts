@@ -1,0 +1,170 @@
+import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { createServer, type Server } from 'node:http'
+import { readFile } from 'node:fs/promises'
+import { join, normalize } from 'node:path'
+import { chromium, type Browser } from '@playwright/test'
+
+let server: Server
+let browser: Browser
+let baseURL = ''
+
+const root = join(process.cwd(), '.tmp/markdown-view-test')
+
+beforeAll(async () => {
+  server = createServer(async (request, response) => {
+    const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+    if (url.pathname === '/') {
+      response.setHeader('content-type', 'text/html')
+      response.end(testDocument())
+      return
+    }
+    const file = normalize(join(root, url.pathname))
+    if (!file.startsWith(root)) {
+      response.writeHead(404)
+      response.end('not found')
+      return
+    }
+    try {
+      response.setHeader('content-type', 'text/javascript')
+      response.end(await readFile(file))
+    } catch {
+      response.writeHead(404)
+      response.end('not found')
+    }
+  })
+  await new Promise<void>((resolve) => server.listen(0, resolve))
+  const address = server.address()
+  if (!address || typeof address === 'string') throw new Error('test server did not bind to a port')
+  baseURL = `http://127.0.0.1:${address.port}`
+  browser = await chromium.launch()
+})
+
+afterAll(async () => {
+  await browser?.close()
+  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+})
+
+test('markdown view renders sanitized markdown with default and compact typography', async () => {
+  const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-markdown-view'))
+
+    const state = await page.evaluate(async () => {
+      const markdown = [
+        '# Hello darkness',
+        '',
+        'A paragraph with **strong**, _emphasis_, ~~strike~~, `inline code`, and https://example.com.',
+        '',
+        '## Section',
+        '',
+        '- One',
+        '- Two',
+        '  - Nested',
+        '',
+        '> Quoted guidance',
+        '',
+        '---',
+        '',
+        '| Name | Value |',
+        '| --- | --- |',
+        '| Tool | Enabled |',
+        '',
+        '```json',
+        '{"enabled": true}',
+        '```',
+        '',
+        '![Alt text](https://example.com/image.png)',
+        '',
+        '<script>window.__unsafe = true</script><img src=x onerror="window.__unsafe = true">',
+      ].join('\n')
+      const standard = document.createElement('ld-markdown-view') as any
+      standard.value = markdown
+      const compact = document.createElement('ld-markdown-view') as any
+      compact.value = markdown
+      compact.compact = true
+      const empty = document.createElement('ld-markdown-view') as any
+      empty.emptyText = 'Nothing here.'
+      document.body.append(standard, compact, empty)
+      await standard.updateComplete
+      await compact.updateComplete
+      await empty.updateComplete
+
+      const standardRoot = standard.shadowRoot
+      const compactRoot = compact.shadowRoot
+      const h1 = compactRoot.querySelector('h1')!
+      const h2 = compactRoot.querySelector('h2')!
+      const paragraph = compactRoot.querySelector('p')!
+      const blockquote = compactRoot.querySelector('blockquote')!
+      const inlineCode = compactRoot.querySelector('p code')!
+      const pre = compactRoot.querySelector('pre')!
+      const th = compactRoot.querySelector('th')!
+      const image = compactRoot.querySelector('img')!
+      return {
+        h1Text: h1.textContent,
+        h1FontSize: getComputedStyle(h1).fontSize,
+        h2FontSize: getComputedStyle(h2).fontSize,
+        paragraphFontSize: getComputedStyle(paragraph).fontSize,
+        compactFontSize: getComputedStyle(compact).fontSize,
+        standardFontSize: getComputedStyle(standard).fontSize,
+        hasStrong: Boolean(compactRoot.querySelector('strong')),
+        hasEmphasis: Boolean(compactRoot.querySelector('em')),
+        hasStrike: Boolean(compactRoot.querySelector('s')),
+        hasAutolink: compactRoot.querySelector('a')?.getAttribute('href'),
+        hasNestedList: Boolean(compactRoot.querySelector('li ul')),
+        blockquoteBorder: getComputedStyle(blockquote).borderLeftWidth,
+        inlineCodeBackground: getComputedStyle(inlineCode).backgroundColor,
+        preOverflow: getComputedStyle(pre).overflowX,
+        tableHeaderDisplay: getComputedStyle(th).display,
+        tableHeaderWeight: getComputedStyle(th).fontWeight,
+        imageMaxWidth: getComputedStyle(image).maxWidth,
+        imageAlt: image.getAttribute('alt'),
+        unsafeScript: Boolean(compactRoot.querySelector('script')),
+        unsafeHandler: compactRoot.querySelector('img[src="x"]')?.getAttribute('onerror') ?? null,
+        emptyText: empty.shadowRoot.textContent?.trim(),
+        standardHasHeading: Boolean(standardRoot.querySelector('h1')),
+      }
+    })
+
+    expect(state.h1Text).toBe('Hello darkness')
+    expect(Number.parseFloat(state.h1FontSize)).toBeGreaterThan(Number.parseFloat(state.h2FontSize))
+    expect(Number.parseFloat(state.h2FontSize)).toBeGreaterThan(Number.parseFloat(state.paragraphFontSize))
+    expect(Number.parseFloat(state.standardFontSize)).toBeGreaterThan(Number.parseFloat(state.compactFontSize))
+    expect(state.hasStrong).toBe(true)
+    expect(state.hasEmphasis).toBe(true)
+    expect(state.hasStrike).toBe(true)
+    expect(state.hasAutolink).toBe('https://example.com')
+    expect(state.hasNestedList).toBe(true)
+    expect(state.blockquoteBorder).toBe('3px')
+    expect(state.inlineCodeBackground).toBe('rgb(246, 248, 250)')
+    expect(state.preOverflow).toBe('auto')
+    expect(state.tableHeaderDisplay).toBe('table-cell')
+    expect(Number.parseInt(state.tableHeaderWeight, 10)).toBeGreaterThanOrEqual(600)
+    expect(state.imageMaxWidth).toBe('100%')
+    expect(state.imageAlt).toBe('Alt text')
+    expect(state.unsafeScript).toBe(false)
+    expect(state.unsafeHandler).toBeNull()
+    expect(state.emptyText).toBe('Nothing here.')
+    expect(state.standardHasHeading).toBe(true)
+  } finally {
+    await page.close()
+  }
+})
+
+function testDocument(): string {
+  return `
+    <!doctype html>
+    <html>
+      <head>
+        <style>
+          html, body { margin: 0; min-height: 100%; }
+          body { --fontStack-system: system-ui; --fontStack-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --ld-bg-panel: #fff; --ld-bg-panel-muted: #f6f8fa; --ld-bg-control: #f6f8fa; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-fg-accent: #0969da; --ld-line-muted: #d8dee4; --ld-border-width: 1px; --ld-border-muted: 1px solid #d8dee4; --ld-radius-default: 6px; --base-size-4: 4px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --ld-space-2xs: 2px; --ld-space-xs: 4px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-font-size-body-md: 16px; --ld-font-size-title-sm: 18px; --ld-font-size-title-md: 22px; --ld-font-weight-strong: 600; --ld-line-height-compact: 1.3; --ld-line-height-snug: 1.35; --ld-line-height-normal: 1.5; --ld-line-height-relaxed: 1.55; --ld-chat-markdown-block-gap: 10px; --ld-chat-markdown-list-indent: 20px; --ld-chat-markdown-list-item-gap: 2px; --ld-chat-code-radius: 4px; --ld-chat-code-padding-block: 1px; --ld-chat-code-padding-inline: 4px; --ld-chat-code-font-scale: 0.92em; --ld-chat-pre-padding-block: 9px; --ld-chat-pre-padding-inline: 10px; --ld-chat-quote-border-width: 2px; --ld-chat-bubble-padding-block: 12px; --ld-chat-link-underline-thickness: 1px; --ld-chat-link-underline-offset: 2px; }
+          ld-markdown-view { display: block; width: 760px; margin: 24px; }
+        </style>
+      </head>
+      <body>
+        <script type="module" src="/markdown-view-under-test.js"></script>
+      </body>
+    </html>
+  `
+}

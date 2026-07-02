@@ -95,6 +95,41 @@ model AgentEventListResponse {
   page: PageInfo;
 }
 
+model AdminAgentToolResponse {
+  name: string;
+  description: string;
+  inputSchema: Record<string>;
+}
+
+model AdminAgentResponse {
+  enabled: boolean;
+  "model"?: string;
+  systemPrompt: string;
+  tools: AdminAgentToolResponse[];
+}
+
+model AdminAgentConfigPatchRequest {
+  systemPrompt: string;
+}
+
+alias GetAdminAgentConfigOK = OkJson<AdminAgentResponse>;
+
+@tag("Agent")
+@summary("Get admin agent configuration")
+@route("/admin/agent/config")
+@get
+@apigen.authz(#{ mode: "permission", permission: "rbac:read" })
+op getAdminAgentConfig(): GetAdminAgentConfigOK | CommonErrors;
+
+alias UpdateAdminAgentConfigOK = OkJson<AdminAgentResponse>;
+
+@tag("Agent")
+@summary("Update admin agent configuration")
+@route("/admin/agent/config")
+@patch
+@apigen.authz(#{ mode: "permission", permission: "rbac:write" })
+op updateAdminAgentConfig(@body body: AdminAgentConfigPatchRequest): UpdateAdminAgentConfigOK | CommonErrors;
+
 alias ListAgentConversationsOK = OkJson<AgentConversationListResponse>;
 
 @tag("Agent")

@@ -106,6 +106,12 @@ func TestAgentVisualToolIsCustomAgentOnlyTool(t *testing.T) {
 	if len(tools) != 1 || tools[0].Name != agenttools.QueryVisualToolName || tools[0].Handler == nil {
 		t.Fatalf("visual tools = %#v", tools)
 	}
+	schemaText := string(tools[0].InputSchema)
+	for _, forbidden := range []string{`"$ref"`, `"$defs"`, `"definitions"`} {
+		if strings.Contains(schemaText, forbidden) {
+			t.Fatalf("query_visual schema contains non-portable keyword %s: %s", forbidden, schemaText)
+		}
+	}
 	for _, tool := range server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"}) {
 		if tool.Name == agenttools.QueryVisualToolName {
 			t.Fatalf("query_visual should not be exposed through APIGen tools")
@@ -409,6 +415,12 @@ func TestAPIGenAgentToolsExposeTypeSpecArgumentNamesAndBodyFields(t *testing.T) 
 	names := map[string]agent.ToolDefinition{}
 	for _, tool := range tools {
 		names[tool.Name] = tool
+		schemaText := string(tool.InputSchema)
+		for _, forbidden := range []string{`"example"`, `"format"`, `"$ref"`, `"$defs"`, `"oneOf"`, `"anyOf"`, `"allOf"`} {
+			if strings.Contains(schemaText, forbidden) {
+				t.Fatalf("%s schema contains non-portable keyword %s: %s", tool.Name, forbidden, schemaText)
+			}
+		}
 	}
 	for toolName, wantProps := range map[string][]string{
 		"describe_dashboard":            {"dashboard"},

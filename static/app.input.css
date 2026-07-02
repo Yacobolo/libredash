@@ -436,6 +436,7 @@
     --ld-shadow-floating-lg: var(--shadow-floating-large);
     --ld-fg-default: var(--fgColor-default);
     --ld-fg-muted: var(--fgColor-muted);
+    --ld-fg-accent: var(--fgColor-accent);
     --ld-fg-link: var(--fgColor-accent);
     --ld-fg-success: var(--fgColor-success);
     --ld-fg-warning: var(--fgColor-attention);
@@ -472,9 +473,11 @@
     --ld-icon-default: var(--fgColor-default);
     --ld-icon-muted: var(--fgColor-muted);
     --ld-icon-accent: var(--fgColor-accent);
+    --ld-bg-accent: var(--bgColor-accent-emphasis);
     --ld-accent: var(--bgColor-accent-emphasis);
     --ld-accent-muted: var(--bgColor-accent-muted);
     --ld-accent-strong: var(--borderColor-accent-emphasis);
+    --ld-fg-on-accent: var(--fgColor-onEmphasis);
     --ld-accent-fg: var(--fgColor-onEmphasis);
     --ld-data-1: var(--data-blue-color-emphasis);
     --ld-data-1-muted: var(--data-blue-color-muted);
