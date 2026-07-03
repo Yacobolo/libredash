@@ -22,6 +22,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	"github.com/Yacobolo/libredash/internal/workspace"
+	workspacerefresh "github.com/Yacobolo/libredash/internal/workspace/refresh"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
 
@@ -1294,11 +1295,11 @@ func TestWorkspaceAssetRefreshPlanModelTableUsesWorkspaceDependencies(t *testing
 	}}
 	asset := workspace.AssetView{Type: string(workspace.AssetTypeModelTable), Key: "movielens.rating_genres"}
 
-	plan, err := workspaceAssetRefreshPlanForAsset(definition, "movielens", asset)
+	plan, err := workspacerefresh.PlanForAsset(definition, "movielens", asset)
 	if err != nil {
 		t.Fatalf("plan model table refresh: %v", err)
 	}
-	if plan.ModelID != workspaceRefreshModelID {
+	if plan.ModelID != workspacerefresh.WorkspaceRefreshModelID {
 		t.Fatalf("plan modelID = %q, want workspace refresh marker", plan.ModelID)
 	}
 	if got, want := plan.Tables, []string{"ratings", "movies", "rating_genres"}; !reflect.DeepEqual(got, want) {
@@ -1325,7 +1326,7 @@ func TestWorkspaceAssetRefreshPlanSemanticModelUsesModelTables(t *testing.T) {
 	}}
 	asset := workspace.AssetView{Type: string(workspace.AssetTypeSemanticModel), Key: "movielens.genre_ratings"}
 
-	plan, err := workspaceAssetRefreshPlanForAsset(definition, "movielens", asset)
+	plan, err := workspacerefresh.PlanForAsset(definition, "movielens", asset)
 	if err != nil {
 		t.Fatalf("plan semantic model refresh: %v", err)
 	}

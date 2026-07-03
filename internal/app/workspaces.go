@@ -19,9 +19,9 @@ import (
 	"github.com/Yacobolo/libredash/internal/assetnav"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
+	workspacerefresh "github.com/Yacobolo/libredash/internal/workspace/refresh"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/csrf"
 	"github.com/starfederation/datastar-go/datastar"
@@ -272,26 +272,15 @@ func (s *Server) refreshWorkspaceAssetWithPatches(r *http.Request, workspaceID s
 	}
 }
 
-type workspaceAssetRefreshPlan struct {
-	TargetType       string
-	TargetID         string
-	ModelID          string
-	Tables           []string
-	DependencyTables []string
-	ChildTrigger     string
-}
-
-const workspaceRefreshModelID = "workspace"
-
 func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
 	ctx := r.Context()
-	repo, err := s.deploymentRepository()
+	runRepo := materialize.NewSQLRunRepository(s.store.SQLDB())
+	service, err := s.workspaceRefreshService(runRepo)
 	if err != nil {
 		return err
 	}
 	environment := s.requestDeploymentEnvironment(r)
-	serving := newServingStateService(repo)
-	activeState, err := serving.Active(ctx, workspaceID, environment)
+	activeState, err := service.Active(ctx, workspaceID, environment)
 	if err != nil {
 		return err
 	}
@@ -305,104 +294,21 @@ func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, wor
 		}
 		return err
 	}
-	root, err := os.MkdirTemp("", "libredash-refresh-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(root)
-	if err := deploymentfs.ExtractArtifact(artifact.Path, root); err != nil {
-		return err
-	}
-	compiled, _, err := deploymentfs.LoadCompiledWorkspaceArtifact(root)
-	if err != nil {
-		return err
-	}
-	if compiled.Definition == nil {
-		return fmt.Errorf("compiled workspace definition is required")
-	}
-	artifact.DataRoot = s.dataDirForWorkspace(workspaceID, artifact)
-	activeState.Artifact = artifact
-	plan, err := workspaceAssetRefreshPlanForAsset(compiled.Definition, workspaceID, asset)
-	if err != nil {
-		return err
-	}
 	principal, _ := currentPrincipal(s, r)
-	candidate := servingState{}
-	runRepo := materialize.NewSQLRunRepository(s.store.SQLDB())
-	rootRun := materialize.RunRecord{}
-	dependencyRuns := []materialize.RunRecord(nil)
-	finalized := false
-	defer func() {
-		if !finalized {
-			cause := fmt.Errorf("refresh did not complete")
-			background := context.Background()
-			if rootRun.ID != "" {
-				_, _ = runRepo.MarkRunFailed(background, workspaceID, rootRun.ID, cause.Error())
-			}
-			for _, run := range dependencyRuns {
-				if run.ID != "" {
-					_, _ = runRepo.MarkRunFailed(background, workspaceID, run.ID, cause.Error())
-				}
-			}
-			_ = serving.MarkFailed(background, candidate, cause)
-		}
-	}()
-	candidate, err = serving.CreateRefreshCandidate(ctx, servingRefreshCandidateInput{
-		WorkspaceID:   workspaceID,
-		Environment:   environment,
-		CreatedBy:     principal.ID,
-		Active:        activeState,
-		ArtifactGraph: compiled.Graph,
-	})
-	if err != nil {
+	if _, err := service.QueueAssetRefresh(ctx, workspacerefresh.QueueAssetInput{
+		WorkspaceID: workspaceID,
+		Environment: environment,
+		PrincipalID: principal.ID,
+		Asset:       asset,
+		DataRoot:    s.dataDirForWorkspace(workspaceID, artifact),
+	}); err != nil {
 		return err
 	}
-	newDeploymentID := candidate.Deployment.ID
-
-	rootRun, err = runRepo.CreateRun(ctx, materialize.RunInput{
-		WorkspaceID:  workspaceID,
-		ModelID:      plan.ModelID,
-		DeploymentID: string(newDeploymentID),
-		PrincipalID:  principal.ID,
-		TargetType:   plan.TargetType,
-		TargetID:     plan.TargetID,
-		TriggerType:  materialize.TriggerDirect,
-		JobKind:      materialize.JobKindWorkspaceAssetRefresh,
-		PayloadJSON:  fmt.Sprintf(`{"assetKey":%q,"assetType":%q}`, asset.Key, asset.Type),
-	})
-	if err != nil {
-		_ = serving.MarkFailed(ctx, candidate, err)
-		return err
-	}
-	dependencyRuns = make([]materialize.RunRecord, 0, len(plan.DependencyTables))
-	for _, table := range plan.DependencyTables {
-		run, err := runRepo.CreateRun(ctx, materialize.RunInput{
-			WorkspaceID:  workspaceID,
-			ModelID:      workspaceRefreshModelID,
-			DeploymentID: string(newDeploymentID),
-			PrincipalID:  principal.ID,
-			TargetType:   materialize.TargetModelTable,
-			TargetID:     workspaceID + "." + table,
-			TriggerType:  plan.ChildTrigger,
-			ParentRunID:  rootRun.ID,
-		})
-		if err != nil {
-			_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
-			_ = serving.MarkFailed(ctx, candidate, err)
-			return err
-		}
-		dependencyRuns = append(dependencyRuns, run)
-	}
-	s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-	for _, run := range dependencyRuns {
-		s.publishWorkspaceAssetRefreshPatchForTarget(r, workspaceID, run.TargetID, assets, edges)
-	}
-	finalized = true
 	s.dispatchQueuedMaterializationJobs(context.Background())
 	return nil
 }
 
-func (s *Server) executeWorkspaceAssetRefreshPlan(ctx context.Context, definition *workspace.Definition, active, refreshed deployment.Deployment, artifact deployment.Artifact, environment deployment.Environment, plan workspaceAssetRefreshPlan) (int64, error) {
+func (s *Server) executeWorkspaceAssetRefreshPlan(ctx context.Context, definition *workspace.Definition, active, refreshed deployment.Deployment, artifact deployment.Artifact, environment deployment.Environment, plan workspacerefresh.Plan) (int64, error) {
 	runtime, err := s.openWorkspaceRefreshRuntime(ctx, definition, active, refreshed, artifact, environment, plan)
 	if err != nil {
 		return 0, err
@@ -418,7 +324,7 @@ func (s *Server) executeWorkspaceAssetRefreshPlan(ctx context.Context, definitio
 	return snapshotID, nil
 }
 
-func (s *Server) openWorkspaceRefreshRuntime(ctx context.Context, definition *workspace.Definition, active, refreshed deployment.Deployment, artifact deployment.Artifact, environment deployment.Environment, plan workspaceAssetRefreshPlan) (*analyticsduckdb.WorkspaceRuntime, error) {
+func (s *Server) openWorkspaceRefreshRuntime(ctx context.Context, definition *workspace.Definition, active, refreshed deployment.Deployment, artifact deployment.Artifact, environment deployment.Environment, plan workspacerefresh.Plan) (*analyticsduckdb.WorkspaceRuntime, error) {
 	dataDir := s.dataDirForWorkspace(string(refreshed.WorkspaceID), artifact)
 	dbDir := s.duckDBDir
 	if strings.TrimSpace(dbDir) == "" {
@@ -720,95 +626,6 @@ func modelTableTargetParts(key string) (string, string) {
 		return "", strings.TrimSpace(key)
 	}
 	return parts[0], parts[1]
-}
-
-func workspaceAssetRefreshPlanForAsset(definition *workspace.Definition, workspaceID string, asset workspace.AssetView) (workspaceAssetRefreshPlan, error) {
-	if definition == nil {
-		return workspaceAssetRefreshPlan{}, fmt.Errorf("workspace definition is required")
-	}
-	targetID := assetRefreshTargetID(asset)
-	switch asset.Type {
-	case string(workspace.AssetTypeSemanticModel):
-		modelID, err := localWorkspaceAssetName(workspaceID, asset.Key)
-		if err != nil {
-			return workspaceAssetRefreshPlan{}, err
-		}
-		model, ok := definition.Models[modelID]
-		if !ok {
-			return workspaceAssetRefreshPlan{}, fmt.Errorf("unknown semantic model %q", modelID)
-		}
-		order, err := materialize.ModelTableOrder(model)
-		if err != nil {
-			return workspaceAssetRefreshPlan{}, err
-		}
-		return workspaceAssetRefreshPlan{
-			TargetType:       materialize.TargetSemanticModel,
-			TargetID:         targetID,
-			ModelID:          modelID,
-			Tables:           order,
-			DependencyTables: order,
-			ChildTrigger:     materialize.TriggerSemanticModel,
-		}, nil
-	case string(workspace.AssetTypeModelTable):
-		tableName, err := localWorkspaceAssetName(workspaceID, asset.Key)
-		if err != nil {
-			return workspaceAssetRefreshPlan{}, err
-		}
-		order, err := analyticsduckdb.WorkspaceModelTableDependencyOrder(definition.Models, tableName)
-		if err != nil {
-			return workspaceAssetRefreshPlan{}, err
-		}
-		dependencies := append([]string(nil), order...)
-		if len(dependencies) > 0 && dependencies[len(dependencies)-1] == tableName {
-			dependencies = dependencies[:len(dependencies)-1]
-		}
-		return workspaceAssetRefreshPlan{
-			TargetType:       materialize.TargetModelTable,
-			TargetID:         targetID,
-			ModelID:          workspaceRefreshModelID,
-			Tables:           order,
-			DependencyTables: dependencies,
-			ChildTrigger:     materialize.TriggerDependency,
-		}, nil
-	default:
-		return workspaceAssetRefreshPlan{}, fmt.Errorf("asset type %q cannot be refreshed", asset.Type)
-	}
-}
-
-func localWorkspaceAssetName(workspaceID, key string) (string, error) {
-	prefix := strings.TrimSpace(workspaceID) + "."
-	key = strings.TrimSpace(key)
-	if prefix == "." {
-		return "", fmt.Errorf("workspace id is required")
-	}
-	if !strings.HasPrefix(key, prefix) {
-		return "", fmt.Errorf("asset key %q is not in workspace %q", key, workspaceID)
-	}
-	name := strings.TrimSpace(strings.TrimPrefix(key, prefix))
-	if name == "" {
-		return "", fmt.Errorf("asset key %q is missing a local name", key)
-	}
-	return name, nil
-}
-
-func retargetAssetGraph(graph workspace.AssetGraph, workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID) workspace.AssetGraph {
-	out := workspace.AssetGraph{
-		Assets: make([]workspace.Asset, 0, len(graph.Assets)),
-		Edges:  make([]workspace.AssetEdge, 0, len(graph.Edges)),
-	}
-	for _, asset := range graph.Assets {
-		asset.WorkspaceID = workspaceID
-		asset.DeploymentID = deploymentID
-		asset.SnapshotID = workspace.NewAssetSnapshotID(deploymentID, asset.ID)
-		out.Assets = append(out.Assets, asset)
-	}
-	for _, edge := range graph.Edges {
-		edge.WorkspaceID = workspaceID
-		edge.DeploymentID = deploymentID
-		edge.ID = workspace.NewAssetEdgeID(deploymentID, edge.FromAssetID, edge.ToAssetID, edge.Type)
-		out.Edges = append(out.Edges, edge)
-	}
-	return out
 }
 
 func (s *Server) connectionAsset(w http.ResponseWriter, r *http.Request) {
