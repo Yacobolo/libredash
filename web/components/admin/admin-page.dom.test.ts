@@ -169,7 +169,7 @@ test('admin navigation remains pinned while content scrolls on desktop', async (
   }
 })
 
-test('query audit page filters rows and opens detail drawer', async () => {
+test('query audit page filters table rows and exposes optional metadata columns', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
@@ -259,19 +259,24 @@ test('query audit page filters rows and opens detail drawer', async () => {
       const hiddenRuntimeText = table.textContent ?? ''
       const visibleHeaderLabels = (recordTable: Element) => Array.from(recordTable.querySelectorAll('thead th')).map((header: Element) => header.querySelector('.record-table-sort span:first-child')?.textContent?.trim() ?? '')
       const hiddenRuntimeHeaders = visibleHeaderLabels(table)
-      const hiddenRuntimeHasDetailAction = Boolean(table.querySelector('.record-icon-action[aria-label="Details"]'))
       table.querySelector<HTMLButtonElement>('.record-query-expand')?.click()
       await table.updateComplete
       const expandedQueryText = table.querySelector('.record-query-expanded-cell')?.textContent ?? ''
-      root.querySelector<HTMLButtonElement>('ld-record-table .record-icon-action')?.click()
-      await element.updateComplete
-      const detailText = root.querySelector('.query-detail')?.textContent ?? ''
+      Array.from(table.querySelectorAll('label'))
+        .find((label) => label.textContent?.includes('Operation'))
+        ?.querySelector('input')
+        ?.click()
+      await table.updateComplete
+      const operationHeaders = visibleHeaderLabels(table)
+      const operationText = table.textContent ?? ''
+      const hasDetailPanel = Boolean(root.querySelector('.query-detail'))
+      const hasDetailAction = Boolean(table.querySelector('.record-icon-action[aria-label="Details"]'))
       const recreated = document.createElement('ld-admin-page') as any
       recreated.page = element.page
       document.body.replaceChildren(recreated)
       await recreated.updateComplete
       const recreatedTable = recreated.shadowRoot.querySelector('ld-record-table') as any
-      const persistedHeaders = visibleHeaderLabels(recreatedTable)
+      const refreshedHeaders = visibleHeaderLabels(recreatedTable)
       return {
         title: root.querySelector('h1')?.textContent?.trim(),
         hasFilters: root.querySelectorAll('.query-filter').length >= 7,
@@ -282,10 +287,12 @@ test('query audit page filters rows and opens detail drawer', async () => {
         rowText,
         hiddenRuntimeText,
         hiddenRuntimeHeaders,
-        hiddenRuntimeHasDetailAction,
         expandedQueryText,
-        detailText,
-        persistedHeaders,
+        operationHeaders,
+        operationText,
+        hasDetailPanel,
+        hasDetailAction,
+        refreshedHeaders,
       }
     })
 
@@ -309,15 +316,14 @@ test('query audit page filters rows and opens detail drawer', async () => {
     expect(state.hiddenRuntimeHeaders).not.toContain('Status')
     expect(state.hiddenRuntimeHeaders[0]).toBe('Query')
     expect(state.hiddenRuntimeText).toMatch(/select status from orders/)
-    expect(state.hiddenRuntimeHasDetailAction).toBe(true)
     expect(state.expandedQueryText).toMatch(/select status from orders/)
-    expect(state.persistedHeaders).not.toContain('Runtime')
-    expect(state.persistedHeaders).not.toContain('Status')
-    expect(state.detailText).toMatch(/select status from orders/)
-    expect(state.detailText).toMatch(/semantic_dataset/)
-    expect(state.detailText).toMatch(/sales:orders/)
-    expect(state.detailText).toMatch(/req_1/)
-    expect(state.detailText).toMatch(/corr_1/)
+    expect(state.operationHeaders).toContain('Operation')
+    expect(state.operationText).toMatch(/api_query/)
+    expect(state.hasDetailPanel).toBe(false)
+    expect(state.hasDetailAction).toBe(false)
+    expect(state.refreshedHeaders).toContain('Runtime')
+    expect(state.refreshedHeaders).not.toContain('Operation')
+    expect(state.refreshedHeaders).not.toContain('Status')
   } finally {
     await page.close()
   }

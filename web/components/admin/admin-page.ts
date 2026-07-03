@@ -23,7 +23,6 @@ class LibreDashAdminPage extends LitElement {
   @property({ converter: jsonAttribute<AdminStorageSignal>(emptyStorage) }) storage: AdminStorageSignal = emptyStorage
   @property({ attribute: 'agent-prompt' }) agentPrompt = ''
   @state() private queryFilters: QueryAuditFilters = {}
-  @state() private selectedQueryEventID = ''
 
   static styles = css`
     :host {
@@ -243,86 +242,6 @@ class LibreDashAdminPage extends LitElement {
       padding: var(--base-size-8) var(--base-size-10);
     }
 
-    .query-detail {
-      display: grid;
-      gap: var(--base-size-12);
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-panel);
-      padding: var(--base-size-12);
-    }
-
-    .query-detail-header {
-      display: flex;
-      align-items: start;
-      justify-content: space-between;
-      gap: var(--base-size-12);
-    }
-
-    .query-detail-title {
-      display: grid;
-      gap: var(--base-size-4);
-      min-width: 0;
-    }
-
-    .query-detail-title strong {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .query-detail-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-      gap: var(--base-size-8);
-    }
-
-    .query-detail-grid div {
-      min-width: 0;
-    }
-
-    .query-detail-grid span {
-      display: block;
-      color: var(--ld-fg-muted);
-      font-size: var(--ld-font-size-caption);
-      font-weight: var(--ld-font-weight-medium);
-      text-transform: uppercase;
-    }
-
-    .query-detail-grid code,
-    .query-detail pre {
-      overflow: auto;
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-small, 6px);
-      background: var(--ld-bg-app);
-      color: var(--ld-fg-default);
-      font-size: var(--ld-font-size-caption);
-    }
-
-    .query-detail-grid code {
-      display: block;
-      padding: var(--base-size-6) var(--base-size-8);
-      white-space: nowrap;
-    }
-
-    .query-detail pre {
-      max-height: 18rem;
-      margin: 0;
-      padding: var(--base-size-10);
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .query-detail-close {
-      border: var(--ld-border-muted);
-      border-radius: var(--ld-radius-small, 6px);
-      background: var(--ld-bg-panel-muted);
-      color: var(--ld-fg-default);
-      cursor: pointer;
-      font: inherit;
-      padding: var(--base-size-6) var(--base-size-10);
-    }
-
     @media (max-width: 640px) {
       .route {
         grid-template-columns: 1fr;
@@ -405,7 +324,6 @@ class LibreDashAdminPage extends LitElement {
   private renderQueries(page: AdminPageSignal) {
     const events = page.queryEvents ?? []
     const filtered = filterQueryEvents(events, this.queryFilters)
-    const selected = filtered.find((event) => event.id === this.selectedQueryEventID) ?? events.find((event) => event.id === this.selectedQueryEventID) ?? null
     return html`
       <section class="query-audit" aria-label="Query audit">
         <div class="query-filters" aria-label="Query event filters">
@@ -417,10 +335,9 @@ class LibreDashAdminPage extends LitElement {
           ${this.renderTextFilter('target', 'Target')}
           ${this.renderTextFilter('search', 'Statement / ID')}
         </div>
-        <div class="panel" @ld-record-table-action=${this.handleQueryTableAction}>
+        <div class="panel">
           <ld-record-table variant="compact" .table=${queryEventsTable(filtered)}></ld-record-table>
         </div>
-        ${selected ? this.renderQueryDetail(selected) : nothing}
       </section>
     `
   }
@@ -459,42 +376,6 @@ class LibreDashAdminPage extends LitElement {
     this.queryFilters = { ...this.queryFilters, [key]: value }
   }
 
-  private handleQueryTableAction = (event: CustomEvent) => {
-    if (event.detail?.action !== 'detail') return
-    this.selectedQueryEventID = String(event.detail.row?.id ?? '')
-  }
-
-  private renderQueryDetail(event: AdminQueryEventSignal) {
-    return html`
-      <aside class="query-detail" aria-label="Query event detail">
-        <div class="query-detail-header">
-          <div class="query-detail-title">
-            <strong>${event.surface || '-'} · ${event.operation || '-'}</strong>
-            <span class="meta">${event.createdAt || '-'}</span>
-          </div>
-          <button class="query-detail-close" type="button" @click=${() => { this.selectedQueryEventID = '' }}>Close</button>
-        </div>
-        <div class="query-detail-grid">
-          ${queryDetailFact('Workspace', event.workspaceId)}
-          ${queryDetailFact('Principal', event.principalId)}
-          ${queryDetailFact('Kind', event.queryKind)}
-          ${queryDetailFact('Model', event.modelId)}
-          ${queryDetailFact('Target', event.target)}
-          ${queryDetailFact('Object', [event.objectType, event.objectId].filter(Boolean).join(':'))}
-          ${queryDetailFact('Status', event.status)}
-          ${queryDetailFact('Duration', `${event.durationMs ?? 0} ms`)}
-          ${queryDetailFact('Rows', String(event.rowsReturned ?? 0))}
-          ${queryDetailFact('Request ID', event.requestId)}
-          ${queryDetailFact('Correlation ID', event.correlationId)}
-        </div>
-        ${event.error ? html`<pre>${event.error}</pre>` : nothing}
-        ${event.sql ? html`<pre>${event.sql}</pre>` : nothing}
-        ${event.planText ? html`<pre>${event.planText}</pre>` : nothing}
-        ${event.queryJson ? html`<pre>${formatQueryJSON(event.queryJson)}</pre>` : nothing}
-      </aside>
-    `
-  }
-
 }
 
 type QueryAuditFilters = {
@@ -530,13 +411,19 @@ function queryEventsTable(events: AdminQueryEventSignal[]) {
       { id: 'runtime', header: 'Runtime', kind: 'code', width: '130px' },
       { id: 'principal_id', header: 'User', kind: 'code', width: '150px' },
       { id: 'rows_returned', header: 'Rows', kind: 'number', align: 'right', width: '90px' },
-      { id: 'actions', header: '', kind: 'actions', sortable: false, toggleable: false, width: '64px' },
+      { id: 'operation', header: 'Operation', kind: 'code', width: '145px' },
+      { id: 'kind', header: 'Kind', kind: 'code', width: '170px' },
+      { id: 'model', header: 'Model', kind: 'code', width: '130px' },
+      { id: 'target', header: 'Target', kind: 'code', width: '150px' },
+      { id: 'object', header: 'Object', kind: 'code', width: '220px' },
+      { id: 'request_id', header: 'Request ID', kind: 'code', width: '170px' },
+      { id: 'correlation_id', header: 'Correlation ID', kind: 'code', width: '170px' },
+      { id: 'error', header: 'Error', kind: 'code', width: '220px' },
     ],
     rows: events.map((event) => ({
       id: event.id,
       query: {
         label: queryEventStatement(event),
-        description: queryEventDescription(event),
         statusLabel: event.status,
         tone: queryEventStatusTone(event.status),
         icon: queryEventStatusIcon(event.status),
@@ -548,14 +435,20 @@ function queryEventsTable(events: AdminQueryEventSignal[]) {
       runtime: queryEventRuntimeLabel(event),
       principal_id: event.principalId,
       rows_returned: event.rowsReturned,
-      actions: [{ label: 'Details', icon: 'external', action: 'detail' }],
+      operation: event.operation,
+      kind: event.queryKind,
+      model: event.modelId,
+      target: event.target,
+      object: queryEventObjectLabel(event),
+      request_id: event.requestId,
+      correlation_id: event.correlationId,
+      error: event.error,
     })),
     empty: 'No query events match these filters.',
-    minWidth: '1270px',
+    minWidth: '1305px',
     density: 'tight',
     columnSelector: {
       enabled: true,
-      storageKey: 'libredash-admin-query-events-columns',
       label: 'Columns',
       defaultColumns: ['started_at', 'duration_ms', 'source', 'runtime', 'principal_id', 'rows_returned'],
     },
@@ -571,14 +464,6 @@ function queryEventStatement(event: AdminQueryEventSignal): string {
   return parts.join(' · ') || event.id
 }
 
-function queryEventDescription(event: AdminQueryEventSignal): string {
-  return [
-    queryEventObjectLabel(event),
-    event.queryKind,
-    shortQueryEventID(event),
-  ].filter(Boolean).join(' · ')
-}
-
 function queryEventExpandedContent(event: AdminQueryEventSignal): string {
   return event.sql || queryEventStatement(event)
 }
@@ -591,11 +476,6 @@ function queryEventObjectLabel(event: AdminQueryEventSignal): string {
 
 function queryEventRuntimeLabel(event: AdminQueryEventSignal): string {
   return event.workspaceId || '-'
-}
-
-function shortQueryEventID(event: AdminQueryEventSignal): string {
-  const id = event.requestId || event.correlationId || event.id
-  return id ? `id ${id}` : ''
 }
 
 function collapseWhitespace(value: string | undefined | null): string {
@@ -624,18 +504,6 @@ function queryEventStatusIcon(status: string): string {
       return 'clock'
     default:
       return 'x'
-  }
-}
-
-function queryDetailFact(label: string, value: string | number | undefined | null) {
-  return html`<div><span>${label}</span><code>${value == null || value === '' ? '-' : String(value)}</code></div>`
-}
-
-function formatQueryJSON(value: string): string {
-  try {
-    return JSON.stringify(JSON.parse(value), null, 2)
-  } catch {
-    return value
   }
 }
 
