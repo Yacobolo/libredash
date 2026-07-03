@@ -35,6 +35,7 @@ import {
   type SortingState,
 } from '@tanstack/lit-table'
 import { lucideIcon } from './lucide-icons'
+import './code-block'
 
 type RecordCellTone = 'default' | 'accent' | 'success' | 'attention' | 'danger' | 'muted'
 type RecordStatusIcon = 'check' | 'x' | 'clock' | 'dot'
@@ -472,7 +473,7 @@ class RecordTable extends LitElement {
         <tr class="record-query-expanded-row">
           <td class="record-query-expanded-cell" colspan=${columns.length}>
             <div class="record-query-expanded">
-              <pre><code>${expandedContent}</code></pre>
+              <ld-code-block language="sql" format dense .code=${expandedContent}></ld-code-block>
               <button
                 type="button"
                 class="record-query-copy"
@@ -1183,7 +1184,7 @@ const recordTableStyles = `
     padding: var(--base-size-12);
   }
 
-  ld-record-table .record-query-expanded pre {
+  ld-record-table .record-query-expanded > pre {
     max-height: 18rem;
     min-width: 0;
     overflow: auto;
@@ -1195,7 +1196,7 @@ const recordTableStyles = `
     padding: var(--base-size-12);
   }
 
-  ld-record-table .record-query-expanded code {
+  ld-record-table .record-query-expanded > pre code {
     font-family: var(--fontStack-monospace);
     font-size: var(--ld-font-size-body-sm);
     line-height: var(--ld-line-height-normal);

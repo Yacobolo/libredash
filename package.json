@@ -58,7 +58,8 @@
     "markdown-it": "^14.2.0",
     "monaco-editor-core": "^0.55.1",
     "p5": "^1.11.13",
-    "shiki": "^4.3.0"
+    "shiki": "^4.3.0",
+    "sql-formatter": "^15.8.2"
   },
   "trustedDependencies": [
     "@parcel/watcher"

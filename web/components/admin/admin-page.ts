@@ -6,6 +6,7 @@ import { jsonAttribute } from '../shared/json-attribute'
 import { lucideIcon } from '../shared/lucide-icons'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../navigation/sub-sidebar'
+import '../shared/code-block'
 import '../shared/record-table'
 import './agent-tools'
 import './agent-prompt-editor'
@@ -646,7 +647,7 @@ class LibreDashAdminPage extends LitElement {
           </section>
           <section class="query-detail-section" aria-label="Query text">
             <h2>Query text</h2>
-            <pre class="query-detail-code"><code>${queryEventExpandedContent(event)}</code></pre>
+            <ld-code-block language="sql" format copy .code=${queryEventExpandedContent(event)}></ld-code-block>
           </section>
           <section class="query-detail-section" aria-label="Timing">
             <h2>Timing</h2>

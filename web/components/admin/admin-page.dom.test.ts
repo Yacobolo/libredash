@@ -265,7 +265,10 @@ test('query audit page filters table rows and exposes optional metadata columns'
       const hiddenRuntimeHeaders = visibleHeaderLabels(table)
       table.querySelector<HTMLButtonElement>('.record-query-expand')?.click()
       await table.updateComplete
-      const expandedQueryText = table.querySelector('.record-query-expanded-cell')?.textContent ?? ''
+      const expandedCodeBlock = table.querySelector('.record-query-expanded-cell ld-code-block') as HTMLElement | null
+      const expandedQueryText = expandedCodeBlock?.shadowRoot?.querySelector('code')?.textContent
+        ?? table.querySelector('.record-query-expanded-cell')?.textContent
+        ?? ''
       const drawerAfterExpand = root.querySelector('.query-detail-drawer')?.textContent ?? ''
       table.querySelector<HTMLButtonElement>('.record-query-expand')?.click()
       await table.updateComplete
@@ -273,6 +276,8 @@ test('query audit page filters table rows and exposes optional metadata columns'
       await element.updateComplete
       const drawer = root.querySelector('.query-detail-drawer') as HTMLElement | null
       const drawerText = drawer?.textContent ?? ''
+      const drawerCodeBlock = drawer?.querySelector('ld-code-block') as HTMLElement | null
+      const drawerCode = drawerCodeBlock?.shadowRoot?.querySelector('code')?.textContent ?? drawerCodeBlock?.querySelector('code')?.textContent ?? ''
       const drawerAnimationName = drawer ? getComputedStyle(drawer).animationName : ''
       const status = drawer?.querySelector('.query-detail-status') as HTMLElement | null
       const statusIcon = status?.querySelector('svg') as SVGElement | null
@@ -318,6 +323,8 @@ test('query audit page filters table rows and exposes optional metadata columns'
         expandedQueryText,
         drawerAfterExpand,
         drawerText,
+        drawerHasCodeBlock: Boolean(drawerCodeBlock),
+        drawerCode,
         drawerAnimationName,
         statusColor,
         statusTextColor,
@@ -354,7 +361,7 @@ test('query audit page filters table rows and exposes optional metadata columns'
     expect(state.hiddenRuntimeHeaders).not.toContain('Status')
     expect(state.hiddenRuntimeHeaders[0]).toBe('Query')
     expect(state.hiddenRuntimeText).toMatch(/select status from orders/)
-    expect(state.expandedQueryText).toMatch(/select status from orders/)
+    expect(state.expandedQueryText).toMatch(/SELECT\s+status\s+FROM\s+orders/i)
     expect(state.drawerAfterExpand).toBe('')
     expect(state.drawerText).toMatch(/Finished|Success|success/i)
     expect(state.drawerText).toMatch(/analyst/)
@@ -366,7 +373,9 @@ test('query audit page filters table rows and exposes optional metadata columns'
     expect(state.drawerText).toMatch(/queryevent_1/)
     expect(state.drawerText).toMatch(/req_1/)
     expect(state.drawerText).toMatch(/corr_1/)
-    expect(state.drawerText).toMatch(/select status from orders/)
+    expect(state.drawerHasCodeBlock).toBe(true)
+    expect(state.drawerCode).toContain('SELECT')
+    expect(state.drawerCode).toMatch(/\nFROM\n\s+orders/)
     expect(state.drawerText).toMatch(/12 ms/)
     expect(state.drawerText).toMatch(/semantic_aggregate/)
     expect(state.drawerText).toMatch(/semantic_dataset:sales:orders/)

@@ -284,7 +284,10 @@ test('record table renders tight expandable query rows', async () => {
     await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
     const expanded = await queryRowState(page)
     expect(expanded.hasExpandedRow).toBe(true)
-    expect(expanded.expandedText).toContain('from customers')
+    expect(expanded.hasCodeBlock).toBe(true)
+    expect(expanded.expandedText).toContain('FROM')
+    expect(expanded.formattedCode).toContain('SELECT')
+    expect(expanded.formattedCode).toMatch(/\nFROM\n\s+customers/)
     expect(expanded.expandedColspan).toBe(3)
 
     await page.locator('ld-record-table .record-query-expand').click()
@@ -506,13 +509,16 @@ async function queryRowState(page: Page) {
     const firstCell = element.querySelector('tbody tr:first-child td:first-child') as HTMLElement
     const firstRow = element.querySelector('tbody tr:first-child') as HTMLElement
     const expandedCell = element.querySelector('.record-query-expanded-cell') as HTMLTableCellElement | null
+    const codeBlock = expandedCell?.querySelector('ld-code-block') as HTMLElement | null
     return {
       headers: Array.from(element.querySelectorAll('thead th')).map((header) => header.querySelector('.record-table-sort span:first-child')?.textContent?.trim() ?? ''),
       menuLabels: Array.from(element.querySelectorAll('.record-table-column-menu label')).map((label) => label.textContent?.trim() ?? ''),
       statusLabel: element.querySelector('.record-query-status')?.getAttribute('aria-label'),
       queryText: element.querySelector('.record-query-text')?.textContent?.trim(),
       hasExpandedRow: Boolean(expandedCell),
-      expandedText: expandedCell?.textContent ?? '',
+      expandedText: codeBlock?.shadowRoot?.querySelector('code')?.textContent ?? expandedCell?.textContent ?? '',
+      hasCodeBlock: Boolean(codeBlock),
+      formattedCode: codeBlock?.shadowRoot?.querySelector('code')?.textContent ?? codeBlock?.querySelector('code')?.textContent ?? '',
       expandedColspan: expandedCell?.colSpan ?? 0,
       wrapHasTightDensity: wrap.classList.contains('density-tight'),
       cellPaddingTop: getComputedStyle(firstCell).paddingTop,
