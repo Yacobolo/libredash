@@ -63,6 +63,7 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 		return err
 	}
 	defer cleanup()
+	server.StartBackgroundJobs(ctx)
 	slog.Info("LibreDash listening", "url", "http://localhost"+addr)
 	return http.ListenAndServe(addr, server.Routes())
 }

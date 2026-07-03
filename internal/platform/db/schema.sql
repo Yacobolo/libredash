@@ -204,7 +204,16 @@ CREATE TABLE IF NOT EXISTS materialization_jobs (
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   deployment_id TEXT REFERENCES deployments(id) ON DELETE SET NULL,
   model_id TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'materialization',
+  payload_json TEXT NOT NULL DEFAULT '{}',
   status TEXT NOT NULL,
+  queued_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  started_at TEXT,
+  finished_at TEXT,
+  lease_owner TEXT NOT NULL DEFAULT '',
+  lease_expires_at TEXT,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -229,6 +238,10 @@ CREATE INDEX IF NOT EXISTS materialization_job_runs_parent_idx
   ON materialization_job_runs(parent_run_id);
 CREATE INDEX IF NOT EXISTS materialization_jobs_workspace_created_idx
   ON materialization_jobs(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS materialization_jobs_claim_idx
+  ON materialization_jobs(status, queued_at, id);
+CREATE INDEX IF NOT EXISTS materialization_jobs_lease_idx
+  ON materialization_jobs(status, lease_expires_at);
 CREATE INDEX IF NOT EXISTS materialization_job_runs_target_job_idx
   ON materialization_job_runs(target_type, target_id, job_id);
 
@@ -258,6 +271,9 @@ CREATE TABLE IF NOT EXISTS query_events (
   correlation_id TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL DEFAULT '',
   duration_ms INTEGER NOT NULL DEFAULT 0,
+  queue_wait_ms INTEGER NOT NULL DEFAULT 0,
+  execution_ms INTEGER NOT NULL DEFAULT 0,
+  execution_state TEXT NOT NULL DEFAULT '',
   rows_returned INTEGER NOT NULL DEFAULT 0,
   bytes_estimate INTEGER NOT NULL DEFAULT 0,
   error TEXT NOT NULL DEFAULT '',

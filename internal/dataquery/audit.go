@@ -70,6 +70,9 @@ func queryResultForError(ctx context.Context, result Result, err error, duration
 	}
 	if err != nil {
 		result.Status = queryStatus(ctx, err)
+		if result.ExecutionState == "" {
+			result.ExecutionState = queryExecutionState(ctx, err)
+		}
 		result.Error = sanitizeQueryError(err)
 		return result
 	}
@@ -95,6 +98,16 @@ func sanitizeQueryError(err error) string {
 		message = message[:1000]
 	}
 	return message
+}
+
+func queryExecutionState(ctx context.Context, err error) string {
+	if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+		return ExecutionCanceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return ExecutionTimeout
+	}
+	return ExecutionFailed
 }
 
 func firstNonEmpty(values ...string) string {

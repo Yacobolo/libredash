@@ -4,7 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
@@ -103,6 +106,9 @@ type Server struct {
 	securityHeaders     SecurityHeadersConfig
 	requestLogging      bool
 	logger              *slog.Logger
+	jobLeaseTimeout     time.Duration
+	jobDispatchMu       sync.Mutex
+	jobDispatching      bool
 	chatTitleMu         sync.Mutex
 	pendingChatTitles   map[string]struct{}
 }
@@ -131,12 +137,13 @@ type Options struct {
 	RequestLogging      bool
 	Logger              *slog.Logger
 	Executor            *execution.Service
+	JobLeaseTimeout     time.Duration
 }
 
 func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	executor := options.Executor
 	if executor == nil {
-		executor = execution.New(execution.DefaultConfig())
+		executor = execution.New(executionConfigFromEnv())
 	}
 	if metrics != nil {
 		metrics = executionMetrics{QueryMetrics: metrics, executor: executor, defaultWorkspaceID: options.DefaultWorkspaceID}
@@ -167,11 +174,54 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.rateLimits = options.RateLimits
 	server.securityHeaders = options.SecurityHeaders
 	server.requestLogging = options.RequestLogging
+	server.jobLeaseTimeout = options.JobLeaseTimeout
+	if server.jobLeaseTimeout <= 0 {
+		server.jobLeaseTimeout = durationEnv("LIBREDASH_EXEC_JOB_LEASE_TIMEOUT", 2*time.Minute)
+	}
 	if options.Logger != nil {
 		server.logger = options.Logger
 	}
 	server.configureAgentTools()
 	return server
+}
+
+func (s *Server) StartBackgroundJobs(ctx context.Context) {
+	s.dispatchQueuedMaterializationJobs(ctx)
+}
+
+func executionConfigFromEnv() execution.Config {
+	defaults := execution.DefaultConfig()
+	return execution.Config{
+		MaxRunningReads: intEnv("LIBREDASH_EXEC_MAX_RUNNING_READS", defaults.MaxRunningReads),
+		MaxQueuedReads:  intEnv("LIBREDASH_EXEC_MAX_QUEUED_READS", defaults.MaxQueuedReads),
+		ReadQueueWait:   durationEnv("LIBREDASH_EXEC_READ_QUEUE_TIMEOUT", defaults.ReadQueueWait),
+		MaxRunningJobs:  intEnv("LIBREDASH_EXEC_MAX_RUNNING_WRITES", defaults.MaxRunningJobs),
+		MaxQueuedJobs:   intEnv("LIBREDASH_EXEC_MAX_QUEUED_WRITES", defaults.MaxQueuedJobs),
+	}
+}
+
+func intEnv(name string, fallback int) int {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func durationEnv(name string, fallback time.Duration) time.Duration {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return fallback
+	}
+	return parsed
 }
 
 func (s *Server) workspaceRepository() (workspace.Repository, error) {

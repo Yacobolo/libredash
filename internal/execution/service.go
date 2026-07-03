@@ -36,6 +36,13 @@ type Service struct {
 	readWait time.Duration
 }
 
+type Stats struct {
+	RunningReads int
+	QueuedReads  int
+	RunningJobs  int
+	QueuedJobs   int
+}
+
 func New(config Config) *Service {
 	config = config.withDefaults()
 	return &Service{
@@ -88,12 +95,30 @@ func (s *Service) SubmitRead(ctx context.Context, query dataquery.Query, execute
 	if execute == nil {
 		return dataquery.Result{}, fmt.Errorf("query executor read function is required")
 	}
-	release, err := s.acquireRead(ctx)
+	release, queueWait, err := s.acquireRead(ctx)
 	if err != nil {
-		return dataquery.Result{}, err
+		return dataquery.Result{
+			QueueWaitMS:    durationMillis(queueWait),
+			ExecutionState: executionStateForError(ctx, err, dataquery.ExecutionRejected),
+		}, err
 	}
 	defer release()
-	return execute(ctx)
+	started := time.Now()
+	result, err := execute(ctx)
+	if result.QueueWaitMS == 0 {
+		result.QueueWaitMS = durationMillis(queueWait)
+	}
+	if result.ExecutionMS == 0 {
+		result.ExecutionMS = durationMillis(time.Since(started))
+	}
+	if result.ExecutionState == "" {
+		if err == nil {
+			result.ExecutionState = dataquery.ExecutionSucceeded
+		} else {
+			result.ExecutionState = executionStateForError(ctx, err, dataquery.ExecutionFailed)
+		}
+	}
+	return result, err
 }
 
 func (s *Service) SubmitJob(ctx context.Context, ref JobRef, execute func(context.Context) error) error {
@@ -133,25 +158,38 @@ func (s *Service) DispatchJob(ref JobRef, execute func(context.Context) error, o
 	return nil
 }
 
-func (s *Service) acquireRead(ctx context.Context) (func(), error) {
+func (s *Service) Stats() Stats {
+	if s == nil {
+		return Stats{}
+	}
+	return Stats{
+		RunningReads: len(s.reads),
+		QueuedReads:  len(s.waiting),
+		RunningJobs:  len(s.jobs),
+		QueuedJobs:   len(s.jobWait),
+	}
+}
+
+func (s *Service) acquireRead(ctx context.Context) (func(), time.Duration, error) {
 	select {
 	case s.reads <- struct{}{}:
-		return func() { <-s.reads }, nil
+		return func() { <-s.reads }, 0, nil
 	default:
 	}
+	startWait := time.Now()
 	select {
 	case s.waiting <- struct{}{}:
 		defer func() { <-s.waiting }()
 	default:
-		return nil, ErrReadQueueFull
+		return nil, time.Since(startWait), ErrReadQueueFull
 	}
 	waitCtx, cancel := context.WithTimeout(ctx, s.readWait)
 	defer cancel()
 	select {
 	case s.reads <- struct{}{}:
-		return func() { <-s.reads }, nil
+		return func() { <-s.reads }, time.Since(startWait), nil
 	case <-waitCtx.Done():
-		return nil, waitCtx.Err()
+		return nil, time.Since(startWait), waitCtx.Err()
 	}
 }
 
@@ -175,4 +213,28 @@ func (s *Service) reserveJobWait() bool {
 
 func (s *Service) releaseJobWait() {
 	<-s.jobWait
+}
+
+func durationMillis(duration time.Duration) int64 {
+	if duration <= 0 {
+		return 0
+	}
+	ms := duration.Milliseconds()
+	if ms == 0 {
+		return 1
+	}
+	return ms
+}
+
+func executionStateForError(ctx context.Context, err error, fallback string) string {
+	if errors.Is(err, ErrReadQueueFull) {
+		return dataquery.ExecutionRejected
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+		return dataquery.ExecutionCanceled
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return dataquery.ExecutionTimeout
+	}
+	return fallback
 }

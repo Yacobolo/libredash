@@ -45,6 +45,9 @@ func TestAuditedQueryMetricsRecordsSuccessWithoutRows(t *testing.T) {
 	if event.RowsReturned != 2 {
 		t.Fatalf("rows returned = %d, want 2", event.RowsReturned)
 	}
+	if event.ExecutionState != dataquery.ExecutionSucceeded || event.ExecutionMS <= 0 {
+		t.Fatalf("execution telemetry = state %q ms %d, want succeeded with duration", event.ExecutionState, event.ExecutionMS)
+	}
 	if event.SQL == "" {
 		t.Fatal("expected generated SQL in query event")
 	}
@@ -87,6 +90,9 @@ func TestAuditedQueryMetricsRecordsExecutionError(t *testing.T) {
 	}
 	if !strings.Contains(event.Error, "unsupported") {
 		t.Fatalf("error = %q, want unsupported query message", event.Error)
+	}
+	if event.ExecutionState != dataquery.ExecutionFailed {
+		t.Fatalf("execution state = %q, want failed", event.ExecutionState)
 	}
 }
 

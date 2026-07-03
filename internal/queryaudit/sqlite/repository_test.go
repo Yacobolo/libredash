@@ -18,7 +18,7 @@ func TestRepositoryRecordsAndFiltersQueryEvents(t *testing.T) {
 
 	repo := NewRepository(store.SQLDB())
 	events := []queryaudit.EventInput{
-		{WorkspaceID: "sales", PrincipalID: "p1", Surface: "api", Operation: "api_query", QueryKind: "semantic_aggregate", ModelID: "sales", Target: "orders", Status: "success", RowsReturned: 10, SQL: "select * from orders", QueryJSON: `{"target":"orders"}`},
+		{WorkspaceID: "sales", PrincipalID: "p1", Surface: "api", Operation: "api_query", QueryKind: "semantic_aggregate", ModelID: "sales", Target: "orders", Status: "success", QueueWaitMS: 7, ExecutionMS: 11, ExecutionState: "succeeded", RowsReturned: 10, SQL: "select * from orders", QueryJSON: `{"target":"orders"}`},
 		{WorkspaceID: "sales", PrincipalID: "p2", Surface: "data_explorer", Operation: "preview_window", QueryKind: "model_table_rows", ModelID: "sales", Target: "customers", Status: "error", Error: "missing table", QueryJSON: `{"target":"customers"}`},
 		{WorkspaceID: "operations", PrincipalID: "p1", Surface: "agent", Operation: "agent_query", QueryKind: "semantic_rows", ModelID: "operations", Target: "reviews", Status: "success", QueryJSON: `{"target":"reviews"}`},
 	}
@@ -50,6 +50,9 @@ func TestRepositoryRecordsAndFiltersQueryEvents(t *testing.T) {
 	}
 	if len(search) != 1 || search[0].Target != "orders" {
 		t.Fatalf("search events = %#v, want orders", search)
+	}
+	if search[0].QueueWaitMS != 7 || search[0].ExecutionMS != 11 || search[0].ExecutionState != "succeeded" {
+		t.Fatalf("execution telemetry = wait %d execution %d state %q, want 7/11/succeeded", search[0].QueueWaitMS, search[0].ExecutionMS, search[0].ExecutionState)
 	}
 
 	multi, err := repo.ListQueryEvents(ctx, queryaudit.Filter{WorkspaceIDs: []string{"sales", "operations"}, Surfaces: []string{"api", "agent"}, Statuses: []string{"success"}})

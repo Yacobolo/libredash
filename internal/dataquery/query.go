@@ -98,6 +98,9 @@ type Result struct {
 	SQL            string
 	PlanText       string
 	DurationMS     int64
+	QueueWaitMS    int64
+	ExecutionMS    int64
+	ExecutionState string
 	RowsReturned   int
 	BytesEstimate  int64
 	Status         string
@@ -126,6 +129,13 @@ const (
 	StatusError    = "error"
 	StatusCanceled = "canceled"
 	StatusTimeout  = "timeout"
+
+	ExecutionStarted   = "started"
+	ExecutionRejected  = "rejected"
+	ExecutionCanceled  = "canceled"
+	ExecutionTimeout   = "timeout"
+	ExecutionSucceeded = "succeeded"
+	ExecutionFailed    = "failed"
 )
 
 type Metadata struct {

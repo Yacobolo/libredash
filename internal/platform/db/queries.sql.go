@@ -787,7 +787,7 @@ func (q *Queries) GetPrincipalByEmail(ctx context.Context, lower string) (Princi
 }
 
 const getQueryEvent = `-- name: GetQueryEvent :one
-SELECT id, workspace_id, principal_id, surface, operation, query_kind, model_id, target, object_type, object_id, request_id, correlation_id, status, duration_ms, rows_returned, bytes_estimate, error, sql_text, plan_text, query_json, created_at
+SELECT id, workspace_id, principal_id, surface, operation, query_kind, model_id, target, object_type, object_id, request_id, correlation_id, status, duration_ms, queue_wait_ms, execution_ms, execution_state, rows_returned, bytes_estimate, error, sql_text, plan_text, query_json, created_at
 FROM query_events
 WHERE id = ?1
 `
@@ -810,6 +810,9 @@ func (q *Queries) GetQueryEvent(ctx context.Context, id string) (QueryEvent, err
 		&i.CorrelationID,
 		&i.Status,
 		&i.DurationMs,
+		&i.QueueWaitMs,
+		&i.ExecutionMs,
+		&i.ExecutionState,
 		&i.RowsReturned,
 		&i.BytesEstimate,
 		&i.Error,
@@ -1157,6 +1160,9 @@ INSERT INTO query_events (
   correlation_id,
   status,
   duration_ms,
+  queue_wait_ms,
+  execution_ms,
+  execution_state,
   rows_returned,
   bytes_estimate,
   error,
@@ -1184,31 +1190,37 @@ VALUES (
   ?17,
   ?18,
   ?19,
-  ?20
+  ?20,
+  ?21,
+  ?22,
+  ?23
 )
 `
 
 type InsertQueryEventParams struct {
-	ID            string `json:"id"`
-	WorkspaceID   string `json:"workspace_id"`
-	PrincipalID   string `json:"principal_id"`
-	Surface       string `json:"surface"`
-	Operation     string `json:"operation"`
-	QueryKind     string `json:"query_kind"`
-	ModelID       string `json:"model_id"`
-	Target        string `json:"target"`
-	ObjectType    string `json:"object_type"`
-	ObjectID      string `json:"object_id"`
-	RequestID     string `json:"request_id"`
-	CorrelationID string `json:"correlation_id"`
-	Status        string `json:"status"`
-	DurationMs    int64  `json:"duration_ms"`
-	RowsReturned  int64  `json:"rows_returned"`
-	BytesEstimate int64  `json:"bytes_estimate"`
-	Error         string `json:"error"`
-	SqlText       string `json:"sql_text"`
-	PlanText      string `json:"plan_text"`
-	QueryJson     string `json:"query_json"`
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
+	PrincipalID    string `json:"principal_id"`
+	Surface        string `json:"surface"`
+	Operation      string `json:"operation"`
+	QueryKind      string `json:"query_kind"`
+	ModelID        string `json:"model_id"`
+	Target         string `json:"target"`
+	ObjectType     string `json:"object_type"`
+	ObjectID       string `json:"object_id"`
+	RequestID      string `json:"request_id"`
+	CorrelationID  string `json:"correlation_id"`
+	Status         string `json:"status"`
+	DurationMs     int64  `json:"duration_ms"`
+	QueueWaitMs    int64  `json:"queue_wait_ms"`
+	ExecutionMs    int64  `json:"execution_ms"`
+	ExecutionState string `json:"execution_state"`
+	RowsReturned   int64  `json:"rows_returned"`
+	BytesEstimate  int64  `json:"bytes_estimate"`
+	Error          string `json:"error"`
+	SqlText        string `json:"sql_text"`
+	PlanText       string `json:"plan_text"`
+	QueryJson      string `json:"query_json"`
 }
 
 func (q *Queries) InsertQueryEvent(ctx context.Context, arg InsertQueryEventParams) error {
@@ -1227,6 +1239,9 @@ func (q *Queries) InsertQueryEvent(ctx context.Context, arg InsertQueryEventPara
 		arg.CorrelationID,
 		arg.Status,
 		arg.DurationMs,
+		arg.QueueWaitMs,
+		arg.ExecutionMs,
+		arg.ExecutionState,
 		arg.RowsReturned,
 		arg.BytesEstimate,
 		arg.Error,
@@ -2039,7 +2054,7 @@ func (q *Queries) ListPrincipalRolePermissions(ctx context.Context, arg ListPrin
 }
 
 const listQueryEvents = `-- name: ListQueryEvents :many
-SELECT id, workspace_id, principal_id, surface, operation, query_kind, model_id, target, object_type, object_id, request_id, correlation_id, status, duration_ms, rows_returned, bytes_estimate, error, sql_text, plan_text, query_json, created_at
+SELECT id, workspace_id, principal_id, surface, operation, query_kind, model_id, target, object_type, object_id, request_id, correlation_id, status, duration_ms, queue_wait_ms, execution_ms, execution_state, rows_returned, bytes_estimate, error, sql_text, plan_text, query_json, created_at
 FROM query_events
 WHERE (?1 = '' OR workspace_id = ?1)
   AND (?2 = '' OR principal_id = ?2)
@@ -2122,6 +2137,9 @@ func (q *Queries) ListQueryEvents(ctx context.Context, arg ListQueryEventsParams
 			&i.CorrelationID,
 			&i.Status,
 			&i.DurationMs,
+			&i.QueueWaitMs,
+			&i.ExecutionMs,
+			&i.ExecutionState,
 			&i.RowsReturned,
 			&i.BytesEstimate,
 			&i.Error,

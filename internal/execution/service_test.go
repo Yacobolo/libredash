@@ -33,17 +33,37 @@ func TestServiceQueuesReadsAndRejectsWhenFull(t *testing.T) {
 	}()
 	waitForQueueDepth(t, service.waiting, 1)
 
-	_, err := service.SubmitRead(context.Background(), dataquery.Query{}, func(context.Context) (dataquery.Result, error) {
+	result, err := service.SubmitRead(context.Background(), dataquery.Query{}, func(context.Context) (dataquery.Result, error) {
 		t.Fatal("third read should not execute")
 		return dataquery.Result{}, nil
 	})
 	if !errors.Is(err, ErrReadQueueFull) {
 		t.Fatalf("third read error = %v, want ErrReadQueueFull", err)
 	}
+	if result.ExecutionState != dataquery.ExecutionRejected {
+		t.Fatalf("third read execution state = %q, want rejected", result.ExecutionState)
+	}
 
 	close(releaseFirst)
 	if err := <-secondDone; err != nil {
 		t.Fatalf("queued read error = %v", err)
+	}
+}
+
+func TestServiceRecordsReadTelemetry(t *testing.T) {
+	service := New(Config{MaxRunningReads: 1, MaxQueuedReads: 1, ReadQueueWait: time.Second, MaxRunningJobs: 1, MaxQueuedJobs: 1})
+	result, err := service.SubmitRead(context.Background(), dataquery.Query{}, func(context.Context) (dataquery.Result, error) {
+		time.Sleep(time.Millisecond)
+		return dataquery.Result{}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ExecutionState != dataquery.ExecutionSucceeded {
+		t.Fatalf("execution state = %q, want succeeded", result.ExecutionState)
+	}
+	if result.ExecutionMS <= 0 {
+		t.Fatalf("execution ms = %d, want positive", result.ExecutionMS)
 	}
 }
 

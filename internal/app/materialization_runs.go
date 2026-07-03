@@ -49,21 +49,7 @@ func (s *Server) createMaterializationRun(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
 	}
-	orchestrator := NewGenericRefreshOrchestrator(repo, s.metrics)
-	err = s.executionService().DispatchJob(execution.JobRef{WorkspaceID: workspaceID, RunID: run.ID, Kind: "materialization"}, func(ctx context.Context) error {
-		if _, err := orchestrator.ExecuteRun(ctx, workspaceID, run.ID, refreshPublisher{}); err != nil {
-			if s.logger != nil {
-				s.logger.WarnContext(ctx, "async materialization refresh failed", "workspace", workspaceID, "run", run.ID, "error", err)
-			}
-			return err
-		}
-		return nil
-	}, nil)
-	if err != nil {
-		_, _ = repo.MarkRunFailed(r.Context(), workspaceID, run.ID, err.Error())
-		writeJSONError(w, err, http.StatusServiceUnavailable)
-		return
-	}
+	s.dispatchQueuedMaterializationJobs(context.Background())
 	writeJSON(w, http.StatusAccepted, run)
 }
 

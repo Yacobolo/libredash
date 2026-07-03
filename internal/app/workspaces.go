@@ -20,7 +20,6 @@ import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
-	"github.com/Yacobolo/libredash/internal/execution"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/go-chi/chi/v5"
@@ -368,6 +367,8 @@ func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, wor
 		TargetType:   plan.TargetType,
 		TargetID:     plan.TargetID,
 		TriggerType:  materialize.TriggerDirect,
+		JobKind:      materialize.JobKindWorkspaceAssetRefresh,
+		PayloadJSON:  fmt.Sprintf(`{"assetKey":%q,"assetType":%q}`, asset.Key, asset.Type),
 	})
 	if err != nil {
 		_ = serving.MarkFailed(ctx, candidate, err)
@@ -392,86 +393,12 @@ func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, wor
 		}
 		dependencyRuns = append(dependencyRuns, run)
 	}
-	if _, err := runRepo.MarkRunRunning(ctx, workspaceID, rootRun.ID); err != nil {
-		_ = serving.MarkFailed(ctx, candidate, err)
-		return err
-	}
+	s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
 	for _, run := range dependencyRuns {
-		if _, err := runRepo.MarkRunRunning(ctx, workspaceID, run.ID); err != nil {
-			_ = serving.MarkFailed(ctx, candidate, err)
-			return err
-		}
 		s.publishWorkspaceAssetRefreshPatchForTarget(r, workspaceID, run.TargetID, assets, edges)
 	}
-	s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-
-	err = s.executionService().SubmitJob(ctx, execution.JobRef{WorkspaceID: workspaceID, RunID: rootRun.ID, Kind: "workspace_asset_refresh"}, func(ctx context.Context) error {
-		snapshotID, err := s.executeWorkspaceAssetRefreshPlan(ctx, compiled.Definition, activeState.Deployment, candidate.Deployment, artifact, environment, plan)
-		if err != nil {
-			_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
-			for _, run := range dependencyRuns {
-				_, _ = runRepo.MarkRunFailed(ctx, workspaceID, run.ID, err.Error())
-				s.publishWorkspaceAssetRefreshPatchForTarget(r, workspaceID, run.TargetID, assets, edges)
-			}
-			_ = serving.MarkFailed(ctx, candidate, err)
-			s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-			return err
-		}
-		if err := serving.RecordSnapshot(ctx, candidate, snapshotID); err != nil {
-			_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
-			_ = serving.MarkFailed(ctx, candidate, err)
-			s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-			return err
-		}
-		var prepared deployment.PreparedRuntime
-		if s.reloader != nil {
-			prepared, err = s.reloader.PrepareDeployment(ctx, string(newDeploymentID))
-			if err != nil {
-				_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
-				_ = serving.MarkFailed(ctx, candidate, err)
-				s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-				return err
-			}
-		}
-		_, err = serving.Activate(ctx, candidate)
-		if err != nil {
-			if prepared != nil {
-				_ = prepared.Close()
-			}
-			_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
-			_ = serving.MarkFailed(ctx, candidate, err)
-			s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-			return err
-		}
-		if err := s.reconcileStorageRetention(ctx, false); err != nil && s.logger != nil {
-			s.logger.WarnContext(ctx, "storage retention reconciliation failed", "workspace", workspaceID, "environment", environment, "error", err)
-		}
-		finalized = true
-		if prepared != nil {
-			if err := s.reloader.CommitPrepared(prepared); err != nil {
-				_ = prepared.Close()
-				_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
-				s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-				return err
-			}
-		} else if s.reloader != nil {
-			_ = s.reloader.Reload(ctx)
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	for _, run := range dependencyRuns {
-		if _, err := runRepo.MarkRunSucceeded(ctx, workspaceID, run.ID); err != nil {
-			return err
-		}
-		s.publishWorkspaceAssetRefreshPatchForTarget(r, workspaceID, run.TargetID, assets, edges)
-	}
-	if _, err := runRepo.MarkRunSucceeded(ctx, workspaceID, rootRun.ID); err != nil {
-		return err
-	}
-	s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
+	finalized = true
+	s.dispatchQueuedMaterializationJobs(context.Background())
 	return nil
 }
 
@@ -605,6 +532,36 @@ func (s *Server) publishModelRefreshPatches(ctx context.Context, workspaceID, mo
 			}
 		}
 		if !workspaceAssetRefreshable(asset) {
+			continue
+		}
+		refresh, err := s.assetRefreshStateForContext(ctx, workspaceID, asset)
+		if err != nil {
+			continue
+		}
+		for _, section := range workspaceAssetRefreshSections() {
+			s.broker.Publish(workspaceAssetStreamID(workspaceID, asset.ID, section), ui.WorkspaceAssetRefreshSignals(view, asset, assets, edges, refresh, section))
+		}
+	}
+}
+
+func (s *Server) publishWorkspaceAssetRefreshPatchesForTarget(ctx context.Context, workspaceID, targetType, targetID string) {
+	assets, edges, ok := s.workspaceAssetsAndEdgesForRefresh(ctx, workspaceID)
+	if !ok {
+		return
+	}
+	view := catalogWorkspaceView(s.catalogForWorkspace(workspaceID))
+	view.ID = workspaceID
+	for _, asset := range assets {
+		if !workspaceAssetRefreshable(asset) {
+			continue
+		}
+		if assetRefreshTargetID(asset) != targetID {
+			continue
+		}
+		if targetType == materialize.TargetModelTable && asset.Type != string(workspace.AssetTypeModelTable) {
+			continue
+		}
+		if targetType == materialize.TargetSemanticModel && asset.Type != string(workspace.AssetTypeSemanticModel) {
 			continue
 		}
 		refresh, err := s.assetRefreshStateForContext(ctx, workspaceID, asset)

@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
 	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
@@ -1259,6 +1260,143 @@ func TestRunRepositoryFailsRunsForTerminalDeployments(t *testing.T) {
 	}
 	if storedActive.Status != analyticsmaterialize.RunStatusRunning || storedActive.Error != "" || storedActive.FinishedAt != "" {
 		t.Fatalf("active deployment run = %#v, want still running", storedActive)
+	}
+}
+
+func TestRunRepositoryClaimsExecutableRootJobs(t *testing.T) {
+	ctx := context.Background()
+	store := openMaterializationStore(t, ctx)
+	defer store.Close()
+	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
+
+	parent, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{
+		WorkspaceID:  "test",
+		ModelID:      "olist",
+		DeploymentID: "dep_1",
+		TargetType:   analyticsmaterialize.TargetSemanticModel,
+		TargetID:     "olist",
+		JobKind:      analyticsmaterialize.JobKindWorkspaceAssetRefresh,
+		PayloadJSON:  `{"assetKey":"olist","assetType":"semantic_model"}`,
+	})
+	if err != nil {
+		t.Fatalf("create parent run: %v", err)
+	}
+	if _, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{
+		WorkspaceID: "test",
+		ModelID:     "olist",
+		TargetType:  analyticsmaterialize.TargetModelTable,
+		TargetID:    "olist.orders",
+		ParentRunID: parent.ID,
+	}); err != nil {
+		t.Fatalf("create child run: %v", err)
+	}
+
+	job, ok, err := repo.ClaimNextExecutableJob(ctx, "worker-1", time.Minute)
+	if err != nil {
+		t.Fatalf("claim job: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected queued root job")
+	}
+	if job.RunID != parent.ID || job.Kind != analyticsmaterialize.JobKindWorkspaceAssetRefresh || job.AttemptCount != 1 {
+		t.Fatalf("claimed job = %#v, want parent workspace refresh attempt 1", job)
+	}
+	stored, err := repo.GetRun(ctx, "test", parent.ID)
+	if err != nil {
+		t.Fatalf("get parent run: %v", err)
+	}
+	if stored.Status != analyticsmaterialize.RunStatusRunning || stored.StartedAt == "" {
+		t.Fatalf("parent run = %#v, want running with start time", stored)
+	}
+	if _, ok, err := repo.ClaimNextExecutableJob(ctx, "worker-1", time.Minute); err != nil || ok {
+		t.Fatalf("second claim ok=%v err=%v, want no child job claimed", ok, err)
+	}
+}
+
+func TestRunRepositoryReclaimsExpiredJobLease(t *testing.T) {
+	ctx := context.Background()
+	store := openMaterializationStore(t, ctx)
+	defer store.Close()
+	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
+
+	run, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{WorkspaceID: "test", ModelID: "olist"})
+	if err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+	job, ok, err := repo.ClaimNextExecutableJob(ctx, "worker-1", time.Minute)
+	if err != nil || !ok {
+		t.Fatalf("first claim ok=%v err=%v", ok, err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, `
+		UPDATE materialization_jobs
+		SET lease_expires_at = datetime('now', '-1 second')
+		WHERE id = ?
+	`, job.ID); err != nil {
+		t.Fatalf("expire lease: %v", err)
+	}
+
+	reclaimed, ok, err := repo.ClaimNextExecutableJob(ctx, "worker-2", time.Minute)
+	if err != nil {
+		t.Fatalf("reclaim job: %v", err)
+	}
+	if !ok || reclaimed.ID != job.ID || reclaimed.RunID != run.ID || reclaimed.AttemptCount != 2 {
+		t.Fatalf("reclaimed job = %#v ok=%v, want same job attempt 2", reclaimed, ok)
+	}
+	if err := repo.RenewJobLease(ctx, reclaimed.ID, "worker-2", time.Minute); err != nil {
+		t.Fatalf("renew lease: %v", err)
+	}
+	var owner string
+	if err := store.SQLDB().QueryRowContext(ctx, `SELECT lease_owner FROM materialization_jobs WHERE id = ?`, reclaimed.ID).Scan(&owner); err != nil {
+		t.Fatalf("read lease owner: %v", err)
+	}
+	if owner != "worker-2" {
+		t.Fatalf("lease owner = %q, want worker-2", owner)
+	}
+}
+
+func TestRunRepositoryReportsDurableQueueStats(t *testing.T) {
+	ctx := context.Background()
+	store := openMaterializationStore(t, ctx)
+	defer store.Close()
+	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
+
+	if _, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{WorkspaceID: "test", ModelID: "queued"}); err != nil {
+		t.Fatalf("create queued run: %v", err)
+	}
+	running, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{WorkspaceID: "test", ModelID: "running"})
+	if err != nil {
+		t.Fatalf("create running run: %v", err)
+	}
+	stale, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{WorkspaceID: "test", ModelID: "stale"})
+	if err != nil {
+		t.Fatalf("create stale run: %v", err)
+	}
+	if _, _, err := repo.ClaimNextExecutableJob(ctx, "worker-1", time.Minute); err != nil {
+		t.Fatalf("claim queued job: %v", err)
+	}
+	if _, _, err := repo.ClaimNextExecutableJob(ctx, "worker-1", time.Minute); err != nil {
+		t.Fatalf("claim running job: %v", err)
+	}
+	if _, _, err := repo.ClaimNextExecutableJob(ctx, "worker-1", time.Minute); err != nil {
+		t.Fatalf("claim stale job: %v", err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, `
+		UPDATE materialization_jobs
+		SET lease_expires_at = datetime('now', '-1 second')
+		WHERE id = (SELECT job_id FROM materialization_job_runs WHERE id = ?)
+	`, stale.ID); err != nil {
+		t.Fatalf("expire stale lease: %v", err)
+	}
+	if _, err := repo.MarkRunSucceeded(ctx, "test", running.ID); err != nil {
+		t.Fatalf("finish one running run: %v", err)
+	}
+
+	stats, err := repo.JobQueueStats(ctx)
+	if err != nil {
+		t.Fatalf("queue stats: %v", err)
+	}
+	if stats.QueuedJobs != 0 || stats.RunningJobs != 1 || stats.StaleLeasedJobs != 1 {
+		t.Fatalf("queue stats = %#v, want 0 queued, 1 running, 1 stale", stats)
 	}
 }
 

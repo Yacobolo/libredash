@@ -1392,6 +1392,41 @@ func TestMaterializationRunAPICanExecuteModelTableTargetWithLocalDevRuntimeShape
 	}
 }
 
+func TestServerStartupDispatchesQueuedMaterializationJobs(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	metrics := &localDevStyleModelTableMetrics{done: make(chan []string, 1)}
+	server := NewWithOptions(metrics, Options{Store: store, DefaultWorkspaceID: "test"})
+	repo := materialize.NewSQLRunRepository(store.SQLDB())
+	run, err := repo.CreateRun(ctx, materialize.RunInput{
+		WorkspaceID: "test",
+		ModelID:     "olist",
+		TargetType:  materialize.TargetModelTable,
+		TargetID:    "olist.orders",
+	})
+	if err != nil {
+		t.Fatalf("create queued run: %v", err)
+	}
+
+	server.StartBackgroundJobs(ctx)
+
+	select {
+	case refreshed := <-metrics.done:
+		if !reflect.DeepEqual(refreshed, []string{"olist", "orders"}) {
+			t.Fatalf("refreshed = %#v, want olist orders", refreshed)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for startup-dispatched refresh")
+	}
+	stored, err := repo.GetRun(ctx, "test", run.ID)
+	if err != nil {
+		t.Fatalf("get run: %v", err)
+	}
+	if stored.Status != materialize.RunStatusSucceeded {
+		t.Fatalf("run status = %q, want succeeded", stored.Status)
+	}
+}
+
 func TestMaterializationRunAPIMalformedModelTableTargetFailsPersistedRun(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
@@ -1422,12 +1457,12 @@ func TestMaterializationRunAPIMalformedModelTableTargetFailsPersistedRun(t *test
 		if err != nil {
 			t.Fatalf("get run: %v", err)
 		}
-		if run.Status != materialize.RunStatusQueued {
+		if run.Status == materialize.RunStatusFailed || run.Status == materialize.RunStatusSucceeded {
 			break
 		}
 		select {
 		case <-deadline:
-			t.Fatalf("run remained queued: %#v", run)
+			t.Fatalf("run did not reach terminal status: %#v", run)
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
