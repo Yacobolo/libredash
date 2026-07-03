@@ -56,3 +56,11 @@ func (r *governedDataRuntime) RefreshTables(ctx context.Context, tableNames []st
 	}
 	return port.RefreshTables(ctx, tableNames)
 }
+
+func (r *governedDataRuntime) DuckLakeSnapshotID() int64 {
+	snapshot, ok := r.DataRuntime.(DataRuntimeSnapshot)
+	if !ok {
+		return 0
+	}
+	return snapshot.DuckLakeSnapshotID()
+}

@@ -26,6 +26,17 @@ func TestServiceDuckLakeSnapshotIDRequiresOneWorkspaceSnapshot(t *testing.T) {
 	}
 }
 
+func TestGovernedDataRuntimeForwardsDuckLakeSnapshotID(t *testing.T) {
+	runtime := newGovernedDataRuntime("sales", "sales", snapshotDataRuntime{snapshotID: 42})
+	snapshot, ok := runtime.(DataRuntimeSnapshot)
+	if !ok {
+		t.Fatalf("governed runtime does not expose DuckLake snapshot")
+	}
+	if got := snapshot.DuckLakeSnapshotID(); got != 42 {
+		t.Fatalf("DuckLakeSnapshotID = %d, want 42", got)
+	}
+}
+
 type snapshotDataRuntime struct {
 	snapshotID int64
 }
