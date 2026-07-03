@@ -124,6 +124,17 @@ export interface AdminStorageSummary {
   dataFileCount: number
 }
 
+export interface AdminStorageTableHistorySignal {
+  snapshotId: number
+  time: string
+  schemaVersion: number
+  source: string
+  changes: string
+  author: string
+  message: string
+  extraInfo: string
+}
+
 export interface AdminStorageTableSignal {
   key: string
   databaseId: string
@@ -146,6 +157,7 @@ export interface AdminStorageTableSignal {
   sizeLabel: string
   columns?: AdminStorageColumnSignal[]
   files?: AdminStorageFileSignal[]
+  history?: AdminStorageTableHistorySignal[]
   deployments?: AdminStorageDeploymentSignal[]
 }
 

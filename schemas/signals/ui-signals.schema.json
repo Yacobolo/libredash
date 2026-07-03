@@ -452,6 +452,46 @@
       ],
       "type": "object"
     },
+    "AdminStorageTableHistorySignal": {
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "string"
+        },
+        "extraInfo": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "type": "integer"
+        },
+        "snapshotId": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "time": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "author",
+        "changes",
+        "extraInfo",
+        "message",
+        "schemaVersion",
+        "snapshotId",
+        "source",
+        "time"
+      ],
+      "type": "object"
+    },
     "AdminStorageTableSignal": {
       "additionalProperties": false,
       "properties": {
@@ -491,6 +531,12 @@
         "files": {
           "items": {
             "$ref": "#/$defs/AdminStorageFileSignal"
+          },
+          "type": "array"
+        },
+        "history": {
+          "items": {
+            "$ref": "#/$defs/AdminStorageTableHistorySignal"
           },
           "type": "array"
         },

@@ -85,6 +85,7 @@ type AdminStorageDatabase = uisignals.AdminStorageDatabase
 type AdminStorageTable = uisignals.AdminStorageTable
 type AdminStorageColumn = uisignals.AdminStorageColumn
 type AdminStorageFile = uisignals.AdminStorageFile
+type AdminStorageTableHistory = uisignals.AdminStorageTableHistory
 type AdminStorageSnapshot = uisignals.AdminStorageSnapshot
 type AdminStorageDeployment = uisignals.AdminStorageDeployment
 type AdminStorageSignal = uisignals.AdminStorageSignal
@@ -92,6 +93,7 @@ type AdminStorageSummary = uisignals.AdminStorageSummary
 type AdminStorageTableSignal = uisignals.AdminStorageTableSignal
 type AdminStorageColumnSignal = uisignals.AdminStorageColumnSignal
 type AdminStorageFileSignal = uisignals.AdminStorageFileSignal
+type AdminStorageTableHistorySignal = uisignals.AdminStorageTableHistorySignal
 type AdminStorageSnapshotSignal = uisignals.AdminStorageSnapshotSignal
 type AdminStorageDeploymentSignal = uisignals.AdminStorageDeploymentSignal
 type AdminStorageCommand = uisignals.AdminStorageCommand
@@ -527,6 +529,19 @@ func AdminStorageTableSignalFromTable(table AdminStorageTable) AdminStorageTable
 			EndSnapshot:      file.EndSnapshot,
 		})
 	}
+	history := make([]AdminStorageTableHistorySignal, 0, len(table.History))
+	for _, event := range table.History {
+		history = append(history, AdminStorageTableHistorySignal{
+			SnapshotID:    event.SnapshotID,
+			Time:          event.Time,
+			SchemaVersion: event.SchemaVersion,
+			Source:        event.Source,
+			Changes:       event.Changes,
+			Author:        event.Author,
+			Message:       event.Message,
+			ExtraInfo:     event.ExtraInfo,
+		})
+	}
 	return AdminStorageTableSignal{
 		Key:           AdminStorageTableKey(table.DatabaseID, table.Schema, table.Name),
 		DatabaseID:    table.DatabaseID,
@@ -549,6 +564,7 @@ func AdminStorageTableSignalFromTable(table AdminStorageTable) AdminStorageTable
 		SizeLabel:     table.SizeLabel,
 		Columns:       columns,
 		Files:         files,
+		History:       history,
 		Deployments:   adminStorageDeploymentSignals(table.Deployments),
 	}
 }

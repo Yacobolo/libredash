@@ -49,12 +49,15 @@ type DatabaseSelection = {
   databaseId: string
 }
 
+type TableDetailTab = 'schema' | 'files' | 'history'
+
 class StorageExplorer extends LitElement {
   @property({ converter: jsonAttribute<AdminStorageSignal>(emptyStorage) }) storage: AdminStorageSignal = emptyStorage
   @state() private search = ''
   @state() private selectedDatabase: DatabaseSelection | null = null
   @state() private selectedSchema: SchemaSelection | null = null
   @state() private localSelectedTable: AdminStorageTableSignal | null = null
+  @state() private tableDetailTab: TableDetailTab = 'schema'
 
   updated(changedProperties: PropertyValues<this>): void {
     if (!changedProperties.has('storage')) return
@@ -318,6 +321,7 @@ class StorageExplorer extends LitElement {
   private renderSelectedTable(table: AdminStorageTableSignal) {
     const columns = table.columns ?? []
     const files = table.files ?? []
+    const history = table.history ?? []
     return html`
       <div class="storage-detail-header">
         <nav aria-label="Selected table location">
@@ -361,26 +365,67 @@ class StorageExplorer extends LitElement {
           <dd>${label(table.sizeLabel)}</dd>
         </div>
       </dl>
-      <div class="storage-columns">
-        <div class="storage-columns-header">
-          <h3>Columns</h3>
+      <div class="storage-table-body">
+        <div class="storage-tabs" role="tablist" aria-label="Table metadata">
+          ${this.renderTableTabButton('schema', 'Schema', columns.length)}
+          ${this.renderTableTabButton('files', 'Data files', files.length)}
+          ${this.renderTableTabButton('history', 'History', history.length)}
         </div>
-        ${columns.length === 0
-          ? html`<p class="storage-empty">No column metadata available.</p>`
-          : html`
-            <div class="storage-column-table-wrap">
-              <ld-record-table .table=${this.tableColumnsTable(table)}></ld-record-table>
-            </div>
-          `}
+        <div class="storage-tab-panel" role="tabpanel">
+          ${this.tableDetailTab === 'files'
+            ? html`
+              <div class="storage-columns">
+                <div class="storage-columns-header">
+                  <h3>Data files</h3>
+                </div>
+                <div class="storage-column-table-wrap">
+                  <ld-record-table .table=${this.tableFilesTable(table)}></ld-record-table>
+                </div>
+              </div>
+            `
+            : this.tableDetailTab === 'history'
+              ? html`
+                <div class="storage-columns">
+                  <div class="storage-columns-header">
+                    <h3>History</h3>
+                  </div>
+                  <div class="storage-column-table-wrap">
+                    <ld-record-table .table=${this.tableHistoryTable(table)}></ld-record-table>
+                  </div>
+                </div>
+              `
+              : html`
+                <div class="storage-columns">
+                  <div class="storage-columns-header">
+                    <h3>Schema</h3>
+                  </div>
+                  ${columns.length === 0
+                    ? html`<p class="storage-empty">No column metadata available.</p>`
+                    : html`
+                      <div class="storage-column-table-wrap">
+                        <ld-record-table .table=${this.tableColumnsTable(table)}></ld-record-table>
+                      </div>
+                    `}
+                </div>
+              `}
+        </div>
       </div>
-      <div class="storage-columns">
-        <div class="storage-columns-header">
-          <h3>Data Files</h3>
-        </div>
-        <div class="storage-column-table-wrap">
-          <ld-record-table .table=${this.tableFilesTable(table)}></ld-record-table>
-        </div>
-      </div>
+    `
+  }
+
+  private renderTableTabButton(tab: TableDetailTab, labelText: string, count: number) {
+    const active = this.tableDetailTab === tab
+    return html`
+      <button
+        type="button"
+        role="tab"
+        class=${active ? 'storage-tab is-active' : 'storage-tab'}
+        aria-selected=${active ? 'true' : 'false'}
+        @click=${() => { this.tableDetailTab = tab }}
+      >
+        <span>${labelText}</span>
+        <em>${count.toLocaleString('en-US')}</em>
+      </button>
     `
   }
 
@@ -480,6 +525,30 @@ class StorageExplorer extends LitElement {
     }
   }
 
+  private tableHistoryTable(table: AdminStorageTableSignal): RecordTableSignal {
+    const history = table.history ?? []
+    return {
+      columns: [
+        { id: 'snapshot', header: 'Snapshot', kind: 'number', align: 'right', width: '110px' },
+        { id: 'time', header: 'Time', width: '220px' },
+        { id: 'source', header: 'Source', width: '140px' },
+        { id: 'changes', header: 'Changes', width: '220px' },
+        { id: 'message', header: 'Message', width: '260px' },
+        { id: 'author', header: 'Author', width: '160px' },
+      ],
+      rows: history.map((event) => ({
+        snapshot: event.snapshotId,
+        time: label(event.time),
+        source: label(event.source),
+        changes: label(event.changes),
+        message: label(event.message || event.extraInfo),
+        author: label(event.author),
+      })),
+      empty: 'No DuckLake snapshot history recorded for this table.',
+      minWidth: '1100px',
+    }
+  }
+
   private deploymentsTable(deployments: NonNullable<AdminStorageSignal['deployments']>): RecordTableSignal {
     return {
       columns: [
@@ -543,6 +612,7 @@ class StorageExplorer extends LitElement {
     this.selectedDatabase = null
     this.selectedSchema = null
     this.localSelectedTable = table
+    this.tableDetailTab = 'schema'
     this.dispatchEvent(new CustomEvent('ld-storage-table-select', {
       bubbles: true,
       composed: true,
@@ -616,6 +686,7 @@ function filterTables(tables: AdminStorageTableSignal[], query: string): AdminSt
     table.rowCountLabel,
     table.sizeLabel,
     ...(table.files ?? []).flatMap((file) => [file.id, file.path, file.format, file.sizeLabel, file.recordCountLabel]),
+    ...(table.history ?? []).flatMap((event) => [event.snapshotId, event.time, event.source, event.changes, event.author, event.message, event.extraInfo]),
   ].some((value) => String(value ?? '').toLowerCase().includes(normalized)))
 }
 
@@ -1177,6 +1248,67 @@ const storageExplorerStyles = `
     min-width: max-content;
     align-items: baseline;
     gap: 0.375rem;
+  }
+
+  .storage-table-body {
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .storage-tabs {
+    display: flex;
+    min-width: 0;
+    gap: 0.25rem;
+    overflow-x: auto;
+    border-bottom: var(--ld-border-muted);
+    padding: 0.25rem 0.75rem 0;
+  }
+
+  .storage-tab {
+    display: inline-flex;
+    min-height: 2rem;
+    flex: none;
+    align-items: center;
+    gap: 0.375rem;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    padding: 0 0.5rem;
+    color: var(--ld-fg-muted);
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .storage-tab:hover,
+  .storage-tab:focus-visible {
+    color: var(--ld-fg-default);
+    outline: 0;
+  }
+
+  .storage-tab.is-active {
+    border-bottom-color: var(--ld-line-accent);
+    color: var(--ld-fg-default);
+  }
+
+  .storage-tab em {
+    border-radius: var(--ld-radius-small);
+    background: var(--ld-bg-panel-muted);
+    padding: 0.0625rem 0.3125rem;
+    color: var(--ld-fg-muted);
+    font-size: 0.6875rem;
+    font-style: normal;
+    font-weight: 750;
+    line-height: 1.2;
+  }
+
+  .storage-tab-panel {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
   }
 
   dt {

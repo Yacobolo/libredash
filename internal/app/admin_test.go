@@ -258,6 +258,9 @@ func TestAdminStorageReadsDuckLakeMetadata(t *testing.T) {
 	if table.Files[0].RecordCountLabel != "10,000" {
 		t.Fatalf("file record count label = %q, want thousands separator", table.Files[0].RecordCountLabel)
 	}
+	if len(table.History) == 0 || table.History[0].SnapshotID != table.BeginSnapshot || !strings.Contains(table.History[0].Source, "table") {
+		t.Fatalf("table history = %#v, want table-scoped DuckLake snapshot metadata", table.History)
+	}
 }
 
 func TestAdminStorageIncludesDeploymentSnapshotContext(t *testing.T) {

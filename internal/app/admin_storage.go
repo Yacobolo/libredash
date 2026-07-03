@@ -250,6 +250,10 @@ func inspectDuckLakeTables(ctx context.Context, db *sql.DB, deployments []ui.Adm
 	if err != nil {
 		return nil, err
 	}
+	history, err := inspectDuckLakeTableHistory(ctx, db)
+	if err != nil {
+		return nil, err
+	}
 
 	rows, err := db.QueryContext(ctx, `
 WITH active_tables AS (
@@ -313,6 +317,7 @@ ORDER BY a.schema_name, a.table_name`)
 			SizeLabel:     formatBytes(sizeBytes),
 			Columns:       columns[tableID],
 			Files:         files[tableID],
+			History:       history[tableID],
 			Deployments:   deploymentsVisibleForTable(deployments, beginSnapshot, end),
 		}
 		tables = append(tables, table)
@@ -388,6 +393,43 @@ ORDER BY table_id, file_order, data_file_id`)
 		files[tableID] = append(files[tableID], file)
 	}
 	return files, rows.Err()
+}
+
+func inspectDuckLakeTableHistory(ctx context.Context, db *sql.DB) (map[int64][]ui.AdminStorageTableHistory, error) {
+	rows, err := db.QueryContext(ctx, `
+WITH table_events AS (
+	SELECT table_id, begin_snapshot AS snapshot_id, 'table' AS source
+	FROM meta.ducklake_table
+	UNION ALL
+	SELECT table_id, begin_snapshot AS snapshot_id, 'column' AS source
+	FROM meta.ducklake_column
+	WHERE parent_column IS NULL
+	UNION ALL
+	SELECT table_id, begin_snapshot AS snapshot_id, 'data_file' AS source
+	FROM meta.ducklake_data_file
+)
+SELECT e.table_id, s.snapshot_id, s.snapshot_time, s.schema_version,
+       group_concat(DISTINCT e.source),
+       coalesce(c.changes_made, ''), coalesce(c.author, ''), coalesce(c.commit_message, ''), coalesce(c.commit_extra_info, '')
+FROM table_events e
+JOIN meta.ducklake_snapshot s ON s.snapshot_id = e.snapshot_id
+LEFT JOIN meta.ducklake_snapshot_changes c ON c.snapshot_id = s.snapshot_id
+GROUP BY e.table_id, s.snapshot_id, s.snapshot_time, s.schema_version, c.changes_made, c.author, c.commit_message, c.commit_extra_info
+ORDER BY e.table_id, s.snapshot_id`)
+	if err != nil {
+		return nil, duckLakeMetadataError(err)
+	}
+	defer rows.Close()
+	history := map[int64][]ui.AdminStorageTableHistory{}
+	for rows.Next() {
+		var tableID int64
+		var event ui.AdminStorageTableHistory
+		if err := rows.Scan(&tableID, &event.SnapshotID, &event.Time, &event.SchemaVersion, &event.Source, &event.Changes, &event.Author, &event.Message, &event.ExtraInfo); err != nil {
+			return nil, err
+		}
+		history[tableID] = append(history[tableID], event)
+	}
+	return history, rows.Err()
 }
 
 func inspectDuckLakeSnapshots(ctx context.Context, db *sql.DB, deployments []ui.AdminStorageDeployment) ([]ui.AdminStorageSnapshot, error) {

@@ -547,6 +547,7 @@ type AdminStorageTable struct {
 	SizeLabel     string
 	Columns       []AdminStorageColumn
 	Files         []AdminStorageFile
+	History       []AdminStorageTableHistory
 	Deployments   []AdminStorageDeployment
 }
 
@@ -568,6 +569,17 @@ type AdminStorageFile struct {
 	SizeLabel        string
 	BeginSnapshot    int64
 	EndSnapshot      int64
+}
+
+type AdminStorageTableHistory struct {
+	SnapshotID    int64
+	Time          string
+	SchemaVersion int64
+	Source        string
+	Changes       string
+	Author        string
+	Message       string
+	ExtraInfo     string
 }
 
 type AdminStorageSnapshot struct {
@@ -618,28 +630,29 @@ type AdminStorageSummary struct {
 }
 
 type AdminStorageTableSignal struct {
-	Key           string                         `json:"key"`
-	DatabaseID    string                         `json:"databaseId"`
-	DatabaseName  string                         `json:"databaseName"`
-	DatabasePath  string                         `json:"databasePath"`
-	ModelID       string                         `json:"modelId"`
-	ModelName     string                         `json:"modelName"`
-	Schema        string                         `json:"schema"`
-	Name          string                         `json:"name"`
-	Type          string                         `json:"type"`
-	TableID       int64                          `json:"tableId"`
-	TableUUID     string                         `json:"tableUuid"`
-	BeginSnapshot int64                          `json:"beginSnapshot"`
-	EndSnapshot   int64                          `json:"endSnapshot"`
-	RowCount      int64                          `json:"rowCount"`
-	RowCountLabel string                         `json:"rowCountLabel"`
-	ColumnCount   int                            `json:"columnCount"`
-	FileCount     int                            `json:"fileCount"`
-	SizeBytes     int64                          `json:"sizeBytes"`
-	SizeLabel     string                         `json:"sizeLabel"`
-	Columns       []AdminStorageColumnSignal     `json:"columns,omitempty"`
-	Files         []AdminStorageFileSignal       `json:"files,omitempty"`
-	Deployments   []AdminStorageDeploymentSignal `json:"deployments,omitempty"`
+	Key           string                           `json:"key"`
+	DatabaseID    string                           `json:"databaseId"`
+	DatabaseName  string                           `json:"databaseName"`
+	DatabasePath  string                           `json:"databasePath"`
+	ModelID       string                           `json:"modelId"`
+	ModelName     string                           `json:"modelName"`
+	Schema        string                           `json:"schema"`
+	Name          string                           `json:"name"`
+	Type          string                           `json:"type"`
+	TableID       int64                            `json:"tableId"`
+	TableUUID     string                           `json:"tableUuid"`
+	BeginSnapshot int64                            `json:"beginSnapshot"`
+	EndSnapshot   int64                            `json:"endSnapshot"`
+	RowCount      int64                            `json:"rowCount"`
+	RowCountLabel string                           `json:"rowCountLabel"`
+	ColumnCount   int                              `json:"columnCount"`
+	FileCount     int                              `json:"fileCount"`
+	SizeBytes     int64                            `json:"sizeBytes"`
+	SizeLabel     string                           `json:"sizeLabel"`
+	Columns       []AdminStorageColumnSignal       `json:"columns,omitempty"`
+	Files         []AdminStorageFileSignal         `json:"files,omitempty"`
+	History       []AdminStorageTableHistorySignal `json:"history,omitempty"`
+	Deployments   []AdminStorageDeploymentSignal   `json:"deployments,omitempty"`
 }
 
 type AdminStorageColumnSignal struct {
@@ -660,6 +673,17 @@ type AdminStorageFileSignal struct {
 	SizeLabel        string `json:"sizeLabel"`
 	BeginSnapshot    int64  `json:"beginSnapshot"`
 	EndSnapshot      int64  `json:"endSnapshot"`
+}
+
+type AdminStorageTableHistorySignal struct {
+	SnapshotID    int64  `json:"snapshotId"`
+	Time          string `json:"time"`
+	SchemaVersion int64  `json:"schemaVersion"`
+	Source        string `json:"source"`
+	Changes       string `json:"changes"`
+	Author        string `json:"author"`
+	Message       string `json:"message"`
+	ExtraInfo     string `json:"extraInfo"`
 }
 
 type AdminStorageSnapshotSignal struct {

@@ -199,6 +199,7 @@ test('admin storage route renders storage explorer from typed signal data', asyn
         sizeLabel: '12 KiB',
         columns: [{ name: 'order_id', type: 'VARCHAR', ordinal: 1, nullable: 'No', default: '' }],
         files: [{ id: 9, path: 'model/orders/file.parquet', format: 'parquet', recordCount: 32000204, recordCountLabel: '32,000,204', sizeBytes: 12288, sizeLabel: '12 KiB', beginSnapshot: 7, endSnapshot: 0 }],
+        history: [{ snapshotId: 7, time: '2026-07-03T10:00:00Z', schemaVersion: 1, source: 'table,data_file', changes: 'tables_inserted_into', author: 'tester', message: 'materialize orders', extraInfo: '{}' }],
         deployments: [{ workspaceId: 'sales', environment: 'dev', deploymentId: 'dep_1', status: 'active', snapshotId: 7, digest: 'digest', active: true, activatedAt: 'now' }],
       }
       const storage = {
@@ -246,6 +247,10 @@ test('admin storage route renders storage explorer from typed signal data', asyn
       await element.updateComplete
       const explorer = element.shadowRoot.querySelector('ld-storage-explorer') as any
       await explorer.updateComplete
+      const filesTab = Array.from(explorer.shadowRoot.querySelectorAll<HTMLButtonElement>('.storage-tab')).find((button) => button.textContent?.includes('Data files'))
+      filesTab?.click()
+      await explorer.updateComplete
+      const filesText = explorer.shadowRoot.textContent
       return {
         hasPageTitle: Boolean(element.shadowRoot.querySelector('h1')),
         explorerTitle: explorer.shadowRoot.querySelector('h2')?.textContent?.trim(),
@@ -262,6 +267,7 @@ test('admin storage route renders storage explorer from typed signal data', asyn
         tableListSizes: Array.from(explorer.shadowRoot.querySelectorAll('.storage-table-size')).map((size) => size.textContent?.trim()),
         searchBorder: getComputedStyle(explorer.shadowRoot.querySelector('.storage-search input')!).border,
         explorerText: explorer.shadowRoot.textContent,
+        filesText,
       }
     })
 
@@ -282,7 +288,7 @@ test('admin storage route renders storage explorer from typed signal data', asyn
     expect(state.explorerText ?? '').toMatch(/orders/)
     expect(state.explorerText ?? '').toMatch(/DuckLake catalog/)
     expect(state.explorerText ?? '').toMatch(/\/tmp\/libredash\/libredash\.db/)
-    expect(state.explorerText ?? '').toMatch(/model\/orders\/file\.parquet/)
+    expect(state.filesText ?? '').toMatch(/model\/orders\/file\.parquet/)
     expect(state.explorerText ?? '').toMatch(/32,000,204/)
     expect(state.explorerText ?? '').not.toMatch(/32000204/)
     expect(state.explorerText ?? '').not.toMatch(/dep_1/)
@@ -839,6 +845,7 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
         sizeLabel: '12 KiB',
         columns: [{ name: 'customer_id', type: 'VARCHAR', ordinal: 1, nullable: 'No', default: '' }],
         files: [{ id: 1, path: 'model/customers/file.parquet', format: 'parquet', recordCount: 10, recordCountLabel: '10', sizeBytes: 12288, sizeLabel: '12 KiB', beginSnapshot: 6, endSnapshot: 0 }],
+        history: [{ snapshotId: 6, time: '2026-07-03T10:00:00Z', schemaVersion: 1, source: 'table,data_file', changes: 'tables_inserted_into', author: 'tester', message: 'materialize customers', extraInfo: '{}' }],
         deployments: [{ workspaceId: 'olist', environment: 'dev', deploymentId: 'dep_1', status: 'active', snapshotId: 6, digest: 'digest', active: true, activatedAt: 'now' }],
       }
       const orders = {
@@ -851,6 +858,7 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
         rowCountLabel: '20',
         columns: [{ name: 'order_id', type: 'VARCHAR', ordinal: 1, nullable: 'No', default: '' }],
         files: [{ id: 2, path: 'model/orders/file.parquet', format: 'parquet', recordCount: 20, recordCountLabel: '20', sizeBytes: 12288, sizeLabel: '12 KiB', beginSnapshot: 6, endSnapshot: 0 }],
+        history: [{ snapshotId: 6, time: '2026-07-03T10:00:00Z', schemaVersion: 1, source: 'table,data_file', changes: 'tables_inserted_into', author: 'tester', message: 'materialize orders', extraInfo: '{}' }],
       }
       element.storage = {
         summary: {
@@ -887,10 +895,27 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
 
       ordersButton.click()
       await element.updateComplete
+      const tabText = (tab: Element | null) => tab?.textContent?.replace(/\s+/g, ' ').trim()
+      const defaultTabLabels = Array.from(root.querySelectorAll('.storage-tab')).map((tab) => tabText(tab))
+      const activeTabBefore = tabText(root.querySelector('.storage-tab.is-active'))
+      const schemaDetail = detailText()
+      const filesTab = Array.from(root.querySelectorAll<HTMLButtonElement>('.storage-tab')).find((button) => button.textContent?.includes('Data files'))!
+      filesTab.click()
+      await element.updateComplete
+      const filesDetail = detailText()
+      const historyTab = Array.from(root.querySelectorAll<HTMLButtonElement>('.storage-tab')).find((button) => button.textContent?.includes('History'))!
+      historyTab.click()
+      await element.updateComplete
+      const historyDetail = detailText()
       const afterOrders = {
         selectedNames: selectedNames(),
         tableSizes: tableSizes(),
         detail: detailText(),
+        defaultTabLabels,
+        activeTabBefore,
+        schemaDetail,
+        filesDetail,
+        historyDetail,
         commands: [...commands],
       }
 
@@ -923,7 +948,12 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
     expect(state.afterOrders.selectedNames).toHaveLength(1)
     expect(state.afterOrders.selectedNames[0]).toContain('orders')
     expect(state.afterOrders.tableSizes).toEqual(['12 KiB', '12 KiB'])
-    expect(state.afterOrders.detail).toContain('order_id')
+    expect(state.afterOrders.activeTabBefore).toContain('Schema')
+    expect(state.afterOrders.defaultTabLabels).toEqual(['Schema 1', 'Data files 1', 'History 1'])
+    expect(state.afterOrders.schemaDetail).toContain('order_id')
+    expect(state.afterOrders.filesDetail).toContain('model/orders/file.parquet')
+    expect(state.afterOrders.historyDetail).toContain('materialize orders')
+    expect(state.afterOrders.historyDetail).toContain('tables_inserted_into')
     expect(state.afterOrders.commands).toEqual([{ databaseId: 'ducklake-catalog', schema: 'model', table: 'orders' }])
 
     expect(state.afterSchema.selectedNames).toHaveLength(0)
