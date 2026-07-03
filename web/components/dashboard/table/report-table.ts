@@ -1,7 +1,9 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { createRef, ref, type Ref } from 'lit/directives/ref.js'
 import { EllipsisVertical } from 'lucide'
+import { type ColumnResizeDrag, resizeClientX, resizeGuideX, resizePlaneScaleX, resizedColumnWidth } from '../../shared/column-resize'
 import { lucideIcon } from '../../shared/lucide-icons'
+import { virtualRowRange } from '../../shared/table-window'
 import {
   TableController,
   callMemoOrStaticFn,
@@ -61,13 +63,6 @@ import {
   type VisualAction,
   type VisibleRowSlot,
 } from './types'
-
-type ResizeDrag = {
-  columnKey: string
-  startClientX: number
-  startSize: number
-  minSize: number
-}
 
 const reportTableFeatures = tableFeatures({
   columnPinningFeature,
@@ -241,7 +236,7 @@ class ReportTable extends LitElement {
   private bodyViewportRef: Ref<HTMLDivElement> = createRef()
   private resizeObserver?: ResizeObserver
   private resizeGuideFrame = 0
-  private resizeDrag?: ResizeDrag
+  private resizeDrag?: ColumnResizeDrag
   private tableController = new TableController<typeof reportTableFeatures, TanStackTableRow>(this)
   private handleOutsidePointerDown = (event: PointerEvent) => {
     const details = this.renderRoot.querySelector<HTMLDetailsElement>('.visual-options')
@@ -1096,9 +1091,7 @@ class ReportTable extends LitElement {
   get visibleRows(): VisibleRowSlot[] {
     if (this.availableRows <= 0) return []
     const rowMap = new Map(this.loadedRows.map((item) => [item.index, item.row]))
-    const first = Math.max(0, Math.floor(this.viewportTop / this.rowHeight) - 2)
-    const visibleCount = Math.max(1, Math.ceil((this.viewportHeight || this.rowHeight) / this.rowHeight) + 4)
-    const last = Math.min(this.availableRows, first + visibleCount)
+    const { first, last } = virtualRowRange(this.availableRows, this.viewportTop, this.viewportHeight || this.rowHeight, this.rowHeight, 2)
     const rows: VisibleRowSlot[] = []
     for (let index = first; index < last; index++) {
       const row = rowMap.get(index)
@@ -1344,7 +1337,7 @@ class ReportTable extends LitElement {
   private beginColumnResize(event: MouseEvent | TouchEvent, header: any): void {
     event.preventDefault()
     event.stopPropagation()
-    const clientX = this.resizeClientX(event)
+    const clientX = resizeClientX(event)
     const column = header.column.columnDef.meta?.column as TableColumn | undefined
     if (clientX === null || !column) return
     this.resizeDrag = {
@@ -1362,30 +1355,19 @@ class ReportTable extends LitElement {
   }
 
   private scheduleResizeGuideUpdate(event: MouseEvent | TouchEvent): void {
-    const clientX = this.resizeClientX(event)
+    const clientX = resizeClientX(event)
     if (clientX === null) return
     if (this.resizeGuideFrame) cancelAnimationFrame(this.resizeGuideFrame)
     this.resizeGuideFrame = requestAnimationFrame(() => {
       this.resizeGuideFrame = 0
       const plane = this.renderRoot.querySelector<HTMLElement>('.table-plane')
       if (!plane) return
-      const rect = plane.getBoundingClientRect()
-      const scaleX = rect.width > 0 && plane.offsetWidth > 0 ? rect.width / plane.offsetWidth : 1
-      const localX = scaleX > 0 ? (clientX - rect.left) / scaleX : clientX - rect.left
-      this.resizeGuideX = Math.max(0, Math.min(plane.scrollWidth, localX))
+      const scaleX = resizePlaneScaleX(plane)
+      this.resizeGuideX = resizeGuideX(plane, clientX)
       if (this.resizeDrag) {
-        const delta = scaleX > 0 ? (clientX - this.resizeDrag.startClientX) / scaleX : clientX - this.resizeDrag.startClientX
-        const nextSize = Math.max(this.resizeDrag.minSize, Math.round(this.resizeDrag.startSize + delta))
-        this.columnSizing = { ...this.columnSizing, [this.resizeDrag.columnKey]: nextSize }
+        this.columnSizing = { ...this.columnSizing, [this.resizeDrag.columnKey]: resizedColumnWidth(this.resizeDrag, clientX, scaleX) }
       }
     })
-  }
-
-  private resizeClientX(event: MouseEvent | TouchEvent): number | null {
-    if ('touches' in event) {
-      return event.touches[0]?.clientX ?? event.changedTouches[0]?.clientX ?? null
-    }
-    return event.clientX
   }
 
   private clearResizeGuide(): void {

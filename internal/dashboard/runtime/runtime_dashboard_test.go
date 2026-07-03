@@ -14,7 +14,19 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 )
+
+type runtimeAuditRecorder struct {
+	queries []dataquery.Query
+	results []dataquery.Result
+}
+
+func (r *runtimeAuditRecorder) RecordDataQuery(_ context.Context, query dataquery.Query, result dataquery.Result) error {
+	r.queries = append(r.queries, query)
+	r.results = append(r.results, result)
+	return nil
+}
 
 func newLegacyRuntime(t *testing.T, dataDir string) (*Service, error) {
 	t.Helper()
@@ -102,6 +114,110 @@ c2,RJ
 	}
 	if len(patch.Visuals["orders_by_status"].Data) == 0 {
 		t.Fatal("orders by status chart has no data")
+	}
+}
+
+func TestDashboardPageQueriesFlowThroughAuditedDataQueryBoundary(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "olist_orders_dataset.csv", `order_id,customer_id,order_status,order_purchase_timestamp,order_delivered_customer_date
+o1,c1,delivered,2018-01-01 10:00:00,2018-01-03 10:00:00
+o2,c2,shipped,2018-01-05 10:00:00,2018-01-15 10:00:00
+`)
+	writeFixture(t, dir, "olist_order_reviews_dataset.csv", `order_id,review_score
+o1,5
+o2,3
+`)
+	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_state
+c1,SP
+c2,RJ
+`)
+
+	metrics, err := newOperationsRuntime(t, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer metrics.Close()
+
+	recorder := &runtimeAuditRecorder{}
+	ctx := dataquery.WithAuditRecorder(context.Background(), recorder)
+	ctx = dataquery.WithMetadata(ctx, dataquery.Metadata{PrincipalID: "test_principal"})
+	patch, err := metrics.QueryDashboardPage(ctx, "fulfillment-operations", "overview", dashboard.Filters{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if patch.Status.Error != "" {
+		t.Fatalf("unexpected status error: %s", patch.Status.Error)
+	}
+	if len(recorder.queries) == 0 {
+		t.Fatal("dashboard page query recorded no dataquery events")
+	}
+	for _, query := range recorder.queries {
+		if query.WorkspaceID != "operations" {
+			t.Fatalf("query workspace = %q, want operations: %#v", query.WorkspaceID, query)
+		}
+		if query.Surface != dataquery.SurfaceDashboard {
+			t.Fatalf("query surface = %q, want dashboard: %#v", query.Surface, query)
+		}
+		if query.PrincipalID != "test_principal" {
+			t.Fatalf("query principal = %q, want test_principal: %#v", query.PrincipalID, query)
+		}
+	}
+}
+
+func TestServicePreviewsRawModelTableRows(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "olist_orders_dataset.csv", `order_id,customer_id,order_status,order_purchase_timestamp,order_approved_at,order_delivered_carrier_date,order_delivered_customer_date,order_estimated_delivery_date
+o1,c1,delivered,2018-01-10 10:00:00,2018-01-10 11:00:00,2018-01-11 10:00:00,2018-01-14 10:00:00,2018-01-20 10:00:00
+o2,c2,shipped,2018-01-11 10:00:00,2018-01-11 11:00:00,2018-01-12 10:00:00,2018-01-15 10:00:00,2018-01-20 10:00:00
+`)
+	writeFixture(t, dir, "olist_order_items_dataset.csv", `order_id,order_item_id,product_id,seller_id,shipping_limit_date,price,freight_value
+o1,1,p1,s1,2018-01-12 10:00:00,100.00,10.00
+o2,1,p2,s2,2018-01-13 10:00:00,150.00,15.00
+`)
+	writeFixture(t, dir, "olist_order_payments_dataset.csv", `order_id,payment_sequential,payment_type,payment_installments,payment_value
+o1,1,credit_card,1,110.00
+o2,1,credit_card,1,165.00
+`)
+	writeFixture(t, dir, "olist_products_dataset.csv", `product_id,product_category_name,product_name_lenght,product_description_lenght,product_photos_qty,product_weight_g,product_length_cm,product_height_cm,product_width_cm
+p1,beleza_saude,10,20,1,500,20,10,15
+p2,relogios_presentes,12,24,1,600,22,11,16
+`)
+	writeFixture(t, dir, "product_category_name_translation.csv", `product_category_name,product_category_name_english
+beleza_saude,health_beauty
+relogios_presentes,watches_gifts
+`)
+	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_unique_id,customer_zip_code_prefix,customer_city,customer_state
+c1,u1,01001,Sao Paulo,SP
+c2,u2,01002,Sao Paulo,SP
+`)
+	writeFixture(t, dir, "olist_order_reviews_dataset.csv", `review_id,order_id,review_score,review_comment_title,review_comment_message,review_creation_date,review_answer_timestamp
+r1,o1,5,,,2018-01-15,2018-01-15 10:00:00
+r2,o2,4,,,2018-01-16,2018-01-16 10:00:00
+`)
+
+	metrics, err := newLegacyRuntime(t, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer metrics.Close()
+
+	ctx := dataquery.WithMetadata(context.Background(), dataquery.Metadata{PrincipalID: "test_principal"})
+	modelResult, err := metrics.ExecuteDataQuery(ctx, dataquery.ModelTableRows("sales", "orders", []string{"order_id", "status"}, []dataquery.Sort{{Field: "status", Direction: "desc"}}, 0, 1, true))
+	if err != nil {
+		t.Fatalf("unified model table query: %v", err)
+	}
+	if modelResult.TotalRows != 2 || len(modelResult.Rows) != 1 || modelResult.Rows[0]["order_id"] != "o2" {
+		t.Fatalf("unified model table result = %#v", modelResult)
+	}
+	sourceResult, err := metrics.ExecuteDataQuery(ctx, dataquery.SourceRows("sales", "olist.orders", []string{"order_id", "order_status"}, []dataquery.Sort{{Field: "order_status", Direction: "desc"}}, 0, 1, true))
+	if err != nil {
+		t.Fatalf("unified source query: %v", err)
+	}
+	if sourceResult.TotalRows != 2 || len(sourceResult.Rows) != 1 || sourceResult.Rows[0]["order_id"] != "o2" {
+		t.Fatalf("unified source result = %#v", sourceResult)
+	}
+	if _, err := metrics.ExecuteDataQuery(ctx, dataquery.ModelTableRows("sales", "missing", nil, nil, 0, 1, false)); err == nil {
+		t.Fatal("missing model table preview error = nil")
 	}
 }
 

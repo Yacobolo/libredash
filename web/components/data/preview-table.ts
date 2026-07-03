@@ -1,0 +1,185 @@
+import { LitElement, css, html } from 'lit'
+import { property } from 'lit/decorators.js'
+import type { DataExplorerCommand, DataPreviewSignal } from '../../generated/signals'
+import '../shared/windowed-table'
+import type { WindowedTableColumn, WindowedTablePayload, WindowedTableRequest } from '../shared/windowed-table'
+
+const emptyPreview: DataPreviewSignal = {
+  columns: [],
+  totalRows: 0,
+  availableRows: 0,
+  chunkSize: 100,
+  rowHeight: 34,
+  resetVersion: 0,
+  blocks: {},
+  totalRowLabel: 'Unknown',
+  sort: {},
+  sql: '',
+  error: '',
+}
+
+const emptyCommand: DataExplorerCommand = {
+  workspaceId: '',
+  objectKey: '',
+  offset: 0,
+  limit: 100,
+  block: 'all',
+  start: 0,
+  count: 100,
+  requestSeq: 0,
+  resetVersion: 0,
+  sort: {},
+  visibleColumns: [],
+  columnWidths: {},
+}
+
+class DataPreviewTable extends LitElement {
+  @property({ attribute: false }) preview: DataPreviewSignal = emptyPreview
+  @property({ attribute: false }) command: DataExplorerCommand = emptyCommand
+
+  static styles = css`
+    :host {
+      display: grid;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    ld-windowed-table {
+      min-width: 0;
+      min-height: 0;
+    }
+  `
+
+  render() {
+    return html`
+      <ld-windowed-table
+        .table=${this.tablePayload()}
+        @ld-windowed-table-request=${this.forwardWindowCommand}
+        @ld-windowed-table-columns=${this.forwardColumnCommand}
+        @ld-windowed-table-column-widths=${this.forwardColumnWidthsCommand}
+      ></ld-windowed-table>
+    `
+  }
+
+  private tablePayload(): WindowedTablePayload {
+    const preview = this.preview ?? emptyPreview
+    const command = this.command ?? emptyCommand
+    return {
+      tableKey: `${command.workspaceId ?? ''}:${command.objectKey ?? ''}`,
+      title: 'Data preview',
+      columns: (preview.columns ?? []).map((column): WindowedTableColumn => ({
+        key: column.key,
+        label: column.label || column.key,
+        type: column.type,
+        align: isNumericType(column.type) ? 'right' : 'left',
+        sortable: true,
+      })),
+      totalRows: preview.totalRows ?? parseTotalRows(preview.totalRowLabel) ?? 0,
+      availableRows: preview.availableRows ?? preview.totalRows ?? 0,
+      chunkSize: preview.chunkSize ?? command.count ?? command.limit ?? 100,
+      rowHeight: preview.rowHeight ?? 34,
+      resetVersion: preview.resetVersion ?? command.resetVersion ?? 0,
+      sort: {
+        key: preview.sort?.column ?? command.sort?.column ?? '',
+        column: preview.sort?.column ?? command.sort?.column ?? '',
+        direction: preview.sort?.direction ?? command.sort?.direction ?? '',
+      },
+      blocks: preview.blocks ?? {},
+      loadingBlock: preview.loadingBlock ?? '',
+      error: preview.error,
+      visibleColumns: command.visibleColumns ?? [],
+      columnWidths: command.columnWidths ?? {},
+      totalLabel: preview.totalRowLabel,
+    }
+  }
+
+  private forwardWindowCommand = (event: CustomEvent<WindowedTableRequest>): void => {
+    event.stopPropagation()
+    const current = this.command ?? emptyCommand
+    const request = event.detail
+    this.dispatchEvent(new CustomEvent('ld-data-preview-table-command', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        workspaceId: current.workspaceId,
+        objectKey: current.objectKey,
+        offset: request.start,
+        limit: request.count,
+        block: request.block,
+        start: request.start,
+        count: request.count,
+        requestSeq: request.requestSeq,
+        resetVersion: request.resetVersion,
+        sort: { column: request.sort.key ?? request.sort.column ?? '', direction: request.sort.direction ?? '' },
+        visibleColumns: current.visibleColumns ?? [],
+        columnWidths: current.columnWidths ?? {},
+      },
+    }))
+  }
+
+  private forwardColumnCommand = (event: CustomEvent): void => {
+    event.stopPropagation()
+    const current = this.command ?? emptyCommand
+    this.dispatchEvent(new CustomEvent('ld-data-preview-table-command', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        workspaceId: current.workspaceId,
+        objectKey: current.objectKey,
+        offset: current.offset ?? current.start ?? 0,
+        limit: current.limit ?? current.count ?? 100,
+        block: current.block ?? 'all',
+        start: current.start ?? current.offset ?? 0,
+        count: current.count ?? current.limit ?? 100,
+        requestSeq: current.requestSeq ?? 0,
+        resetVersion: current.resetVersion ?? 0,
+        sort: current.sort ?? {},
+        visibleColumns: event.detail?.visibleColumns ?? [],
+        columnWidths: current.columnWidths ?? {},
+      },
+    }))
+  }
+
+  private forwardColumnWidthsCommand = (event: CustomEvent): void => {
+    event.stopPropagation()
+    const current = this.command ?? emptyCommand
+    this.dispatchEvent(new CustomEvent('ld-data-preview-table-command', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        workspaceId: current.workspaceId,
+        objectKey: current.objectKey,
+        offset: current.offset ?? current.start ?? 0,
+        limit: current.limit ?? current.count ?? 100,
+        block: current.block ?? 'all',
+        start: current.start ?? current.offset ?? 0,
+        count: current.count ?? current.limit ?? 100,
+        requestSeq: current.requestSeq ?? 0,
+        resetVersion: current.resetVersion ?? 0,
+        sort: current.sort ?? {},
+        visibleColumns: current.visibleColumns ?? [],
+        columnWidths: event.detail?.columnWidths ?? {},
+      },
+    }))
+  }
+}
+
+function parseTotalRows(label: string | undefined): number | undefined {
+  const normalized = String(label ?? '').replace(/,/g, '').trim()
+  if (!/^\d+$/.test(normalized)) return undefined
+  const value = Number(normalized)
+  return Number.isFinite(value) ? value : undefined
+}
+
+function isNumericType(type: string | undefined): boolean {
+  return /int|decimal|double|float|number|numeric|real|bigint|smallint/i.test(type ?? '')
+}
+
+if (!customElements.get('ld-data-preview-table')) customElements.define('ld-data-preview-table', DataPreviewTable)
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'ld-data-preview-table': DataPreviewTable
+  }
+}

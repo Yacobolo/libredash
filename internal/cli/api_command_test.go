@@ -43,6 +43,9 @@ func TestAPICommandCallUsesGeneratedContract(t *testing.T) {
 		if got := r.Header.Get("Authorization"); got != "Bearer token" {
 			t.Fatalf("Authorization = %q", got)
 		}
+		if got := r.Header.Get("X-LibreDash-Client"); got != "cli" {
+			t.Fatalf("X-LibreDash-Client = %q", got)
+		}
 		if got := r.Header.Get("Content-Type"); got != "application/json" {
 			t.Fatalf("Content-Type = %q", got)
 		}

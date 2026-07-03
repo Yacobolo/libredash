@@ -369,6 +369,7 @@
     --ld-font-weight-strong: var(--base-text-weight-semibold);
     --ld-line-height-none: 1;
     --ld-line-height-compact: var(--base-text-lineHeight-tight);
+    --ld-line-height-default: var(--base-text-lineHeight-normal);
     --ld-line-height-tight: var(--base-text-lineHeight-tight);
     --ld-line-height-snug: var(--base-text-lineHeight-snug);
     --ld-line-height-normal: var(--base-text-lineHeight-normal);
@@ -391,6 +392,7 @@
     --ld-border-width: var(--borderWidth-default);
     --ld-border-width-focus: var(--focus-outline-width);
     --ld-radius-tight: var(--borderRadius-small);
+    --ld-radius-small: var(--borderRadius-small);
     --ld-radius-default: var(--borderRadius-default);
     --ld-radius-panel: var(--borderRadius-default);
     --ld-radius-large: var(--borderRadius-large);
@@ -452,10 +454,12 @@
     --ld-chat-activity-padding-inline: var(--ld-space-sm);
     --ld-chat-activity-icon-size: var(--ld-icon-sm);
     --ld-shadow-floating-sm: var(--shadow-floating-small);
+    --ld-shadow-floating: var(--shadow-floating-small);
     --ld-shadow-floating-lg: var(--shadow-floating-large);
     --ld-shadow-resting-sm: var(--shadow-resting-small);
     --ld-fg-default: var(--fgColor-default);
     --ld-fg-muted: var(--fgColor-muted);
+    --ld-fg-subtle: var(--fgColor-muted);
     --ld-fg-accent: var(--fgColor-accent);
     --ld-fg-link: var(--fgColor-accent);
     --ld-fg-success: var(--fgColor-success);
@@ -468,6 +472,7 @@
     --ld-bg-panel-muted: var(--bgColor-muted);
     --ld-bg-panel-subtle: var(--bgColor-muted);
     --ld-bg-control: var(--ld-bg-panel-muted);
+    --ld-bg-input: var(--ld-bg-panel);
     --ld-bg-control-hover: var(--control-bgColor-hover);
     --ld-bg-control-active: var(--control-bgColor-active);
     --ld-bg-selected: var(--bgColor-accent-muted);
@@ -486,6 +491,7 @@
     --ld-line-muted: var(--borderColor-muted);
     --ld-line-emphasis: var(--borderColor-emphasis);
     --ld-line-accent: var(--borderColor-accent-emphasis);
+    --ld-border-accent: var(--borderColor-accent-emphasis);
     --ld-line-accent-muted: var(--borderColor-accent-muted);
     --ld-line-success-muted: var(--borderColor-success-muted);
     --ld-line-warning-muted: var(--borderColor-attention-muted);
@@ -655,6 +661,7 @@
   ld-workspace-page,
   ld-workspace-asset-page,
   ld-connections-page,
+  ld-data-explorer,
   ld-admin-page,
   ld-login-page {
     display: block;

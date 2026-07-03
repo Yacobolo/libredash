@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"html"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -171,6 +173,90 @@ func (fakeMetrics) PreviewSemantic(_ context.Context, _ string, request reportde
 		{"order_id": "o2", "status": "shipped"},
 	}
 	return rows[:min(len(rows), request.Limit)], nil
+}
+
+func (fakeMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	switch request.Kind {
+	case dataquery.KindSemanticAggregate:
+		rows, err := fakeMetrics{}.QuerySemantic(ctx, request.ModelID, reportdef.AggregateQuery{
+			Table:      request.Target,
+			Dimensions: dataFieldsToReportFields(request.Fields),
+			Measures:   dataFieldsToReportFields(request.Measures),
+			Time:       reportdef.QueryTime{Field: request.Time.Field, Grain: request.Time.Grain, Alias: request.Time.Alias},
+			Filters:    dataFiltersToReportFilters(request.Filters),
+			Sort:       dataSortToReportSort(request.Sort),
+			Limit:      request.Limit,
+			Offset:     request.Offset,
+		})
+		return fakeDataQueryResult(rows, request.IncludeTotal), err
+	case dataquery.KindSemanticRows:
+		rows, err := fakeMetrics{}.PreviewSemantic(ctx, request.ModelID, reportdef.RowQuery{
+			Table:      request.Target,
+			Dimensions: dataFieldsToReportFields(request.Fields),
+			Measures:   dataFieldsToReportFields(request.Measures),
+			Filters:    dataFiltersToReportFilters(request.Filters),
+			Sort:       dataSortToReportSort(request.Sort),
+			Limit:      request.Limit,
+			Offset:     request.Offset,
+		})
+		return fakeDataQueryResult(rows, request.IncludeTotal), err
+	case dataquery.KindSourceRows, dataquery.KindModelTableRows:
+		return dataquery.Result{
+			Columns:        dataquery.ColumnsFromNames([]string{"order_id", "status"}),
+			Rows:           []dataquery.Row{{"order_id": "o1", "status": "delivered"}, {"order_id": "o2", "status": "shipped"}},
+			TotalRows:      2,
+			TotalRowsKnown: request.IncludeTotal,
+			SQL:            string(request.Kind) + ": " + request.Target,
+		}, nil
+	default:
+		return dataquery.Result{}, fmt.Errorf("unsupported data query kind %q", request.Kind)
+	}
+}
+
+func fakeDataQueryResult(rows reportdef.QueryRows, includeTotal bool) dataquery.Result {
+	out := make([]dataquery.Row, 0, len(rows))
+	columnSet := map[string]bool{}
+	columns := []string{}
+	for _, row := range rows {
+		converted := dataquery.Row{}
+		for key, value := range row {
+			converted[key] = value
+			if !columnSet[key] {
+				columnSet[key] = true
+				columns = append(columns, key)
+			}
+		}
+		out = append(out, converted)
+	}
+	return dataquery.Result{Columns: dataquery.ColumnsFromNames(columns), Rows: out, TotalRows: len(out), TotalRowsKnown: includeTotal}
+}
+
+func dataFieldsToReportFields(fields []dataquery.Field) []reportdef.QueryField {
+	out := make([]reportdef.QueryField, 0, len(fields))
+	for _, field := range fields {
+		out = append(out, reportdef.QueryField{Field: field.Field, Alias: field.Alias})
+	}
+	return out
+}
+
+func dataFiltersToReportFilters(filters []dataquery.Filter) []reportdef.QueryFilter {
+	out := make([]reportdef.QueryFilter, 0, len(filters))
+	for _, filter := range filters {
+		groups := make([]reportdef.QueryFilterGroup, 0, len(filter.Groups))
+		for _, group := range filter.Groups {
+			groups = append(groups, reportdef.QueryFilterGroup{Filters: dataFiltersToReportFilters(group.Filters)})
+		}
+		out = append(out, reportdef.QueryFilter{Field: filter.Field, Operator: filter.Operator, Values: append([]any{}, filter.Values...), Groups: groups})
+	}
+	return out
+}
+
+func dataSortToReportSort(sort []dataquery.Sort) []reportdef.QuerySort {
+	out := make([]reportdef.QuerySort, 0, len(sort))
+	for _, item := range sort {
+		out = append(out, reportdef.QuerySort{Field: item.Field, Direction: item.Direction})
+	}
+	return out
 }
 
 func (fakeMetrics) ExplainSemanticQuery(_ string, request reportdef.AggregateQuery) (semanticquery.Plan, error) {
@@ -687,6 +773,10 @@ func (m *localDevStyleModelTableMetrics) QuerySemantic(ctx context.Context, mode
 
 func (m *localDevStyleModelTableMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
 	return fakeMetrics{}.PreviewSemantic(ctx, modelID, request)
+}
+
+func (m *localDevStyleModelTableMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	return fakeMetrics{}.ExecuteDataQuery(ctx, request)
 }
 
 func (m *localDevStyleModelTableMetrics) DefaultFilters(dashboardID string) dashboard.Filters {

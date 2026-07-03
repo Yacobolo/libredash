@@ -10,6 +10,7 @@ import (
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
@@ -27,10 +28,11 @@ type runtimeMetrics struct {
 }
 
 type dynamicRuntimeMetrics struct {
-	dataDir string
-	factory func(workspaceID string) RuntimeProvider
-	mu      sync.Mutex
-	metrics map[string]QueryMetrics
+	defaultID string
+	dataDir   string
+	factory   func(workspaceID string) RuntimeProvider
+	mu        sync.Mutex
+	metrics   map[string]QueryMetrics
 }
 
 type catalogRuntime interface {
@@ -60,6 +62,7 @@ type tableRuntime interface {
 }
 
 type semanticQueryRuntime interface {
+	ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error)
 	QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error)
 	PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
 }
@@ -78,9 +81,10 @@ func NewRuntimeMetrics(provider runtimeProvider, dataDir, workspaceID string) Qu
 
 func NewDynamicRuntimeMetrics(defaultWorkspaceID, dataDir string, factory func(workspaceID string) RuntimeProvider) QueryMetrics {
 	return &dynamicRuntimeMetrics{
-		dataDir: dataDir,
-		factory: factory,
-		metrics: map[string]QueryMetrics{},
+		defaultID: defaultWorkspaceID,
+		dataDir:   dataDir,
+		factory:   factory,
+		metrics:   map[string]QueryMetrics{},
 	}
 }
 
@@ -198,6 +202,17 @@ func (m runtimeMetrics) QuerySemantic(ctx context.Context, modelID string, reque
 		return nil, err
 	}
 	return runtime.QuerySemantic(ctx, modelID, request)
+}
+
+func (m runtimeMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	runtime, err := m.semanticQueryRuntime()
+	if err != nil {
+		return dataquery.Result{}, err
+	}
+	if request.WorkspaceID == "" {
+		request.WorkspaceID = m.workspaceID
+	}
+	return runtime.ExecuteDataQuery(ctx, request)
 }
 
 func (m runtimeMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {

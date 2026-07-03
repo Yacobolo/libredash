@@ -23,7 +23,7 @@ type NavItem = {
   id: string
   label: string
   href: string
-  icon: IconName
+  icon: string
   meta?: string
   disabled?: boolean
 }
@@ -822,7 +822,7 @@ class LibreDashSidebar extends LitElement {
   }
 }
 
-function icon(name: IconName) {
+function icon(name: string) {
   const icons: Record<IconName, IconNode> = {
     catalog: Layers,
     dashboard: LayoutDashboard,
@@ -840,7 +840,7 @@ function icon(name: IconName) {
     plus: Plus,
   }
 
-  return lucideIcon(icons[name])
+  return lucideIcon(icons[name as IconName] ?? Layers)
 }
 
 function storedCollapsed(): boolean {

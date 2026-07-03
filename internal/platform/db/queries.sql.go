@@ -1036,6 +1036,137 @@ func (q *Queries) InsertPlatformRoleBinding(ctx context.Context, arg InsertPlatf
 	return err
 }
 
+const insertQueryEvent = `-- name: InsertQueryEvent :exec
+INSERT INTO query_events (
+  id,
+  workspace_id,
+  principal_id,
+  surface,
+  operation,
+  query_kind,
+  model_id,
+  target,
+  object_type,
+  object_id,
+  request_id,
+  correlation_id,
+  status,
+  duration_ms,
+  rows_returned,
+  bytes_estimate,
+  error,
+  sql_text,
+  plan_text,
+  query_json
+)
+VALUES (
+  ?1,
+  ?2,
+  ?3,
+  ?4,
+  ?5,
+  ?6,
+  ?7,
+  ?8,
+  ?9,
+  ?10,
+  ?11,
+  ?12,
+  ?13,
+  ?14,
+  ?15,
+  ?16,
+  ?17,
+  ?18,
+  ?19,
+  ?20
+)
+`
+
+type InsertQueryEventParams struct {
+	ID            string `json:"id"`
+	WorkspaceID   string `json:"workspace_id"`
+	PrincipalID   string `json:"principal_id"`
+	Surface       string `json:"surface"`
+	Operation     string `json:"operation"`
+	QueryKind     string `json:"query_kind"`
+	ModelID       string `json:"model_id"`
+	Target        string `json:"target"`
+	ObjectType    string `json:"object_type"`
+	ObjectID      string `json:"object_id"`
+	RequestID     string `json:"request_id"`
+	CorrelationID string `json:"correlation_id"`
+	Status        string `json:"status"`
+	DurationMs    int64  `json:"duration_ms"`
+	RowsReturned  int64  `json:"rows_returned"`
+	BytesEstimate int64  `json:"bytes_estimate"`
+	Error         string `json:"error"`
+	SqlText       string `json:"sql_text"`
+	PlanText      string `json:"plan_text"`
+	QueryJson     string `json:"query_json"`
+}
+
+func (q *Queries) InsertQueryEvent(ctx context.Context, arg InsertQueryEventParams) error {
+	_, err := q.db.ExecContext(ctx, insertQueryEvent,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+		arg.Surface,
+		arg.Operation,
+		arg.QueryKind,
+		arg.ModelID,
+		arg.Target,
+		arg.ObjectType,
+		arg.ObjectID,
+		arg.RequestID,
+		arg.CorrelationID,
+		arg.Status,
+		arg.DurationMs,
+		arg.RowsReturned,
+		arg.BytesEstimate,
+		arg.Error,
+		arg.SqlText,
+		arg.PlanText,
+		arg.QueryJson,
+	)
+	return err
+}
+
+const getQueryEvent = `-- name: GetQueryEvent :one
+SELECT id, workspace_id, principal_id, surface, operation, query_kind, model_id, target, object_type, object_id, request_id, correlation_id, status, duration_ms, rows_returned, bytes_estimate, error, sql_text, plan_text, query_json, created_at
+FROM query_events
+WHERE id = ?
+`
+
+func (q *Queries) GetQueryEvent(ctx context.Context, id string) (QueryEvent, error) {
+	row := q.db.QueryRowContext(ctx, getQueryEvent, id)
+	var i QueryEvent
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.PrincipalID,
+		&i.Surface,
+		&i.Operation,
+		&i.QueryKind,
+		&i.ModelID,
+		&i.Target,
+		&i.ObjectType,
+		&i.ObjectID,
+		&i.RequestID,
+		&i.CorrelationID,
+		&i.Status,
+		&i.DurationMs,
+		&i.RowsReturned,
+		&i.BytesEstimate,
+		&i.Error,
+		&i.SqlText,
+		&i.PlanText,
+		&i.QueryJson,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const insertRoleBinding = `-- name: InsertRoleBinding :exec
 INSERT OR IGNORE INTO role_bindings (id, workspace_id, role_id, principal_id, group_id)
 VALUES (?, ?, ?, ?, ?)
@@ -1760,6 +1891,111 @@ func (q *Queries) ListPrincipalRolePermissions(ctx context.Context, arg ListPrin
 			return nil, err
 		}
 		items = append(items, permission_name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listQueryEvents = `-- name: ListQueryEvents :many
+SELECT id, workspace_id, principal_id, surface, operation, query_kind, model_id, target, object_type, object_id, request_id, correlation_id, status, duration_ms, rows_returned, bytes_estimate, error, sql_text, plan_text, query_json, created_at
+FROM query_events
+WHERE (?1 = '' OR workspace_id = ?1)
+  AND (?2 = '' OR principal_id = ?2)
+  AND (?3 = '' OR surface = ?3)
+  AND (?4 = '' OR operation = ?4)
+  AND (?5 = '' OR query_kind = ?5)
+  AND (?6 = '' OR model_id = ?6)
+  AND (?7 = '' OR target = ?7)
+  AND (?8 = '' OR status = ?8)
+  AND (?9 = '' OR created_at >= ?9)
+  AND (?10 = '' OR created_at <= ?10)
+  AND (
+    ?11 = ''
+    OR target LIKE '%' || ?11 || '%'
+    OR sql_text LIKE '%' || ?11 || '%'
+    OR query_json LIKE '%' || ?11 || '%'
+  )
+  AND (
+    ?12 = ''
+    OR created_at < ?12
+    OR (created_at = ?12 AND id < ?13)
+  )
+ORDER BY created_at DESC, id DESC
+LIMIT ?14
+`
+
+type ListQueryEventsParams struct {
+	WorkspaceID interface{} `json:"workspace_id"`
+	PrincipalID interface{} `json:"principal_id"`
+	Surface     interface{} `json:"surface"`
+	Operation   interface{} `json:"operation"`
+	QueryKind   interface{} `json:"query_kind"`
+	ModelID     interface{} `json:"model_id"`
+	Target      interface{} `json:"target"`
+	Status      interface{} `json:"status"`
+	FromTime    interface{} `json:"from_time"`
+	ToTime      interface{} `json:"to_time"`
+	Search      interface{} `json:"search"`
+	CursorTime  interface{} `json:"cursor_time"`
+	CursorID    string      `json:"cursor_id"`
+	Limit       int64       `json:"limit"`
+}
+
+func (q *Queries) ListQueryEvents(ctx context.Context, arg ListQueryEventsParams) ([]QueryEvent, error) {
+	rows, err := q.db.QueryContext(ctx, listQueryEvents,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+		arg.Surface,
+		arg.Operation,
+		arg.QueryKind,
+		arg.ModelID,
+		arg.Target,
+		arg.Status,
+		arg.FromTime,
+		arg.ToTime,
+		arg.Search,
+		arg.CursorTime,
+		arg.CursorID,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []QueryEvent{}
+	for rows.Next() {
+		var i QueryEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.PrincipalID,
+			&i.Surface,
+			&i.Operation,
+			&i.QueryKind,
+			&i.ModelID,
+			&i.Target,
+			&i.ObjectType,
+			&i.ObjectID,
+			&i.RequestID,
+			&i.CorrelationID,
+			&i.Status,
+			&i.DurationMs,
+			&i.RowsReturned,
+			&i.BytesEstimate,
+			&i.Error,
+			&i.SqlText,
+			&i.PlanText,
+			&i.QueryJson,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

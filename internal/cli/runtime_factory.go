@@ -11,6 +11,7 @@ import (
 	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
 )
@@ -64,7 +65,7 @@ func (dashboardDataRuntimeFactory) OpenDashboardDataRuntime(ctx context.Context,
 	}
 	return dashboardDataRuntime{
 		runtime: runtime,
-		data:    reportdef.NewAnalyticsDataService(runtime.Queries()),
+		data:    reportdef.NewDataQueryService(config.ModelID, reportdef.NewAnalyticsDataService(runtime.Queries()), runtime),
 	}, nil
 }
 
@@ -91,6 +92,10 @@ func (r dashboardDataRuntime) Histogram(ctx context.Context, request reportdef.R
 
 func (r dashboardDataRuntime) Distribution(ctx context.Context, request reportdef.RawValueQuery, sort []reportdef.QuerySort, limit int) (reportdef.QueryRows, error) {
 	return r.data.Distribution(ctx, request, sort, limit)
+}
+
+func (r dashboardDataRuntime) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	return r.runtime.ExecuteDataQuery(ctx, request)
 }
 
 func (r dashboardDataRuntime) Refresh(ctx context.Context) error {

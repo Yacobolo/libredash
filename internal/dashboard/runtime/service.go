@@ -12,6 +12,7 @@ import (
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 )
@@ -29,6 +30,7 @@ type DataRuntimeFactory interface {
 
 type DataRuntime interface {
 	reportdef.DataService
+	ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error)
 	Refresh(ctx context.Context) error
 	Close() error
 	LastRefresh() time.Time
@@ -169,7 +171,7 @@ func newFromDefinition(dataDir, duckDBDir string, factory DataRuntimeFactory, de
 			}
 			return nil, err
 		}
-		runtime.data = dataRuntime
+		runtime.data = newGovernedDataRuntime(definition.Catalog.Workspace.ID, modelID, dataRuntime)
 		runtime.ready = true
 	}
 

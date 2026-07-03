@@ -22,6 +22,9 @@
     "test:chat-thread": "playwright install chromium && bun scripts/build_test_assets.ts chat-thread && bun test web/components/chat/chat-thread.dom.test.ts",
     "test:code-block": "playwright install chromium && bun scripts/build_test_assets.ts code-block && bun test web/components/shared/code-block.dom.test.ts",
     "test:workspace-page": "playwright install chromium && bun scripts/build_test_assets.ts workspace-page && bun test web/components/workspace/workspace-page.dom.test.ts",
+    "test:data-explorer": "playwright install chromium && bun scripts/build_test_assets.ts data-explorer && bun test web/components/data/data-explorer.dom.test.ts",
+    "test:windowed-table": "playwright install chromium && bun scripts/build_test_assets.ts windowed-table && bun test web/components/shared/windowed-table.dom.test.ts",
+    "test:filter-menu": "playwright install chromium && bun scripts/build_test_assets.ts filter-menu && bun test web/components/shared/filter-menu.dom.test.ts",
     "test:admin-page": "playwright install chromium && bun scripts/build_test_assets.ts admin-page && bun test web/components/admin/admin-page.dom.test.ts",
     "test:code-editor": "playwright install chromium && bun scripts/build_test_assets.ts code-editor && bun test web/components/shared/code-editor.dom.test.ts",
     "test:markdown-view": "playwright install chromium && bun scripts/build_test_assets.ts markdown-view && bun test web/components/shared/markdown-view.dom.test.ts",
@@ -56,7 +59,8 @@
     "markdown-it": "^14.2.0",
     "monaco-editor-core": "^0.55.1",
     "p5": "^1.11.13",
-    "shiki": "^4.3.0"
+    "shiki": "^4.3.0",
+    "sql-formatter": "^15.8.2"
   },
   "trustedDependencies": [
     "@parcel/watcher"

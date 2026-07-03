@@ -25,6 +25,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
@@ -61,6 +62,7 @@ type integrationMetrics interface {
 	QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error)
 	QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
 	QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
+	ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error)
 	QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error)
 	PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
 	RefreshMaterializations(ctx context.Context, modelID string) error
@@ -642,7 +644,7 @@ func (integrationDataRuntimeFactory) OpenDashboardDataRuntime(ctx context.Contex
 	}
 	return integrationDataRuntime{
 		runtime: runtime,
-		data:    reportdef.NewAnalyticsDataService(runtime.Queries()),
+		data:    reportdef.NewDataQueryService(config.ModelID, reportdef.NewAnalyticsDataService(runtime.Queries()), runtime),
 	}, nil
 }
 
@@ -669,6 +671,10 @@ func (r integrationDataRuntime) Histogram(ctx context.Context, request reportdef
 
 func (r integrationDataRuntime) Distribution(ctx context.Context, request reportdef.RawValueQuery, sort []reportdef.QuerySort, limit int) (reportdef.QueryRows, error) {
 	return r.data.Distribution(ctx, request, sort, limit)
+}
+
+func (r integrationDataRuntime) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	return r.runtime.ExecuteDataQuery(ctx, request)
 }
 
 func (r integrationDataRuntime) Refresh(ctx context.Context) error {

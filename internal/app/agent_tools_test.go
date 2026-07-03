@@ -14,6 +14,8 @@ import (
 	"github.com/Yacobolo/libredash/internal/agenttools"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/libredash/internal/queryaudit"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/agent"
 )
@@ -116,6 +118,46 @@ func TestAgentVisualToolIsCustomAgentOnlyTool(t *testing.T) {
 		if tool.Name == agenttools.QueryVisualToolName {
 			t.Fatalf("query_visual should not be exposed through APIGen tools")
 		}
+	}
+}
+
+func TestAgentAPIGenQueryAuditSurface(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
+	var queryTool agent.ToolDefinition
+	for _, tool := range server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true}) {
+		if tool.Name == "query_semantic_dataset" {
+			queryTool = tool
+			break
+		}
+	}
+	if queryTool.Handler == nil {
+		t.Fatal("query_semantic_dataset tool not found")
+	}
+
+	result, err := queryTool.Handler.Run(context.Background(), agent.ToolCall{
+		ID:   "call_agent_query",
+		Name: "query_semantic_dataset",
+		Arguments: json.RawMessage(`{
+			"model":"test",
+			"dataset":"orders",
+			"dimensions":[{"field":"orders.status","alias":"status"}],
+			"measures":[{"field":"order_count"}],
+			"limit":1
+		}`),
+	})
+	if err != nil {
+		t.Fatalf("run query_semantic_dataset: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("query_semantic_dataset returned error: %#v", result.Content)
+	}
+
+	events := queryEventsForTest(t, server, queryaudit.Filter{WorkspaceID: "test", Surface: dataquery.SurfaceAgent})
+	if len(events) != 1 {
+		t.Fatalf("agent query events = %d, want 1: %#v", len(events), events)
+	}
+	if events[0].Operation != dataquery.OperationAgentQuery || events[0].ObjectType != "agent_tool" || events[0].RequestID != "call_agent_query" {
+		t.Fatalf("agent query event = %#v", events[0])
 	}
 }
 
@@ -1252,6 +1294,21 @@ func (manySemanticRowsMetrics) QuerySemantic(_ context.Context, _ string, reques
 		rows = append(rows, reportdef.QueryRow{"status": "s" + strconv.Itoa(i), "order_count": i})
 	}
 	return rows, nil
+}
+
+func (m manySemanticRowsMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	if request.Kind != dataquery.KindSemanticAggregate {
+		return m.fakeMetrics.ExecuteDataQuery(ctx, request)
+	}
+	rows, err := m.QuerySemantic(ctx, request.ModelID, reportdef.AggregateQuery{Limit: request.Limit})
+	if err != nil {
+		return dataquery.Result{}, err
+	}
+	out := make([]dataquery.Row, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, dataquery.Row(row))
+	}
+	return dataquery.Result{Columns: dataquery.ColumnsFromNames([]string{"status", "order_count"}), Rows: out}, nil
 }
 
 func (manyEdgesMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {

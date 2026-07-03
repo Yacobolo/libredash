@@ -16,6 +16,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/agentapp"
 	"github.com/Yacobolo/libredash/internal/agenttools"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/agent"
 	"github.com/go-chi/chi/v5"
@@ -70,7 +71,7 @@ func (s *Server) agentAPIGenToolDefinitions(scope agentapp.Scope) []agent.ToolDe
 			Description: apigenAgentToolDescription(operation),
 			InputSchema: apigenAgentInputSchema(operation),
 			Handler: agent.ToolHandlerFunc(func(ctx context.Context, call agent.ToolCall) (agent.ToolResult, error) {
-				return s.runAPIGenAgentTool(ctx, scope, operation, call.Arguments), nil
+				return s.runAPIGenAgentTool(ctx, scope, operation, call), nil
 			}),
 		})
 	}
@@ -312,8 +313,8 @@ func agentStringSliceHas(values []string, want string) bool {
 	return false
 }
 
-func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, operation apigenAgentOperation, rawArgs json.RawMessage) agent.ToolResult {
-	args, err := decodeAPIGenAgentToolArguments(rawArgs)
+func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, operation apigenAgentOperation, call agent.ToolCall) agent.ToolResult {
+	args, err := decodeAPIGenAgentToolArguments(call.Arguments)
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
 	}
@@ -324,6 +325,15 @@ func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, o
 	if errResult, ok := s.authorizeAPIGenAgentTool(ctx, toolScope, operation); !ok {
 		return errResult
 	}
+	ctx = dataquery.WithMetadata(ctx, dataquery.Metadata{
+		WorkspaceID: toolScope.WorkspaceID,
+		Surface:     dataquery.SurfaceAgent,
+		Operation:   dataquery.OperationAgentQuery,
+		PrincipalID: toolScope.PrincipalID,
+		RequestID:   call.ID,
+		ObjectType:  "agent_tool",
+		ObjectID:    operation.Extension.Name,
+	})
 	request, err := apigenAgentToolRequest(ctx, toolScope, operation, args)
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())

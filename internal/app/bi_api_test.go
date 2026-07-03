@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/libredash/internal/queryaudit"
 )
 
 func TestBIAPIListResponsesUseStandardEnvelope(t *testing.T) {
@@ -193,6 +195,91 @@ func TestBIAPIDashboardVisualDataSurface(t *testing.T) {
 	}
 }
 
+func TestSemanticAPIQueryAuditIncludesWorkspace(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/semantic-models/test/datasets/orders/query", strings.NewReader(`{"dimensions":[{"field":"orders.status","alias":"status"}],"measures":[{"field":"order_count"}],"limit":1}`))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-ID", "req_api_workspace")
+	req.Header.Set("X-Correlation-ID", "corr_api_workspace")
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	events := queryEventsForTest(t, server, queryaudit.Filter{WorkspaceID: "test", Search: "req_api_workspace"})
+	if len(events) != 1 {
+		t.Fatalf("events = %d, want 1: %#v", len(events), events)
+	}
+	event := events[0]
+	if event.WorkspaceID != "test" || event.Surface != dataquery.SurfaceAPI || event.Operation != dataquery.OperationAPIQuery {
+		t.Fatalf("event metadata = %#v", event)
+	}
+	if event.RequestID != "req_api_workspace" || event.CorrelationID != "corr_api_workspace" {
+		t.Fatalf("request/correlation = %q/%q", event.RequestID, event.CorrelationID)
+	}
+	if strings.Contains(event.QueryJSON, "delivered") || strings.Contains(event.QueryJSON, "shipped") {
+		t.Fatalf("query event stored result row values: %s", event.QueryJSON)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/query-events?search=req_api_workspace&limit=10", nil)
+	listReq.Header.Set("Accept", "application/json")
+	listRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(listRec, listReq)
+	if listRec.Code != http.StatusOK {
+		t.Fatalf("query events status=%d body=%s", listRec.Code, listRec.Body.String())
+	}
+	if !strings.Contains(listRec.Body.String(), `"requestId":"req_api_workspace"`) || !strings.Contains(listRec.Body.String(), `"workspaceId":"test"`) {
+		t.Fatalf("query events endpoint did not return workspace-scoped event: %s", listRec.Body.String())
+	}
+}
+
+func TestDashboardPageQueryWritesQueryEvents(t *testing.T) {
+	server := NewWithOptions(auditedDashboardMetrics{fakeMetrics: fakeMetrics{}}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/query", strings.NewReader(`{}`))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-ID", "req_dashboard_page")
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	events := queryEventsForTest(t, server, queryaudit.Filter{WorkspaceID: "test", Search: "req_dashboard_page"})
+	if len(events) != 1 {
+		t.Fatalf("events = %d, want 1: %#v", len(events), events)
+	}
+	if events[0].Surface != dataquery.SurfaceAPI || events[0].Operation != dataquery.OperationDashboardAggregate || events[0].ObjectType != "dashboard_page" {
+		t.Fatalf("dashboard page event = %#v", events[0])
+	}
+}
+
+func TestDashboardTableWindowWritesQueryEvents(t *testing.T) {
+	server := NewWithOptions(auditedDashboardMetrics{fakeMetrics: fakeMetrics{}}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/tables/orders/data", strings.NewReader(`{"count":10}`))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-ID", "req_dashboard_table")
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
+	events := queryEventsForTest(t, server, queryaudit.Filter{WorkspaceID: "test", Search: "req_dashboard_table"})
+	if len(events) != 1 {
+		t.Fatalf("events = %d, want 1: %#v", len(events), events)
+	}
+	if events[0].Surface != dataquery.SurfaceAPI || events[0].Operation != dataquery.OperationDashboardRows || events[0].ObjectType != "dashboard_table" {
+		t.Fatalf("dashboard table event = %#v", events[0])
+	}
+}
+
 func TestBIAPIDashboardVisualDataSurfaceNotFoundAndMalformedBody(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
 
@@ -327,6 +414,47 @@ func TestBIAPISemanticDatasetErrors(t *testing.T) {
 
 type manyRowsMetrics struct {
 	fakeMetrics
+}
+
+type auditedDashboardMetrics struct {
+	fakeMetrics
+}
+
+func (m auditedDashboardMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
+	_, err := m.ExecuteDataQuery(ctx, dataquery.Query{
+		Surface:   dataquery.SurfaceDashboard,
+		Operation: dataquery.OperationDashboardAggregate,
+		ModelID:   "test",
+		Kind:      dataquery.KindSemanticAggregate,
+		Target:    "orders",
+		Fields:    []dataquery.Field{{Field: "orders.status", Alias: "status"}},
+		Measures:  []dataquery.Field{{Field: "order_count"}},
+		Limit:     10,
+	})
+	if err != nil {
+		return dashboard.Patch{}, err
+	}
+	return m.fakeMetrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+}
+
+func (m auditedDashboardMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+	_, err := m.ExecuteDataQuery(ctx, dataquery.Query{
+		Surface:   dataquery.SurfaceDashboard,
+		Operation: dataquery.OperationDashboardRows,
+		ModelID:   "test",
+		Kind:      dataquery.KindSemanticRows,
+		Target:    "orders",
+		Fields:    []dataquery.Field{{Field: "orders.order_id", Alias: "order_id"}},
+		Limit:     request.Count,
+	})
+	if err != nil {
+		return dashboard.Table{}, err
+	}
+	return m.fakeMetrics.QueryTablePage(ctx, dashboardID, pageID, filters, request)
+}
+
+func (m auditedDashboardMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	return dataquery.ExecuteAudited(ctx, request, m.fakeMetrics.ExecuteDataQuery)
 }
 
 func (manyRowsMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {

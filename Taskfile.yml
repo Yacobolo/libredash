@@ -150,6 +150,9 @@ tasks:
       - bun run test:chat-thread
       - bun run test:code-block
       - bun run test:workspace-page
+      - bun run test:data-explorer
+      - bun run test:windowed-table
+      - bun run test:filter-menu
       - bun run test:admin-page
       - bun run test:code-editor
       - bun run test:markdown-view

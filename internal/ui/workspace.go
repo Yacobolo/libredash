@@ -307,6 +307,9 @@ func workspaceAssetPageSignalWithRefreshAndVersions(workspace workspaceview.Work
 	page.Tabs = []uisignals.WorkspaceTabSignal{
 		{ID: "details", Label: "Details", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "details"), Active: activeSection == "details"},
 	}
+	if assetDataInspectable(asset.Type) {
+		page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "data", Label: "Data", Href: workspaceAssetDataHref(workspace.ID, asset.ID), Active: activeSection == "data"})
+	}
 	if assetRefreshable(asset.Type) {
 		page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "refreshes", Label: "Refreshes", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "refreshes"), Active: activeSection == "refreshes"})
 	}
@@ -351,6 +354,7 @@ func connectionSourceAssetPageSignalWithVersions(workspace workspaceview.Workspa
 	page.Actions = []uisignals.WorkspaceActionSignal{{Label: "Back to sources", Href: "/connections?type=source", Icon: "back"}}
 	page.Tabs = []uisignals.WorkspaceTabSignal{
 		{ID: "details", Label: "Details", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "details"), Active: activeSection == "details"},
+		{ID: "data", Label: "Data", Href: workspaceAssetDataHref(source.WorkspaceID, source.ID), Active: activeSection == "data"},
 		{ID: "lineage", Label: "Lineage", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "lineage"), Active: activeSection == "lineage", Count: lineage.Count},
 		{ID: "versions", Label: "Versions", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "versions"), Active: activeSection == "versions"},
 	}
@@ -665,7 +669,7 @@ func workspaceAssetHref(workspaceID, typ, query string) string {
 
 func ValidWorkspaceAssetSection(section string) bool {
 	switch section {
-	case "details", "lineage", "refreshes", "versions":
+	case "details", "data", "lineage", "refreshes", "versions":
 		return true
 	default:
 		return false
@@ -902,6 +906,17 @@ func parseRefreshTime(value string) (time.Time, bool) {
 
 func assetRefreshable(assetType string) bool {
 	return assetType == "semantic_model" || assetType == "model_table"
+}
+
+func assetDataInspectable(assetType string) bool {
+	return assetType == "semantic_model" || assetType == "model_table" || assetType == "source"
+}
+
+func workspaceAssetDataHref(workspaceID, assetID string) string {
+	values := url.Values{}
+	values.Set("workspace", workspaceID)
+	values.Set("object", assetID)
+	return "/data?" + values.Encode()
 }
 
 func normalizeWorkspaceAssetSection(section string) string {

@@ -11,6 +11,7 @@ const builds: AssetBuild[] = [
   single('catalog-page', 'web/components/app/catalog-page.ts', 'static/catalog-page.js'),
   split('dashboard-page', 'web/components/dashboard/dashboard-page.ts', 'static', 'dashboard-page.js', 'chunks/dashboard-[name]-[hash].[ext]'),
   single('workspace-page', 'web/components/workspace/workspace-page.ts', 'static/workspace-page.js'),
+  single('data-explorer', 'web/components/data/data-explorer.ts', 'static/data-explorer.js'),
   split('chat-page', 'web/components/chat/chat-page.ts', 'static', 'chat-page.js', 'chunks/chat-[name]-[hash].[ext]'),
   splitByName('admin-page', 'web/components/admin/admin-page.ts', 'static', 'chunks/admin-[name]-[hash].[ext]'),
   single('login-page', 'web/components/login/login-page.ts', 'static/login-page.js'),

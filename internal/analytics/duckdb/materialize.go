@@ -27,6 +27,10 @@ func (r *SourceRuntime) PrepareSourceRuntime(ctx context.Context, model *semanti
 	return PrepareSourceRuntime(ctx, r.db.SQLDB(), model, r.dataDir, r.attachedConnections)
 }
 
+func (r *SourceRuntime) SourceRelation(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error) {
+	return SourceRelation(model, source, dataDir)
+}
+
 func (r *SourceRuntime) PlanModelTable(ctx context.Context, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
 	return PlanModelTable(ctx, r.db.SQLDB(), model, r.dataDir, tableName, table)
 }
