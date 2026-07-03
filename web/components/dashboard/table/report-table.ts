@@ -1,7 +1,9 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { createRef, ref, type Ref } from 'lit/directives/ref.js'
 import { EllipsisVertical } from 'lucide'
+import { type ColumnResizeDrag, resizeClientX, resizeGuideX, resizePlaneScaleX, resizedColumnWidth } from '../../shared/column-resize'
 import { lucideIcon } from '../../shared/lucide-icons'
+import { virtualRowRange } from '../../shared/table-window'
 import {
   TableController,
   callMemoOrStaticFn,
@@ -61,13 +63,6 @@ import {
   type VisualAction,
   type VisibleRowSlot,
 } from './types'
-
-type ResizeDrag = {
-  columnKey: string
-  startClientX: number
-  startSize: number
-  minSize: number
-}
 
 const reportTableFeatures = tableFeatures({
   columnPinningFeature,
@@ -241,7 +236,7 @@ class ReportTable extends LitElement {
   private bodyViewportRef: Ref<HTMLDivElement> = createRef()
   private resizeObserver?: ResizeObserver
   private resizeGuideFrame = 0
-  private resizeDrag?: ResizeDrag
+  private resizeDrag?: ColumnResizeDrag
   private tableController = new TableController<typeof reportTableFeatures, TanStackTableRow>(this)
   private handleOutsidePointerDown = (event: PointerEvent) => {
     const details = this.renderRoot.querySelector<HTMLDetailsElement>('.visual-options')
@@ -352,13 +347,13 @@ class ReportTable extends LitElement {
 
     .visual-options summary {
       display: grid;
-      width: var(--control-xsmall-size);
-      height: var(--control-xsmall-size);
+      width: var(--ld-button-height-xs, var(--control-xsmall-size));
+      height: var(--ld-button-height-xs, var(--control-xsmall-size));
       place-items: center;
-      border: var(--ld-border-transparent);
+      border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
       border-radius: var(--ld-radius-tight);
-      background: transparent;
-      color: var(--ld-fg-muted);
+      background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+      color: var(--ld-button-invisible-icon-rest, var(--ld-fg-muted));
       cursor: pointer;
       font-size: var(--ld-font-size-body-lg);
       font-weight: var(--ld-font-weight-strong);
@@ -378,10 +373,12 @@ class ReportTable extends LitElement {
     .visual-options summary:hover,
     .visual-options summary:focus-visible,
     .visual-options[open] summary {
-      border-color: var(--ld-line-default);
-      background: var(--ld-bg-panel-muted);
+      border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
+      background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
       color: var(--ld-fg-default);
-      outline: 0;
+      outline: var(--focus-outline, var(--ld-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
     .menu {
@@ -402,13 +399,13 @@ class ReportTable extends LitElement {
       display: flex;
       align-items: center;
       gap: var(--base-size-8);
-      min-height: var(--control-small-size);
-      border: 0;
+      min-height: var(--ld-button-height-sm, var(--control-small-size));
+      border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
       border-radius: var(--ld-radius-tight);
-      background: transparent;
-      color: var(--ld-fg-default);
+      background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+      color: var(--ld-button-invisible-fg-rest, var(--ld-fg-default));
       cursor: pointer;
-      padding: 0 var(--control-xsmall-paddingInline-normal);
+      padding: 0 var(--ld-button-padding-inline-xs, var(--control-xsmall-paddingInline-normal));
       font: inherit;
       font-size: var(--ld-font-size-caption);
       font-weight: var(--ld-font-weight-medium);
@@ -428,8 +425,11 @@ class ReportTable extends LitElement {
 
     .menu button:hover,
     .menu button:focus-visible {
-      background: var(--ld-bg-panel-muted);
-      outline: 0;
+      border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
+      background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover, var(--ld-bg-panel-muted)));
+      outline: var(--focus-outline, var(--ld-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
     .menu button:disabled {
@@ -438,7 +438,7 @@ class ReportTable extends LitElement {
     }
 
     .menu button:disabled:hover {
-      background: transparent;
+      background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
     }
 
     .menu-divider {
@@ -504,7 +504,7 @@ class ReportTable extends LitElement {
       top: 0;
       z-index: calc(var(--zIndex-sticky) + 2);
       border-bottom: var(--ld-border-default);
-      background: color-mix(in srgb, var(--ld-bg-panel-muted), var(--ld-chart-surface) 34%);
+      background: var(--ld-bg-panel-muted);
       color: var(--ld-fg-muted);
     }
 
@@ -594,7 +594,7 @@ class ReportTable extends LitElement {
 
     .group-cell.pinned-left {
       z-index: calc(var(--zIndex-sticky) + 5);
-      background: color-mix(in srgb, var(--ld-bg-panel-muted), var(--ld-chart-surface) 34%);
+      background: var(--ld-bg-panel-muted);
     }
 
     .cell.pinned-left {
@@ -625,11 +625,11 @@ class ReportTable extends LitElement {
       justify-content: space-between;
       gap: var(--base-size-8);
       width: 100%;
-      min-height: calc(var(--control-small-size) + var(--base-size-6));
-      border: 0;
+      min-height: calc(var(--ld-button-height-sm, var(--control-small-size)) + var(--base-size-6));
+      border: var(--borderWidth-default, var(--ld-border-width)) solid var(--ld-button-invisible-border-rest, var(--control-transparent-borderColor-rest, var(--ld-line-muted)));
       border-bottom: var(--borderWidth-thick) solid transparent;
-      background: transparent;
-      color: inherit;
+      background: var(--ld-button-invisible-bg-rest, var(--control-transparent-bgColor-rest, var(--ld-bg-panel)));
+      color: var(--ld-button-invisible-fg-rest, inherit);
       cursor: pointer;
       padding: 0 var(--base-size-8);
       font: inherit;
@@ -642,9 +642,12 @@ class ReportTable extends LitElement {
 
     button.header-button:hover,
     button.header-button:focus-visible {
-      background: color-mix(in srgb, var(--ld-fg-link), transparent 92%);
+      border-color: var(--ld-button-invisible-border-hover, var(--control-transparent-borderColor-hover, var(--ld-line-default)));
+      background: var(--ld-button-invisible-bg-hover, var(--control-transparent-bgColor-hover));
       color: var(--ld-fg-default);
-      outline: 0;
+      outline: var(--focus-outline, var(--ld-border-default));
+      outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+      outline-offset: var(--focus-outline-offset, var(--base-size-2));
     }
 
     .sort {
@@ -745,7 +748,7 @@ class ReportTable extends LitElement {
       z-index: var(--zIndex-overlay);
       width: 0;
       border-left: 2px solid var(--ld-fg-link);
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--ld-fg-link), transparent 74%);
+      box-shadow: 0 0 0 var(--borderWidth-default) var(--borderColor-accent-muted);
       pointer-events: none;
     }
 
@@ -755,15 +758,15 @@ class ReportTable extends LitElement {
       z-index: 1;
       height: var(--ld-row-height, 34px);
       --ld-row-bg: var(--ld-chart-surface);
-      --ld-row-bg-hover: color-mix(in srgb, var(--ld-fg-link), var(--ld-row-bg) 88%);
-      --ld-row-bg-selected: color-mix(in srgb, var(--ld-fg-link), var(--ld-chart-surface) 62%);
-      --ld-row-bg-selected-hover: color-mix(in srgb, var(--ld-fg-link), var(--ld-chart-surface) 54%);
+      --ld-row-bg-hover: var(--control-transparent-bgColor-hover);
+      --ld-row-bg-selected: var(--bgColor-accent-muted);
+      --ld-row-bg-selected-hover: var(--selection-bgColor);
       background: var(--ld-row-bg);
       color: var(--ld-fg-default);
     }
 
     .zebra .row:nth-child(even) {
-      --ld-row-bg: color-mix(in srgb, var(--ld-table-stripe), var(--ld-chart-surface) 18%);
+      --ld-row-bg: var(--ld-table-stripe);
     }
 
     .grid-rows .row,
@@ -833,7 +836,7 @@ class ReportTable extends LitElement {
     .cell.active {
       outline: var(--ld-border-width-focus) solid var(--ld-fg-link);
       outline-offset: var(--base-size-negative-2);
-      background: color-mix(in srgb, var(--ld-fg-link), transparent 88%);
+      background: var(--bgColor-accent-muted);
     }
 
     .skeleton-cell {
@@ -1088,9 +1091,7 @@ class ReportTable extends LitElement {
   get visibleRows(): VisibleRowSlot[] {
     if (this.availableRows <= 0) return []
     const rowMap = new Map(this.loadedRows.map((item) => [item.index, item.row]))
-    const first = Math.max(0, Math.floor(this.viewportTop / this.rowHeight) - 2)
-    const visibleCount = Math.max(1, Math.ceil((this.viewportHeight || this.rowHeight) / this.rowHeight) + 4)
-    const last = Math.min(this.availableRows, first + visibleCount)
+    const { first, last } = virtualRowRange(this.availableRows, this.viewportTop, this.viewportHeight || this.rowHeight, this.rowHeight, 2)
     const rows: VisibleRowSlot[] = []
     for (let index = first; index < last; index++) {
       const row = rowMap.get(index)
@@ -1336,7 +1337,7 @@ class ReportTable extends LitElement {
   private beginColumnResize(event: MouseEvent | TouchEvent, header: any): void {
     event.preventDefault()
     event.stopPropagation()
-    const clientX = this.resizeClientX(event)
+    const clientX = resizeClientX(event)
     const column = header.column.columnDef.meta?.column as TableColumn | undefined
     if (clientX === null || !column) return
     this.resizeDrag = {
@@ -1354,30 +1355,19 @@ class ReportTable extends LitElement {
   }
 
   private scheduleResizeGuideUpdate(event: MouseEvent | TouchEvent): void {
-    const clientX = this.resizeClientX(event)
+    const clientX = resizeClientX(event)
     if (clientX === null) return
     if (this.resizeGuideFrame) cancelAnimationFrame(this.resizeGuideFrame)
     this.resizeGuideFrame = requestAnimationFrame(() => {
       this.resizeGuideFrame = 0
       const plane = this.renderRoot.querySelector<HTMLElement>('.table-plane')
       if (!plane) return
-      const rect = plane.getBoundingClientRect()
-      const scaleX = rect.width > 0 && plane.offsetWidth > 0 ? rect.width / plane.offsetWidth : 1
-      const localX = scaleX > 0 ? (clientX - rect.left) / scaleX : clientX - rect.left
-      this.resizeGuideX = Math.max(0, Math.min(plane.scrollWidth, localX))
+      const scaleX = resizePlaneScaleX(plane)
+      this.resizeGuideX = resizeGuideX(plane, clientX)
       if (this.resizeDrag) {
-        const delta = scaleX > 0 ? (clientX - this.resizeDrag.startClientX) / scaleX : clientX - this.resizeDrag.startClientX
-        const nextSize = Math.max(this.resizeDrag.minSize, Math.round(this.resizeDrag.startSize + delta))
-        this.columnSizing = { ...this.columnSizing, [this.resizeDrag.columnKey]: nextSize }
+        this.columnSizing = { ...this.columnSizing, [this.resizeDrag.columnKey]: resizedColumnWidth(this.resizeDrag, clientX, scaleX) }
       }
     })
-  }
-
-  private resizeClientX(event: MouseEvent | TouchEvent): number | null {
-    if ('touches' in event) {
-      return event.touches[0]?.clientX ?? event.changedTouches[0]?.clientX ?? null
-    }
-    return event.clientX
   }
 
   private clearResizeGuide(): void {

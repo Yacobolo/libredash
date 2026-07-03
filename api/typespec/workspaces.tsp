@@ -104,7 +104,7 @@ alias ListWorkspacesOK = OkJson<WorkspaceListResponse>;
 @get
 @apigen.authz(#{ mode: "permission", permission: "workspace:read" })
 @apigen.cli(#{ command: #["workspaces", "list"], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_workspaces", risk: "read", tags: #["workspace"], defaultLimit: 25 })
+@extension("x-agent", #{ enabled: true, name: "list_workspaces", risk: "read", tags: #["workspace"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "title", "description"], cursorPath: "page.nextCursor", count: true } })
 op listWorkspaces(@query environment?: string, @query limit?: int32, @query pageToken?: string): ListWorkspacesOK | CommonErrors;
 
 alias ListWorkspaceAssetEdgesOK = OkJson<AssetEdgeListResponse>;
@@ -115,7 +115,7 @@ alias ListWorkspaceAssetEdgesOK = OkJson<AssetEdgeListResponse>;
 @get
 @apigen.authz(#{ mode: "permission", permission: "asset:read" })
 @apigen.cli(#{ command: #["assets", "edges"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_workspace_asset_edges", risk: "read", tags: #["workspace", "lineage"], defaultLimit: 25 })
+@extension("x-agent", #{ enabled: true, name: "list_workspace_asset_edges", risk: "read", tags: #["workspace", "lineage"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["fromAssetId", "toAssetId", "type"], cursorPath: "page.nextCursor", count: true } })
 op listWorkspaceAssetEdges(@path workspace: string, @query limit?: int32, @query pageToken?: string): ListWorkspaceAssetEdgesOK | CommonErrors;
 
 alias ListWorkspaceAssetsOK = OkJson<AssetListResponse>;
@@ -126,7 +126,7 @@ alias ListWorkspaceAssetsOK = OkJson<AssetListResponse>;
 @get
 @apigen.authz(#{ mode: "permission", permission: "asset:read" })
 @apigen.cli(#{ command: #["assets", "list"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_assets", risk: "read", tags: #["workspace", "asset", "lineage"], defaultLimit: 25 })
+@extension("x-agent", #{ enabled: true, name: "list_assets", risk: "read", tags: #["workspace", "asset", "lineage"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "type", "title", "description"], cursorPath: "page.nextCursor", count: true } })
 op listWorkspaceAssets(@path workspace: string, @query type?: string, @query q?: string, @query limit?: int32, @query pageToken?: string): ListWorkspaceAssetsOK | CommonErrors;
 
 @tag("Workspaces")
@@ -142,7 +142,7 @@ op getWorkspaceActiveDeploymentGraph(@path workspace: string, @query environment
 @get
 @apigen.authz(#{ mode: "permission", permission: "asset:read" })
 @apigen.cli(#{ command: #["assets", "describe"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "assetId", displayName: "asset-id" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "describe_asset", risk: "read", tags: #["workspace", "asset"] })
+@extension("x-agent", #{ enabled: true, name: "describe_asset", risk: "read", tags: #["workspace", "asset"], output: #{ rootFields: #["id", "type", "title", "description", "payloadSchema", "href"] } })
 op getWorkspaceAsset(@path workspace: string, @path assetId: string): OkJson<AssetResponse> | CommonErrors;
 
 @tag("Workspaces")
@@ -151,5 +151,5 @@ op getWorkspaceAsset(@path workspace: string, @path assetId: string): OkJson<Ass
 @get
 @apigen.authz(#{ mode: "permission", permission: "asset:read" })
 @apigen.cli(#{ command: #["assets", "lineage"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "assetId", displayName: "asset-id" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "asset_lineage", risk: "read", tags: #["workspace", "asset", "lineage"] })
+@extension("x-agent", #{ enabled: true, name: "asset_lineage", risk: "read", tags: #["workspace", "asset", "lineage"], output: #{ rootFields: #["assetId", "upstream", "downstream"] } })
 op getWorkspaceAssetLineage(@path workspace: string, @path assetId: string): OkJson<AssetLineageResponse> | CommonErrors;

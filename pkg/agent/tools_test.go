@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -243,6 +244,219 @@ func TestToolExecutionIsBoundedParallelAndOrdered(t *testing.T) {
 	}
 }
 
+func TestToolResultContentDefaultsToTOON(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{
+		{ToolCalls: []ToolCall{{ID: "call_1", Name: "lookup", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
+		{Content: "done", FinishReason: FinishReasonStop},
+	}}
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "x",
+		Model:        model,
+		Tools: []ToolDefinition{{
+			Name:        "lookup",
+			Description: "lookup",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+			Handler: ToolHandlerFunc(func(context.Context, ToolCall) (ToolResult, error) {
+				return ToolResult{Content: map[string]any{"ok": true, "id": "agent_table_1"}}, nil
+			}),
+		}},
+	})
+
+	if _, err := a.Prompt(context.Background(), PromptRequest{Input: "go"}); err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	tool := onlyToolMessage(t, a.Transcript())
+	if strings.Contains(tool.Content, `"ok":true`) || !strings.Contains(tool.Content, "ok: true") || !strings.Contains(tool.Content, "id: agent_table_1") {
+		t.Fatalf("tool result should be TOON by default: %s", tool.Content)
+	}
+}
+
+func TestToolResultContentCanUseJSON(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{
+		{ToolCalls: []ToolCall{{ID: "call_1", Name: "lookup", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
+		{Content: "done", FinishReason: FinishReasonStop},
+	}}
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "x",
+		Model:        model,
+		ToolOutput:   ToolOutputConfig{Format: ToolOutputJSON},
+		Tools: []ToolDefinition{{
+			Name:        "lookup",
+			Description: "lookup",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+			Handler: ToolHandlerFunc(func(context.Context, ToolCall) (ToolResult, error) {
+				return ToolResult{Content: map[string]any{"ok": true, "id": "agent_table_1"}}, nil
+			}),
+		}},
+	})
+
+	if _, err := a.Prompt(context.Background(), PromptRequest{Input: "go"}); err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	tool := onlyToolMessage(t, a.Transcript())
+	if !strings.Contains(tool.Content, `"ok":true`) || !strings.Contains(tool.Content, `"id":"agent_table_1"`) {
+		t.Fatalf("tool result should honor JSON output config: %s", tool.Content)
+	}
+}
+
+func TestToolResultTruncatesArraysAndStrings(t *testing.T) {
+	rows := make([]map[string]any, 0, 5)
+	for i := range 5 {
+		rows = append(rows, map[string]any{"id": i + 1, "name": fmt.Sprintf("row-%d", i+1)})
+	}
+	model := &fakeModel{responses: []ModelResponse{
+		{ToolCalls: []ToolCall{{ID: "call_1", Name: "lookup", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
+		{Content: "done", FinishReason: FinishReasonStop},
+	}}
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "x",
+		Model:        model,
+		ToolOutput:   ToolOutputConfig{MaxArrayItems: 2, MaxStringChars: 5},
+		Tools: []ToolDefinition{{
+			Name:        "lookup",
+			Description: "lookup",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+			Handler: ToolHandlerFunc(func(context.Context, ToolCall) (ToolResult, error) {
+				return ToolResult{Content: map[string]any{"body": "abcdefghij", "items": rows}}, nil
+			}),
+		}},
+	})
+
+	if _, err := a.Prompt(context.Background(), PromptRequest{Input: "go"}); err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	tool := onlyToolMessage(t, a.Transcript())
+	for _, want := range []string{
+		"body: abcde",
+		"items[2]{id,name}:",
+		"1,row-1",
+		"_meta:",
+		"truncated: true",
+		"$.body",
+		"$.items",
+		"total: 5",
+		"shown_chars: 5",
+		"total_chars: 10",
+	} {
+		if !strings.Contains(tool.Content, want) {
+			t.Fatalf("tool result missing %q:\n%s", want, tool.Content)
+		}
+	}
+	if strings.Contains(tool.Content, "row-3") || strings.Contains(tool.Content, "fghij") {
+		t.Fatalf("tool result was not truncated:\n%s", tool.Content)
+	}
+}
+
+func TestToolResultTOONQuotesAmbiguousScalarsAndKeys(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{
+		{ToolCalls: []ToolCall{{ID: "call_1", Name: "lookup", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
+		{Content: "done", FinishReason: FinishReasonStop},
+	}}
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "x",
+		Model:        model,
+		Tools: []ToolDefinition{{
+			Name:        "lookup",
+			Description: "lookup",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+			Handler: ToolHandlerFunc(func(context.Context, ToolCall) (ToolResult, error) {
+				return ToolResult{Content: map[string]any{
+					"quoted:key": `He said "hi" \ ok`,
+					"items": []any{
+						map[string]any{"name": "true", "value": "123", "bad,field": "a,b"},
+					},
+				}}, nil
+			}),
+		}},
+	})
+
+	if _, err := a.Prompt(context.Background(), PromptRequest{Input: "go"}); err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	tool := onlyToolMessage(t, a.Transcript())
+	for _, want := range []string{
+		`"quoted:key": "He said \"hi\" \\ ok"`,
+		`items[1]{"bad,field",name,value}:`,
+		`"a,b","true","123"`,
+	} {
+		if !strings.Contains(tool.Content, want) {
+			t.Fatalf("tool result missing quoted fragment %q:\n%s", want, tool.Content)
+		}
+	}
+}
+
+func TestToolResultTopLevelEmptyArrayIsExplicit(t *testing.T) {
+	model := &fakeModel{responses: []ModelResponse{
+		{ToolCalls: []ToolCall{{ID: "call_1", Name: "lookup", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
+		{Content: "done", FinishReason: FinishReasonStop},
+	}}
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "x",
+		Model:        model,
+		Tools: []ToolDefinition{{
+			Name:        "lookup",
+			Description: "lookup",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+			Handler: ToolHandlerFunc(func(context.Context, ToolCall) (ToolResult, error) {
+				return ToolResult{Content: []any{}}, nil
+			}),
+		}},
+	})
+
+	if _, err := a.Prompt(context.Background(), PromptRequest{Input: "go"}); err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	tool := onlyToolMessage(t, a.Transcript())
+	if !strings.Contains(tool.Content, "count: 0") || !strings.Contains(tool.Content, "items[0]:") {
+		t.Fatalf("empty array should be explicit:\n%s", tool.Content)
+	}
+}
+
+func TestToolResultOrderingAndDepthTruncationAreDeterministic(t *testing.T) {
+	content := map[string]any{
+		"z": "last",
+		"a": map[string]any{"b": map[string]any{"c": map[string]any{"d": "too deep"}}},
+		"m": "middle",
+	}
+	model := &fakeModel{responses: []ModelResponse{
+		{ToolCalls: []ToolCall{{ID: "call_1", Name: "lookup", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
+		{Content: "done", FinishReason: FinishReasonStop},
+	}}
+	a := mustAgent(t, Definition{
+		Name:         "test",
+		SystemPrompt: "x",
+		Model:        model,
+		ToolOutput:   ToolOutputConfig{MaxObjectDepth: 2},
+		Tools: []ToolDefinition{{
+			Name:        "lookup",
+			Description: "lookup",
+			InputSchema: json.RawMessage(`{"type":"object"}`),
+			Handler: ToolHandlerFunc(func(context.Context, ToolCall) (ToolResult, error) {
+				return ToolResult{Content: content}, nil
+			}),
+		}},
+	})
+
+	if _, err := a.Prompt(context.Background(), PromptRequest{Input: "go"}); err != nil {
+		t.Fatalf("Prompt returned error: %v", err)
+	}
+	tool := onlyToolMessage(t, a.Transcript())
+	aIndex := strings.Index(tool.Content, "a:")
+	mIndex := strings.Index(tool.Content, "m: middle")
+	zIndex := strings.Index(tool.Content, "z: last")
+	if aIndex < 0 || mIndex < 0 || zIndex < 0 || !(aIndex < mIndex && mIndex < zIndex) {
+		t.Fatalf("object keys should be sorted deterministically:\n%s", tool.Content)
+	}
+	if !strings.Contains(tool.Content, "max_depth") || strings.Contains(tool.Content, "too deep") {
+		t.Fatalf("deep object should be truncated with metadata:\n%s", tool.Content)
+	}
+}
+
 func TestToolDisplayContentIsNotSentBackToModel(t *testing.T) {
 	model := &fakeModel{responses: []ModelResponse{
 		{ToolCalls: []ToolCall{{ID: "call_1", Name: "visual", Arguments: json.RawMessage(`{}`)}}, FinishReason: FinishReasonToolCalls},
@@ -280,7 +494,7 @@ func TestToolDisplayContentIsNotSentBackToModel(t *testing.T) {
 	if tool.DisplayContent == nil {
 		t.Fatalf("tool transcript missing display content: %#v", tool)
 	}
-	if !strings.Contains(tool.Content, `"ok":true`) || strings.Contains(tool.Content, "row-data") {
+	if !strings.Contains(tool.Content, `ok: true`) || strings.Contains(tool.Content, "row-data") {
 		t.Fatalf("tool model content should be compact: %s", tool.Content)
 	}
 	if len(model.requests) != 2 {

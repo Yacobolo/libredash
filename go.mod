@@ -17,6 +17,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/spf13/cobra v1.10.2
 	github.com/starfederation/datastar-go v1.2.2
+	github.com/toon-format/toon-go v0.0.0-20251202084852-7ca0e27c4e8c
 	golang.org/x/sync v0.20.0
 	gopkg.in/yaml.v3 v3.0.1
 	maragu.dev/gomponents v1.3.0

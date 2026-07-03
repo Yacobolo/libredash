@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -148,6 +149,17 @@ func (s *Server) workspaceAssetSection(w http.ResponseWriter, r *http.Request) {
 	}
 	if section == "refreshes" && !workspaceAssetRefreshable(selected) {
 		http.NotFound(w, r)
+		return
+	}
+	if section == "data" {
+		if selected.Type != "semantic_model" && selected.Type != "model_table" && selected.Type != "source" {
+			http.NotFound(w, r)
+			return
+		}
+		values := url.Values{}
+		values.Set("workspace", workspaceID)
+		values.Set("object", assetID)
+		http.Redirect(w, r, "/data?"+values.Encode(), http.StatusFound)
 		return
 	}
 	if selected.Type == "connection" {
@@ -874,6 +886,13 @@ func (s *Server) connectionSourceAssetSection(w http.ResponseWriter, r *http.Req
 		http.NotFound(w, r)
 		return
 	}
+	if section == "data" {
+		values := url.Values{}
+		values.Set("workspace", source.WorkspaceID)
+		values.Set("object", source.ID)
+		http.Redirect(w, r, "/data?"+values.Encode(), http.StatusFound)
+		return
+	}
 	workspace := platformAssetWorkspaceView()
 	versions, err := s.assetVersionsStateForSection(r.Context(), source.WorkspaceID, string(s.requestDeploymentEnvironment(r)), source, section)
 	if err != nil {
@@ -910,6 +929,10 @@ func (s *Server) connectionAssetSection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if section == "refreshes" {
+		http.NotFound(w, r)
+		return
+	}
+	if section == "data" {
 		http.NotFound(w, r)
 		return
 	}

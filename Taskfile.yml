@@ -150,6 +150,8 @@ tasks:
       - generate
       - build
     cmds:
+      - bun run test:primer-primitives
+      - bun run test:primer-alignment
       - bun run test:theme
       - bun run test:app-shell
       - bun run test:table-selection
@@ -160,7 +162,11 @@ tasks:
       - bun run test:chat-composer
       - bun run test:chat-page
       - bun run test:chat-thread
+      - bun run test:code-block
       - bun run test:workspace-page
+      - bun run test:data-explorer
+      - bun run test:windowed-table
+      - bun run test:filter-menu
       - bun run test:admin-page
       - bun run test:code-editor
       - bun run test:markdown-view

@@ -33,5 +33,5 @@ alias SearchWorkspaceOK = OkJson<SearchResponse>;
 @get
 @apigen.authz(#{ mode: "permission", permission: "asset:read" })
 @apigen.cli(#{ command: #["search"], args: #[#{ source: "query", name: "q", displayName: "query" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "search_workspace", risk: "read", tags: #["search", "discovery"], defaultLimit: 10 })
+@extension("x-agent", #{ enabled: true, name: "search_workspace", risk: "read", tags: #["search", "discovery"], defaultLimit: 10, output: #{ itemsPath: "items", fields: #["type", "id", "name", "description"], cursorPath: "page.nextCursor", count: true } })
 op searchWorkspace(@path workspace: string, @query q?: string, @query types?: string, @query limit?: int32, @query pageToken?: string): SearchWorkspaceOK | CommonErrors;

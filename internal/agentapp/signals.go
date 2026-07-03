@@ -12,8 +12,10 @@ type ChatTranscriptItem struct {
 	Summary        string        `json:"summary,omitempty"`
 	ResultSummary  string        `json:"resultSummary,omitempty"`
 	InputJSON      string        `json:"inputJson,omitempty"`
+	InputFormat    string        `json:"inputFormat,omitempty"`
 	ArgumentsJSON  string        `json:"argumentsJson,omitempty"`
 	ResultJSON     string        `json:"resultJson,omitempty"`
+	ResultFormat   string        `json:"resultFormat,omitempty"`
 	Artifact       *ChatArtifact `json:"artifact,omitempty"`
 	Error          string        `json:"error,omitempty"`
 	ConversationID string        `json:"conversationId,omitempty"`

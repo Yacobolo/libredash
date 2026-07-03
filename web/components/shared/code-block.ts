@@ -1,26 +1,56 @@
 import { LitElement, html, nothing } from 'lit'
 import { property, state } from 'lit/decorators.js'
 import { unsafeHTML } from 'lit/directives/unsafe-html.js'
-import { createHighlighterCore, type HighlighterCore } from 'shiki/core'
-import { createJavaScriptRegexEngine } from 'shiki/engine/javascript'
-import sql from '@shikijs/langs/sql'
-import githubDark from '@shikijs/themes/github-dark'
-import githubLight from '@shikijs/themes/github-light'
+import type { HighlighterCore } from 'shiki/core'
+import { format as formatSQL } from 'sql-formatter'
+import { Check, Copy } from 'lucide'
+import { lucideIcon } from './lucide-icons'
 
 type CodeTheme = 'github-light' | 'github-dark'
+type SupportedLanguage = 'json' | 'sql' | 'toon'
 
-const highlighterPromise: Promise<HighlighterCore> = createHighlighterCore({
-  themes: [githubLight, githubDark],
-  langs: [sql],
-  engine: createJavaScriptRegexEngine(),
-})
+let highlighterPromise: Promise<HighlighterCore> | null = null
+
+function loadHighlighter(): Promise<HighlighterCore> {
+  highlighterPromise ??= (async () => {
+    const [
+      { createHighlighterCore },
+      { createJavaScriptRegexEngine },
+      { default: sql },
+      { default: json },
+      { default: githubDark },
+      { default: githubLight },
+      { toonLanguage },
+    ] = await Promise.all([
+      import('shiki/core'),
+      import('shiki/engine/javascript'),
+      import('@shikijs/langs/sql'),
+      import('@shikijs/langs/json'),
+      import('@shikijs/themes/github-dark'),
+      import('@shikijs/themes/github-light'),
+      import('./toon-language'),
+    ])
+    return createHighlighterCore({
+      themes: [githubLight, githubDark],
+      langs: [json, sql, toonLanguage],
+      engine: createJavaScriptRegexEngine(),
+    })
+  })()
+  return highlighterPromise
+}
 
 class CodeBlock extends LitElement {
   @property({ type: String }) code = ''
   @property({ type: String }) language = 'sql'
+  @property({ type: Boolean, reflect: true }) compact = false
+  @property({ type: Boolean, reflect: true }) format = false
+  @property({ type: Boolean, reflect: true }) copy = false
+  @property({ type: Boolean, reflect: true }) dense = false
   @state() private highlighted = ''
   @state() private error = ''
+  @state() private copied = false
   private renderToken = 0
+  private copiedTimeout = 0
 
   createRenderRoot(): HTMLElement {
     return this
@@ -33,6 +63,7 @@ class CodeBlock extends LitElement {
 
   disconnectedCallback(): void {
     document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    window.clearTimeout(this.copiedTimeout)
     super.disconnectedCallback()
   }
 
@@ -41,18 +72,24 @@ class CodeBlock extends LitElement {
   }
 
   updated(changed: Map<string, unknown>): void {
-    if (changed.has('code') || changed.has('language')) {
+    if (changed.has('code') || changed.has('language') || changed.has('format')) {
       void this.highlight()
     }
   }
 
   render() {
-    const code = this.code.trim()
+    const code = this.displayCode
     return html`
       <style>
         ${codeBlockStyles}
       </style>
       <div class="code-block-shell">
+        ${this.copy && code ? html`
+          <button type="button" class="code-block-copy" @click=${this.copyCode}>
+            ${lucideIcon(this.copied ? Check : Copy, { size: 14, strokeWidth: 2 })}
+            <span>${this.copied ? 'Copied' : 'Copy'}</span>
+          </button>
+        ` : nothing}
         ${this.error
           ? html`<pre class="code-block-fallback"><code>${code}</code></pre>`
           : this.highlighted
@@ -69,17 +106,18 @@ class CodeBlock extends LitElement {
 
   private async highlight(): Promise<void> {
     const token = ++this.renderToken
-    const code = this.code.trim()
-    if (!code) {
+    const code = this.displayCode
+    const language = supportedLanguage(this.language)
+    if (!code.trim() || !language) {
       this.highlighted = ''
       this.error = ''
       return
     }
     try {
-      const highlighter = await highlighterPromise
+      const highlighter = await loadHighlighter()
       if (token !== this.renderToken) return
       this.highlighted = highlighter.codeToHtml(code, {
-        lang: this.language || 'sql',
+        lang: language,
         theme: this.theme,
       })
       this.error = ''
@@ -95,6 +133,39 @@ class CodeBlock extends LitElement {
     if (colorScheme === 'dark') return 'github-dark'
     return 'github-light'
   }
+
+  private get displayCode(): string {
+    const code = this.code.trim()
+    if (!this.format || supportedLanguage(this.language) !== 'sql' || !code) return code
+    try {
+      return formatSQL(code, {
+        language: 'duckdb',
+        keywordCase: 'upper',
+      }).trim()
+    } catch {
+      return code
+    }
+  }
+
+  private copyCode = async (event: Event): Promise<void> => {
+    event.stopPropagation()
+    try {
+      await navigator.clipboard?.writeText(this.displayCode)
+      this.copied = true
+      window.clearTimeout(this.copiedTimeout)
+      this.copiedTimeout = window.setTimeout(() => {
+        this.copied = false
+      }, 1600)
+    } catch {
+      this.copied = false
+    }
+  }
+}
+
+function supportedLanguage(language: string): SupportedLanguage | '' {
+  const normalized = language.trim().toLowerCase()
+  if (normalized === 'json' || normalized === 'sql' || normalized === 'toon') return normalized
+  return ''
 }
 
 const codeBlockStyles = `
@@ -105,6 +176,7 @@ const codeBlockStyles = `
   }
 
   ld-code-block .code-block-shell {
+    position: relative;
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
@@ -125,6 +197,62 @@ const codeBlockStyles = `
     font-size: var(--ld-font-size-body-sm, 0.875rem);
     line-height: 1.65;
     tab-size: 2;
+  }
+
+  ld-code-block[compact] .shiki,
+  ld-code-block[compact] .code-block-fallback {
+    max-height: var(--ld-chat-tool-max-height, 18rem);
+    padding: var(--ld-chat-pre-padding-block, var(--base-size-8)) var(--ld-chat-pre-padding-inline, var(--base-size-12));
+    font-size: var(--ld-font-size-caption, 0.75rem);
+    line-height: var(--ld-line-height-snug, 1.35);
+    white-space: pre;
+  }
+
+  ld-code-block[dense] .shiki,
+  ld-code-block[dense] .code-block-fallback {
+    max-height: min(22rem, 52vh);
+    padding: var(--base-size-12);
+    font-size: var(--ld-font-size-caption, 0.75rem);
+    line-height: var(--ld-line-height-normal, 1.5);
+  }
+
+  ld-code-block[copy] .shiki,
+  ld-code-block[copy] .code-block-fallback {
+    padding-top: calc(var(--base-size-16) + var(--control-medium-size, 32px));
+  }
+
+  ld-code-block[copy][compact] .shiki,
+  ld-code-block[copy][compact] .code-block-fallback,
+  ld-code-block[copy][dense] .shiki,
+  ld-code-block[copy][dense] .code-block-fallback {
+    padding-top: calc(var(--base-size-12) + var(--control-medium-size, 32px));
+  }
+
+  ld-code-block .code-block-copy {
+    position: absolute;
+    top: var(--base-size-8);
+    right: var(--base-size-8);
+    z-index: 1;
+    display: inline-flex;
+    min-height: var(--control-medium-size, 32px);
+    align-items: center;
+    gap: var(--base-size-6, 6px);
+    border: var(--ld-border-muted);
+    border-radius: var(--ld-radius-default);
+    background: var(--ld-bg-panel);
+    color: var(--ld-fg-muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--ld-font-size-caption);
+    font-weight: var(--ld-font-weight-medium, 500);
+    padding: 0 var(--base-size-8);
+  }
+
+  ld-code-block .code-block-copy:hover,
+  ld-code-block .code-block-copy:focus-visible {
+    background: var(--ld-bg-control-hover, var(--ld-bg-panel-muted));
+    color: var(--ld-fg-default);
+    outline: 0;
   }
 
   ld-code-block .shiki code,

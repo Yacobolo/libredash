@@ -23,6 +23,7 @@ const (
 	RouteWorkspaceAsset  RouteKind = "workspace_asset"
 	RouteConnections     RouteKind = "connections"
 	RouteConnectionAsset RouteKind = "connection_asset"
+	RouteData            RouteKind = "data"
 	RouteAdmin           RouteKind = "admin"
 	RouteLogin           RouteKind = "login"
 )
@@ -266,6 +267,109 @@ type ConnectionsPageSignal struct {
 	AssetList   WorkspaceAssetListSignal `json:"assetList,omitempty"`
 }
 
+type DataExplorerPageEnvelope struct {
+	Chrome       ChromeSignal           `json:"chrome"`
+	Page         DataExplorerPageSignal `json:"page"`
+	DataExplorer DataExplorerSignal     `json:"dataExplorer"`
+	Runtime      RouteRuntimeSignal     `json:"runtime"`
+	Status       StatusSignal           `json:"status"`
+}
+
+type DataExplorerPageSignal struct {
+	Kind                RouteKind                     `json:"kind"`
+	Title               string                        `json:"title"`
+	Description         string                        `json:"description,omitempty"`
+	WorkspaceID         string                        `json:"workspaceId,omitempty"`
+	SelectedWorkspaceID string                        `json:"selectedWorkspaceId,omitempty"`
+	SelectedObject      string                        `json:"selectedObject,omitempty"`
+	Workspaces          []DataExplorerWorkspaceSignal `json:"workspaces"`
+	Tabs                []WorkspaceTabSignal          `json:"tabs"`
+}
+
+type DataExplorerWorkspaceSignal struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Href        string `json:"href"`
+	ObjectCount int    `json:"objectCount"`
+	Active      bool   `json:"active"`
+}
+
+type DataExplorerSignal struct {
+	Objects             []DataExplorerObjectSignal `json:"objects"`
+	SelectedWorkspaceID string                     `json:"selectedWorkspaceId,omitempty"`
+	SelectedKey         string                     `json:"selectedKey,omitempty"`
+	SelectedObject      *DataExplorerObjectSignal  `json:"selectedObject,omitempty"`
+	Preview             DataPreviewSignal          `json:"preview"`
+	Command             DataExplorerCommand        `json:"command"`
+	Warnings            []string                   `json:"warnings,omitempty"`
+}
+
+type DataExplorerObjectSignal struct {
+	Key            string                    `json:"key"`
+	WorkspaceID    string                    `json:"workspaceId"`
+	WorkspaceTitle string                    `json:"workspaceTitle,omitempty"`
+	AssetID        string                    `json:"assetId,omitempty"`
+	Layer          string                    `json:"layer"`
+	ModelID        string                    `json:"modelId,omitempty"`
+	Table          string                    `json:"table,omitempty"`
+	Source         string                    `json:"source,omitempty"`
+	Title          string                    `json:"title"`
+	Description    string                    `json:"description,omitempty"`
+	DetailHref     string                    `json:"detailHref,omitempty"`
+	ColumnCount    int                       `json:"columnCount"`
+	RowCountLabel  string                    `json:"rowCountLabel,omitempty"`
+	Columns        []DataPreviewColumnSignal `json:"columns,omitempty"`
+}
+
+type DataPreviewSignal struct {
+	Columns       []DataPreviewColumnSignal         `json:"columns"`
+	TotalRows     int                               `json:"totalRows"`
+	AvailableRows int                               `json:"availableRows"`
+	ChunkSize     int                               `json:"chunkSize"`
+	RowHeight     int                               `json:"rowHeight"`
+	ResetVersion  int                               `json:"resetVersion"`
+	Blocks        map[string]DataPreviewBlockSignal `json:"blocks"`
+	LoadingBlock  string                            `json:"loadingBlock,omitempty"`
+	TotalRowLabel string                            `json:"totalRowLabel,omitempty"`
+	Sort          DataPreviewSortSignal             `json:"sort"`
+	SQL           string                            `json:"sql,omitempty"`
+	Error         string                            `json:"error,omitempty"`
+}
+
+type DataPreviewBlockSignal struct {
+	Start        int                   `json:"start"`
+	RequestSeq   int                   `json:"requestSeq"`
+	ResetVersion int                   `json:"resetVersion"`
+	Sort         DataPreviewSortSignal `json:"sort"`
+	Rows         []map[string]any      `json:"rows"`
+}
+
+type DataPreviewColumnSignal struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+	Type  string `json:"type,omitempty"`
+}
+
+type DataPreviewSortSignal struct {
+	Column    string `json:"column,omitempty"`
+	Direction string `json:"direction,omitempty"`
+}
+
+type DataExplorerCommand struct {
+	WorkspaceID    string                `json:"workspaceId,omitempty"`
+	ObjectKey      string                `json:"objectKey,omitempty"`
+	Offset         int                   `json:"offset"`
+	Limit          int                   `json:"limit"`
+	Block          string                `json:"block,omitempty"`
+	Start          int                   `json:"start"`
+	Count          int                   `json:"count"`
+	RequestSeq     int                   `json:"requestSeq"`
+	ResetVersion   int                   `json:"resetVersion"`
+	Sort           DataPreviewSortSignal `json:"sort"`
+	VisibleColumns []string              `json:"visibleColumns,omitempty"`
+	ColumnWidths   map[string]float64    `json:"columnWidths,omitempty"`
+}
+
 type WorkspaceCardSignal struct {
 	ID              string `json:"id"`
 	Title           string `json:"title"`
@@ -424,19 +528,30 @@ type AssetLineageEdgeSignal struct {
 }
 
 type RecordTableSignal struct {
-	Columns  []RecordTableColumnSignal `json:"columns"`
-	Rows     []map[string]any          `json:"rows"`
-	Empty    string                    `json:"empty"`
-	MinWidth string                    `json:"minWidth,omitempty"`
+	Columns        []RecordTableColumnSignal  `json:"columns"`
+	Rows           []map[string]any           `json:"rows"`
+	Empty          string                     `json:"empty"`
+	MinWidth       string                     `json:"minWidth,omitempty"`
+	ColumnSelector *RecordTableColumnSelector `json:"columnSelector,omitempty"`
+	Density        string                     `json:"density,omitempty"`
+	RowAction      string                     `json:"rowAction,omitempty"`
 }
 
 type RecordTableColumnSignal struct {
-	ID      string `json:"id"`
-	Header  string `json:"header"`
-	Kind    string `json:"kind,omitempty"`
-	Align   string `json:"align,omitempty"`
-	HrefKey string `json:"hrefKey,omitempty"`
-	Width   string `json:"width,omitempty"`
+	ID         string `json:"id"`
+	Header     string `json:"header"`
+	Kind       string `json:"kind,omitempty"`
+	Align      string `json:"align,omitempty"`
+	HrefKey    string `json:"hrefKey,omitempty"`
+	Width      string `json:"width,omitempty"`
+	Toggleable *bool  `json:"toggleable,omitempty"`
+}
+
+type RecordTableColumnSelector struct {
+	Enabled        bool     `json:"enabled"`
+	StorageKey     string   `json:"storageKey,omitempty"`
+	Label          string   `json:"label,omitempty"`
+	DefaultColumns []string `json:"defaultColumns,omitempty"`
 }
 
 type RecordTableBadgeSignal struct {
@@ -465,6 +580,97 @@ type AdminPageSignal struct {
 	Storage      AdminStorageSignal          `json:"storage,omitempty"`
 }
 
+type AdminQueryHistorySignal struct {
+	Table            RecordTableSignal        `json:"table"`
+	FilterMenus      []FilterMenuSignal       `json:"filterMenus,omitempty"`
+	Filters          AdminQueryHistoryFilters `json:"filters"`
+	NextCursor       string                   `json:"nextCursor"`
+	LoadedCountLabel string                   `json:"loadedCountLabel"`
+	HasMore          bool                     `json:"hasMore"`
+	Loading          bool                     `json:"loading"`
+	Error            string                   `json:"error"`
+	Limit            int                      `json:"limit"`
+}
+
+type AdminQueryHistoryFilters struct {
+	Workspaces []string `json:"workspaces,omitempty"`
+	Principals []string `json:"principals,omitempty"`
+	Surfaces   []string `json:"surfaces,omitempty"`
+	Kinds      []string `json:"kinds,omitempty"`
+	Statuses   []string `json:"statuses,omitempty"`
+	Target     string   `json:"target,omitempty"`
+	Search     string   `json:"search,omitempty"`
+	From       string   `json:"from,omitempty"`
+	To         string   `json:"to,omitempty"`
+}
+
+type AdminQueryHistoryCommand struct {
+	Action     string                   `json:"action"`
+	Filters    AdminQueryHistoryFilters `json:"filters"`
+	FilterMenu FilterMenuCommand        `json:"filterMenu,omitempty"`
+	PageToken  string                   `json:"pageToken,omitempty"`
+	Limit      int                      `json:"limit,omitempty"`
+	EventID    string                   `json:"eventId,omitempty"`
+}
+
+type FilterMenuSignal struct {
+	ID           string                   `json:"id"`
+	Label        string                   `json:"label"`
+	SummaryLabel string                   `json:"summaryLabel,omitempty"`
+	Mode         string                   `json:"mode,omitempty"`
+	Search       string                   `json:"search,omitempty"`
+	Selected     []string                 `json:"selected,omitempty"`
+	Options      []FilterMenuOptionSignal `json:"options,omitempty"`
+	Loading      bool                     `json:"loading"`
+	Error        string                   `json:"error,omitempty"`
+	Placeholder  string                   `json:"placeholder,omitempty"`
+	EmptyLabel   string                   `json:"emptyLabel,omitempty"`
+}
+
+type FilterMenuOptionSignal struct {
+	Value       string `json:"value"`
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+	Icon        string `json:"icon,omitempty"`
+	CountLabel  string `json:"countLabel,omitempty"`
+	Selected    bool   `json:"selected"`
+	Disabled    bool   `json:"disabled"`
+}
+
+type FilterMenuCommand struct {
+	MenuID   string   `json:"menuId,omitempty"`
+	Action   string   `json:"action,omitempty"`
+	Search   string   `json:"search,omitempty"`
+	Value    string   `json:"value,omitempty"`
+	Selected []string `json:"selected,omitempty"`
+}
+
+type AdminQueryDetailSignal struct {
+	EventID       string `json:"eventId,omitempty"`
+	Loading       bool   `json:"loading"`
+	Error         string `json:"error,omitempty"`
+	Status        string `json:"status,omitempty"`
+	StatusLabel   string `json:"statusLabel,omitempty"`
+	WorkspaceID   string `json:"workspaceId,omitempty"`
+	PrincipalID   string `json:"principalId,omitempty"`
+	Surface       string `json:"surface,omitempty"`
+	Operation     string `json:"operation,omitempty"`
+	QueryKind     string `json:"queryKind,omitempty"`
+	ModelID       string `json:"modelId,omitempty"`
+	Target        string `json:"target,omitempty"`
+	ObjectType    string `json:"objectType,omitempty"`
+	ObjectID      string `json:"objectId,omitempty"`
+	RequestID     string `json:"requestId,omitempty"`
+	CorrelationID string `json:"correlationId,omitempty"`
+	DurationMS    int64  `json:"durationMs"`
+	RowsReturned  int    `json:"rowsReturned"`
+	QueryError    string `json:"queryError,omitempty"`
+	SQL           string `json:"sql,omitempty"`
+	PlanText      string `json:"planText,omitempty"`
+	QueryJSON     string `json:"queryJson,omitempty"`
+	CreatedAt     string `json:"createdAt,omitempty"`
+}
+
 type AdminAgentSignal struct {
 	Enabled      bool                   `json:"enabled"`
 	Model        string                 `json:"model,omitempty"`
@@ -491,6 +697,29 @@ type AdminContentSectionSignal struct {
 	Title string                 `json:"title"`
 	Facts []DefinitionFactSignal `json:"facts,omitempty"`
 	Table RecordTableSignal      `json:"table,omitempty"`
+}
+
+type AdminQueryEventSignal struct {
+	ID            string `json:"id"`
+	WorkspaceID   string `json:"workspaceId"`
+	PrincipalID   string `json:"principalId"`
+	Surface       string `json:"surface"`
+	Operation     string `json:"operation"`
+	QueryKind     string `json:"queryKind"`
+	ModelID       string `json:"modelId"`
+	Target        string `json:"target"`
+	ObjectType    string `json:"objectType"`
+	ObjectID      string `json:"objectId"`
+	RequestID     string `json:"requestId"`
+	CorrelationID string `json:"correlationId"`
+	Status        string `json:"status"`
+	DurationMS    int64  `json:"durationMs"`
+	RowsReturned  int    `json:"rowsReturned"`
+	Error         string `json:"error"`
+	SQL           string `json:"sql"`
+	PlanText      string `json:"planText"`
+	QueryJSON     string `json:"queryJson"`
+	CreatedAt     string `json:"createdAt"`
 }
 
 type AdminStorageData struct {
@@ -799,8 +1028,10 @@ type ChatTranscriptItemSignal struct {
 	Summary        string              `json:"summary,omitempty"`
 	ResultSummary  string              `json:"resultSummary,omitempty"`
 	InputJSON      string              `json:"inputJson,omitempty"`
+	InputFormat    string              `json:"inputFormat,omitempty"`
 	ArgumentsJSON  string              `json:"argumentsJson,omitempty"`
 	ResultJSON     string              `json:"resultJson,omitempty"`
+	ResultFormat   string              `json:"resultFormat,omitempty"`
 	Artifact       *ChatArtifactSignal `json:"artifact,omitempty"`
 	Error          string              `json:"error,omitempty"`
 	ConversationID string              `json:"conversationId,omitempty"`
@@ -835,8 +1066,10 @@ func ChatTranscriptItem(item agentapp.ChatTranscriptItem) ChatTranscriptItemSign
 		Summary:        item.Summary,
 		ResultSummary:  item.ResultSummary,
 		InputJSON:      item.InputJSON,
+		InputFormat:    item.InputFormat,
 		ArgumentsJSON:  item.ArgumentsJSON,
 		ResultJSON:     item.ResultJSON,
+		ResultFormat:   item.ResultFormat,
 		Error:          item.Error,
 		ConversationID: item.ConversationID,
 		RunID:          item.RunID,
@@ -888,7 +1121,7 @@ func DashboardInitialEnvelope(dataDir, clientID, csrfToken string, catalog dashb
 		modelTitle = model.Title
 	}
 	return DashboardEnvelope{
-		Chrome: ChromeSignal{Sidebar: SidebarConfig(catalog, "workspaces", report.ID, workspaceDisplayTitle(catalog), report.Title, activePage.Title, modelID, modelTitle, true, "")},
+		Chrome: ChromeSignal{Sidebar: sidebarConfig(catalog, "workspaces", report.ID, workspaceDisplayTitle(catalog), report.Title, activePage.Title, modelID, modelTitle, true, "", strings.TrimSpace(catalog.Workspace.ID) != "")},
 		Page: DashboardPageSignal{
 			Kind:           RouteDashboard,
 			Title:          report.Title,
@@ -1020,10 +1253,6 @@ func SidebarConfigForChat(catalog dashboard.Catalog, workspaceID, roleLabel, vie
 	}
 	config := SidebarConfigForWorkspace(catalog, active, roleLabel)
 	return config
-}
-
-func SidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitle, dashboardTitle, pageTitle, modelID, modelTitle string, compact bool, roleLabel string) SidebarSignal {
-	return sidebarConfig(catalog, active, dashboardID, workspaceTitle, dashboardTitle, pageTitle, modelID, modelTitle, compact, roleLabel, strings.TrimSpace(catalog.Workspace.ID) != "")
 }
 
 func sidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitle, dashboardTitle, pageTitle, modelID, modelTitle string, compact bool, roleLabel string, includeWorkspaceScoped bool) SidebarSignal {
@@ -1231,6 +1460,7 @@ func sidebarGroups(catalog dashboard.Catalog, includeWorkspaceScoped bool) []Sid
 				{ID: "dashboards", Label: "Dashboards", Href: "/", Icon: "dashboard", Meta: "Reports"},
 				{ID: "chat", Label: "Chats", Href: chatPath(), Icon: "chat", Meta: "Agent interface"},
 				{ID: "workspaces", Label: "Workspaces", Href: "/workspaces", Icon: "catalog", Meta: "Published assets"},
+				{ID: "data", Label: "Data", Href: "/data", Icon: "cache", Meta: "Inspect rows"},
 				{ID: "connections", Label: "Connections", Href: "/connections", Icon: "data", Meta: "Data access"},
 				{ID: "admin", Label: "Admin", Href: "/admin", Icon: "settings", Meta: "Read-only administration"},
 			},

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/libredash/internal/queryaudit"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -492,6 +493,58 @@ func (s *Server) apiListAuditEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, pagedResponseWithCursor(out, nextCursor))
 }
 
+func (s *Server) apiListQueryEvents(w http.ResponseWriter, r *http.Request) {
+	repo, err := s.queryAuditRepository()
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	if repo == nil {
+		writeJSON(w, http.StatusOK, pagedResponseWithCursor([]map[string]any{}, ""))
+		return
+	}
+	limit, ok := apiLimitForRequest(w, r)
+	if !ok {
+		return
+	}
+	cursorTime, cursorID := decodeCursor(r.URL.Query().Get("pageToken"))
+	rows, err := repo.ListQueryEvents(r.Context(), queryaudit.Filter{
+		WorkspaceID:  s.workspaceID(chi.URLParam(r, "workspace")),
+		PrincipalID:  r.URL.Query().Get("principal"),
+		PrincipalIDs: cleanQueryValues(r.URL.Query()["principal"]),
+		Surface:      r.URL.Query().Get("surface"),
+		Surfaces:     cleanQueryValues(r.URL.Query()["surface"]),
+		Operation:    r.URL.Query().Get("operation"),
+		QueryKind:    r.URL.Query().Get("kind"),
+		QueryKinds:   cleanQueryValues(r.URL.Query()["kind"]),
+		ModelID:      firstNonEmpty(r.URL.Query().Get("modelId"), r.URL.Query().Get("model")),
+		Target:       r.URL.Query().Get("target"),
+		Status:       r.URL.Query().Get("status"),
+		Statuses:     cleanQueryValues(r.URL.Query()["status"]),
+		Search:       r.URL.Query().Get("search"),
+		From:         r.URL.Query().Get("from"),
+		To:           r.URL.Query().Get("to"),
+		CursorTime:   cursorTime,
+		CursorID:     cursorID,
+		Limit:        limit + 1,
+	})
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	nextCursor := ""
+	if len(rows) > limit {
+		last := rows[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		rows = rows[:limit]
+	}
+	out := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, queryEventDTO(row))
+	}
+	writeJSON(w, http.StatusOK, pagedResponseWithCursor(out, nextCursor))
+}
+
 func currentPrincipal(s *Server, r *http.Request) (Principal, bool) {
 	if s.auth == nil {
 		return localDeveloperPrincipal(), true
@@ -543,6 +596,39 @@ func auditEventDTO(row access.AuditEvent) map[string]any {
 		metadata = map[string]any{}
 	}
 	return map[string]any{"id": row.ID, "workspaceId": row.WorkspaceID, "principalId": row.PrincipalID, "action": row.Action, "targetType": row.TargetType, "targetId": row.TargetID, "metadata": metadata, "createdAt": row.CreatedAt}
+}
+
+func queryEventDTO(row queryaudit.Event) map[string]any {
+	var query map[string]any
+	if strings.TrimSpace(row.QueryJSON) != "" {
+		_ = json.Unmarshal([]byte(row.QueryJSON), &query)
+	}
+	if query == nil {
+		query = map[string]any{}
+	}
+	return map[string]any{
+		"id":            row.ID,
+		"workspaceId":   row.WorkspaceID,
+		"principalId":   emptyToNil(row.PrincipalID),
+		"surface":       row.Surface,
+		"operation":     row.Operation,
+		"queryKind":     row.QueryKind,
+		"modelId":       row.ModelID,
+		"target":        row.Target,
+		"objectType":    row.ObjectType,
+		"objectId":      row.ObjectID,
+		"requestId":     row.RequestID,
+		"correlationId": row.CorrelationID,
+		"status":        row.Status,
+		"durationMs":    row.DurationMS,
+		"rowsReturned":  row.RowsReturned,
+		"bytesEstimate": row.BytesEstimate,
+		"error":         emptyToNil(row.Error),
+		"sql":           emptyToNil(row.SQL),
+		"planText":      emptyToNil(row.PlanText),
+		"query":         query,
+		"createdAt":     row.CreatedAt,
+	}
 }
 
 func emptyToNil(value string) any {
@@ -702,6 +788,26 @@ func decodeIndexCursor(token string) (int, error) {
 		return 0, fmt.Errorf("pageToken is invalid")
 	}
 	return value, nil
+}
+
+func cleanQueryValues(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 func encodeCursor(createdAt, id string) string {

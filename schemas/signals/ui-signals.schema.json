@@ -176,6 +176,296 @@
       ],
       "type": "object"
     },
+    "AdminQueryDetailSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "correlationId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "integer"
+        },
+        "error": {
+          "type": "string"
+        },
+        "eventId": {
+          "type": "string"
+        },
+        "loading": {
+          "type": "boolean"
+        },
+        "modelId": {
+          "type": "string"
+        },
+        "objectId": {
+          "type": "string"
+        },
+        "objectType": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "planText": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "queryError": {
+          "type": "string"
+        },
+        "queryJson": {
+          "type": "string"
+        },
+        "queryKind": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "rowsReturned": {
+          "type": "integer"
+        },
+        "sql": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "statusLabel": {
+          "type": "string"
+        },
+        "surface": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "durationMs",
+        "loading",
+        "rowsReturned"
+      ],
+      "type": "object"
+    },
+    "AdminQueryEventSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "correlationId": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        },
+        "durationMs": {
+          "type": "integer"
+        },
+        "error": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "modelId": {
+          "type": "string"
+        },
+        "objectId": {
+          "type": "string"
+        },
+        "objectType": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "planText": {
+          "type": "string"
+        },
+        "principalId": {
+          "type": "string"
+        },
+        "queryJson": {
+          "type": "string"
+        },
+        "queryKind": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "rowsReturned": {
+          "type": "integer"
+        },
+        "sql": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "surface": {
+          "type": "string"
+        },
+        "target": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "correlationId",
+        "createdAt",
+        "durationMs",
+        "error",
+        "id",
+        "modelId",
+        "objectId",
+        "objectType",
+        "operation",
+        "planText",
+        "principalId",
+        "queryJson",
+        "queryKind",
+        "requestId",
+        "rowsReturned",
+        "sql",
+        "status",
+        "surface",
+        "target",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "AdminQueryHistoryCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "eventId": {
+          "type": "string"
+        },
+        "filterMenu": {
+          "$ref": "#/$defs/FilterMenuCommand"
+        },
+        "filters": {
+          "$ref": "#/$defs/AdminQueryHistoryFilters"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "pageToken": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action",
+        "filters"
+      ],
+      "type": "object"
+    },
+    "AdminQueryHistoryFilters": {
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "kinds": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "principals": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "search": {
+          "type": "string"
+        },
+        "statuses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "surfaces": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "target": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "workspaces": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "AdminQueryHistorySignal": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "filterMenus": {
+          "items": {
+            "$ref": "#/$defs/FilterMenuSignal"
+          },
+          "type": "array"
+        },
+        "filters": {
+          "$ref": "#/$defs/AdminQueryHistoryFilters"
+        },
+        "hasMore": {
+          "type": "boolean"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "loadedCountLabel": {
+          "type": "string"
+        },
+        "loading": {
+          "type": "boolean"
+        },
+        "nextCursor": {
+          "type": "string"
+        },
+        "table": {
+          "$ref": "#/$defs/RecordTableSignal"
+        }
+      },
+      "required": [
+        "error",
+        "filters",
+        "hasMore",
+        "limit",
+        "loadedCountLabel",
+        "loading",
+        "nextCursor",
+        "table"
+      ],
+      "type": "object"
+    },
     "AdminStorageColumnSignal": {
       "additionalProperties": false,
       "properties": {
@@ -1043,6 +1333,9 @@
         "id": {
           "type": "string"
         },
+        "inputFormat": {
+          "type": "string"
+        },
         "inputJson": {
           "type": "string"
         },
@@ -1053,6 +1346,9 @@
           "type": "string"
         },
         "name": {
+          "type": "string"
+        },
+        "resultFormat": {
           "type": "string"
         },
         "resultJson": {
@@ -2117,6 +2413,378 @@
       ],
       "type": "object"
     },
+    "DataExplorerCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "block": {
+          "type": "string"
+        },
+        "columnWidths": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "objectKey": {
+          "type": "string"
+        },
+        "offset": {
+          "type": "integer"
+        },
+        "requestSeq": {
+          "type": "integer"
+        },
+        "resetVersion": {
+          "type": "integer"
+        },
+        "sort": {
+          "$ref": "#/$defs/DataPreviewSortSignal"
+        },
+        "start": {
+          "type": "integer"
+        },
+        "visibleColumns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "count",
+        "limit",
+        "offset",
+        "requestSeq",
+        "resetVersion",
+        "sort",
+        "start"
+      ],
+      "type": "object"
+    },
+    "DataExplorerObjectSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "assetId": {
+          "type": "string"
+        },
+        "columnCount": {
+          "type": "integer"
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/DataPreviewColumnSignal"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "detailHref": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "layer": {
+          "type": "string"
+        },
+        "modelId": {
+          "type": "string"
+        },
+        "rowCountLabel": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "table": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "workspaceTitle": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "columnCount",
+        "key",
+        "layer",
+        "title",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "DataExplorerPageEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "chrome": {
+          "$ref": "#/$defs/ChromeSignal"
+        },
+        "dataExplorer": {
+          "$ref": "#/$defs/DataExplorerSignal"
+        },
+        "page": {
+          "$ref": "#/$defs/DataExplorerPageSignal"
+        },
+        "runtime": {
+          "$ref": "#/$defs/RouteRuntimeSignal"
+        },
+        "status": {
+          "$ref": "#/$defs/DashboardStatus"
+        }
+      },
+      "required": [
+        "chrome",
+        "dataExplorer",
+        "page",
+        "runtime",
+        "status"
+      ],
+      "type": "object"
+    },
+    "DataExplorerPageSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "selectedObject": {
+          "type": "string"
+        },
+        "selectedWorkspaceId": {
+          "type": "string"
+        },
+        "tabs": {
+          "items": {
+            "$ref": "#/$defs/WorkspaceTabSignal"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        },
+        "workspaces": {
+          "items": {
+            "$ref": "#/$defs/DataExplorerWorkspaceSignal"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "tabs",
+        "title",
+        "workspaces"
+      ],
+      "type": "object"
+    },
+    "DataExplorerSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/DataExplorerCommand"
+        },
+        "objects": {
+          "items": {
+            "$ref": "#/$defs/DataExplorerObjectSignal"
+          },
+          "type": "array"
+        },
+        "preview": {
+          "$ref": "#/$defs/DataPreviewSignal"
+        },
+        "selectedKey": {
+          "type": "string"
+        },
+        "selectedObject": {
+          "$ref": "#/$defs/DataExplorerObjectSignal"
+        },
+        "selectedWorkspaceId": {
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "command",
+        "objects",
+        "preview"
+      ],
+      "type": "object"
+    },
+    "DataExplorerWorkspaceSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "active": {
+          "type": "boolean"
+        },
+        "href": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "objectCount": {
+          "type": "integer"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "active",
+        "href",
+        "id",
+        "objectCount",
+        "title"
+      ],
+      "type": "object"
+    },
+    "DataPreviewBlockSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "requestSeq": {
+          "type": "integer"
+        },
+        "resetVersion": {
+          "type": "integer"
+        },
+        "rows": {
+          "items": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "sort": {
+          "$ref": "#/$defs/DataPreviewSortSignal"
+        },
+        "start": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "requestSeq",
+        "resetVersion",
+        "rows",
+        "sort",
+        "start"
+      ],
+      "type": "object"
+    },
+    "DataPreviewColumnSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "label"
+      ],
+      "type": "object"
+    },
+    "DataPreviewSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "availableRows": {
+          "type": "integer"
+        },
+        "blocks": {
+          "additionalProperties": {
+            "$ref": "#/$defs/DataPreviewBlockSignal"
+          },
+          "type": "object"
+        },
+        "chunkSize": {
+          "type": "integer"
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/DataPreviewColumnSignal"
+          },
+          "type": "array"
+        },
+        "error": {
+          "type": "string"
+        },
+        "loadingBlock": {
+          "type": "string"
+        },
+        "resetVersion": {
+          "type": "integer"
+        },
+        "rowHeight": {
+          "type": "integer"
+        },
+        "sort": {
+          "$ref": "#/$defs/DataPreviewSortSignal"
+        },
+        "sql": {
+          "type": "string"
+        },
+        "totalRowLabel": {
+          "type": "string"
+        },
+        "totalRows": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "availableRows",
+        "blocks",
+        "chunkSize",
+        "columns",
+        "resetVersion",
+        "rowHeight",
+        "sort",
+        "totalRows"
+      ],
+      "type": "object"
+    },
+    "DataPreviewSortSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "column": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "DefinitionFactSignal": {
       "additionalProperties": false,
       "properties": {
@@ -2136,6 +2804,113 @@
       "required": [
         "label",
         "value"
+      ],
+      "type": "object"
+    },
+    "FilterMenuCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "menuId": {
+          "type": "string"
+        },
+        "search": {
+          "type": "string"
+        },
+        "selected": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "FilterMenuOptionSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "countLabel": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "selected": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "disabled",
+        "label",
+        "selected",
+        "value"
+      ],
+      "type": "object"
+    },
+    "FilterMenuSignal": {
+      "additionalProperties": false,
+      "properties": {
+        "emptyLabel": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "loading": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/$defs/FilterMenuOptionSignal"
+          },
+          "type": "array"
+        },
+        "placeholder": {
+          "type": "string"
+        },
+        "search": {
+          "type": "string"
+        },
+        "selected": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "summaryLabel": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "loading"
       ],
       "type": "object"
     },
@@ -2198,6 +2973,30 @@
       ],
       "type": "object"
     },
+    "RecordTableColumnSelector": {
+      "additionalProperties": false,
+      "properties": {
+        "defaultColumns": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "storageKey": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "type": "object"
+    },
     "RecordTableColumnSignal": {
       "additionalProperties": false,
       "properties": {
@@ -2216,6 +3015,9 @@
         "kind": {
           "type": "string"
         },
+        "toggleable": {
+          "type": "boolean"
+        },
         "width": {
           "type": "string"
         }
@@ -2229,16 +3031,25 @@
     "RecordTableSignal": {
       "additionalProperties": false,
       "properties": {
+        "columnSelector": {
+          "$ref": "#/$defs/RecordTableColumnSelector"
+        },
         "columns": {
           "items": {
             "$ref": "#/$defs/RecordTableColumnSignal"
           },
           "type": "array"
         },
+        "density": {
+          "type": "string"
+        },
         "empty": {
           "type": "string"
         },
         "minWidth": {
+          "type": "string"
+        },
+        "rowAction": {
           "type": "string"
         },
         "rows": {
@@ -3470,6 +4281,21 @@
       "$ref": "#/$defs/AdminPageSignal"
     },
     {
+      "$ref": "#/$defs/AdminQueryDetailSignal"
+    },
+    {
+      "$ref": "#/$defs/AdminQueryEventSignal"
+    },
+    {
+      "$ref": "#/$defs/AdminQueryHistoryCommand"
+    },
+    {
+      "$ref": "#/$defs/AdminQueryHistoryFilters"
+    },
+    {
+      "$ref": "#/$defs/AdminQueryHistorySignal"
+    },
+    {
       "$ref": "#/$defs/AdminStorageColumnSignal"
     },
     {
@@ -3524,7 +4350,46 @@
       "$ref": "#/$defs/DashboardPageSignal"
     },
     {
+      "$ref": "#/$defs/DataExplorerCommand"
+    },
+    {
+      "$ref": "#/$defs/DataExplorerObjectSignal"
+    },
+    {
+      "$ref": "#/$defs/DataExplorerPageEnvelope"
+    },
+    {
+      "$ref": "#/$defs/DataExplorerPageSignal"
+    },
+    {
+      "$ref": "#/$defs/DataExplorerSignal"
+    },
+    {
+      "$ref": "#/$defs/DataExplorerWorkspaceSignal"
+    },
+    {
+      "$ref": "#/$defs/DataPreviewBlockSignal"
+    },
+    {
+      "$ref": "#/$defs/DataPreviewColumnSignal"
+    },
+    {
+      "$ref": "#/$defs/DataPreviewSignal"
+    },
+    {
+      "$ref": "#/$defs/DataPreviewSortSignal"
+    },
+    {
       "$ref": "#/$defs/DefinitionFactSignal"
+    },
+    {
+      "$ref": "#/$defs/FilterMenuCommand"
+    },
+    {
+      "$ref": "#/$defs/FilterMenuOptionSignal"
+    },
+    {
+      "$ref": "#/$defs/FilterMenuSignal"
     },
     {
       "$ref": "#/$defs/LoginPageEnvelope"

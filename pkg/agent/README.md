@@ -168,9 +168,13 @@ The harness validates tool calls before handlers run:
 - malformed JSON arguments
 - JSON Schema failures
 - non-serializable outputs
-- overlarge outputs
+- outputs that remain overlarge after truncation
 
-Validation and ordinary handler failures become model-visible tool-result
+Successful tool results are normalized, truncated, and serialized as TOON by
+default before they are sent back to the model. Set
+`Definition.ToolOutput.Format` to `ToolOutputJSON` only when an embedding
+application needs JSON model-visible tool results. Validation and ordinary
+handler failures use the same formatter and become model-visible tool-result
 messages, allowing the model to repair the next call. Fatal tool outcomes stop
 the run after appending the tool result:
 
@@ -231,11 +235,18 @@ Default limits are intentionally conservative:
 - `MaxToolCalls`: 64 per run
 - `MaxConcurrentTools`: 4 per assistant turn
 - `ToolTimeout`: 30 seconds
-- `MaxToolResultBytes`: 64 KiB after JSON serialization
+- `MaxToolResultBytes`: 64 KiB after tool-output formatting and truncation
 - `ContextWindowTokens`: 128000
 - `ReserveOutputTokens`: 4096
 
 Set limits in `agent.Definition` when constructing the harness.
+
+Default tool-output policy:
+
+- `Format`: `ToolOutputTOON`
+- `MaxStringChars`: 2000
+- `MaxArrayItems`: 50
+- `MaxObjectDepth`: 8
 
 ## Boundaries
 

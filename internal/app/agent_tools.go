@@ -16,6 +16,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/agentapp"
 	"github.com/Yacobolo/libredash/internal/agenttools"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/agent"
 	"github.com/go-chi/chi/v5"
@@ -70,7 +71,7 @@ func (s *Server) agentAPIGenToolDefinitions(scope agentapp.Scope) []agent.ToolDe
 			Description: apigenAgentToolDescription(operation),
 			InputSchema: apigenAgentInputSchema(operation),
 			Handler: agent.ToolHandlerFunc(func(ctx context.Context, call agent.ToolCall) (agent.ToolResult, error) {
-				return s.runAPIGenAgentTool(ctx, scope, operation, call.Arguments), nil
+				return s.runAPIGenAgentTool(ctx, scope, operation, call), nil
 			}),
 		})
 	}
@@ -312,8 +313,8 @@ func agentStringSliceHas(values []string, want string) bool {
 	return false
 }
 
-func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, operation apigenAgentOperation, rawArgs json.RawMessage) agent.ToolResult {
-	args, err := decodeAPIGenAgentToolArguments(rawArgs)
+func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, operation apigenAgentOperation, call agent.ToolCall) agent.ToolResult {
+	args, err := decodeAPIGenAgentToolArguments(call.Arguments)
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
 	}
@@ -324,6 +325,15 @@ func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, o
 	if errResult, ok := s.authorizeAPIGenAgentTool(ctx, toolScope, operation); !ok {
 		return errResult
 	}
+	ctx = dataquery.WithMetadata(ctx, dataquery.Metadata{
+		WorkspaceID: toolScope.WorkspaceID,
+		Surface:     dataquery.SurfaceAgent,
+		Operation:   dataquery.OperationAgentQuery,
+		PrincipalID: toolScope.PrincipalID,
+		RequestID:   call.ID,
+		ObjectType:  "agent_tool",
+		ObjectID:    operation.Extension.Name,
+	})
 	request, err := apigenAgentToolRequest(ctx, toolScope, operation, args)
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
@@ -332,7 +342,7 @@ func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, o
 	if ok := apigenapi.DispatchAPIGenOperation(operation.Contract.OperationID, apiGenAdapter{server: s}, recorder, request); !ok {
 		return apigenAgentToolError("operation_not_found", "APIGen operation is not dispatchable")
 	}
-	return apigenAgentToolResult(recorder.Result())
+	return apigenAgentToolResult(operation.Extension, recorder.Result())
 }
 
 func (s *Server) authorizeAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, operation apigenAgentOperation) (agent.ToolResult, bool) {
@@ -525,7 +535,7 @@ func apigenAgentStringArgument(name string, args map[string]any) (string, bool, 
 	}
 }
 
-func apigenAgentToolResult(response *http.Response) agent.ToolResult {
+func apigenAgentToolResult(extension agenttools.Extension, response *http.Response) agent.ToolResult {
 	defer response.Body.Close()
 	body, _ := io.ReadAll(response.Body)
 	content := map[string]any{
@@ -543,9 +553,203 @@ func apigenAgentToolResult(response *http.Response) agent.ToolResult {
 		return agent.ToolResult{Content: content, IsError: true}
 	}
 	if body, ok := content["body"]; ok {
-		return agent.ToolResult{Content: body}
+		return agent.ToolResult{Content: shapeAPIGenAgentToolContent(body, extension.Output)}
 	}
 	return agent.ToolResult{Content: content}
+}
+
+func shapeAPIGenAgentToolContent(content any, output agenttools.Output) any {
+	if apigenAgentOutputEmpty(output) {
+		return content
+	}
+	shaped := map[string]any{}
+	for _, field := range output.RootFields {
+		if value, ok := valueAtPath(content, field); ok {
+			shaped[agentOutputFieldName(field)] = value
+		}
+	}
+	if output.ItemsPath != "" {
+		applyAPIGenAgentCollection(shaped, content, agenttools.OutputCollection{
+			Path:   output.ItemsPath,
+			As:     "items",
+			Fields: output.Fields,
+			Count:  output.Count,
+		})
+	}
+	for _, collection := range output.Collections {
+		applyAPIGenAgentCollection(shaped, content, collection)
+	}
+	for _, outputMap := range output.Maps {
+		applyAPIGenAgentMap(shaped, content, outputMap)
+	}
+	if output.CursorPath != "" {
+		cursor := stringValueAtPath(content, output.CursorPath)
+		if cursor != "" {
+			shaped["nextCursor"] = cursor
+			shaped["hasMore"] = true
+		} else {
+			shaped["hasMore"] = false
+		}
+	}
+	if _, ok := shaped["hasMore"]; !ok {
+		deriveAPIGenAgentHasMore(shaped)
+	}
+	return shaped
+}
+
+func apigenAgentOutputEmpty(output agenttools.Output) bool {
+	return output.ItemsPath == "" &&
+		len(output.Fields) == 0 &&
+		output.CursorPath == "" &&
+		!output.Count &&
+		len(output.RootFields) == 0 &&
+		len(output.Collections) == 0 &&
+		len(output.Maps) == 0
+}
+
+func applyAPIGenAgentCollection(shaped map[string]any, content any, collection agenttools.OutputCollection) {
+	if collection.Path == "" || collection.As == "" {
+		return
+	}
+	value, ok := valueAtPath(content, collection.Path)
+	if !ok {
+		return
+	}
+	items, ok := value.([]any)
+	if !ok {
+		return
+	}
+	shaped[collection.As] = projectAPIGenAgentItems(items, collection.Fields)
+	if collection.Count {
+		shaped["count"] = len(items)
+	}
+}
+
+func applyAPIGenAgentMap(shaped map[string]any, content any, outputMap agenttools.OutputMap) {
+	if outputMap.Path == "" || outputMap.As == "" {
+		return
+	}
+	value, ok := valueAtPath(content, outputMap.Path)
+	if !ok {
+		return
+	}
+	object, ok := value.(map[string]any)
+	if !ok {
+		return
+	}
+	out := make(map[string]any, len(object))
+	for key, value := range object {
+		projected := projectAPIGenAgentObject(value, outputMap.Fields)
+		if outputMap.Collection.Path != "" && outputMap.Collection.As != "" {
+			applyAPIGenAgentCollection(projected, value, outputMap.Collection)
+		}
+		out[key] = projected
+	}
+	shaped[outputMap.As] = out
+}
+
+func projectAPIGenAgentItems(items []any, fields []string) []any {
+	if len(fields) == 0 {
+		out := make([]any, len(items))
+		copy(out, items)
+		return out
+	}
+	out := make([]any, 0, len(items))
+	for _, item := range items {
+		object, ok := item.(map[string]any)
+		if !ok {
+			out = append(out, item)
+			continue
+		}
+		projected := map[string]any{}
+		for _, field := range fields {
+			if value, ok := object[field]; ok {
+				projected[field] = value
+			}
+		}
+		out = append(out, projected)
+	}
+	return out
+}
+
+func projectAPIGenAgentObject(value any, fields []string) map[string]any {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return map[string]any{}
+	}
+	if len(fields) == 0 {
+		out := make(map[string]any, len(object))
+		for key, value := range object {
+			out[key] = value
+		}
+		return out
+	}
+	projected := map[string]any{}
+	for _, field := range fields {
+		if value, ok := valueAtPath(object, field); ok {
+			projected[agentOutputFieldName(field)] = value
+		}
+	}
+	return projected
+}
+
+func deriveAPIGenAgentHasMore(shaped map[string]any) {
+	count, ok := intFromAny(shaped["count"])
+	if !ok {
+		return
+	}
+	availableRows, ok := intFromAny(shaped["availableRows"])
+	if !ok {
+		return
+	}
+	shaped["hasMore"] = availableRows > count
+}
+
+func intFromAny(value any) (int, bool) {
+	switch typed := value.(type) {
+	case int:
+		return typed, true
+	case int32:
+		return int(typed), true
+	case int64:
+		return int(typed), true
+	case float64:
+		return int(typed), true
+	default:
+		return 0, false
+	}
+}
+
+func agentOutputFieldName(path string) string {
+	parts := strings.Split(path, ".")
+	return parts[len(parts)-1]
+}
+
+func valueAtPath(value any, path string) (any, bool) {
+	current := value
+	for _, part := range strings.Split(path, ".") {
+		if part == "" {
+			return nil, false
+		}
+		object, ok := current.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		current, ok = object[part]
+		if !ok {
+			return nil, false
+		}
+	}
+	return current, true
+}
+
+func stringValueAtPath(value any, path string) string {
+	raw, ok := valueAtPath(value, path)
+	if !ok {
+		return ""
+	}
+	text, _ := raw.(string)
+	return strings.TrimSpace(text)
 }
 
 func apigenAgentToolError(code, message string) agent.ToolResult {

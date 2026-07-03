@@ -9,6 +9,7 @@ import (
 	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
 	materializeruntime "github.com/Yacobolo/libredash/internal/analytics/materialize"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 )
 
 type testDataRuntimeFactory struct{}
@@ -56,7 +57,7 @@ func (testDataRuntimeFactory) OpenDashboardDataRuntime(ctx context.Context, conf
 	queries := runtime.Queries
 	return testDataRuntime{
 		runtime: runtime,
-		data:    reportdef.NewAnalyticsDataService(queries()),
+		data:    reportdef.NewDataQueryService(config.ModelID, reportdef.NewAnalyticsDataService(queries()), runtime),
 	}, nil
 }
 
@@ -142,6 +143,10 @@ func (r testDataRuntime) Histogram(ctx context.Context, request reportdef.RawVal
 
 func (r testDataRuntime) Distribution(ctx context.Context, request reportdef.RawValueQuery, sort []reportdef.QuerySort, limit int) (reportdef.QueryRows, error) {
 	return r.data.Distribution(ctx, request, sort, limit)
+}
+
+func (r testDataRuntime) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	return r.runtime.ExecuteDataQuery(ctx, request)
 }
 
 func (r testDataRuntime) Refresh(ctx context.Context) error {

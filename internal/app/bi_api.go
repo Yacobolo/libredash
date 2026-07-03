@@ -11,6 +11,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -182,7 +183,8 @@ func (s *Server) querySemanticDataset(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
 	}
-	rows, err := metrics.QuerySemantic(r.Context(), modelID, request)
+	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "semantic_dataset", modelID+":"+datasetID))
+	rows, err := executeAggregateRows(ctx, metrics, modelID, request)
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
@@ -214,7 +216,8 @@ func (s *Server) previewSemanticDataset(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
 	}
-	rows, err := metrics.PreviewSemantic(r.Context(), modelID, request)
+	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIPreview, "semantic_dataset", modelID+":"+datasetID))
+	rows, err := executePreviewRows(ctx, metrics, modelID, request)
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
@@ -291,7 +294,9 @@ func (s *Server) queryDashboardPage(w http.ResponseWriter, r *http.Request) {
 	if filters.Controls == nil && filters.Selections == nil {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
-	patch, err := metrics.QueryDashboardPage(r.Context(), dashboardID, chi.URLParam(r, "page"), filters)
+	pageID := chi.URLParam(r, "page")
+	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_page", dashboardID+":"+pageID))
+	patch, err := metrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
@@ -320,7 +325,8 @@ func (s *Server) queryDashboardTable(w http.ResponseWriter, r *http.Request) {
 	}
 	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: chi.URLParam(r, "table"), Block: "a", Count: count})
 	request.Count = count
-	table, err := metrics.QueryTablePage(r.Context(), dashboardID, input.PageID, filters, request)
+	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_table", dashboardID+":"+chi.URLParam(r, "table")))
+	table, err := metrics.QueryTablePage(ctx, dashboardID, input.PageID, filters, request)
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
@@ -356,7 +362,8 @@ func (s *Server) queryDashboardVisualData(w http.ResponseWriter, r *http.Request
 	if filters.Controls == nil && filters.Selections == nil {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
-	patch, err := metrics.QueryDashboardPage(r.Context(), dashboardID, page.ID, filters)
+	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_visual", dashboardID+":"+visualID))
+	patch, err := metrics.QueryDashboardPage(ctx, dashboardID, page.ID, filters)
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
@@ -403,7 +410,8 @@ func (s *Server) queryDashboardTableData(w http.ResponseWriter, r *http.Request)
 	}
 	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: tableID, Block: "a", Count: count})
 	request.Count = count
-	table, err := metrics.QueryTablePage(r.Context(), dashboardID, page.ID, filters, request)
+	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_table", dashboardID+":"+tableID))
+	table, err := metrics.QueryTablePage(ctx, dashboardID, page.ID, filters, request)
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
@@ -439,7 +447,8 @@ func (s *Server) listDashboardFilterOptions(w http.ResponseWriter, r *http.Reque
 	if filters.Controls == nil && filters.Selections == nil {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
-	patch, err := metrics.QueryDashboardPage(r.Context(), dashboardID, page.ID, filters)
+	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_filter", dashboardID+":"+filterID))
+	patch, err := metrics.QueryDashboardPage(ctx, dashboardID, page.ID, filters)
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return

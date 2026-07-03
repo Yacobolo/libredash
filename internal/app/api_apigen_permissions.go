@@ -73,4 +73,5 @@ var apigenOperationPermissions = map[string]string{
 	"updateRoleBinding":                 access.PermissionRBACWrite,
 	"deleteRoleBinding":                 access.PermissionRBACWrite,
 	"listAuditEvents":                   access.PermissionAuditRead,
+	"listQueryEvents":                   access.PermissionAuditRead,
 }

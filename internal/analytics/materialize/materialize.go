@@ -22,6 +22,10 @@ type SourceRegistrar interface {
 	PlanModelTable(ctx context.Context, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (ModelTablePlan, error)
 }
 
+type sourceRelationPlanner interface {
+	SourceRelation(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error)
+}
+
 type ModelTablePlan struct {
 	Mode string
 	SQL  string

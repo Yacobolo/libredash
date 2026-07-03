@@ -29,9 +29,9 @@ class CodeEditor extends LitElement {
       display: block;
       min-width: 0;
       color: var(--ld-fg-default);
-      --ld-code-editor-font-family: var(--ld-font-family-mono, var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace));
-      --ld-code-editor-font-size: var(--ld-font-size-body-sm, 0.875rem);
-      --ld-code-editor-line-height: var(--ld-line-height-snug, 1.35);
+      --ld-code-editor-font-family: var(--ld-font-family-mono);
+      --ld-code-editor-font-size: var(--ld-font-size-body-sm);
+      --ld-code-editor-line-height: var(--ld-line-height-snug);
       font-family: var(--ld-font-family-ui, var(--fontStack-system));
     }
 
@@ -67,7 +67,7 @@ class CodeEditor extends LitElement {
       border: var(--ld-border-muted);
       border-radius: var(--ld-radius-default);
       background: var(--ld-bg-panel);
-      padding: var(--base-size-4, 4px) var(--base-size-8);
+      padding: var(--base-size-4) var(--base-size-8);
       color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-caption);
       font-weight: var(--ld-font-weight-medium);

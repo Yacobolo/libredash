@@ -270,7 +270,7 @@ class AgentTools extends LitElement {
       border: 0;
       border-radius: calc(var(--ld-radius-default) - 2px);
       background: transparent;
-      padding: var(--base-size-6) var(--base-size-10);
+      padding: var(--base-size-6) var(--ld-space-control);
       color: var(--ld-fg-muted);
       cursor: pointer;
       font: inherit;
@@ -282,7 +282,7 @@ class AgentTools extends LitElement {
     .tabs button.is-active {
       background: var(--ld-bg-panel);
       color: var(--ld-fg-default);
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--ld-fg-default) 8%, transparent);
+      box-shadow: var(--shadow-inset);
     }
 
     .tabs button:focus-visible {

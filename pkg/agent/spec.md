@@ -27,7 +27,7 @@ The package is designed for LibreDash first, but it must be generic enough to li
 - OpenAI-compatible provider contract: model requests and responses follow the OpenAI-compatible chat/tool API used by providers such as OpenAI and DeepSeek.
 - Provider flexibility through compatibility: OpenAI, DeepSeek, OpenAI-compatible gateways, local compatible endpoints, and test fakes can sit behind the same client interface. Non-compatible providers must adapt to the OpenAI-compatible API outside the core.
 - Tool schema convention: tool inputs use JSON Schema-compatible objects because that is the OpenAI tool contract.
-- Tool validation is part of the harness: unknown tools, malformed JSON arguments, schema validation failures, handler failures, and overlarge outputs are converted into clear model-visible tool results.
+- Tool validation is part of the harness: unknown tools, malformed JSON arguments, schema validation failures, handler failures, and outputs that remain overlarge after truncation are converted into clear model-visible tool results.
 - Compaction is part of the harness: keep the last configured turns verbatim and summarize older turns into a model-visible summary message.
 - Context-first cancellation: all model calls and tool calls receive `context.Context`.
 - Deterministic state boundaries: one run uses the harness configuration supplied at construction time.
@@ -111,6 +111,7 @@ type Definition struct {
 
 	Tools      []ToolDefinition
 	Limits     Limits
+	ToolOutput ToolOutputConfig
 	Compaction CompactionConfig
 
 	Events EventSink
@@ -141,7 +142,7 @@ Default limits:
 - `MaxToolCalls`: 64 per run
 - `MaxConcurrentTools`: 4 per assistant turn
 - `ToolTimeout`: 30 seconds
-- `MaxToolResultBytes`: 64 KiB after JSON serialization
+- `MaxToolResultBytes`: 64 KiB after tool-output formatting and truncation
 - `ReserveOutputTokens`: 4096
 - `HardInputLimitTokens`: `ContextWindowTokens - ReserveOutputTokens`
 
@@ -289,7 +290,8 @@ Validation rules:
 - Tool arguments must be valid JSON.
 - Tool arguments must satisfy the tool input schema.
 - Tool output must be JSON-serializable.
-- Tool output must fit the configured result-size limit after serialization.
+- Tool output is normalized, truncated, and serialized as TOON by default.
+- Tool output must fit the configured result-size limit after formatting and truncation.
 
 If validation fails, the harness does not call the handler. It appends a tool-result message with `is_error=true` and a concise, model-readable payload.
 

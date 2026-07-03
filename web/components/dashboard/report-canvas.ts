@@ -300,7 +300,7 @@ class ReportZoom extends LitElement {
     }
 
     button[aria-pressed='true'] {
-      background: color-mix(in srgb, var(--ld-fg-link), transparent 86%);
+      background: var(--bgColor-accent-muted);
       color: var(--ld-fg-link);
     }
 

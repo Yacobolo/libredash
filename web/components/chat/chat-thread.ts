@@ -3,6 +3,7 @@ import { property, state } from 'lit/decorators.js'
 import { Box, ChevronRight, FileText, LayoutDashboard, LayoutPanelTop, Table2, Wrench, type IconNode } from 'lucide'
 import type { ChatArtifactSignal, ChatStatus, ChatTranscriptItemSignal, DashboardTable, DashboardVisual } from '../../generated/signals'
 import { lucideIcon } from '../shared/lucide-icons'
+import '../shared/code-block'
 import '../shared/markdown-view'
 import '../shared/visual-artifact'
 
@@ -15,6 +16,12 @@ type LegacyArtifact = ChatArtifactSignal & {
     visuals?: Record<string, DashboardVisual>
     tables?: Record<string, DashboardTable>
   }
+}
+
+type ToolPreviewLanguage = 'json' | 'toon' | 'text'
+type ChatTranscriptItemWithFormats = ChatTranscriptItemSignal & {
+  inputFormat?: string
+  resultFormat?: string
 }
 
 const jsonConverter = <T,>(fallback: T) => ({
@@ -319,6 +326,10 @@ class ChatThread extends LitElement {
       white-space: pre-wrap;
     }
 
+    .tool-detail-block ld-code-block {
+      max-width: 100%;
+    }
+
     .tool-error {
       color: var(--ld-fg-danger);
     }
@@ -506,18 +517,18 @@ class ChatThread extends LitElement {
     const status = item.status || 'running'
     return html`
       <div class="tool-details" id=${detailsID}>
-        ${item.inputJson || item.argumentsJson ? this.renderToolJSON('Input', item.inputJson || item.argumentsJson || '') : nothing}
-        ${item.resultJson ? this.renderToolJSON(status === 'error' ? 'Error result' : 'Result', item.resultJson) : nothing}
+        ${item.inputJson || item.argumentsJson ? this.renderToolCode('Input', item.inputJson || item.argumentsJson || '', toolInputLanguage(item)) : nothing}
+        ${item.resultJson ? this.renderToolCode(status === 'error' ? 'Error result' : 'Result', item.resultJson, toolResultLanguage(item)) : nothing}
         ${!item.resultJson && item.error ? html`<div class="tool-error">${item.error}</div>` : nothing}
       </div>
     `
   }
 
-  private renderToolJSON(label: string, value: string) {
+  private renderToolCode(label: string, value: string, language: ToolPreviewLanguage) {
     return html`
       <div class="tool-detail-block">
         <div class="tool-detail-label">${label}</div>
-        <pre><code>${value}</code></pre>
+        <ld-code-block compact language=${language} .code=${value}></ld-code-block>
       </div>
     `
   }
@@ -594,6 +605,32 @@ function toolCallKey(item: ChatTranscriptItemSignal): string {
 
 function toolDetailsID(key: string): string {
   return `tool-details-${key.replace(/[^a-zA-Z0-9_-]/g, '-')}`
+}
+
+function toolInputLanguage(item: ChatTranscriptItemSignal): ToolPreviewLanguage {
+  return previewLanguage((item as ChatTranscriptItemWithFormats).inputFormat, item.inputJson || item.argumentsJson || '', 'json')
+}
+
+function toolResultLanguage(item: ChatTranscriptItemSignal): ToolPreviewLanguage {
+  return previewLanguage((item as ChatTranscriptItemWithFormats).resultFormat, item.resultJson || '', 'toon')
+}
+
+function previewLanguage(format: string | undefined, value: string, fallback: ToolPreviewLanguage): ToolPreviewLanguage {
+  const normalized = (format || '').trim().toLowerCase()
+  if (normalized === 'json' || normalized === 'toon' || normalized === 'text') return normalized
+  if (isJSON(value)) return 'json'
+  return fallback
+}
+
+function isJSON(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed || !['{', '['].includes(trimmed[0])) return false
+  try {
+    JSON.parse(trimmed)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function statusLabel(status: string): string {

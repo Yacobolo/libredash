@@ -37,7 +37,7 @@ model DeploymentListResponse {
 @get
 @apigen.authz(#{ mode: "permission", permission: "deployment:read" })
 @apigen.cli(#{ command: #["deployments", "list"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_deployments", risk: "read", tags: #["deployment"], defaultLimit: 25 })
+@extension("x-agent", #{ enabled: true, name: "list_deployments", risk: "read", tags: #["deployment"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "environment", "status", "createdAt"], cursorPath: "page.nextCursor", count: true } })
 op listDeployments(@path workspace: string, @query environment?: string, @query limit?: int32, @query pageToken?: string): OkJson<DeploymentListResponse> | CommonErrors;
 
 @tag("Deployments")
@@ -52,7 +52,7 @@ op createDeployment(@path workspace: string, @body body?: DeploymentCreateReques
 @route("/workspaces/{workspace}/deployments/{deployment}")
 @get
 @apigen.authz(#{ mode: "permission", permission: "deployment:read" })
-@extension("x-agent", #{ enabled: true, name: "get_deployment", risk: "read", tags: #["deployment"] })
+@extension("x-agent", #{ enabled: true, name: "get_deployment", risk: "read", tags: #["deployment"], output: #{ rootFields: #["id", "environment", "status", "createdAt", "activatedAt", "error"] } })
 op getDeployment(@path workspace: string, @path deployment: string, @query environment?: string): OkJson<DeploymentResponse> | CommonErrors;
 
 @tag("Deployments")

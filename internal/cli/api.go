@@ -243,6 +243,7 @@ func doRawAPI(ctx context.Context, method, endpoint, token, contentType string, 
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-LibreDash-Client", "cli")
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}

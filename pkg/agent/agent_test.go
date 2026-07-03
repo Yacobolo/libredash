@@ -41,6 +41,9 @@ func TestNewAppliesDefaultsAndValidatesDefinition(t *testing.T) {
 	if a.def.Limits.MaxToolDisplayBytes != 1024*1024 {
 		t.Fatalf("MaxToolDisplayBytes = %d, want 1MiB", a.def.Limits.MaxToolDisplayBytes)
 	}
+	if a.def.ToolOutput.Format != ToolOutputTOON || a.def.ToolOutput.MaxStringChars != 2000 || a.def.ToolOutput.MaxArrayItems != 50 || a.def.ToolOutput.MaxObjectDepth != 8 {
+		t.Fatalf("ToolOutput defaults = %#v", a.def.ToolOutput)
+	}
 	if a.def.Compaction.KeepLastTurns != 8 {
 		t.Fatalf("KeepLastTurns = %d, want 8", a.def.Compaction.KeepLastTurns)
 	}
@@ -95,6 +98,16 @@ func TestNewAppliesDefaultsAndValidatesDefinition(t *testing.T) {
 				SystemPrompt: "x",
 				Model:        model,
 				Limits:       Limits{MaxTurns: -1},
+			},
+			want: ErrorCodeInvalidArgument,
+		},
+		{
+			name: "bad tool output format",
+			def: Definition{
+				Name:         "bad",
+				SystemPrompt: "x",
+				Model:        model,
+				ToolOutput:   ToolOutputConfig{Format: "xml"},
 			},
 			want: ErrorCodeInvalidArgument,
 		},

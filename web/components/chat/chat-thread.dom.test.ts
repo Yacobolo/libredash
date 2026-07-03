@@ -318,6 +318,57 @@ test('chat thread renders visual artifacts with dashboard web components', async
   await page.close()
 })
 
+test('chat thread renders tool details with compact json and toon code blocks', async () => {
+  const page = await browser.newPage()
+  await page.goto(baseURL)
+  await page.evaluate(async () => {
+    await customElements.whenDefined('ld-chat-thread')
+    const thread = document.querySelector('ld-chat-thread') as any
+    thread.transcript = [
+      {
+        id: 'tool-toon',
+        kind: 'tool',
+        name: 'list_workspaces',
+        status: 'complete',
+        inputJson: '{\n  "name": "list_workspaces",\n  "arguments": "{}"\n}',
+        inputFormat: 'json',
+        resultJson: 'items[2]{id,title}:\n  sales,Sales\n  ops,Operations\ncount: 2\nhasMore: false',
+        resultFormat: 'toon',
+      },
+      {
+        id: 'tool-json',
+        kind: 'tool',
+        name: 'query_visual',
+        status: 'complete',
+        resultJson: '{\n  "ok": true,\n  "kind": "chart"\n}',
+      },
+    ]
+    await thread.updateComplete
+    for (const trigger of Array.from(thread.shadowRoot.querySelectorAll('.tool-trigger')) as HTMLButtonElement[]) {
+      trigger.click()
+    }
+    await thread.updateComplete
+  })
+
+  const state = await page.locator('ld-chat-thread').evaluate((element: any) => {
+    const blocks = Array.from(element.shadowRoot.querySelectorAll('ld-code-block')) as any[]
+    return {
+      blockCount: blocks.length,
+      languages: blocks.map((block) => block.language),
+      compact: blocks.map((block) => block.compact),
+      text: element.shadowRoot.querySelector('.tool-details')?.textContent || '',
+      hasRawPre: Boolean(element.shadowRoot.querySelector('.tool-detail-block > pre')),
+    }
+  })
+
+  expect(state.blockCount).toBe(3)
+  expect(state.languages).toEqual(['json', 'toon', 'json'])
+  expect(state.compact).toEqual([true, true, true])
+  expect(state.text).toContain('items[2]{id,title}:')
+  expect(state.hasRawPre).toBe(false)
+  await page.close()
+})
+
 test('chat thread renders assistant markdown through shared markdown view', async () => {
   const page = await browser.newPage()
   await page.goto(baseURL)

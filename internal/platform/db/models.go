@@ -227,6 +227,30 @@ type Principal struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
+type QueryEvent struct {
+	ID            string `json:"id"`
+	WorkspaceID   string `json:"workspace_id"`
+	PrincipalID   string `json:"principal_id"`
+	Surface       string `json:"surface"`
+	Operation     string `json:"operation"`
+	QueryKind     string `json:"query_kind"`
+	ModelID       string `json:"model_id"`
+	Target        string `json:"target"`
+	ObjectType    string `json:"object_type"`
+	ObjectID      string `json:"object_id"`
+	RequestID     string `json:"request_id"`
+	CorrelationID string `json:"correlation_id"`
+	Status        string `json:"status"`
+	DurationMs    int64  `json:"duration_ms"`
+	RowsReturned  int64  `json:"rows_returned"`
+	BytesEstimate int64  `json:"bytes_estimate"`
+	Error         string `json:"error"`
+	SqlText       string `json:"sql_text"`
+	PlanText      string `json:"plan_text"`
+	QueryJson     string `json:"query_json"`
+	CreatedAt     string `json:"created_at"`
+}
+
 type Role struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`

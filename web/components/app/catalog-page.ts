@@ -21,7 +21,7 @@ class LibreDashCatalogPage extends LitElement {
 
     section {
       display: grid;
-      width: min(100%, var(--ld-page-content-max-width, 72rem));
+      width: min(100%, var(--ld-page-content-max-width));
       min-width: 0;
       min-height: 100svh;
       align-content: start;
@@ -131,14 +131,15 @@ class LibreDashCatalogPage extends LitElement {
 
     a {
       display: inline-grid;
-      min-height: var(--control-small-size, 28px);
+      min-height: var(--ld-button-height-sm);
       grid-auto-flow: column;
       place-items: center;
       gap: var(--base-size-6);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-accent, #0969da);
-      color: var(--ld-accent-fg, #fff);
-      padding: 0 var(--base-size-10);
+      border: var(--borderWidth-default) solid var(--ld-button-accent-border-rest);
+      border-radius: var(--ld-button-radius);
+      background: var(--ld-button-accent-bg-rest);
+      color: var(--ld-button-accent-fg-rest);
+      padding: 0 var(--ld-button-padding-inline-sm);
       font-size: var(--ld-font-size-caption);
       font-weight: var(--ld-font-weight-strong);
       text-decoration: none;

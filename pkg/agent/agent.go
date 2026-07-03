@@ -58,6 +58,9 @@ func New(def Definition) (*Agent, error) {
 	if err := validateLimits(def.Limits); err != nil {
 		return nil, err
 	}
+	if err := validateToolOutputConfig(def.ToolOutput); err != nil {
+		return nil, err
+	}
 	tools, specs, err := compileTools(def.Tools)
 	if err != nil {
 		return nil, err

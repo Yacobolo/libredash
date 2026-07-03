@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -18,6 +19,7 @@ type Definition struct {
 
 	Tools             []ToolDefinition
 	Limits            Limits
+	ToolOutput        ToolOutputConfig
 	Compaction        CompactionConfig
 	InitialTranscript []Message
 
@@ -28,6 +30,7 @@ type Definition struct {
 
 func (d Definition) withDefaults() Definition {
 	d.Limits = defaultLimits(d.Limits)
+	d.ToolOutput = defaultToolOutputConfig(d.ToolOutput)
 	d.Compaction = defaultCompaction(d.Compaction)
 	if d.Events == nil {
 		d.Events = noopEventSink{}
@@ -115,13 +118,15 @@ func findNonPortableToolSchemaKeyword(value any, path string) (string, string, b
 		}
 		return "", "", false
 	}
-	for key, child := range object {
+	for _, key := range sortedSchemaKeys(object) {
+		child := object[key]
 		if !portableToolSchemaKeywords[key] {
 			return key, path + "." + key, true
 		}
 		if key == "properties" {
 			properties, _ := child.(map[string]any)
-			for name, propertySchema := range properties {
+			for _, name := range sortedSchemaKeys(properties) {
+				propertySchema := properties[name]
 				if foundKey, foundPath, found := findNonPortableToolSchemaKeyword(propertySchema, path+".properties."+name); found {
 					return foundKey, foundPath, true
 				}
@@ -133,6 +138,15 @@ func findNonPortableToolSchemaKeyword(value any, path string) (string, string, b
 		}
 	}
 	return "", "", false
+}
+
+func sortedSchemaKeys(object map[string]any) []string {
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 var portableToolSchemaKeywords = map[string]bool{

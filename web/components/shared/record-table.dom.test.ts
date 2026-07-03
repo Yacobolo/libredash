@@ -100,6 +100,7 @@ test('record table renders cells and sorts through TanStack headers', async () =
     expect(initial.actionHref).toBe('/orders/open')
     expect(initial.minWidth).toBe('1300px')
     expect(initial.headerPosition).toBe('sticky')
+    expect(initial.hasSelector).toBe(false)
 
     await page.locator('ld-record-table th:nth-child(3) button').click()
     await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
@@ -233,6 +234,133 @@ test('compact record table keeps metadata dense and scalar placeholders muted', 
   }
 })
 
+test('record table renders tight expandable query rows', async () => {
+  const page = await browser.newPage({ viewport: { width: 900, height: 620 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-record-table'))
+    await page.evaluate(() => localStorage.removeItem('record-table-query-columns'))
+    await page.locator('ld-record-table').evaluate((element: any) => {
+      element.setAttribute('variant', 'compact')
+      element.table = {
+        density: 'tight',
+        columns: [
+          { id: 'query', header: 'Query', kind: 'query', width: '520px', toggleable: false },
+          { id: 'runtime', header: 'Runtime', width: '160px' },
+          { id: 'actions', header: '', kind: 'actions', sortable: false, toggleable: false, width: '64px' },
+        ],
+        rows: [{
+          id: 'query_1',
+          query: {
+            label: 'select customer_id, customer_city from customers where customer_state = $1 order by customer_id',
+            statusLabel: 'success',
+            tone: 'success',
+            icon: 'check',
+            expandedContent: 'select customer_id, customer_city\nfrom customers\nwhere customer_state = $1\norder by customer_id',
+          },
+          runtime: 'sales',
+          actions: [{ label: 'Details', action: 'detail' }],
+        }],
+        columnSelector: {
+          enabled: true,
+          storageKey: 'record-table-query-columns',
+          defaultColumns: ['runtime'],
+        },
+      }
+    })
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+
+    const collapsed = await queryRowState(page)
+    expect(collapsed.headers).toEqual(['Query', 'Runtime', ''])
+    expect(collapsed.menuLabels).toEqual(['Runtime'])
+    expect(collapsed.statusLabel).toBe('success')
+    expect(collapsed.queryText).toContain('select customer_id')
+    expect(collapsed.hasExpandedRow).toBe(false)
+    expect(collapsed.wrapHasTightDensity).toBe(true)
+    expect(collapsed.cellPaddingTop).toBe('4px')
+    expect(collapsed.rowHeight).toBeLessThanOrEqual(40)
+
+    await page.locator('ld-record-table .record-query-expand').click()
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    const expanded = await queryRowState(page)
+    expect(expanded.hasExpandedRow).toBe(true)
+    expect(expanded.hasCodeBlock).toBe(true)
+    expect(expanded.expandedText).toContain('FROM')
+    expect(expanded.formattedCode).toContain('SELECT')
+    expect(expanded.formattedCode).toMatch(/\nFROM\n\s+customers/)
+    expect(expanded.expandedColspan).toBe(3)
+
+    await page.locator('ld-record-table .record-query-expand').click()
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    expect((await queryRowState(page)).hasExpandedRow).toBe(false)
+  } finally {
+    await page.close()
+  }
+})
+
+test('record table emits configured row actions without stealing interactive controls', async () => {
+  const page = await browser.newPage({ viewport: { width: 900, height: 620 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-record-table'))
+    await page.locator('ld-record-table').evaluate((element: any) => {
+      element.table = {
+        rowAction: 'detail',
+        columns: [
+          { id: 'query', header: 'Query', kind: 'query', width: '520px', toggleable: false },
+          { id: 'runtime', header: 'Runtime', width: '160px' },
+        ],
+        rows: [{
+          id: 'query_1',
+          query: {
+            label: 'select * from orders',
+            statusLabel: 'success',
+            tone: 'success',
+            icon: 'check',
+            expandedContent: 'select *\nfrom orders',
+          },
+          runtime: 'sales',
+        }],
+      }
+      ;(window as any).recordTableActions = []
+      element.addEventListener('ld-record-table-action', (event: CustomEvent) => {
+        ;(window as any).recordTableActions.push(event.detail)
+      })
+    })
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+
+    await page.locator('ld-record-table tbody tr.record-row').click()
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    expect(await rowActionState(page)).toEqual({ count: 1, action: 'detail', rowID: 'query_1', expanded: false })
+
+    await page.locator('ld-record-table .record-query-expand').click()
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    expect(await rowActionState(page)).toEqual({ count: 1, action: 'detail', rowID: 'query_1', expanded: true })
+
+    await page.locator('ld-record-table tbody tr.record-row').focus()
+    await page.keyboard.press('Enter')
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    expect(await rowActionState(page)).toEqual({ count: 2, action: 'detail', rowID: 'query_1', expanded: true })
+
+    await page.keyboard.press('Space')
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    expect(await rowActionState(page)).toEqual({ count: 3, action: 'detail', rowID: 'query_1', expanded: true })
+
+    await page.locator('ld-record-table').evaluate((element: any) => {
+      element.table = {
+        columns: [{ id: 'name', header: 'Name' }],
+        rows: [{ id: 'plain_1', name: 'Plain row' }],
+      }
+      ;(window as any).recordTableActions = []
+    })
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    await page.locator('ld-record-table tbody tr.record-row').click()
+    expect(await rowActionState(page)).toEqual({ count: 0, action: '', rowID: '', expanded: false })
+  } finally {
+    await page.close()
+  }
+})
+
 test('record table renders configured empty state', async () => {
   const page = await browser.newPage({ viewport: { width: 500, height: 360 } })
   try {
@@ -244,6 +372,97 @@ test('record table renders configured empty state', async () => {
     await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
     const empty = await page.locator('ld-record-table .record-table-empty').textContent()
     expect(empty).toBe('No records.')
+  } finally {
+    await page.close()
+  }
+})
+
+test('record table column selector hides, restores, and persists columns', async () => {
+  const page = await browser.newPage({ viewport: { width: 900, height: 620 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-record-table'))
+    await page.evaluate(() => localStorage.removeItem('record-table-test-columns'))
+    await page.locator('ld-record-table').evaluate((element: any) => {
+      element.table = {
+        columns: [
+          { id: 'name', header: 'Name', width: '220px' },
+          { id: 'runtime', header: 'Runtime', width: '160px' },
+          { id: 'rows', header: 'Rows', kind: 'number', width: '100px' },
+          { id: 'actions', header: '', kind: 'actions', toggleable: false, width: '64px' },
+        ],
+        rows: [
+          { name: 'select * from orders', runtime: 'sales', rows: 10, actions: [{ label: 'Details', action: 'detail' }] },
+        ],
+        columnSelector: {
+          enabled: true,
+          storageKey: 'record-table-test-columns',
+          defaultColumns: ['name', 'runtime', 'rows'],
+        },
+      }
+    })
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+
+    const initial = await columnSelectorState(page)
+    expect(initial.hasSelector).toBe(true)
+    expect(initial.selectorInCorner).toBe(true)
+    expect(initial.hasSeparateToolbar).toBe(false)
+    expect(initial.headers).toEqual(['Name', 'Runtime', 'Rows', ''])
+    expect(initial.menuLabels).toEqual(['Name', 'Runtime', 'Rows'])
+    expect(initial.hasActionsColumn).toBe(true)
+
+    await page.locator('ld-record-table .record-table-column-selector summary').click()
+    await page.locator('ld-record-table .record-table-column-menu label', { hasText: 'Runtime' }).locator('input').uncheck()
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    const hidden = await columnSelectorState(page)
+    expect(hidden.headers).toEqual(['Name', 'Rows', ''])
+    expect(hidden.hasRuntimeCell).toBe(false)
+    expect(hidden.hasActionsColumn).toBe(true)
+    expect(hidden.storedColumns).toEqual(['name', 'rows'])
+
+    await page.locator('ld-record-table .record-table-column-menu label', { hasText: 'Runtime' }).locator('input').check()
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    expect((await columnSelectorState(page)).headers).toEqual(['Name', 'Runtime', 'Rows', ''])
+
+    await page.locator('ld-record-table .record-table-column-menu label', { hasText: 'Runtime' }).locator('input').uncheck()
+    await page.locator('ld-record-table .record-table-column-menu label', { hasText: 'Rows' }).locator('input').uncheck()
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    const lastVisible = await columnSelectorState(page)
+    expect(lastVisible.headers).toEqual(['Name', ''])
+    expect(lastVisible.disabledChecks).toEqual(['Name'])
+
+    await page.reload()
+    await page.waitForFunction(() => customElements.get('ld-record-table'))
+    await page.locator('ld-record-table').evaluate((element: any) => {
+      element.table = {
+        columns: [
+          { id: 'name', header: 'Name', width: '220px' },
+          { id: 'runtime', header: 'Runtime', width: '160px' },
+          { id: 'rows', header: 'Rows', kind: 'number', width: '100px' },
+          { id: 'actions', header: '', kind: 'actions', toggleable: false, width: '64px' },
+        ],
+        rows: [
+          { name: 'select * from orders', runtime: 'sales', rows: 10, actions: [{ label: 'Details', action: 'detail' }] },
+        ],
+        columnSelector: {
+          enabled: true,
+          storageKey: 'record-table-test-columns',
+          defaultColumns: ['name', 'runtime', 'rows'],
+        },
+      }
+    })
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    expect((await columnSelectorState(page)).headers).toEqual(['Name', ''])
+
+    await page.evaluate(() => localStorage.setItem('record-table-test-columns', JSON.stringify(['missing'])))
+    await page.locator('ld-record-table').evaluate((element: any) => {
+      element.table = {
+        ...element.table,
+        columns: [...element.table.columns, { id: 'request', header: 'Request', width: '120px' }],
+      }
+    })
+    await page.locator('ld-record-table').evaluate((element: any) => element.updateComplete)
+    expect((await columnSelectorState(page)).headers).toEqual(['Name', 'Runtime', 'Rows', '', 'Request'])
   } finally {
     await page.close()
   }
@@ -266,8 +485,60 @@ async function tableState(page: Page) {
       actionHref: element.querySelector<HTMLAnchorElement>('.record-icon-action')?.getAttribute('href'),
       minWidth: getComputedStyle(table).minWidth,
       headerPosition: getComputedStyle(header).position,
+      hasSelector: Boolean(element.querySelector('.record-table-column-selector')),
     }
   })
+}
+
+async function rowActionState(page: Page) {
+  return page.locator('ld-record-table').evaluate((element) => {
+    const actions = (window as any).recordTableActions ?? []
+    const last = actions[actions.length - 1] ?? {}
+    return {
+      count: actions.length,
+      action: last.action ?? '',
+      rowID: last.row?.id ?? '',
+      expanded: Boolean(element.querySelector('.record-query-expanded-cell')),
+    }
+  })
+}
+
+async function queryRowState(page: Page) {
+  return page.locator('ld-record-table').evaluate((element) => {
+    const wrap = element.querySelector('.record-table-wrap') as HTMLElement
+    const firstCell = element.querySelector('tbody tr:first-child td:first-child') as HTMLElement
+    const firstRow = element.querySelector('tbody tr:first-child') as HTMLElement
+    const expandedCell = element.querySelector('.record-query-expanded-cell') as HTMLTableCellElement | null
+    const codeBlock = expandedCell?.querySelector('ld-code-block') as HTMLElement | null
+    return {
+      headers: Array.from(element.querySelectorAll('thead th')).map((header) => header.querySelector('.record-table-sort span:first-child')?.textContent?.trim() ?? ''),
+      menuLabels: Array.from(element.querySelectorAll('.record-table-column-menu label')).map((label) => label.textContent?.trim() ?? ''),
+      statusLabel: element.querySelector('.record-query-status')?.getAttribute('aria-label'),
+      queryText: element.querySelector('.record-query-text')?.textContent?.trim(),
+      hasExpandedRow: Boolean(expandedCell),
+      expandedText: codeBlock?.shadowRoot?.querySelector('code')?.textContent ?? expandedCell?.textContent ?? '',
+      hasCodeBlock: Boolean(codeBlock),
+      formattedCode: codeBlock?.shadowRoot?.querySelector('code')?.textContent ?? codeBlock?.querySelector('code')?.textContent ?? '',
+      expandedColspan: expandedCell?.colSpan ?? 0,
+      wrapHasTightDensity: wrap.classList.contains('density-tight'),
+      cellPaddingTop: getComputedStyle(firstCell).paddingTop,
+      rowHeight: Math.round(firstRow.getBoundingClientRect().height),
+    }
+  })
+}
+
+async function columnSelectorState(page: Page) {
+  return page.locator('ld-record-table').evaluate((element) => ({
+    hasSelector: Boolean(element.querySelector('.record-table-column-selector')),
+    selectorInCorner: Boolean(element.querySelector('.record-table-corner-selector .record-table-column-selector')),
+    hasSeparateToolbar: Boolean(element.querySelector('.record-table-toolbar')),
+    headers: Array.from(element.querySelectorAll('thead th')).map((header) => header.querySelector('.record-table-sort span:first-child')?.textContent?.trim() ?? ''),
+    menuLabels: Array.from(element.querySelectorAll('.record-table-column-menu label')).map((label) => label.textContent?.trim() ?? ''),
+    disabledChecks: Array.from(element.querySelectorAll<HTMLInputElement>('.record-table-column-menu input:disabled')).map((input) => input.closest('label')?.textContent?.trim() ?? ''),
+    hasRuntimeCell: Array.from(element.querySelectorAll('tbody td')).some((cell) => cell.textContent?.trim() === 'sales'),
+    hasActionsColumn: Boolean(element.querySelector('.record-icon-action')),
+    storedColumns: JSON.parse(localStorage.getItem('record-table-test-columns') ?? '[]'),
+  }))
 }
 
 function testDocument(): string {

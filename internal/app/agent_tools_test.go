@@ -14,6 +14,8 @@ import (
 	"github.com/Yacobolo/libredash/internal/agenttools"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/libredash/internal/queryaudit"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/agent"
 )
@@ -116,6 +118,46 @@ func TestAgentVisualToolIsCustomAgentOnlyTool(t *testing.T) {
 		if tool.Name == agenttools.QueryVisualToolName {
 			t.Fatalf("query_visual should not be exposed through APIGen tools")
 		}
+	}
+}
+
+func TestAgentAPIGenQueryAuditSurface(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
+	var queryTool agent.ToolDefinition
+	for _, tool := range server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true}) {
+		if tool.Name == "query_semantic_dataset" {
+			queryTool = tool
+			break
+		}
+	}
+	if queryTool.Handler == nil {
+		t.Fatal("query_semantic_dataset tool not found")
+	}
+
+	result, err := queryTool.Handler.Run(context.Background(), agent.ToolCall{
+		ID:   "call_agent_query",
+		Name: "query_semantic_dataset",
+		Arguments: json.RawMessage(`{
+			"model":"test",
+			"dataset":"orders",
+			"dimensions":[{"field":"orders.status","alias":"status"}],
+			"measures":[{"field":"order_count"}],
+			"limit":1
+		}`),
+	})
+	if err != nil {
+		t.Fatalf("run query_semantic_dataset: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("query_semantic_dataset returned error: %#v", result.Content)
+	}
+
+	events := queryEventsForTest(t, server, queryaudit.Filter{WorkspaceID: "test", Surface: dataquery.SurfaceAgent})
+	if len(events) != 1 {
+		t.Fatalf("agent query events = %d, want 1: %#v", len(events), events)
+	}
+	if events[0].Operation != dataquery.OperationAgentQuery || events[0].ObjectType != "agent_tool" || events[0].RequestID != "call_agent_query" {
+		t.Fatalf("agent query event = %#v", events[0])
 	}
 }
 
@@ -385,18 +427,26 @@ func TestAPIGenAgentSearchToolInjectsDefaultLimit(t *testing.T) {
 		t.Fatalf("marshal result content: %v", err)
 	}
 	var decoded struct {
-		Items []map[string]any `json:"items"`
-		Page  struct {
-			NextCursor string `json:"nextCursor"`
-		} `json:"page"`
+		Count      int              `json:"count"`
+		Items      []map[string]any `json:"items"`
+		HasMore    bool             `json:"hasMore"`
+		NextCursor string           `json:"nextCursor"`
 	}
 	if err := json.Unmarshal(body, &decoded); err != nil {
 		t.Fatalf("decode result: %v body=%s", err, body)
 	}
-	if len(decoded.Items) == 0 || len(decoded.Items) > 10 {
+	if decoded.Count != len(decoded.Items) || len(decoded.Items) == 0 || len(decoded.Items) > 10 {
 		t.Fatalf("search result count = %d, want 1..10: %#v", len(decoded.Items), decoded.Items)
 	}
+	if decoded.HasMore || decoded.NextCursor != "" {
+		t.Fatalf("search should not expose empty cursor metadata: %#v", decoded)
+	}
 	for _, item := range decoded.Items {
+		for _, forbidden := range []string{"dashboardId", "pageId", "visualId", "tableId", "filterId", "modelId", "datasetId", "fieldId", "assetId"} {
+			if _, ok := item[forbidden]; ok {
+				t.Fatalf("search item kept metadata field %q: %#v", forbidden, item)
+			}
+		}
 		if _, ok := item["name"]; !ok {
 			t.Fatalf("search item missing concise name: %#v", item)
 		}
@@ -406,6 +456,178 @@ func TestAPIGenAgentSearchToolInjectsDefaultLimit(t *testing.T) {
 		if _, ok := item["type"]; !ok {
 			t.Fatalf("search item missing concise type: %#v", item)
 		}
+	}
+}
+
+func TestAPIGenAgentListWorkspacesUsesDeclarativeOutputShape(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+	tools := server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"})
+	var listWorkspaces agent.ToolDefinition
+	for _, tool := range tools {
+		if tool.Name == "list_workspaces" {
+			listWorkspaces = tool
+			break
+		}
+	}
+	if listWorkspaces.Handler == nil {
+		t.Fatal("list_workspaces tool missing")
+	}
+	result, err := listWorkspaces.Handler.Run(context.Background(), agent.ToolCall{
+		ID:        "call_1",
+		Name:      "list_workspaces",
+		Arguments: json.RawMessage(`{}`),
+	})
+	if err != nil {
+		t.Fatalf("run list_workspaces: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool returned error: %#v", result.Content)
+	}
+	body, err := json.Marshal(result.Content)
+	if err != nil {
+		t.Fatalf("marshal result content: %v", err)
+	}
+	var decoded struct {
+		Count      int              `json:"count"`
+		Items      []map[string]any `json:"items"`
+		HasMore    bool             `json:"hasMore"`
+		NextCursor string           `json:"nextCursor"`
+		Page       any              `json:"page"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decode result: %v body=%s", err, body)
+	}
+	if decoded.Count != len(decoded.Items) || decoded.Count == 0 || decoded.HasMore || decoded.NextCursor != "" || decoded.Page != nil {
+		t.Fatalf("workspace shaped result metadata = %#v body=%s", decoded, body)
+	}
+	for _, item := range decoded.Items {
+		if _, ok := item["id"]; !ok {
+			t.Fatalf("workspace item missing id: %#v", item)
+		}
+		if _, ok := item["title"]; !ok {
+			t.Fatalf("workspace item missing title: %#v", item)
+		}
+		if _, ok := item["description"]; !ok {
+			t.Fatalf("workspace item missing description: %#v", item)
+		}
+		for _, forbidden := range []string{"activeDeploymentId", "createdAt", "updatedAt"} {
+			if _, ok := item[forbidden]; ok {
+				t.Fatalf("workspace item kept noisy metadata field %q: %#v", forbidden, item)
+			}
+		}
+	}
+}
+
+func TestAPIGenAgentOutputShapeKeepsNonEmptyCursor(t *testing.T) {
+	shaped := shapeAPIGenAgentToolContent(map[string]any{
+		"items": []any{
+			map[string]any{"id": "one", "title": "One", "description": "First", "createdAt": "ignored"},
+		},
+		"page": map[string]any{"nextCursor": "cursor-1"},
+	}, agenttools.Output{
+		ItemsPath:  "items",
+		Fields:     []string{"id", "title"},
+		CursorPath: "page.nextCursor",
+		Count:      true,
+	})
+	decoded, ok := shaped.(map[string]any)
+	if !ok {
+		t.Fatalf("shaped content type = %T", shaped)
+	}
+	if decoded["count"] != 1 || decoded["hasMore"] != true || decoded["nextCursor"] != "cursor-1" {
+		t.Fatalf("shaped cursor metadata = %#v", decoded)
+	}
+	if _, ok := decoded["page"]; ok {
+		t.Fatalf("shaped output kept raw page metadata: %#v", decoded)
+	}
+}
+
+func TestAPIGenAgentOutputShapeProjectsRootsCollectionsAndMaps(t *testing.T) {
+	shaped := shapeAPIGenAgentToolContent(map[string]any{
+		"title":         "Orders",
+		"availableRows": 7,
+		"style":         map[string]any{"density": "compact"},
+		"blocks": map[string]any{
+			"a": map[string]any{
+				"rows": []any{
+					map[string]any{"order_id": "o1", "status": "delivered", "internal": true},
+					map[string]any{"order_id": "o2", "status": "shipped", "internal": false},
+				},
+			},
+		},
+		"visuals": map[string]any{
+			"orders": map[string]any{
+				"id":              "orders",
+				"title":           "Orders",
+				"type":            "bar",
+				"rendererOptions": map[string]any{"hidden": true},
+				"data": []any{
+					map[string]any{"label": "delivered", "value": 1, "extra": "ignored"},
+				},
+			},
+		},
+	}, agenttools.Output{
+		RootFields: []string{"title", "availableRows"},
+		Collections: []agenttools.OutputCollection{{
+			Path:   "blocks.a.rows",
+			As:     "rows",
+			Fields: []string{"order_id", "status"},
+			Count:  true,
+		}},
+		Maps: []agenttools.OutputMap{{
+			Path:   "visuals",
+			As:     "visuals",
+			Fields: []string{"id", "title", "type"},
+			Collection: agenttools.OutputCollection{
+				Path:  "data",
+				As:    "data",
+				Count: true,
+			},
+		}},
+	})
+	decoded, ok := shaped.(map[string]any)
+	if !ok {
+		t.Fatalf("shaped content type = %T", shaped)
+	}
+	if decoded["title"] != "Orders" || decoded["availableRows"] != 7 || decoded["count"] != 2 || decoded["hasMore"] != true {
+		t.Fatalf("root/count metadata = %#v", decoded)
+	}
+	rows, ok := decoded["rows"].([]any)
+	if !ok || len(rows) != 2 {
+		t.Fatalf("rows = %#v", decoded["rows"])
+	}
+	firstRow := rows[0].(map[string]any)
+	if firstRow["order_id"] != "o1" || firstRow["status"] != "delivered" {
+		t.Fatalf("projected row = %#v", firstRow)
+	}
+	if _, ok := firstRow["internal"]; ok {
+		t.Fatalf("row kept noisy field: %#v", firstRow)
+	}
+	visuals := decoded["visuals"].(map[string]any)
+	orders := visuals["orders"].(map[string]any)
+	if orders["id"] != "orders" || orders["title"] != "Orders" || orders["type"] != "bar" || orders["count"] != 1 {
+		t.Fatalf("projected visual = %#v", orders)
+	}
+	if _, ok := orders["rendererOptions"]; ok {
+		t.Fatalf("visual kept renderer options: %#v", orders)
+	}
+}
+
+func TestAPIGenAgentOutputShapeOmitsMissingPathsAndFallbackRawWithoutMetadata(t *testing.T) {
+	raw := map[string]any{"body": "raw"}
+	if shaped := shapeAPIGenAgentToolContent(raw, agenttools.Output{}); !reflect.DeepEqual(shaped, raw) {
+		t.Fatalf("empty output metadata should preserve raw content: %#v", shaped)
+	}
+	shaped := shapeAPIGenAgentToolContent(raw, agenttools.Output{
+		RootFields:  []string{"missing"},
+		Collections: []agenttools.OutputCollection{{Path: "items", As: "items", Count: true}},
+	})
+	decoded, ok := shaped.(map[string]any)
+	if !ok {
+		t.Fatalf("shaped missing-path content type = %T", shaped)
+	}
+	if len(decoded) != 0 {
+		t.Fatalf("missing paths should be omitted without falling back to raw: %#v", decoded)
 	}
 }
 
@@ -455,6 +677,14 @@ func TestAPIGenAgentToolsExposeTypeSpecArgumentNamesAndBodyFields(t *testing.T) 
 	}
 }
 
+func TestAPIGenAgentOperationsDeclareOutputMetadata(t *testing.T) {
+	for _, operation := range agenttools.APIGenOperations() {
+		if outputMetadataEmpty(operation.Extension.Output) {
+			t.Fatalf("agent operation %s (%s) does not declare x-agent.output metadata", operation.Contract.OperationID, operation.Extension.Name)
+		}
+	}
+}
+
 func TestAPIGenAgentToolDispatchesThroughGeneratedOperation(t *testing.T) {
 	catalog := testAgentAssetCatalogFromProvider(t, manyEdgesMetrics{})
 	server := NewWithOptions(manyEdgesMetrics{}, Options{
@@ -489,21 +719,63 @@ func TestAPIGenAgentToolDispatchesThroughGeneratedOperation(t *testing.T) {
 		t.Fatalf("marshal result content: %v", err)
 	}
 	var decoded struct {
+		Count int `json:"count"`
 		Items []struct {
 			ID          string `json:"id"`
-			WorkspaceID string `json:"workspaceId"`
 			Type        string `json:"type"`
-			Payload     any    `json:"payload"`
+			Title       string `json:"title"`
+			Description string `json:"description"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(body, &decoded); err != nil {
 		t.Fatalf("decode result: %v\n%s", err, body)
 	}
-	if len(decoded.Items) != 1 || decoded.Items[0].ID != "dashboard:dashboard-0" || decoded.Items[0].WorkspaceID != "test" || decoded.Items[0].Type != "dashboard" {
-		t.Fatalf("tool result = %#v", decoded.Items)
+	if decoded.Count != 1 || len(decoded.Items) != 1 || decoded.Items[0].ID != "dashboard:dashboard-0" || decoded.Items[0].Type != "dashboard" || decoded.Items[0].Title == "" {
+		t.Fatalf("tool result = %#v", decoded)
 	}
-	if decoded.Items[0].Payload != nil {
-		t.Fatalf("list_assets returned payload in summary row: %#v", decoded.Items[0])
+}
+
+func TestAPIGenAgentDescribeDashboardVisualUsesDeclarativeOutputShape(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+	tools := server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"})
+	var describeVisual agent.ToolDefinition
+	for _, tool := range tools {
+		if tool.Name == "describe_dashboard_visual" {
+			describeVisual = tool
+			break
+		}
+	}
+	if describeVisual.Handler == nil {
+		t.Fatal("describe_dashboard_visual tool missing")
+	}
+	result, err := describeVisual.Handler.Run(context.Background(), agent.ToolCall{
+		ID:        "call_1",
+		Name:      "describe_dashboard_visual",
+		Arguments: json.RawMessage(`{"dashboard":"executive-sales","page":"overview","visual":"orders"}`),
+	})
+	if err != nil {
+		t.Fatalf("run describe_dashboard_visual: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool returned error: %#v", result.Content)
+	}
+	body, err := json.Marshal(result.Content)
+	if err != nil {
+		t.Fatalf("marshal result content: %v", err)
+	}
+	var visual map[string]any
+	if err := json.Unmarshal(body, &visual); err != nil {
+		t.Fatalf("decode visual result: %v body=%s", err, body)
+	}
+	for _, want := range []string{"id", "title", "kind", "type", "query"} {
+		if _, ok := visual[want]; !ok {
+			t.Fatalf("visual result missing %q: %#v", want, visual)
+		}
+	}
+	for _, forbidden := range []string{"componentId", "renderer", "rendererOptions", "options", "interaction", "placement", "x", "y", "width", "height"} {
+		if _, ok := visual[forbidden]; ok {
+			t.Fatalf("visual result kept noisy field %q: %#v", forbidden, visual)
+		}
 	}
 }
 
@@ -537,19 +809,26 @@ func TestAPIGenAgentAssetDescribeAndLineageToolsUseTypeSpecContracts(t *testing.
 		t.Fatalf("marshal describe_asset: %v", err)
 	}
 	var described struct {
-		ID            string         `json:"id"`
-		SnapshotID    string         `json:"snapshotId"`
-		PayloadSchema string         `json:"payloadSchema"`
-		Payload       map[string]any `json:"payload"`
+		ID            string `json:"id"`
+		Type          string `json:"type"`
+		Title         string `json:"title"`
+		Description   string `json:"description"`
+		PayloadSchema string `json:"payloadSchema"`
 	}
 	if err := json.Unmarshal(body, &described); err != nil {
 		t.Fatalf("decode describe_asset: %v body=%s", err, body)
 	}
-	if described.ID != "visual:executive-sales.revenue" || described.SnapshotID == "" || described.PayloadSchema != "visual.v1" || described.Payload["query_kind"] != "aggregate" {
+	if described.ID != "visual:executive-sales.revenue" || described.Type != "visual" || described.Title != "Revenue" || described.PayloadSchema != "visual.v1" {
 		t.Fatalf("describe_asset result = %#v", described)
 	}
-	if _, ok := described.Payload["auth"]; ok {
-		t.Fatalf("describe_asset leaked auth payload: %#v", described.Payload)
+	var describedMap map[string]any
+	if err := json.Unmarshal(body, &describedMap); err != nil {
+		t.Fatalf("decode describe_asset map: %v", err)
+	}
+	for _, forbidden := range []string{"snapshotId", "workspaceId", "deploymentId", "payload", "key", "sourceFile"} {
+		if _, ok := describedMap[forbidden]; ok {
+			t.Fatalf("describe_asset kept noisy field %q: %#v", forbidden, describedMap)
+		}
 	}
 
 	result, err = names["asset_lineage"].Handler.Run(context.Background(), agent.ToolCall{
@@ -574,6 +853,58 @@ func TestAPIGenAgentAssetDescribeAndLineageToolsUseTypeSpecContracts(t *testing.
 	}
 	if lineage.AssetID != "visual:executive-sales.revenue" || !stringSliceHas(lineage.Upstream, "dashboard:executive-sales") || !stringSliceHas(lineage.Downstream, "measure:olist.revenue") {
 		t.Fatalf("asset_lineage result = %#v", lineage)
+	}
+}
+
+func TestAPIGenAgentQueryDashboardPageUsesDeclarativeOutputShape(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+	tools := server.agentAPIGenToolDefinitions(agentapp.Scope{WorkspaceID: "test", PrincipalID: "principal"})
+	var queryPage agent.ToolDefinition
+	for _, tool := range tools {
+		if tool.Name == "query_dashboard_page" {
+			queryPage = tool
+			break
+		}
+	}
+	if queryPage.Handler == nil {
+		t.Fatal("query_dashboard_page tool missing")
+	}
+	result, err := queryPage.Handler.Run(context.Background(), agent.ToolCall{
+		ID:        "call_1",
+		Name:      "query_dashboard_page",
+		Arguments: json.RawMessage(`{"dashboard":"executive-sales","page":"overview"}`),
+	})
+	if err != nil {
+		t.Fatalf("run query_dashboard_page: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("tool returned error: %#v", result.Content)
+	}
+	body, err := json.Marshal(result.Content)
+	if err != nil {
+		t.Fatalf("marshal result content: %v", err)
+	}
+	var page map[string]any
+	if err := json.Unmarshal(body, &page); err != nil {
+		t.Fatalf("decode page result: %v body=%s", err, body)
+	}
+	visuals, ok := page["visuals"].(map[string]any)
+	if !ok || len(visuals) == 0 {
+		t.Fatalf("page result missing compact visuals map: %#v", page)
+	}
+	orders := visuals["orders"].(map[string]any)
+	if orders["title"] != "Orders" || orders["count"] != float64(1) {
+		t.Fatalf("compact visual = %#v", orders)
+	}
+	for _, forbidden := range []string{"filters", "filterOptions", "status"} {
+		if _, ok := page[forbidden]; ok {
+			t.Fatalf("page result kept noisy field %q: %#v", forbidden, page)
+		}
+	}
+	for _, forbidden := range []string{"rendererOptions", "options", "interaction", "selection", "version"} {
+		if _, ok := orders[forbidden]; ok {
+			t.Fatalf("compact visual kept noisy field %q: %#v", forbidden, orders)
+		}
 	}
 }
 
@@ -610,16 +941,26 @@ func TestAPIGenAgentListToolInjectsDefaultLimit(t *testing.T) {
 		t.Fatalf("marshal result content: %v", err)
 	}
 	var decoded struct {
-		Items []map[string]any `json:"items"`
-		Page  struct {
-			NextCursor string `json:"nextCursor"`
-		} `json:"page"`
+		Count      int              `json:"count"`
+		Items      []map[string]any `json:"items"`
+		HasMore    bool             `json:"hasMore"`
+		NextCursor string           `json:"nextCursor"`
 	}
 	if err := json.Unmarshal(body, &decoded); err != nil {
 		t.Fatalf("decode result: %v body=%s", err, body)
 	}
-	if len(decoded.Items) != 25 || decoded.Page.NextCursor == "" {
-		t.Fatalf("default-limited edge result = count %d cursor %q", len(decoded.Items), decoded.Page.NextCursor)
+	if decoded.Count != 25 || len(decoded.Items) != 25 || !decoded.HasMore || decoded.NextCursor == "" {
+		t.Fatalf("default-limited edge result = %#v", decoded)
+	}
+	for _, item := range decoded.Items {
+		for _, want := range []string{"fromAssetId", "toAssetId", "type"} {
+			if _, ok := item[want]; !ok {
+				t.Fatalf("edge item missing %q: %#v", want, item)
+			}
+		}
+		if _, ok := item["deploymentId"]; ok {
+			t.Fatalf("edge item kept noisy metadata: %#v", item)
+		}
 	}
 
 	result, err = listEdges.Handler.Run(context.Background(), agent.ToolCall{
@@ -634,8 +975,8 @@ func TestAPIGenAgentListToolInjectsDefaultLimit(t *testing.T) {
 	if err := json.Unmarshal(body, &decoded); err != nil {
 		t.Fatalf("decode explicit result: %v body=%s", err, body)
 	}
-	if len(decoded.Items) != 3 {
-		t.Fatalf("explicit-limited edge count = %d, want 3", len(decoded.Items))
+	if decoded.Count != 3 || len(decoded.Items) != 3 {
+		t.Fatalf("explicit-limited edge result = %#v", decoded)
 	}
 }
 
@@ -668,16 +1009,26 @@ func TestAPIGenAgentToolDispatchesJSONBodyOperation(t *testing.T) {
 		t.Fatalf("marshal result content: %v", err)
 	}
 	var table struct {
-		AvailableRows int `json:"availableRows"`
-		Blocks        map[string]struct {
-			Rows []map[string]any `json:"rows"`
-		} `json:"blocks"`
+		AvailableRows int              `json:"availableRows"`
+		Count         int              `json:"count"`
+		HasMore       bool             `json:"hasMore"`
+		Columns       []map[string]any `json:"columns"`
+		Rows          []map[string]any `json:"rows"`
 	}
 	if err := json.Unmarshal(body, &table); err != nil {
 		t.Fatalf("decode table result: %v\n%s", err, body)
 	}
-	if table.AvailableRows != 50 || len(table.Blocks["a"].Rows) != 50 {
+	if table.AvailableRows != 50 || table.Count != 50 || len(table.Rows) != 50 || len(table.Columns) == 0 {
 		t.Fatalf("table result was not capped to 50: %#v", table)
+	}
+	var tableMap map[string]any
+	if err := json.Unmarshal(body, &tableMap); err != nil {
+		t.Fatalf("decode table map: %v", err)
+	}
+	for _, forbidden := range []string{"blocks", "style", "interaction", "selection", "chunkSize", "rowHeight", "resetVersion", "loadingBlock"} {
+		if _, ok := tableMap[forbidden]; ok {
+			t.Fatalf("table result kept noisy field %q: %#v", forbidden, tableMap)
+		}
 	}
 }
 
@@ -711,13 +1062,23 @@ func TestAPIGenAgentToolFetchesSingleDashboardVisualData(t *testing.T) {
 	}
 	var visual struct {
 		Title string           `json:"title"`
+		Count int              `json:"count"`
 		Data  []map[string]any `json:"data"`
 	}
 	if err := json.Unmarshal(body, &visual); err != nil {
 		t.Fatalf("decode visual result: %v body=%s", err, body)
 	}
-	if visual.Title != "Orders" || len(visual.Data) != 1 {
+	if visual.Title != "Orders" || visual.Count != 1 || len(visual.Data) != 1 {
 		t.Fatalf("visual result = %#v", visual)
+	}
+	var visualMap map[string]any
+	if err := json.Unmarshal(body, &visualMap); err != nil {
+		t.Fatalf("decode visual map: %v", err)
+	}
+	for _, forbidden := range []string{"renderer", "rendererOptions", "options", "interaction", "selection", "version"} {
+		if _, ok := visualMap[forbidden]; ok {
+			t.Fatalf("visual result kept noisy field %q: %#v", forbidden, visualMap)
+		}
 	}
 }
 
@@ -750,16 +1111,24 @@ func TestAPIGenAgentSemanticQueryToolInjectsBodyDefaultLimit(t *testing.T) {
 		t.Fatalf("marshal result content: %v", err)
 	}
 	var decoded struct {
-		Items []map[string]any `json:"items"`
-		Page  struct {
-			NextCursor string `json:"nextCursor"`
-		} `json:"page"`
+		Columns    []string         `json:"columns"`
+		Items      []map[string]any `json:"items"`
+		Count      int              `json:"count"`
+		HasMore    bool             `json:"hasMore"`
+		NextCursor string           `json:"nextCursor"`
 	}
 	if err := json.Unmarshal(body, &decoded); err != nil {
 		t.Fatalf("decode semantic result: %v body=%s", err, body)
 	}
-	if len(decoded.Items) != 25 || decoded.Page.NextCursor == "" {
+	if len(decoded.Columns) == 0 || len(decoded.Items) != 25 || decoded.Count != 25 || !decoded.HasMore || decoded.NextCursor == "" {
 		t.Fatalf("semantic default-limited result = %#v", decoded)
+	}
+	var decodedMap map[string]any
+	if err := json.Unmarshal(body, &decodedMap); err != nil {
+		t.Fatalf("decode semantic map: %v", err)
+	}
+	if _, ok := decodedMap["page"]; ok {
+		t.Fatalf("semantic result kept raw page metadata: %#v", decodedMap)
 	}
 }
 
@@ -830,6 +1199,16 @@ func sortedToolNames(tools []agent.ToolDefinition) []string {
 	names := toolNames(tools)
 	sort.Strings(names)
 	return names
+}
+
+func outputMetadataEmpty(output agenttools.Output) bool {
+	return output.ItemsPath == "" &&
+		len(output.Fields) == 0 &&
+		output.CursorPath == "" &&
+		!output.Count &&
+		len(output.RootFields) == 0 &&
+		len(output.Collections) == 0 &&
+		len(output.Maps) == 0
 }
 
 type fakeAssetCatalogReader struct {
@@ -915,6 +1294,21 @@ func (manySemanticRowsMetrics) QuerySemantic(_ context.Context, _ string, reques
 		rows = append(rows, reportdef.QueryRow{"status": "s" + strconv.Itoa(i), "order_count": i})
 	}
 	return rows, nil
+}
+
+func (m manySemanticRowsMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	if request.Kind != dataquery.KindSemanticAggregate {
+		return m.fakeMetrics.ExecuteDataQuery(ctx, request)
+	}
+	rows, err := m.QuerySemantic(ctx, request.ModelID, reportdef.AggregateQuery{Limit: request.Limit})
+	if err != nil {
+		return dataquery.Result{}, err
+	}
+	out := make([]dataquery.Row, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, dataquery.Row(row))
+	}
+	return dataquery.Result{Columns: dataquery.ColumnsFromNames([]string{"status", "order_count"}), Rows: out}, nil
 }
 
 func (manyEdgesMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {

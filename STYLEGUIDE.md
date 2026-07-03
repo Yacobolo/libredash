@@ -16,7 +16,9 @@ Primer primitive CSS imports provide the foundation for color, typography, spaci
 
 Tailwind v4 is configured CSS-first through `@theme` and `@theme inline` in `static/app.input.css`. Utilities should resolve to Primer variables or to LibreDash semantic aliases that themselves resolve to Primer variables.
 
-Add a token mapping before using a new design value. Arbitrary Tailwind values are allowed only for runtime/layout math that is not a reusable design decision.
+Add a token mapping before using a new design value. Do not define local tokens in Primer namespaces such as `--base-size-*`; use `--ld-*` aliases backed by Primer primitives instead.
+
+Product UI must not use raw color values or raw design fallbacks in CSS. Raw CSS values are allowed only for non-design runtime geometry such as `0`, `100%`, `minmax(0, 1fr)`, canvas dimensions derived from data, table virtualization offsets, and SVG stroke math.
 
 ## Light DOM And Gomponents
 
@@ -54,6 +56,8 @@ React Flow extracted CSS can remain as a page-specific asset where required, but
 
 For styling migrations, run:
 
+- `bun run test:primer-primitives`
+- `bun run test:primer-alignment`
 - `bun run build:css`
 - `bun run build`
 - `task test`

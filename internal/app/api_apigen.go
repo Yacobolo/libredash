@@ -382,3 +382,7 @@ func (a apiGenAdapter) DeleteRoleBinding(w http.ResponseWriter, r *http.Request,
 func (a apiGenAdapter) ListAuditEvents(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListAuditEventsParams) {
 	a.server.apiListAuditEvents(w, r)
 }
+
+func (a apiGenAdapter) ListQueryEvents(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListQueryEventsParams) {
+	a.server.apiListQueryEvents(w, r)
+}

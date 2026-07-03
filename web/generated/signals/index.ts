@@ -51,6 +51,88 @@ export interface AdminPageSignal {
   storage?: AdminStorageSignal
 }
 
+export interface AdminQueryDetailSignal {
+  eventId?: string
+  loading: boolean
+  error?: string
+  status?: string
+  statusLabel?: string
+  workspaceId?: string
+  principalId?: string
+  surface?: string
+  operation?: string
+  queryKind?: string
+  modelId?: string
+  target?: string
+  objectType?: string
+  objectId?: string
+  requestId?: string
+  correlationId?: string
+  durationMs: number
+  rowsReturned: number
+  queryError?: string
+  sql?: string
+  planText?: string
+  queryJson?: string
+  createdAt?: string
+}
+
+export interface AdminQueryEventSignal {
+  id: string
+  workspaceId: string
+  principalId: string
+  surface: string
+  operation: string
+  queryKind: string
+  modelId: string
+  target: string
+  objectType: string
+  objectId: string
+  requestId: string
+  correlationId: string
+  status: string
+  durationMs: number
+  rowsReturned: number
+  error: string
+  sql: string
+  planText: string
+  queryJson: string
+  createdAt: string
+}
+
+export interface AdminQueryHistoryCommand {
+  action: string
+  filters: AdminQueryHistoryFilters
+  filterMenu?: FilterMenuCommand
+  pageToken?: string
+  limit?: number
+  eventId?: string
+}
+
+export interface AdminQueryHistoryFilters {
+  workspaces?: string[]
+  principals?: string[]
+  surfaces?: string[]
+  kinds?: string[]
+  statuses?: string[]
+  target?: string
+  search?: string
+  from?: string
+  to?: string
+}
+
+export interface AdminQueryHistorySignal {
+  table: RecordTableSignal
+  filterMenus?: FilterMenuSignal[]
+  filters: AdminQueryHistoryFilters
+  nextCursor: string
+  loadedCountLabel: string
+  hasMore: boolean
+  loading: boolean
+  error: string
+  limit: number
+}
+
 export interface AdminStorageColumnSignal {
   id: number
   name: string
@@ -289,8 +371,10 @@ export interface ChatTranscriptItemSignal {
   summary?: string
   resultSummary?: string
   inputJson?: string
+  inputFormat?: string
   argumentsJson?: string
   resultJson?: string
+  resultFormat?: string
   artifact?: ChatArtifactSignal
   error?: string
   conversationId?: string
@@ -573,11 +657,146 @@ export interface DashboardVisual {
   data: Record<string, unknown>[]
 }
 
+export interface DataExplorerCommand {
+  workspaceId?: string
+  objectKey?: string
+  offset: number
+  limit: number
+  block?: string
+  start: number
+  count: number
+  requestSeq: number
+  resetVersion: number
+  sort: DataPreviewSortSignal
+  visibleColumns?: string[]
+  columnWidths?: Record<string, number>
+}
+
+export interface DataExplorerObjectSignal {
+  key: string
+  workspaceId: string
+  workspaceTitle?: string
+  assetId?: string
+  layer: string
+  modelId?: string
+  table?: string
+  source?: string
+  title: string
+  description?: string
+  detailHref?: string
+  columnCount: number
+  rowCountLabel?: string
+  columns?: DataPreviewColumnSignal[]
+}
+
+export interface DataExplorerPageEnvelope {
+  chrome: ChromeSignal
+  page: DataExplorerPageSignal
+  dataExplorer: DataExplorerSignal
+  runtime: RouteRuntimeSignal
+  status: DashboardStatus
+}
+
+export interface DataExplorerPageSignal {
+  kind: string
+  title: string
+  description?: string
+  workspaceId?: string
+  selectedWorkspaceId?: string
+  selectedObject?: string
+  workspaces: DataExplorerWorkspaceSignal[]
+  tabs: WorkspaceTabSignal[]
+}
+
+export interface DataExplorerSignal {
+  objects: DataExplorerObjectSignal[]
+  selectedWorkspaceId?: string
+  selectedKey?: string
+  selectedObject?: DataExplorerObjectSignal
+  preview: DataPreviewSignal
+  command: DataExplorerCommand
+  warnings?: string[]
+}
+
+export interface DataExplorerWorkspaceSignal {
+  id: string
+  title: string
+  href: string
+  objectCount: number
+  active: boolean
+}
+
+export interface DataPreviewBlockSignal {
+  start: number
+  requestSeq: number
+  resetVersion: number
+  sort: DataPreviewSortSignal
+  rows: Record<string, unknown>[]
+}
+
+export interface DataPreviewColumnSignal {
+  key: string
+  label: string
+  type?: string
+}
+
+export interface DataPreviewSignal {
+  columns: DataPreviewColumnSignal[]
+  totalRows: number
+  availableRows: number
+  chunkSize: number
+  rowHeight: number
+  resetVersion: number
+  blocks: Record<string, DataPreviewBlockSignal>
+  loadingBlock?: string
+  totalRowLabel?: string
+  sort: DataPreviewSortSignal
+  sql?: string
+  error?: string
+}
+
+export interface DataPreviewSortSignal {
+  column?: string
+  direction?: string
+}
+
 export interface DefinitionFactSignal {
   label: string
   value: string
   code?: boolean
   wide?: boolean
+}
+
+export interface FilterMenuCommand {
+  menuId?: string
+  action?: string
+  search?: string
+  value?: string
+  selected?: string[]
+}
+
+export interface FilterMenuOptionSignal {
+  value: string
+  label: string
+  description?: string
+  icon?: string
+  countLabel?: string
+  selected: boolean
+  disabled: boolean
+}
+
+export interface FilterMenuSignal {
+  id: string
+  label: string
+  summaryLabel?: string
+  mode?: string
+  search?: string
+  selected?: string[]
+  options?: FilterMenuOptionSignal[]
+  loading: boolean
+  error?: string
+  placeholder?: string
+  emptyLabel?: string
 }
 
 export interface LoginPageEnvelope {
@@ -598,6 +817,13 @@ export interface RecordTableBadgeSignal {
   tone?: string
 }
 
+export interface RecordTableColumnSelector {
+  enabled: boolean
+  storageKey?: string
+  label?: string
+  defaultColumns?: string[]
+}
+
 export interface RecordTableColumnSignal {
   id: string
   header: string
@@ -605,6 +831,7 @@ export interface RecordTableColumnSignal {
   align?: string
   hrefKey?: string
   width?: string
+  toggleable?: boolean
 }
 
 export interface RecordTableSignal {
@@ -612,6 +839,9 @@ export interface RecordTableSignal {
   rows: Record<string, unknown>[]
   empty: string
   minWidth?: string
+  columnSelector?: RecordTableColumnSelector
+  density?: string
+  rowAction?: string
 }
 
 export interface ReportFilterConfig {
@@ -956,4 +1186,4 @@ export interface WorkspaceTabSignal {
   count?: number
 }
 
-export type UISignalEnvelope = AdminAgentSignal | AdminAgentToolSignal | AdminContentSectionSignal | AdminMetricSignal | AdminPageEnvelope | AdminPageSignal | AdminStorageColumnSignal | AdminStorageCommand | AdminStorageSignal | AdminStorageSummary | AdminStorageTableSignal | CatalogDashboardSignal | CatalogPageEnvelope | CatalogPageSignal | ChatEnvelope | ChatPageSignal | ChatSignal | ChromeSignal | ConnectionsPageEnvelope | ConnectionsPageSignal | DashboardComponentSignal | DashboardEnvelope | DashboardPageNavSignal | DashboardPageSignal | DefinitionFactSignal | LoginPageEnvelope | LoginPageSignal | RecordTableBadgeSignal | RecordTableColumnSignal | RecordTableSignal | RouteRuntimeSignal | SemanticModelGraphEdgeSignal | SemanticModelGraphFieldSignal | SemanticModelGraphNodeSignal | SemanticModelGraphSignal | SidebarActionSignal | SidebarGroupSignal | SidebarHistoryItemSignal | SidebarHistorySignal | SidebarItemSignal | SidebarSignal | SubSidebarItemSignal | SubSidebarSignal | WorkspaceAccessSignal | WorkspaceActionSignal | WorkspaceAssetDetailsSignal | WorkspaceAssetLineageSignal | WorkspaceAssetPageEnvelope | WorkspaceAssetPageSignal | WorkspaceAssetRefreshSignal | WorkspaceAssetSummarySignal | WorkspaceBreadcrumbSignal | WorkspaceCardSignal | WorkspaceDetailSectionSignal | WorkspacePageEnvelope | WorkspacePageSignal | WorkspaceTabSignal
+export type UISignalEnvelope = AdminAgentSignal | AdminAgentToolSignal | AdminContentSectionSignal | AdminMetricSignal | AdminPageEnvelope | AdminPageSignal | AdminQueryDetailSignal | AdminQueryEventSignal | AdminQueryHistoryCommand | AdminQueryHistoryFilters | AdminQueryHistorySignal | AdminStorageColumnSignal | AdminStorageCommand | AdminStorageSignal | AdminStorageSummary | AdminStorageTableSignal | CatalogDashboardSignal | CatalogPageEnvelope | CatalogPageSignal | ChatEnvelope | ChatPageSignal | ChatSignal | ChromeSignal | ConnectionsPageEnvelope | ConnectionsPageSignal | DashboardComponentSignal | DashboardEnvelope | DashboardPageNavSignal | DashboardPageSignal | DataExplorerCommand | DataExplorerObjectSignal | DataExplorerPageEnvelope | DataExplorerPageSignal | DataExplorerSignal | DataExplorerWorkspaceSignal | DataPreviewBlockSignal | DataPreviewColumnSignal | DataPreviewSignal | DataPreviewSortSignal | DefinitionFactSignal | FilterMenuCommand | FilterMenuOptionSignal | FilterMenuSignal | LoginPageEnvelope | LoginPageSignal | RecordTableBadgeSignal | RecordTableColumnSignal | RecordTableSignal | RouteRuntimeSignal | SemanticModelGraphEdgeSignal | SemanticModelGraphFieldSignal | SemanticModelGraphNodeSignal | SemanticModelGraphSignal | SidebarActionSignal | SidebarGroupSignal | SidebarHistoryItemSignal | SidebarHistorySignal | SidebarItemSignal | SidebarSignal | SubSidebarItemSignal | SubSidebarSignal | WorkspaceAccessSignal | WorkspaceActionSignal | WorkspaceAssetDetailsSignal | WorkspaceAssetLineageSignal | WorkspaceAssetPageEnvelope | WorkspaceAssetPageSignal | WorkspaceAssetRefreshSignal | WorkspaceAssetSummarySignal | WorkspaceBreadcrumbSignal | WorkspaceCardSignal | WorkspaceDetailSectionSignal | WorkspacePageEnvelope | WorkspacePageSignal | WorkspaceTabSignal

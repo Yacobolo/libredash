@@ -7,6 +7,7 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
@@ -92,6 +93,17 @@ func (m multiWorkspaceMetrics) QuerySemantic(ctx context.Context, modelID string
 		return metrics.QuerySemantic(ctx, modelID, request)
 	}
 	return nil, fmt.Errorf("workspace metrics are not configured")
+}
+
+func (m multiWorkspaceMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	metrics := m.defaultMetrics()
+	if request.WorkspaceID != "" {
+		metrics = m.workspaces[request.WorkspaceID]
+	}
+	if metrics != nil {
+		return metrics.ExecuteDataQuery(ctx, request)
+	}
+	return dataquery.Result{}, fmt.Errorf("workspace metrics are not configured")
 }
 
 func (m multiWorkspaceMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
@@ -216,6 +228,20 @@ func (m *dynamicRuntimeMetrics) QuerySemantic(ctx context.Context, modelID strin
 		return metrics.QuerySemantic(ctx, modelID, request)
 	}
 	return nil, fmt.Errorf("workspace metrics are not configured")
+}
+
+func (m *dynamicRuntimeMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	workspaceID := request.WorkspaceID
+	if workspaceID == "" {
+		workspaceID = m.defaultID
+	}
+	if metrics, ok := m.MetricsForWorkspace(workspaceID); ok {
+		if request.WorkspaceID == "" {
+			request.WorkspaceID = workspaceID
+		}
+		return metrics.ExecuteDataQuery(ctx, request)
+	}
+	return dataquery.Result{}, fmt.Errorf("workspace metrics are not configured")
 }
 
 func (m *dynamicRuntimeMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {

@@ -53,6 +53,7 @@ func transcriptStateFromMessages(conversationID string, messages []Message) Chat
 					Title:          toolTitle(call.Name),
 					Status:         "running",
 					InputJSON:      formatToolCallPreview(call),
+					InputFormat:    "json",
 					ArgumentsJSON:  formatJSONPreview(string(call.Arguments), maxToolArgumentsPreviewBytes),
 					ConversationID: conversationID,
 					RunID:          message.RunID,
@@ -62,10 +63,11 @@ func transcriptStateFromMessages(conversationID string, messages []Message) Chat
 		case MessageRoleTool:
 			artifact, artifactSignals, compactArtifactResult := toolArtifact(message.ContentText, message.ContentJSON)
 			mergeChatArtifactSignals(&artifacts, artifactSignals)
-			resultJSON := formatJSONPreview(message.ContentText, maxToolResultPreviewBytes)
+			resultContent := message.ContentText
 			if compactArtifactResult != "" {
-				resultJSON = formatJSONPreview(compactArtifactResult, maxToolResultPreviewBytes)
+				resultContent = compactArtifactResult
 			}
+			resultJSON := formatJSONPreview(resultContent, maxToolResultPreviewBytes)
 			item := ChatTranscriptItem{
 				ID:             message.ID,
 				Kind:           "tool",
@@ -76,6 +78,7 @@ func transcriptStateFromMessages(conversationID string, messages []Message) Chat
 				Summary:        toolSummary(message.ContentText),
 				ResultSummary:  toolSummary(message.ContentText),
 				ResultJSON:     resultJSON,
+				ResultFormat:   toolPreviewFormat(resultContent),
 				Artifact:       artifact,
 				ConversationID: conversationID,
 				RunID:          message.RunID,
@@ -119,11 +122,15 @@ func mergeToolTranscriptItem(started, finished ChatTranscriptItem) ChatTranscrip
 	started.Summary = finished.Summary
 	started.ResultSummary = finished.ResultSummary
 	started.ResultJSON = finished.ResultJSON
+	started.ResultFormat = finished.ResultFormat
 	started.Artifact = finished.Artifact
 	started.Error = finished.Error
 	started.RunID = finished.RunID
 	if started.InputJSON == "" {
 		started.InputJSON = finished.InputJSON
+	}
+	if started.InputFormat == "" {
+		started.InputFormat = finished.InputFormat
 	}
 	if started.ArgumentsJSON == "" {
 		started.ArgumentsJSON = finished.ArgumentsJSON
@@ -281,6 +288,14 @@ func formatJSONPreview(raw string, limit int) string {
 		}
 	}
 	return truncateDisplayText(raw, limit)
+}
+
+func toolPreviewFormat(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw != "" && json.Valid([]byte(raw)) {
+		return "json"
+	}
+	return "toon"
 }
 
 func toolSummary(raw string) string {

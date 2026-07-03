@@ -10,6 +10,7 @@
     "generate:primer-primitives": "bun scripts/primer_primitives_reference.ts",
     "watch:css": "tailwindcss -i ./static/app.input.css -o ./static/app.css --watch",
     "test:primer-primitives": "bun test scripts/primer_primitives_reference.test.ts",
+    "test:primer-alignment": "bun test scripts/check_primer_alignment.test.ts && bun scripts/check_primer_alignment.ts",
     "test:theme": "playwright install chromium && bun test static/theme.dom.test.ts",
     "test:app-shell": "playwright install chromium && bun scripts/build_test_assets.ts app-shell && bun test web/components/app/app-shell.dom.test.ts",
     "test:table-selection": "bun test web/components/dashboard/table/selection.test.ts",
@@ -19,7 +20,11 @@
     "test:chat-composer": "playwright install chromium && bun scripts/build_test_assets.ts chat-composer && bun test web/components/chat/chat-composer.dom.test.ts",
     "test:chat-page": "playwright install chromium && bun scripts/build_test_assets.ts chat-page && bun test web/components/chat/chat-page.dom.test.ts",
     "test:chat-thread": "playwright install chromium && bun scripts/build_test_assets.ts chat-thread && bun test web/components/chat/chat-thread.dom.test.ts",
+    "test:code-block": "playwright install chromium && bun scripts/build_test_assets.ts code-block && bun test web/components/shared/code-block.dom.test.ts",
     "test:workspace-page": "playwright install chromium && bun scripts/build_test_assets.ts workspace-page && bun test web/components/workspace/workspace-page.dom.test.ts",
+    "test:data-explorer": "playwright install chromium && bun scripts/build_test_assets.ts data-explorer && bun test web/components/data/data-explorer.dom.test.ts",
+    "test:windowed-table": "playwright install chromium && bun scripts/build_test_assets.ts windowed-table && bun test web/components/shared/windowed-table.dom.test.ts",
+    "test:filter-menu": "playwright install chromium && bun scripts/build_test_assets.ts filter-menu && bun test web/components/shared/filter-menu.dom.test.ts",
     "test:admin-page": "playwright install chromium && bun scripts/build_test_assets.ts admin-page && bun test web/components/admin/admin-page.dom.test.ts",
     "test:code-editor": "playwright install chromium && bun scripts/build_test_assets.ts code-editor && bun test web/components/shared/code-editor.dom.test.ts",
     "test:markdown-view": "playwright install chromium && bun scripts/build_test_assets.ts markdown-view && bun test web/components/shared/markdown-view.dom.test.ts",
@@ -54,7 +59,8 @@
     "markdown-it": "^14.2.0",
     "monaco-editor-core": "^0.55.1",
     "p5": "^1.11.13",
-    "shiki": "^4.3.0"
+    "shiki": "^4.3.0",
+    "sql-formatter": "^15.8.2"
   },
   "trustedDependencies": [
     "@parcel/watcher"

@@ -516,7 +516,7 @@ const workspaceStyles = css`
   .page,
   .asset-page {
     display: grid;
-    width: min(100%, var(--ld-page-content-max-width, 72rem));
+    width: min(100%, var(--ld-page-content-max-width));
     min-width: 0;
     min-height: 100svh;
     align-content: start;
@@ -552,7 +552,7 @@ const workspaceStyles = css`
 
   .breadcrumb-header {
     border-bottom: var(--ld-border-muted);
-    padding: var(--base-size-10) var(--base-size-16);
+    padding: var(--ld-space-control) var(--base-size-16);
   }
 
   .title-block {
@@ -663,12 +663,13 @@ const workspaceStyles = css`
   }
 
   .primary-link {
-    min-height: var(--control-small-size, 28px);
+    min-height: var(--ld-button-height-sm);
     grid-auto-flow: column;
     gap: var(--base-size-6);
-    background: var(--ld-accent, #0969da);
-    color: var(--ld-accent-fg, #fff);
-    padding: 0 var(--base-size-10);
+    border: var(--borderWidth-default) solid var(--ld-button-accent-border-rest);
+    background: var(--ld-button-accent-bg-rest);
+    color: var(--ld-button-accent-fg-rest);
+    padding: 0 var(--ld-button-padding-inline-sm);
     font-size: var(--ld-font-size-caption);
     font-weight: var(--ld-font-weight-strong);
   }
@@ -748,16 +749,17 @@ const workspaceStyles = css`
   }
 
   input[type='search']:focus {
-    border-color: var(--ld-line-accent, var(--ld-accent));
+    border-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
     background: var(--ld-bg-panel);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--ld-line-accent, var(--ld-accent)), transparent 84%);
-    outline: 0;
+    outline: var(--focus-outline, var(--ld-border-default));
+    outline-color: var(--borderColor-accent-emphasis, var(--ld-line-accent));
+    outline-offset: var(--focus-outline-offset, var(--base-size-2));
   }
 
   .search-icon {
     position: absolute;
     top: 50%;
-    right: var(--base-size-10);
+    right: var(--ld-space-control);
     display: grid;
     width: var(--base-size-16);
     height: var(--base-size-16);
@@ -792,7 +794,7 @@ const workspaceStyles = css`
   }
 
   .tabs a.active {
-    border-bottom-color: var(--ld-accent, #0969da);
+    border-bottom-color: var(--ld-accent);
     color: var(--ld-fg-default);
     font-weight: var(--ld-font-weight-strong);
   }
@@ -985,7 +987,7 @@ const workspaceStyles = css`
 
   .lineage-graph {
     display: block;
-    height: var(--ld-lineage-graph-height, 32rem);
+    height: var(--ld-lineage-graph-height);
     min-height: 0;
     border-bottom: var(--ld-border-muted);
     background: var(--ld-bg-panel);
