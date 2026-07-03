@@ -190,7 +190,7 @@ func newFromDefinition(dataDir, duckDBDir string, factory DataRuntimeFactory, de
 			if !ok {
 				return nil, fmt.Errorf("workspace data runtime missing semantic model %q", modelID)
 			}
-			runtime.data = dataRuntime
+			runtime.data = newGovernedDataRuntime(definition.Catalog.Workspace.ID, modelID, dataRuntime)
 			runtime.ready = true
 		}
 		for modelID := range dataRuntimes {

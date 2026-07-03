@@ -76,7 +76,7 @@ func sqliteDSN(path string) string {
 	if strings.Contains(path, "?") {
 		separator = "&"
 	}
-	return path + separator + "_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"
+	return path + separator + "_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)"
 }
 
 func (s *Store) Close() error {

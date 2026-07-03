@@ -41,6 +41,9 @@ func TestRepositorySaveValidatedCommitsDeploymentGraph(t *testing.T) {
 	if gotArtifact.Path != "artifact.tar.gz" {
 		t.Fatalf("artifact path = %q, want artifact.tar.gz", gotArtifact.Path)
 	}
+	if gotArtifact.DataRoot != ".data/test" {
+		t.Fatalf("artifact data root = %q, want .data/test", gotArtifact.DataRoot)
+	}
 }
 
 func TestRepositorySaveValidatedRollsBackOnDuplicateEdge(t *testing.T) {
@@ -319,6 +322,53 @@ func TestRepositoryListsReferencedDuckLakeSnapshots(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("referenced snapshots = %#v, want %#v", got, want)
 		}
+	}
+}
+
+func TestRepositoryPersistsQuerySnapshotLeaseLifecycle(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openRepo(t, ctx)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	created, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create deployment: %v", err)
+	}
+	if _, err := repo.SaveValidated(ctx, created.ID, validationGraph(created.ID), artifact(created.ID, "test")); err != nil {
+		t.Fatalf("save validated: %v", err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, "UPDATE deployments SET status = ?, ducklake_snapshot_id = ? WHERE id = ?", string(deployment.StatusDraining), int64(42), string(created.ID)); err != nil {
+		t.Fatalf("mark deployment draining: %v", err)
+	}
+
+	leaseID, err := repo.CreateQuerySnapshotLease(ctx, deployment.SnapshotLeaseInput{
+		WorkspaceID:        "test",
+		Environment:        deployment.DefaultEnvironment,
+		DeploymentID:       created.ID,
+		DuckLakeSnapshotID: 42,
+		OwnerID:            "test",
+		ExpiresAt:          time.Now().Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("create lease: %v", err)
+	}
+	leased, err := repo.LeasedDuckLakeSnapshots(ctx)
+	if err != nil {
+		t.Fatalf("leased snapshots: %v", err)
+	}
+	if len(leased) != 1 || leased[0] != 42 {
+		t.Fatalf("leased snapshots = %#v, want [42]", leased)
+	}
+	if err := repo.ReleaseQuerySnapshotLease(ctx, leaseID); err != nil {
+		t.Fatalf("release lease: %v", err)
+	}
+	leased, err = repo.LeasedDuckLakeSnapshots(ctx)
+	if err != nil {
+		t.Fatalf("leased snapshots after release: %v", err)
+	}
+	if len(leased) != 0 {
+		t.Fatalf("leased snapshots after release = %#v, want empty", leased)
 	}
 }
 
@@ -641,6 +691,7 @@ func artifactForEnvironment(deploymentID deployment.ID, workspaceID deployment.W
 		Digest:       "digest",
 		Format:       "tar.gz",
 		Path:         "artifact.tar.gz",
+		DataRoot:     ".data/" + string(workspaceID),
 		ManifestJSON: "{}",
 	}
 }

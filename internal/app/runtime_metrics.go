@@ -260,14 +260,19 @@ func (m runtimeMetrics) QuerySemantic(ctx context.Context, modelID string, reque
 }
 
 func (m runtimeMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
-	runtime, err := m.semanticQueryRuntime()
+	runtime, release, err := m.active(ctx)
 	if err != nil {
 		return dataquery.Result{}, err
+	}
+	defer release()
+	port, ok := runtime.(semanticQueryRuntime)
+	if !ok {
+		return dataquery.Result{}, fmt.Errorf("active runtime does not provide semantic query data")
 	}
 	if request.WorkspaceID == "" {
 		request.WorkspaceID = m.workspaceID
 	}
-	return runtime.ExecuteDataQuery(ctx, request)
+	return port.ExecuteDataQuery(ctx, request)
 }
 
 func (m runtimeMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {

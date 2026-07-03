@@ -46,10 +46,27 @@ CREATE TABLE IF NOT EXISTS deployment_artifacts (
   digest TEXT NOT NULL,
   format TEXT NOT NULL,
   path TEXT NOT NULL,
+  data_root TEXT NOT NULL DEFAULT '',
   manifest_json TEXT NOT NULL DEFAULT '{}',
   size_bytes INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS query_snapshot_leases (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  environment TEXT NOT NULL,
+  deployment_id TEXT NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+  ducklake_snapshot_id INTEGER NOT NULL,
+  owner_id TEXT NOT NULL DEFAULT '',
+  acquired_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT NOT NULL,
+  released_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS query_snapshot_leases_live_idx
+  ON query_snapshot_leases(ducklake_snapshot_id, expires_at)
+  WHERE released_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS assets (
   snapshot_id TEXT PRIMARY KEY,

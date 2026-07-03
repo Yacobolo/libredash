@@ -17,6 +17,7 @@ import (
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/deployment"
+	"github.com/Yacobolo/libredash/internal/execution"
 	"github.com/Yacobolo/libredash/internal/platform"
 	queryauditsqlite "github.com/Yacobolo/libredash/internal/queryaudit/sqlite"
 	"github.com/Yacobolo/libredash/internal/ui"
@@ -82,6 +83,7 @@ func (m multiWorkspaceMetrics) defaultMetrics() QueryMetrics {
 
 type Server struct {
 	metrics             QueryMetrics
+	executor            *execution.Service
 	broker              *dashboardstream.Broker
 	store               *platform.Store
 	deploymentRepo      deploymentRepository
@@ -128,9 +130,17 @@ type Options struct {
 	SecurityHeaders     SecurityHeadersConfig
 	RequestLogging      bool
 	Logger              *slog.Logger
+	Executor            *execution.Service
 }
 
 func NewWithOptions(metrics QueryMetrics, options Options) *Server {
+	executor := options.Executor
+	if executor == nil {
+		executor = execution.New(execution.DefaultConfig())
+	}
+	if metrics != nil {
+		metrics = executionMetrics{QueryMetrics: metrics, executor: executor, defaultWorkspaceID: options.DefaultWorkspaceID}
+	}
 	if metrics != nil && options.Store != nil {
 		metrics = queryAuditMetrics{
 			QueryMetrics:       metrics,
@@ -139,6 +149,7 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 		}
 	}
 	server := New(metrics)
+	server.executor = executor
 	server.store = options.Store
 	server.deploymentRepo = options.DeploymentRepo
 	server.workspaceRepo = options.WorkspaceRepo

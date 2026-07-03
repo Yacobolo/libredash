@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/deployment"
 )
@@ -142,6 +143,75 @@ func TestManagerKeepsOldRuntimeOpenUntilLeaseRelease(t *testing.T) {
 	}
 	if !equalInt64s(drained, []int64{11}) {
 		t.Fatalf("drained snapshots = %#v, want [11]", drained)
+	}
+}
+
+func TestManagerPersistsSnapshotLeaseOnAcquireAndRelease(t *testing.T) {
+	ctx := context.Background()
+	repo := &fakeRepo{
+		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 11},
+		artifact:   deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
+	}
+	manager := NewManagerWithFactory(ManagerOptions{
+		Repo:        repo,
+		WorkspaceID: "test",
+		Environment: "dev",
+		DataDir:     "/data",
+		Factory:     &fakeFactory{},
+		LeaseTTL:    time.Minute,
+		LeaseOwner:  "test-owner",
+	})
+	if err := manager.Reload(ctx); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	lease, err := manager.Acquire()
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+	if len(repo.createdLeases) != 1 {
+		t.Fatalf("created leases = %#v, want one", repo.createdLeases)
+	}
+	created := repo.createdLeases[0]
+	if created.WorkspaceID != "test" || created.Environment != "dev" || created.DeploymentID != "dep_1" || created.DuckLakeSnapshotID != 11 || created.OwnerID != "test-owner" {
+		t.Fatalf("created lease = %#v", created)
+	}
+	lease.Release()
+	if got := repo.releasedLeases; len(got) != 1 || got[0] != "lease_1" {
+		t.Fatalf("released leases = %#v, want [lease_1]", got)
+	}
+	lease.Release()
+	if got := repo.releasedLeases; len(got) != 1 {
+		t.Fatalf("released leases after second release = %#v, want one release", got)
+	}
+}
+
+func TestManagerRetriesPersistentLeaseRelease(t *testing.T) {
+	ctx := context.Background()
+	repo := &fakeRepo{
+		deployment:        deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 42},
+		artifact:          deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
+		releaseFailures:   2,
+		releaseFailureErr: errors.New("database is locked"),
+	}
+	manager := NewManagerWithFactory(ManagerOptions{
+		Repo:        repo,
+		WorkspaceID: "test",
+		Environment: "dev",
+		DataDir:     "/data",
+		Factory:     &fakeFactory{},
+	})
+	if err := manager.Reload(ctx); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	lease, err := manager.Acquire()
+	if err != nil {
+		t.Fatalf("acquire: %v", err)
+	}
+
+	lease.Release()
+
+	if got := len(repo.releasedLeases); got != 3 {
+		t.Fatalf("release attempts = %d, want retry until success", got)
 	}
 }
 
@@ -473,6 +543,11 @@ type fakeRepo struct {
 	activeEnvironment    deployment.Environment
 	recordedDeploymentID deployment.ID
 	recordedSnapshotID   int64
+	createdLeases        []deployment.SnapshotLeaseInput
+	releasedLeases       []string
+	extendedLeases       []string
+	releaseFailures      int
+	releaseFailureErr    error
 }
 
 func (r *fakeRepo) ActiveArtifact(_ context.Context, _ deployment.WorkspaceID, environment deployment.Environment) (deployment.Deployment, deployment.Artifact, error) {
@@ -501,6 +576,28 @@ func (r *fakeRepo) RecordDuckLakeSnapshot(_ context.Context, deploymentID deploy
 	r.recordedDeploymentID = deploymentID
 	r.recordedSnapshotID = snapshotID
 	r.deployment.DuckLakeSnapshotID = snapshotID
+	return nil
+}
+
+func (r *fakeRepo) CreateQuerySnapshotLease(_ context.Context, input deployment.SnapshotLeaseInput) (string, error) {
+	r.createdLeases = append(r.createdLeases, input)
+	return fmt.Sprintf("lease_%d", len(r.createdLeases)), nil
+}
+
+func (r *fakeRepo) ReleaseQuerySnapshotLease(_ context.Context, id string) error {
+	r.releasedLeases = append(r.releasedLeases, id)
+	if r.releaseFailures > 0 {
+		r.releaseFailures--
+		if r.releaseFailureErr != nil {
+			return r.releaseFailureErr
+		}
+		return errors.New("release failed")
+	}
+	return nil
+}
+
+func (r *fakeRepo) ExtendQuerySnapshotLease(_ context.Context, id string, _ time.Time) error {
+	r.extendedLeases = append(r.extendedLeases, id)
 	return nil
 }
 

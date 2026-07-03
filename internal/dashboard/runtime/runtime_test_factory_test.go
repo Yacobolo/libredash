@@ -38,7 +38,7 @@ func (testDataRuntimeFactory) OpenDashboardWorkspaceDataRuntimes(ctx context.Con
 			modelID: modelID,
 			runtime: runtime,
 			close:   sharedClose,
-			data:    reportdef.NewAnalyticsDataService(queries),
+			data:    reportdef.NewDataQueryService(modelID, reportdef.NewAnalyticsDataService(queries), runtime),
 		}
 	}
 	return runtimes, nil
@@ -102,6 +102,10 @@ func (r testWorkspaceDataRuntime) Histogram(ctx context.Context, request reportd
 
 func (r testWorkspaceDataRuntime) Distribution(ctx context.Context, request reportdef.RawValueQuery, sort []reportdef.QuerySort, limit int) (reportdef.QueryRows, error) {
 	return r.data.Distribution(ctx, request, sort, limit)
+}
+
+func (r testWorkspaceDataRuntime) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	return r.runtime.ExecuteDataQuery(ctx, request)
 }
 
 func (r testWorkspaceDataRuntime) Refresh(ctx context.Context) error {

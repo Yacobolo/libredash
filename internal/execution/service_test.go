@@ -1,0 +1,143 @@
+package execution
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/Yacobolo/libredash/internal/dataquery"
+)
+
+func TestServiceQueuesReadsAndRejectsWhenFull(t *testing.T) {
+	service := New(Config{MaxRunningReads: 1, MaxQueuedReads: 1, ReadQueueWait: time.Second, MaxRunningJobs: 1, MaxQueuedJobs: 1})
+	firstStarted := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	secondDone := make(chan error, 1)
+
+	go func() {
+		_, _ = service.SubmitRead(context.Background(), dataquery.Query{}, func(context.Context) (dataquery.Result, error) {
+			close(firstStarted)
+			<-releaseFirst
+			return dataquery.Result{}, nil
+		})
+	}()
+	<-firstStarted
+
+	go func() {
+		_, err := service.SubmitRead(context.Background(), dataquery.Query{}, func(context.Context) (dataquery.Result, error) {
+			return dataquery.Result{}, nil
+		})
+		secondDone <- err
+	}()
+	waitForQueueDepth(t, service.waiting, 1)
+
+	_, err := service.SubmitRead(context.Background(), dataquery.Query{}, func(context.Context) (dataquery.Result, error) {
+		t.Fatal("third read should not execute")
+		return dataquery.Result{}, nil
+	})
+	if !errors.Is(err, ErrReadQueueFull) {
+		t.Fatalf("third read error = %v, want ErrReadQueueFull", err)
+	}
+
+	close(releaseFirst)
+	if err := <-secondDone; err != nil {
+		t.Fatalf("queued read error = %v", err)
+	}
+}
+
+func TestServiceCanceledQueuedReadDoesNotExecute(t *testing.T) {
+	service := New(Config{MaxRunningReads: 1, MaxQueuedReads: 1, ReadQueueWait: time.Second, MaxRunningJobs: 1, MaxQueuedJobs: 1})
+	firstStarted := make(chan struct{})
+	releaseFirst := make(chan struct{})
+
+	go func() {
+		_, _ = service.SubmitRead(context.Background(), dataquery.Query{}, func(context.Context) (dataquery.Result, error) {
+			close(firstStarted)
+			<-releaseFirst
+			return dataquery.Result{}, nil
+		})
+	}()
+	<-firstStarted
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := service.SubmitRead(ctx, dataquery.Query{}, func(context.Context) (dataquery.Result, error) {
+			t.Fatal("canceled queued read should not execute")
+			return dataquery.Result{}, nil
+		})
+		errCh <- err
+	}()
+	cancel()
+	if err := <-errCh; !errors.Is(err, context.Canceled) {
+		t.Fatalf("queued read error = %v, want context.Canceled", err)
+	}
+	close(releaseFirst)
+}
+
+func TestServiceRunsOneJobAtATime(t *testing.T) {
+	service := New(Config{MaxRunningReads: 1, MaxQueuedReads: 1, MaxRunningJobs: 1, MaxQueuedJobs: 2})
+	firstStarted := make(chan struct{})
+	releaseFirst := make(chan struct{})
+	secondStarted := make(chan struct{})
+	var mu sync.Mutex
+	running := 0
+	maxRunning := 0
+
+	run := func(started chan<- struct{}, release <-chan struct{}) error {
+		mu.Lock()
+		running++
+		if running > maxRunning {
+			maxRunning = running
+		}
+		mu.Unlock()
+		close(started)
+		if release != nil {
+			<-release
+		}
+		mu.Lock()
+		running--
+		mu.Unlock()
+		return nil
+	}
+
+	go func() {
+		_ = service.SubmitJob(context.Background(), JobRef{RunID: "first"}, func(context.Context) error {
+			return run(firstStarted, releaseFirst)
+		})
+	}()
+	<-firstStarted
+	go func() {
+		_ = service.SubmitJob(context.Background(), JobRef{RunID: "second"}, func(context.Context) error {
+			return run(secondStarted, nil)
+		})
+	}()
+
+	select {
+	case <-secondStarted:
+		t.Fatal("second job started before first released")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(releaseFirst)
+	<-secondStarted
+
+	mu.Lock()
+	defer mu.Unlock()
+	if maxRunning != 1 {
+		t.Fatalf("max running jobs = %d, want 1", maxRunning)
+	}
+}
+
+func waitForQueueDepth(t *testing.T, queue chan struct{}, want int) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if len(queue) == want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("queue depth = %d, want %d", len(queue), want)
+}

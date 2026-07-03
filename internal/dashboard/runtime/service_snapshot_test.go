@@ -6,6 +6,7 @@ import (
 	"time"
 
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 )
 
 func TestServiceDuckLakeSnapshotIDRequiresOneWorkspaceSnapshot(t *testing.T) {
@@ -47,6 +48,10 @@ func (r snapshotDataRuntime) Histogram(context.Context, reportdef.RawValueQuery,
 
 func (r snapshotDataRuntime) Distribution(context.Context, reportdef.RawValueQuery, []reportdef.QuerySort, int) (reportdef.QueryRows, error) {
 	return nil, nil
+}
+
+func (r snapshotDataRuntime) ExecuteDataQuery(context.Context, dataquery.Query) (dataquery.Result, error) {
+	return dataquery.Result{}, nil
 }
 
 func (r snapshotDataRuntime) Refresh(context.Context) error {

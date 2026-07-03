@@ -27,7 +27,7 @@ type deploymentRuntimeFactory struct {
 }
 
 func (f deploymentRuntimeFactory) Prepare(_ context.Context, input runtimehost.RuntimeInput) (runtimehost.Runtime, error) {
-	dataDir := runtimeFirstNonEmpty(input.DataDir, f.dataDir)
+	dataDir := runtimeDataDir(input, f.dataDir)
 	duckDBDir := runtimeFirstNonEmpty(input.DuckDBDir, f.duckDBDir)
 	runtimeDir := runtimeFirstNonEmpty(input.RuntimeDir, f.runtimeDir)
 	targetDir := filepath.Join(runtimeDir, string(input.Deployment.ID)+"-"+shortDigest(input.Artifact.Digest))
@@ -131,7 +131,7 @@ func (f dashboardDataRuntimeFactory) OpenDashboardWorkspaceDataRuntimes(ctx cont
 			modelID: modelID,
 			runtime: runtime,
 			close:   sharedClose,
-			data:    reportdef.NewAnalyticsDataService(queries),
+			data:    reportdef.NewDataQueryService(modelID, reportdef.NewAnalyticsDataService(queries), runtime),
 		}
 	}
 	return runtimes, nil
@@ -194,6 +194,10 @@ func (r dashboardWorkspaceDataRuntime) Histogram(ctx context.Context, request re
 
 func (r dashboardWorkspaceDataRuntime) Distribution(ctx context.Context, request reportdef.RawValueQuery, sort []reportdef.QuerySort, limit int) (reportdef.QueryRows, error) {
 	return r.data.Distribution(ctx, request, sort, limit)
+}
+
+func (r dashboardWorkspaceDataRuntime) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	return r.runtime.ExecuteDataQuery(ctx, request)
 }
 
 func (r dashboardWorkspaceDataRuntime) Refresh(ctx context.Context) error {
@@ -268,4 +272,15 @@ func runtimeFirstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func runtimeDataDir(input runtimehost.RuntimeInput, fallback string) string {
+	if input.Artifact.DataRoot != "" {
+		return input.Artifact.DataRoot
+	}
+	workspaceDataDir := filepath.Join(".data", string(input.Deployment.WorkspaceID))
+	if info, err := os.Stat(workspaceDataDir); err == nil && info.IsDir() {
+		return workspaceDataDir
+	}
+	return runtimeFirstNonEmpty(input.DataDir, fallback)
 }

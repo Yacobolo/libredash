@@ -17,6 +17,15 @@ type DeploymentRepository interface {
 	ReferencedDuckLakeSnapshots(ctx context.Context) ([]int64, error)
 }
 
+type snapshotProtectionRepository interface {
+	ActiveDuckLakeSnapshots(ctx context.Context) ([]int64, error)
+	LeasedDuckLakeSnapshots(ctx context.Context) ([]int64, error)
+}
+
+type expiredLeaseReconciler interface {
+	ReleaseExpiredQuerySnapshotLeases(ctx context.Context) error
+}
+
 type Options struct {
 	RootDir                      string
 	CatalogPath                  string
@@ -27,18 +36,27 @@ type Options struct {
 }
 
 type Report struct {
-	ProtectedSnapshots []int64
-	Candidates         []int64
+	ProtectedSnapshots       []int64
+	ActiveProtectedSnapshots []int64
+	LeaseProtectedSnapshots  []int64
+	Candidates               []int64
 }
 
 func Run(ctx context.Context, repo DeploymentRepository, options Options) (Report, error) {
 	if repo == nil {
 		return Report{}, fmt.Errorf("deployment repository is required")
 	}
-	if err := repo.ReconcileRetention(ctx, time.Now()); err != nil {
-		return Report{}, err
+	if !options.DryRun {
+		if leases, ok := repo.(expiredLeaseReconciler); ok {
+			if err := leases.ReleaseExpiredQuerySnapshotLeases(ctx); err != nil {
+				return Report{}, err
+			}
+		}
+		if err := repo.ReconcileRetention(ctx, time.Now()); err != nil {
+			return Report{}, err
+		}
 	}
-	referenced, err := repo.ReferencedDuckLakeSnapshots(ctx)
+	active, leased, err := protectedSnapshots(ctx, repo)
 	if err != nil {
 		return Report{}, err
 	}
@@ -56,7 +74,10 @@ func Run(ctx context.Context, repo DeploymentRepository, options Options) (Repor
 		snapshotSet[snapshot.ID] = struct{}{}
 	}
 	protected := map[int64]struct{}{}
-	for _, snapshotID := range referenced {
+	for _, snapshotID := range active {
+		protected[snapshotID] = struct{}{}
+	}
+	for _, snapshotID := range leased {
 		protected[snapshotID] = struct{}{}
 	}
 	for _, snapshotID := range options.AdditionalProtectedSnapshots {
@@ -82,8 +103,18 @@ func Run(ctx context.Context, repo DeploymentRepository, options Options) (Repor
 		fmt.Fprintf(options.Out, "ducklake catalog: %s\n", options.CatalogPath)
 		fmt.Fprintf(options.Out, "ducklake data: %s\n", options.DataPath)
 		fmt.Fprintf(options.Out, "mode: %s\n", cleanupMode(options.DryRun))
+		fmt.Fprintf(options.Out, "protected active snapshots: %s\n", FormatSnapshotIDs(active))
+		fmt.Fprintf(options.Out, "protected leased snapshots: %s\n", FormatSnapshotIDs(leased))
 		fmt.Fprintf(options.Out, "protected snapshots: %s\n", FormatSnapshotIDs(protectedList))
 		fmt.Fprintf(options.Out, "expiration candidates: %s\n", FormatSnapshotIDs(candidates))
+	}
+	if options.DryRun {
+		return Report{
+			ProtectedSnapshots:       protectedList,
+			ActiveProtectedSnapshots: active,
+			LeaseProtectedSnapshots:  leased,
+			Candidates:               candidates,
+		}, nil
 	}
 	if err := env.ExpireSnapshots(ctx, candidates, options.DryRun); err != nil {
 		return Report{}, fmt.Errorf("expire snapshots: %w", err)
@@ -94,7 +125,31 @@ func Run(ctx context.Context, repo DeploymentRepository, options Options) (Repor
 	if err := env.DeleteOrphanedFiles(ctx, options.DryRun); err != nil {
 		return Report{}, fmt.Errorf("delete orphaned files: %w", err)
 	}
-	return Report{ProtectedSnapshots: protectedList, Candidates: candidates}, nil
+	return Report{
+		ProtectedSnapshots:       protectedList,
+		ActiveProtectedSnapshots: active,
+		LeaseProtectedSnapshots:  leased,
+		Candidates:               candidates,
+	}, nil
+}
+
+func protectedSnapshots(ctx context.Context, repo DeploymentRepository) ([]int64, []int64, error) {
+	if split, ok := repo.(snapshotProtectionRepository); ok {
+		active, err := split.ActiveDuckLakeSnapshots(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		leased, err := split.LeasedDuckLakeSnapshots(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		return positiveSnapshotIDs(active), positiveSnapshotIDs(leased), nil
+	}
+	referenced, err := repo.ReferencedDuckLakeSnapshots(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	return positiveSnapshotIDs(referenced), nil, nil
 }
 
 func FormatSnapshotIDs(ids []int64) string {
@@ -127,4 +182,15 @@ func snapshotKeys(values map[int64]struct{}) []int64 {
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	return keys
+}
+
+func positiveSnapshotIDs(values []int64) []int64 {
+	out := make([]int64, 0, len(values))
+	for _, value := range values {
+		if value > 0 {
+			out = append(out, value)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }

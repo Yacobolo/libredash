@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
-	"net/url"
 	"sort"
 	"strings"
 
@@ -20,6 +20,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
+	"github.com/Yacobolo/libredash/internal/execution"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/go-chi/chi/v5"
@@ -320,6 +321,8 @@ func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, wor
 	if compiled.Definition == nil {
 		return fmt.Errorf("compiled workspace definition is required")
 	}
+	artifact.DataRoot = s.dataDirForWorkspace(workspaceID, artifact)
+	activeState.Artifact = artifact
 	plan, err := workspaceAssetRefreshPlanForAsset(compiled.Definition, workspaceID, asset)
 	if err != nil {
 		return err
@@ -402,56 +405,62 @@ func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, wor
 	}
 	s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
 
-	snapshotID, err := s.executeWorkspaceAssetRefreshPlan(ctx, compiled.Definition, activeState.Deployment, candidate.Deployment, artifact, environment, plan)
-	if err != nil {
-		_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
-		for _, run := range dependencyRuns {
-			_, _ = runRepo.MarkRunFailed(ctx, workspaceID, run.ID, err.Error())
-			s.publishWorkspaceAssetRefreshPatchForTarget(r, workspaceID, run.TargetID, assets, edges)
-		}
-		_ = serving.MarkFailed(ctx, candidate, err)
-		s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-		return err
-	}
-	if err := serving.RecordSnapshot(ctx, candidate, snapshotID); err != nil {
-		_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
-		_ = serving.MarkFailed(ctx, candidate, err)
-		s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-		return err
-	}
-	var prepared deployment.PreparedRuntime
-	if s.reloader != nil {
-		prepared, err = s.reloader.PrepareDeployment(ctx, string(newDeploymentID))
+	err = s.executionService().SubmitJob(ctx, execution.JobRef{WorkspaceID: workspaceID, RunID: rootRun.ID, Kind: "workspace_asset_refresh"}, func(ctx context.Context) error {
+		snapshotID, err := s.executeWorkspaceAssetRefreshPlan(ctx, compiled.Definition, activeState.Deployment, candidate.Deployment, artifact, environment, plan)
 		if err != nil {
+			_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
+			for _, run := range dependencyRuns {
+				_, _ = runRepo.MarkRunFailed(ctx, workspaceID, run.ID, err.Error())
+				s.publishWorkspaceAssetRefreshPatchForTarget(r, workspaceID, run.TargetID, assets, edges)
+			}
+			_ = serving.MarkFailed(ctx, candidate, err)
+			s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
+			return err
+		}
+		if err := serving.RecordSnapshot(ctx, candidate, snapshotID); err != nil {
 			_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
 			_ = serving.MarkFailed(ctx, candidate, err)
 			s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
 			return err
 		}
-	}
-	_, err = serving.Activate(ctx, candidate)
-	if err != nil {
-		if prepared != nil {
-			_ = prepared.Close()
+		var prepared deployment.PreparedRuntime
+		if s.reloader != nil {
+			prepared, err = s.reloader.PrepareDeployment(ctx, string(newDeploymentID))
+			if err != nil {
+				_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
+				_ = serving.MarkFailed(ctx, candidate, err)
+				s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
+				return err
+			}
 		}
-		_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
-		_ = serving.MarkFailed(ctx, candidate, err)
-		s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-		return err
-	}
-	if err := s.reconcileStorageRetention(ctx, false); err != nil && s.logger != nil {
-		s.logger.WarnContext(ctx, "storage retention reconciliation failed", "workspace", workspaceID, "environment", environment, "error", err)
-	}
-	finalized = true
-	if prepared != nil {
-		if err := s.reloader.CommitPrepared(prepared); err != nil {
-			_ = prepared.Close()
+		_, err = serving.Activate(ctx, candidate)
+		if err != nil {
+			if prepared != nil {
+				_ = prepared.Close()
+			}
 			_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
+			_ = serving.MarkFailed(ctx, candidate, err)
 			s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
 			return err
 		}
-	} else if s.reloader != nil {
-		_ = s.reloader.Reload(ctx)
+		if err := s.reconcileStorageRetention(ctx, false); err != nil && s.logger != nil {
+			s.logger.WarnContext(ctx, "storage retention reconciliation failed", "workspace", workspaceID, "environment", environment, "error", err)
+		}
+		finalized = true
+		if prepared != nil {
+			if err := s.reloader.CommitPrepared(prepared); err != nil {
+				_ = prepared.Close()
+				_, _ = runRepo.MarkRunFailed(ctx, workspaceID, rootRun.ID, err.Error())
+				s.publishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
+				return err
+			}
+		} else if s.reloader != nil {
+			_ = s.reloader.Reload(ctx)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	for _, run := range dependencyRuns {
 		if _, err := runRepo.MarkRunSucceeded(ctx, workspaceID, run.ID); err != nil {
@@ -483,7 +492,7 @@ func (s *Server) executeWorkspaceAssetRefreshPlan(ctx context.Context, definitio
 }
 
 func (s *Server) openWorkspaceRefreshRuntime(ctx context.Context, definition *workspace.Definition, active, refreshed deployment.Deployment, artifact deployment.Artifact, environment deployment.Environment, plan workspaceAssetRefreshPlan) (*analyticsduckdb.WorkspaceRuntime, error) {
-	dataDir := s.dataDirForWorkspace(string(refreshed.WorkspaceID))
+	dataDir := s.dataDirForWorkspace(string(refreshed.WorkspaceID), artifact)
 	dbDir := s.duckDBDir
 	if strings.TrimSpace(dbDir) == "" {
 		dbDir = filepath.Join(".libredash", "duckdb")
@@ -506,7 +515,10 @@ func (s *Server) openWorkspaceRefreshRuntime(ctx context.Context, definition *wo
 	})
 }
 
-func (s *Server) dataDirForWorkspace(workspaceID string) string {
+func (s *Server) dataDirForWorkspace(workspaceID string, artifact deployment.Artifact) string {
+	if strings.TrimSpace(artifact.DataRoot) != "" {
+		return artifact.DataRoot
+	}
 	dataDir := ""
 	if workspaceMetrics, ok := s.metrics.(workspaceMetrics); ok {
 		if metrics, ok := workspaceMetrics.MetricsForWorkspace(workspaceID); ok && metrics != nil {

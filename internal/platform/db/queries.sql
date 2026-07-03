@@ -78,6 +78,21 @@ WHERE ducklake_snapshot_id > 0
   AND status = 'active'
 ORDER BY ducklake_snapshot_id;
 
+-- name: ListActiveDuckLakeSnapshots :many
+SELECT DISTINCT ducklake_snapshot_id
+FROM deployments
+WHERE ducklake_snapshot_id > 0
+  AND status = 'active'
+ORDER BY ducklake_snapshot_id;
+
+-- name: ListLeasedDuckLakeSnapshots :many
+SELECT DISTINCT ducklake_snapshot_id
+FROM query_snapshot_leases
+WHERE ducklake_snapshot_id > 0
+  AND released_at IS NULL
+  AND expires_at > CURRENT_TIMESTAMP
+ORDER BY ducklake_snapshot_id;
+
 -- name: ExpireInactiveDeployments :exec
 UPDATE deployments
 SET status = 'expired', error = ''
@@ -135,18 +150,40 @@ SET status = 'inactive'
 WHERE workspace_id = ? AND environment = ? AND id <> ? AND status = 'active';
 
 -- name: InsertDeploymentArtifact :exec
-INSERT INTO deployment_artifacts (id, deployment_id, workspace_id, environment, digest, format, path, manifest_json, size_bytes)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO deployment_artifacts (id, deployment_id, workspace_id, environment, digest, format, path, data_root, manifest_json, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(deployment_id) DO UPDATE SET
   environment = excluded.environment,
   digest = excluded.digest,
   format = excluded.format,
   path = excluded.path,
+  data_root = excluded.data_root,
   manifest_json = excluded.manifest_json,
   size_bytes = excluded.size_bytes;
 
 -- name: GetArtifactByDeployment :one
 SELECT * FROM deployment_artifacts WHERE deployment_id = ?;
+
+-- name: CreateQuerySnapshotLease :exec
+INSERT INTO query_snapshot_leases (id, workspace_id, environment, deployment_id, ducklake_snapshot_id, owner_id, expires_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- name: ReleaseQuerySnapshotLease :exec
+UPDATE query_snapshot_leases
+SET released_at = COALESCE(released_at, CURRENT_TIMESTAMP)
+WHERE id = ?;
+
+-- name: ExtendQuerySnapshotLease :exec
+UPDATE query_snapshot_leases
+SET expires_at = ?
+WHERE id = ?
+  AND released_at IS NULL;
+
+-- name: ReleaseExpiredQuerySnapshotLeases :exec
+UPDATE query_snapshot_leases
+SET released_at = CURRENT_TIMESTAMP
+WHERE released_at IS NULL
+  AND expires_at <= CURRENT_TIMESTAMP;
 
 -- name: ClearAssetsForDeployment :exec
 DELETE FROM assets WHERE deployment_id = ?;

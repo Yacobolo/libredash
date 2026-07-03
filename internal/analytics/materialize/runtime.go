@@ -55,6 +55,18 @@ type schemaDiscoverer interface {
 }
 
 func OpenRuntime(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
+	runtime, err := NewRuntimeView(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	if err := runtime.Refresh(ctx); err != nil {
+		config.Database.Close()
+		return nil, err
+	}
+	return runtime, nil
+}
+
+func NewRuntimeView(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
 	if config.Model == nil {
 		return nil, fmt.Errorf("semantic model is required")
 	}
@@ -78,10 +90,6 @@ func OpenRuntime(ctx context.Context, config RuntimeConfig) (*Runtime, error) {
 		db:      config.Database,
 		sources: config.Sources,
 		queries: semanticquery.NewService(semanticquery.NewPlanner(config.Model), config.Database),
-	}
-	if err := runtime.Refresh(ctx); err != nil {
-		config.Database.Close()
-		return nil, err
 	}
 	return runtime, nil
 }

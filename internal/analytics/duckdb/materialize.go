@@ -15,6 +15,7 @@ import (
 	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 )
 
 type SourceRuntime struct {
@@ -180,6 +181,35 @@ func (r *WorkspaceRuntime) Queries(modelID string) (*semanticquery.Service, erro
 		return nil, fmt.Errorf("unknown semantic model %q", modelID)
 	}
 	return queries, nil
+}
+
+func (r *WorkspaceRuntime) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	if r == nil || r.db == nil {
+		return dataquery.Result{}, fmt.Errorf("workspace runtime is not initialized")
+	}
+	modelID := strings.TrimSpace(request.ModelID)
+	if modelID == "" && len(r.models) == 1 {
+		for id := range r.models {
+			modelID = id
+		}
+	}
+	model, ok := r.models[modelID]
+	if !ok {
+		return dataquery.Result{}, fmt.Errorf("unknown semantic model %q", modelID)
+	}
+	request.ModelID = modelID
+	view, err := analyticsmaterialize.NewRuntimeView(ctx, analyticsmaterialize.RuntimeConfig{
+		ModelID:  modelID,
+		Model:    model,
+		DataDir:  r.dataDir,
+		Database: r.db,
+		Sources:  r.sources,
+		Resolver: r.sources,
+	})
+	if err != nil {
+		return dataquery.Result{}, err
+	}
+	return view.ExecuteDataQuery(ctx, request)
 }
 
 func (r *WorkspaceRuntime) Refresh(ctx context.Context) error {

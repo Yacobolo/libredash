@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
 	"github.com/Yacobolo/libredash/internal/deployment"
@@ -65,6 +66,29 @@ func TestAdminStorageCleanupDryRunReconcilesReferencedSnapshots(t *testing.T) {
 		if _, ok := ids[want]; !ok {
 			t.Fatalf("snapshot %d missing after dry-run; snapshots=%#v", want, snapshots)
 		}
+	}
+}
+
+func TestAdminStorageCleanupDryRunDoesNotMutateDrainingDeployments(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	setAdminStorageEnv(t, home)
+	root := home
+	first, second := seedAdminDuckLakeSnapshots(t, ctx, home, root)
+	drainingID := recordAdminDeploymentSnapshotWithStatus(t, ctx, home, "dev", first, deployment.StatusDraining, "")
+	recordAdminDeploymentSnapshot(t, ctx, home, "dev", second)
+
+	opts := &rootOptions{}
+	cmd := adminCommand(ctx, opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"storage", "cleanup"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("admin storage cleanup dry-run: %v", err)
+	}
+	status := adminDeploymentStatus(t, ctx, home, drainingID)
+	if status != string(deployment.StatusDraining) {
+		t.Fatalf("draining deployment status after dry-run = %q, want draining", status)
 	}
 }
 
@@ -139,6 +163,53 @@ func TestAdminStorageCleanupApplyExpiresDrainingSnapshots(t *testing.T) {
 	}
 }
 
+func TestAdminStorageCleanupApplyProtectsLeasedDrainingSnapshot(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	setAdminStorageEnv(t, home)
+	root := home
+	first, second := seedAdminDuckLakeSnapshots(t, ctx, home, root)
+	drainingID := recordAdminDeploymentSnapshotWithStatus(t, ctx, home, "dev", first, deployment.StatusDraining, "")
+	recordAdminDeploymentSnapshot(t, ctx, home, "dev", second)
+	createAdminSnapshotLease(t, ctx, home, drainingID, first)
+
+	opts := &rootOptions{}
+	cmd := adminCommand(ctx, opts)
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"storage", "cleanup", "--apply"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("admin storage cleanup apply: %v", err)
+	}
+	output := out.String()
+	if !strings.Contains(output, "protected leased snapshots: "+storagemaintenance.FormatSnapshotIDs([]int64{first})) {
+		t.Fatalf("output missing leased protection:\n%s", output)
+	}
+	if !strings.Contains(output, "expiration candidates: none") {
+		t.Fatalf("output has unexpected expiration candidates:\n%s", output)
+	}
+
+	env, err := analyticsducklake.Open(ctx, analyticsducklake.Config{RootDir: root, CatalogPath: filepath.Join(home, "libredash.db"), DataPath: filepath.Join(home, "data")})
+	if adminDuckLakeUnavailable(err) {
+		t.Skipf("ducklake extension unavailable: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("reopen ducklake: %v", err)
+	}
+	defer env.Close()
+	snapshots, err := env.Snapshots(ctx)
+	if err != nil {
+		t.Fatalf("snapshots after apply: %v", err)
+	}
+	ids := map[int64]struct{}{}
+	for _, snapshot := range snapshots {
+		ids[snapshot.ID] = struct{}{}
+	}
+	if _, ok := ids[first]; !ok {
+		t.Fatalf("leased snapshot %d missing after cleanup apply; snapshots=%#v", first, snapshots)
+	}
+}
+
 func setAdminStorageEnv(t *testing.T, home string) {
 	t.Helper()
 	t.Setenv("LIBREDASH_HOME", home)
@@ -172,12 +243,12 @@ func seedAdminDuckLakeSnapshots(t *testing.T, ctx context.Context, home, root st
 	return first, second
 }
 
-func recordAdminDeploymentSnapshot(t *testing.T, ctx context.Context, home string, environment deployment.Environment, snapshotID int64) {
+func recordAdminDeploymentSnapshot(t *testing.T, ctx context.Context, home string, environment deployment.Environment, snapshotID int64) deployment.ID {
 	t.Helper()
-	recordAdminDeploymentSnapshotWithStatus(t, ctx, home, environment, snapshotID, deployment.StatusActive, "")
+	return recordAdminDeploymentSnapshotWithStatus(t, ctx, home, environment, snapshotID, deployment.StatusActive, "")
 }
 
-func recordAdminDeploymentSnapshotWithStatus(t *testing.T, ctx context.Context, home string, environment deployment.Environment, snapshotID int64, status deployment.Status, cleanupAfter string) {
+func recordAdminDeploymentSnapshotWithStatus(t *testing.T, ctx context.Context, home string, environment deployment.Environment, snapshotID int64, status deployment.Status, cleanupAfter string) deployment.ID {
 	t.Helper()
 	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
 	if err != nil {
@@ -198,6 +269,41 @@ func recordAdminDeploymentSnapshotWithStatus(t *testing.T, ctx context.Context, 
 	if _, err := store.SQLDB().ExecContext(ctx, "UPDATE deployments SET status = ?, cleanup_after = NULLIF(?, '') WHERE id = ?", string(status), cleanupAfter, string(created.ID)); err != nil {
 		t.Fatalf("mark deployment %s: %v", status, err)
 	}
+	return created.ID
+}
+
+func createAdminSnapshotLease(t *testing.T, ctx context.Context, home string, deploymentID deployment.ID, snapshotID int64) {
+	t.Helper()
+	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	if err != nil {
+		t.Fatalf("open platform store: %v", err)
+	}
+	defer store.Close()
+	repo := deploymentsqlite.NewRepository(store.SQLDB())
+	if _, err := repo.CreateQuerySnapshotLease(ctx, deployment.SnapshotLeaseInput{
+		WorkspaceID:        "test",
+		Environment:        "dev",
+		DeploymentID:       deploymentID,
+		DuckLakeSnapshotID: snapshotID,
+		OwnerID:            "test",
+		ExpiresAt:          time.Now().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("create query snapshot lease: %v", err)
+	}
+}
+
+func adminDeploymentStatus(t *testing.T, ctx context.Context, home string, deploymentID deployment.ID) string {
+	t.Helper()
+	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
+	if err != nil {
+		t.Fatalf("open platform store: %v", err)
+	}
+	defer store.Close()
+	var status string
+	if err := store.SQLDB().QueryRowContext(ctx, "SELECT status FROM deployments WHERE id = ?", string(deploymentID)).Scan(&status); err != nil {
+		t.Fatalf("read deployment status: %v", err)
+	}
+	return status
 }
 
 func adminDuckLakeUnavailable(err error) bool {

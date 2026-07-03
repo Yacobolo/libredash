@@ -50,11 +50,7 @@ func (s servingStateService) CreateRefreshCandidate(ctx context.Context, input s
 	if err != nil {
 		return servingState{}, err
 	}
-	validated, err := s.repo.SaveValidated(ctx, created.ID, deployment.Validation{
-		Digest:       active.Deployment.Digest,
-		ManifestJSON: active.Deployment.ManifestJSON,
-		Graph:        retargetAssetGraph(input.ArtifactGraph, workspace.WorkspaceID(input.WorkspaceID), workspace.DeploymentID(created.ID)),
-	}, deployment.Artifact{
+	candidateArtifact := deployment.Artifact{
 		ID:           "artifact_" + string(created.ID),
 		DeploymentID: created.ID,
 		WorkspaceID:  workspaceID,
@@ -62,15 +58,22 @@ func (s servingStateService) CreateRefreshCandidate(ctx context.Context, input s
 		Digest:       active.Artifact.Digest,
 		Format:       active.Artifact.Format,
 		Path:         active.Artifact.Path,
+		DataRoot:     active.Artifact.DataRoot,
 		ManifestJSON: active.Artifact.ManifestJSON,
 		SizeBytes:    active.Artifact.SizeBytes,
 		CreatedAt:    active.Artifact.CreatedAt,
-	})
+	}
+	validated, err := s.repo.SaveValidated(ctx, created.ID, deployment.Validation{
+		Digest:       active.Deployment.Digest,
+		ManifestJSON: active.Deployment.ManifestJSON,
+		Graph:        retargetAssetGraph(input.ArtifactGraph, workspace.WorkspaceID(input.WorkspaceID), workspace.DeploymentID(created.ID)),
+		DataRoot:     active.Artifact.DataRoot,
+	}, candidateArtifact)
 	if err != nil {
 		_ = s.repo.MarkFailed(ctx, created.ID, err)
 		return servingState{}, err
 	}
-	return servingState{Deployment: validated, Artifact: active.Artifact}, nil
+	return servingState{Deployment: validated, Artifact: candidateArtifact}, nil
 }
 
 func (s servingStateService) RecordSnapshot(ctx context.Context, candidate servingState, snapshotID int64) error {

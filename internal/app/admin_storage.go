@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -615,6 +616,34 @@ func openDuckDBConnection(ctx context.Context, dsn string) (*sql.DB, error) {
 		}
 	}
 	return nil, err
+}
+
+func openDuckDBForInspection(ctx context.Context, path string) (*sql.DB, error) {
+	db, err := openDuckDBConnection(ctx, duckDBReadOnlyDSN(path))
+	if err == nil {
+		return db, nil
+	}
+	fallbackDB, fallbackErr := openDuckDBConnection(ctx, path)
+	if fallbackErr == nil {
+		return fallbackDB, nil
+	}
+	return nil, errors.Join(err, fallbackErr)
+}
+
+func duckDBReadOnlyDSN(path string) string {
+	before, query, hasQuery := strings.Cut(path, "?")
+	if !hasQuery {
+		return path + "?access_mode=READ_ONLY"
+	}
+	values := strings.Split(query, "&")
+	for i, value := range values {
+		key, _, _ := strings.Cut(value, "=")
+		if key == "access_mode" {
+			values[i] = "access_mode=READ_ONLY"
+			return before + "?" + strings.Join(values, "&")
+		}
+	}
+	return path + "&access_mode=READ_ONLY"
 }
 
 func directorySize(root string) (int64, error) {

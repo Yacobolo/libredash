@@ -2,6 +2,7 @@ package deployment
 
 import (
 	"errors"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
@@ -73,15 +74,26 @@ type Artifact struct {
 	Digest       string
 	Format       string
 	Path         string
+	DataRoot     string
 	ManifestJSON string
 	SizeBytes    int64
 	CreatedAt    string
+}
+
+type SnapshotLeaseInput struct {
+	WorkspaceID        WorkspaceID
+	Environment        Environment
+	DeploymentID       ID
+	DuckLakeSnapshotID int64
+	OwnerID            string
+	ExpiresAt          time.Time
 }
 
 type Validation struct {
 	Digest       string
 	ManifestJSON string
 	RootDir      string
+	DataRoot     string
 	Graph        workspace.AssetGraph
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/deployment"
 )
@@ -35,6 +36,12 @@ type RuntimeFactory interface {
 	Prepare(ctx context.Context, input RuntimeInput) (Runtime, error)
 }
 
+type SnapshotLeaseRepository interface {
+	CreateQuerySnapshotLease(ctx context.Context, input deployment.SnapshotLeaseInput) (string, error)
+	ReleaseQuerySnapshotLease(ctx context.Context, id string) error
+	ExtendQuerySnapshotLease(ctx context.Context, id string, expiresAt time.Time) error
+}
+
 type RuntimeInput struct {
 	Deployment deployment.Deployment
 	Artifact   deployment.Artifact
@@ -51,6 +58,8 @@ type Manager struct {
 	dataDir     string
 	factory     RuntimeFactory
 	onDrained   func(deployment.ID, int64)
+	leaseTTL    time.Duration
+	leaseOwner  string
 
 	activeDeployment deployment.ID
 	activeDigest     string
@@ -66,6 +75,8 @@ type ManagerOptions struct {
 	DataDir     string
 	Factory     RuntimeFactory
 	OnDrained   func(deployment.ID, int64)
+	LeaseTTL    time.Duration
+	LeaseOwner  string
 }
 
 type Prepared struct {
@@ -98,6 +109,8 @@ func NewManagerWithFactory(options ManagerOptions) *Manager {
 		dataDir:     options.DataDir,
 		factory:     options.Factory,
 		onDrained:   options.OnDrained,
+		leaseTTL:    normalizedLeaseTTL(options.LeaseTTL),
+		leaseOwner:  firstNonEmpty(options.LeaseOwner, "runtimehost"),
 	}
 }
 
@@ -224,8 +237,12 @@ func (m *Manager) Acquire() (Lease, error) {
 	if m.current == nil || m.current.closing {
 		return nil, fmt.Errorf("no active LibreDash deployment")
 	}
+	leaseID, heartbeatCancel, err := m.createPersistentLeaseLocked()
+	if err != nil {
+		return nil, err
+	}
 	m.current.refs++
-	return &runtimeLease{manager: m, managed: m.current}, nil
+	return &runtimeLease{manager: m, managed: m.current, leaseID: leaseID, heartbeatCancel: heartbeatCancel}, nil
 }
 
 func (m *Manager) LeasedSnapshots() []int64 {
@@ -255,7 +272,15 @@ func (m *Manager) retireLocked(runtime *managedRuntime) *managedRuntime {
 	return runtime
 }
 
-func (m *Manager) release(runtime *managedRuntime) {
+func (m *Manager) release(runtime *managedRuntime, leaseID string, heartbeatCancel context.CancelFunc) {
+	if heartbeatCancel != nil {
+		heartbeatCancel()
+	}
+	if leaseID != "" {
+		if repo, ok := m.repo.(SnapshotLeaseRepository); ok {
+			releaseSnapshotLease(repo, leaseID)
+		}
+	}
 	var drained *managedRuntime
 	m.mu.Lock()
 	if runtime != nil && runtime.refs > 0 {
@@ -267,6 +292,24 @@ func (m *Manager) release(runtime *managedRuntime) {
 	}
 	m.mu.Unlock()
 	_ = m.closeManaged(drained)
+}
+
+func releaseSnapshotLease(repo SnapshotLeaseRepository, leaseID string) {
+	if repo == nil || leaseID == "" {
+		return
+	}
+	delay := 25 * time.Millisecond
+	for attempt := 0; attempt < 5; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		err := repo.ReleaseQuerySnapshotLease(ctx, leaseID)
+		cancel()
+		if err == nil {
+			return
+		}
+		time.Sleep(delay)
+		delay *= 2
+	}
+	_ = repo.ReleaseQuerySnapshotLease(context.Background(), leaseID)
 }
 
 func (m *Manager) removeRetiredLocked(runtime *managedRuntime) {
@@ -299,9 +342,11 @@ type managedRuntime struct {
 }
 
 type runtimeLease struct {
-	manager *Manager
-	managed *managedRuntime
-	once    sync.Once
+	manager         *Manager
+	managed         *managedRuntime
+	leaseID         string
+	heartbeatCancel context.CancelFunc
+	once            sync.Once
 }
 
 func (l *runtimeLease) Runtime() Runtime {
@@ -330,8 +375,63 @@ func (l *runtimeLease) Release() {
 		return
 	}
 	l.once.Do(func() {
-		l.manager.release(l.managed)
+		l.manager.release(l.managed, l.leaseID, l.heartbeatCancel)
 	})
+}
+
+func (m *Manager) createPersistentLeaseLocked() (string, context.CancelFunc, error) {
+	repo, ok := m.repo.(SnapshotLeaseRepository)
+	if !ok || m.current == nil || m.current.snapshotID <= 0 {
+		return "", nil, nil
+	}
+	expiresAt := time.Now().Add(m.leaseTTL)
+	leaseID, err := repo.CreateQuerySnapshotLease(context.Background(), deployment.SnapshotLeaseInput{
+		WorkspaceID:        m.workspaceID,
+		Environment:        m.environment,
+		DeploymentID:       m.current.deploymentID,
+		DuckLakeSnapshotID: m.current.snapshotID,
+		OwnerID:            m.leaseOwner,
+		ExpiresAt:          expiresAt,
+	})
+	if err != nil {
+		return "", nil, err
+	}
+	heartbeatCtx, cancel := context.WithCancel(context.Background())
+	go m.heartbeatLease(heartbeatCtx, repo, leaseID)
+	return leaseID, cancel, nil
+}
+
+func (m *Manager) heartbeatLease(ctx context.Context, repo SnapshotLeaseRepository, leaseID string) {
+	interval := m.leaseTTL / 2
+	if interval <= 0 {
+		interval = time.Minute
+	}
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			_ = repo.ExtendQuerySnapshotLease(context.Background(), leaseID, time.Now().Add(m.leaseTTL))
+		}
+	}
+}
+
+func normalizedLeaseTTL(value time.Duration) time.Duration {
+	if value <= 0 {
+		return 5 * time.Minute
+	}
+	return value
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func snapshotKeys(values map[int64]struct{}) []int64 {

@@ -136,6 +136,7 @@ type DeploymentArtifact struct {
 	Digest       string `json:"digest"`
 	Format       string `json:"format"`
 	Path         string `json:"path"`
+	DataRoot     string `json:"data_root"`
 	ManifestJson string `json:"manifest_json"`
 	SizeBytes    int64  `json:"size_bytes"`
 	CreatedAt    string `json:"created_at"`
@@ -249,6 +250,18 @@ type QueryEvent struct {
 	PlanText      string `json:"plan_text"`
 	QueryJson     string `json:"query_json"`
 	CreatedAt     string `json:"created_at"`
+}
+
+type QuerySnapshotLease struct {
+	ID                 string         `json:"id"`
+	WorkspaceID        string         `json:"workspace_id"`
+	Environment        string         `json:"environment"`
+	DeploymentID       string         `json:"deployment_id"`
+	DucklakeSnapshotID int64          `json:"ducklake_snapshot_id"`
+	OwnerID            string         `json:"owner_id"`
+	AcquiredAt         string         `json:"acquired_at"`
+	ExpiresAt          string         `json:"expires_at"`
+	ReleasedAt         sql.NullString `json:"released_at"`
 }
 
 type Role struct {

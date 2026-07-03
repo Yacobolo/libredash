@@ -378,6 +378,7 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 		Digest:       digest,
 		ManifestJSON: string(manifestJSON),
 		RootDir:      root,
+		DataRoot:     options.DataDir,
 		Graph:        compiled.Graph,
 	}, nil
 }
