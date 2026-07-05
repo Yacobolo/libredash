@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 )
 
 const testSCIMToken = "test-scim-token"
@@ -177,6 +178,160 @@ func TestSCIMFiltersUsersAndGroups(t *testing.T) {
 	}
 }
 
+func TestSCIMUserRoundTripsExternalIDAndNestedPatch(t *testing.T) {
+	store := testStore(t)
+	repo := testAccessRepository(store)
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, AccessRepo: repo, DefaultWorkspaceID: "test", SCIMBearerToken: testSCIMToken})
+	userID := createSCIMUser(t, server, "nested-user-ext", "old@example.com", "Old User")
+
+	getRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(getRec, scimRequest(http.MethodGet, "/scim/v2/Users/"+url.PathEscape(userID), nil))
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("get SCIM user status = %d body=%s", getRec.Code, getRec.Body.String())
+	}
+	if externalID(t, getRec.Body.Bytes()) != "nested-user-ext" {
+		t.Fatalf("SCIM user externalId = %q, want nested-user-ext body=%s", externalID(t, getRec.Body.Bytes()), getRec.Body.String())
+	}
+
+	patchBody := map[string]any{
+		"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+		"Operations": []map[string]any{
+			{"op": "replace", "path": "name.formatted", "value": "New User"},
+			{"op": "replace", "path": "displayName", "value": "Display User"},
+			{"op": "replace", "path": "userName", "value": "new@example.com"},
+			{"op": "replace", "path": "emails", "value": []map[string]any{{"value": "new-primary@example.com", "primary": true}}},
+			{"op": "replace", "path": "active", "value": true},
+		},
+	}
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, scimRequest(http.MethodPatch, "/scim/v2/Users/"+url.PathEscape(userID), patchBody))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("patch SCIM user status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	principal, err := repo.PrincipalByID(context.Background(), userID)
+	if err != nil {
+		t.Fatalf("get principal: %v", err)
+	}
+	if principal.Email != "new-primary@example.com" || principal.DisplayName != "Display User" || principal.DisabledAt != "" {
+		t.Fatalf("patched principal = %#v", principal)
+	}
+	if externalID(t, rec.Body.Bytes()) != "nested-user-ext" {
+		t.Fatalf("patched SCIM user externalId = %q, want nested-user-ext body=%s", externalID(t, rec.Body.Bytes()), rec.Body.String())
+	}
+}
+
+func TestSCIMCannotMutateNonSCIMPrincipal(t *testing.T) {
+	store := testStore(t)
+	repo := accesssqlite.NewRepository(store.SQLDB())
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, AccessRepo: repo, DefaultWorkspaceID: "test", SCIMBearerToken: testSCIMToken})
+	ctx := context.Background()
+	local, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "local_user", Email: "local@example.com", DisplayName: "Local"})
+	if err != nil {
+		t.Fatalf("create local principal: %v", err)
+	}
+
+	deleteRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(deleteRec, scimRequest(http.MethodDelete, "/scim/v2/Users/"+url.PathEscape(local.ID), nil))
+	if deleteRec.Code != http.StatusNotFound {
+		t.Fatalf("delete non-SCIM status = %d, want %d body=%s", deleteRec.Code, http.StatusNotFound, deleteRec.Body.String())
+	}
+	after, err := repo.PrincipalByID(ctx, local.ID)
+	if err != nil {
+		t.Fatalf("get local principal: %v", err)
+	}
+	if after.DisabledAt != "" {
+		t.Fatalf("non-SCIM principal was disabled: %#v", after)
+	}
+}
+
+func TestSCIMGroupPatchReplaceAndClearMembers(t *testing.T) {
+	store := testStore(t)
+	repo := testAccessRepository(store)
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, AccessRepo: repo, DefaultWorkspaceID: "test", SCIMBearerToken: testSCIMToken})
+	first := createSCIMUser(t, server, "replace-member-1", "member1@example.com", "Member 1")
+	second := createSCIMUser(t, server, "replace-member-2", "member2@example.com", "Member 2")
+	groupID := createSCIMGroup(t, server, "replace-group", "Replace Group", []string{first})
+
+	replaceBody := map[string]any{
+		"schemas":    []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+		"Operations": []map[string]any{{"op": "replace", "path": "members", "value": []map[string]any{{"value": second}}}},
+	}
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, scimRequest(http.MethodPatch, "/scim/v2/Groups/"+url.PathEscape(groupID), replaceBody))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("replace members status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	members, err := repo.ListSCIMGroupMembers(context.Background(), groupID)
+	if err != nil {
+		t.Fatalf("list members: %v", err)
+	}
+	if len(members) != 1 || members[0].PrincipalID != second {
+		t.Fatalf("members after replace = %#v, want only %s", members, second)
+	}
+
+	clearBody := map[string]any{
+		"schemas":    []string{"urn:ietf:params:scim:api:messages:2.0:PatchOp"},
+		"Operations": []map[string]any{{"op": "remove", "path": "members"}},
+	}
+	clearRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(clearRec, scimRequest(http.MethodPatch, "/scim/v2/Groups/"+url.PathEscape(groupID), clearBody))
+	if clearRec.Code != http.StatusOK {
+		t.Fatalf("clear members status = %d body=%s", clearRec.Code, clearRec.Body.String())
+	}
+	members, err = repo.ListSCIMGroupMembers(context.Background(), groupID)
+	if err != nil {
+		t.Fatalf("list members after clear: %v", err)
+	}
+	if len(members) != 0 {
+		t.Fatalf("members after clear = %#v, want none", members)
+	}
+}
+
+func TestSCIMAuditIncludesRequestMetadataOnSuccessAndFailure(t *testing.T) {
+	store := testStore(t)
+	repo := testAccessRepository(store)
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, AccessRepo: repo, DefaultWorkspaceID: "test", SCIMBearerToken: testSCIMToken})
+
+	req := scimRequest(http.MethodPost, "/scim/v2/Users", map[string]any{
+		"schemas":    []string{"urn:ietf:params:scim:schemas:core:2.0:User"},
+		"externalId": "audit-user",
+		"userName":   "audit@example.com",
+		"active":     true,
+	})
+	req.Header.Set("X-Request-ID", "scim_req")
+	req.Header.Set("X-Correlation-ID", "scim_corr")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create audited user status = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	badReq := httptest.NewRequest(http.MethodGet, "/scim/v2/Users", nil)
+	badReq.Header.Set("Authorization", "Bearer wrong")
+	badReq.Header.Set("X-Request-ID", "bad_req")
+	badReq.Header.Set("X-Correlation-ID", "bad_corr")
+	badRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(badRec, badReq)
+	if badRec.Code != http.StatusUnauthorized {
+		t.Fatalf("bad token status = %d body=%s", badRec.Code, badRec.Body.String())
+	}
+
+	events, err := repo.ListAuditEvents(context.Background(), access.AuditEventFilter{Action: "scim.user.create"})
+	if err != nil {
+		t.Fatalf("list create audit events: %v", err)
+	}
+	if len(events) != 1 || events[0].RequestID != "scim_req" || events[0].CorrelationID != "scim_corr" || events[0].PrincipalID != "" {
+		t.Fatalf("create audit events = %#v", events)
+	}
+	events, err = repo.ListAuditEvents(context.Background(), access.AuditEventFilter{Action: "scim.auth"})
+	if err != nil {
+		t.Fatalf("list auth audit events: %v", err)
+	}
+	if len(events) != 1 || events[0].Status != "denied" || events[0].RequestID != "bad_req" || events[0].CorrelationID != "bad_corr" || events[0].PrincipalID != "" {
+		t.Fatalf("auth audit events = %#v", events)
+	}
+}
+
 func createSCIMUser(t *testing.T, server *Server, externalID, email, displayName string) string {
 	t.Helper()
 	body := map[string]any{
@@ -254,4 +409,15 @@ func totalResults(t *testing.T, body []byte) int {
 		t.Fatalf("decode list response: %v body=%s", err, string(body))
 	}
 	return decoded.TotalResults
+}
+
+func externalID(t *testing.T, body []byte) string {
+	t.Helper()
+	var decoded struct {
+		ExternalID string `json:"externalId"`
+	}
+	if err := json.Unmarshal(body, &decoded); err != nil {
+		t.Fatalf("decode externalId response: %v body=%s", err, string(body))
+	}
+	return decoded.ExternalID
 }

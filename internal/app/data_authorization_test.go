@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/access"
@@ -12,7 +11,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dataquery"
 )
 
-func TestDataAuthorizationRejectsUnappliedSelectedColumnMask(t *testing.T) {
+func TestDataAuthorizationPassesSelectedColumnMaskToExecution(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 	repo := accesssqlite.NewRepository(store.SQLDB())
@@ -35,8 +34,9 @@ func TestDataAuthorizationRejectsUnappliedSelectedColumnMask(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("upsert policy: %v", err)
 	}
+	capture := &columnMaskCaptureMetrics{}
 	metrics := dataAuthorizationMetrics{
-		QueryMetrics: mismatchedColumnMetrics{},
+		QueryMetrics: capture,
 		repo:         repo,
 	}
 	ctx = context.WithValue(ctx, principalContextKey{}, Principal{ID: principal.ID})
@@ -51,8 +51,11 @@ func TestDataAuthorizationRejectsUnappliedSelectedColumnMask(t *testing.T) {
 		Fields:        []dataquery.Field{{Field: "orders.email", Alias: "customer_email"}},
 		Limit:         1,
 	})
-	if err == nil || !strings.Contains(err.Error(), "could not be applied") {
-		t.Fatalf("ExecuteDataQuery error = %v, want unapplied mask rejection", err)
+	if err != nil {
+		t.Fatalf("ExecuteDataQuery error = %v", err)
+	}
+	if len(capture.request.ColumnMasks) != 1 || capture.request.ColumnMasks[0].Field != "orders.email" || capture.request.ColumnMasks[0].Mask != "redact" {
+		t.Fatalf("governed column masks = %#v, want orders.email redact", capture.request.ColumnMasks)
 	}
 	events, err := repo.ListAuditEvents(ctx, access.AuditEventFilter{WorkspaceID: "test", Action: "data_preview.executed"})
 	if err != nil {
@@ -62,8 +65,8 @@ func TestDataAuthorizationRejectsUnappliedSelectedColumnMask(t *testing.T) {
 		t.Fatalf("audit events = %d, want 1: %#v", len(events), events)
 	}
 	event := events[0]
-	if event.PrincipalID != principal.ID || event.Privilege != access.PrivilegePreviewData || event.Status != "error" || event.RequestID != "preview_req" || event.CorrelationID != "preview_corr" {
-		t.Fatalf("audit event = %#v, want preview error for principal", event)
+	if event.PrincipalID != principal.ID || event.Privilege != access.PrivilegePreviewData || event.Status != "success" || event.RequestID != "preview_req" || event.CorrelationID != "preview_corr" {
+		t.Fatalf("audit event = %#v, want preview success for principal", event)
 	}
 }
 
@@ -97,14 +100,16 @@ func TestAgentToolAuthorizationRecordsAuditEvent(t *testing.T) {
 	}
 }
 
-type mismatchedColumnMetrics struct {
+type columnMaskCaptureMetrics struct {
 	fakeMetrics
+	request dataquery.Query
 }
 
-func (mismatchedColumnMetrics) ExecuteDataQuery(context.Context, dataquery.Query) (dataquery.Result, error) {
+func (m *columnMaskCaptureMetrics) ExecuteDataQuery(_ context.Context, request dataquery.Query) (dataquery.Result, error) {
+	m.request = request
 	return dataquery.Result{
-		Columns: dataquery.ColumnsFromNames([]string{"not_customer_email"}),
-		Rows:    []dataquery.Row{{"not_customer_email": "secret@example.com"}},
+		Columns: dataquery.ColumnsFromNames([]string{"customer_email"}),
+		Rows:    []dataquery.Row{{"customer_email": "REDACTED"}},
 		Status:  dataquery.StatusSuccess,
 	}, nil
 }

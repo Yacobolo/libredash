@@ -433,6 +433,11 @@ type SCIMUserInput struct {
 	Active      bool
 }
 
+type SCIMUser struct {
+	Principal  Principal
+	ExternalID string
+}
+
 type SCIMUserFilter struct {
 	ID         string
 	ExternalID string
@@ -565,9 +570,9 @@ type Repository interface {
 	PrincipalForServicePrincipalSecret(ctx context.Context, servicePrincipalID, secret string) (Principal, error)
 	BootstrapAdmin(ctx context.Context, workspaceID, email string) error
 	ResolveExternalPrincipal(ctx context.Context, input ExternalIdentityInput) (Principal, error)
-	UpsertSCIMUser(ctx context.Context, input SCIMUserInput) (Principal, error)
-	ListSCIMUsers(ctx context.Context, filter SCIMUserFilter) ([]Principal, error)
-	DisableSCIMUser(ctx context.Context, principalID string) (Principal, error)
+	UpsertSCIMUser(ctx context.Context, input SCIMUserInput) (SCIMUser, error)
+	ListSCIMUsers(ctx context.Context, filter SCIMUserFilter) ([]SCIMUser, error)
+	DisableSCIMUser(ctx context.Context, principalID string) (SCIMUser, error)
 	UpsertGroup(ctx context.Context, input GroupInput) (Group, error)
 	ListGroups(ctx context.Context, workspaceID string) ([]Group, error)
 	DeleteGroup(ctx context.Context, workspaceID, groupID string) error

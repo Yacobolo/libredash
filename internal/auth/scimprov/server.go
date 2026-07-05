@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -22,9 +23,9 @@ import (
 const directoryWorkspace = ""
 
 type Repository interface {
-	UpsertSCIMUser(ctx context.Context, input access.SCIMUserInput) (access.Principal, error)
-	ListSCIMUsers(ctx context.Context, filter access.SCIMUserFilter) ([]access.Principal, error)
-	DisableSCIMUser(ctx context.Context, principalID string) (access.Principal, error)
+	UpsertSCIMUser(ctx context.Context, input access.SCIMUserInput) (access.SCIMUser, error)
+	ListSCIMUsers(ctx context.Context, filter access.SCIMUserFilter) ([]access.SCIMUser, error)
+	DisableSCIMUser(ctx context.Context, principalID string) (access.SCIMUser, error)
 	UpsertSCIMGroup(ctx context.Context, input access.SCIMGroupInput) (access.Group, error)
 	ListSCIMGroups(ctx context.Context, filter access.SCIMGroupFilter) ([]access.Group, error)
 	DeleteSCIMGroup(ctx context.Context, groupID string) error
@@ -83,14 +84,15 @@ func NewHandler(options Options) (http.Handler, error) {
 	if err != nil {
 		return nil, err
 	}
-	return bearerMiddleware(token, server), nil
+	return bearerMiddleware(token, options.Repository, server), nil
 }
 
-func bearerMiddleware(expected string, next http.Handler) http.Handler {
+func bearerMiddleware(expected string, repo Repository, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := strings.TrimSpace(r.Header.Get("Authorization"))
 		token := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
 		if header == token || subtle.ConstantTimeCompare([]byte(token), []byte(expected)) != 1 {
+			recordAudit(r.Context(), repo, r, "scim.auth", "scim", "scim", "denied", errors.New("invalid scim bearer token"))
 			w.Header().Set("Content-Type", "application/scim+json")
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = w.Write([]byte(`{"schemas":["urn:ietf:params:scim:api:messages:2.0:Error"],"status":"401","detail":"Unauthorized"}`))
@@ -106,23 +108,24 @@ type userHandler struct {
 
 func (h userHandler) Create(r *http.Request, attrs scimpkg.ResourceAttributes) (scimpkg.Resource, error) {
 	input := scimUserInput("", attrs)
-	principal, err := h.repo.UpsertSCIMUser(r.Context(), input)
+	user, err := h.repo.UpsertSCIMUser(r.Context(), input)
 	if err != nil {
+		recordAudit(r.Context(), h.repo, r, "scim.user.create", "principal", input.ExternalID, "error", err)
 		return scimpkg.Resource{}, err
 	}
-	h.audit(r.Context(), "scim.user.create", principal.ID, "success")
-	return userResource(principal, input.ExternalID), nil
+	recordAudit(r.Context(), h.repo, r, "scim.user.create", "principal", user.Principal.ID, "success", nil)
+	return userResource(user.Principal, user.ExternalID), nil
 }
 
 func (h userHandler) Get(r *http.Request, id string) (scimpkg.Resource, error) {
-	principals, err := h.repo.ListSCIMUsers(r.Context(), access.SCIMUserFilter{ID: id})
+	users, err := h.repo.ListSCIMUsers(r.Context(), access.SCIMUserFilter{ID: id})
 	if err != nil {
 		return scimpkg.Resource{}, err
 	}
-	if len(principals) == 0 {
+	if len(users) == 0 {
 		return scimpkg.Resource{}, scimerrors.ScimErrorResourceNotFound(id)
 	}
-	return userResource(principals[0], ""), nil
+	return userResource(users[0].Principal, users[0].ExternalID), nil
 }
 
 func (h userHandler) GetAll(r *http.Request, params scimpkg.ListRequestParams) (scimpkg.Page, error) {
@@ -135,36 +138,38 @@ func (h userHandler) GetAll(r *http.Request, params scimpkg.ListRequestParams) (
 			filter.ExternalID = value
 		}
 	}
-	principals, err := h.repo.ListSCIMUsers(r.Context(), filter)
+	users, err := h.repo.ListSCIMUsers(r.Context(), filter)
 	if err != nil {
 		return scimpkg.Page{}, err
 	}
-	resources := make([]scimpkg.Resource, 0, len(principals))
-	for _, principal := range principals {
-		resources = append(resources, userResource(principal, ""))
+	resources := make([]scimpkg.Resource, 0, len(users))
+	for _, user := range users {
+		resources = append(resources, userResource(user.Principal, user.ExternalID))
 	}
 	return page(params, resources), nil
 }
 
 func (h userHandler) Replace(r *http.Request, id string, attrs scimpkg.ResourceAttributes) (scimpkg.Resource, error) {
 	input := scimUserInput(id, attrs)
-	principal, err := h.repo.UpsertSCIMUser(r.Context(), input)
+	user, err := h.repo.UpsertSCIMUser(r.Context(), input)
 	if err != nil {
+		recordAudit(r.Context(), h.repo, r, "scim.user.update", "principal", id, "error", err)
 		return scimpkg.Resource{}, err
 	}
-	h.audit(r.Context(), "scim.user.update", principal.ID, "success")
-	return userResource(principal, input.ExternalID), nil
+	recordAudit(r.Context(), h.repo, r, "scim.user.update", "principal", user.Principal.ID, "success", nil)
+	return userResource(user.Principal, user.ExternalID), nil
 }
 
 func (h userHandler) Delete(r *http.Request, id string) error {
-	principal, err := h.repo.DisableSCIMUser(r.Context(), id)
+	user, err := h.repo.DisableSCIMUser(r.Context(), id)
 	if err != nil {
+		recordAudit(r.Context(), h.repo, r, "scim.user.delete", "principal", id, "error", err)
 		if errors.Is(err, sql.ErrNoRows) {
 			return scimerrors.ScimErrorResourceNotFound(id)
 		}
 		return err
 	}
-	h.audit(r.Context(), "scim.user.delete", principal.ID, "success")
+	recordAudit(r.Context(), h.repo, r, "scim.user.delete", "principal", user.Principal.ID, "success", nil)
 	return nil
 }
 
@@ -178,26 +183,17 @@ func (h userHandler) Patch(r *http.Request, id string, ops []scimpkg.PatchOperat
 		applyUserPatch(attrs, op)
 	}
 	input := scimUserInput(id, attrs)
-	principal, err := h.repo.UpsertSCIMUser(r.Context(), input)
+	user, err := h.repo.UpsertSCIMUser(r.Context(), input)
 	if err != nil {
+		recordAudit(r.Context(), h.repo, r, "scim.user.update", "principal", id, "error", err)
 		return scimpkg.Resource{}, err
 	}
 	action := "scim.user.update"
 	if !input.Active {
 		action = "scim.user.disable"
 	}
-	h.audit(r.Context(), action, principal.ID, "success")
-	return userResource(principal, input.ExternalID), nil
-}
-
-func (h userHandler) audit(ctx context.Context, action, targetID, status string) {
-	_ = h.repo.RecordAuditEvent(ctx, access.AuditEventInput{
-		WorkspaceID: directoryWorkspace,
-		Action:      action,
-		TargetType:  "principal",
-		TargetID:    targetID,
-		Status:      status,
-	})
+	recordAudit(r.Context(), h.repo, r, action, "principal", user.Principal.ID, "success", nil)
+	return userResource(user.Principal, user.ExternalID), nil
 }
 
 type groupHandler struct {
@@ -208,9 +204,10 @@ func (h groupHandler) Create(r *http.Request, attrs scimpkg.ResourceAttributes) 
 	input := scimGroupInput("", attrs)
 	group, err := h.repo.UpsertSCIMGroup(r.Context(), input)
 	if err != nil {
+		recordAudit(r.Context(), h.repo, r, "scim.group.create", "group", input.ExternalID, "error", err)
 		return scimpkg.Resource{}, err
 	}
-	h.audit(r.Context(), "scim.group.create", group.ID, "success")
+	recordAudit(r.Context(), h.repo, r, "scim.group.create", "group", group.ID, "success", nil)
 	return h.groupResource(r.Context(), group, input.ExternalID)
 }
 
@@ -254,17 +251,19 @@ func (h groupHandler) Replace(r *http.Request, id string, attrs scimpkg.Resource
 	input := scimGroupInput(id, attrs)
 	group, err := h.repo.UpsertSCIMGroup(r.Context(), input)
 	if err != nil {
+		recordAudit(r.Context(), h.repo, r, "scim.group.update", "group", id, "error", err)
 		return scimpkg.Resource{}, err
 	}
-	h.audit(r.Context(), "scim.group.update", group.ID, "success")
+	recordAudit(r.Context(), h.repo, r, "scim.group.update", "group", group.ID, "success", nil)
 	return h.groupResource(r.Context(), group, input.ExternalID)
 }
 
 func (h groupHandler) Delete(r *http.Request, id string) error {
 	if err := h.repo.DeleteSCIMGroup(r.Context(), id); err != nil {
+		recordAudit(r.Context(), h.repo, r, "scim.group.delete", "group", id, "error", err)
 		return err
 	}
-	h.audit(r.Context(), "scim.group.delete", id, "success")
+	recordAudit(r.Context(), h.repo, r, "scim.group.delete", "group", id, "success", nil)
 	return nil
 }
 
@@ -274,47 +273,107 @@ func (h groupHandler) Patch(r *http.Request, id string, ops []scimpkg.PatchOpera
 		return scimpkg.Resource{}, err
 	}
 	displayName := stringAttr(current.Attributes, "displayName")
+	externalID := ""
+	if current.ExternalID.Present() {
+		externalID = current.ExternalID.Value()
+	}
+	memberSet := map[string]bool{}
+	for _, memberID := range memberIDs(current.Attributes["members"]) {
+		memberSet[memberID] = true
+	}
+	membersChanged := false
 	for _, op := range ops {
 		path := patchPath(op)
 		switch strings.ToLower(op.Op) {
 		case scimpkg.PatchOperationAdd:
-			if path == "" || strings.EqualFold(path, "members") {
-				for _, memberID := range memberIDs(op.Value) {
-					if err := h.repo.AddSCIMGroupMember(r.Context(), id, memberID); err != nil {
-						return scimpkg.Resource{}, err
+			if path == "" {
+				if m, ok := op.Value.(map[string]interface{}); ok {
+					if v := stringAttr(m, "displayName"); v != "" {
+						displayName = v
 					}
-					h.audit(r.Context(), "scim.group.member.add", id, "success")
+					for _, memberID := range memberIDs(m["members"]) {
+						if !memberSet[memberID] {
+							memberSet[memberID] = true
+							membersChanged = true
+							recordAudit(r.Context(), h.repo, r, "scim.group.member.add", "group", id, "success", nil)
+						}
+					}
+					continue
 				}
+			}
+			if strings.EqualFold(path, "members") {
+				for _, memberID := range memberIDs(op.Value) {
+					if !memberSet[memberID] {
+						memberSet[memberID] = true
+						membersChanged = true
+						recordAudit(r.Context(), h.repo, r, "scim.group.member.add", "group", id, "success", nil)
+					}
+				}
+			}
+		case scimpkg.PatchOperationRemove:
+			if memberID := memberIDFromPath(path); memberID != "" {
+				if memberSet[memberID] {
+					delete(memberSet, memberID)
+					membersChanged = true
+					recordAudit(r.Context(), h.repo, r, "scim.group.member.remove", "group", id, "success", nil)
+				}
+				continue
+			}
+			if strings.EqualFold(path, "members") {
+				if len(memberSet) > 0 {
+					memberSet = map[string]bool{}
+					membersChanged = true
+					recordAudit(r.Context(), h.repo, r, "scim.group.member.replace", "group", id, "success", nil)
+				}
+				continue
+			}
+			if path == "" {
+				for _, memberID := range memberIDs(op.Value) {
+					if memberSet[memberID] {
+						delete(memberSet, memberID)
+						membersChanged = true
+						recordAudit(r.Context(), h.repo, r, "scim.group.member.remove", "group", id, "success", nil)
+					}
+				}
+			}
+		case scimpkg.PatchOperationReplace:
+			if strings.EqualFold(path, "displayName") {
+				displayName = fmt.Sprint(op.Value)
+				continue
 			}
 			if path == "" {
 				if m, ok := op.Value.(map[string]interface{}); ok {
 					if v := stringAttr(m, "displayName"); v != "" {
 						displayName = v
 					}
+					if _, ok := m["members"]; ok {
+						memberSet = memberSetFromIDs(memberIDs(m["members"]))
+						membersChanged = true
+						recordAudit(r.Context(), h.repo, r, "scim.group.member.replace", "group", id, "success", nil)
+					}
+					continue
 				}
 			}
-		case scimpkg.PatchOperationRemove:
-			if memberID := memberIDFromPath(path); memberID != "" {
-				if err := h.repo.RemoveSCIMGroupMember(r.Context(), id, memberID); err != nil {
-					return scimpkg.Resource{}, err
-				}
-				h.audit(r.Context(), "scim.group.member.remove", id, "success")
-			}
-		case scimpkg.PatchOperationReplace:
-			if strings.EqualFold(path, "displayName") {
-				displayName = fmt.Sprint(op.Value)
+			if strings.EqualFold(path, "members") {
+				memberSet = memberSetFromIDs(memberIDs(op.Value))
+				membersChanged = true
+				recordAudit(r.Context(), h.repo, r, "scim.group.member.replace", "group", id, "success", nil)
 			}
 		}
 	}
-	externalID := ""
-	if current.ExternalID.Present() {
-		externalID = current.ExternalID.Value()
+	var memberList []string
+	if membersChanged {
+		memberList = make([]string, 0, len(memberSet))
+		for memberID := range memberSet {
+			memberList = append(memberList, memberID)
+		}
 	}
-	group, err := h.repo.UpsertSCIMGroup(r.Context(), access.SCIMGroupInput{ID: id, ExternalID: externalID, Name: displayName})
+	group, err := h.repo.UpsertSCIMGroup(r.Context(), access.SCIMGroupInput{ID: id, ExternalID: externalID, Name: displayName, MemberIDs: memberList})
 	if err != nil {
+		recordAudit(r.Context(), h.repo, r, "scim.group.update", "group", id, "error", err)
 		return scimpkg.Resource{}, err
 	}
-	h.audit(r.Context(), "scim.group.update", group.ID, "success")
+	recordAudit(r.Context(), h.repo, r, "scim.group.update", "group", group.ID, "success", nil)
 	return h.groupResource(r.Context(), group, "")
 }
 
@@ -345,16 +404,6 @@ func (h groupHandler) groupResource(ctx context.Context, group access.Group, ext
 		resource.ExternalID = optional.NewString(externalID)
 	}
 	return resource, nil
-}
-
-func (h groupHandler) audit(ctx context.Context, action, targetID, status string) {
-	_ = h.repo.RecordAuditEvent(ctx, access.AuditEventInput{
-		WorkspaceID: directoryWorkspace,
-		Action:      action,
-		TargetType:  "group",
-		TargetID:    targetID,
-		Status:      status,
-	})
 }
 
 func scimUserInput(id string, attrs scimpkg.ResourceAttributes) access.SCIMUserInput {
@@ -465,24 +514,106 @@ func applyUserPatch(attrs scimpkg.ResourceAttributes, op scimpkg.PatchOperation)
 	if path == "" {
 		if values, ok := op.Value.(map[string]interface{}); ok {
 			for key, value := range values {
-				attrs[key] = value
+				setUserAttr(attrs, key, value)
 			}
 		}
 		return
 	}
 	if strings.EqualFold(op.Op, scimpkg.PatchOperationRemove) {
-		delete(attrs, path)
+		removeUserAttr(attrs, path)
 		return
 	}
-	attrs[path] = op.Value
+	setUserAttr(attrs, path, op.Value)
 }
 
 func cloneAttrs(attrs scimpkg.ResourceAttributes) scimpkg.ResourceAttributes {
 	out := make(scimpkg.ResourceAttributes, len(attrs))
 	for key, value := range attrs {
+		switch typed := value.(type) {
+		case map[string]interface{}:
+			out[key] = cloneMap(typed)
+		case []interface{}:
+			out[key] = append([]interface{}(nil), typed...)
+		default:
+			out[key] = value
+		}
+	}
+	return out
+}
+
+func cloneMap(values map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(values))
+	for key, value := range values {
 		out[key] = value
 	}
 	return out
+}
+
+func setUserAttr(attrs scimpkg.ResourceAttributes, path string, value interface{}) {
+	switch strings.ToLower(strings.TrimSpace(path)) {
+	case "name.formatted":
+		name, _ := attrs["name"].(map[string]interface{})
+		if name == nil {
+			name = map[string]interface{}{}
+		}
+		name["formatted"] = value
+		attrs["name"] = name
+	case "displayname":
+		attrs["displayName"] = value
+	case "username":
+		attrs["userName"] = value
+	case "active":
+		attrs["active"] = value
+	case "emails":
+		attrs["emails"] = normalizeEmails(value)
+	case "externalid":
+		attrs["externalId"] = value
+	default:
+		attrs[path] = value
+	}
+}
+
+func removeUserAttr(attrs scimpkg.ResourceAttributes, path string) {
+	switch strings.ToLower(strings.TrimSpace(path)) {
+	case "name.formatted":
+		if name, ok := attrs["name"].(map[string]interface{}); ok {
+			delete(name, "formatted")
+		}
+	case "displayname":
+		delete(attrs, "displayName")
+	case "username":
+		delete(attrs, "userName")
+	case "active":
+		delete(attrs, "active")
+	case "emails":
+		delete(attrs, "emails")
+	case "externalid":
+		delete(attrs, "externalId")
+	default:
+		delete(attrs, path)
+	}
+}
+
+func normalizeEmails(value interface{}) []interface{} {
+	switch typed := value.(type) {
+	case []interface{}:
+		return typed
+	case []map[string]any:
+		out := make([]interface{}, 0, len(typed))
+		for _, item := range typed {
+			out = append(out, map[string]interface{}(item))
+		}
+		return out
+	case map[string]interface{}:
+		return []interface{}{typed}
+	case string:
+		if strings.TrimSpace(typed) == "" {
+			return nil
+		}
+		return []interface{}{map[string]interface{}{"value": typed, "type": "work", "primary": true}}
+	default:
+		return nil
+	}
 }
 
 func patchPath(op scimpkg.PatchOperation) string {
@@ -550,6 +681,16 @@ func memberIDs(raw interface{}) []string {
 	return ids
 }
 
+func memberSetFromIDs(ids []string) map[string]bool {
+	out := map[string]bool{}
+	for _, id := range ids {
+		if id = strings.TrimSpace(id); id != "" {
+			out[id] = true
+		}
+	}
+	return out
+}
+
 var memberPathRE = regexp.MustCompile(`(?i)^members\[value eq "([^"]+)"\]$`)
 
 func memberIDFromPath(path string) string {
@@ -567,4 +708,37 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func recordAudit(ctx context.Context, repo Repository, r *http.Request, action, targetType, targetID, status string, cause error) {
+	if repo == nil {
+		return
+	}
+	metadata := map[string]any{
+		"actor":  "scim",
+		"path":   r.URL.Path,
+		"method": r.Method,
+	}
+	if cause != nil {
+		metadata["error"] = cause.Error()
+	}
+	bytes, _ := json.Marshal(metadata)
+	_ = repo.RecordAuditEvent(ctx, access.AuditEventInput{
+		WorkspaceID:   directoryWorkspace,
+		Action:        action,
+		TargetType:    targetType,
+		TargetID:      targetID,
+		Status:        status,
+		RequestID:     requestIDFromRequest(r),
+		CorrelationID: correlationIDFromRequest(r),
+		MetadataJSON:  string(bytes),
+	})
+}
+
+func requestIDFromRequest(r *http.Request) string {
+	return firstNonEmpty(r.Header.Get("X-Request-Id"), r.Header.Get("X-Request-ID"))
+}
+
+func correlationIDFromRequest(r *http.Request) string {
+	return firstNonEmpty(r.Header.Get("X-Correlation-Id"), r.Header.Get("X-Correlation-ID"), requestIDFromRequest(r))
 }

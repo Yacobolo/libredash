@@ -996,12 +996,31 @@ func (r *Repository) ResolveExternalPrincipal(ctx context.Context, input access.
 	return principal, nil
 }
 
-func (r *Repository) UpsertSCIMUser(ctx context.Context, input access.SCIMUserInput) (access.Principal, error) {
-	subject := strings.TrimSpace(firstNonEmpty(input.ExternalID, input.ID, input.UserName, input.Email))
-	if subject == "" {
-		return access.Principal{}, fmt.Errorf("scim user requires id, external id, userName, or email")
-	}
+func (r *Repository) UpsertSCIMUser(ctx context.Context, input access.SCIMUserInput) (access.SCIMUser, error) {
 	id := strings.TrimSpace(input.ID)
+	existingSubject := ""
+	if id == "" {
+		id = "scim_user_" + stableID(firstNonEmpty(input.ExternalID, input.UserName, input.Email))
+	} else if identity, err := r.q.GetExternalIdentityByPrincipalProvider(ctx, platformdb.GetExternalIdentityByPrincipalProviderParams{
+		PrincipalID: id,
+		Provider:    "scim",
+	}); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			if _, principalErr := r.q.GetPrincipal(ctx, id); principalErr == nil {
+				return access.SCIMUser{}, sql.ErrNoRows
+			} else if principalErr != nil && !errors.Is(principalErr, sql.ErrNoRows) {
+				return access.SCIMUser{}, principalErr
+			}
+		} else {
+			return access.SCIMUser{}, err
+		}
+	} else {
+		existingSubject = identity.Subject
+	}
+	subject := strings.TrimSpace(firstNonEmpty(input.ExternalID, existingSubject, input.ID, input.UserName, input.Email))
+	if subject == "" {
+		return access.SCIMUser{}, fmt.Errorf("scim user requires id, external id, userName, or email")
+	}
 	if id == "" {
 		id = "scim_user_" + stableID(subject)
 	}
@@ -1014,7 +1033,7 @@ func (r *Repository) UpsertSCIMUser(ctx context.Context, input access.SCIMUserIn
 		DisplayName: displayName,
 	})
 	if err != nil {
-		return access.Principal{}, err
+		return access.SCIMUser{}, err
 	}
 	if err := r.q.UpsertExternalIdentity(ctx, platformdb.UpsertExternalIdentityParams{
 		ID:          "identity_" + stableID("scim||"+subject),
@@ -1024,40 +1043,41 @@ func (r *Repository) UpsertSCIMUser(ctx context.Context, input access.SCIMUserIn
 		Subject:     subject,
 		Email:       email,
 	}); err != nil {
-		return access.Principal{}, err
+		return access.SCIMUser{}, err
 	}
 	if !input.Active {
 		return r.DisableSCIMUser(ctx, principal.ID)
 	}
 	if _, err := r.db.ExecContext(ctx, `UPDATE principals SET disabled_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, principal.ID); err != nil {
-		return access.Principal{}, err
+		return access.SCIMUser{}, err
 	}
 	row, err := r.q.GetPrincipal(ctx, principal.ID)
 	if err != nil {
-		return access.Principal{}, err
+		return access.SCIMUser{}, err
 	}
-	return mapPrincipal(row), nil
+	return access.SCIMUser{Principal: mapPrincipal(row), ExternalID: subject}, nil
 }
 
-func (r *Repository) ListSCIMUsers(ctx context.Context, filter access.SCIMUserFilter) ([]access.Principal, error) {
+func (r *Repository) ListSCIMUsers(ctx context.Context, filter access.SCIMUserFilter) ([]access.SCIMUser, error) {
 	if strings.TrimSpace(filter.ID) != "" {
 		row, err := r.q.GetPrincipal(ctx, strings.TrimSpace(filter.ID))
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return []access.Principal{}, nil
+				return []access.SCIMUser{}, nil
 			}
 			return nil, err
 		}
-		if _, err := r.q.GetExternalIdentityByPrincipalProvider(ctx, platformdb.GetExternalIdentityByPrincipalProviderParams{
+		identity, err := r.q.GetExternalIdentityByPrincipalProvider(ctx, platformdb.GetExternalIdentityByPrincipalProviderParams{
 			PrincipalID: row.ID,
 			Provider:    "scim",
-		}); err != nil {
+		})
+		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return []access.Principal{}, nil
+				return []access.SCIMUser{}, nil
 			}
 			return nil, err
 		}
-		return []access.Principal{mapPrincipal(row)}, nil
+		return []access.SCIMUser{{Principal: mapPrincipal(row), ExternalID: identity.Subject}}, nil
 	}
 	subject := strings.TrimSpace(firstNonEmpty(filter.ID, filter.ExternalID))
 	rows, err := r.q.ListSCIMPrincipals(ctx, platformdb.ListSCIMPrincipalsParams{
@@ -1067,35 +1087,49 @@ func (r *Repository) ListSCIMUsers(ctx context.Context, filter access.SCIMUserFi
 	if err != nil {
 		return nil, err
 	}
-	principals := make([]access.Principal, 0, len(rows))
+	users := make([]access.SCIMUser, 0, len(rows))
 	for _, row := range rows {
-		principals = append(principals, mapPrincipal(row))
+		identity, err := r.q.GetExternalIdentityByPrincipalProvider(ctx, platformdb.GetExternalIdentityByPrincipalProviderParams{
+			PrincipalID: row.ID,
+			Provider:    "scim",
+		})
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, access.SCIMUser{Principal: mapPrincipal(row), ExternalID: identity.Subject})
 	}
-	return principals, nil
+	return users, nil
 }
 
-func (r *Repository) DisableSCIMUser(ctx context.Context, principalID string) (access.Principal, error) {
+func (r *Repository) DisableSCIMUser(ctx context.Context, principalID string) (access.SCIMUser, error) {
 	principalID = strings.TrimSpace(principalID)
 	if principalID == "" {
-		return access.Principal{}, fmt.Errorf("principal id is required")
+		return access.SCIMUser{}, fmt.Errorf("principal id is required")
+	}
+	identity, err := r.q.GetExternalIdentityByPrincipalProvider(ctx, platformdb.GetExternalIdentityByPrincipalProviderParams{
+		PrincipalID: principalID,
+		Provider:    "scim",
+	})
+	if err != nil {
+		return access.SCIMUser{}, err
 	}
 	if err := r.q.DisablePrincipal(ctx, principalID); err != nil {
-		return access.Principal{}, err
+		return access.SCIMUser{}, err
 	}
 	if err := r.q.DeleteSCIMGroupMembersByPrincipal(ctx, principalID); err != nil {
-		return access.Principal{}, err
+		return access.SCIMUser{}, err
 	}
 	if err := r.q.RevokeSessionsByPrincipal(ctx, principalID); err != nil {
-		return access.Principal{}, err
+		return access.SCIMUser{}, err
 	}
 	if err := r.q.RevokeAPITokensByPrincipal(ctx, principalID); err != nil {
-		return access.Principal{}, err
+		return access.SCIMUser{}, err
 	}
 	row, err := r.q.GetPrincipal(ctx, principalID)
 	if err != nil {
-		return access.Principal{}, err
+		return access.SCIMUser{}, err
 	}
-	return mapPrincipal(row), nil
+	return access.SCIMUser{Principal: mapPrincipal(row), ExternalID: identity.Subject}, nil
 }
 
 func (r *Repository) UpsertGroup(ctx context.Context, input access.GroupInput) (access.Group, error) {

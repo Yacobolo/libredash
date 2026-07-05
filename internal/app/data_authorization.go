@@ -100,7 +100,7 @@ func (m dataAuthorizationMetrics) GovernDataQuery(ctx context.Context, request d
 		m.recordDataAccessAudit(ctx, request, privilege, objects, "denied", err)
 		return request, nil, err
 	}
-	governed, masks, err := m.applyDataPolicies(ctx, request, objects)
+	governed, err := m.applyDataPolicies(ctx, request, objects)
 	if err != nil {
 		m.recordDataAccessAudit(ctx, request, privilege, objects, "error", err)
 		return request, nil, err
@@ -109,10 +109,6 @@ func (m dataAuthorizationMetrics) GovernDataQuery(ctx context.Context, request d
 		if executeErr != nil {
 			m.recordDataAccessAudit(ctx, governed, privilege, objects, "error", executeErr)
 			return nil
-		}
-		if err := applyColumnMasks(result, governed, masks); err != nil {
-			m.recordDataAccessAudit(ctx, governed, privilege, objects, "error", err)
-			return err
 		}
 		status := "success"
 		if result != nil && result.Status == dataquery.StatusError {
@@ -262,29 +258,30 @@ func (m dataAuthorizationMetrics) RefreshTables(ctx context.Context, modelID str
 	return errors.New("model table refresh is not configured")
 }
 
-func (m dataAuthorizationMetrics) applyDataPolicies(ctx context.Context, request dataquery.Query, objects []access.ObjectRef) (dataquery.Query, []columnMaskPolicy, error) {
+func (m dataAuthorizationMetrics) applyDataPolicies(ctx context.Context, request dataquery.Query, objects []access.ObjectRef) (dataquery.Query, error) {
 	policies, err := m.effectiveDataPolicies(ctx, request, objects)
 	if err != nil {
-		return request, nil, err
+		return request, err
 	}
-	masks := []columnMaskPolicy{}
 	for _, policy := range policies {
 		switch policy.PolicyType {
 		case "row_filter":
 			filters, err := rowFiltersFromPolicy(policy)
 			if err != nil {
-				return request, nil, err
+				return request, err
 			}
 			request.Filters = append(request.Filters, filters...)
 		case "column_mask":
 			mask, err := columnMaskFromPolicy(policy)
 			if err != nil {
-				return request, nil, err
+				return request, err
 			}
-			masks = append(masks, mask)
+			for _, field := range selectedMaskedFields(request, mask) {
+				request.ColumnMasks = append(request.ColumnMasks, dataquery.ColumnMask{Field: field, Mask: mask.Mask})
+			}
 		}
 	}
-	return request, masks, nil
+	return request, nil
 }
 
 func (m dataAuthorizationMetrics) effectiveDataPolicies(ctx context.Context, request dataquery.Query, objects []access.ObjectRef) ([]access.DataPolicy, error) {
@@ -458,91 +455,43 @@ func columnMaskFromPolicy(policy access.DataPolicy) (columnMaskPolicy, error) {
 	return columnMaskPolicy{PolicyID: policy.ID, Fields: fields, Mask: mask}, nil
 }
 
-func applyColumnMasks(result *dataquery.Result, request dataquery.Query, masks []columnMaskPolicy) error {
-	if len(masks) == 0 || result == nil {
-		return nil
+func selectedMaskedFields(request dataquery.Query, mask columnMaskPolicy) []string {
+	selected := map[string]string{}
+	leafSelected := map[string]string{}
+	ambiguousLeaf := map[string]bool{}
+	for _, field := range dataQuerySelectedFields(request) {
+		normalized := strings.ToLower(strings.TrimSpace(field))
+		selected[normalized] = field
+		leaf := strings.ToLower(strings.TrimSpace(fieldNameLeaf(field)))
+		if existing, ok := leafSelected[leaf]; ok && existing != field {
+			ambiguousLeaf[leaf] = true
+		} else {
+			leafSelected[leaf] = field
+		}
 	}
-	aliases := dataQueryFieldAliases(request)
-	columnNames := dataQueryResultColumnNames(result)
-	for _, mask := range masks {
-		for _, field := range mask.Fields {
-			if _, selected := aliases[field]; !selected {
+	out := []string{}
+	seen := map[string]struct{}{}
+	for _, field := range mask.Fields {
+		key := strings.ToLower(strings.TrimSpace(field))
+		selectedField, ok := selected[key]
+		if !ok {
+			leaf := strings.ToLower(strings.TrimSpace(fieldNameLeaf(field)))
+			if ambiguousLeaf[leaf] {
 				continue
 			}
-			targets := aliases[field]
-			if len(targets) == 0 {
-				targets = []string{field, fieldNameLeaf(field)}
-			}
-			matched := false
-			for _, row := range result.Rows {
-				for _, target := range targets {
-					if _, ok := row[target]; ok {
-						row[target] = maskedValue(mask.Mask)
-						matched = true
-					}
-				}
-			}
-			for _, target := range targets {
-				if _, ok := columnNames[target]; ok {
-					matched = true
-				}
-			}
-			if !matched {
-				return fmt.Errorf("column_mask data policy %q could not be applied to selected field %q", mask.PolicyID, field)
+			selectedField, ok = leafSelected[leaf]
+			if !ok {
+				continue
 			}
 		}
-	}
-	return nil
-}
-
-func dataQueryResultColumnNames(result *dataquery.Result) map[string]struct{} {
-	out := map[string]struct{}{}
-	if result == nil {
-		return out
-	}
-	for _, column := range result.Columns {
-		if strings.TrimSpace(column.Name) != "" {
-			out[column.Name] = struct{}{}
+		seenKey := strings.ToLower(strings.TrimSpace(selectedField))
+		if _, ok := seen[seenKey]; ok {
+			continue
 		}
-	}
-	for _, row := range result.Rows {
-		for name := range row {
-			if strings.TrimSpace(name) != "" {
-				out[name] = struct{}{}
-			}
-		}
+		seen[seenKey] = struct{}{}
+		out = append(out, selectedField)
 	}
 	return out
-}
-
-func dataQueryFieldAliases(request dataquery.Query) map[string][]string {
-	out := map[string][]string{}
-	add := func(field dataquery.Field) {
-		if field.Field == "" {
-			return
-		}
-		alias := firstNonEmpty(field.Alias, fieldNameLeaf(field.Field), field.Field)
-		out[field.Field] = append(out[field.Field], alias)
-	}
-	for _, field := range request.Fields {
-		add(field)
-	}
-	for _, field := range request.Measures {
-		add(field)
-	}
-	add(request.Value)
-	return out
-}
-
-func maskedValue(mask string) any {
-	switch strings.ToLower(strings.TrimSpace(mask)) {
-	case "redact", "redacted":
-		return "REDACTED"
-	case "zero":
-		return 0
-	default:
-		return nil
-	}
 }
 
 func fieldNameLeaf(field string) string {
