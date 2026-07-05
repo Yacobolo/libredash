@@ -52,10 +52,6 @@ func runtimeSignal(kind uisignals.RouteKind, updates string) uisignals.RouteRunt
 	}
 }
 
-func streamAction() string {
-	return "@get($runtime.updatesUrl, {openWhenHidden: true})"
-}
-
 func inspectorScript() g.Node {
 	return h.Script(h.Type("module"), h.Src(staticAsset("/static/datastar-inspector.js")))
 }
@@ -81,7 +77,8 @@ func LoginPage() g.Node {
 		ProviderLabel:       "Sign in with Azure Active Directory",
 		BackgroundModuleSrc: staticAsset("/static/topology-background.js"),
 	}
-	return pagestream.RenderDocument(pagestream.DocumentSpec{
+	loginUpdatesURL := updatesURL(uisignals.RouteLogin)
+	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash Login",
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
@@ -101,10 +98,10 @@ func LoginPage() g.Node {
 		MainAttrs: []g.Node{h.Class(appRootClass)},
 		Signals: map[string]any{
 			"page":    page,
-			"runtime": runtimeSignal(uisignals.RouteLogin, updatesURL(uisignals.RouteLogin)),
+			"runtime": runtimeSignal(uisignals.RouteLogin, loginUpdatesURL),
 			"status":  dashboard.Status{},
 		},
-		Init: []string{streamAction()},
+		UpdatesURL: loginUpdatesURL,
 		Body: []g.Node{
 			h.Span(g.Attr("hidden"), ds.Init("document.dispatchEvent(new CustomEvent('libredash-login-background-init'))", ds.ModifierDelay, ds.Duration(900*time.Millisecond))),
 			g.El("ld-login-page",
@@ -147,12 +144,13 @@ func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSi
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForCatalog(catalog)}
 	applyChromeOptions(&chrome, chromeOptions)
 	signals := map[string]any{
-		"chrome":  chrome,
-		"page":    page,
-		"runtime": runtimeSignal(uisignals.RouteCatalog, updatesURL(uisignals.RouteCatalog)),
-		"status":  dashboard.Status{},
+		"chrome": chrome,
+		"page":   page,
+		"status": dashboard.Status{},
 	}
-	return pagestream.RenderDocument(pagestream.DocumentSpec{
+	catalogUpdatesURL := updatesURL(uisignals.RouteCatalog)
+	signals["runtime"] = runtimeSignal(uisignals.RouteCatalog, catalogUpdatesURL)
+	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash Dashboards",
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
@@ -165,9 +163,9 @@ func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSi
 			inspectorScript(),
 			h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 		),
-		MainAttrs: []g.Node{h.Class(appRootClass)},
-		Signals:   signals,
-		Init:      []string{streamAction()},
+		MainAttrs:  []g.Node{h.Class(appRootClass)},
+		Signals:    signals,
+		UpdatesURL: catalogUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-app-shell",
 				g.Attr("chrome", jsonString(chrome)),

@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -51,8 +50,7 @@ func TestServeStreamSendsInitialAndBrokerPatchesAndCleansUp(t *testing.T) {
 	}
 }
 
-func TestServeStreamSendsSnapshotAndTickerPatches(t *testing.T) {
-	var count atomic.Int64
+func TestServeStreamSendsInitialSnapshotOnce(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	req := httptest.NewRequest(http.MethodGet, "/updates", nil).WithContext(ctx)
 	rec := httptest.NewRecorder()
@@ -62,26 +60,23 @@ func TestServeStreamSendsSnapshotAndTickerPatches(t *testing.T) {
 		defer close(done)
 		ServeStream(rec, req, StreamSpec{
 			Snapshot: func(context.Context) []Patch {
-				next := count.Add(1)
-				return []Patch{{"tick": next}}
+				return []Patch{{"snapshot": "initial"}}
 			},
-			TickerInterval: 5 * time.Millisecond,
 		})
 	}()
 
 	waitFor(t, time.Second, func() bool {
-		return count.Load() >= 2
+		return len(ssetest.PatchSignals(t, rec.Body.String())) == 1
 	})
+	time.Sleep(25 * time.Millisecond)
+	if patches := ssetest.PatchSignals(t, rec.Body.String()); len(patches) != 1 {
+		t.Fatalf("snapshot stream patches = %#v, want exactly one initial snapshot", patches)
+	}
 	cancel()
 	select {
 	case <-done:
 	case <-time.After(time.Second):
 		t.Fatal("stream did not stop after cancellation")
-	}
-
-	patches := ssetest.PatchSignals(t, rec.Body.String())
-	if len(patches) < 2 {
-		t.Fatalf("snapshot stream patches = %#v, want at least two", patches)
 	}
 }
 

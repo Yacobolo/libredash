@@ -8,7 +8,7 @@ import (
 
 func TestEnsureClientIDKeepsExistingCookie(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: DefaultClientIDCookieName, Value: "client-1"})
+	req.AddCookie(&http.Cookie{Name: defaultClientIDCookieName, Value: "client-1"})
 	rec := httptest.NewRecorder()
 
 	if got := EnsureClientID(rec, req); got != "client-1" {
@@ -31,14 +31,14 @@ func TestEnsureClientIDSetsMissingCookie(t *testing.T) {
 	if len(cookies) != 1 {
 		t.Fatalf("cookies = %#v, want one client id cookie", cookies)
 	}
-	if cookies[0].Name != DefaultClientIDCookieName || cookies[0].Value != clientID || cookies[0].Path != "/" || cookies[0].SameSite != http.SameSiteLaxMode {
+	if cookies[0].Name != defaultClientIDCookieName || cookies[0].Value != clientID || cookies[0].Path != "/" || cookies[0].SameSite != http.SameSiteLaxMode {
 		t.Fatalf("client id cookie = %#v", cookies[0])
 	}
 }
 
 func TestClientIDFromRequestPrefersSignalThenCookieThenDefault(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req.AddCookie(&http.Cookie{Name: DefaultClientIDCookieName, Value: "cookie-client"})
+	req.AddCookie(&http.Cookie{Name: defaultClientIDCookieName, Value: "cookie-client"})
 
 	if got := ClientIDFromRequest(req, "signal-client"); got != "signal-client" {
 		t.Fatalf("client id from signal = %q", got)

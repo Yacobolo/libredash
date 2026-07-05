@@ -16,7 +16,7 @@ import (
 )
 
 func updateAction(workspaceID, dashboardID, pageID string) string {
-	return "@get($runtime.updatesUrl, {openWhenHidden: true})"
+	return pagestream.RefreshSignalsAction()
 }
 
 func updatesURL(workspaceID, dashboardID, pageID string) string {
@@ -63,13 +63,14 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 	if activePage.ID == "" {
 		activePage = defaultPage()
 	}
+	dashboardUpdatesURL := updatesURL(catalog.Workspace.ID, report.ID, activePage.ID)
 	action := updateAction(catalog.Workspace.ID, report.ID, activePage.ID)
-	initAction := "window.DatastarURLSync && window.DatastarURLSync.bindPopstate($urlParamShape); " + action
+	initAction := "window.DatastarURLSync && window.DatastarURLSync.bindPopstate($urlParamShape)"
 	tableReset := tableResetExpression()
 	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + tableReset
 	initialFilters = report.NormalizeFiltersForPage(activePage.ID, initialFilters)
 	signals := initialSignals(dataDir, clientID, csrfToken, catalog, report, model, pages, activePage, initialFilters, chromeDecorators...)
-	return pagestream.RenderDocument(pagestream.DocumentSpec{
+	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash",
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
@@ -88,8 +89,9 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 			h.Class(appRootClass),
 			g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+tableReset+action),
 		},
-		Signals: signals,
-		Init:    []string{initAction},
+		Signals:          signals,
+		BeforeStreamInit: []string{initAction},
+		UpdatesURL:       dashboardUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-app-shell",
 				g.Attr("chrome", jsonString(signals["chrome"])),

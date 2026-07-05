@@ -9,16 +9,17 @@ import (
 	h "maragu.dev/gomponents/html"
 )
 
-func TestRenderDocumentIncludesSignalsInitMainAttrsAndBody(t *testing.T) {
+func TestRenderPageIncludesSignalsUpdatesInitMainAttrsAndBody(t *testing.T) {
 	var body bytes.Buffer
-	err := RenderDocument(DocumentSpec{
-		Title:     "Test Page",
-		HTMLAttrs: []g.Node{g.Attr("data-color-mode", "auto")},
-		Head:      []g.Node{h.Meta(g.Attr("name", "test-head"))},
-		MainAttrs: []g.Node{h.ID("root"), h.Class("app-shell")},
-		Signals:   map[string]any{"runtime": map[string]any{"updatesUrl": "/updates?route=test"}},
-		Init:      []string{"$ready = true", "@get($runtime.updatesUrl)"},
-		Body:      []g.Node{h.Div(h.ID("content"), g.Text("Hello"))},
+	err := RenderPage(PageSpec{
+		Title:            "Test Page",
+		HTMLAttrs:        []g.Node{g.Attr("data-color-mode", "auto")},
+		Head:             []g.Node{h.Meta(g.Attr("name", "test-head"))},
+		MainAttrs:        []g.Node{h.ID("root"), h.Class("app-shell")},
+		Signals:          map[string]any{"runtime": map[string]any{}, "page": map[string]any{"title": "Test"}},
+		BeforeStreamInit: []string{"$ready = true"},
+		UpdatesURL:       "/updates?route=test",
+		Body:             []g.Node{h.Div(h.ID("content"), g.Text("Hello"))},
 	}).Render(&body)
 	if err != nil {
 		t.Fatalf("render document: %v", err)
@@ -30,7 +31,8 @@ func TestRenderDocumentIncludesSignalsInitMainAttrsAndBody(t *testing.T) {
 		`<main id="root" class="app-shell"`,
 		`data-signals=`,
 		`updatesUrl`,
-		`data-init="$ready = true; @get($runtime.updatesUrl)"`,
+		`/updates?route=test`,
+		`data-init="$ready = true; @get($runtime.updatesUrl, {openWhenHidden: true})"`,
 		`<div id="content">Hello</div>`,
 	} {
 		if !strings.Contains(html, want) {
@@ -39,8 +41,62 @@ func TestRenderDocumentIncludesSignalsInitMainAttrsAndBody(t *testing.T) {
 	}
 }
 
-func TestInitExpressionSkipsEmptyExpressions(t *testing.T) {
-	if got, want := InitExpression("", "$a = 1", "", "@get('/updates')"), "$a = 1; @get('/updates')"; got != want {
+func TestRenderPageRequiresUpdatesURL(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("RenderPage did not panic for missing UpdatesURL")
+		}
+	}()
+	_ = RenderPage(PageSpec{Signals: map[string]any{}})
+}
+
+func TestRenderPageRequiresCanonicalUpdatesPath(t *testing.T) {
+	for _, updatesURL := range []string{"/data/updates", "/updates-old", "https://example.com/updates"} {
+		t.Run(updatesURL, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("RenderPage did not panic for %q", updatesURL)
+				}
+			}()
+			_ = RenderPage(PageSpec{Signals: map[string]any{}, UpdatesURL: updatesURL})
+		})
+	}
+}
+
+func TestRenderPageRejectsMismatchedRuntimeUpdatesURL(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("RenderPage did not panic for mismatched runtime.updatesUrl")
+		}
+	}()
+	_ = RenderPage(PageSpec{
+		Signals:    map[string]any{"runtime": map[string]any{"updatesUrl": "/updates?route=wrong"}},
+		UpdatesURL: "/updates?route=right",
+	})
+}
+
+func TestRenderPageSeedsTypedRuntimeUpdatesURL(t *testing.T) {
+	type runtimeSignal struct {
+		Kind       string `json:"kind,omitempty"`
+		UpdatesURL string `json:"updatesUrl,omitempty"`
+	}
+	var body bytes.Buffer
+	err := RenderPage(PageSpec{
+		Title:      "Typed Runtime",
+		Signals:    map[string]any{"runtime": runtimeSignal{Kind: "test"}},
+		UpdatesURL: "/updates?route=test",
+	}).Render(&body)
+	if err != nil {
+		t.Fatalf("render page: %v", err)
+	}
+	html := body.String()
+	if !strings.Contains(html, "updatesUrl") || !strings.Contains(html, "/updates?route=test") {
+		t.Fatalf("rendered page did not seed typed runtime updates URL:\n%s", html)
+	}
+}
+
+func TestRenderInitSkipsEmptyExpressions(t *testing.T) {
+	if got, want := initExpression("", "$a = 1", "", "@get('/updates')"), "$a = 1; @get('/updates')"; got != want {
 		t.Fatalf("init expression = %q, want %q", got, want)
 	}
 }

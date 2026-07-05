@@ -10,10 +10,11 @@ import (
 
 func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view string, signal ChatSignal) g.Node {
 	envelope := uisignals.ChatInitialEnvelope(catalog, workspaceID, csrfToken, roleLabel, view, signal)
-	envelope.Runtime = runtimeSignal(uisignals.RouteChat, updatesURL(uisignals.RouteChat))
+	chatUpdatesURL := updatesURL(uisignals.RouteChat)
+	envelope.Runtime = runtimeSignal(uisignals.RouteChat, chatUpdatesURL)
 	envelope.Runtime.WorkspaceID = workspaceID
 	chatBasePath := "/chat"
-	return pagestream.RenderDocument(pagestream.DocumentSpec{
+	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash Chat",
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
@@ -36,7 +37,7 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 			"visuals":   envelope.Visuals,
 			"tables":    envelope.Tables,
 		},
-		Init: []string{streamAction()},
+		UpdatesURL: chatUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-app-shell",
 				g.Attr("chrome", jsonString(envelope.Chrome)),

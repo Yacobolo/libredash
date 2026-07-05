@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	nethttp "net/http"
-	"time"
 
 	lddatastar "github.com/Yacobolo/libredash/internal/dashboard/datastar"
 	"github.com/Yacobolo/libredash/internal/dashboard/stream"
@@ -30,10 +29,6 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 		TableCommand: signals.TableCommand,
 	}
 
-	interval := h.TickerInterval
-	if interval <= 0 {
-		interval = 60 * time.Second
-	}
 	pagestream.ServeStream(w, r, pagestream.StreamSpec{
 		Broker:         h.Broker,
 		StreamID:       clientID,
@@ -42,6 +37,5 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 			snapshot := stream.Service{Metrics: metrics}.Snapshot(ctx, request)
 			return lddatastar.SnapshotPatches(snapshot)
 		},
-		TickerInterval: interval,
 	})
 }

@@ -137,7 +137,8 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, "admin", roleLabel)}
 	applyChromeOptions(&chrome, chromeOptions)
 	storageSignal := page.Storage
-	runtime := runtimeSignal(uisignals.RouteAdmin, updatesURL(uisignals.RouteAdmin, "section", active))
+	adminUpdatesURL := updatesURL(uisignals.RouteAdmin, "section", active)
+	runtime := runtimeSignal(uisignals.RouteAdmin, adminUpdatesURL)
 	signals := map[string]any{
 		"chrome":    chrome,
 		"page":      page,
@@ -198,7 +199,7 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 		}
 		adminChildren = append(adminChildren, g.El("ld-agent-prompt-editor", promptAttrs...))
 	}
-	return pagestream.RenderDocument(pagestream.DocumentSpec{
+	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "Admin - " + title,
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
@@ -212,9 +213,9 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 			inspectorScript(),
 			h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 		),
-		MainAttrs: []g.Node{h.Class(appRootClass)},
-		Signals:   signals,
-		Init:      []string{streamAction()},
+		MainAttrs:  []g.Node{h.Class(appRootClass)},
+		Signals:    signals,
+		UpdatesURL: adminUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-app-shell",
 				g.Attr("chrome", jsonString(chrome)),

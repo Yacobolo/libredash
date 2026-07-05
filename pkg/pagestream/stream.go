@@ -3,7 +3,6 @@ package pagestream
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/starfederation/datastar-go/datastar"
 )
@@ -13,7 +12,6 @@ type StreamSpec struct {
 	StreamID       string
 	InitialPatches []Patch
 	Snapshot       func(context.Context) []Patch
-	TickerInterval time.Duration
 }
 
 func ServeStream(w http.ResponseWriter, r *http.Request, spec StreamSpec) {
@@ -35,23 +33,9 @@ func ServeStream(w http.ResponseWriter, r *http.Request, spec StreamSpec) {
 	if spec.Snapshot != nil && !patchAll(spec.Snapshot(r.Context())) {
 		return
 	}
-	var tickerC <-chan time.Time
-	if spec.Snapshot != nil && spec.TickerInterval > 0 {
-		ticker := time.NewTicker(spec.TickerInterval)
-		defer ticker.Stop()
-		tickerC = ticker.C
-	}
 	if spec.Broker == nil || spec.StreamID == "" {
-		for {
-			select {
-			case <-r.Context().Done():
-				return
-			case <-tickerC:
-				if !patchAll(spec.Snapshot(r.Context())) {
-					return
-				}
-			}
-		}
+		<-r.Context().Done()
+		return
 	}
 	updates, unsubscribe := spec.Broker.Subscribe(spec.StreamID)
 	defer unsubscribe()
@@ -64,10 +48,6 @@ func ServeStream(w http.ResponseWriter, r *http.Request, spec StreamSpec) {
 				return
 			}
 			if err := sse.MarshalAndPatchSignals(patch); err != nil {
-				return
-			}
-		case <-tickerC:
-			if !patchAll(spec.Snapshot(r.Context())) {
 				return
 			}
 		}

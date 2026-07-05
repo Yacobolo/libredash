@@ -14,16 +14,17 @@ func DataExplorerPage(catalog dashboard.Catalog, page uisignals.DataExplorerPage
 	catalog = catalogWithoutWorkspaceContext(catalog)
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, "data", roleLabel)}
 	applyChromeOptions(&chrome, chromeOptions)
+	explorerUpdatesURL := updatesURL(uisignals.RouteData)
 	signals := map[string]any{
 		"chrome":              chrome,
 		"page":                page,
 		"dataExplorer":        explorer,
 		"dataExplorerCommand": explorer.Command,
 		"csrfToken":           csrfToken,
-		"runtime":             runtimeSignal(uisignals.RouteData, updatesURL(uisignals.RouteData)),
+		"runtime":             runtimeSignal(uisignals.RouteData, explorerUpdatesURL),
 		"status":              dashboard.Status{},
 	}
-	return pagestream.RenderDocument(pagestream.DocumentSpec{
+	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: page.Title,
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
@@ -36,9 +37,9 @@ func DataExplorerPage(catalog dashboard.Catalog, page uisignals.DataExplorerPage
 			inspectorScript(),
 			h.Script(h.Type("module"), h.Src("https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.2/bundles/datastar.js")),
 		),
-		MainAttrs: []g.Node{h.Class(appRootClass)},
-		Signals:   signals,
-		Init:      []string{streamAction()},
+		MainAttrs:  []g.Node{h.Class(appRootClass)},
+		Signals:    signals,
+		UpdatesURL: explorerUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-app-shell",
 				g.Attr("chrome", jsonString(chrome)),

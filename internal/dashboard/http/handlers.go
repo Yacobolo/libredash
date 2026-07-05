@@ -4,7 +4,6 @@ import (
 	"context"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	nethttp "net/http"
-	"time"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
@@ -32,7 +31,6 @@ type Handler struct {
 	Metrics             Metrics
 	MetricsForWorkspace func(workspaceID string) (Metrics, bool)
 	Broker              *pagestream.Broker
-	TickerInterval      time.Duration
 	CSRFToken           func(r *nethttp.Request) string
 	ChromeDecorators    func(r *nethttp.Request) []reportui.ChromeDecorator
 }

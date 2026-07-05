@@ -610,18 +610,18 @@ func workspaceRouteDocumentWithBodyExtras(title string, catalog dashboard.Catalo
 		),
 		inspectorElement(),
 	)
-	return pagestream.RenderDocument(pagestream.DocumentSpec{
+	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: title,
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
 			g.Attr("data-light-theme", "light"),
 			g.Attr("data-dark-theme", "dark"),
 		},
-		Head:      pageHead(head...),
-		MainAttrs: []g.Node{h.Class(appRootClass)},
-		Signals:   signals,
-		Init:      []string{streamAction()},
-		Body:      body,
+		Head:       pageHead(head...),
+		MainAttrs:  []g.Node{h.Class(appRootClass)},
+		Signals:    signals,
+		UpdatesURL: runtime.UpdatesURL,
+		Body:       body,
 	})
 }
 
