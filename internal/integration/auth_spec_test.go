@@ -253,6 +253,78 @@ func TestAuthSpecShowGrantsIncludesInheritedObjectProvenance(t *testing.T) {
 	t.Fatalf("inherited grants=%#v missing QUERY_DATA", decoded.Items)
 }
 
+func TestAuthSpecDataPolicyAPIRowFilterAppliesAndDeletes(t *testing.T) {
+	h, repo := newAuthSpecHarness(t)
+	ctx := context.Background()
+
+	manager := authSpecPrincipal(t, ctx, repo, "data-policy-manager@example.com")
+	authSpecGrant(t, ctx, repo, access.WorkspaceObject("sales"), access.SubjectPrincipal, manager.ID, access.PrivilegeUseWorkspace)
+	authSpecGrant(t, ctx, repo, access.ItemObject(access.SecurableSemanticModel, "sales", "sales"), access.SubjectPrincipal, manager.ID, access.PrivilegeManageGrants)
+	authSpecGrant(t, ctx, repo, access.ItemObject(access.SecurableSemanticModel, "sales", "sales"), access.SubjectPrincipal, manager.ID, access.PrivilegeQueryData)
+	token := authSpecToken(t, ctx, repo, access.APITokenInput{PrincipalID: manager.ID, WorkspaceID: "sales", Name: "data-policy-manager"})
+
+	if got := h.authSpecQueryRevenue(t, token); got != 165 {
+		t.Fatalf("baseline revenue = %v, want 165", got)
+	}
+	status, body := h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/data-policies", token, `{"objectType":"dataset","objectId":"sales/orders","policyType":"row_filter","expression":{"field":"orders.status","operator":"equals","values":["delivered"]}}`)
+	if status != http.StatusCreated {
+		t.Fatalf("create row filter policy status=%d body=%s", status, body)
+	}
+	var created struct {
+		ID         string `json:"id"`
+		ObjectID   string `json:"objectId"`
+		PolicyType string `json:"policyType"`
+	}
+	if err := json.Unmarshal([]byte(body), &created); err != nil {
+		t.Fatalf("decode data policy: %v body=%s", err, body)
+	}
+	if created.ID == "" || created.ObjectID != "dataset:sales:sales/orders" || created.PolicyType != "row_filter" {
+		t.Fatalf("created data policy = %#v", created)
+	}
+	if got := h.authSpecQueryRevenue(t, token); got != 110 {
+		t.Fatalf("filtered revenue = %v, want 110", got)
+	}
+
+	status, body = h.authSpecDo(t, http.MethodGet, "/api/v1/workspaces/sales/data-policies?objectType=dataset&objectId=sales/orders", token, "")
+	if status != http.StatusOK {
+		t.Fatalf("list data policies status=%d body=%s", status, body)
+	}
+	if !strings.Contains(body, created.ID) {
+		t.Fatalf("list data policies missing created policy %q: %s", created.ID, body)
+	}
+	status, body = h.authSpecDo(t, http.MethodDelete, "/api/v1/workspaces/sales/data-policies/"+created.ID, token, "")
+	if status != http.StatusOK {
+		t.Fatalf("delete data policy status=%d body=%s", status, body)
+	}
+	if got := h.authSpecQueryRevenue(t, token); got != 165 {
+		t.Fatalf("revenue after policy delete = %v, want 165", got)
+	}
+}
+
+func TestAuthSpecAPITokenAllowlistReducesEffectiveDataPrivileges(t *testing.T) {
+	h, repo := newAuthSpecHarness(t)
+	ctx := context.Background()
+
+	principal := authSpecPrincipal(t, ctx, repo, "token-scope@example.com")
+	authSpecGrant(t, ctx, repo, access.ItemObject(access.SecurableSemanticModel, "sales", "sales"), access.SubjectPrincipal, principal.ID, access.PrivilegeQueryData)
+	authSpecGrant(t, ctx, repo, access.ItemObject(access.SecurableSemanticModel, "sales", "sales"), access.SubjectPrincipal, principal.ID, access.PrivilegePreviewData)
+	token := authSpecToken(t, ctx, repo, access.APITokenInput{
+		PrincipalID: principal.ID,
+		WorkspaceID: "sales",
+		Name:        "query-only",
+		Permissions: []access.Privilege{access.PrivilegeQueryData},
+	})
+
+	status, body := h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/datasets/orders/query", token, `{"measures":[{"field":"revenue"}],"limit":1}`)
+	if status != http.StatusOK {
+		t.Fatalf("query with QUERY_DATA token status=%d body=%s", status, body)
+	}
+	status, body = h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/datasets/orders/preview", token, `{"fields":[{"field":"orders.status"}],"limit":1}`)
+	if status != http.StatusForbidden {
+		t.Fatalf("preview with query-only token status=%d want=403 body=%s", status, body)
+	}
+}
+
 func TestAuthSpecServicePrincipalOAuthAndTokenAllowlist(t *testing.T) {
 	h, repo := newAuthSpecHarness(t)
 	ctx := context.Background()
@@ -453,6 +525,24 @@ func (h *harness) authSpecDo(t *testing.T, method, path, token, body string) (in
 	defer res.Body.Close()
 	bytes, _ := io.ReadAll(res.Body)
 	return res.StatusCode, string(bytes)
+}
+
+func (h *harness) authSpecQueryRevenue(t *testing.T, token string) float64 {
+	t.Helper()
+	status, body := h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/datasets/orders/query", token, `{"measures":[{"field":"revenue"}],"limit":1}`)
+	if status != http.StatusOK {
+		t.Fatalf("semantic revenue query status=%d body=%s", status, body)
+	}
+	var decoded struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
+		t.Fatalf("decode semantic revenue query: %v body=%s", err, body)
+	}
+	if len(decoded.Items) != 1 {
+		t.Fatalf("semantic revenue items = %#v, want one", decoded.Items)
+	}
+	return integrationNumberValue(t, decoded.Items[0]["revenue"])
 }
 
 func (h *harness) authSpecForm(t *testing.T, path string, form url.Values) (int, string) {

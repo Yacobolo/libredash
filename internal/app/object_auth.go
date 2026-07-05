@@ -25,7 +25,7 @@ func routeCanDeferDashboardDataAuth(privilege access.Privilege, r *http.Request)
 }
 
 func routeCanDeferGrantManagement(privilege access.Privilege, r *http.Request) bool {
-	return privilege == access.PrivilegeManageGrants && strings.Contains(r.URL.Path, "/grants")
+	return privilege == access.PrivilegeManageGrants && (strings.Contains(r.URL.Path, "/grants") || strings.Contains(r.URL.Path, "/data-policies"))
 }
 
 func routeObjectRefs(r *http.Request, workspaceID string) []access.ObjectRef {
