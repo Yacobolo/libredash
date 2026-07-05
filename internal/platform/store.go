@@ -142,17 +142,34 @@ func (s *Store) seedDefaults(ctx context.Context) error {
 		if err := s.q.ClearRolePermissions(ctx, roleID); err != nil {
 			return err
 		}
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM role_grant_templates WHERE role_name = ?`, role.Name); err != nil {
+			return err
+		}
 		for _, permission := range role.Permissions {
-			if err := s.q.UpsertPermission(ctx, permission); err != nil {
+			if err := s.q.UpsertPermission(ctx, string(permission)); err != nil {
 				return err
 			}
 			if err := s.q.InsertRolePermission(ctx, db.InsertRolePermissionParams{
 				RoleID:         roleID,
-				PermissionName: permission,
+				PermissionName: string(permission),
 			}); err != nil {
 				return err
 			}
+			if _, err := s.db.ExecContext(ctx, `
+	INSERT INTO role_grant_templates (role_name, privilege)
+	VALUES (?, ?)
+	ON CONFLICT(role_name, privilege) DO NOTHING
+	`, role.Name, string(permission)); err != nil {
+				return err
+			}
 		}
+	}
+	if _, err := s.db.ExecContext(ctx, `
+	INSERT INTO securable_objects (id, object_type, display_name)
+	VALUES ('platform', 'platform', 'Platform')
+	ON CONFLICT(id) DO UPDATE SET object_type = excluded.object_type, display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP
+	`); err != nil {
+		return err
 	}
 	return nil
 }

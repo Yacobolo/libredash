@@ -720,11 +720,11 @@ func (s *Server) adminAgentData(r *http.Request) (ui.AdminAgentData, error) {
 	if err != nil || repo == nil {
 		return data, err
 	}
-	allowed, err := repo.HasPermission(r.Context(), s.defaultWorkspaceID, principal.ID, access.PermissionRBACWrite)
+	decision, err := repo.Authorize(r.Context(), principal.ID, access.PrivilegeManageGrants, access.WorkspaceObject(s.defaultWorkspaceID))
 	if err != nil {
 		return data, err
 	}
-	data.CanWrite = allowed
+	data.CanWrite = decision.Allowed
 	return data, nil
 }
 

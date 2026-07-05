@@ -83,11 +83,11 @@ func TestDeploymentBackedDevServerSeedsPlatformAdminPrincipal(t *testing.T) {
 	if principal.Email != "dev@localhost" || principal.DisplayName != "Local Developer" {
 		t.Fatalf("dev principal = %#v, want Local Developer", principal)
 	}
-	allowed, err := repo.HasPermission(ctx, "other", principal.ID, access.PermissionTokenManage)
+	decision, err := repo.Authorize(ctx, principal.ID, access.PrivilegeManageGrants, access.WorkspaceObject("other"))
 	if err != nil {
 		t.Fatalf("check dev platform permission: %v", err)
 	}
-	if !allowed {
+	if !decision.Allowed {
 		t.Fatal("local dev principal missing platform admin permission")
 	}
 }

@@ -323,6 +323,22 @@ func (a apiGenAdapter) ListWorkspaceRoles(w http.ResponseWriter, r *http.Request
 	a.server.apiWorkspaceRoles(w, r)
 }
 
+func (a apiGenAdapter) ListEffectivePrivileges(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListEffectivePrivilegesParams) {
+	a.server.apiListEffectivePrivileges(w, r)
+}
+
+func (a apiGenAdapter) ListGrants(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListGrantsParams) {
+	a.server.apiListGrants(w, r)
+}
+
+func (a apiGenAdapter) CreateGrant(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiCreateGrant(w, r)
+}
+
+func (a apiGenAdapter) DeleteGrant(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.apiDeleteGrant(w, r)
+}
+
 func (a apiGenAdapter) ListSemanticModels(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListSemanticModelsParams) {
 	a.server.listSemanticModels(w, r)
 }

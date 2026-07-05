@@ -20,7 +20,7 @@ func TestAPITokenWorkspaceAndPermissionAllowlistAreEnforced(t *testing.T) {
 		PrincipalID: owner.ID,
 		WorkspaceID: "test",
 		Name:        "workspace-read-only",
-		Permissions: []string{access.PermissionWorkspaceRead},
+		Permissions: []access.Privilege{access.PrivilegeUseWorkspace},
 	})
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
@@ -57,10 +57,10 @@ func TestAPITokenWorkspaceAndPermissionAllowlistAreEnforced(t *testing.T) {
 	if err := json.Unmarshal(permissionsRec.Body.Bytes(), &permissionsBody); err != nil {
 		t.Fatalf("decode permissions: %v", err)
 	}
-	if !hasString(permissionsBody.Permissions, access.PermissionWorkspaceRead) {
+	if !hasString(permissionsBody.Permissions, string(access.PrivilegeUseWorkspace)) {
 		t.Fatalf("permissions = %#v, want workspace read", permissionsBody.Permissions)
 	}
-	if hasString(permissionsBody.Permissions, access.PermissionDeploymentRead) {
+	if hasString(permissionsBody.Permissions, string(access.PrivilegeViewItem)) {
 		t.Fatalf("permissions = %#v, token allowlist leaked deployment read", permissionsBody.Permissions)
 	}
 
@@ -68,7 +68,7 @@ func TestAPITokenWorkspaceAndPermissionAllowlistAreEnforced(t *testing.T) {
 		PrincipalID: owner.ID,
 		WorkspaceID: "test",
 		Name:        "empty-allowlist",
-		Permissions: []string{},
+		Permissions: []access.Privilege{},
 	})
 	emptyAllowlistReq := httptest.NewRequest(http.MethodGet, "/api/v1/me/permissions?workspace=test", nil)
 	emptyAllowlistReq.Header.Set("Authorization", "Bearer "+emptyAllowlistToken)
@@ -89,7 +89,7 @@ func TestCurrentAPITokenRevocationIsScopedToAuthenticatedPrincipal(t *testing.T)
 		PrincipalID: owner.ID,
 		WorkspaceID: "test",
 		Name:        "auth",
-		Permissions: []string{access.PermissionTokenManage},
+		Permissions: []access.Privilege{access.PrivilegeManageGrants},
 	})
 	_, ownerToken := testScopedAPIToken(t, ctx, store, access.APITokenInput{PrincipalID: owner.ID, Name: "owned"})
 	foreignSecret, foreignToken := testScopedAPIToken(t, ctx, store, access.APITokenInput{PrincipalID: foreign.ID, Name: "foreign"})
@@ -130,7 +130,7 @@ func TestCurrentSessionRevocationIsScopedToAuthenticatedPrincipal(t *testing.T) 
 		PrincipalID: owner.ID,
 		WorkspaceID: "test",
 		Name:        "auth",
-		Permissions: []string{access.PermissionWorkspaceRead},
+		Permissions: []access.Privilege{access.PrivilegeUseWorkspace},
 	})
 	ownerSessionSecret, err := repo.CreateSession(ctx, owner.ID, time.Hour)
 	if err != nil {

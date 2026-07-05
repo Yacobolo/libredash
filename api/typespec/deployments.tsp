@@ -35,7 +35,7 @@ model DeploymentListResponse {
 @summary("List deployments")
 @route("/workspaces/{workspace}/deployments")
 @get
-@apigen.authz(#{ mode: "permission", permission: "deployment:read" })
+@apigen.authz(#{ mode: "permission", permission: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["deployments", "list"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
 @extension("x-agent", #{ enabled: true, name: "list_deployments", risk: "read", tags: #["deployment"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "environment", "status", "createdAt"], cursorPath: "page.nextCursor", count: true } })
 op listDeployments(@path workspace: string, @query environment?: string, @query limit?: int32, @query pageToken?: string): OkJson<DeploymentListResponse> | CommonErrors;
@@ -44,14 +44,14 @@ op listDeployments(@path workspace: string, @query environment?: string, @query 
 @summary("Create a deployment")
 @route("/workspaces/{workspace}/deployments")
 @post
-@apigen.authz(#{ mode: "permission", permission: "deployment:write" })
+@apigen.authz(#{ mode: "permission", permission: "DEPLOY" })
 op createDeployment(@path workspace: string, @body body?: DeploymentCreateRequest): CreatedJson<DeploymentResponse> | CommonErrors;
 
 @tag("Deployments")
 @summary("Get a deployment")
 @route("/workspaces/{workspace}/deployments/{deployment}")
 @get
-@apigen.authz(#{ mode: "permission", permission: "deployment:read" })
+@apigen.authz(#{ mode: "permission", permission: "VIEW_ITEM" })
 @extension("x-agent", #{ enabled: true, name: "get_deployment", risk: "read", tags: #["deployment"], output: #{ rootFields: #["id", "environment", "status", "createdAt", "activatedAt", "error"] } })
 op getDeployment(@path workspace: string, @path deployment: string, @query environment?: string): OkJson<DeploymentResponse> | CommonErrors;
 
@@ -59,14 +59,14 @@ op getDeployment(@path workspace: string, @path deployment: string, @query envir
 @summary("Activate a deployment")
 @route("/workspaces/{workspace}/deployments/{deployment}/activate")
 @post
-@apigen.authz(#{ mode: "permission", permission: "deployment:activate" })
+@apigen.authz(#{ mode: "permission", permission: "ACTIVATE_DEPLOYMENT" })
 op activateDeployment(@path workspace: string, @path deployment: string, @query environment?: string): OkJson<DeploymentResponse> | CommonErrors;
 
 @tag("Deployments")
 @summary("Upload a deployment artifact")
 @route("/workspaces/{workspace}/deployments/{deployment}/artifact")
 @put
-@apigen.authz(#{ mode: "permission", permission: "deployment:write" })
+@apigen.authz(#{ mode: "permission", permission: "DEPLOY" })
 @apigen.manual
 op uploadDeploymentArtifact(
   @path workspace: string,
@@ -79,5 +79,5 @@ op uploadDeploymentArtifact(
 @summary("Validate a deployment")
 @route("/workspaces/{workspace}/deployments/{deployment}/validate")
 @post
-@apigen.authz(#{ mode: "permission", permission: "deployment:write" })
+@apigen.authz(#{ mode: "permission", permission: "DEPLOY" })
 op validateDeployment(@path workspace: string, @path deployment: string, @query environment?: string): OkJson<DeploymentResponse> | CommonErrors;

@@ -152,8 +152,8 @@ func TestAPIGenOperationAuthCoverage(t *testing.T) {
 			t.Fatalf("%s has app permission mapping but no generated contract", operationID)
 		}
 	}
-	if got := apigenOperationPermissions["uploadDeploymentArtifact"]; got != access.PermissionDeploymentCreate {
-		t.Fatalf("uploadDeploymentArtifact permission = %q, want %q", got, access.PermissionDeploymentCreate)
+	if got := apigenOperationPermissions["uploadDeploymentArtifact"]; got != access.PrivilegeDeploy {
+		t.Fatalf("uploadDeploymentArtifact permission = %q, want %q", got, access.PrivilegeDeploy)
 	}
 }
 
@@ -197,7 +197,7 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		if got := authz["mode"]; got != "permission" {
 			t.Fatalf("%s x-authz mode = %#v, want permission", operationID, got)
 		}
-		if got := authz["permission"]; got != apigenOperationPermissions[operationID] {
+		if got := authz["permission"]; got != string(apigenOperationPermissions[operationID]) {
 			t.Fatalf("%s x-authz permission = %#v, want %q", operationID, got, apigenOperationPermissions[operationID])
 		}
 		agentExtension, hasAgentExtension := contract.Extensions["x-agent"].(map[string]any)

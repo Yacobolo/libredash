@@ -490,13 +490,15 @@ RETURNING *;
 
 -- name: ListAgentConversations :many
 SELECT * FROM agent_conversations
-WHERE principal_id = sqlc.arg(principal_id)
+WHERE workspace_id = sqlc.arg(workspace_id)
+  AND principal_id = sqlc.arg(principal_id)
   AND status = 'active'
 ORDER BY updated_at DESC, created_at DESC;
 
 -- name: GetAgentConversation :one
 SELECT * FROM agent_conversations
 WHERE id = sqlc.arg(id)
+  AND workspace_id = sqlc.arg(workspace_id)
   AND principal_id = sqlc.arg(principal_id);
 
 -- name: ArchiveAgentConversation :one
@@ -505,6 +507,7 @@ SET status = 'archived',
     archived_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg(id)
+  AND workspace_id = sqlc.arg(workspace_id)
   AND principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
@@ -513,6 +516,7 @@ UPDATE agent_conversations
 SET transcript_json = sqlc.arg(transcript_json),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg(id)
+  AND workspace_id = sqlc.arg(workspace_id)
   AND principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
@@ -521,6 +525,7 @@ UPDATE agent_conversations
 SET title = sqlc.arg(title),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg(id)
+  AND workspace_id = sqlc.arg(workspace_id)
   AND principal_id = sqlc.arg(principal_id)
   AND status = 'active'
   AND title = 'New conversation'
@@ -541,6 +546,7 @@ SELECT
   sqlc.arg(is_error)
 FROM agent_conversations c
 WHERE c.id = sqlc.arg(conversation_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
@@ -549,6 +555,7 @@ SELECT m.*
 FROM agent_messages m
 JOIN agent_conversations c ON c.id = m.conversation_id
 WHERE c.id = sqlc.arg(conversation_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 ORDER BY m.seq;
 
@@ -562,6 +569,7 @@ SELECT
   sqlc.arg(metadata_json)
 FROM agent_conversations c
 WHERE c.id = sqlc.arg(conversation_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
@@ -570,6 +578,7 @@ SELECT r.*
 FROM agent_runs r
 JOIN agent_conversations c ON c.id = r.conversation_id
 WHERE c.id = sqlc.arg(conversation_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 ORDER BY r.started_at DESC;
 
@@ -588,6 +597,7 @@ WHERE agent_runs.id = sqlc.arg(id)
     SELECT agent_conversations.id
     FROM agent_conversations
     WHERE agent_conversations.id = sqlc.arg(conversation_id)
+      AND workspace_id = sqlc.arg(workspace_id)
       AND principal_id = sqlc.arg(principal_id)
   )
 RETURNING *;
@@ -604,6 +614,7 @@ SELECT
 FROM agent_runs r
 JOIN agent_conversations c ON c.id = r.conversation_id
 WHERE r.id = sqlc.arg(run_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
@@ -613,6 +624,7 @@ FROM agent_events e
 JOIN agent_runs r ON r.id = e.run_id
 JOIN agent_conversations c ON c.id = r.conversation_id
 WHERE r.id = sqlc.arg(run_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 ORDER BY e.seq;
 

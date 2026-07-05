@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/agentapp"
 	"github.com/Yacobolo/libredash/internal/agenttools"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
@@ -353,11 +354,11 @@ func (s *Server) authorizeAPIGenAgentTool(ctx context.Context, scope agentapp.Sc
 	return s.authorizeAgentPermission(ctx, scope, permission)
 }
 
-func (s *Server) authorizeAgentPermission(ctx context.Context, scope agentapp.Scope, permission string) (agent.ToolResult, bool) {
+func (s *Server) authorizeAgentPermission(ctx context.Context, scope agentapp.Scope, privilege access.Privilege) (agent.ToolResult, bool) {
 	if scope.PrincipalID == "" {
 		return apigenAgentToolError("unauthorized", "agent tool requires an authenticated principal"), false
 	}
-	if !agentCredentialAllows(scope, permission) {
+	if !agentCredentialAllows(scope, privilege) {
 		return apigenAgentToolError("forbidden", "credential is not allowed to call this tool"), false
 	}
 	if scope.DevAuthBypass {
@@ -370,17 +371,17 @@ func (s *Server) authorizeAgentPermission(ctx context.Context, scope agentapp.Sc
 	if repo == nil {
 		return agent.ToolResult{}, true
 	}
-	allowed, err := repo.HasPermission(ctx, scope.WorkspaceID, scope.PrincipalID, permission)
+	decision, err := repo.Authorize(ctx, scope.PrincipalID, privilege, access.WorkspaceObject(scope.WorkspaceID))
 	if err != nil {
 		return apigenAgentToolError("authorization_failed", err.Error()), false
 	}
-	if !allowed {
+	if !decision.Allowed {
 		return apigenAgentToolError("forbidden", "principal does not have permission to call this tool"), false
 	}
 	return agent.ToolResult{}, true
 }
 
-func agentCredentialAllows(scope agentapp.Scope, permission string) bool {
+func agentCredentialAllows(scope agentapp.Scope, privilege access.Privilege) bool {
 	credential := scope.Credential
 	if credential.WorkspaceID != "" && credential.WorkspaceID != scope.WorkspaceID {
 		return false
@@ -389,7 +390,7 @@ func agentCredentialAllows(scope agentapp.Scope, permission string) bool {
 		return true
 	}
 	for _, allowed := range credential.Permissions {
-		if allowed == permission {
+		if allowed == string(privilege) {
 			return true
 		}
 	}

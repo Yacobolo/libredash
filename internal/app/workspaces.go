@@ -1092,8 +1092,8 @@ func (s *Server) canReadWorkspace(r *http.Request, workspaceID string) bool {
 	if !ok {
 		return false
 	}
-	allowed, err := repo.HasPermission(r.Context(), workspaceID, principal.ID, access.PermissionWorkspaceRead)
-	return err == nil && allowed
+	decision, err := repo.Authorize(r.Context(), principal.ID, access.PrivilegeUseWorkspace, access.WorkspaceObject(workspaceID))
+	return err == nil && decision.Allowed
 }
 
 func (s *Server) catalogForWorkspacesPage(r *http.Request, workspaces []workspace.WorkspaceView) dashboard.Catalog {
@@ -1327,8 +1327,8 @@ func (s *Server) canManageWorkspaceAccess(r *http.Request, workspaceID string) b
 	if !ok {
 		return false
 	}
-	allowed, err := repo.HasPermission(r.Context(), workspaceID, principal.ID, access.PermissionRBACManage)
-	return err == nil && allowed
+	decision, err := repo.Authorize(r.Context(), principal.ID, access.PrivilegeManageGrants, access.WorkspaceObject(workspaceID))
+	return err == nil && decision.Allowed
 }
 
 func defaultWorkspaceRoles() []workspace.RoleView {
@@ -1512,7 +1512,11 @@ func roleBindingView(row access.RoleBinding) workspace.RoleBindingView {
 }
 
 func roleView(row access.Role) workspace.RoleView {
-	return workspace.RoleView{Name: row.Name, Permissions: row.Permissions}
+	permissions := make([]string, 0, len(row.Permissions))
+	for _, permission := range row.Permissions {
+		permissions = append(permissions, string(permission))
+	}
+	return workspace.RoleView{Name: row.Name, Permissions: permissions}
 }
 
 func csrfToken(r *http.Request, auth *Auth) string {

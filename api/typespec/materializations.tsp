@@ -42,7 +42,7 @@ alias ListMaterializationRunsOK = OkJson<MaterializationRunListResponse>;
 @summary("List materialization runs")
 @route("/workspaces/{workspace}/materialization-runs")
 @get
-@apigen.authz(#{ mode: "permission", permission: "materialization:run" })
+@apigen.authz(#{ mode: "permission", permission: "REFRESH_DATA" })
 @extension("x-agent", #{ enabled: true, name: "list_materialization_runs", risk: "read", tags: #["materialization"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "modelId", "status", "createdAt"], cursorPath: "page.nextCursor", count: true } })
 op listMaterializationRuns(@path workspace: string, @query limit?: int32, @query pageToken?: string): ListMaterializationRunsOK | CommonErrors;
 
@@ -52,7 +52,7 @@ alias CreateMaterializationRunAccepted = AcceptedJson<MaterializationRunResponse
 @summary("Create a materialization run")
 @route("/workspaces/{workspace}/materialization-runs")
 @post
-@apigen.authz(#{ mode: "permission", permission: "materialization:run" })
+@apigen.authz(#{ mode: "permission", permission: "REFRESH_DATA" })
 op createMaterializationRun(@path workspace: string, @body body: MaterializationRunCreateRequest): CreateMaterializationRunAccepted | CommonErrors;
 
 alias GetMaterializationRunOK = OkJson<MaterializationRunResponse>;
@@ -61,6 +61,6 @@ alias GetMaterializationRunOK = OkJson<MaterializationRunResponse>;
 @summary("Get a materialization run")
 @route("/workspaces/{workspace}/materialization-runs/{run}")
 @get
-@apigen.authz(#{ mode: "permission", permission: "materialization:run" })
+@apigen.authz(#{ mode: "permission", permission: "REFRESH_DATA" })
 @extension("x-agent", #{ enabled: true, name: "get_materialization_run", risk: "read", tags: #["materialization"], output: #{ rootFields: #["id", "modelId", "deploymentId", "targetType", "targetId", "status", "error", "createdAt", "startedAt", "finishedAt"] } })
 op getMaterializationRun(@path workspace: string, @path run: string): GetMaterializationRunOK | CommonErrors;

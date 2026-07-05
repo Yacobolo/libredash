@@ -22,7 +22,8 @@ SELECT
 FROM agent_runs r
 JOIN agent_conversations c ON c.id = r.conversation_id
 WHERE r.id = ?6
-  AND c.principal_id = ?7
+  AND c.workspace_id = ?7
+  AND c.principal_id = ?8
 RETURNING id, run_id, seq, event_type, severity, payload_json, created_at
 `
 
@@ -33,6 +34,7 @@ type AppendAgentEventParams struct {
 	Severity    string `json:"severity"`
 	PayloadJson string `json:"payload_json"`
 	RunID       string `json:"run_id"`
+	WorkspaceID string `json:"workspace_id"`
 	PrincipalID string `json:"principal_id"`
 }
 
@@ -44,6 +46,7 @@ func (q *Queries) AppendAgentEvent(ctx context.Context, arg AppendAgentEventPara
 		arg.Severity,
 		arg.PayloadJson,
 		arg.RunID,
+		arg.WorkspaceID,
 		arg.PrincipalID,
 	)
 	var i AgentEvent
@@ -74,7 +77,8 @@ SELECT
   ?8
 FROM agent_conversations c
 WHERE c.id = ?9
-  AND c.principal_id = ?10
+  AND c.workspace_id = ?10
+  AND c.principal_id = ?11
 RETURNING id, conversation_id, run_id, seq, role, content_text, content_json, tool_call_id, tool_name, is_error, created_at
 `
 
@@ -88,6 +92,7 @@ type AppendAgentMessageParams struct {
 	ToolName       string      `json:"tool_name"`
 	IsError        bool        `json:"is_error"`
 	ConversationID string      `json:"conversation_id"`
+	WorkspaceID    string      `json:"workspace_id"`
 	PrincipalID    string      `json:"principal_id"`
 }
 
@@ -102,6 +107,7 @@ func (q *Queries) AppendAgentMessage(ctx context.Context, arg AppendAgentMessage
 		arg.ToolName,
 		arg.IsError,
 		arg.ConversationID,
+		arg.WorkspaceID,
 		arg.PrincipalID,
 	)
 	var i AgentMessage
@@ -127,17 +133,19 @@ SET status = 'archived',
     archived_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?1
-  AND principal_id = ?2
+  AND workspace_id = ?2
+  AND principal_id = ?3
 RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at
 `
 
 type ArchiveAgentConversationParams struct {
 	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
 	PrincipalID string `json:"principal_id"`
 }
 
 func (q *Queries) ArchiveAgentConversation(ctx context.Context, arg ArchiveAgentConversationParams) (AgentConversation, error) {
-	row := q.db.QueryRowContext(ctx, archiveAgentConversation, arg.ID, arg.PrincipalID)
+	row := q.db.QueryRowContext(ctx, archiveAgentConversation, arg.ID, arg.WorkspaceID, arg.PrincipalID)
 	var i AgentConversation
 	err := row.Scan(
 		&i.ID,
@@ -261,7 +269,8 @@ SELECT
   ?4
 FROM agent_conversations c
 WHERE c.id = ?5
-  AND c.principal_id = ?6
+  AND c.workspace_id = ?6
+  AND c.principal_id = ?7
 RETURNING id, conversation_id, status, model, stop_reason, input_tokens, output_tokens, total_tokens, error, started_at, finished_at, metadata_json
 `
 
@@ -271,6 +280,7 @@ type CreateAgentRunParams struct {
 	Model          string `json:"model"`
 	MetadataJson   string `json:"metadata_json"`
 	ConversationID string `json:"conversation_id"`
+	WorkspaceID    string `json:"workspace_id"`
 	PrincipalID    string `json:"principal_id"`
 }
 
@@ -281,6 +291,7 @@ func (q *Queries) CreateAgentRun(ctx context.Context, arg CreateAgentRunParams) 
 		arg.Model,
 		arg.MetadataJson,
 		arg.ConversationID,
+		arg.WorkspaceID,
 		arg.PrincipalID,
 	)
 	var i AgentRun
@@ -490,7 +501,8 @@ WHERE agent_runs.id = ?8
     SELECT agent_conversations.id
     FROM agent_conversations
     WHERE agent_conversations.id = ?9
-      AND principal_id = ?10
+      AND workspace_id = ?10
+      AND principal_id = ?11
   )
 RETURNING id, conversation_id, status, model, stop_reason, input_tokens, output_tokens, total_tokens, error, started_at, finished_at, metadata_json
 `
@@ -505,6 +517,7 @@ type FinishAgentRunParams struct {
 	MetadataJson   string `json:"metadata_json"`
 	ID             string `json:"id"`
 	ConversationID string `json:"conversation_id"`
+	WorkspaceID    string `json:"workspace_id"`
 	PrincipalID    string `json:"principal_id"`
 }
 
@@ -519,6 +532,7 @@ func (q *Queries) FinishAgentRun(ctx context.Context, arg FinishAgentRunParams) 
 		arg.MetadataJson,
 		arg.ID,
 		arg.ConversationID,
+		arg.WorkspaceID,
 		arg.PrincipalID,
 	)
 	var i AgentRun
@@ -601,16 +615,18 @@ func (q *Queries) GetActiveDeployment(ctx context.Context, arg GetActiveDeployme
 const getAgentConversation = `-- name: GetAgentConversation :one
 SELECT id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at FROM agent_conversations
 WHERE id = ?1
-  AND principal_id = ?2
+  AND workspace_id = ?2
+  AND principal_id = ?3
 `
 
 type GetAgentConversationParams struct {
 	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
 	PrincipalID string `json:"principal_id"`
 }
 
 func (q *Queries) GetAgentConversation(ctx context.Context, arg GetAgentConversationParams) (AgentConversation, error) {
-	row := q.db.QueryRowContext(ctx, getAgentConversation, arg.ID, arg.PrincipalID)
+	row := q.db.QueryRowContext(ctx, getAgentConversation, arg.ID, arg.WorkspaceID, arg.PrincipalID)
 	var i AgentConversation
 	err := row.Scan(
 		&i.ID,
@@ -753,7 +769,7 @@ func (q *Queries) GetGroupByProviderExternalID(ctx context.Context, arg GetGroup
 }
 
 const getPrincipal = `-- name: GetPrincipal :one
-SELECT id, email, display_name, created_at, updated_at FROM principals WHERE id = ?
+SELECT id, kind, email, display_name, created_at, updated_at FROM principals WHERE id = ?
 `
 
 func (q *Queries) GetPrincipal(ctx context.Context, id string) (Principal, error) {
@@ -761,6 +777,7 @@ func (q *Queries) GetPrincipal(ctx context.Context, id string) (Principal, error
 	var i Principal
 	err := row.Scan(
 		&i.ID,
+		&i.Kind,
 		&i.Email,
 		&i.DisplayName,
 		&i.CreatedAt,
@@ -770,7 +787,7 @@ func (q *Queries) GetPrincipal(ctx context.Context, id string) (Principal, error
 }
 
 const getPrincipalByEmail = `-- name: GetPrincipalByEmail :one
-SELECT id, email, display_name, created_at, updated_at FROM principals WHERE lower(email) = lower(?) AND email <> '' LIMIT 1
+SELECT id, kind, email, display_name, created_at, updated_at FROM principals WHERE lower(email) = lower(?) AND email <> '' LIMIT 1
 `
 
 func (q *Queries) GetPrincipalByEmail(ctx context.Context, lower string) (Principal, error) {
@@ -778,6 +795,7 @@ func (q *Queries) GetPrincipalByEmail(ctx context.Context, lower string) (Princi
 	var i Principal
 	err := row.Scan(
 		&i.ID,
+		&i.Kind,
 		&i.Email,
 		&i.DisplayName,
 		&i.CreatedAt,
@@ -1364,13 +1382,19 @@ func (q *Queries) ListActiveDuckLakeSnapshots(ctx context.Context) ([]int64, err
 
 const listAgentConversations = `-- name: ListAgentConversations :many
 SELECT id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at FROM agent_conversations
-WHERE principal_id = ?1
+WHERE workspace_id = ?1
+  AND principal_id = ?2
   AND status = 'active'
 ORDER BY updated_at DESC, created_at DESC
 `
 
-func (q *Queries) ListAgentConversations(ctx context.Context, principalID string) ([]AgentConversation, error) {
-	rows, err := q.db.QueryContext(ctx, listAgentConversations, principalID)
+type ListAgentConversationsParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	PrincipalID string `json:"principal_id"`
+}
+
+func (q *Queries) ListAgentConversations(ctx context.Context, arg ListAgentConversationsParams) ([]AgentConversation, error) {
+	rows, err := q.db.QueryContext(ctx, listAgentConversations, arg.WorkspaceID, arg.PrincipalID)
 	if err != nil {
 		return nil, err
 	}
@@ -1409,17 +1433,19 @@ FROM agent_events e
 JOIN agent_runs r ON r.id = e.run_id
 JOIN agent_conversations c ON c.id = r.conversation_id
 WHERE r.id = ?1
-  AND c.principal_id = ?2
+  AND c.workspace_id = ?2
+  AND c.principal_id = ?3
 ORDER BY e.seq
 `
 
 type ListAgentEventsParams struct {
 	RunID       string `json:"run_id"`
+	WorkspaceID string `json:"workspace_id"`
 	PrincipalID string `json:"principal_id"`
 }
 
 func (q *Queries) ListAgentEvents(ctx context.Context, arg ListAgentEventsParams) ([]AgentEvent, error) {
-	rows, err := q.db.QueryContext(ctx, listAgentEvents, arg.RunID, arg.PrincipalID)
+	rows, err := q.db.QueryContext(ctx, listAgentEvents, arg.RunID, arg.WorkspaceID, arg.PrincipalID)
 	if err != nil {
 		return nil, err
 	}
@@ -1454,17 +1480,19 @@ SELECT m.id, m.conversation_id, m.run_id, m.seq, m.role, m.content_text, m.conte
 FROM agent_messages m
 JOIN agent_conversations c ON c.id = m.conversation_id
 WHERE c.id = ?1
-  AND c.principal_id = ?2
+  AND c.workspace_id = ?2
+  AND c.principal_id = ?3
 ORDER BY m.seq
 `
 
 type ListAgentMessagesParams struct {
 	ConversationID string `json:"conversation_id"`
+	WorkspaceID    string `json:"workspace_id"`
 	PrincipalID    string `json:"principal_id"`
 }
 
 func (q *Queries) ListAgentMessages(ctx context.Context, arg ListAgentMessagesParams) ([]AgentMessage, error) {
-	rows, err := q.db.QueryContext(ctx, listAgentMessages, arg.ConversationID, arg.PrincipalID)
+	rows, err := q.db.QueryContext(ctx, listAgentMessages, arg.ConversationID, arg.WorkspaceID, arg.PrincipalID)
 	if err != nil {
 		return nil, err
 	}
@@ -1503,17 +1531,19 @@ SELECT r.id, r.conversation_id, r.status, r.model, r.stop_reason, r.input_tokens
 FROM agent_runs r
 JOIN agent_conversations c ON c.id = r.conversation_id
 WHERE c.id = ?1
-  AND c.principal_id = ?2
+  AND c.workspace_id = ?2
+  AND c.principal_id = ?3
 ORDER BY r.started_at DESC
 `
 
 type ListAgentRunsParams struct {
 	ConversationID string `json:"conversation_id"`
+	WorkspaceID    string `json:"workspace_id"`
 	PrincipalID    string `json:"principal_id"`
 }
 
 func (q *Queries) ListAgentRuns(ctx context.Context, arg ListAgentRunsParams) ([]AgentRun, error) {
-	rows, err := q.db.QueryContext(ctx, listAgentRuns, arg.ConversationID, arg.PrincipalID)
+	rows, err := q.db.QueryContext(ctx, listAgentRuns, arg.ConversationID, arg.WorkspaceID, arg.PrincipalID)
 	if err != nil {
 		return nil, err
 	}
@@ -2644,18 +2674,25 @@ UPDATE agent_conversations
 SET transcript_json = ?1,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?2
-  AND principal_id = ?3
+  AND workspace_id = ?3
+  AND principal_id = ?4
 RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at
 `
 
 type UpdateAgentConversationTranscriptParams struct {
 	TranscriptJson string `json:"transcript_json"`
 	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
 	PrincipalID    string `json:"principal_id"`
 }
 
 func (q *Queries) UpdateAgentConversationTranscript(ctx context.Context, arg UpdateAgentConversationTranscriptParams) (AgentConversation, error) {
-	row := q.db.QueryRowContext(ctx, updateAgentConversationTranscript, arg.TranscriptJson, arg.ID, arg.PrincipalID)
+	row := q.db.QueryRowContext(ctx, updateAgentConversationTranscript,
+		arg.TranscriptJson,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+	)
 	var i AgentConversation
 	err := row.Scan(
 		&i.ID,
@@ -2677,7 +2714,8 @@ UPDATE agent_conversations
 SET title = ?1,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = ?2
-  AND principal_id = ?3
+  AND workspace_id = ?3
+  AND principal_id = ?4
   AND status = 'active'
   AND title = 'New conversation'
 RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at
@@ -2686,11 +2724,17 @@ RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcri
 type UpdateDefaultAgentConversationTitleParams struct {
 	Title       string `json:"title"`
 	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
 	PrincipalID string `json:"principal_id"`
 }
 
 func (q *Queries) UpdateDefaultAgentConversationTitle(ctx context.Context, arg UpdateDefaultAgentConversationTitleParams) (AgentConversation, error) {
-	row := q.db.QueryRowContext(ctx, updateDefaultAgentConversationTitle, arg.Title, arg.ID, arg.PrincipalID)
+	row := q.db.QueryRowContext(ctx, updateDefaultAgentConversationTitle,
+		arg.Title,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.PrincipalID,
+	)
 	var i AgentConversation
 	err := row.Scan(
 		&i.ID,

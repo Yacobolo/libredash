@@ -20,11 +20,12 @@ import (
 )
 
 type Repository struct {
-	q *platformdb.Queries
+	db *sql.DB
+	q  *platformdb.Queries
 }
 
 func NewRepository(sqlDB *sql.DB) *Repository {
-	return &Repository{q: platformdb.New(sqlDB)}
+	return &Repository{db: sqlDB, q: platformdb.New(sqlDB)}
 }
 
 func (r *Repository) PrincipalByID(ctx context.Context, id string) (access.Principal, error) {
@@ -79,12 +80,19 @@ func (r *Repository) SetPrincipalRole(ctx context.Context, input access.Principa
 	}); err != nil {
 		return access.Principal{}, err
 	}
+	bindingID := stableAccessID("rolebinding", input.WorkspaceID, principal.ID+"|"+input.Role)
+	if err := r.deleteRoleBindingGrants(ctx, bindingID); err != nil {
+		return access.Principal{}, err
+	}
 	if err := r.q.InsertRoleBinding(ctx, platformdb.InsertRoleBindingParams{
-		ID:          newID("rolebinding"),
+		ID:          bindingID,
 		WorkspaceID: input.WorkspaceID,
 		RoleID:      role.ID,
 		PrincipalID: sql.NullString{String: principal.ID, Valid: true},
 	}); err != nil {
+		return access.Principal{}, err
+	}
+	if err := r.syncRoleBindingGrants(ctx, bindingID, input.WorkspaceID, input.Role, access.SubjectPrincipal, principal.ID); err != nil {
 		return access.Principal{}, err
 	}
 	return principal, nil
@@ -121,6 +129,20 @@ func (r *Repository) SetPlatformRole(ctx context.Context, input access.PlatformR
 	}); err != nil {
 		return access.Principal{}, err
 	}
+	privileges, err := r.rolePrivileges(ctx, firstNonEmpty(input.Role, access.RolePlatformAdmin))
+	if err != nil {
+		return access.Principal{}, err
+	}
+	for _, privilege := range privileges {
+		if err := r.upsertGrantWithID(ctx, "grant_platform_"+stableID(principal.ID+"|"+string(privilege)), access.GrantInput{
+			Object:      access.PlatformObject(),
+			SubjectType: access.SubjectPrincipal,
+			SubjectID:   principal.ID,
+			Privilege:   privilege,
+		}); err != nil {
+			return access.Principal{}, err
+		}
+	}
 	return principal, nil
 }
 
@@ -154,6 +176,9 @@ func (r *Repository) CreateRoleBinding(ctx context.Context, input access.RoleBin
 	}); err != nil {
 		return access.RoleBinding{}, err
 	}
+	if err := r.syncRoleBindingGrants(ctx, input.ID, input.WorkspaceID, input.Role, input.SubjectType, input.SubjectID); err != nil {
+		return access.RoleBinding{}, err
+	}
 	return r.GetRoleBinding(ctx, input.WorkspaceID, input.ID)
 }
 
@@ -183,12 +208,21 @@ func (r *Repository) UpdateRoleBinding(ctx context.Context, workspaceID, id stri
 	}); err != nil {
 		return access.RoleBinding{}, err
 	}
+	if err := r.deleteRoleBindingGrants(ctx, id); err != nil {
+		return access.RoleBinding{}, err
+	}
+	if err := r.syncRoleBindingGrants(ctx, id, workspaceID, input.Role, input.SubjectType, input.SubjectID); err != nil {
+		return access.RoleBinding{}, err
+	}
 	return r.GetRoleBinding(ctx, workspaceID, id)
 }
 
 func (r *Repository) DeleteRoleBinding(ctx context.Context, workspaceID, id string) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("role binding id is required")
+	}
+	if err := r.deleteRoleBindingGrants(ctx, id); err != nil {
+		return err
 	}
 	return r.q.DeleteRoleBindingByID(ctx, platformdb.DeleteRoleBindingByIDParams{
 		WorkspaceID: workspaceID,
@@ -215,32 +249,331 @@ func (r *Repository) ListRoles(ctx context.Context) ([]access.Role, error) {
 	}
 	roles := make([]access.Role, 0, len(rows))
 	for _, row := range rows {
-		var permissions []string
+		var permissions []access.Privilege
 		_ = json.Unmarshal([]byte(row.PermissionsJson), &permissions)
 		roles = append(roles, access.Role{Name: row.Name, Permissions: permissions})
 	}
 	return roles, nil
 }
 
-func (r *Repository) HasPermission(ctx context.Context, workspaceID, principalID, permission string) (bool, error) {
+func (r *Repository) Authorize(ctx context.Context, principalID string, privilege access.Privilege, object access.ObjectRef) (access.AuthorizationDecision, error) {
+	decision := access.AuthorizationDecision{Privilege: privilege, Object: object}
+	principalID = strings.TrimSpace(principalID)
 	if principalID == "" {
-		return false, nil
+		decision.Reason = "missing_principal"
+		return decision, nil
 	}
-	rows, err := r.q.ListPrincipalRolePermissions(ctx, platformdb.ListPrincipalRolePermissionsParams{
-		WorkspaceID:   workspaceID,
-		PrincipalID:   sql.NullString{String: principalID, Valid: true},
-		PrincipalID_2: principalID,
-		PrincipalID_3: principalID,
-	})
+	if strings.TrimSpace(string(privilege)) == "" {
+		decision.Reason = "missing_privilege"
+		return decision, nil
+	}
+	objectID, err := r.ensureSecurableObject(ctx, object)
 	if err != nil {
-		return false, err
+		return decision, err
 	}
-	for _, row := range rows {
-		if row == permission {
-			return true, nil
+	if owner, err := r.objectOwner(ctx, objectID); err != nil {
+		return decision, err
+	} else if owner != "" && owner == principalID {
+		decision.Allowed = true
+		decision.Owner = true
+		decision.Reason = "owner"
+		return decision, nil
+	}
+	platformDecision, err := r.authorizeByGrant(ctx, principalID, access.PrivilegeManagePlatform, []string{access.PlatformObject().CanonicalID()})
+	if err != nil {
+		return decision, err
+	}
+	if platformDecision.Allowed {
+		decision.Allowed = true
+		decision.Platform = true
+		decision.GrantID = platformDecision.GrantID
+		decision.Reason = "platform_admin"
+		return decision, nil
+	}
+	objectIDs := []string{}
+	for current := object; ; {
+		objectIDs = append(objectIDs, current.CanonicalID())
+		parent, ok := current.Parent()
+		if !ok {
+			break
+		}
+		current = parent
+	}
+	grantDecision, err := r.authorizeByGrant(ctx, principalID, privilege, objectIDs)
+	if err != nil {
+		return decision, err
+	}
+	if grantDecision.Allowed {
+		grantDecision.Privilege = privilege
+		grantDecision.Object = object
+		return grantDecision, nil
+	}
+	decision.Reason = "no_grant"
+	return decision, nil
+}
+
+func (r *Repository) EffectivePrivileges(ctx context.Context, principalID string, object access.ObjectRef) ([]access.Privilege, error) {
+	out := []access.Privilege{}
+	for _, privilege := range knownPrivileges() {
+		decision, err := r.Authorize(ctx, principalID, privilege, object)
+		if err != nil {
+			return nil, err
+		}
+		if decision.Allowed {
+			out = append(out, privilege)
 		}
 	}
-	return false, nil
+	return out, nil
+}
+
+func (r *Repository) CreateGrant(ctx context.Context, input access.GrantInput) (access.Grant, error) {
+	id := newID("grant")
+	if err := r.upsertGrantWithID(ctx, id, input); err != nil {
+		return access.Grant{}, err
+	}
+	grants, err := r.ListGrants(ctx, input.Object)
+	if err != nil {
+		return access.Grant{}, err
+	}
+	for _, grant := range grants {
+		if grant.ID == id {
+			return grant, nil
+		}
+	}
+	return access.Grant{}, sql.ErrNoRows
+}
+
+func (r *Repository) DeleteGrant(ctx context.Context, workspaceID, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("grant id is required")
+	}
+	_, err := r.db.ExecContext(ctx, `
+DELETE FROM grants
+WHERE id = ?
+  AND object_id IN (
+    SELECT id FROM securable_objects
+    WHERE workspace_id = ? OR id = ?
+  )
+`, id, workspaceID, access.WorkspaceObject(workspaceID).CanonicalID())
+	return err
+}
+
+func (r *Repository) ListGrants(ctx context.Context, object access.ObjectRef) ([]access.Grant, error) {
+	objectID, err := r.ensureSecurableObject(ctx, object)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.db.QueryContext(ctx, `
+SELECT g.id, g.object_id, so.object_type, so.workspace_id, g.subject_type, g.subject_id, g.privilege, g.created_at
+FROM grants g
+JOIN securable_objects so ON so.id = g.object_id
+WHERE g.object_id = ?
+ORDER BY g.subject_type, g.subject_id, g.privilege
+`, objectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	grants := []access.Grant{}
+	for rows.Next() {
+		var grant access.Grant
+		var objectType, subjectType, privilege string
+		if err := rows.Scan(&grant.ID, &grant.ObjectID, &objectType, &grant.WorkspaceID, &subjectType, &grant.SubjectID, &privilege, &grant.CreatedAt); err != nil {
+			return nil, err
+		}
+		grant.ObjectType = access.SecurableType(objectType)
+		grant.SubjectType = access.SubjectType(subjectType)
+		grant.Privilege = access.Privilege(privilege)
+		grants = append(grants, grant)
+	}
+	return grants, rows.Err()
+}
+
+func (r *Repository) authorizeByGrant(ctx context.Context, principalID string, privilege access.Privilege, objectIDs []string) (access.AuthorizationDecision, error) {
+	decision := access.AuthorizationDecision{Privilege: privilege}
+	if len(objectIDs) == 0 {
+		return decision, nil
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(objectIDs)), ",")
+	args := []any{principalID, string(privilege), principalID}
+	for _, id := range objectIDs {
+		args = append(args, id)
+	}
+	query := `
+SELECT g.id, g.object_id
+FROM grants g
+LEFT JOIN group_members gm
+  ON g.subject_type = 'group'
+ AND gm.group_id = g.subject_id
+ AND gm.principal_id = ?
+WHERE g.privilege = ?
+  AND (g.subject_type IN ('principal', 'service_principal') AND g.subject_id = ? OR gm.principal_id IS NOT NULL)
+  AND g.object_id IN (` + placeholders + `)
+ORDER BY CASE g.object_id`
+	for i, id := range objectIDs {
+		query += fmt.Sprintf(" WHEN ? THEN %d", i)
+		args = append(args, id)
+	}
+	query += " ELSE 999 END LIMIT 1"
+	var grantID, objectID string
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(&grantID, &objectID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return decision, nil
+		}
+		return decision, err
+	}
+	decision.Allowed = true
+	decision.GrantID = grantID
+	decision.Inherited = len(objectIDs) > 0 && objectID != objectIDs[0]
+	decision.Reason = "grant"
+	return decision, nil
+}
+
+func (r *Repository) ensureSecurableObject(ctx context.Context, object access.ObjectRef) (string, error) {
+	objectID := object.CanonicalID()
+	if strings.TrimSpace(objectID) == "" {
+		return "", fmt.Errorf("securable object id is required")
+	}
+	parentID := ""
+	if parent, ok := object.Parent(); ok {
+		parentID = parent.CanonicalID()
+		if _, err := r.ensureSecurableObject(ctx, parent); err != nil {
+			return "", err
+		}
+	}
+	_, err := r.db.ExecContext(ctx, `
+INSERT INTO securable_objects (id, object_type, workspace_id, parent_id, display_name)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  object_type = excluded.object_type,
+  workspace_id = excluded.workspace_id,
+  parent_id = excluded.parent_id,
+  display_name = COALESCE(NULLIF(excluded.display_name, ''), securable_objects.display_name),
+  updated_at = CURRENT_TIMESTAMP
+`, objectID, string(object.Type), object.WorkspaceID, parentID, objectDisplayName(object))
+	return objectID, err
+}
+
+func objectDisplayName(object access.ObjectRef) string {
+	if object.ObjectID != "" {
+		return object.ObjectID
+	}
+	if object.WorkspaceID != "" {
+		return object.WorkspaceID
+	}
+	return string(object.Type)
+}
+
+func (r *Repository) objectOwner(ctx context.Context, objectID string) (string, error) {
+	var owner string
+	err := r.db.QueryRowContext(ctx, `SELECT owner_principal_id FROM securable_objects WHERE id = ?`, objectID).Scan(&owner)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return owner, err
+}
+
+func (r *Repository) syncRoleBindingGrants(ctx context.Context, bindingID, workspaceID, roleName string, subjectType access.SubjectType, subjectID string) error {
+	if err := r.ensureWorkspaceSecurable(ctx, workspaceID); err != nil {
+		return err
+	}
+	privileges, err := r.rolePrivileges(ctx, roleName)
+	if err != nil {
+		return err
+	}
+	for _, privilege := range privileges {
+		grantID := roleBindingGrantID(bindingID, privilege)
+		if err := r.upsertGrantWithID(ctx, grantID, access.GrantInput{
+			Object:      access.WorkspaceObject(workspaceID),
+			SubjectType: subjectType,
+			SubjectID:   subjectID,
+			Privilege:   privilege,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *Repository) deleteRoleBindingGrants(ctx context.Context, bindingID string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM grants WHERE id LIKE ?`, "grant_"+bindingID+"_%")
+	return err
+}
+
+func roleBindingGrantID(bindingID string, privilege access.Privilege) string {
+	return "grant_" + bindingID + "_" + strings.ToLower(string(privilege))
+}
+
+func (r *Repository) rolePrivileges(ctx context.Context, roleName string) ([]access.Privilege, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT privilege FROM role_grant_templates WHERE role_name = ? ORDER BY privilege`, roleName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	privileges := []access.Privilege{}
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return nil, err
+		}
+		privileges = append(privileges, access.Privilege(value))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(privileges) == 0 {
+		return nil, fmt.Errorf("role %q has no grant template", roleName)
+	}
+	return privileges, nil
+}
+
+func (r *Repository) upsertGrantWithID(ctx context.Context, id string, input access.GrantInput) error {
+	subjectID := strings.TrimSpace(input.SubjectID)
+	if subjectID == "" {
+		return fmt.Errorf("grant subject id is required")
+	}
+	if input.SubjectType == "" {
+		return fmt.Errorf("grant subject type is required")
+	}
+	if input.Privilege == "" {
+		return fmt.Errorf("grant privilege is required")
+	}
+	objectID, err := r.ensureSecurableObject(ctx, input.Object)
+	if err != nil {
+		return err
+	}
+	_, err = r.db.ExecContext(ctx, `
+INSERT INTO grants (id, object_id, subject_type, subject_id, privilege)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(object_id, subject_type, subject_id, privilege) DO UPDATE SET id = excluded.id
+`, id, objectID, string(input.SubjectType), subjectID, string(input.Privilege))
+	return err
+}
+
+func (r *Repository) ensureWorkspaceSecurable(ctx context.Context, workspaceID string) error {
+	_, err := r.ensureSecurableObject(ctx, access.WorkspaceObject(workspaceID))
+	return err
+}
+
+func knownPrivileges() []access.Privilege {
+	return []access.Privilege{
+		access.PrivilegeUseWorkspace,
+		access.PrivilegeViewItem,
+		access.PrivilegeEditItem,
+		access.PrivilegeManageItem,
+		access.PrivilegeQueryData,
+		access.PrivilegePreviewData,
+		access.PrivilegeRefreshData,
+		access.PrivilegeDeploy,
+		access.PrivilegeActivateDeployment,
+		access.PrivilegeUseAgent,
+		access.PrivilegeViewAgent,
+		access.PrivilegeManageGrants,
+		access.PrivilegeViewAudit,
+		access.PrivilegeManageWorkspace,
+		access.PrivilegeManagePlatform,
+	}
 }
 
 func (r *Repository) BootstrapAdmin(ctx context.Context, workspaceID, email string) error {
@@ -260,12 +593,19 @@ func (r *Repository) BootstrapAdmin(ctx context.Context, workspaceID, email stri
 	if err != nil {
 		return err
 	}
-	return r.q.InsertRoleBinding(ctx, platformdb.InsertRoleBindingParams{
-		ID:          newID("rolebinding"),
+	bindingID := stableAccessID("rolebinding", workspaceID, principal.ID+"|"+access.RoleOwner)
+	if err := r.deleteRoleBindingGrants(ctx, bindingID); err != nil {
+		return err
+	}
+	if err := r.q.InsertRoleBinding(ctx, platformdb.InsertRoleBindingParams{
+		ID:          bindingID,
 		WorkspaceID: workspaceID,
 		RoleID:      role.ID,
 		PrincipalID: sql.NullString{String: principal.ID, Valid: principal.ID != ""},
-	})
+	}); err != nil {
+		return err
+	}
+	return r.syncRoleBindingGrants(ctx, bindingID, workspaceID, access.RoleOwner, access.SubjectPrincipal, principal.ID)
 }
 
 func (r *Repository) ResolveExternalPrincipal(ctx context.Context, input access.ExternalIdentityInput) (access.Principal, error) {
@@ -446,6 +786,14 @@ func (r *Repository) ReconcileWorkspacePolicy(ctx context.Context, workspaceID s
 		if err := r.DeleteRoleBinding(ctx, workspaceID, binding.ID); err != nil {
 			return err
 		}
+	}
+	if _, err := r.db.ExecContext(ctx, `
+DELETE FROM grants
+WHERE object_id IN (
+  SELECT id FROM securable_objects WHERE workspace_id = ? OR id = ?
+)
+`, workspaceID, access.WorkspaceObject(workspaceID).CanonicalID()); err != nil {
+		return err
 	}
 	groups, err := r.ListGroups(ctx, workspaceID)
 	if err != nil {
@@ -820,6 +1168,7 @@ func (r *Repository) roleBindingParts(ctx context.Context, input access.RoleBind
 func mapPrincipal(row platformdb.Principal) access.Principal {
 	return access.Principal{
 		ID:          row.ID,
+		Kind:        access.PrincipalKind(row.Kind),
 		Email:       row.Email,
 		DisplayName: row.DisplayName,
 		CreatedAt:   row.CreatedAt,
@@ -882,7 +1231,7 @@ func mapSession(row platformdb.Session) access.Session {
 }
 
 func mapAPIToken(row platformdb.ApiToken) access.APIToken {
-	var permissions []string
+	var permissions []access.Privilege
 	_ = json.Unmarshal([]byte(row.PermissionsJson), &permissions)
 	return access.APIToken{
 		ID:          row.ID,

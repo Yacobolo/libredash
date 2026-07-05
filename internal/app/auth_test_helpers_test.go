@@ -15,7 +15,7 @@ func testAuth(store *platform.Store, workspaceID string, cfg AuthConfig) *Auth {
 			PrincipalID: "dev",
 			Email:       "dev@localhost",
 			DisplayName: "Local Developer",
-			Role:        access.RoleAdmin,
+			Role:        access.RolePlatformAdmin,
 		})
 	}
 	return NewAuth(repo, workspaceID, cfg)

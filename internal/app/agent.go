@@ -282,9 +282,13 @@ func (s *Server) agentRequest(w http.ResponseWriter, r *http.Request) (*agentapp
 
 func agentCredentialScope(credential access.APICredential) agentapp.CredentialScope {
 	token := credential.Token
+	permissions := make([]string, 0, len(token.Permissions))
+	for _, permission := range token.Permissions {
+		permissions = append(permissions, string(permission))
+	}
 	return agentapp.CredentialScope{
 		WorkspaceID: token.WorkspaceID,
-		Permissions: append([]string(nil), token.Permissions...),
+		Permissions: permissions,
 		Restricted:  token.Permissions != nil,
 	}
 }

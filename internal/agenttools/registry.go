@@ -204,7 +204,7 @@ func operationAllowed(contract apigenapi.GenOperationContract, extension Extensi
 		return false
 	}
 	switch operationPermission(contract) {
-	case "workspace:read", "asset:read", "deployment:read", "materialization:run":
+	case "USE_WORKSPACE", "VIEW_ITEM", "QUERY_DATA", "PREVIEW_DATA", "REFRESH_DATA":
 		return true
 	default:
 		return false

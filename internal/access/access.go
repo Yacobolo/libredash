@@ -10,104 +10,161 @@ import (
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
-const (
-	PermissionWorkspaceRead      = "workspace:read"
-	PermissionAssetRead          = "asset:read"
-	PermissionDeploymentRead     = "deployment:read"
-	PermissionDeploymentWrite    = "deployment:write"
-	PermissionDeploymentActivate = "deployment:activate"
-	PermissionRBACRead           = "rbac:read"
-	PermissionRBACWrite          = "rbac:write"
-	PermissionAgentUse           = "agent:use"
-	PermissionAgentRead          = "agent:read"
-	PermissionMaterializationRun = "materialization:run"
-	PermissionAuditRead          = "audit:read"
-	PermissionTokenManage        = "token:manage"
+type Privilege string
 
-	PermissionDashboardView           = PermissionWorkspaceRead
-	PermissionDeploymentCreate        = PermissionDeploymentWrite
-	PermissionDeploymentRollback      = PermissionDeploymentActivate
-	PermissionMaterializationsRefresh = PermissionMaterializationRun
-	PermissionRBACManage              = PermissionRBACWrite
+const (
+	PrivilegeUseWorkspace       Privilege = "USE_WORKSPACE"
+	PrivilegeViewItem           Privilege = "VIEW_ITEM"
+	PrivilegeEditItem           Privilege = "EDIT_ITEM"
+	PrivilegeManageItem         Privilege = "MANAGE_ITEM"
+	PrivilegeQueryData          Privilege = "QUERY_DATA"
+	PrivilegePreviewData        Privilege = "PREVIEW_DATA"
+	PrivilegeRefreshData        Privilege = "REFRESH_DATA"
+	PrivilegeDeploy             Privilege = "DEPLOY"
+	PrivilegeActivateDeployment Privilege = "ACTIVATE_DEPLOYMENT"
+	PrivilegeUseAgent           Privilege = "USE_AGENT"
+	PrivilegeViewAgent          Privilege = "VIEW_AGENT"
+	PrivilegeManageGrants       Privilege = "MANAGE_GRANTS"
+	PrivilegeViewAudit          Privilege = "VIEW_AUDIT"
+	PrivilegeManageWorkspace    Privilege = "MANAGE_WORKSPACE"
+	PrivilegeManagePlatform     Privilege = "MANAGE_PLATFORM"
 )
 
 const (
-	RoleOwner    = "owner"
-	RoleAdmin    = "admin"
-	RoleDeployer = "deployer"
-	RoleEditor   = "editor"
-	RoleViewer   = "viewer"
+	RoleOwner         = "owner"
+	RoleAdmin         = "admin"
+	RoleDeployer      = "deployer"
+	RoleContributor   = "contributor"
+	RoleEditor        = "editor"
+	RoleMember        = "member"
+	RoleViewer        = "viewer"
+	RolePlatformAdmin = "platform_admin"
 )
 
 var defaultRoles = []Role{
 	{
 		Name: RoleOwner,
-		Permissions: []string{
-			PermissionWorkspaceRead,
-			PermissionAssetRead,
-			PermissionDeploymentRead,
-			PermissionDeploymentWrite,
-			PermissionDeploymentActivate,
-			PermissionRBACRead,
-			PermissionRBACWrite,
-			PermissionAgentUse,
-			PermissionAgentRead,
-			PermissionMaterializationRun,
-			PermissionAuditRead,
-			PermissionTokenManage,
+		Permissions: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeManageItem,
+			PrivilegeQueryData,
+			PrivilegePreviewData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeActivateDeployment,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
+			PrivilegeManageGrants,
+			PrivilegeViewAudit,
+			PrivilegeManageWorkspace,
 		},
 	},
 	{
 		Name: RoleAdmin,
-		Permissions: []string{
-			PermissionWorkspaceRead,
-			PermissionAssetRead,
-			PermissionDeploymentRead,
-			PermissionDeploymentWrite,
-			PermissionDeploymentActivate,
-			PermissionRBACRead,
-			PermissionRBACWrite,
-			PermissionAgentUse,
-			PermissionAgentRead,
-			PermissionMaterializationRun,
-			PermissionAuditRead,
-			PermissionTokenManage,
+		Permissions: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeManageItem,
+			PrivilegeQueryData,
+			PrivilegePreviewData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeActivateDeployment,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
+			PrivilegeManageGrants,
+			PrivilegeViewAudit,
+			PrivilegeManageWorkspace,
 		},
 	},
 	{
 		Name: RoleDeployer,
-		Permissions: []string{
-			PermissionWorkspaceRead,
-			PermissionAssetRead,
-			PermissionDeploymentRead,
-			PermissionDeploymentWrite,
-			PermissionDeploymentActivate,
-			PermissionMaterializationRun,
+		Permissions: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeQueryData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeActivateDeployment,
+		},
+	},
+	{
+		Name: RoleContributor,
+		Permissions: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeQueryData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
 		},
 	},
 	{
 		Name: RoleEditor,
-		Permissions: []string{
-			PermissionWorkspaceRead,
-			PermissionAssetRead,
-			PermissionAgentUse,
-			PermissionAgentRead,
-			PermissionMaterializationRun,
+		Permissions: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeQueryData,
+			PrivilegeRefreshData,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
+		},
+	},
+	{
+		Name: RoleMember,
+		Permissions: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeManageItem,
+			PrivilegeQueryData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
 		},
 	},
 	{
 		Name: RoleViewer,
-		Permissions: []string{
-			PermissionWorkspaceRead,
-			PermissionAssetRead,
-			PermissionAgentUse,
-			PermissionAgentRead,
+		Permissions: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeQueryData,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
+		},
+	},
+	{
+		Name: RolePlatformAdmin,
+		Permissions: []Privilege{
+			PrivilegeManagePlatform,
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeManageItem,
+			PrivilegeQueryData,
+			PrivilegePreviewData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeActivateDeployment,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
+			PrivilegeManageGrants,
+			PrivilegeViewAudit,
+			PrivilegeManageWorkspace,
 		},
 	},
 }
 
 type Principal struct {
 	ID          string
+	Kind        PrincipalKind
 	Email       string
 	DisplayName string
 	CreatedAt   string
@@ -116,7 +173,110 @@ type Principal struct {
 
 type Role struct {
 	Name        string
-	Permissions []string
+	Permissions []Privilege
+}
+
+type PrincipalKind string
+
+const (
+	PrincipalKindUser             PrincipalKind = "user"
+	PrincipalKindGroup            PrincipalKind = "group"
+	PrincipalKindServicePrincipal PrincipalKind = "service_principal"
+)
+
+type SecurableType string
+
+const (
+	SecurablePlatform      SecurableType = "platform"
+	SecurableWorkspace     SecurableType = "workspace"
+	SecurableDashboard     SecurableType = "dashboard"
+	SecurableSemanticModel SecurableType = "semantic_model"
+	SecurableSource        SecurableType = "source"
+	SecurableModelTable    SecurableType = "model_table"
+	SecurableAgentPolicy   SecurableType = "agent_policy"
+	SecurableDataset       SecurableType = "dataset"
+	SecurableTable         SecurableType = "table"
+	SecurableColumn        SecurableType = "column"
+)
+
+type ObjectRef struct {
+	Type        SecurableType
+	WorkspaceID string
+	ObjectID    string
+}
+
+func PlatformObject() ObjectRef {
+	return ObjectRef{Type: SecurablePlatform}
+}
+
+func WorkspaceObject(workspaceID string) ObjectRef {
+	return ObjectRef{Type: SecurableWorkspace, WorkspaceID: strings.TrimSpace(workspaceID)}
+}
+
+func ItemObject(typ SecurableType, workspaceID, objectID string) ObjectRef {
+	return ObjectRef{Type: typ, WorkspaceID: strings.TrimSpace(workspaceID), ObjectID: strings.TrimSpace(objectID)}
+}
+
+func (r ObjectRef) CanonicalID() string {
+	switch r.Type {
+	case SecurablePlatform:
+		return "platform"
+	case SecurableWorkspace:
+		return "workspace:" + r.WorkspaceID
+	default:
+		return string(r.Type) + ":" + r.WorkspaceID + ":" + r.ObjectID
+	}
+}
+
+func (r ObjectRef) Parent() (ObjectRef, bool) {
+	switch r.Type {
+	case SecurablePlatform:
+		return ObjectRef{}, false
+	case SecurableWorkspace:
+		return PlatformObject(), true
+	default:
+		return WorkspaceObject(r.WorkspaceID), true
+	}
+}
+
+type SecurableObject struct {
+	ID               string
+	Type             SecurableType
+	WorkspaceID      string
+	ParentID         string
+	OwnerPrincipalID string
+	DisplayName      string
+	CreatedAt        string
+	UpdatedAt        string
+}
+
+type Grant struct {
+	ID          string
+	ObjectID    string
+	ObjectType  SecurableType
+	WorkspaceID string
+	SubjectType SubjectType
+	SubjectID   string
+	Privilege   Privilege
+	CreatedAt   string
+}
+
+type GrantInput struct {
+	Object      ObjectRef
+	SubjectType SubjectType
+	SubjectID   string
+	Privilege   Privilege
+}
+
+type AuthorizationDecision struct {
+	Allowed   bool
+	Privilege Privilege
+	Object    ObjectRef
+	Reason    string
+	GrantID   string
+	Inherited bool
+	Owner     bool
+	Platform  bool
 }
 
 type SubjectType string
@@ -206,7 +366,7 @@ type APITokenInput struct {
 	PrincipalID string
 	WorkspaceID string
 	Name        string
-	Permissions []string
+	Permissions []Privilege
 	ExpiresAt   time.Time
 }
 
@@ -215,7 +375,7 @@ type APIToken struct {
 	PrincipalID string
 	WorkspaceID string
 	Name        string
-	Permissions []string
+	Permissions []Privilege
 	ExpiresAt   string
 	CreatedAt   string
 	LastUsedAt  string
@@ -282,7 +442,11 @@ type Repository interface {
 	DeleteRoleBinding(ctx context.Context, workspaceID, id string) error
 	ListRoleBindings(ctx context.Context, workspaceID string) ([]RoleBinding, error)
 	ListRoles(ctx context.Context) ([]Role, error)
-	HasPermission(ctx context.Context, workspaceID, principalID, permission string) (bool, error)
+	Authorize(ctx context.Context, principalID string, privilege Privilege, object ObjectRef) (AuthorizationDecision, error)
+	EffectivePrivileges(ctx context.Context, principalID string, object ObjectRef) ([]Privilege, error)
+	CreateGrant(ctx context.Context, input GrantInput) (Grant, error)
+	DeleteGrant(ctx context.Context, workspaceID, id string) error
+	ListGrants(ctx context.Context, object ObjectRef) ([]Grant, error)
 	BootstrapAdmin(ctx context.Context, workspaceID, email string) error
 	ResolveExternalPrincipal(ctx context.Context, input ExternalIdentityInput) (Principal, error)
 	UpsertGroup(ctx context.Context, input GroupInput) (Group, error)
@@ -317,7 +481,7 @@ func DefaultRoles() []Role {
 	for i, role := range defaultRoles {
 		roles[i] = Role{
 			Name:        role.Name,
-			Permissions: append([]string(nil), role.Permissions...),
+			Permissions: append([]Privilege(nil), role.Permissions...),
 		}
 	}
 	return roles

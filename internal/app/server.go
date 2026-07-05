@@ -264,7 +264,7 @@ func SeedLocalDeveloperPlatformAdmin(ctx context.Context, repo access.Repository
 		PrincipalID: principal.ID,
 		Email:       principal.Email,
 		DisplayName: principal.DisplayName,
-		Role:        access.RoleAdmin,
+		Role:        access.RolePlatformAdmin,
 	})
 	return err
 }

@@ -68,7 +68,7 @@ func (s *Server) agentVisualToolDefinitions(scope agentapp.Scope) []agent.ToolDe
 }
 
 func (s *Server) runAgentVisualTool(ctx context.Context, scope agentapp.Scope, call agent.ToolCall) agent.ToolResult {
-	if errResult, ok := s.authorizeAgentPermission(ctx, scope, access.PermissionAssetRead); !ok {
+	if errResult, ok := s.authorizeAgentPermission(ctx, scope, access.PrivilegeQueryData); !ok {
 		return errResult
 	}
 	input, err := decodeAgentVisualInput(call.Arguments)

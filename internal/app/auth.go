@@ -171,7 +171,7 @@ func (a *Auth) APICredential(r *http.Request) (access.APICredential, bool) {
 	return access.APICredential{}, false
 }
 
-func (a *Auth) Middleware(permission string, next http.Handler) http.Handler {
+func (a *Auth) Middleware(privilege access.Privilege, next http.Handler) http.Handler {
 	if !a.Enabled() {
 		return next
 	}
@@ -185,18 +185,18 @@ func (a *Auth) Middleware(permission string, next http.Handler) http.Handler {
 			http.Redirect(w, r, "/auth/azureadv2", http.StatusFound)
 			return
 		}
-		if permission != "" {
+		if privilege != "" {
 			workspaceID := a.permissionWorkspaceID(r)
-			if credential != nil && !apiTokenAllows((*credential).Token, workspaceID, permission) {
+			if credential != nil && !apiTokenAllows((*credential).Token, workspaceID, privilege) {
 				writeAuthError(w, r, errForbidden, http.StatusForbidden)
 				return
 			}
-			allowed, err := a.repo.HasPermission(r.Context(), workspaceID, principal.ID, permission)
+			decision, err := a.repo.Authorize(r.Context(), principal.ID, privilege, authObjectForWorkspace(workspaceID))
 			if err != nil {
 				writeAuthError(w, r, err, http.StatusInternalServerError)
 				return
 			}
-			if !allowed {
+			if !decision.Allowed {
 				writeAuthError(w, r, errForbidden, http.StatusForbidden)
 				return
 			}
@@ -207,6 +207,13 @@ func (a *Auth) Middleware(permission string, next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func authObjectForWorkspace(workspaceID string) access.ObjectRef {
+	if strings.TrimSpace(workspaceID) == "" {
+		return access.PlatformObject()
+	}
+	return access.WorkspaceObject(workspaceID)
 }
 
 func writeAuthError(w http.ResponseWriter, r *http.Request, err error, status int) {
@@ -272,7 +279,7 @@ func (a *Auth) authenticate(r *http.Request) (Principal, *access.APICredential, 
 	return Principal{ID: principal.ID, Email: principal.Email, DisplayName: principal.DisplayName}, nil, true
 }
 
-func apiTokenAllows(token access.APIToken, workspaceID, permission string) bool {
+func apiTokenAllows(token access.APIToken, workspaceID string, privilege access.Privilege) bool {
 	if token.WorkspaceID != "" && token.WorkspaceID != workspaceID {
 		return false
 	}
@@ -280,7 +287,7 @@ func apiTokenAllows(token access.APIToken, workspaceID, permission string) bool 
 		return true
 	}
 	for _, allowed := range token.Permissions {
-		if allowed == permission {
+		if allowed == privilege {
 			return true
 		}
 	}

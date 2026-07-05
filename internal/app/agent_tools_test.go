@@ -1136,9 +1136,9 @@ func TestAPIGenAgentToolEnforcesCredentialPermissionAllowlistAndWorkspace(t *tes
 	ctx := context.Background()
 	store := testStore(t)
 	principal := testPrincipal(t, ctx, store, "agent-token@example.com", "Agent Token", access.RoleOwner)
-	agentOnlyToken := access.APIToken{WorkspaceID: "test", Permissions: []string{access.PermissionAgentUse}}
-	assetToken := access.APIToken{WorkspaceID: "test", Permissions: []string{access.PermissionAgentUse, access.PermissionAssetRead}}
-	foreignToken := access.APIToken{WorkspaceID: "other", Permissions: []string{access.PermissionAssetRead}}
+	agentOnlyToken := access.APIToken{WorkspaceID: "test", Permissions: []access.Privilege{access.PrivilegeUseAgent}}
+	assetToken := access.APIToken{WorkspaceID: "test", Permissions: []access.Privilege{access.PrivilegeUseAgent, access.PrivilegeViewItem}}
+	foreignToken := access.APIToken{WorkspaceID: "other", Permissions: []access.Privilege{access.PrivilegeViewItem}}
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, AccessRepo: testAccessRepository(store), DefaultWorkspaceID: "test"})
 
 	run := func(token access.APIToken) agent.ToolResult {
@@ -1147,7 +1147,7 @@ func TestAPIGenAgentToolEnforcesCredentialPermissionAllowlistAndWorkspace(t *tes
 			PrincipalID: principal.ID,
 			Credential: agentapp.CredentialScope{
 				WorkspaceID: token.WorkspaceID,
-				Permissions: append([]string(nil), token.Permissions...),
+				Permissions: testPrivilegeStrings(token.Permissions),
 				Restricted:  token.Permissions != nil,
 			},
 		}
@@ -1278,6 +1278,14 @@ func stringSliceHas(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func testPrivilegeStrings(values []access.Privilege) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
 }
 
 type manyEdgesMetrics struct {

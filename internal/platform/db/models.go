@@ -111,6 +111,16 @@ type AuditEvent struct {
 	CreatedAt    string         `json:"created_at"`
 }
 
+type DataPolicy struct {
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
+	ObjectID       string `json:"object_id"`
+	PolicyType     string `json:"policy_type"`
+	ExpressionJson string `json:"expression_json"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
+}
+
 type Deployment struct {
 	ID                 string         `json:"id"`
 	WorkspaceID        string         `json:"workspace_id"`
@@ -151,6 +161,15 @@ type ExternalIdentity struct {
 	Email       string `json:"email"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
+}
+
+type Grant struct {
+	ID          string `json:"id"`
+	ObjectID    string `json:"object_id"`
+	SubjectType string `json:"subject_type"`
+	SubjectID   string `json:"subject_id"`
+	Privilege   string `json:"privilege"`
+	CreatedAt   string `json:"created_at"`
 }
 
 type Group struct {
@@ -231,6 +250,7 @@ type PlatformSetting struct {
 
 type Principal struct {
 	ID          string `json:"id"`
+	Kind        string `json:"kind"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 	CreatedAt   string `json:"created_at"`
@@ -291,10 +311,27 @@ type RoleBinding struct {
 	CreatedAt   string         `json:"created_at"`
 }
 
+type RoleGrantTemplate struct {
+	RoleName  string `json:"role_name"`
+	Privilege string `json:"privilege"`
+	CreatedAt string `json:"created_at"`
+}
+
 type RolePermission struct {
 	RoleID         string `json:"role_id"`
 	PermissionName string `json:"permission_name"`
 	CreatedAt      string `json:"created_at"`
+}
+
+type SecurableObject struct {
+	ID               string `json:"id"`
+	ObjectType       string `json:"object_type"`
+	WorkspaceID      string `json:"workspace_id"`
+	ParentID         string `json:"parent_id"`
+	OwnerPrincipalID string `json:"owner_principal_id"`
+	DisplayName      string `json:"display_name"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
 }
 
 type Session struct {

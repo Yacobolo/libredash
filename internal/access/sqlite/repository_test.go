@@ -27,7 +27,7 @@ func TestRepositoryChecksRBAC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("set principal role: %v", err)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivateDeployment)
 	if err != nil {
 		t.Fatalf("check permission: %v", err)
 	}
@@ -50,7 +50,7 @@ func TestRepositoryChecksPlatformRolePermissions(t *testing.T) {
 		t.Fatalf("set platform role: %v", err)
 	}
 	for _, workspaceID := range []string{"test", "other"} {
-		allowed, err := repo.HasPermission(ctx, workspaceID, principal.ID, access.PermissionTokenManage)
+		allowed, err := testAuthorize(ctx, repo, workspaceID, principal.ID, access.PrivilegeManageGrants)
 		if err != nil {
 			t.Fatalf("check permission for %s: %v", workspaceID, err)
 		}
@@ -63,7 +63,7 @@ func TestRepositoryChecksPlatformRolePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upsert limited principal: %v", err)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", limited.ID, access.PermissionTokenManage)
+	allowed, err := testAuthorize(ctx, repo, "test", limited.ID, access.PrivilegeManageGrants)
 	if err != nil {
 		t.Fatalf("check limited permission: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestRepositoryChecksGroupRolePermissions(t *testing.T) {
 		t.Fatalf("binding subject = %q/%q, want group/%q", binding.SubjectType, binding.SubjectID, group.ID)
 	}
 
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivateDeployment)
 	if err != nil {
 		t.Fatalf("check permission: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestRepositoryChecksGroupRolePermissions(t *testing.T) {
 	if err := repo.RemoveGroupMember(ctx, "test", group.ID, principal.ID); err != nil {
 		t.Fatalf("remove group member: %v", err)
 	}
-	allowed, err = repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	allowed, err = testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivateDeployment)
 	if err != nil {
 		t.Fatalf("check permission after remove: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestRepositoryResolveExternalPrincipalAttachesBootstrappedEmail(t *testing.
 	if principal.ID != access.PrincipalIDForEmail("owner@example.com") {
 		t.Fatalf("principal id = %q, want bootstrapped email principal", principal.ID)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivateDeployment)
 	if err != nil {
 		t.Fatalf("check permission: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestRepositoryResolveExternalPrincipalWithoutEmailCreatesUnprivilegedPrinci
 	if err != nil {
 		t.Fatalf("resolve external principal: %v", err)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivateDeployment)
 	if err != nil {
 		t.Fatalf("check permission: %v", err)
 	}
@@ -458,7 +458,7 @@ func TestRepositoryListsAndRevokesAPITokens(t *testing.T) {
 		PrincipalID: principal.ID,
 		WorkspaceID: "test",
 		Name:        "production",
-		Permissions: []string{access.PermissionDashboardView},
+		Permissions: []access.Privilege{access.PrivilegeViewItem},
 		ExpiresAt:   expiresAt,
 	})
 	if err != nil {
@@ -478,7 +478,7 @@ func TestRepositoryListsAndRevokesAPITokens(t *testing.T) {
 	if token.WorkspaceID != "test" || token.ExpiresAt == "" || token.RevokedAt != "" {
 		t.Fatalf("token metadata = workspace %q expires %q revoked %q", token.WorkspaceID, token.ExpiresAt, token.RevokedAt)
 	}
-	if len(token.Permissions) != 1 || token.Permissions[0] != access.PermissionDashboardView {
+	if len(token.Permissions) != 1 || token.Permissions[0] != access.PrivilegeViewItem {
 		t.Fatalf("token permissions = %#v, want dashboard view", token.Permissions)
 	}
 	if _, err := repo.PrincipalForAPIToken(ctx, secret); err != nil {
@@ -514,7 +514,7 @@ func TestRepositoryAPITokenCredentialIncludesTokenMetadata(t *testing.T) {
 		PrincipalID: principal.ID,
 		WorkspaceID: "test",
 		Name:        "scoped",
-		Permissions: []string{access.PermissionWorkspaceRead, access.PermissionTokenManage},
+		Permissions: []access.Privilege{access.PrivilegeUseWorkspace, access.PrivilegeManageGrants},
 	})
 	if err != nil {
 		t.Fatalf("create api token: %v", err)
@@ -530,7 +530,7 @@ func TestRepositoryAPITokenCredentialIncludesTokenMetadata(t *testing.T) {
 	if credential.Token.ID != created.ID || credential.Token.WorkspaceID != "test" {
 		t.Fatalf("credential token metadata = id %q workspace %q, want %q/test", credential.Token.ID, credential.Token.WorkspaceID, created.ID)
 	}
-	if len(credential.Token.Permissions) != 2 || credential.Token.Permissions[0] != access.PermissionWorkspaceRead || credential.Token.Permissions[1] != access.PermissionTokenManage {
+	if len(credential.Token.Permissions) != 2 || credential.Token.Permissions[0] != access.PrivilegeUseWorkspace || credential.Token.Permissions[1] != access.PrivilegeManageGrants {
 		t.Fatalf("credential token permissions = %#v", credential.Token.Permissions)
 	}
 }
@@ -751,4 +751,9 @@ func openAccessRepo(t *testing.T, ctx context.Context) (*platform.Store, *Reposi
 		t.Fatalf("ensure workspace: %v", err)
 	}
 	return store, NewRepository(store.SQLDB())
+}
+
+func testAuthorize(ctx context.Context, repo *Repository, workspaceID, principalID string, privilege access.Privilege) (bool, error) {
+	decision, err := repo.Authorize(ctx, principalID, privilege, access.WorkspaceObject(workspaceID))
+	return decision.Allowed, err
 }
