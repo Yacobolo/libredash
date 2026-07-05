@@ -114,6 +114,46 @@ func TestRepositorySaveValidatedReplacesDeploymentGraph(t *testing.T) {
 	}
 }
 
+func TestRepositoryActivateRegistersSecurablesFromDeploymentGraph(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openRepo(t, ctx)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	created, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	workspaceID := workspace.WorkspaceID("test")
+	deploymentID := workspace.DeploymentID(created.ID)
+	model := mustTestAsset(workspaceID, deploymentID, workspace.AssetTypeSemanticModel, "test.sales", "")
+	table := mustTestAsset(workspaceID, deploymentID, workspace.AssetTypeSemanticTable, "test.sales.orders", model.ID)
+	field := mustTestAsset(workspaceID, deploymentID, workspace.AssetTypeField, "test.sales.orders.email", table.ID)
+	dashboard := mustTestAsset(workspaceID, deploymentID, workspace.AssetTypeDashboard, "test.executive", "")
+	validation := deployment.Validation{
+		Digest:       "digest",
+		ManifestJSON: "{}",
+		Graph: workspace.AssetGraph{
+			Assets: []workspace.Asset{model, table, field, dashboard},
+			Edges: []workspace.AssetEdge{
+				workspace.NewAssetEdge(workspaceID, deploymentID, dashboard.ID, model.ID, workspace.AssetEdgeUsesSemanticModel),
+				workspace.NewAssetEdge(workspaceID, deploymentID, field.ID, table.ID, workspace.AssetEdgeUsesSemanticTable),
+			},
+		},
+	}
+	if _, err := repo.SaveValidated(ctx, created.ID, validation, artifact(created.ID, "test")); err != nil {
+		t.Fatalf("save validated: %v", err)
+	}
+	if _, err := repo.Activate(ctx, "test", deployment.DefaultEnvironment, created.ID); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+
+	assertSecurableParent(t, store, "semantic_model:test:sales", "workspace:test")
+	assertSecurableParent(t, store, "dataset:test:sales/orders", "semantic_model:test:sales")
+	assertSecurableParent(t, store, "column:test:sales/orders/email", "dataset:test:sales/orders")
+	assertSecurableParent(t, store, "dashboard:test:executive", "workspace:test")
+}
+
 func TestRepositorySaveValidatedRollsBackOnDuplicateLogicalAsset(t *testing.T) {
 	ctx := context.Background()
 	store, repo := openRepo(t, ctx)
@@ -138,6 +178,17 @@ func TestRepositorySaveValidatedRollsBackOnDuplicateLogicalAsset(t *testing.T) {
 	}
 	if _, err := repo.ArtifactByDeployment(ctx, created.ID); !errors.Is(err, deployment.ErrNotFound) {
 		t.Fatalf("artifact error = %v, want ErrNotFound", err)
+	}
+}
+
+func assertSecurableParent(t *testing.T, store *platform.Store, id, wantParent string) {
+	t.Helper()
+	var parent string
+	if err := store.SQLDB().QueryRowContext(context.Background(), `SELECT parent_id FROM securable_objects WHERE id = ?`, id).Scan(&parent); err != nil {
+		t.Fatalf("securable %s: %v", id, err)
+	}
+	if parent != wantParent {
+		t.Fatalf("securable %s parent = %q, want %q", id, parent, wantParent)
 	}
 }
 

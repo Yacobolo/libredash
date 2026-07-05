@@ -180,15 +180,6 @@ func (q *Queries) ClearAssetsForDeployment(ctx context.Context, deploymentID str
 	return err
 }
 
-const clearRolePermissions = `-- name: ClearRolePermissions :exec
-DELETE FROM role_permissions WHERE role_id = ?
-`
-
-func (q *Queries) ClearRolePermissions(ctx context.Context, roleID string) error {
-	_, err := q.db.ExecContext(ctx, clearRolePermissions, roleID)
-	return err
-}
-
 const createAPIToken = `-- name: CreateAPIToken :exec
 INSERT INTO api_tokens (id, principal_id, workspace_id, name, token_hash, permissions_json, expires_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -1367,21 +1358,6 @@ func (q *Queries) InsertRoleBinding(ctx context.Context, arg InsertRoleBindingPa
 	return err
 }
 
-const insertRolePermission = `-- name: InsertRolePermission :exec
-INSERT OR IGNORE INTO role_permissions (role_id, permission_name)
-VALUES (?, ?)
-`
-
-type InsertRolePermissionParams struct {
-	RoleID         string `json:"role_id"`
-	PermissionName string `json:"permission_name"`
-}
-
-func (q *Queries) InsertRolePermission(ctx context.Context, arg InsertRolePermissionParams) error {
-	_, err := q.db.ExecContext(ctx, insertRolePermission, arg.RoleID, arg.PermissionName)
-	return err
-}
-
 const listAPITokensByPrincipal = `-- name: ListAPITokensByPrincipal :many
 SELECT id, principal_id, workspace_id, name, token_hash, permissions_json, expires_at, created_at, last_used_at, revoked_at FROM api_tokens
 WHERE principal_id = ?
@@ -2065,91 +2041,6 @@ func (q *Queries) ListLeasedDuckLakeSnapshots(ctx context.Context) ([]int64, err
 			return nil, err
 		}
 		items = append(items, ducklake_snapshot_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPermissions = `-- name: ListPermissions :many
-SELECT name, created_at FROM permissions ORDER BY name
-`
-
-func (q *Queries) ListPermissions(ctx context.Context) ([]Permission, error) {
-	rows, err := q.db.QueryContext(ctx, listPermissions)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Permission{}
-	for rows.Next() {
-		var i Permission
-		if err := rows.Scan(&i.Name, &i.CreatedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listPrincipalRolePermissions = `-- name: ListPrincipalRolePermissions :many
-SELECT DISTINCT permission_name
-FROM (
-  SELECT rp.permission_name
-  FROM role_bindings rb
-  JOIN role_permissions rp ON rp.role_id = rb.role_id
-  LEFT JOIN group_members gm
-    ON gm.workspace_id = rb.workspace_id
-   AND gm.group_id = rb.group_id
-  WHERE rb.workspace_id = ?
-    AND (
-      rb.principal_id = ?
-      OR gm.principal_id = ?
-    )
-  UNION
-  SELECT rp.permission_name
-  FROM platform_role_bindings prb
-  JOIN role_permissions rp ON rp.role_id = prb.role_id
-  WHERE prb.principal_id = ?
-)
-ORDER BY permission_name
-`
-
-type ListPrincipalRolePermissionsParams struct {
-	WorkspaceID   string         `json:"workspace_id"`
-	PrincipalID   sql.NullString `json:"principal_id"`
-	PrincipalID_2 string         `json:"principal_id_2"`
-	PrincipalID_3 string         `json:"principal_id_3"`
-}
-
-func (q *Queries) ListPrincipalRolePermissions(ctx context.Context, arg ListPrincipalRolePermissionsParams) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, listPrincipalRolePermissions,
-		arg.WorkspaceID,
-		arg.PrincipalID,
-		arg.PrincipalID_2,
-		arg.PrincipalID_3,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []string{}
-	for rows.Next() {
-		var permission_name string
-		if err := rows.Scan(&permission_name); err != nil {
-			return nil, err
-		}
-		items = append(items, permission_name)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -3014,17 +2905,6 @@ func (q *Queries) UpsertGroup(ctx context.Context, arg UpsertGroupParams) error 
 		arg.ExternalID,
 		arg.Name,
 	)
-	return err
-}
-
-const upsertPermission = `-- name: UpsertPermission :exec
-INSERT INTO permissions (name)
-VALUES (?)
-ON CONFLICT(name) DO NOTHING
-`
-
-func (q *Queries) UpsertPermission(ctx context.Context, name string) error {
-	_, err := q.db.ExecContext(ctx, upsertPermission, name)
 	return err
 }
 

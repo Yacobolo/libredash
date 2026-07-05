@@ -28,6 +28,8 @@ type WorkspaceProject struct {
 	Dashboards            map[string]*report.Dashboard
 	AccessGroups          map[string]workspace.WorkspaceGroup
 	AccessRoleBindings    map[string]workspace.WorkspaceRoleBinding
+	AccessGrants          map[string]workspace.WorkspaceGrant
+	AccessDataPolicies    map[string]workspace.WorkspaceDataPolicy
 	AgentPolicies         map[string]workspace.AgentPolicy
 	ModelTitles           map[string]string
 	ModelDescriptions     map[string]string

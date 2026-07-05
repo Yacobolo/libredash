@@ -287,6 +287,10 @@ func TestAuthSpecServicePrincipalOAuthAndTokenAllowlist(t *testing.T) {
 	form.Set("client_id", "sp_ci")
 	form.Set("client_secret", secretResponse.Secret)
 	form.Set("workspace_id", "sales")
+	status, body = h.authSpecForm(t, "/oauth/token", form)
+	if status != http.StatusBadRequest {
+		t.Fatalf("oauth token empty scope status=%d want=400 body=%s", status, body)
+	}
 	form.Set("scope", string(access.PrivilegeQueryData))
 	status, body = h.authSpecForm(t, "/oauth/token", form)
 	if status != http.StatusOK {

@@ -139,25 +139,13 @@ func (s *Store) seedDefaults(ctx context.Context) error {
 		}); err != nil {
 			return err
 		}
-		if err := s.q.ClearRolePermissions(ctx, roleID); err != nil {
-			return err
-		}
 		if _, err := s.db.ExecContext(ctx, `DELETE FROM role_grant_templates WHERE role_name = ?`, role.Name); err != nil {
 			return err
 		}
 		for _, permission := range role.Permissions {
-			if err := s.q.UpsertPermission(ctx, string(permission)); err != nil {
-				return err
-			}
-			if err := s.q.InsertRolePermission(ctx, db.InsertRolePermissionParams{
-				RoleID:         roleID,
-				PermissionName: string(permission),
-			}); err != nil {
-				return err
-			}
 			if _, err := s.db.ExecContext(ctx, `
-	INSERT INTO role_grant_templates (role_name, privilege)
-	VALUES (?, ?)
+		INSERT INTO role_grant_templates (role_name, privilege)
+		VALUES (?, ?)
 	ON CONFLICT(role_name, privilege) DO NOTHING
 	`, role.Name, string(permission)); err != nil {
 				return err

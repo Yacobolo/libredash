@@ -159,6 +159,8 @@ func loadWorkspaces(project *Project, includes []string) error {
 			Dashboards:            map[string]*report.Dashboard{},
 			AccessGroups:          map[string]workspace.WorkspaceGroup{},
 			AccessRoleBindings:    map[string]workspace.WorkspaceRoleBinding{},
+			AccessGrants:          map[string]workspace.WorkspaceGrant{},
+			AccessDataPolicies:    map[string]workspace.WorkspaceDataPolicy{},
 			AgentPolicies:         map[string]workspace.AgentPolicy{},
 			ModelTitles:           map[string]string{},
 			ModelDescriptions:     map[string]string{},
@@ -350,8 +352,32 @@ func loadWorkspaceAccess(workspaceProject *WorkspaceProject, baseDir string, inc
 			}
 			workspaceProject.AccessRoleBindings[name] = projectWorkspaceRoleBinding(name, spec)
 			workspaceProject.AccessPaths["WorkspaceRoleBinding:"+name] = path
+		case "Grant":
+			var spec workspaceGrantSpec
+			if err := envelope.Spec.Decode(&spec); err != nil {
+				return resourceError(path, envelopeResourceID(envelope, workspaceProject.ID), "spec", "%s spec: %s", path, err.Error())
+			}
+			if _, exists := workspaceProject.AccessGrants[name]; exists {
+				return resourceError(path, "grant:"+workspaceProject.ID+"."+name, "metadata.name", "duplicate Grant %q in workspace %q", name, workspaceProject.ID)
+			}
+			workspaceProject.AccessGrants[name] = projectWorkspaceGrant(name, spec)
+			workspaceProject.AccessPaths["Grant:"+name] = path
+		case "DataPolicy":
+			var spec workspaceDataPolicySpec
+			if err := envelope.Spec.Decode(&spec); err != nil {
+				return resourceError(path, envelopeResourceID(envelope, workspaceProject.ID), "spec", "%s spec: %s", path, err.Error())
+			}
+			if _, exists := workspaceProject.AccessDataPolicies[name]; exists {
+				return resourceError(path, "data_policy:"+workspaceProject.ID+"."+name, "metadata.name", "duplicate DataPolicy %q in workspace %q", name, workspaceProject.ID)
+			}
+			policy, err := projectWorkspaceDataPolicy(name, spec)
+			if err != nil {
+				return resourceError(path, envelopeResourceID(envelope, workspaceProject.ID), "spec.expression", "%s spec.expression: %s", path, err.Error())
+			}
+			workspaceProject.AccessDataPolicies[name] = policy
+			workspaceProject.AccessPaths["DataPolicy:"+name] = path
 		default:
-			return resourceError(path, envelopeResourceID(envelope, workspaceProject.ID), "kind", "%s kind = %q, want WorkspaceGroup or WorkspaceRoleBinding", path, envelope.Kind)
+			return resourceError(path, envelopeResourceID(envelope, workspaceProject.ID), "kind", "%s kind = %q, want WorkspaceGroup, WorkspaceRoleBinding, Grant, or DataPolicy", path, envelope.Kind)
 		}
 	}
 	return nil
@@ -463,6 +489,16 @@ func envelopeResourceID(envelope resourceEnvelope, fallbackWorkspace string) str
 			return ""
 		}
 		return "workspace_role_binding:" + workspaceID + "." + name
+	case "Grant":
+		if workspaceID == "" {
+			return ""
+		}
+		return "grant:" + workspaceID + "." + name
+	case "DataPolicy":
+		if workspaceID == "" {
+			return ""
+		}
+		return "data_policy:" + workspaceID + "." + name
 	case "WorkspaceAgentPolicy":
 		if workspaceID == "" {
 			return ""
@@ -497,6 +533,10 @@ func schemaKindForEnvelope(content []byte) (configschema.Kind, bool) {
 		return configschema.KindWorkspaceGroup, true
 	case "WorkspaceRoleBinding":
 		return configschema.KindWorkspaceRoleBinding, true
+	case "Grant":
+		return configschema.KindGrant, true
+	case "DataPolicy":
+		return configschema.KindDataPolicy, true
 	case "WorkspaceAgentPolicy":
 		return configschema.KindWorkspaceAgentPolicy, true
 	case "ModelTable":

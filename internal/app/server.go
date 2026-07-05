@@ -148,6 +148,13 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	if metrics != nil {
 		metrics = executionMetrics{QueryMetrics: metrics, executor: executor, defaultWorkspaceID: options.DefaultWorkspaceID}
 	}
+	dataAccessRepo := options.AccessRepo
+	if dataAccessRepo == nil && options.Auth != nil && options.Store != nil {
+		dataAccessRepo = accesssqlite.NewRepository(options.Store.SQLDB())
+	}
+	if metrics != nil && dataAccessRepo != nil && options.Auth != nil {
+		metrics = dataAuthorizationMetrics{QueryMetrics: metrics, repo: dataAccessRepo, defaultWorkspaceID: options.DefaultWorkspaceID}
+	}
 	if metrics != nil && options.Store != nil {
 		metrics = queryAuditMetrics{
 			QueryMetrics:       metrics,

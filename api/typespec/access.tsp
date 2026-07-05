@@ -141,6 +141,28 @@ model GrantListResponse {
   page: PageInfo;
 }
 
+model DataPolicyRequest {
+  objectType?: string;
+  objectId?: string;
+  policyType: string;
+  expression: JSONObject;
+}
+
+model DataPolicyResponse {
+  id: string;
+  workspaceId: string;
+  objectId: string;
+  policyType: string;
+  expression: JSONObject;
+  createdAt: utcDateTime;
+  updatedAt: utcDateTime;
+}
+
+model DataPolicyListResponse {
+  items: DataPolicyResponse[];
+  page: PageInfo;
+}
+
 model EffectivePrivilegeListResponse {
   workspaceId: string;
   objectType: string;
@@ -396,3 +418,30 @@ alias DeleteGrantOK = OkJson<StatusResponse>;
 @delete
 @apigen.authz(#{ mode: "permission", permission: "MANAGE_GRANTS" })
 op deleteGrant(@path workspace: string, @path grant: string): DeleteGrantOK | CommonErrors;
+
+alias ListDataPoliciesOK = OkJson<DataPolicyListResponse>;
+
+@tag("Access")
+@summary("List data policies")
+@route("/workspaces/{workspace}/data-policies")
+@get
+@apigen.authz(#{ mode: "permission", permission: "MANAGE_GRANTS" })
+op listDataPolicies(@path workspace: string, @query objectType?: string, @query objectId?: string, @query includeInherited?: boolean, @query limit?: int32, @query pageToken?: string): ListDataPoliciesOK | CommonErrors;
+
+alias CreateDataPolicyCreated = CreatedJson<DataPolicyResponse>;
+
+@tag("Access")
+@summary("Create a data policy")
+@route("/workspaces/{workspace}/data-policies")
+@post
+@apigen.authz(#{ mode: "permission", permission: "MANAGE_GRANTS" })
+op createDataPolicy(@path workspace: string, @body body: DataPolicyRequest): CreateDataPolicyCreated | CommonErrors;
+
+alias DeleteDataPolicyOK = OkJson<StatusResponse>;
+
+@tag("Access")
+@summary("Delete a data policy")
+@route("/workspaces/{workspace}/data-policies/{policy}")
+@delete
+@apigen.authz(#{ mode: "permission", permission: "MANAGE_GRANTS" })
+op deleteDataPolicy(@path workspace: string, @path policy: string): DeleteDataPolicyOK | CommonErrors;

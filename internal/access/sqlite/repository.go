@@ -453,16 +453,32 @@ WHERE id = ? AND workspace_id = ?
 }
 
 func (r *Repository) ListDataPolicies(ctx context.Context, object access.ObjectRef) ([]access.DataPolicy, error) {
+	return r.ListDataPoliciesWithOptions(ctx, object, false)
+}
+
+func (r *Repository) ListDataPoliciesWithOptions(ctx context.Context, object access.ObjectRef, includeInherited bool) ([]access.DataPolicy, error) {
 	objectID, err := r.ensureSecurableObject(ctx, object)
 	if err != nil {
 		return nil, err
 	}
+	objectIDs := []string{objectID}
+	if includeInherited {
+		objectIDs, err = r.objectAncestry(ctx, objectID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(objectIDs)), ",")
+	args := make([]any, 0, len(objectIDs)*2)
+	for _, id := range objectIDs {
+		args = append(args, id)
+	}
 	rows, err := r.db.QueryContext(ctx, `
 SELECT id, workspace_id, object_id, policy_type, expression_json, created_at, updated_at
 FROM data_policies
-WHERE object_id = ?
-ORDER BY policy_type, id
-`, objectID)
+WHERE object_id IN (`+placeholders+`)
+ORDER BY CASE object_id`+grantOrderCase(objectIDs)+` ELSE 999 END, policy_type, id
+`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -990,6 +1006,9 @@ WHERE object_id IN (
 `, workspaceID, access.WorkspaceObject(workspaceID).CanonicalID()); err != nil {
 		return err
 	}
+	if _, err := r.db.ExecContext(ctx, `DELETE FROM data_policies WHERE workspace_id = ?`, workspaceID); err != nil {
+		return err
+	}
 	groups, err := r.ListGroups(ctx, workspaceID)
 	if err != nil {
 		return err
@@ -1054,7 +1073,86 @@ WHERE object_id IN (
 			return err
 		}
 	}
+	for _, name := range sortedWorkspaceGrantNames(policy.Grants) {
+		grant := policy.Grants[name]
+		subjectType, subjectID, err := r.policySubject(ctx, workspaceID, grant.Subject, groupIDs)
+		if err != nil {
+			return fmt.Errorf("workspace grant %q: %w", name, err)
+		}
+		if err := r.upsertGrantWithID(ctx, stableAccessID("grant", workspaceID, name), access.GrantInput{
+			Object:      policyObjectRef(workspaceID, grant.Object),
+			SubjectType: subjectType,
+			SubjectID:   subjectID,
+			Privilege:   access.Privilege(grant.Privilege),
+		}); err != nil {
+			return err
+		}
+	}
+	for _, name := range sortedWorkspaceDataPolicyNames(policy.DataPolicies) {
+		dataPolicy := policy.DataPolicies[name]
+		if _, err := r.UpsertDataPolicy(ctx, access.DataPolicyInput{
+			ID:             stableAccessID("datapolicy", workspaceID, name),
+			Object:         policyObjectRef(workspaceID, dataPolicy.Object),
+			PolicyType:     dataPolicy.PolicyType,
+			ExpressionJSON: dataPolicy.ExpressionJSON,
+		}); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (r *Repository) policySubject(ctx context.Context, workspaceID string, subject workspace.WorkspaceRoleBindingSubject, groupIDs map[string]string) (access.SubjectType, string, error) {
+	switch subject.Kind {
+	case string(access.SubjectGroup):
+		groupID := groupIDs[subject.Group]
+		if groupID == "" {
+			return "", "", fmt.Errorf("unknown group %q", subject.Group)
+		}
+		return access.SubjectGroup, groupID, nil
+	case string(access.SubjectPrincipal):
+		principal, err := r.policyPrincipal(ctx, subject.PrincipalID, subject.Email, subject.DisplayName)
+		if err != nil {
+			return "", "", err
+		}
+		return access.SubjectPrincipal, principal.ID, nil
+	case string(access.SubjectServicePrincipal):
+		id := strings.TrimSpace(subject.PrincipalID)
+		if id == "" {
+			return "", "", fmt.Errorf("service principal subject requires principalId")
+		}
+		principal, err := r.UpsertPrincipal(ctx, access.PrincipalInput{
+			ID:          id,
+			Kind:        access.PrincipalKindServicePrincipal,
+			DisplayName: firstNonEmpty(strings.TrimSpace(subject.DisplayName), id),
+		})
+		if err != nil {
+			return "", "", err
+		}
+		return access.SubjectServicePrincipal, principal.ID, nil
+	default:
+		return "", "", fmt.Errorf("unsupported subject kind %q in workspace %q", subject.Kind, workspaceID)
+	}
+}
+
+func policyObjectRef(workspaceID string, object workspace.WorkspaceSecurableObjectRef) access.ObjectRef {
+	typ := access.SecurableType(strings.TrimSpace(object.Type))
+	objectID := strings.TrimSpace(object.ID)
+	switch typ {
+	case access.SecurableWorkspace:
+		return access.WorkspaceObject(workspaceID)
+	case access.SecurableDataset, access.SecurableTable:
+		if modelID, _, ok := strings.Cut(objectID, "/"); ok && strings.TrimSpace(modelID) != "" {
+			return access.ItemObjectWithParent(typ, workspaceID, objectID, access.ItemObject(access.SecurableSemanticModel, workspaceID, modelID))
+		}
+	case access.SecurableColumn:
+		parts := strings.Split(objectID, "/")
+		if len(parts) >= 3 && strings.TrimSpace(parts[0]) != "" && strings.TrimSpace(parts[1]) != "" {
+			parent := access.ItemObjectWithParent(access.SecurableDataset, workspaceID, parts[0]+"/"+parts[1], access.ItemObject(access.SecurableSemanticModel, workspaceID, parts[0]))
+			return access.ItemObjectWithParent(typ, workspaceID, objectID, parent)
+		}
+	}
+	return access.ItemObject(typ, workspaceID, objectID)
 }
 
 func (r *Repository) policyPrincipal(ctx context.Context, id, email, displayName string) (access.Principal, error) {
@@ -1593,6 +1691,24 @@ func sortedWorkspaceGroupNames(values map[string]workspace.WorkspaceGroup) []str
 }
 
 func sortedWorkspaceRoleBindingNames(values map[string]workspace.WorkspaceRoleBinding) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedWorkspaceGrantNames(values map[string]workspace.WorkspaceGrant) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedWorkspaceDataPolicyNames(values map[string]workspace.WorkspaceDataPolicy) []string {
 	keys := make([]string, 0, len(values))
 	for key := range values {
 		keys = append(keys, key)

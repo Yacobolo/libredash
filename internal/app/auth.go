@@ -145,13 +145,18 @@ func (a *Auth) Callback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	recordAccessAudit(r, a.repo, "session.created", principal.ID, "", "session", "", "", "success", map[string]any{"provider": provider})
+	recordAccessAudit(r, a.repo, "sign_in", principal.ID, "", "principal", principal.ID, "", "success", map[string]any{"provider": provider})
 	http.SetCookie(w, a.sessionCookie(token, time.Now().Add(8*time.Hour)))
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
 func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie("ld_session"); err == nil {
+		principal, _ := a.repo.PrincipalForToken(r.Context(), cookie.Value)
 		_ = a.repo.DeleteSession(r.Context(), cookie.Value)
+		recordAccessAudit(r, a.repo, "session.revoked", principal.ID, "", "session", "", "", "success", nil)
+		recordAccessAudit(r, a.repo, "sign_out", principal.ID, "", "principal", principal.ID, "", "success", nil)
 	}
 	http.SetCookie(w, &http.Cookie{Name: "ld_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: a.cookieSecure})
 	http.Redirect(w, r, "/", http.StatusFound)

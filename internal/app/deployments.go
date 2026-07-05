@@ -68,12 +68,14 @@ func (s *Server) createDeployment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	environment := requestDeploymentEnvironment(r, input.Environment)
-	deployment, err := repo.Create(r.Context(), deployment.CreateInput{WorkspaceID: deployment.WorkspaceID(workspaceID), Environment: environment, CreatedBy: createdBy})
+	row, err := repo.Create(r.Context(), deployment.CreateInput{WorkspaceID: deployment.WorkspaceID(workspaceID), Environment: environment, CreatedBy: createdBy})
 	if err != nil {
+		s.recordDeploymentAudit(r, "deployment.created", workspaceID, "", access.PrivilegeDeploy, "error", map[string]any{"error": err.Error(), "environment": string(environment)})
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusCreated, deploymentDTO(deployment))
+	s.recordDeploymentAudit(r, "deployment.created", workspaceID, string(row.ID), access.PrivilegeDeploy, "success", map[string]any{"environment": string(environment)})
+	writeJSON(w, http.StatusCreated, deploymentDTO(row))
 }
 
 func (s *Server) uploadDeploymentArtifact(w http.ResponseWriter, r *http.Request) {
@@ -159,12 +161,26 @@ func (s *Server) activateDeployment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	service := activate.NewServiceWithAccess(repo, s.reloader, repo, accessReconciler)
-	deployment, err := service.Activate(r.Context(), deployment.ID(deploymentID))
+	row, err := service.Activate(r.Context(), deployment.ID(deploymentID))
 	if err != nil {
+		s.recordDeploymentAudit(r, "deployment.activated", chi.URLParam(r, "workspace"), deploymentID, access.PrivilegeActivateDeployment, "error", map[string]any{"error": err.Error()})
 		writeJSONError(w, err, statusForActivationError(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, deploymentDTO(deployment))
+	s.recordDeploymentAudit(r, "deployment.activated", string(row.WorkspaceID), string(row.ID), access.PrivilegeActivateDeployment, "success", map[string]any{"environment": string(row.Environment)})
+	writeJSON(w, http.StatusOK, deploymentDTO(row))
+}
+
+func (s *Server) recordDeploymentAudit(r *http.Request, action, workspaceID, deploymentID string, privilege access.Privilege, status string, metadata map[string]any) {
+	repo, err := s.accessRepository()
+	if err != nil || repo == nil {
+		return
+	}
+	principalID := ""
+	if principal, ok := currentPrincipal(s, r); ok {
+		principalID = principal.ID
+	}
+	recordAccessAudit(r, repo, action, principalID, s.workspaceID(workspaceID), "deployment", deploymentID, privilege, status, metadata)
 }
 
 func (s *Server) listDeployments(w http.ResponseWriter, r *http.Request) {

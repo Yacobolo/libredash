@@ -160,25 +160,44 @@ func (r *Runtime) ExecuteDataQuery(ctx context.Context, request dataquery.Query)
 	if r.modelID != "" && request.ModelID != "" && request.ModelID != r.modelID {
 		return dataquery.Result{}, fmt.Errorf("semantic model %q is not available in runtime for %q", request.ModelID, r.modelID)
 	}
+	var transform dataquery.ResultTransformer
+	if governor, ok := dataquery.GovernorFromContext(ctx); ok && !dataquery.GovernanceApplied(ctx) {
+		governed, nextTransform, err := governor.GovernDataQuery(ctx, request)
+		if err != nil {
+			return dataquery.Result{Status: dataquery.StatusError, ExecutionState: dataquery.ExecutionRejected, Error: err.Error()}, err
+		}
+		request = governed
+		transform = nextTransform
+		ctx = dataquery.WithGovernanceApplied(ctx)
+	}
 	if err := request.Validate(); err != nil {
 		return dataquery.Result{}, err
 	}
-	switch request.Kind {
-	case dataquery.KindSemanticAggregate:
-		return r.executeSemanticAggregate(ctx, request)
-	case dataquery.KindSemanticRows:
-		return r.executeSemanticRows(ctx, request)
-	case dataquery.KindModelTableRows:
-		return r.executeModelTableRows(ctx, request)
-	case dataquery.KindSourceRows:
-		return r.executeSourceRows(ctx, request)
-	case dataquery.KindSemanticHistogram:
-		return r.executeSemanticHistogram(ctx, request)
-	case dataquery.KindSemanticDistribution:
-		return r.executeSemanticDistribution(ctx, request)
-	default:
-		return dataquery.Result{}, fmt.Errorf("unsupported data query kind %q", request.Kind)
+	execute := func() (dataquery.Result, error) {
+		switch request.Kind {
+		case dataquery.KindSemanticAggregate:
+			return r.executeSemanticAggregate(ctx, request)
+		case dataquery.KindSemanticRows:
+			return r.executeSemanticRows(ctx, request)
+		case dataquery.KindModelTableRows:
+			return r.executeModelTableRows(ctx, request)
+		case dataquery.KindSourceRows:
+			return r.executeSourceRows(ctx, request)
+		case dataquery.KindSemanticHistogram:
+			return r.executeSemanticHistogram(ctx, request)
+		case dataquery.KindSemanticDistribution:
+			return r.executeSemanticDistribution(ctx, request)
+		default:
+			return dataquery.Result{}, fmt.Errorf("unsupported data query kind %q", request.Kind)
+		}
 	}
+	result, err := execute()
+	if transform != nil {
+		if transformErr := transform(&result, err); transformErr != nil {
+			return dataquery.Result{Status: dataquery.StatusError, ExecutionState: dataquery.ExecutionRejected, Error: transformErr.Error()}, transformErr
+		}
+	}
+	return result, err
 }
 
 func (r *Runtime) executeSemanticAggregate(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {

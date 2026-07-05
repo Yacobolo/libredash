@@ -516,6 +516,11 @@ type Repository interface {
 	DeleteGrant(ctx context.Context, workspaceID, id string) error
 	ListGrants(ctx context.Context, object ObjectRef) ([]Grant, error)
 	ListGrantsWithOptions(ctx context.Context, object ObjectRef, includeInherited bool) ([]GrantView, error)
+	UpsertDataPolicy(ctx context.Context, input DataPolicyInput) (DataPolicy, error)
+	GetDataPolicy(ctx context.Context, workspaceID, id string) (DataPolicy, error)
+	ListDataPolicies(ctx context.Context, object ObjectRef) ([]DataPolicy, error)
+	ListDataPoliciesWithOptions(ctx context.Context, object ObjectRef, includeInherited bool) ([]DataPolicy, error)
+	DeleteDataPolicy(ctx context.Context, workspaceID, id string) error
 	CreateServicePrincipal(ctx context.Context, input ServicePrincipalInput) (Principal, error)
 	ListServicePrincipals(ctx context.Context) ([]Principal, error)
 	UpdateServicePrincipal(ctx context.Context, id string, input ServicePrincipalInput) (Principal, error)

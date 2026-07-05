@@ -270,26 +270,11 @@ INSERT INTO roles (id, name, permissions_json)
 VALUES (?, ?, ?)
 ON CONFLICT(name) DO UPDATE SET permissions_json = excluded.permissions_json;
 
--- name: UpsertPermission :exec
-INSERT INTO permissions (name)
-VALUES (?)
-ON CONFLICT(name) DO NOTHING;
-
--- name: ClearRolePermissions :exec
-DELETE FROM role_permissions WHERE role_id = ?;
-
--- name: InsertRolePermission :exec
-INSERT OR IGNORE INTO role_permissions (role_id, permission_name)
-VALUES (?, ?);
-
 -- name: GetRoleByName :one
 SELECT * FROM roles WHERE name = ?;
 
 -- name: ListRoles :many
 SELECT * FROM roles ORDER BY name;
-
--- name: ListPermissions :many
-SELECT * FROM permissions ORDER BY name;
 
 -- name: UpsertGroup :exec
 INSERT INTO groups (id, workspace_id, provider, external_id, name)
@@ -394,28 +379,6 @@ ORDER BY subject_type, p.email, g.name, r.name;
 -- name: DeletePrincipalRoleBindings :exec
 DELETE FROM role_bindings
 WHERE workspace_id = ? AND principal_id = ?;
-
--- name: ListPrincipalRolePermissions :many
-SELECT DISTINCT permission_name
-FROM (
-  SELECT rp.permission_name
-  FROM role_bindings rb
-  JOIN role_permissions rp ON rp.role_id = rb.role_id
-  LEFT JOIN group_members gm
-    ON gm.workspace_id = rb.workspace_id
-   AND gm.group_id = rb.group_id
-  WHERE rb.workspace_id = ?
-    AND (
-      rb.principal_id = ?
-      OR gm.principal_id = ?
-    )
-  UNION
-  SELECT rp.permission_name
-  FROM platform_role_bindings prb
-  JOIN role_permissions rp ON rp.role_id = prb.role_id
-  WHERE prb.principal_id = ?
-)
-ORDER BY permission_name;
 
 -- name: CreateSession :exec
 INSERT INTO sessions (id, principal_id, token_hash, expires_at)

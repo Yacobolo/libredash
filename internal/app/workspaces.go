@@ -1110,6 +1110,9 @@ func (s *Server) apiUpsertRoleBinding(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
 	}
+	if actor, ok := currentPrincipal(s, r); ok {
+		recordAccessAudit(r, repo, "role_binding.upserted", actor.ID, workspaceID, "principal", principal.ID, access.PrivilegeManageGrants, "success", map[string]any{"role": input.Role})
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"principalId": principal.ID})
 }
 
@@ -1131,6 +1134,9 @@ func (s *Server) apiDeleteRoleBinding(w http.ResponseWriter, r *http.Request) {
 	if err := repo.DeleteRoleBinding(r.Context(), workspaceID, bindingID); err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
+	}
+	if actor, ok := currentPrincipal(s, r); ok {
+		recordAccessAudit(r, repo, "role_binding.deleted", actor.ID, workspaceID, "role_binding", bindingID, access.PrivilegeManageGrants, "success", nil)
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
 }

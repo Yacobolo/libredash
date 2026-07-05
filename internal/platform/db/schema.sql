@@ -135,22 +135,10 @@ CREATE TABLE IF NOT EXISTS group_members (
   PRIMARY KEY(group_id, principal_id)
 );
 
-CREATE TABLE IF NOT EXISTS permissions (
-  name TEXT PRIMARY KEY,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS roles (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   permissions_json TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS role_permissions (
-  role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-  permission_name TEXT NOT NULL REFERENCES permissions(name) ON DELETE CASCADE,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY(role_id, permission_name)
 );
 
 CREATE TABLE IF NOT EXISTS role_bindings (

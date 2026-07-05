@@ -363,6 +363,18 @@ func (a apiGenAdapter) DeleteGrant(w http.ResponseWriter, r *http.Request, _, _ 
 	a.server.apiDeleteGrant(w, r)
 }
 
+func (a apiGenAdapter) ListDataPolicies(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListDataPoliciesParams) {
+	a.server.apiListDataPolicies(w, r)
+}
+
+func (a apiGenAdapter) CreateDataPolicy(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiCreateDataPolicy(w, r)
+}
+
+func (a apiGenAdapter) DeleteDataPolicy(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.apiDeleteDataPolicy(w, r)
+}
+
 func (a apiGenAdapter) ListSemanticModels(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListSemanticModelsParams) {
 	a.server.listSemanticModels(w, r)
 }

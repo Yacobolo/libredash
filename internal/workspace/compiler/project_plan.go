@@ -24,6 +24,8 @@ type ProjectPlanWorkspace struct {
 	Dashboards             []string                      `json:"dashboards"`
 	WorkspaceGroups        []string                      `json:"workspaceGroups"`
 	WorkspaceRoleBindings  []string                      `json:"workspaceRoleBindings"`
+	Grants                 []string                      `json:"grants"`
+	DataPolicies           []string                      `json:"dataPolicies"`
 	WorkspaceAgentPolicies []string                      `json:"workspaceAgentPolicies"`
 	Changes                []ProjectPlanChange           `json:"changes,omitempty"`
 	DependencyChanges      []ProjectPlanDependencyChange `json:"dependencyChanges,omitempty"`
@@ -80,6 +82,8 @@ func PlanProject(projectPath string) (ProjectPlan, error) {
 			Dashboards:             sortedMapKeys(workspaceProject.Dashboards),
 			WorkspaceGroups:        sortedMapKeys(workspaceProject.AccessGroups),
 			WorkspaceRoleBindings:  sortedMapKeys(workspaceProject.AccessRoleBindings),
+			Grants:                 sortedMapKeys(workspaceProject.AccessGrants),
+			DataPolicies:           sortedMapKeys(workspaceProject.AccessDataPolicies),
 			WorkspaceAgentPolicies: sortedMapKeys(workspaceProject.AgentPolicies),
 		})
 	}

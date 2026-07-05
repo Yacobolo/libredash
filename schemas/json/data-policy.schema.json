@@ -3,6 +3,10 @@
     "#APIVersion": {
       "const": "libredash.dev/v1"
     },
+    "#AnyObject": {
+      "additionalProperties": true,
+      "type": "object"
+    },
     "#Metadata": {
       "additionalProperties": false,
       "properties": {
@@ -36,6 +40,31 @@
     "#ResourceID": {
       "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
       "type": "string"
+    },
+    "#SecurableObjectRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "workspace",
+            "dashboard",
+            "semantic_model",
+            "source",
+            "model_table",
+            "agent_policy",
+            "dataset",
+            "table",
+            "column"
+          ]
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -45,7 +74,7 @@
       "$ref": "#/$defs/%23APIVersion"
     },
     "kind": {
-      "const": "WorkspaceRoleBinding"
+      "const": "DataPolicy"
     },
     "metadata": {
       "$ref": "#/$defs/%23Metadata"
@@ -53,50 +82,23 @@
     "spec": {
       "additionalProperties": false,
       "properties": {
-        "role": {
-          "enum": [
-            "owner",
-            "admin",
-            "deployer",
-            "contributor",
-            "editor",
-            "member",
-            "viewer",
-            "platform_admin"
-          ]
+        "expression": {
+          "$ref": "#/$defs/%23AnyObject"
         },
-        "subject": {
-          "additionalProperties": false,
-          "properties": {
-            "displayName": {
-              "type": "string"
-            },
-            "email": {
-              "type": "string"
-            },
-            "group": {
-              "$ref": "#/$defs/%23ResourceID"
-            },
-            "kind": {
-              "enum": [
-                "principal",
-                "group",
-                "service_principal"
-              ]
-            },
-            "principalId": {
-              "$ref": "#/$defs/%23ResourceID"
-            }
-          },
-          "required": [
-            "kind"
-          ],
-          "type": "object"
+        "object": {
+          "$ref": "#/$defs/%23SecurableObjectRef"
+        },
+        "policyType": {
+          "enum": [
+            "row_filter",
+            "column_mask"
+          ]
         }
       },
       "required": [
-        "role",
-        "subject"
+        "expression",
+        "object",
+        "policyType"
       ],
       "type": "object"
     }

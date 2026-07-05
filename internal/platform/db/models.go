@@ -233,11 +233,6 @@ type OauthState struct {
 	CreatedAt   string `json:"created_at"`
 }
 
-type Permission struct {
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
-}
-
 type PlatformRoleBinding struct {
 	ID          string `json:"id"`
 	RoleID      string `json:"role_id"`
@@ -319,12 +314,6 @@ type RoleGrantTemplate struct {
 	RoleName  string `json:"role_name"`
 	Privilege string `json:"privilege"`
 	CreatedAt string `json:"created_at"`
-}
-
-type RolePermission struct {
-	RoleID         string `json:"role_id"`
-	PermissionName string `json:"permission_name"`
-	CreatedAt      string `json:"created_at"`
 }
 
 type SecurableObject struct {

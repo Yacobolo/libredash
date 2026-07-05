@@ -323,10 +323,7 @@ func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, o
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
 	}
-	if errResult, ok := s.authorizeAPIGenAgentTool(ctx, toolScope, operation, args); !ok {
-		return errResult
-	}
-	ctx = dataquery.WithMetadata(ctx, dataquery.Metadata{
+	metadata := dataquery.Metadata{
 		WorkspaceID: toolScope.WorkspaceID,
 		Surface:     dataquery.SurfaceAgent,
 		Operation:   dataquery.OperationAgentQuery,
@@ -334,7 +331,11 @@ func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, o
 		RequestID:   call.ID,
 		ObjectType:  "agent_tool",
 		ObjectID:    operation.Extension.Name,
-	})
+	}
+	ctx = dataquery.WithMetadata(ctx, metadata)
+	if errResult, ok := s.authorizeAPIGenAgentTool(ctx, toolScope, operation, args); !ok {
+		return errResult
+	}
 	request, err := apigenAgentToolRequest(ctx, toolScope, operation, args)
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
@@ -355,34 +356,72 @@ func (s *Server) authorizeAPIGenAgentTool(ctx context.Context, scope agentapp.Sc
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error()), false
 	}
-	return s.authorizeAgentPermission(ctx, scope, permission, authObjectsForRequest(permission, request, scope.WorkspaceID))
+	return s.authorizeAgentPermission(ctx, scope, permission, authObjectsForRequest(permission, request, scope.WorkspaceID), "agent_tool", operation.Extension.Name)
 }
 
-func (s *Server) authorizeAgentPermission(ctx context.Context, scope agentapp.Scope, privilege access.Privilege, objects []access.ObjectRef) (agent.ToolResult, bool) {
+func (s *Server) authorizeAgentPermission(ctx context.Context, scope agentapp.Scope, privilege access.Privilege, objects []access.ObjectRef, targetType, targetID string) (agent.ToolResult, bool) {
 	if scope.PrincipalID == "" {
 		return apigenAgentToolError("unauthorized", "agent tool requires an authenticated principal"), false
-	}
-	if !agentCredentialAllows(scope, privilege) {
-		return apigenAgentToolError("forbidden", "credential is not allowed to call this tool"), false
-	}
-	if scope.DevAuthBypass {
-		return agent.ToolResult{}, true
 	}
 	repo, err := s.accessRepository()
 	if err != nil {
 		return apigenAgentToolError("authorization_failed", err.Error()), false
+	}
+	if !agentCredentialAllows(scope, privilege) {
+		recordAgentToolAudit(ctx, repo, scope, privilege, targetType, targetID, "denied", fmt.Errorf("credential is not allowed to call this tool"))
+		return apigenAgentToolError("forbidden", "credential is not allowed to call this tool"), false
+	}
+	if scope.DevAuthBypass {
+		recordAgentToolAudit(ctx, repo, scope, privilege, targetType, targetID, "success", nil)
+		return agent.ToolResult{}, true
 	}
 	if repo == nil {
 		return agent.ToolResult{}, true
 	}
 	decision, err := repo.AuthorizeAny(ctx, scope.PrincipalID, privilege, objects)
 	if err != nil {
+		recordAgentToolAudit(ctx, repo, scope, privilege, targetType, targetID, "error", err)
 		return apigenAgentToolError("authorization_failed", err.Error()), false
 	}
 	if !decision.Allowed {
+		recordAgentToolAudit(ctx, repo, scope, privilege, targetType, targetID, "denied", fmt.Errorf("principal does not have permission to call this tool"))
 		return apigenAgentToolError("forbidden", "principal does not have permission to call this tool"), false
 	}
+	recordAgentToolAudit(ctx, repo, scope, privilege, targetType, targetID, "success", nil)
 	return agent.ToolResult{}, true
+}
+
+func recordAgentToolAudit(ctx context.Context, repo access.Repository, scope agentapp.Scope, privilege access.Privilege, targetType, targetID, status string, cause error) {
+	if repo == nil {
+		return
+	}
+	metadata := dataquery.MetadataFromContext(ctx)
+	if targetType == "" {
+		targetType = metadata.ObjectType
+	}
+	if targetID == "" {
+		targetID = metadata.ObjectID
+	}
+	payload := map[string]any{
+		"surface":   dataquery.SurfaceAgent,
+		"operation": dataquery.OperationAgentQuery,
+	}
+	if cause != nil {
+		payload["error"] = cause.Error()
+	}
+	bytes, _ := json.Marshal(payload)
+	_ = repo.RecordAuditEvent(ctx, access.AuditEventInput{
+		WorkspaceID:   scope.WorkspaceID,
+		PrincipalID:   scope.PrincipalID,
+		Action:        "agent_tool.called",
+		TargetType:    targetType,
+		TargetID:      targetID,
+		Privilege:     privilege,
+		Status:        status,
+		RequestID:     metadata.RequestID,
+		CorrelationID: metadata.CorrelationID,
+		MetadataJSON:  string(bytes),
+	})
 }
 
 func agentCredentialAllows(scope agentapp.Scope, privilege access.Privilege) bool {

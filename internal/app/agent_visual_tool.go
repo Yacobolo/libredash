@@ -68,9 +68,6 @@ func (s *Server) agentVisualToolDefinitions(scope agentapp.Scope) []agent.ToolDe
 }
 
 func (s *Server) runAgentVisualTool(ctx context.Context, scope agentapp.Scope, call agent.ToolCall) agent.ToolResult {
-	if errResult, ok := s.authorizeAgentPermission(ctx, scope, access.PrivilegeQueryData, []access.ObjectRef{access.WorkspaceObject(scope.WorkspaceID)}); !ok {
-		return errResult
-	}
 	input, err := decodeAgentVisualInput(call.Arguments)
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
@@ -85,6 +82,9 @@ func (s *Server) runAgentVisualTool(ctx context.Context, scope agentapp.Scope, c
 		RequestID:   call.ID,
 	}
 	ctx = dataquery.WithMetadata(ctx, metadata)
+	if errResult, ok := s.authorizeAgentPermission(ctx, scope, access.PrivilegeQueryData, []access.ObjectRef{access.WorkspaceObject(scope.WorkspaceID)}, "agent_tool", agentVisualToolName); !ok {
+		return errResult
+	}
 	result, err := s.queryAgentVisual(ctx, input, agentVisualID(input.Kind, call.ID))
 	if err != nil {
 		return apigenAgentToolError("query_visual_failed", err.Error())
