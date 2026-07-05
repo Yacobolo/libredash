@@ -1,9 +1,9 @@
-package app
+package http
 
 import (
 	"context"
 	"fmt"
-	"net/http"
+	nethttp "net/http"
 	"net/url"
 	"sort"
 	"strconv"
@@ -16,13 +16,17 @@ import (
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
-func (s *Server) globalDataExplorerState(r *http.Request, command uisignals.DataExplorerCommand) (uisignals.DataExplorerPageSignal, uisignals.DataExplorerSignal, error) {
-	return s.globalDataExplorerStateWithCurrent(r, command, nil)
+func (h Handler) globalDataExplorerState(r *nethttp.Request, command uisignals.DataExplorerCommand) (uisignals.DataExplorerPageSignal, uisignals.DataExplorerSignal, error) {
+	return h.globalDataExplorerStateWithCurrent(r, command, nil)
 }
 
-func (s *Server) globalDataExplorerStateWithCurrent(r *http.Request, command uisignals.DataExplorerCommand, current *uisignals.DataExplorerSignal) (uisignals.DataExplorerPageSignal, uisignals.DataExplorerSignal, error) {
+func (h Handler) DataExplorerState(r *nethttp.Request, command uisignals.DataExplorerCommand) (uisignals.DataExplorerPageSignal, uisignals.DataExplorerSignal, error) {
+	return h.globalDataExplorerState(r, command)
+}
+
+func (h Handler) globalDataExplorerStateWithCurrent(r *nethttp.Request, command uisignals.DataExplorerCommand, current *uisignals.DataExplorerSignal) (uisignals.DataExplorerPageSignal, uisignals.DataExplorerSignal, error) {
 	command = normalizeDataExplorerCommand(command)
-	workspaces, err := s.workspaceList(r)
+	workspaces, err := h.workspaceList(r)
 	if err != nil {
 		return uisignals.DataExplorerPageSignal{}, uisignals.DataExplorerSignal{}, err
 	}
@@ -34,16 +38,16 @@ func (s *Server) globalDataExplorerStateWithCurrent(r *http.Request, command uis
 		}
 		return workspaces[i].ID < workspaces[j].ID
 	})
-	environment := string(s.requestDeploymentEnvironment(r))
+	environment := string(h.environment(r))
 	objects := []uisignals.DataExplorerObjectSignal{}
 	warnings := []string{}
 	for _, workspace := range workspaces {
-		metrics, ok := s.metricsForWorkspace(workspace.ID)
+		metrics, ok := h.metricsForWorkspace(workspace.ID)
 		if !ok || metrics == nil {
 			warnings = append(warnings, fmt.Sprintf("Workspace %q metrics are not configured.", workspace.ID))
 			continue
 		}
-		assets, edges, err := s.workspaceAssetsAndEdgesForData(r.Context(), workspace.ID, environment)
+		assets, edges, err := h.workspaceAssetsAndEdgesForData(r.Context(), workspace.ID, environment)
 		if err != nil {
 			fallback := dataExplorerObjectsFromMetrics(workspace.ID, firstNonEmpty(workspace.Title, workspace.ID), metrics)
 			if len(fallback) == 0 {
@@ -83,8 +87,8 @@ func (s *Server) globalDataExplorerStateWithCurrent(r *http.Request, command uis
 	if selected != nil {
 		copy := *selected
 		explorer.SelectedObject = &copy
-		if metrics, ok := s.metricsForWorkspace(copy.WorkspaceID); ok && metrics != nil {
-			explorer.Preview = s.dataPreview(r.Context(), metrics, copy, command, current)
+		if metrics, ok := h.metricsForWorkspace(copy.WorkspaceID); ok && metrics != nil {
+			explorer.Preview = h.dataPreview(r.Context(), metrics, copy, command, current)
 		} else {
 			explorer.Preview.Error = fmt.Sprintf("workspace %q metrics are not configured", copy.WorkspaceID)
 		}
@@ -104,18 +108,7 @@ func (s *Server) globalDataExplorerStateWithCurrent(r *http.Request, command uis
 	return page, explorer, nil
 }
 
-func (s *Server) workspaceAssetsAndEdgesForData(ctx context.Context, workspaceID, environment string) ([]workspace.AssetView, []workspace.AssetEdgeView, error) {
-	catalog, ok, err := s.workspaceAssetCatalog(ctx, workspaceID, environment)
-	if err != nil {
-		return nil, nil, err
-	}
-	if ok {
-		return assetCatalogViews(catalog), assetCatalogEdgeViews(catalog), nil
-	}
-	return nil, nil, fmt.Errorf("workspace %q assets were not found", workspaceID)
-}
-
-func dataExplorerObjects(workspaceID, workspaceTitle string, metrics QueryMetrics, assets []workspace.AssetView, edges []workspace.AssetEdgeView) ([]uisignals.DataExplorerObjectSignal, []string) {
+func dataExplorerObjects(workspaceID, workspaceTitle string, metrics Metrics, assets []workspace.AssetView, edges []workspace.AssetEdgeView) ([]uisignals.DataExplorerObjectSignal, []string) {
 	out := []uisignals.DataExplorerObjectSignal{}
 	warnings := []string{}
 	for _, asset := range assets {
@@ -195,7 +188,7 @@ func dataExplorerObjects(workspaceID, workspaceTitle string, metrics QueryMetric
 	return out, warnings
 }
 
-func dataExplorerSourceForAsset(metrics QueryMetrics, sourceKey string) (string, string, semanticmodel.Source, bool) {
+func dataExplorerSourceForAsset(metrics Metrics, sourceKey string) (string, string, semanticmodel.Source, bool) {
 	sourceKey = strings.TrimSpace(sourceKey)
 	if sourceKey == "" || metrics == nil {
 		return "", "", semanticmodel.Source{}, false
@@ -255,7 +248,7 @@ func dataExplorerLocalSourceName(sourceID string) string {
 	return out
 }
 
-func dataExplorerObjectsFromMetrics(workspaceID, workspaceTitle string, metrics QueryMetrics) []uisignals.DataExplorerObjectSignal {
+func dataExplorerObjectsFromMetrics(workspaceID, workspaceTitle string, metrics Metrics) []uisignals.DataExplorerObjectSignal {
 	out := []uisignals.DataExplorerObjectSignal{}
 	for _, modelSummary := range metrics.Catalog().Models {
 		model, ok := metrics.SemanticModel(modelSummary.ID)
@@ -398,7 +391,7 @@ func dataExplorerObjectMatchesKey(object uisignals.DataExplorerObjectSignal, key
 	return false
 }
 
-func (s *Server) dataPreview(ctx context.Context, metrics QueryMetrics, object uisignals.DataExplorerObjectSignal, command uisignals.DataExplorerCommand, current *uisignals.DataExplorerSignal) uisignals.DataPreviewSignal {
+func (h Handler) dataPreview(ctx context.Context, metrics Metrics, object uisignals.DataExplorerObjectSignal, command uisignals.DataExplorerCommand, current *uisignals.DataExplorerSignal) uisignals.DataPreviewSignal {
 	preview := uisignals.DataPreviewSignal{
 		Columns:       object.Columns,
 		TotalRows:     0,
@@ -415,7 +408,7 @@ func (s *Server) dataPreview(ctx context.Context, metrics QueryMetrics, object u
 		preview.AvailableRows = totals.AvailableRows
 		preview.TotalRowLabel = totals.TotalRowLabel
 	} else {
-		total, err := s.countDataPreview(ctx, metrics, object)
+		total, err := h.countDataPreview(ctx, metrics, object)
 		if err != nil {
 			preview.Error = err.Error()
 			return preview
@@ -436,7 +429,7 @@ func (s *Server) dataPreview(ctx context.Context, metrics QueryMetrics, object u
 	}
 	for index, blockID := range blockIDs {
 		start := blockStarts[index]
-		rows, sqlText, err := s.previewRows(ctx, metrics, object, command, start, command.Count)
+		rows, sqlText, err := h.previewRows(ctx, metrics, object, command, start, command.Count)
 		if sqlText != "" {
 			preview.SQL = sqlText
 		}
@@ -486,6 +479,10 @@ func emptyDataPreviewBlocks(count int, sort uisignals.DataPreviewSortSignal, res
 	}
 }
 
+func EmptyDataPreviewBlocks(count int, sort uisignals.DataPreviewSortSignal, resetVersion int) map[string]uisignals.DataPreviewBlockSignal {
+	return emptyDataPreviewBlocks(count, sort, resetVersion)
+}
+
 func dataPreviewBlockStarts(start, count, availableRows int) []int {
 	if count <= 0 {
 		count = dataExplorerDefaultLimit
@@ -522,7 +519,7 @@ func dataPreviewCanceled(preview uisignals.DataPreviewSignal) bool {
 		strings.Contains(message, "interrupt")
 }
 
-func (s *Server) countDataPreview(ctx context.Context, metrics QueryMetrics, object uisignals.DataExplorerObjectSignal) (string, error) {
+func (h Handler) countDataPreview(ctx context.Context, metrics Metrics, object uisignals.DataExplorerObjectSignal) (string, error) {
 	switch object.Layer {
 	case "source", "model_table":
 		result, err := metrics.ExecuteDataQuery(ctx, dataPreviewQuery(object, uisignals.DataExplorerCommand{}, 0, 1, true))
@@ -540,7 +537,7 @@ func (s *Server) countDataPreview(ctx context.Context, metrics QueryMetrics, obj
 	}
 }
 
-func (s *Server) previewRows(ctx context.Context, metrics QueryMetrics, object uisignals.DataExplorerObjectSignal, command uisignals.DataExplorerCommand, start, count int) ([]map[string]any, string, error) {
+func (h Handler) previewRows(ctx context.Context, metrics Metrics, object uisignals.DataExplorerObjectSignal, command uisignals.DataExplorerCommand, start, count int) ([]map[string]any, string, error) {
 	result, err := metrics.ExecuteDataQuery(ctx, dataPreviewQuery(object, command, start, count, false))
 	if err != nil {
 		return nil, "", err

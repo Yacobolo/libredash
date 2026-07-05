@@ -1,7 +1,7 @@
-package app
+package http
 
 import (
-	"net/http"
+	nethttp "net/http"
 	"net/url"
 	"strings"
 
@@ -18,6 +18,11 @@ const (
 	dataExplorerRowHeight    = 34
 )
 
+const (
+	DataExplorerDefaultLimit = dataExplorerDefaultLimit
+	DataExplorerRowHeight    = dataExplorerRowHeight
+)
+
 var dataExplorerBlockIDs = []string{"a", "b", "c"}
 
 type dataExplorerCommandSignals struct {
@@ -25,38 +30,38 @@ type dataExplorerCommandSignals struct {
 	DataExplorer        uisignals.DataExplorerSignal  `json:"dataExplorer"`
 }
 
-func (s *Server) dataExplorer(w http.ResponseWriter, r *http.Request) {
-	page, explorer, err := s.globalDataExplorerState(r, dataExplorerCommandFromQuery(r.URL.Query().Get("workspace"), r.URL.Query().Get("object")))
+func (h Handler) DataExplorer(w nethttp.ResponseWriter, r *nethttp.Request) {
+	page, explorer, err := h.globalDataExplorerState(r, dataExplorerCommandFromQuery(r.URL.Query().Get("workspace"), r.URL.Query().Get("object")))
 	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
+		nethttp.Error(w, err.Error(), statusForNotFound(err))
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.DataExplorerPage(s.catalogForWorkspacesPage(r, nil), page, explorer, s.currentRoleLabel(r), csrfToken(r, s.auth), s.chatChromeOption(r)).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	w.WriteHeader(nethttp.StatusOK)
+	if err := ui.DataExplorerPage(h.catalogForWorkspacesPage(r, nil), page, explorer, h.currentRoleLabel(r), h.csrfToken(r), h.chromeOptions(r)...).Render(w); err != nil {
+		nethttp.Error(w, err.Error(), nethttp.StatusInternalServerError)
 	}
 }
 
-func (s *Server) workspaceDataExplorerRedirect(w http.ResponseWriter, r *http.Request) {
+func (h Handler) WorkspaceDataExplorerRedirect(w nethttp.ResponseWriter, r *nethttp.Request) {
 	values := url.Values{}
 	for key, entries := range r.URL.Query() {
 		for _, entry := range entries {
 			values.Add(key, entry)
 		}
 	}
-	values.Set("workspace", s.workspaceID(chi.URLParam(r, "workspace")))
+	values.Set("workspace", h.workspaceID(chi.URLParam(r, "workspace")))
 	target := "/data"
 	if encoded := values.Encode(); encoded != "" {
 		target += "?" + encoded
 	}
-	http.Redirect(w, r, target, http.StatusFound)
+	nethttp.Redirect(w, r, target, nethttp.StatusFound)
 }
 
-func (s *Server) dataExplorerUpdates(w http.ResponseWriter, r *http.Request) {
+func (h Handler) DataExplorerUpdates(w nethttp.ResponseWriter, r *nethttp.Request) {
 	clientID := lddatastar.EnsureClientID(w, r)
 	sse := datastar.NewSSE(w, r)
-	updates, unsubscribe := s.broker.Subscribe(dataExplorerStreamID(clientID))
+	updates, unsubscribe := h.broker().Subscribe(dataExplorerStreamID(clientID))
 	defer unsubscribe()
 	for {
 		select {
@@ -70,35 +75,35 @@ func (s *Server) dataExplorerUpdates(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) dataExplorerCommand(w http.ResponseWriter, r *http.Request) {
+func (h Handler) DataExplorerCommand(w nethttp.ResponseWriter, r *nethttp.Request) {
 	clientID := lddatastar.EnsureClientID(w, r)
 	signals := dataExplorerCommandSignals{}
 	if err := datastar.ReadSignals(r, &signals); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		nethttp.Error(w, err.Error(), nethttp.StatusBadRequest)
 		return
 	}
 	if explorer, ok := dataExplorerResizeOnlyPatch(signals.DataExplorer, signals.DataExplorerCommand); ok {
-		s.broker.Publish(dataExplorerStreamID(clientID), map[string]any{
+		h.broker().Publish(dataExplorerStreamID(clientID), map[string]any{
 			"dataExplorer":        explorer,
 			"dataExplorerCommand": explorer.Command,
 		})
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(nethttp.StatusNoContent)
 		return
 	}
-	_, explorer, err := s.globalDataExplorerStateWithCurrent(r, signals.DataExplorerCommand, &signals.DataExplorer)
+	_, explorer, err := h.globalDataExplorerStateWithCurrent(r, signals.DataExplorerCommand, &signals.DataExplorer)
 	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
+		nethttp.Error(w, err.Error(), statusForNotFound(err))
 		return
 	}
 	if dataPreviewCanceled(explorer.Preview) {
-		w.WriteHeader(http.StatusNoContent)
+		w.WriteHeader(nethttp.StatusNoContent)
 		return
 	}
-	s.broker.Publish(dataExplorerStreamID(clientID), map[string]any{
+	h.broker().Publish(dataExplorerStreamID(clientID), map[string]any{
 		"dataExplorer":        explorer,
 		"dataExplorerCommand": explorer.Command,
 	})
-	w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(nethttp.StatusNoContent)
 }
 
 func dataExplorerStreamID(clientID string) string {
@@ -116,6 +121,10 @@ func dataExplorerCommandFromQuery(workspaceID, object string) uisignals.DataExpl
 		Count:       dataExplorerDefaultLimit,
 		Block:       "all",
 	})
+}
+
+func DataExplorerCommandFromQuery(workspaceID, object string) uisignals.DataExplorerCommand {
+	return dataExplorerCommandFromQuery(workspaceID, object)
 }
 
 func normalizeDataExplorerCommand(command uisignals.DataExplorerCommand) uisignals.DataExplorerCommand {

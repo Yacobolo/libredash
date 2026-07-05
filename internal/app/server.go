@@ -13,7 +13,6 @@ import (
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/agent"
 	agentopenai "github.com/Yacobolo/libredash/internal/agent/openai"
-	materializesqlite "github.com/Yacobolo/libredash/internal/analytics/materialize/sqlite"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
@@ -379,7 +378,10 @@ func (s *Server) refreshMaterializationsWithRunForWorkspace(ctx context.Context,
 	if s.store == nil {
 		return s.metrics.RefreshMaterializations(ctx, modelID)
 	}
-	repo := materializesqlite.NewSQLRunRepository(s.store.SQLDB())
+	repo, err := s.materializationRunRepository()
+	if err != nil {
+		return err
+	}
 	principal, _ := principalFromContext(ctx)
 	orchestrator := NewRefreshOrchestrator(repo, s.metrics)
 	return orchestrator.RefreshSemanticModel(ctx, refreshRunInput{

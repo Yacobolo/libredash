@@ -14,10 +14,7 @@ import (
 func (s *Server) materializationHTTP() materializehttp.Handler {
 	return materializehttp.Handler{
 		Repository: func() (materialize.RunRepository, error) {
-			if s.store == nil {
-				return nil, fmt.Errorf("platform store is required")
-			}
-			return materializesqlite.NewSQLRunRepository(s.store.SQLDB()), nil
+			return s.materializationRunRepository()
 		},
 		RunnerConfigured: func() bool {
 			return s.metrics != nil
@@ -31,6 +28,13 @@ func (s *Server) materializationHTTP() materializehttp.Handler {
 		},
 		WorkspaceID: s.workspaceID,
 	}
+}
+
+func (s *Server) materializationRunRepository() (*materializesqlite.SQLRunRepository, error) {
+	if s.store == nil {
+		return nil, fmt.Errorf("platform store is required")
+	}
+	return materializesqlite.NewSQLRunRepository(s.store.SQLDB()), nil
 }
 
 func (s *Server) executionService() *execution.Service {

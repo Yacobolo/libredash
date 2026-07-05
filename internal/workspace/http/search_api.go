@@ -1,25 +1,26 @@
-package app
+package http
 
 import (
-	"net/http"
+	nethttp "net/http"
+	"sort"
 	"strings"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	workspacesearch "github.com/Yacobolo/libredash/internal/workspace/search"
+	"github.com/Yacobolo/libredash/internal/workspace/search"
 	"github.com/go-chi/chi/v5"
 )
 
-func (s *Server) searchWorkspace(w http.ResponseWriter, r *http.Request) {
-	types, err := workspacesearch.ParseTypes(r.URL.Query().Get("types"))
+func (h Handler) SearchWorkspace(w nethttp.ResponseWriter, r *nethttp.Request) {
+	types, err := search.ParseTypes(r.URL.Query().Get("types"))
 	if err != nil {
-		writeJSONError(w, err, http.StatusBadRequest)
+		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
 	}
-	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
-	results, err := s.workspaceSearchResults(r, workspaceID, r.URL.Query().Get("q"), types)
+	workspaceID := h.workspaceID(chi.URLParam(r, "workspace"))
+	results, err := h.workspaceSearchResults(r, workspaceID, r.URL.Query().Get("q"), types)
 	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
@@ -28,38 +29,38 @@ func (s *Server) searchWorkspace(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, api.SearchResponse{Items: items, Page: api.PageInfo{NextCursor: nextCursor}})
+	writeJSON(w, nethttp.StatusOK, api.SearchResponse{Items: items, Page: api.PageInfo{NextCursor: nextCursor}})
 }
 
-func (s *Server) workspaceSearchResults(r *http.Request, workspaceID, query string, types workspacesearch.TypeSet) ([]api.SearchResult, error) {
-	documents := make([]workspacesearch.Document, 0)
-	if metrics, ok := s.metricsForWorkspace(workspaceID); ok && metrics != nil {
+func (h Handler) workspaceSearchResults(r *nethttp.Request, workspaceID, query string, types search.TypeSet) ([]api.SearchResult, error) {
+	documents := make([]search.Document, 0)
+	if metrics, ok := h.metricsForWorkspace(workspaceID); ok && metrics != nil {
 		documents = append(documents, workspaceSearchDocuments(workspaceID, metrics)...)
 	}
-	assets, _, err := s.workspaceAssetsAndEdges(r, workspaceID)
+	assets, _, err := h.assetsAndEdges(r, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	for _, asset := range assets {
 		name := firstNonEmpty(asset.Title, asset.Key, asset.ID)
-		documents = append(documents, workspacesearch.Document{
+		documents = append(documents, search.Document{
 			ID:          asset.ID,
 			Type:        "asset",
 			Name:        name,
 			Description: firstNonEmpty(asset.Description, asset.Type+" asset "+asset.Key),
-			Refs: workspacesearch.Refs{
+			Refs: search.Refs{
 				AssetID: asset.ID,
 			},
 			Terms:  []string{asset.ID, asset.Type, asset.Key, asset.Title, asset.Description},
 			Weight: -10,
 		})
 	}
-	return searchResultsFromWorkspaceResults(workspacesearch.Rank(documents, workspacesearch.Query{Text: query, Types: types})), nil
+	return searchResultsFromWorkspaceResults(search.Rank(documents, search.Query{Text: query, Types: types})), nil
 }
 
-func workspaceSearchDocuments(workspaceID string, metrics QueryMetrics) []workspacesearch.Document {
+func workspaceSearchDocuments(workspaceID string, metrics Metrics) []search.Document {
 	catalog := metrics.Catalog()
-	documents := make([]workspacesearch.Document, 0)
+	documents := make([]search.Document, 0)
 	for _, dashboardSummary := range catalog.Dashboards {
 		report, model, ok := metrics.Report(dashboardSummary.ID)
 		if !ok {
@@ -72,7 +73,7 @@ func workspaceSearchDocuments(workspaceID string, metrics QueryMetrics) []worksp
 		documents = append(documents, semanticModelSearchDocuments(modelSummary.ID, modelSummary.Title, modelSummary.Description, model)...)
 	}
 	if workspaceID != "" {
-		documents = append(documents, workspacesearch.Document{
+		documents = append(documents, search.Document{
 			ID:          workspaceID,
 			Type:        "asset",
 			Name:        workspaceID,
@@ -84,13 +85,13 @@ func workspaceSearchDocuments(workspaceID string, metrics QueryMetrics) []worksp
 	return documents
 }
 
-func dashboardSearchDocuments(report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page) []workspacesearch.Document {
-	out := []workspacesearch.Document{{
+func dashboardSearchDocuments(report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page) []search.Document {
+	out := []search.Document{{
 		ID:          report.ID,
 		Type:        "dashboard",
 		Name:        firstNonEmpty(report.Title, report.ID),
 		Description: firstNonEmpty(report.Description, "Dashboard "+report.ID),
-		Refs: workspacesearch.Refs{
+		Refs: search.Refs{
 			DashboardID: report.ID,
 			ModelID:     report.SemanticModel,
 		},
@@ -102,12 +103,12 @@ func dashboardSearchDocuments(report reportdef.Dashboard, model *semanticmodel.M
 	}
 	for _, page := range pages {
 		page = page.WithDefaults()
-		out = append(out, workspacesearch.Document{
+		out = append(out, search.Document{
 			ID:          report.ID + "." + page.ID,
 			Type:        "page",
 			Name:        firstNonEmpty(page.Title, page.ID),
 			Description: firstNonEmpty(page.Description, "Page "+page.ID+" in "+firstNonEmpty(report.Title, report.ID)),
-			Refs: workspacesearch.Refs{
+			Refs: search.Refs{
 				DashboardID: report.ID,
 				PageID:      page.ID,
 				ModelID:     report.SemanticModel,
@@ -154,18 +155,18 @@ func dashboardDeepTerms(report reportdef.Dashboard) []string {
 	return terms
 }
 
-func dashboardComponentSearchDocument(report reportdef.Dashboard, page dashboard.Page, component dashboard.PageVisual) workspacesearch.Document {
+func dashboardComponentSearchDocument(report reportdef.Dashboard, page dashboard.Page, component dashboard.PageVisual) search.Document {
 	switch {
 	case component.Visual != "":
 		visual := report.Visuals[component.Visual]
 		name := firstNonEmpty(component.Title, visual.Title, component.Visual)
 		description := firstNonEmpty(component.Description, visual.Description, "Visual "+component.Visual+" on "+firstNonEmpty(page.Title, page.ID))
-		return workspacesearch.Document{
+		return search.Document{
 			ID:          "visual:" + report.ID + "." + page.ID + "." + component.Visual,
 			Type:        "visual",
 			Name:        name,
 			Description: description,
-			Refs: workspacesearch.Refs{
+			Refs: search.Refs{
 				DashboardID: report.ID,
 				PageID:      page.ID,
 				VisualID:    component.Visual,
@@ -183,12 +184,12 @@ func dashboardComponentSearchDocument(report reportdef.Dashboard, page dashboard
 		table := report.Tables[component.Table]
 		name := firstNonEmpty(component.Title, table.Title, component.Table)
 		description := firstNonEmpty(component.Description, table.Description, "Table "+component.Table+" on "+firstNonEmpty(page.Title, page.ID))
-		return workspacesearch.Document{
+		return search.Document{
 			ID:          "table:" + report.ID + "." + page.ID + "." + component.Table,
 			Type:        "table",
 			Name:        name,
 			Description: description,
-			Refs: workspacesearch.Refs{
+			Refs: search.Refs{
 				DashboardID: report.ID,
 				PageID:      page.ID,
 				TableID:     component.Table,
@@ -207,12 +208,12 @@ func dashboardComponentSearchDocument(report reportdef.Dashboard, page dashboard
 		filter := report.Filters[component.Filter]
 		name := firstNonEmpty(component.Title, filter.Label, component.Filter)
 		description := firstNonEmpty(component.Description, filter.Description, "Filter "+component.Filter+" on "+firstNonEmpty(page.Title, page.ID))
-		return workspacesearch.Document{
+		return search.Document{
 			ID:          "filter:" + report.ID + "." + page.ID + "." + component.Filter,
 			Type:        "filter",
 			Name:        name,
 			Description: description,
-			Refs: workspacesearch.Refs{
+			Refs: search.Refs{
 				DashboardID: report.ID,
 				PageID:      page.ID,
 				FilterID:    component.Filter,
@@ -228,12 +229,12 @@ func dashboardComponentSearchDocument(report reportdef.Dashboard, page dashboard
 		}
 	default:
 		name := firstNonEmpty(component.Title, component.ID)
-		return workspacesearch.Document{
+		return search.Document{
 			ID:          report.ID + "." + page.ID + "." + component.ID,
 			Type:        "page",
 			Name:        name,
 			Description: firstNonEmpty(component.Description, component.Kind+" component on "+firstNonEmpty(page.Title, page.ID)),
-			Refs: workspacesearch.Refs{
+			Refs: search.Refs{
 				DashboardID: report.ID,
 				PageID:      page.ID,
 			},
@@ -242,13 +243,13 @@ func dashboardComponentSearchDocument(report reportdef.Dashboard, page dashboard
 	}
 }
 
-func semanticModelSearchDocuments(modelID, title, description string, model *semanticmodel.Model) []workspacesearch.Document {
-	out := []workspacesearch.Document{{
+func semanticModelSearchDocuments(modelID, title, description string, model *semanticmodel.Model) []search.Document {
+	out := []search.Document{{
 		ID:          modelID,
 		Type:        "semantic_model",
 		Name:        firstNonEmpty(title, modelID),
 		Description: firstNonEmpty(description, "Semantic model "+modelID),
-		Refs: workspacesearch.Refs{
+		Refs: search.Refs{
 			ModelID: modelID,
 		},
 		Terms:  []string{modelID, title, description},
@@ -259,12 +260,12 @@ func semanticModelSearchDocuments(modelID, title, description string, model *sem
 	}
 	for _, sourceID := range sortedMapKeys(model.Sources) {
 		source := model.Sources[sourceID]
-		out = append(out, workspacesearch.Document{
+		out = append(out, search.Document{
 			ID:          modelID + "." + sourceID,
 			Type:        "source",
 			Name:        sourceID,
 			Description: firstNonEmpty(source.Description, "Source "+sourceID),
-			Refs: workspacesearch.Refs{
+			Refs: search.Refs{
 				ModelID: modelID,
 			},
 			Terms:  []string{modelID, model.Title, sourceID, source.Description, source.Format, source.Connection, source.Object, source.Path},
@@ -273,12 +274,12 @@ func semanticModelSearchDocuments(modelID, title, description string, model *sem
 	}
 	for _, datasetID := range sortedMapKeys(model.Tables) {
 		table := model.Tables[datasetID]
-		out = append(out, workspacesearch.Document{
+		out = append(out, search.Document{
 			ID:          modelID + "." + datasetID,
 			Type:        "dataset",
 			Name:        datasetID,
 			Description: firstNonEmpty(table.Description, "Dataset "+datasetID),
-			Refs: workspacesearch.Refs{
+			Refs: search.Refs{
 				ModelID:   modelID,
 				DatasetID: datasetID,
 			},
@@ -290,12 +291,12 @@ func semanticModelSearchDocuments(modelID, title, description string, model *sem
 			if field.Kind == "measure" {
 				typ = "measure"
 			}
-			out = append(out, workspacesearch.Document{
+			out = append(out, search.Document{
 				ID:          modelID + "." + field.ID,
 				Type:        typ,
 				Name:        firstNonEmpty(field.Label, field.Name, field.ID),
 				Description: firstNonEmpty(field.Description, typ+" "+field.ID),
-				Refs: workspacesearch.Refs{
+				Refs: search.Refs{
 					ModelID:   modelID,
 					DatasetID: datasetID,
 					FieldID:   field.ID,
@@ -316,7 +317,93 @@ func fieldRefTerms(fields []reportdef.FieldRef) []string {
 	return out
 }
 
-func searchResultsFromWorkspaceResults(results []workspacesearch.Result) []api.SearchResult {
+func semanticDatasetMeasureCount(model *semanticmodel.Model, datasetID string) int {
+	if model == nil {
+		return 0
+	}
+	count := 0
+	if table, ok := model.Tables[datasetID]; ok {
+		count += len(table.Measures)
+	}
+	for _, measure := range model.Measures {
+		if measure.Table == datasetID {
+			count++
+		}
+	}
+	return count
+}
+
+func semanticDatasetFields(model *semanticmodel.Model, datasetID string, table semanticmodel.Table) []api.SemanticFieldResponse {
+	out := make([]api.SemanticFieldResponse, 0, len(table.Dimensions)+semanticDatasetMeasureCount(model, datasetID))
+	for _, fieldID := range sortedMapKeys(table.Dimensions) {
+		dimension := table.Dimensions[fieldID]
+		out = append(out, api.SemanticFieldResponse{
+			ID:          datasetID + "." + fieldID,
+			Kind:        "dimension",
+			Table:       datasetID,
+			Name:        fieldID,
+			Label:       dimension.Label,
+			Description: dimension.Description,
+		})
+	}
+	for _, measureID := range sortedMapKeys(table.Measures) {
+		measure := table.Measures[measureID]
+		out = append(out, semanticMeasureFieldDTO(datasetID+"."+measureID, datasetID, measureID, measure))
+	}
+	for _, measureID := range sortedMapKeys(model.Measures) {
+		measure := model.Measures[measureID]
+		if measure.Table != datasetID {
+			continue
+		}
+		out = append(out, semanticMeasureFieldDTO(measureID, datasetID, measureID, measure))
+	}
+	return out
+}
+
+func semanticMeasureFieldDTO(id, datasetID, name string, measure semanticmodel.MetricMeasure) api.SemanticFieldResponse {
+	return api.SemanticFieldResponse{
+		ID:          id,
+		Kind:        "measure",
+		Table:       datasetID,
+		Name:        name,
+		Label:       measure.Label,
+		Description: measure.Description,
+		Unit:        measure.Unit,
+		Format:      measure.Format,
+		Grain:       measure.Grain,
+		Time:        measure.Time,
+		Grains:      append([]string{}, measure.Grains...),
+	}
+}
+
+func sortedMapKeys[T any](items map[string]T) []string {
+	keys := make([]string, 0, len(items))
+	for key := range items {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func semanticModelForID(metrics Metrics, modelID string) *semanticmodel.Model {
+	if metrics == nil {
+		return nil
+	}
+	if model, ok := metrics.SemanticModel(modelID); ok {
+		return model
+	}
+	for _, row := range metrics.Catalog().Models {
+		if row.ID != modelID {
+			continue
+		}
+		if model, ok := metrics.SemanticModel(row.ID); ok {
+			return model
+		}
+	}
+	return nil
+}
+
+func searchResultsFromWorkspaceResults(results []search.Result) []api.SearchResult {
 	out := make([]api.SearchResult, 0, len(results))
 	for _, result := range results {
 		out = append(out, api.SearchResult{

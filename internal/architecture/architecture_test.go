@@ -103,6 +103,7 @@ func TestRequiredCapabilityAdaptersExist(t *testing.T) {
 		"internal/access/http",
 		"internal/admin/http",
 		"internal/agent/http",
+		"internal/analytics/connectors",
 		"internal/analytics/materialize/http",
 		"internal/analytics/query/http",
 		"internal/dashboard/http",
@@ -149,6 +150,25 @@ func TestAppDoesNotOwnKnownProductRouteFamilies(t *testing.T) {
 			"func (s *Server) chatConversation(",
 			"func (s *Server) chatTurn(",
 			"func (s *Server) chatUpdates(",
+			"func (s *Server) dataExplorer(",
+			"func (s *Server) dataExplorerUpdates(",
+			"func (s *Server) dataExplorerCommand(",
+			"func (s *Server) workspaceDataExplorerRedirect(",
+			"func (s *Server) searchWorkspace(",
+			"func (s *Server) renderWorkspacesPage(",
+			"func (s *Server) renderWorkspaceAssetsPage(",
+			"func (s *Server) renderConnectionsPage(",
+			"func (s *Server) renderWorkspaceAssetRedirect(",
+			"func (s *Server) renderWorkspaceAssetSection(",
+			"func (s *Server) renderConnectionAssetRedirect(",
+			"func (s *Server) renderConnectionAssetSection(",
+			"func (s *Server) renderConnectionSourceAssetRedirect(",
+			"func (s *Server) renderConnectionSourceAssetSection(",
+			"func (s *Server) assetRefreshPost(",
+			"func (s *Server) assetUpdatesStream(",
+			"func (s *Server) refreshWorkspaceAssetWithPatches(",
+			"func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(",
+			"func (s *Server) openWorkspaceRefreshRuntime(",
 		} {
 			if strings.Contains(file.body, forbidden) {
 				t.Fatalf("%s still owns product route family %q", file.path, forbidden)
@@ -176,6 +196,68 @@ func TestAppDoesNotOwnAgentToolBehavior(t *testing.T) {
 	}
 }
 
+func TestAppDoesNotKeepStaleBIAPIHelpers(t *testing.T) {
+	for _, file := range productionGoFiles(t) {
+		if file.pkgDir != "internal/app" {
+			continue
+		}
+		for _, forbidden := range []string{
+			"func boundedPatch(",
+			"func boundedVisual(",
+			"func boundedTable(",
+			"func dashboardSummaryDTO(",
+			"func semanticModelSummaryDTO(",
+			"func (s *Server) semanticModelForRequest(",
+			"func (s *Server) semanticDatasetForRequest(",
+			"func semanticDatasetDTO(",
+			"func semanticAggregateRequest(",
+			"func semanticRowRequest(",
+		} {
+			if strings.Contains(file.body, forbidden) {
+				t.Fatalf("%s still keeps stale BI API helper %q", file.path, forbidden)
+			}
+		}
+	}
+}
+
+func TestWorkspaceHTTPDoesNotDelegateProductRoutesBackToApp(t *testing.T) {
+	for _, file := range productionGoFiles(t) {
+		if file.pkgDir != "internal/workspace/http" {
+			continue
+		}
+		for _, forbidden := range []string{
+			"WorkspaceCatalogPage   nethttp.HandlerFunc",
+			"WorkspaceAssetsPage    nethttp.HandlerFunc",
+			"WorkspaceAssetPage     nethttp.HandlerFunc",
+			"WorkspaceAssetDetail   nethttp.HandlerFunc",
+			"ConnectionsPage        nethttp.HandlerFunc",
+			"ConnectionSourcePage   nethttp.HandlerFunc",
+			"ConnectionSourceDetail nethttp.HandlerFunc",
+			"ConnectionAssetPage    nethttp.HandlerFunc",
+			"ConnectionAssetDetail  nethttp.HandlerFunc",
+			"AssetUpdates           nethttp.HandlerFunc",
+			"AssetRefresh           nethttp.HandlerFunc",
+			"AssetMaterialize       nethttp.HandlerFunc",
+		} {
+			if strings.Contains(file.body, forbidden) {
+				t.Fatalf("%s delegates product route behavior through %q", file.path, forbidden)
+			}
+		}
+	}
+}
+
+func TestPlatformStoreSQLDBDoesNotLeakPastCompositionAndAdapters(t *testing.T) {
+	for _, file := range productionGoFiles(t) {
+		if !strings.Contains(file.body, ".SQLDB()") {
+			continue
+		}
+		if isSQLDBAllowedFile(file) {
+			continue
+		}
+		t.Fatalf("%s calls platform Store SQLDB outside composition or adapter construction", file.path)
+	}
+}
+
 func TestRemovedLegacyAgentPackagesAreNotImported(t *testing.T) {
 	for _, file := range productionGoFiles(t) {
 		for _, imported := range file.imports {
@@ -188,6 +270,29 @@ func TestRemovedLegacyAgentPackagesAreNotImported(t *testing.T) {
 			}
 		}
 	}
+}
+
+func isSQLDBAllowedFile(file goFile) bool {
+	if file.pkgDir == "internal/app" {
+		switch file.path {
+		case "internal/app/server.go",
+			"internal/app/deployments.go",
+			"internal/app/materialization_runs.go",
+			"internal/app/query_audit.go":
+			return true
+		default:
+			return false
+		}
+	}
+	if file.pkgDir == "internal/cli" ||
+		file.pkgDir == "internal/integration" ||
+		strings.HasPrefix(file.pkgDir, "internal/analytics/duckdb") ||
+		strings.HasPrefix(file.pkgDir, "internal/analytics/ducklake") ||
+		strings.HasSuffix(file.pkgDir, "/sqlite") ||
+		strings.Contains(file.pkgDir, "/sqlite/") {
+		return true
+	}
+	return false
 }
 
 func productionGoFiles(t *testing.T) []goFile {

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,13 +14,12 @@ import (
 	"github.com/Yacobolo/libredash/internal/access"
 	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	materializesqlite "github.com/Yacobolo/libredash/internal/analytics/materialize/sqlite"
 	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/assetnav"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
+	workspacedatastar "github.com/Yacobolo/libredash/internal/workspace/datastar"
 	workspacerefresh "github.com/Yacobolo/libredash/internal/workspace/refresh"
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/csrf"
@@ -35,234 +33,7 @@ type activeWorkspaceMetadataRepository interface {
 	ByIDWithActiveMetadata(context.Context, workspace.WorkspaceID, string) (workspace.Summary, error)
 }
 
-func (s *Server) renderWorkspacesPage(w http.ResponseWriter, r *http.Request) {
-	workspaces, err := s.workspaceList(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspacesPage(s.catalogForWorkspacesPage(r, workspaces), workspaces, s.currentRoleLabel(r), s.chatChromeOption(r)).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) renderWorkspaceAssetsPage(w http.ResponseWriter, r *http.Request) {
-	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
-	switch r.URL.Query().Get("type") {
-	case "connection":
-		http.Redirect(w, r, assetnav.ConnectionsHref(r.URL.Query().Get("q")), http.StatusFound)
-		return
-	case "source":
-		http.Redirect(w, r, assetnav.ConnectionsHrefWithType("source", r.URL.Query().Get("q")), http.StatusFound)
-		return
-	}
-	assets, _, err := s.workspaceAssetsAndEdges(r, workspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
-		return
-	}
-	filtered := workspace.FilterWorkspaceAssets(assets, r.URL.Query().Get("type"), r.URL.Query().Get("q"))
-	workspace := s.workspaceResponse(r, workspaceID)
-	canManage := s.canManageWorkspaceAccess(r, workspaceID)
-	access := s.workspaceAccessResponse(r, workspace, canManage, ui.WorkspaceAccessStatus{})
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspacePage(s.catalogForWorkspace(workspaceID), workspace, filtered, r.URL.Query().Get("type"), r.URL.Query().Get("q"), s.currentRoleLabel(r), access, csrfToken(r, s.auth), s.chatChromeOption(r)).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) renderConnectionsPage(w http.ResponseWriter, r *http.Request) {
-	assets, edges, err := s.platformConnectionAssetsAndEdges(r)
-	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
-		return
-	}
-	activeType := workspace.NormalizeConnectionAssetType(r.URL.Query().Get("type"))
-	filtered := workspace.FilterConnectionAssets(assets, activeType, r.URL.Query().Get("q"))
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionsPage(s.catalogForWorkspacesPage(r, nil), "platform", filtered, edges, activeType, r.URL.Query().Get("q"), s.currentRoleLabel(r), s.chatChromeOption(r)).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) renderWorkspaceAssetRedirect(w http.ResponseWriter, r *http.Request) {
-	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
-	assetID := chi.URLParam(r, "asset")
-	assets, edges, err := s.workspaceAssetsAndEdges(r, workspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
-		return
-	}
-	var selected workspace.AssetView
-	for _, asset := range assets {
-		if asset.ID == assetID {
-			selected = asset
-			break
-		}
-	}
-	if selected.ID == "" {
-		http.NotFound(w, r)
-		return
-	}
-	if selected.Type == "connection" {
-		http.Redirect(w, r, assetnav.ConnectionAssetSectionHref(assetID, "details"), http.StatusFound)
-		return
-	}
-	if selected.Type == "source" {
-		http.Redirect(w, r, assetnav.CanonicalSourceAssetSectionHref(workspaceID, selected.ID, "details", edges), http.StatusFound)
-		return
-	}
-	http.Redirect(w, r, "/workspaces/"+workspaceID+"/assets/"+assetID+"/details", http.StatusFound)
-}
-
-func (s *Server) renderWorkspaceAssetSection(w http.ResponseWriter, r *http.Request) {
-	section := chi.URLParam(r, "section")
-	redirectToDetails := false
-	if section == "definition" {
-		section = "details"
-		redirectToDetails = true
-	}
-	if !ui.ValidWorkspaceAssetSection(section) {
-		http.NotFound(w, r)
-		return
-	}
-	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
-	assets, edges, err := s.workspaceAssetsAndEdges(r, workspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
-		return
-	}
-	assetID := chi.URLParam(r, "asset")
-	var selected workspace.AssetView
-	for _, asset := range assets {
-		if asset.ID == assetID {
-			selected = asset
-			break
-		}
-	}
-	if selected.ID == "" {
-		http.NotFound(w, r)
-		return
-	}
-	if section == "refreshes" && !workspaceAssetRefreshable(selected) {
-		http.NotFound(w, r)
-		return
-	}
-	if section == "data" {
-		if selected.Type != "semantic_model" && selected.Type != "model_table" && selected.Type != "source" {
-			http.NotFound(w, r)
-			return
-		}
-		values := url.Values{}
-		values.Set("workspace", workspaceID)
-		values.Set("object", assetID)
-		http.Redirect(w, r, "/data?"+values.Encode(), http.StatusFound)
-		return
-	}
-	if selected.Type == "connection" {
-		http.Redirect(w, r, assetnav.ConnectionAssetSectionHref(assetID, section), http.StatusFound)
-		return
-	}
-	if selected.Type == "source" {
-		http.Redirect(w, r, assetnav.CanonicalSourceAssetSectionHref(workspaceID, selected.ID, section, edges), http.StatusFound)
-		return
-	}
-	if redirectToDetails {
-		http.Redirect(w, r, "/workspaces/"+workspaceID+"/assets/"+assetID+"/details", http.StatusFound)
-		return
-	}
-	workspace := s.workspaceResponse(r, workspaceID)
-	refresh, err := s.assetRefreshState(r, workspaceID, selected)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	refresh.CSRFToken = csrfToken(r, s.auth)
-	versions, err := s.assetVersionsStateForSection(r.Context(), workspaceID, string(s.requestDeploymentEnvironment(r)), selected, section)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspaceAssetPageWithRefreshAndVersions(s.catalogForWorkspace(workspaceID), workspace, selected, assets, edges, section, s.currentRoleLabel(r), refresh, versions, s.chatChromeOption(r)).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func (s *Server) assetRefreshMaterializationsPost(w http.ResponseWriter, r *http.Request) {
-	s.assetRefreshPost(w, r)
-}
-
-func (s *Server) assetRefreshPost(w http.ResponseWriter, r *http.Request) {
-	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
-	assetID := chi.URLParam(r, "asset")
-	assets, edges, err := s.workspaceAssetsAndEdges(r, workspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
-		return
-	}
-	selected, ok := workspace.AssetByID(assets, assetID)
-	if !ok || !workspaceAssetRefreshable(selected) {
-		http.NotFound(w, r)
-		return
-	}
-	if s.store == nil {
-		http.Error(w, "platform store is required", http.StatusServiceUnavailable)
-		return
-	}
-	if err := s.refreshWorkspaceAssetDeploymentWithPatches(r, workspaceID, selected, assets, edges); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) assetUpdatesStream(w http.ResponseWriter, r *http.Request) {
-	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
-	assetID := chi.URLParam(r, "asset")
-	section := workspaceAssetUpdateSection(r)
-	assets, edges, err := s.workspaceAssetsAndEdges(r, workspaceID)
-	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
-		return
-	}
-	selected, ok := workspace.AssetByID(assets, assetID)
-	if !ok || !workspaceAssetRefreshable(selected) {
-		http.NotFound(w, r)
-		return
-	}
-	if s.store == nil {
-		http.Error(w, "platform store is required", http.StatusServiceUnavailable)
-		return
-	}
-
-	sse := datastar.NewSSE(w, r)
-	if err := sse.MarshalAndPatchSignals(s.workspaceAssetRefreshPatch(r, workspaceID, selected, assets, edges, section)); err != nil {
-		return
-	}
-	updates, unsubscribe := s.broker.Subscribe(workspaceAssetStreamID(workspaceID, assetID, section))
-	defer unsubscribe()
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case patch, ok := <-updates:
-			if !ok {
-				return
-			}
-			if err := sse.MarshalAndPatchSignals(patch); err != nil {
-				return
-			}
-		}
-	}
-}
-
-func (s *Server) refreshWorkspaceAssetWithPatches(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
+func (s *Server) runWorkspaceAssetRefreshWithPatches(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
 	switch asset.Type {
 	case string(workspace.AssetTypeSemanticModel):
 		return s.refreshSemanticModelAssetWithPatches(r.Context(), r, workspaceID, asset, assets, edges)
@@ -273,9 +44,12 @@ func (s *Server) refreshWorkspaceAssetWithPatches(r *http.Request, workspaceID s
 	}
 }
 
-func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
+func (s *Server) queueWorkspaceAssetRefreshWithPatches(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
 	ctx := r.Context()
-	runRepo := materializesqlite.NewSQLRunRepository(s.store.SQLDB())
+	runRepo, err := s.materializationRunRepository()
+	if err != nil {
+		return err
+	}
 	service, err := s.workspaceRefreshService(runRepo)
 	if err != nil {
 		return err
@@ -287,11 +61,11 @@ func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, wor
 	}
 	artifact := activeState.Artifact
 	if strings.TrimSpace(artifact.Path) == "" {
-		return s.refreshWorkspaceAssetWithPatches(r, workspaceID, asset, assets, edges)
+		return s.runWorkspaceAssetRefreshWithPatches(r, workspaceID, asset, assets, edges)
 	}
 	if _, err := os.Stat(artifact.Path); err != nil {
 		if os.IsNotExist(err) {
-			return s.refreshWorkspaceAssetWithPatches(r, workspaceID, asset, assets, edges)
+			return s.runWorkspaceAssetRefreshWithPatches(r, workspaceID, asset, assets, edges)
 		}
 		return err
 	}
@@ -310,7 +84,7 @@ func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, wor
 }
 
 func (s *Server) executeWorkspaceAssetRefreshPlan(ctx context.Context, definition *workspace.Definition, active, refreshed deployment.Deployment, artifact deployment.Artifact, environment deployment.Environment, plan workspacerefresh.Plan) (int64, error) {
-	runtime, err := s.openWorkspaceRefreshRuntime(ctx, definition, active, refreshed, artifact, environment, plan)
+	runtime, err := s.openRefreshRuntime(ctx, definition, active, refreshed, artifact, environment, plan)
 	if err != nil {
 		return 0, err
 	}
@@ -325,7 +99,7 @@ func (s *Server) executeWorkspaceAssetRefreshPlan(ctx context.Context, definitio
 	return snapshotID, nil
 }
 
-func (s *Server) openWorkspaceRefreshRuntime(ctx context.Context, definition *workspace.Definition, active, refreshed deployment.Deployment, artifact deployment.Artifact, environment deployment.Environment, plan workspacerefresh.Plan) (*analyticsduckdb.WorkspaceRuntime, error) {
+func (s *Server) openRefreshRuntime(ctx context.Context, definition *workspace.Definition, active, refreshed deployment.Deployment, artifact deployment.Artifact, environment deployment.Environment, plan workspacerefresh.Plan) (*analyticsduckdb.WorkspaceRuntime, error) {
 	dataDir := s.dataDirForWorkspace(string(refreshed.WorkspaceID), artifact)
 	dbDir := s.duckDBDir
 	if strings.TrimSpace(dbDir) == "" {
@@ -370,7 +144,10 @@ func (s *Server) dataDirForWorkspace(workspaceID string, artifact deployment.Art
 }
 
 func (s *Server) refreshSemanticModelAssetWithPatches(ctx context.Context, r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
-	repo := materializesqlite.NewSQLRunRepository(s.store.SQLDB())
+	repo, err := s.materializationRunRepository()
+	if err != nil {
+		return err
+	}
 	principal, _ := currentPrincipal(s, r)
 	orchestrator := NewRefreshOrchestrator(repo, s.metrics)
 	return orchestrator.RefreshSemanticModel(ctx, refreshRunInput{
@@ -387,7 +164,10 @@ func (s *Server) refreshSemanticModelAssetWithPatches(ctx context.Context, r *ht
 }
 
 func (s *Server) refreshModelTableAssetWithPatches(ctx context.Context, r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
-	repo := materializesqlite.NewSQLRunRepository(s.store.SQLDB())
+	repo, err := s.materializationRunRepository()
+	if err != nil {
+		return err
+	}
 	principal, _ := currentPrincipal(s, r)
 	modelID, tableName := modelTableTargetParts(asset.Key)
 	if modelID == "" || tableName == "" {
@@ -408,8 +188,8 @@ func (s *Server) refreshModelTableAssetWithPatches(ctx context.Context, r *http.
 }
 
 func (s *Server) publishWorkspaceAssetRefreshPatch(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) {
-	for _, section := range workspaceAssetRefreshSections() {
-		s.broker.Publish(workspaceAssetStreamID(workspaceID, asset.ID, section), s.workspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges, section))
+	for _, section := range workspacedatastar.WorkspaceAssetRefreshSections() {
+		s.broker.Publish(workspacedatastar.WorkspaceAssetStreamID(workspaceID, asset.ID, section), s.workspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges, section))
 	}
 }
 
@@ -445,8 +225,8 @@ func (s *Server) publishModelRefreshPatches(ctx context.Context, workspaceID, mo
 		if err != nil {
 			continue
 		}
-		for _, section := range workspaceAssetRefreshSections() {
-			s.broker.Publish(workspaceAssetStreamID(workspaceID, asset.ID, section), ui.WorkspaceAssetRefreshSignals(view, asset, assets, edges, refresh, section))
+		for _, section := range workspacedatastar.WorkspaceAssetRefreshSections() {
+			s.broker.Publish(workspacedatastar.WorkspaceAssetStreamID(workspaceID, asset.ID, section), workspacedatastar.WorkspaceAssetRefreshSignals(view, asset, assets, edges, refresh, section))
 		}
 	}
 }
@@ -475,8 +255,8 @@ func (s *Server) publishWorkspaceAssetRefreshPatchesForTarget(ctx context.Contex
 		if err != nil {
 			continue
 		}
-		for _, section := range workspaceAssetRefreshSections() {
-			s.broker.Publish(workspaceAssetStreamID(workspaceID, asset.ID, section), ui.WorkspaceAssetRefreshSignals(view, asset, assets, edges, refresh, section))
+		for _, section := range workspacedatastar.WorkspaceAssetRefreshSections() {
+			s.broker.Publish(workspacedatastar.WorkspaceAssetStreamID(workspaceID, asset.ID, section), workspacedatastar.WorkspaceAssetRefreshSignals(view, asset, assets, edges, refresh, section))
 		}
 	}
 }
@@ -494,26 +274,7 @@ func (s *Server) workspaceAssetRefreshPatch(r *http.Request, workspaceID string,
 	if err != nil {
 		refresh = ui.AssetRefreshState{Latest: ui.AssetRefreshRun{Status: "failed"}}
 	}
-	return ui.WorkspaceAssetRefreshSignals(s.workspaceResponse(r, workspaceID), asset, assets, edges, refresh, section)
-}
-
-func workspaceAssetStreamID(workspaceID, assetID, section string) string {
-	return "workspace-asset:" + workspaceID + ":" + assetID + ":" + section
-}
-
-func workspaceAssetRefreshSections() []string {
-	return []string{"details", "refreshes", "lineage"}
-}
-
-func workspaceAssetUpdateSection(r *http.Request) string {
-	switch strings.TrimSpace(r.URL.Query().Get("section")) {
-	case "refreshes":
-		return "refreshes"
-	case "lineage":
-		return "lineage"
-	default:
-		return "details"
-	}
+	return workspacedatastar.WorkspaceAssetRefreshSignals(s.workspaceResponse(r, workspaceID), asset, assets, edges, refresh, section)
 }
 
 func (s *Server) assetRefreshState(r *http.Request, workspaceID string, asset workspace.AssetView) (ui.AssetRefreshState, error) {
@@ -524,7 +285,10 @@ func (s *Server) assetRefreshStateForContext(ctx context.Context, workspaceID st
 	if s.store == nil || !workspaceAssetRefreshable(asset) {
 		return ui.AssetRefreshState{}, nil
 	}
-	repo := materializesqlite.NewSQLRunRepository(s.store.SQLDB())
+	repo, err := s.materializationRunRepository()
+	if err != nil {
+		return ui.AssetRefreshState{}, err
+	}
 	targetType := materialize.TargetSemanticModel
 	if asset.Type == string(workspace.AssetTypeModelTable) {
 		targetType = materialize.TargetModelTable
@@ -627,130 +391,6 @@ func modelTableTargetParts(key string) (string, string) {
 		return "", strings.TrimSpace(key)
 	}
 	return parts[0], parts[1]
-}
-
-func (s *Server) renderConnectionAssetRedirect(w http.ResponseWriter, r *http.Request) {
-	assetID := chi.URLParam(r, "asset")
-	http.Redirect(w, r, assetnav.ConnectionAssetSectionHref(assetID, "details"), http.StatusFound)
-}
-
-func (s *Server) renderConnectionSourceAssetRedirect(w http.ResponseWriter, r *http.Request) {
-	connectionID := chi.URLParam(r, "connection")
-	sourceID := chi.URLParam(r, "source")
-	assets, edges, err := s.platformConnectionAssetsAndEdges(r)
-	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
-		return
-	}
-	if _, _, ok := connectionSourcePair(assets, edges, connectionID, sourceID); !ok {
-		http.NotFound(w, r)
-		return
-	}
-	http.Redirect(w, r, assetnav.ConnectionSourceAssetSectionHref(connectionID, sourceID, "details"), http.StatusFound)
-}
-
-func (s *Server) renderConnectionSourceAssetSection(w http.ResponseWriter, r *http.Request) {
-	section := chi.URLParam(r, "section")
-	if section == "definition" {
-		http.Redirect(w, r, assetnav.ConnectionSourceAssetSectionHref(chi.URLParam(r, "connection"), chi.URLParam(r, "source"), "details"), http.StatusFound)
-		return
-	}
-	if !ui.ValidWorkspaceAssetSection(section) {
-		http.NotFound(w, r)
-		return
-	}
-	if section == "refreshes" {
-		http.NotFound(w, r)
-		return
-	}
-	assets, edges, err := s.platformConnectionAssetsAndEdges(r)
-	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
-		return
-	}
-	connection, source, ok := connectionSourcePair(assets, edges, chi.URLParam(r, "connection"), chi.URLParam(r, "source"))
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-	if section == "data" {
-		values := url.Values{}
-		values.Set("workspace", source.WorkspaceID)
-		values.Set("object", source.ID)
-		http.Redirect(w, r, "/data?"+values.Encode(), http.StatusFound)
-		return
-	}
-	workspace := platformAssetWorkspaceView()
-	versions, err := s.assetVersionsStateForSection(r.Context(), source.WorkspaceID, string(s.requestDeploymentEnvironment(r)), source, section)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionSourceAssetPageWithVersions(s.catalogForWorkspacesPage(r, nil), workspace, connection, source, assets, edges, section, s.currentRoleLabel(r), versions).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-func connectionSourcePair(assets []workspace.AssetView, edges []workspace.AssetEdgeView, connectionID, sourceID string) (workspace.AssetView, workspace.AssetView, bool) {
-	connection, ok := workspace.AssetByID(assets, connectionID)
-	if !ok || connection.Type != "connection" {
-		return workspace.AssetView{}, workspace.AssetView{}, false
-	}
-	source, ok := workspace.AssetByID(assets, sourceID)
-	if !ok || source.Type != "source" || assetnav.SourceConnectionID(source.ID, edges) != connection.ID {
-		return workspace.AssetView{}, workspace.AssetView{}, false
-	}
-	return connection, source, true
-}
-
-func (s *Server) renderConnectionAssetSection(w http.ResponseWriter, r *http.Request) {
-	section := chi.URLParam(r, "section")
-	if section == "definition" {
-		http.Redirect(w, r, assetnav.ConnectionAssetSectionHref(chi.URLParam(r, "asset"), "details"), http.StatusFound)
-		return
-	}
-	if !ui.ValidWorkspaceAssetSection(section) {
-		http.NotFound(w, r)
-		return
-	}
-	if section == "refreshes" {
-		http.NotFound(w, r)
-		return
-	}
-	if section == "data" {
-		http.NotFound(w, r)
-		return
-	}
-	assets, edges, err := s.platformConnectionAssetsAndEdges(r)
-	if err != nil {
-		http.Error(w, err.Error(), statusForNotFound(err))
-		return
-	}
-	assetID := chi.URLParam(r, "asset")
-	var selected workspace.AssetView
-	for _, asset := range assets {
-		if asset.ID == assetID {
-			selected = asset
-			break
-		}
-	}
-	if selected.ID == "" || selected.Type != "connection" {
-		http.NotFound(w, r)
-		return
-	}
-	workspace := platformAssetWorkspaceView()
-	versions, err := s.assetVersionsStateForSection(r.Context(), selected.WorkspaceID, string(s.requestDeploymentEnvironment(r)), selected, section)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionAssetPageWithVersions(s.catalogForWorkspacesPage(r, nil), workspace, selected, assets, edges, section, s.currentRoleLabel(r), versions).Render(w); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 }
 
 type workspaceAccessSignalPayload struct {

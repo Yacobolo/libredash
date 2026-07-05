@@ -136,7 +136,7 @@ func (a apiGenAdapter) ListWorkspaces(w http.ResponseWriter, r *http.Request, _ 
 }
 
 func (a apiGenAdapter) SearchWorkspace(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenSearchWorkspaceParams) {
-	a.server.searchWorkspace(w, r)
+	a.server.workspaceHTTPHandler().SearchWorkspace(w, r)
 }
 
 func (a apiGenAdapter) ListWorkspaceAssets(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListWorkspaceAssetsParams) {

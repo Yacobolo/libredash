@@ -1,0 +1,302 @@
+package connectors
+
+import (
+	"sort"
+	"strings"
+)
+
+const (
+	KindPath   = "path"
+	KindObject = "object"
+
+	ScanTableFunction = "table_function"
+	ScanReplacement   = "replacement"
+
+	AttachDatabase = "database"
+	AttachDuckLake = "ducklake"
+
+	ObjectRelationAttach     = "attach"
+	ObjectRelationQuackQuery = "quack_query"
+)
+
+type Format struct {
+	Name              string
+	Extensions        []string
+	ScanKind          string
+	ScanFunction      string
+	RequiredExtension string
+	AllowsOptions     bool
+	SourceSecretType  string
+	TableLike         bool
+}
+
+type ConnectionSpec struct {
+	Kind               string
+	SecretType         string
+	RequiredExtension  string
+	AllowsPathSource   bool
+	AllowsObjectSource bool
+	AllowsPath         bool
+	RequiresPath       bool
+	AllowedOptions     []string
+	AuthKeys           []string
+	RequiredAuthSets   [][]string
+	AllowNoAuth        bool
+	AttachKind         string
+	ObjectRelation     string
+	TransformPushdown  bool
+}
+
+var formats = map[string]Format{
+	"csv": {
+		Name:          "csv",
+		Extensions:    []string{".csv", ".csv.gz"},
+		ScanKind:      ScanTableFunction,
+		ScanFunction:  "read_csv",
+		AllowsOptions: true,
+	},
+	"json": {
+		Name:          "json",
+		Extensions:    []string{".json", ".jsonl", ".ndjson"},
+		ScanKind:      ScanTableFunction,
+		ScanFunction:  "read_json",
+		AllowsOptions: true,
+	},
+	"parquet": {
+		Name:          "parquet",
+		Extensions:    []string{".parquet"},
+		ScanKind:      ScanTableFunction,
+		ScanFunction:  "read_parquet",
+		AllowsOptions: true,
+	},
+	"excel": {
+		Name:              "excel",
+		Extensions:        []string{".xlsx"},
+		ScanKind:          ScanTableFunction,
+		ScanFunction:      "read_xlsx",
+		RequiredExtension: "excel",
+		AllowsOptions:     true,
+	},
+	"text": {
+		Name:          "text",
+		Extensions:    []string{".txt"},
+		ScanKind:      ScanTableFunction,
+		ScanFunction:  "read_text",
+		AllowsOptions: true,
+	},
+	"blob": {
+		Name:          "blob",
+		Extensions:    []string{".blob"},
+		ScanKind:      ScanTableFunction,
+		ScanFunction:  "read_blob",
+		AllowsOptions: true,
+	},
+	"vortex": {
+		Name:              "vortex",
+		Extensions:        []string{".vortex"},
+		ScanKind:          ScanTableFunction,
+		ScanFunction:      "read_vortex",
+		RequiredExtension: "vortex",
+		AllowsOptions:     true,
+	},
+	"delta": {
+		Name:              "delta",
+		ScanKind:          ScanTableFunction,
+		ScanFunction:      "delta_scan",
+		RequiredExtension: "delta",
+		AllowsOptions:     true,
+		TableLike:         true,
+	},
+	"iceberg": {
+		Name:              "iceberg",
+		ScanKind:          ScanTableFunction,
+		ScanFunction:      "iceberg_scan",
+		RequiredExtension: "iceberg",
+		AllowsOptions:     true,
+		TableLike:         true,
+	},
+	"lance": {
+		Name:              "lance",
+		Extensions:        []string{".lance"},
+		ScanKind:          ScanReplacement,
+		RequiredExtension: "lance",
+		SourceSecretType:  "lance",
+		TableLike:         true,
+	},
+}
+
+var connections = map[string]ConnectionSpec{
+	"local": {
+		Kind:             "local",
+		AllowsPathSource: true,
+		AllowNoAuth:      true,
+	},
+	"s3": {
+		Kind:              "s3",
+		SecretType:        "s3",
+		RequiredExtension: "httpfs",
+		AllowsPathSource:  true,
+		AuthKeys:          []string{"access_key_id", "secret_access_key", "session_token", "region", "endpoint", "url_style", "use_ssl"},
+		RequiredAuthSets:  [][]string{{"access_key_id", "secret_access_key"}},
+	},
+	"r2": {
+		Kind:              "r2",
+		SecretType:        "r2",
+		RequiredExtension: "httpfs",
+		AllowsPathSource:  true,
+		AuthKeys:          []string{"access_key_id", "secret_access_key", "account_id", "region"},
+		RequiredAuthSets:  [][]string{{"access_key_id", "secret_access_key", "account_id"}},
+	},
+	"gcs": {
+		Kind:              "gcs",
+		SecretType:        "gcs",
+		RequiredExtension: "httpfs",
+		AllowsPathSource:  true,
+		AuthKeys:          []string{"access_key_id", "secret_access_key", "endpoint"},
+		RequiredAuthSets:  [][]string{{"access_key_id", "secret_access_key"}},
+	},
+	"http": {
+		Kind:              "http",
+		SecretType:        "http",
+		RequiredExtension: "httpfs",
+		AllowsPathSource:  true,
+		AllowNoAuth:       true,
+	},
+	"azure_blob": {
+		Kind:              "azure_blob",
+		SecretType:        "azure",
+		RequiredExtension: "azure",
+		AllowsPathSource:  true,
+		AuthKeys:          []string{"connection_string", "account_name", "tenant_id", "client_id", "client_secret"},
+		RequiredAuthSets:  [][]string{{"connection_string"}, {"account_name", "tenant_id", "client_id", "client_secret"}},
+	},
+	"postgres": {
+		Kind:               "postgres",
+		SecretType:         "postgres",
+		RequiredExtension:  "postgres",
+		AllowsObjectSource: true,
+		AuthKeys:           []string{"connection_string"},
+		RequiredAuthSets:   [][]string{{"connection_string"}},
+		AttachKind:         AttachDatabase,
+		ObjectRelation:     ObjectRelationAttach,
+	},
+	"mysql": {
+		Kind:               "mysql",
+		SecretType:         "mysql",
+		RequiredExtension:  "mysql",
+		AllowsObjectSource: true,
+		AuthKeys:           []string{"connection_string"},
+		RequiredAuthSets:   [][]string{{"connection_string"}},
+		AttachKind:         AttachDatabase,
+		ObjectRelation:     ObjectRelationAttach,
+	},
+	"sqlite": {
+		Kind:               "sqlite",
+		SecretType:         "sqlite",
+		RequiredExtension:  "sqlite",
+		AllowsObjectSource: true,
+		AllowedOptions:     []string{"path"},
+		AuthKeys:           []string{"path"},
+		RequiredAuthSets:   [][]string{{"path"}},
+		AllowNoAuth:        true,
+		AttachKind:         AttachDatabase,
+		ObjectRelation:     ObjectRelationAttach,
+	},
+	"ducklake": {
+		Kind:               "ducklake",
+		SecretType:         "ducklake",
+		RequiredExtension:  "ducklake",
+		AllowsObjectSource: true,
+		AllowsPath:         true,
+		RequiresPath:       true,
+		AllowedOptions:     []string{"data_path"},
+		AuthKeys:           []string{"access_key_id", "secret_access_key", "session_token", "region", "endpoint", "url_style", "use_ssl", "account_id", "connection_string", "account_name", "tenant_id", "client_id", "client_secret"},
+		RequiredAuthSets:   [][]string{{"access_key_id", "secret_access_key"}, {"connection_string"}, {"account_name", "tenant_id", "client_id", "client_secret"}},
+		AllowNoAuth:        true,
+		AttachKind:         AttachDuckLake,
+		ObjectRelation:     ObjectRelationAttach,
+	},
+	"quack": {
+		Kind:               "quack",
+		SecretType:         "quack",
+		RequiredExtension:  "quack",
+		AllowsObjectSource: true,
+		AllowsPath:         true,
+		RequiresPath:       true,
+		AllowedOptions:     []string{"disable_ssl"},
+		AuthKeys:           []string{"token"},
+		RequiredAuthSets:   [][]string{{"token"}},
+		ObjectRelation:     ObjectRelationQuackQuery,
+		TransformPushdown:  true,
+	},
+}
+
+func LookupFormat(name string) (Format, bool) {
+	spec, ok := formats[name]
+	return spec, ok
+}
+
+func LookupConnection(kind string) (ConnectionSpec, bool) {
+	spec, ok := connections[kind]
+	return spec, ok
+}
+
+func FormatNames() []string {
+	return sortedKeys(formats)
+}
+
+func ConnectionKinds() []string {
+	return sortedKeys(connections)
+}
+
+func InferFormat(path string) (string, bool) {
+	lower := strings.ToLower(path)
+	for _, format := range FormatNames() {
+		spec := formats[format]
+		for _, ext := range spec.Extensions {
+			if strings.HasSuffix(lower, ext) {
+				return spec.Name, true
+			}
+		}
+	}
+	return "", false
+}
+
+func IsLocalPath(path string) bool {
+	for _, prefix := range []string{"s3://", "r2://", "gcs://", "gs://", "az://", "azure://", "abfss://", "http://", "https://", "file://"} {
+		if strings.HasPrefix(path, prefix) {
+			return false
+		}
+	}
+	return !strings.Contains(path, "://")
+}
+
+func JoinScope(scope, path string) string {
+	return strings.TrimRight(scope, "/") + "/" + strings.TrimLeft(path, "/")
+}
+
+func WithinScope(scope, path string) bool {
+	scope = strings.TrimRight(scope, "/")
+	path = strings.TrimRight(path, "/")
+	return path == scope || strings.HasPrefix(path, scope+"/")
+}
+
+func StorageExtension(path string) (string, bool) {
+	switch {
+	case strings.HasPrefix(path, "s3://"), strings.HasPrefix(path, "r2://"), strings.HasPrefix(path, "gcs://"), strings.HasPrefix(path, "gs://"), strings.HasPrefix(path, "http://"), strings.HasPrefix(path, "https://"):
+		return "httpfs", true
+	case strings.HasPrefix(path, "az://"), strings.HasPrefix(path, "azure://"), strings.HasPrefix(path, "abfss://"):
+		return "azure", true
+	default:
+		return "", false
+	}
+}
+
+func sortedKeys[T any](items map[string]T) []string {
+	keys := make([]string, 0, len(items))
+	for key := range items {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
