@@ -11,7 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-type materializationRunRequest struct {
+type refreshRunRequest struct {
 	ModelID        string `json:"modelId"`
 	ServingStateID string `json:"servingStateId,omitempty"`
 	TargetType     string `json:"targetType,omitempty"`
@@ -20,16 +20,16 @@ type materializationRunRequest struct {
 	ParentRunID    string `json:"parentRunId,omitempty"`
 }
 
-func (s *Server) createMaterializationRun(w http.ResponseWriter, r *http.Request) {
-	repo, workspaceID, ok := s.materializationRunRepository(w, r)
+func (s *Server) createRefreshRun(w http.ResponseWriter, r *http.Request) {
+	repo, workspaceID, ok := s.refreshRunRepository(w, r)
 	if !ok {
 		return
 	}
 	if s.metrics == nil {
-		writeJSONError(w, fmt.Errorf("materialization refresh runner is not configured"), http.StatusServiceUnavailable)
+		writeJSONError(w, fmt.Errorf("refresh runner is not configured"), http.StatusServiceUnavailable)
 		return
 	}
-	var input materializationRunRequest
+	var input refreshRunRequest
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
@@ -49,7 +49,7 @@ func (s *Server) createMaterializationRun(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
 	}
-	s.dispatchQueuedMaterializationJobs(context.Background())
+	s.dispatchQueuedRefreshJobs(context.Background())
 	writeJSON(w, http.StatusAccepted, refreshRunDTO(run))
 }
 
@@ -60,8 +60,8 @@ func (s *Server) executionService() *execution.Service {
 	return s.executor
 }
 
-func (s *Server) listMaterializationRuns(w http.ResponseWriter, r *http.Request) {
-	repo, workspaceID, ok := s.materializationRunRepository(w, r)
+func (s *Server) listRefreshRuns(w http.ResponseWriter, r *http.Request) {
+	repo, workspaceID, ok := s.refreshRunRepository(w, r)
 	if !ok {
 		return
 	}
@@ -89,8 +89,8 @@ func (s *Server) listMaterializationRuns(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, pagedResponseWithCursor(items, nextCursor))
 }
 
-func (s *Server) getMaterializationRun(w http.ResponseWriter, r *http.Request) {
-	repo, workspaceID, ok := s.materializationRunRepository(w, r)
+func (s *Server) getRefreshRun(w http.ResponseWriter, r *http.Request) {
+	repo, workspaceID, ok := s.refreshRunRepository(w, r)
 	if !ok {
 		return
 	}
@@ -140,7 +140,7 @@ func refreshRunDTO(run materialize.RunRecord) refreshRunResponse {
 	}
 }
 
-func (s *Server) materializationRunRepository(w http.ResponseWriter, r *http.Request) (*materialize.SQLRunRepository, string, bool) {
+func (s *Server) refreshRunRepository(w http.ResponseWriter, r *http.Request) (*materialize.SQLRunRepository, string, bool) {
 	if s.store == nil {
 		writeJSONError(w, fmt.Errorf("platform store is required"), http.StatusServiceUnavailable)
 		return nil, "", false

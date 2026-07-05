@@ -118,7 +118,7 @@ func (e appLegacyRefreshExecutor) ExecuteLegacyJob(ctx context.Context, job mate
 	orchestrator := NewGenericRefreshOrchestrator(e.repo, e.metrics)
 	_, err := orchestrator.ExecuteRun(ctx, job.WorkspaceID, job.RunID, refreshPublisher{})
 	if err != nil && e.logger != nil {
-		e.logger.WarnContext(ctx, "materialization job failed", "workspace", job.WorkspaceID, "run", job.RunID, "error", err)
+		e.logger.WarnContext(ctx, "refresh job failed", "workspace", job.WorkspaceID, "run", job.RunID, "error", err)
 	}
 	return err
 }

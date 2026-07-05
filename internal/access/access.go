@@ -11,24 +11,23 @@ import (
 )
 
 const (
-	PermissionWorkspaceRead      = "workspace:read"
-	PermissionAssetRead          = "asset:read"
-	PermissionPublishRead        = "publish:read"
-	PermissionPublishWrite       = "publish:write"
-	PermissionPublishActivate    = "publish:activate"
-	PermissionRBACRead           = "rbac:read"
-	PermissionRBACWrite          = "rbac:write"
-	PermissionAgentUse           = "agent:use"
-	PermissionAgentRead          = "agent:read"
-	PermissionMaterializationRun = "refresh:run"
-	PermissionAuditRead          = "audit:read"
-	PermissionTokenManage        = "token:manage"
+	PermissionWorkspaceRead   = "workspace:read"
+	PermissionAssetRead       = "asset:read"
+	PermissionPublishRead     = "publish:read"
+	PermissionPublishWrite    = "publish:write"
+	PermissionPublishActivate = "publish:activate"
+	PermissionRBACRead        = "rbac:read"
+	PermissionRBACWrite       = "rbac:write"
+	PermissionAgentUse        = "agent:use"
+	PermissionAgentRead       = "agent:read"
+	PermissionRefreshRun      = "refresh:run"
+	PermissionAuditRead       = "audit:read"
+	PermissionTokenManage     = "token:manage"
 
-	PermissionDashboardView           = PermissionWorkspaceRead
-	PermissionPublishCreate           = PermissionPublishWrite
-	PermissionPublishRollback         = PermissionPublishActivate
-	PermissionMaterializationsRefresh = PermissionMaterializationRun
-	PermissionRBACManage              = PermissionRBACWrite
+	PermissionDashboardView   = PermissionWorkspaceRead
+	PermissionPublishCreate   = PermissionPublishWrite
+	PermissionPublishRollback = PermissionPublishActivate
+	PermissionRBACManage      = PermissionRBACWrite
 )
 
 const (
@@ -52,7 +51,7 @@ var defaultRoles = []Role{
 			PermissionRBACWrite,
 			PermissionAgentUse,
 			PermissionAgentRead,
-			PermissionMaterializationRun,
+			PermissionRefreshRun,
 			PermissionAuditRead,
 			PermissionTokenManage,
 		},
@@ -69,7 +68,7 @@ var defaultRoles = []Role{
 			PermissionRBACWrite,
 			PermissionAgentUse,
 			PermissionAgentRead,
-			PermissionMaterializationRun,
+			PermissionRefreshRun,
 			PermissionAuditRead,
 			PermissionTokenManage,
 		},
@@ -82,7 +81,7 @@ var defaultRoles = []Role{
 			PermissionPublishRead,
 			PermissionPublishWrite,
 			PermissionPublishActivate,
-			PermissionMaterializationRun,
+			PermissionRefreshRun,
 		},
 	},
 	{
@@ -92,7 +91,7 @@ var defaultRoles = []Role{
 			PermissionAssetRead,
 			PermissionAgentUse,
 			PermissionAgentRead,
-			PermissionMaterializationRun,
+			PermissionRefreshRun,
 		},
 	},
 	{

@@ -1385,7 +1385,7 @@ func TestMaterializationRunAPICanExecuteModelTableTargetWithLocalDevRuntimeShape
 	}
 }
 
-func TestServerStartupDispatchesQueuedMaterializationJobs(t *testing.T) {
+func TestServerStartupDispatchesQueuedRefreshJobs(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
 	metrics := &localDevStyleModelTableMetrics{done: make(chan []string, 1)}

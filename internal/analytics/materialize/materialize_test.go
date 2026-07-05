@@ -1328,7 +1328,7 @@ func TestRunRepositoryReclaimsExpiredJobLease(t *testing.T) {
 		t.Fatalf("first claim ok=%v err=%v", ok, err)
 	}
 	if _, err := store.SQLDB().ExecContext(ctx, `
-		UPDATE materialization_jobs
+		UPDATE refresh_jobs
 		SET lease_expires_at = datetime('now', '-1 second')
 		WHERE id = ?
 	`, job.ID); err != nil {
@@ -1346,7 +1346,7 @@ func TestRunRepositoryReclaimsExpiredJobLease(t *testing.T) {
 		t.Fatalf("renew lease: %v", err)
 	}
 	var owner string
-	if err := store.SQLDB().QueryRowContext(ctx, `SELECT lease_owner FROM materialization_jobs WHERE id = ?`, reclaimed.ID).Scan(&owner); err != nil {
+	if err := store.SQLDB().QueryRowContext(ctx, `SELECT lease_owner FROM refresh_jobs WHERE id = ?`, reclaimed.ID).Scan(&owner); err != nil {
 		t.Fatalf("read lease owner: %v", err)
 	}
 	if owner != "worker-2" {
@@ -1381,9 +1381,9 @@ func TestRunRepositoryReportsDurableQueueStats(t *testing.T) {
 		t.Fatalf("claim stale job: %v", err)
 	}
 	if _, err := store.SQLDB().ExecContext(ctx, `
-		UPDATE materialization_jobs
+		UPDATE refresh_jobs
 		SET lease_expires_at = datetime('now', '-1 second')
-		WHERE id = (SELECT job_id FROM materialization_job_runs WHERE id = ?)
+		WHERE id = (SELECT job_id FROM refresh_job_runs WHERE id = ?)
 	`, stale.ID); err != nil {
 		t.Fatalf("expire stale lease: %v", err)
 	}

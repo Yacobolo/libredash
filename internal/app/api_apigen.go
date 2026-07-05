@@ -248,15 +248,15 @@ func (a apiGenAdapter) ValidatePublish(w http.ResponseWriter, r *http.Request, _
 }
 
 func (a apiGenAdapter) CreateRefreshRun(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.createMaterializationRun(w, r)
+	a.server.createRefreshRun(w, r)
 }
 
 func (a apiGenAdapter) ListRefreshRuns(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListRefreshRunsParams) {
-	a.server.listMaterializationRuns(w, r)
+	a.server.listRefreshRuns(w, r)
 }
 
 func (a apiGenAdapter) GetRefreshRun(w http.ResponseWriter, r *http.Request, _, _ string) {
-	a.server.getMaterializationRun(w, r)
+	a.server.getRefreshRun(w, r)
 }
 
 func (a apiGenAdapter) ListAgentConversations(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListAgentConversationsParams) {

@@ -263,7 +263,7 @@ func planChangeAnnotations(change workspacecompiler.ProjectPlanChange) string {
 		parts = append(parts, "breaking")
 	}
 	if change.MaterializationImpact {
-		parts = append(parts, "materialization")
+		parts = append(parts, "refresh")
 	}
 	if change.AccessImpact {
 		parts = append(parts, "access")

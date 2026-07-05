@@ -681,7 +681,7 @@ func TestExpiredRefreshJobLeaseIsReclaimed(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("claim job ok=%v err=%v", ok, err)
 	}
-	if _, err := h.store.SQLDB().ExecContext(ctx, `UPDATE materialization_jobs SET lease_expires_at = datetime('now', '-1 second') WHERE id = ?`, job.ID); err != nil {
+	if _, err := h.store.SQLDB().ExecContext(ctx, `UPDATE refresh_jobs SET lease_expires_at = datetime('now', '-1 second') WHERE id = ?`, job.ID); err != nil {
 		t.Fatalf("expire job lease: %v", err)
 	}
 	h.startReplacementRegistry(t)

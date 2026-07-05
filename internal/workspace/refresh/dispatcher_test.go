@@ -15,7 +15,7 @@ func TestDispatcherExecutesLegacyJobThroughWriteLane(t *testing.T) {
 		ID:          "job_1",
 		WorkspaceID: "sales",
 		RunID:       "run_1",
-		Kind:        materialize.JobKindMaterialization,
+		Kind:        materialize.JobKindRefresh,
 	}}}
 	legacy := &fakeLegacyExecutor{}
 	executor := execution.New(execution.Config{MaxRunningJobs: 1, MaxQueuedJobs: 1})

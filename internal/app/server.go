@@ -186,7 +186,7 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 }
 
 func (s *Server) StartBackgroundJobs(ctx context.Context) {
-	s.dispatchQueuedMaterializationJobs(ctx)
+	s.dispatchQueuedRefreshJobs(ctx)
 }
 
 func executionConfigFromEnv() execution.Config {

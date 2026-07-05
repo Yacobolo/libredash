@@ -300,7 +300,7 @@ func (s *Server) refreshWorkspaceAssetServingStateWithPatches(r *http.Request, w
 	}); err != nil {
 		return err
 	}
-	s.dispatchQueuedMaterializationJobs(context.Background())
+	s.dispatchQueuedRefreshJobs(context.Background())
 	return nil
 }
 

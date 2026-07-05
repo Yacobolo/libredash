@@ -45,7 +45,7 @@ func (d Dispatcher) Run(ctx context.Context) {
 		job, ok, err := d.Runs.ClaimNextExecutableJob(ctx, owner, d.leaseTimeout())
 		if err != nil {
 			if d.Logger != nil {
-				d.Logger.WarnContext(ctx, "claim materialization job failed", "error", err)
+				d.Logger.WarnContext(ctx, "claim refresh job failed", "error", err)
 			}
 			return
 		}
@@ -57,7 +57,7 @@ func (d Dispatcher) Run(ctx context.Context) {
 			if d.ExecutionStats != nil {
 				stats = d.ExecutionStats()
 			}
-			d.Logger.InfoContext(ctx, "dispatch materialization job",
+			d.Logger.InfoContext(ctx, "dispatch refresh job",
 				"workspace", job.WorkspaceID,
 				"run", job.RunID,
 				"kind", job.Kind,
@@ -83,9 +83,9 @@ func (d Dispatcher) Run(ctx context.Context) {
 
 func (d Dispatcher) executeClaimedJob(ctx context.Context, job materialize.JobRecord) error {
 	switch job.Kind {
-	case materialize.JobKindMaterialization:
+	case materialize.JobKindRefresh:
 		if d.Legacy == nil {
-			err := fmt.Errorf("legacy materialization executor is required")
+			err := fmt.Errorf("legacy refresh executor is required")
 			_, _ = d.Runs.MarkRunFailed(ctx, job.WorkspaceID, job.RunID, err.Error())
 			return err
 		}
@@ -93,7 +93,7 @@ func (d Dispatcher) executeClaimedJob(ctx context.Context, job materialize.JobRe
 	case materialize.JobKindWorkspaceAssetRefresh:
 		return d.Service.ExecuteClaimedJob(ctx, job)
 	default:
-		err := fmt.Errorf("unsupported materialization job kind %q", job.Kind)
+		err := fmt.Errorf("unsupported refresh job kind %q", job.Kind)
 		_, _ = d.Runs.MarkRunFailed(ctx, job.WorkspaceID, job.RunID, err.Error())
 		return err
 	}
@@ -119,7 +119,7 @@ func (d Dispatcher) renewJobLease(ctx context.Context, jobID, owner string) func
 				return
 			case <-ticker.C:
 				if err := d.Runs.RenewJobLease(context.Background(), jobID, owner, d.leaseTimeout()); err != nil && d.Logger != nil {
-					d.Logger.WarnContext(ctx, "renew materialization job lease failed", "job", jobID, "error", err)
+					d.Logger.WarnContext(ctx, "renew refresh job lease failed", "job", jobID, "error", err)
 				}
 			}
 		}

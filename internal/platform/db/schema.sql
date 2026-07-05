@@ -198,12 +198,12 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   revoked_at TEXT
 );
 
-CREATE TABLE IF NOT EXISTS materialization_jobs (
+CREATE TABLE IF NOT EXISTS refresh_jobs (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   serving_state_id TEXT REFERENCES serving_states(id) ON DELETE SET NULL,
   model_id TEXT NOT NULL,
-  kind TEXT NOT NULL DEFAULT 'materialization',
+  kind TEXT NOT NULL DEFAULT 'refresh',
   payload_json TEXT NOT NULL DEFAULT '{}',
   status TEXT NOT NULL,
   queued_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -217,32 +217,32 @@ CREATE TABLE IF NOT EXISTS materialization_jobs (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS materialization_job_runs (
+CREATE TABLE IF NOT EXISTS refresh_job_runs (
   id TEXT PRIMARY KEY,
-  job_id TEXT NOT NULL REFERENCES materialization_jobs(id) ON DELETE CASCADE,
+  job_id TEXT NOT NULL REFERENCES refresh_jobs(id) ON DELETE CASCADE,
   principal_id TEXT REFERENCES principals(id) ON DELETE SET NULL,
   target_type TEXT NOT NULL DEFAULT 'semantic_model',
   target_id TEXT NOT NULL DEFAULT '',
   trigger_type TEXT NOT NULL DEFAULT 'direct',
-  parent_run_id TEXT REFERENCES materialization_job_runs(id) ON DELETE SET NULL,
+  parent_run_id TEXT REFERENCES refresh_job_runs(id) ON DELETE SET NULL,
   status TEXT NOT NULL,
   started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   finished_at TEXT,
   error TEXT NOT NULL DEFAULT ''
 );
 
-CREATE INDEX IF NOT EXISTS materialization_job_runs_target_idx
-  ON materialization_job_runs(target_type, target_id, started_at DESC);
-CREATE INDEX IF NOT EXISTS materialization_job_runs_parent_idx
-  ON materialization_job_runs(parent_run_id);
-CREATE INDEX IF NOT EXISTS materialization_jobs_workspace_created_idx
-  ON materialization_jobs(workspace_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS materialization_jobs_claim_idx
-  ON materialization_jobs(status, queued_at, id);
-CREATE INDEX IF NOT EXISTS materialization_jobs_lease_idx
-  ON materialization_jobs(status, lease_expires_at);
-CREATE INDEX IF NOT EXISTS materialization_job_runs_target_job_idx
-  ON materialization_job_runs(target_type, target_id, job_id);
+CREATE INDEX IF NOT EXISTS refresh_job_runs_target_idx
+  ON refresh_job_runs(target_type, target_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS refresh_job_runs_parent_idx
+  ON refresh_job_runs(parent_run_id);
+CREATE INDEX IF NOT EXISTS refresh_jobs_workspace_created_idx
+  ON refresh_jobs(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS refresh_jobs_claim_idx
+  ON refresh_jobs(status, queued_at, id);
+CREATE INDEX IF NOT EXISTS refresh_jobs_lease_idx
+  ON refresh_jobs(status, lease_expires_at);
+CREATE INDEX IF NOT EXISTS refresh_job_runs_target_job_idx
+  ON refresh_job_runs(target_type, target_id, job_id);
 
 CREATE TABLE IF NOT EXISTS audit_events (
   id TEXT PRIMARY KEY,

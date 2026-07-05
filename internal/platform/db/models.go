@@ -138,39 +138,6 @@ type GroupMember struct {
 	CreatedAt   string `json:"created_at"`
 }
 
-type MaterializationJob struct {
-	ID             string         `json:"id"`
-	WorkspaceID    string         `json:"workspace_id"`
-	ServingStateID sql.NullString `json:"serving_state_id"`
-	ModelID        string         `json:"model_id"`
-	Kind           string         `json:"kind"`
-	PayloadJson    string         `json:"payload_json"`
-	Status         string         `json:"status"`
-	QueuedAt       string         `json:"queued_at"`
-	StartedAt      sql.NullString `json:"started_at"`
-	FinishedAt     sql.NullString `json:"finished_at"`
-	LeaseOwner     string         `json:"lease_owner"`
-	LeaseExpiresAt sql.NullString `json:"lease_expires_at"`
-	AttemptCount   int64          `json:"attempt_count"`
-	LastError      string         `json:"last_error"`
-	CreatedAt      string         `json:"created_at"`
-	UpdatedAt      string         `json:"updated_at"`
-}
-
-type MaterializationJobRun struct {
-	ID          string         `json:"id"`
-	JobID       string         `json:"job_id"`
-	PrincipalID sql.NullString `json:"principal_id"`
-	TargetType  string         `json:"target_type"`
-	TargetID    string         `json:"target_id"`
-	TriggerType string         `json:"trigger_type"`
-	ParentRunID sql.NullString `json:"parent_run_id"`
-	Status      string         `json:"status"`
-	StartedAt   string         `json:"started_at"`
-	FinishedAt  sql.NullString `json:"finished_at"`
-	Error       string         `json:"error"`
-}
-
 type OauthState struct {
 	ID          string `json:"id"`
 	StateHash   string `json:"state_hash"`
@@ -243,6 +210,39 @@ type QuerySnapshotLease struct {
 	AcquiredAt         string         `json:"acquired_at"`
 	ExpiresAt          string         `json:"expires_at"`
 	ReleasedAt         sql.NullString `json:"released_at"`
+}
+
+type RefreshJob struct {
+	ID             string         `json:"id"`
+	WorkspaceID    string         `json:"workspace_id"`
+	ServingStateID sql.NullString `json:"serving_state_id"`
+	ModelID        string         `json:"model_id"`
+	Kind           string         `json:"kind"`
+	PayloadJson    string         `json:"payload_json"`
+	Status         string         `json:"status"`
+	QueuedAt       string         `json:"queued_at"`
+	StartedAt      sql.NullString `json:"started_at"`
+	FinishedAt     sql.NullString `json:"finished_at"`
+	LeaseOwner     string         `json:"lease_owner"`
+	LeaseExpiresAt sql.NullString `json:"lease_expires_at"`
+	AttemptCount   int64          `json:"attempt_count"`
+	LastError      string         `json:"last_error"`
+	CreatedAt      string         `json:"created_at"`
+	UpdatedAt      string         `json:"updated_at"`
+}
+
+type RefreshJobRun struct {
+	ID          string         `json:"id"`
+	JobID       string         `json:"job_id"`
+	PrincipalID sql.NullString `json:"principal_id"`
+	TargetType  string         `json:"target_type"`
+	TargetID    string         `json:"target_id"`
+	TriggerType string         `json:"trigger_type"`
+	ParentRunID sql.NullString `json:"parent_run_id"`
+	Status      string         `json:"status"`
+	StartedAt   string         `json:"started_at"`
+	FinishedAt  sql.NullString `json:"finished_at"`
+	Error       string         `json:"error"`
 }
 
 type Role struct {

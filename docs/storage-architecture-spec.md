@@ -47,7 +47,7 @@ LibreDash owns application metadata that DuckLake cannot own:
 - Active serving pointer: workspace/environment -> DuckLake snapshot id.
 - Refresh intent, run history, and serving-state lifecycle.
 - Semantic model, dashboard, and permission metadata.
-- Materialization job state for work not yet committed to DuckLake.
+- Refresh job state for work not yet committed to DuckLake.
 - Audit records for application actions.
 
 LibreDash must not mirror DuckLake table schemas, row counts, file lists, schema versions, or cleanup queues.
@@ -71,7 +71,7 @@ Parquet stores physical table data:
 DuckDB owns execution:
 
 - Attaching DuckLake catalogs.
-- Running materialization SQL.
+- Running model-table replacement SQL.
 - Running dashboard, export, API, and agent queries.
 - Reading DuckLake-managed Parquet files through the DuckLake catalog.
 
@@ -102,7 +102,7 @@ Human-readable BI semantics and application ownership come from LibreDash metada
 LibreDash is a BI serving layer. Assets define what can be queried. Refreshes replace the served data atomically.
 
 - Each active serving state points to one DuckLake snapshot id.
-- Materialization commits all planned table changes in one DuckLake transaction.
+- Refresh commits all planned table changes in one DuckLake transaction.
 - The DuckLake commit message or extra info records workspace id, environment, target asset, semantic digest, artifact digest, source data digest when available, and internal serving-state id.
 - After commit and schema validation, LibreDash records the committed DuckLake snapshot id and flips the active serving pointer.
 - Failed or incomplete refreshes are never active and never serve queries.
@@ -167,7 +167,7 @@ Snapshot expiration and physical file cleanup remain separate operations.
 ## Acceptance Criteria
 
 - LibreDash active serving pointers can be reconciled with DuckLake snapshots.
-- Failed materialization cannot alter active query results.
+- Failed refresh cannot alter active query results.
 - Cleanup can report and remove expired snapshots and orphaned physical data through DuckLake.
 - Tests prove query routing changes when only the active serving pointer changes.
 - Tests prove one request attaches exactly one DuckLake snapshot version.

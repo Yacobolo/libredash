@@ -649,7 +649,7 @@ func knownPermissions() []string {
 		access.PermissionRBACWrite,
 		access.PermissionAgentUse,
 		access.PermissionAgentRead,
-		access.PermissionMaterializationRun,
+		access.PermissionRefreshRun,
 		access.PermissionAuditRead,
 		access.PermissionTokenManage,
 	}

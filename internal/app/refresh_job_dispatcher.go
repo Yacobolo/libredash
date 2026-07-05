@@ -10,7 +10,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/workspace/refresh"
 )
 
-func (s *Server) dispatchQueuedMaterializationJobs(ctx context.Context) {
+func (s *Server) dispatchQueuedRefreshJobs(ctx context.Context) {
 	if s == nil || s.store == nil || s.metrics == nil {
 		return
 	}
@@ -21,10 +21,10 @@ func (s *Server) dispatchQueuedMaterializationJobs(ctx context.Context) {
 	}
 	s.jobDispatching = true
 	s.jobDispatchMu.Unlock()
-	go s.runMaterializationDispatcher(ctx)
+	go s.runRefreshJobDispatcher(ctx)
 }
 
-func (s *Server) runMaterializationDispatcher(ctx context.Context) {
+func (s *Server) runRefreshJobDispatcher(ctx context.Context) {
 	defer func() {
 		s.jobDispatchMu.Lock()
 		s.jobDispatching = false
