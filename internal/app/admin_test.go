@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -130,7 +131,7 @@ func TestAdminQueryHistoryCommandPublishesLoadMorePatch(t *testing.T) {
 	if err != nil || len(first) != 2 {
 		t.Fatalf("first page = %d, err=%v", len(first), err)
 	}
-	nextCursor := encodeCursor(first[1].CreatedAt, first[1].ID)
+	nextCursor := encodeAdminQueryCursor(first[1].CreatedAt, first[1].ID)
 	expectedNext, err := repo.ListQueryEvents(ctx, queryaudit.Filter{PageToken: nextCursor, Limit: 2})
 	if err != nil || len(expectedNext) != 1 {
 		t.Fatalf("next page = %d, err=%v", len(expectedNext), err)
@@ -164,6 +165,13 @@ func TestAdminQueryHistoryCommandPublishesLoadMorePatch(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for query history patch")
 	}
+}
+
+func encodeAdminQueryCursor(createdAt, id string) string {
+	if strings.TrimSpace(createdAt) == "" || strings.TrimSpace(id) == "" {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString([]byte(createdAt + "\x00" + id))
 }
 
 func TestAdminQueryHistoryCommandPublishesFilteredResetPatch(t *testing.T) {
@@ -598,7 +606,7 @@ func TestAdminStorageReadsDuckLakeMetadata(t *testing.T) {
 	}
 	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test", DuckDBDir: legacyDir, DuckLakeCatalogPath: catalogPath, DuckLakeDataPath: dataPath})
 
-	data := server.adminStorageData(httptest.NewRequest(http.MethodGet, "/admin/storage", nil))
+	data := server.storageReadModel().Data(httptest.NewRequest(http.MethodGet, "/admin/storage", nil).Context())
 	if data.Status != "" {
 		t.Fatalf("status = %q", data.Status)
 	}
@@ -669,7 +677,7 @@ VALUES ('test', 'dev', 'dep_test')`, snapshotID); err != nil {
 		DuckLakeDataPath:    dataPath,
 	})
 
-	data := server.adminStorageData(httptest.NewRequest(http.MethodGet, "/admin/storage", nil))
+	data := server.storageReadModel().Data(httptest.NewRequest(http.MethodGet, "/admin/storage", nil).Context())
 	if len(data.Deployments) != 1 {
 		t.Fatalf("deployments = %#v, want active deployment context", data.Deployments)
 	}

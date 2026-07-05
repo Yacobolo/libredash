@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"errors"
 	"net/http"
 	"strings"
@@ -264,9 +263,6 @@ func (a *Auth) authenticate(r *http.Request) (Principal, *access.APICredential, 
 	}
 	principal, err := a.repo.PrincipalForToken(r.Context(), cookie.Value)
 	if err != nil {
-		if err != sql.ErrNoRows {
-			return Principal{}, nil, false
-		}
 		return Principal{}, nil, false
 	}
 	return Principal{ID: principal.ID, Email: principal.Email, DisplayName: principal.DisplayName}, nil, true

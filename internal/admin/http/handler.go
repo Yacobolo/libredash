@@ -3,22 +3,40 @@ package http
 import (
 	"fmt"
 	nethttp "net/http"
+	"strings"
 
+	adminstorage "github.com/Yacobolo/libredash/internal/admin/storage"
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	lddatastar "github.com/Yacobolo/libredash/internal/dashboard/datastar"
+	"github.com/Yacobolo/libredash/internal/dashboard/stream"
+	"github.com/Yacobolo/libredash/internal/queryaudit"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/go-chi/chi/v5"
+	"github.com/starfederation/datastar-go/datastar"
 )
 
+type Broker interface {
+	Subscribe(string) (<-chan stream.Patch, func())
+	Publish(string, stream.Patch)
+}
+
+type QueryAuditRepositoryProvider func() (queryaudit.Repository, error)
+type PrincipalLabelsProvider func(*nethttp.Request, []string) map[string]string
+
 type Handler struct {
-	Catalog             func() dashboard.Catalog
-	Data                func(*nethttp.Request) (ui.AdminData, error)
-	CurrentRoleLabel    func(*nethttp.Request) string
-	ChromeOption        func(*nethttp.Request) ui.ChromeOption
-	EnsureClientID      func(nethttp.ResponseWriter, *nethttp.Request)
-	QueryHistoryUpdates nethttp.HandlerFunc
-	QueryHistoryCommand nethttp.HandlerFunc
-	StorageUpdates      nethttp.HandlerFunc
-	StorageSelectTable  nethttp.HandlerFunc
+	Catalog              func() dashboard.Catalog
+	Data                 func(*nethttp.Request) (ui.AdminData, error)
+	CurrentRoleLabel     func(*nethttp.Request) string
+	ChromeOption         func(*nethttp.Request) ui.ChromeOption
+	EnsureClientID       func(nethttp.ResponseWriter, *nethttp.Request)
+	Broker               Broker
+	StorageService       adminstorage.Service
+	QueryAuditRepository QueryAuditRepositoryProvider
+	PrincipalLabels      PrincipalLabelsProvider
+}
+
+type storageCommandSignals struct {
+	AdminStorageCommand ui.AdminStorageCommand `json:"adminStorageCommand"`
 }
 
 func (h Handler) General(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -82,19 +100,57 @@ func (h Handler) Queries(w nethttp.ResponseWriter, r *nethttp.Request) {
 }
 
 func (h Handler) QueryUpdates(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.delegate(h.QueryHistoryUpdates, w, r)
+	h.queryHistoryUpdates(w, r)
 }
 
 func (h Handler) QueryCommand(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.delegate(h.QueryHistoryCommand, w, r)
+	h.queryHistoryCommand(w, r)
 }
 
 func (h Handler) StorageSignalUpdates(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.delegate(h.StorageUpdates, w, r)
+	clientID := lddatastar.EnsureClientID(w, r)
+	if h.Broker == nil {
+		nethttp.Error(w, "admin storage broker is not configured", nethttp.StatusInternalServerError)
+		return
+	}
+	sse := datastar.NewSSE(w, r)
+	updates, unsubscribe := h.Broker.Subscribe(adminStorageStreamID(clientID))
+	defer unsubscribe()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case patch := <-updates:
+			if err := sse.MarshalAndPatchSignals(patch); err != nil {
+				return
+			}
+		}
+	}
 }
 
 func (h Handler) StorageTableSelect(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.delegate(h.StorageSelectTable, w, r)
+	clientID := lddatastar.EnsureClientID(w, r)
+	signals := storageCommandSignals{}
+	if err := datastar.ReadSignals(r, &signals); err != nil {
+		nethttp.Error(w, err.Error(), nethttp.StatusBadRequest)
+		return
+	}
+	selectedTable, err := h.StorageService.SelectTable(r.Context(), signals.AdminStorageCommand)
+	if err != nil {
+		nethttp.Error(w, err.Error(), nethttp.StatusBadRequest)
+		return
+	}
+	if h.Broker == nil {
+		nethttp.Error(w, "admin storage broker is not configured", nethttp.StatusInternalServerError)
+		return
+	}
+	h.Broker.Publish(adminStorageStreamID(clientID), map[string]any{
+		"adminStorage": map[string]any{
+			"selectedKey":   selectedTable.Key,
+			"selectedTable": selectedTable,
+		},
+	})
+	w.WriteHeader(nethttp.StatusNoContent)
 }
 
 func (h Handler) renderPage(w nethttp.ResponseWriter, r *nethttp.Request, active string) {
@@ -148,10 +204,30 @@ func (h Handler) ensureClientID(w nethttp.ResponseWriter, r *nethttp.Request) {
 	}
 }
 
-func (h Handler) delegate(next nethttp.HandlerFunc, w nethttp.ResponseWriter, r *nethttp.Request) {
-	if next == nil {
-		nethttp.NotFound(w, r)
-		return
+func (h Handler) queryAuditRepository() (queryaudit.Repository, error) {
+	if h.QueryAuditRepository == nil {
+		return nil, fmt.Errorf("query audit repository is not configured")
 	}
-	next(w, r)
+	return h.QueryAuditRepository()
+}
+
+func (h Handler) queryPrincipalLabels(r *nethttp.Request, values []string) map[string]string {
+	if h.PrincipalLabels == nil {
+		labels := map[string]string{}
+		for _, value := range values {
+			value = strings.TrimSpace(value)
+			if value != "" {
+				labels[value] = value
+			}
+		}
+		return labels
+	}
+	return h.PrincipalLabels(r, values)
+}
+
+func adminStorageStreamID(clientID string) string {
+	if strings.TrimSpace(clientID) == "" {
+		clientID = "default"
+	}
+	return "admin-storage:" + clientID
 }

@@ -211,7 +211,36 @@ func (m dataExplorerFixtureMetrics) openModelTableDB(ctx context.Context, modelI
 	if strings.TrimSpace(m.duckDBDir) == "" {
 		return nil, fmt.Errorf("fixture DuckDB directory is not configured")
 	}
-	return openDuckDBForInspection(ctx, analyticsmaterialize.DatabasePath(m.duckDBDir, modelID))
+	return openTestDuckDBForInspection(ctx, analyticsmaterialize.DatabasePath(m.duckDBDir, modelID))
+}
+
+func openTestDuckDBForInspection(ctx context.Context, path string) (*sql.DB, error) {
+	db, err := sql.Open("duckdb", path+"?access_mode=READ_ONLY")
+	if err == nil {
+		db.SetMaxOpenConns(1)
+		db.SetMaxIdleConns(1)
+		pingErr := db.PingContext(ctx)
+		if pingErr == nil {
+			return db, nil
+		}
+		_ = db.Close()
+		err = pingErr
+	}
+	fallbackDB, fallbackErr := sql.Open("duckdb", path)
+	if fallbackErr != nil {
+		return nil, errors.Join(err, fallbackErr)
+	}
+	fallbackDB.SetMaxOpenConns(1)
+	fallbackDB.SetMaxIdleConns(1)
+	if pingErr := fallbackDB.PingContext(ctx); pingErr != nil {
+		_ = fallbackDB.Close()
+		return nil, errors.Join(err, pingErr)
+	}
+	return fallbackDB, nil
+}
+
+func quoteDuckDBIdentifier(identifier string) string {
+	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
 }
 
 func TestDataExplorerRouteRendersSignalsAndWiring(t *testing.T) {

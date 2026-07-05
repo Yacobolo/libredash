@@ -228,6 +228,52 @@ func TestAppDoesNotKeepStaleBIAPIHelpers(t *testing.T) {
 	}
 }
 
+func TestAppDoesNotOwnRemainingAdminWorkspaceBehavior(t *testing.T) {
+	for _, file := range productionGoFiles(t) {
+		if file.pkgDir != "internal/app" {
+			continue
+		}
+		for _, forbidden := range []string{
+			"database/sql",
+			"github.com/duckdb/duckdb-go",
+			"datastar.ReadSignals(",
+			"MarshalAndPatchSignals(",
+			".QueryContext(",
+			".QueryRowContext(",
+			".ExecContext(",
+			"func (s *Server) adminStorage",
+			"func (s *Server) adminQueryHistory",
+			"func (s *Server) upsertWorkspaceAccess(",
+			"func (s *Server) removeWorkspaceAccess(",
+			"func apiWorkspaceDTOs(",
+			"func apiAssetDTOs(",
+			"func apiWorkspaceAssetGraphDTO(",
+		} {
+			if strings.Contains(file.body, forbidden) || importListContains(file.imports, forbidden) {
+				t.Fatalf("%s still owns app behavior marker %q", file.path, forbidden)
+			}
+		}
+	}
+}
+
+func TestAdminHTTPDoesNotDelegateStorageAndQueryHistoryBackToApp(t *testing.T) {
+	for _, file := range productionGoFiles(t) {
+		if file.pkgDir != "internal/admin/http" {
+			continue
+		}
+		for _, forbidden := range []string{
+			"QueryHistoryUpdates nethttp.HandlerFunc",
+			"QueryHistoryCommand nethttp.HandlerFunc",
+			"StorageUpdates      nethttp.HandlerFunc",
+			"StorageSelectTable  nethttp.HandlerFunc",
+		} {
+			if strings.Contains(file.body, forbidden) {
+				t.Fatalf("%s delegates admin behavior through %q", file.path, forbidden)
+			}
+		}
+	}
+}
+
 func TestWorkspaceHTTPDoesNotDelegateProductRoutesBackToApp(t *testing.T) {
 	for _, file := range productionGoFiles(t) {
 		if file.pkgDir != "internal/workspace/http" {
@@ -299,6 +345,15 @@ func isSQLDBAllowedFile(file goFile) bool {
 		strings.HasSuffix(file.pkgDir, "/sqlite") ||
 		strings.Contains(file.pkgDir, "/sqlite/") {
 		return true
+	}
+	return false
+}
+
+func importListContains(imports []string, value string) bool {
+	for _, imported := range imports {
+		if imported == value || strings.Contains(imported, value) {
+			return true
+		}
 	}
 	return false
 }
@@ -398,6 +453,7 @@ func isAdapterOrCompositionPackage(pkgDir string) bool {
 		strings.HasPrefix(pkgDir, "internal/platform/") ||
 		pkgDir == "internal/storage" ||
 		strings.HasPrefix(pkgDir, "internal/storage/") ||
+		pkgDir == "internal/admin/storage" ||
 		pkgDir == "internal/agent/tools" ||
 		strings.HasPrefix(pkgDir, "internal/tools/") ||
 		strings.HasPrefix(pkgDir, "internal/testutil/") {

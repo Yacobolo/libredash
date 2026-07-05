@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -11,17 +9,12 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
-	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/csrf"
-	"github.com/starfederation/datastar-go/datastar"
 )
-
-var errWorkspaceRBACNotConfigured = errors.New("Workspace RBAC store is not configured.")
 
 type activeWorkspaceMetadataRepository interface {
 	ListWithActiveMetadata(context.Context, string) ([]workspace.Summary, error)
@@ -77,70 +70,6 @@ func (s *Server) assetVersionsStateForSection(ctx context.Context, workspaceID, 
 		})
 	}
 	return state, nil
-}
-
-type workspaceAccessSignalPayload struct {
-	WorkspaceAccess struct {
-		Command ui.WorkspaceAccessCommand `json:"command"`
-	} `json:"workspaceAccess"`
-	WorkspaceAccessCommand ui.WorkspaceAccessCommand `json:"workspaceAccessCommand"`
-}
-
-func (signals workspaceAccessSignalPayload) command() ui.WorkspaceAccessCommand {
-	command := signals.WorkspaceAccess.Command
-	if command.Email == "" && command.Role == "" && command.PrincipalID == "" {
-		command = signals.WorkspaceAccessCommand
-	}
-	return command
-}
-
-func (s *Server) upsertWorkspaceAccess(w http.ResponseWriter, r *http.Request) {
-	signals := workspaceAccessSignalPayload{}
-	if err := datastar.ReadSignals(r, &signals); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
-	command := signals.command()
-	status := ui.WorkspaceAccessStatus{Message: "Access updated."}
-	repo, err := s.accessRepository()
-	if err != nil {
-		status = ui.WorkspaceAccessStatus{Error: err.Error()}
-	} else if repo == nil {
-		status = ui.WorkspaceAccessStatus{Error: errWorkspaceRBACNotConfigured.Error()}
-	} else if _, err := repo.SetPrincipalRole(r.Context(), access.PrincipalRoleInput{WorkspaceID: workspaceID, Email: command.Email, Role: command.Role}); err != nil {
-		status = ui.WorkspaceAccessStatus{Error: err.Error()}
-	}
-	s.patchWorkspaceAccess(w, r, workspaceID, status)
-}
-
-func (s *Server) removeWorkspaceAccess(w http.ResponseWriter, r *http.Request) {
-	signals := workspaceAccessSignalPayload{}
-	if err := datastar.ReadSignals(r, &signals); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
-	command := signals.command()
-	status := ui.WorkspaceAccessStatus{Message: "Access removed."}
-	repo, err := s.accessRepository()
-	if err != nil {
-		status = ui.WorkspaceAccessStatus{Error: err.Error()}
-	} else if repo == nil {
-		status = ui.WorkspaceAccessStatus{Error: errWorkspaceRBACNotConfigured.Error()}
-	} else if err := repo.RemovePrincipalRoles(r.Context(), workspaceID, command.PrincipalID); err != nil {
-		status = ui.WorkspaceAccessStatus{Error: err.Error()}
-	}
-	s.patchWorkspaceAccess(w, r, workspaceID, status)
-}
-
-func (s *Server) patchWorkspaceAccess(w http.ResponseWriter, r *http.Request, workspaceID string, status ui.WorkspaceAccessStatus) {
-	workspace := s.workspaceResponse(r, workspaceID)
-	access := s.workspaceAccessResponse(r, workspace, true, status)
-	sse := datastar.NewSSE(w, r)
-	_ = sse.MarshalAndPatchSignals(map[string]any{
-		"workspaceAccess": ui.WorkspaceAccessSignals(access, csrfToken(r, s.auth)),
-	})
 }
 
 func (s *Server) workspaceList(r *http.Request) ([]workspace.WorkspaceView, error) {
@@ -440,152 +369,6 @@ func catalogWorkspaceView(catalog dashboard.Catalog) workspace.WorkspaceView {
 		Title:       catalog.Workspace.Title,
 		Description: catalog.Workspace.Description,
 	}
-}
-
-func apiWorkspaceDTOs(rows []workspace.WorkspaceView) []api.WorkspaceResponse {
-	out := make([]api.WorkspaceResponse, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, api.WorkspaceResponse{
-			ID:                 row.ID,
-			Title:              row.Title,
-			Description:        row.Description,
-			ActiveDeploymentID: row.ActiveDeploymentID,
-			CreatedAt:          row.CreatedAt,
-			UpdatedAt:          row.UpdatedAt,
-		})
-	}
-	return out
-}
-
-func apiAssetDTOs(rows []workspace.AssetView) []api.AssetResponse {
-	out := make([]api.AssetResponse, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, api.AssetResponse{
-			ID:            row.ID,
-			SnapshotID:    row.SnapshotID,
-			WorkspaceID:   row.WorkspaceID,
-			DeploymentID:  row.DeploymentID,
-			Type:          row.Type,
-			Key:           row.Key,
-			ParentID:      row.ParentID,
-			Title:         row.Title,
-			Description:   row.Description,
-			SourceFile:    row.SourceFile,
-			PayloadSchema: row.PayloadSchema,
-			Payload:       row.Payload,
-			Href:          row.Href,
-		})
-	}
-	return out
-}
-
-func apiAssetSummaryDTOs(rows []workspace.AssetView) []api.AssetSummaryResponse {
-	out := make([]api.AssetSummaryResponse, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, api.AssetSummaryResponse{
-			ID:            row.ID,
-			SnapshotID:    row.SnapshotID,
-			WorkspaceID:   row.WorkspaceID,
-			DeploymentID:  row.DeploymentID,
-			Type:          row.Type,
-			Key:           row.Key,
-			ParentID:      row.ParentID,
-			Title:         row.Title,
-			Description:   row.Description,
-			SourceFile:    row.SourceFile,
-			PayloadSchema: row.PayloadSchema,
-			ContentHash:   row.ContentHash,
-			Href:          row.Href,
-		})
-	}
-	return out
-}
-
-func apiWorkspaceAssetGraphDTO(graph workspace.AssetGraph) (api.WorkspaceAssetGraphResponse, error) {
-	assets := make([]api.AssetGraphAssetResponse, 0, len(graph.Assets))
-	for _, row := range graph.Assets {
-		payload := map[string]any{}
-		if row.PayloadJSON != "" {
-			if err := json.Unmarshal([]byte(row.PayloadJSON), &payload); err != nil {
-				return api.WorkspaceAssetGraphResponse{}, err
-			}
-		}
-		assets = append(assets, api.AssetGraphAssetResponse{
-			ID:            string(row.ID),
-			SnapshotID:    string(row.SnapshotID),
-			WorkspaceID:   string(row.WorkspaceID),
-			DeploymentID:  string(row.DeploymentID),
-			Type:          string(row.Type),
-			Key:           row.Key,
-			ParentID:      string(row.ParentID),
-			Title:         row.Title,
-			Description:   row.Description,
-			SourceFile:    row.SourceFile,
-			PayloadSchema: row.PayloadSchema,
-			Payload:       payload,
-			ContentHash:   row.ContentHash,
-		})
-	}
-	return api.WorkspaceAssetGraphResponse{
-		Assets: assets,
-		Edges:  apiWorkspaceAssetGraphEdgeDTOs(graph.Edges),
-	}, nil
-}
-
-func apiWorkspaceAssetGraphEdgeDTOs(rows []workspace.AssetEdge) []api.AssetEdgeResponse {
-	out := make([]api.AssetEdgeResponse, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, api.AssetEdgeResponse{
-			ID:           string(row.ID),
-			WorkspaceID:  string(row.WorkspaceID),
-			DeploymentID: string(row.DeploymentID),
-			FromAssetID:  string(row.FromAssetID),
-			ToAssetID:    string(row.ToAssetID),
-			Type:         string(row.Type),
-		})
-	}
-	return out
-}
-
-func apiAssetEdgeDTOs(rows []workspace.AssetEdgeView) []api.AssetEdgeResponse {
-	out := make([]api.AssetEdgeResponse, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, api.AssetEdgeResponse{
-			ID:           row.ID,
-			WorkspaceID:  row.WorkspaceID,
-			DeploymentID: row.DeploymentID,
-			FromAssetID:  row.FromAssetID,
-			ToAssetID:    row.ToAssetID,
-			Type:         row.Type,
-		})
-	}
-	return out
-}
-
-func assetLineageEndpointIDs(edges []workspace.AssetEdgeView, assetID string, upstream bool) []string {
-	values := map[string]struct{}{}
-	for _, edge := range edges {
-		if upstream && edge.ToAssetID == assetID {
-			values[edge.FromAssetID] = struct{}{}
-		}
-		if !upstream && edge.FromAssetID == assetID {
-			values[edge.ToAssetID] = struct{}{}
-		}
-	}
-	out := make([]string, 0, len(values))
-	for value := range values {
-		out = append(out, value)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func apiRoleDTOs(rows []workspace.RoleView) []api.RoleResponse {
-	out := make([]api.RoleResponse, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, api.RoleResponse{Name: row.Name, Permissions: row.Permissions})
-	}
-	return out
 }
 
 func roleBindingView(row access.RoleBinding) workspace.RoleBindingView {

@@ -45,6 +45,21 @@ type Handler struct {
 	ChromeOptions        func(*nethttp.Request) []ui.ChromeOption
 }
 
+type workspaceAccessSignalPayload struct {
+	WorkspaceAccess struct {
+		Command ui.WorkspaceAccessCommand `json:"command"`
+	} `json:"workspaceAccess"`
+	WorkspaceAccessCommand ui.WorkspaceAccessCommand `json:"workspaceAccessCommand"`
+}
+
+func (signals workspaceAccessSignalPayload) command() ui.WorkspaceAccessCommand {
+	command := signals.WorkspaceAccess.Command
+	if command.Email == "" && command.Role == "" && command.PrincipalID == "" {
+		command = signals.WorkspaceAccessCommand
+	}
+	return command
+}
+
 func (h Handler) WorkspaceCatalog(w nethttp.ResponseWriter, r *nethttp.Request) {
 	workspaces, err := h.workspaceList(r)
 	if err != nil {
@@ -524,6 +539,55 @@ func (h Handler) PermissionRemove(w nethttp.ResponseWriter, r *nethttp.Request) 
 		return
 	}
 	nethttp.Redirect(w, r, "/workspaces/"+workspaceID+"/permissions", nethttp.StatusFound)
+}
+
+func (h Handler) AccessUpsert(w nethttp.ResponseWriter, r *nethttp.Request) {
+	signals := workspaceAccessSignalPayload{}
+	if err := datastar.ReadSignals(r, &signals); err != nil {
+		nethttp.Error(w, err.Error(), nethttp.StatusBadRequest)
+		return
+	}
+	workspaceID := h.workspaceID(chi.URLParam(r, "workspace"))
+	command := signals.command()
+	status := ui.WorkspaceAccessStatus{Message: "Access updated."}
+	repo, err := h.accessRepository()
+	if err != nil {
+		status = ui.WorkspaceAccessStatus{Error: err.Error()}
+	} else if repo == nil {
+		status = ui.WorkspaceAccessStatus{Error: errWorkspaceRBACNotConfigured.Error()}
+	} else if _, err := repo.SetPrincipalRole(r.Context(), access.PrincipalRoleInput{WorkspaceID: workspaceID, Email: command.Email, Role: command.Role}); err != nil {
+		status = ui.WorkspaceAccessStatus{Error: err.Error()}
+	}
+	h.patchWorkspaceAccess(w, r, workspaceID, status)
+}
+
+func (h Handler) AccessRemove(w nethttp.ResponseWriter, r *nethttp.Request) {
+	signals := workspaceAccessSignalPayload{}
+	if err := datastar.ReadSignals(r, &signals); err != nil {
+		nethttp.Error(w, err.Error(), nethttp.StatusBadRequest)
+		return
+	}
+	workspaceID := h.workspaceID(chi.URLParam(r, "workspace"))
+	command := signals.command()
+	status := ui.WorkspaceAccessStatus{Message: "Access removed."}
+	repo, err := h.accessRepository()
+	if err != nil {
+		status = ui.WorkspaceAccessStatus{Error: err.Error()}
+	} else if repo == nil {
+		status = ui.WorkspaceAccessStatus{Error: errWorkspaceRBACNotConfigured.Error()}
+	} else if err := repo.RemovePrincipalRoles(r.Context(), workspaceID, command.PrincipalID); err != nil {
+		status = ui.WorkspaceAccessStatus{Error: err.Error()}
+	}
+	h.patchWorkspaceAccess(w, r, workspaceID, status)
+}
+
+func (h Handler) patchWorkspaceAccess(w nethttp.ResponseWriter, r *nethttp.Request, workspaceID string, status ui.WorkspaceAccessStatus) {
+	workspaceView := h.workspaceResponse(r, workspaceID)
+	access := h.workspaceAccess(r, workspaceView, true, status)
+	sse := datastar.NewSSE(w, r)
+	_ = sse.MarshalAndPatchSignals(map[string]any{
+		"workspaceAccess": ui.WorkspaceAccessSignals(access, h.csrfToken(r)),
+	})
 }
 
 func (h Handler) AssetUpdatesStream(w nethttp.ResponseWriter, r *nethttp.Request) {

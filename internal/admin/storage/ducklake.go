@@ -1,33 +1,31 @@
-package app
+package storage
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
-	lddatastar "github.com/Yacobolo/libredash/internal/dashboard/datastar"
 	"github.com/Yacobolo/libredash/internal/ui"
 	_ "github.com/duckdb/duckdb-go/v2"
-	"github.com/starfederation/datastar-go/datastar"
 )
 
-type adminStorageCommandSignals struct {
-	AdminStorageCommand ui.AdminStorageCommand `json:"adminStorageCommand"`
+type Service struct {
+	CatalogPath string
+	DataPath    string
 }
 
-const duckLakeStorageCatalogID = "ducklake-catalog"
+const DuckLakeCatalogID = "ducklake-catalog"
 
-func (s *Server) adminStorageData(r interface{ Context() context.Context }) ui.AdminStorageData {
+func (s Service) Data(ctx context.Context) ui.AdminStorageData {
 	data := ui.AdminStorageData{
-		CatalogPath: s.duckLakeCatalogPath,
-		DataPath:    s.duckLakeDataPath,
+		CatalogPath: s.CatalogPath,
+		DataPath:    s.DataPath,
 	}
 	if strings.TrimSpace(data.CatalogPath) == "" {
 		data.Status = "No DuckLake catalog has been initialized."
@@ -60,7 +58,7 @@ func (s *Server) adminStorageData(r interface{ Context() context.Context }) ui.A
 	data.TotalSizeLabel = formatBytes(data.TotalSizeBytes)
 	data.DatabaseCount = 1
 	data.Databases = []ui.AdminStorageDatabase{{
-		ID:        duckLakeStorageCatalogID,
+		ID:        DuckLakeCatalogID,
 		Name:      "DuckLake catalog",
 		Path:      data.CatalogPath,
 		ModelID:   "ducklake",
@@ -68,7 +66,7 @@ func (s *Server) adminStorageData(r interface{ Context() context.Context }) ui.A
 		SizeBytes: data.TotalSizeBytes,
 		SizeLabel: data.TotalSizeLabel,
 	}}
-	metadata, err := inspectDuckLakeStorage(r.Context(), data.CatalogPath, data.DataPath)
+	metadata, err := inspectDuckLakeStorage(ctx, data.CatalogPath, data.DataPath)
 	if err != nil {
 		data.Status = err.Error()
 		return data
@@ -90,55 +88,17 @@ func (s *Server) adminStorageData(r interface{ Context() context.Context }) ui.A
 	return data
 }
 
-func (s *Server) adminStorageUpdates(w http.ResponseWriter, r *http.Request) {
-	clientID := lddatastar.EnsureClientID(w, r)
-	sse := datastar.NewSSE(w, r)
-	updates, unsubscribe := s.broker.Subscribe(adminStorageStreamID(clientID))
-	defer unsubscribe()
-	for {
-		select {
-		case <-r.Context().Done():
-			return
-		case patch := <-updates:
-			if err := sse.MarshalAndPatchSignals(patch); err != nil {
-				return
-			}
-		}
-	}
-}
-
-func (s *Server) adminStorageSelectTable(w http.ResponseWriter, r *http.Request) {
-	clientID := lddatastar.EnsureClientID(w, r)
-	signals := adminStorageCommandSignals{}
-	if err := datastar.ReadSignals(r, &signals); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	selectedTable, err := s.adminStorageSelectedTable(r.Context(), signals.AdminStorageCommand)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	s.broker.Publish(adminStorageStreamID(clientID), map[string]any{
-		"adminStorage": map[string]any{
-			"selectedKey":   selectedTable.Key,
-			"selectedTable": selectedTable,
-		},
-	})
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) adminStorageSelectedTable(ctx context.Context, command ui.AdminStorageCommand) (*ui.AdminStorageTableSignal, error) {
+func (s Service) SelectTable(ctx context.Context, command ui.AdminStorageCommand) (*ui.AdminStorageTableSignal, error) {
 	if strings.TrimSpace(command.DatabaseID) == "" || strings.TrimSpace(command.Schema) == "" || strings.TrimSpace(command.Table) == "" {
 		return nil, fmt.Errorf("storage table selection is incomplete")
 	}
-	if command.DatabaseID != duckLakeStorageCatalogID {
+	if command.DatabaseID != DuckLakeCatalogID {
 		return nil, fmt.Errorf("DuckLake catalog %q was not found", command.DatabaseID)
 	}
-	if strings.TrimSpace(s.duckLakeCatalogPath) == "" || strings.TrimSpace(s.duckLakeDataPath) == "" {
+	if strings.TrimSpace(s.CatalogPath) == "" || strings.TrimSpace(s.DataPath) == "" {
 		return nil, fmt.Errorf("DuckLake catalog is not configured")
 	}
-	metadata, err := inspectDuckLakeStorage(ctx, s.duckLakeCatalogPath, s.duckLakeDataPath)
+	metadata, err := inspectDuckLakeStorage(ctx, s.CatalogPath, s.DataPath)
 	if err != nil {
 		return nil, err
 	}
@@ -149,13 +109,6 @@ func (s *Server) adminStorageSelectedTable(ctx context.Context, command ui.Admin
 		}
 	}
 	return nil, fmt.Errorf("DuckLake table %q.%q was not found", command.Schema, command.Table)
-}
-
-func adminStorageStreamID(clientID string) string {
-	if strings.TrimSpace(clientID) == "" {
-		clientID = "default"
-	}
-	return "admin-storage:" + clientID
 }
 
 type duckLakeStorageMetadata struct {
@@ -298,7 +251,7 @@ ORDER BY a.schema_name, a.table_name`)
 			end = endSnapshot.Int64
 		}
 		table := ui.AdminStorageTable{
-			DatabaseID:    duckLakeStorageCatalogID,
+			DatabaseID:    DuckLakeCatalogID,
 			DatabaseName:  "DuckLake catalog",
 			DatabasePath:  "",
 			ModelID:       "ducklake",

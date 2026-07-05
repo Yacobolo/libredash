@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -128,7 +127,7 @@ func decodeOptionalJSONBody(r *http.Request, dst any) error {
 }
 
 func statusForNotFound(err error) int {
-	if err == sql.ErrNoRows || errors.Is(err, deployment.ErrNotFound) {
+	if errors.Is(err, deployment.ErrNotFound) {
 		return http.StatusNotFound
 	}
 	return http.StatusInternalServerError
