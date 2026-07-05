@@ -50,10 +50,10 @@ Package import rules:
 Allowed inward dependencies:
 
 ```text
-internal/deployment/http      -> internal/deployment
-internal/deployment/http      -> internal/deployment/activate
-internal/deployment/sqlite    -> internal/deployment
-internal/deployment/filesystem -> internal/deployment
+internal/servingstate/http      -> internal/servingstate
+internal/servingstate/http      -> internal/servingstate/activate
+internal/servingstate/sqlite    -> internal/servingstate
+internal/servingstate/filesystem -> internal/servingstate
 
 internal/dashboard/datastar   -> internal/dashboard
 internal/analytics/duckdb     -> internal/analytics
@@ -62,10 +62,10 @@ internal/analytics/duckdb     -> internal/analytics
 Avoid outward dependencies:
 
 ```text
-internal/deployment -> chi
-internal/deployment -> sqlc generated rows
-internal/deployment -> datastar
-internal/deployment -> http.Request
+internal/servingstate -> chi
+internal/servingstate -> sqlc generated rows
+internal/servingstate -> datastar
+internal/servingstate -> http.Request
 ```
 
 ## Top-Level Capabilities
@@ -75,7 +75,7 @@ The long-term internal package map should be organized around product capabiliti
 ```text
 internal/
   workspace/
-  deployment/
+  servingstate/
   access/
   analytics/
   dashboard/
@@ -85,7 +85,7 @@ internal/
 Suggested ownership:
 
 - `workspace`: workspace identity, catalog surface, asset discovery, workspace-level views.
-- `deployment`: bundle lifecycle, upload, validation, artifact storage, activation, rollback.
+- `servingstate`: publish bundle lifecycle, upload, validation, artifact storage, activation, and internal serving-state transitions.
 - `access`: principals, roles, permissions, authorization decisions.
 - `analytics`: semantic model loading, source/model resolution, semantic relationship validation, query planning, DuckDB execution, materialization.
 - `dashboard`: report pages, filters, visuals, BI tables, interaction commands, page state, and typed query intents for analytics.
@@ -99,7 +99,7 @@ Product contract:
 sources -> models -> semantic model -> dashboards
 ```
 
-LibreDash is assets-as-code. Authored YAML in Git is the source of truth. The compiler turns authored contracts into a stable asset graph. Deployments publish immutable graph snapshots. Runtime stores never become authoring sources.
+LibreDash is assets-as-code. Authored YAML in Git is the source of truth. The compiler turns authored contracts into a stable asset graph. Publishes create immutable asset-configuration snapshots. Runtime stores never become authoring sources.
 
 Metric views, datasets, cache tables, and generated serving tables are not product/schema concepts in the v1 contract. If they appear in code, they should be internal runtime implementation details, legacy rejection paths, or tests proving old vocabulary does not leak into user-facing surfaces.
 
@@ -108,11 +108,11 @@ YAML contract ownership:
 - `workspace` owns catalog discovery and workspace asset surfacing.
 - `analytics` owns source contracts, model table contracts, semantic model contracts, fields, relationships, measures, query-facing validation, and materialization definitions.
 - `dashboard` owns dashboard/page/filter/visual/table contracts and runtime signal shapes.
-- `deployment` owns bundle-level validation, artifact identity, activation, rollback, and artifact storage.
+- `serving state` owns bundle-level validation, artifact identity, activation, and artifact storage. Rollback is not a v1 data-version product surface.
 
 Storage ownership:
 
-- SQLite is the control-plane store for workspaces, deployments, immutable asset graph snapshots, roles, sessions, agent conversations, and audit data.
+- SQLite is the control-plane store for workspaces, serving states, immutable asset graph snapshots, roles, sessions, agent conversations, and audit data.
 - SQLite asset tables are indexed read models of compiled code assets. They are not an authoring database for dashboards, models, sources, fields, measures, or visuals.
 - DuckDB is the analytical data plane for imported/cache data, semantic query execution, dashboard data, and materializations.
 
@@ -149,7 +149,7 @@ The long-term target is:
 workspace/catalog + analytics/model + dashboard/report
         -> workspace/compiler
         -> normalized workspace + stable asset graph
-        -> immutable deployment snapshot
+        -> immutable asset configuration snapshot
 ```
 
 The compiler owns cross-contract validation and normalization:
@@ -158,20 +158,20 @@ The compiler owns cross-contract validation and normalization:
 - Dashboard `semantic_model` references resolve to loaded semantic models.
 - Dashboard fields, measures, filters, tables, and visuals resolve against the semantic model.
 - Legacy product vocabulary such as metric views is rejected at the boundary.
-- The compiler produces a runtime workspace that dashboard, analytics, deployment, workspace UI, APIs, and agent tools can consume without re-parsing YAML.
-- The compiler produces the asset graph. Deployment, UI, API, agents, and storage adapters must not rediscover lineage by walking semantic or dashboard internals.
+- The compiler produces a runtime workspace that dashboard, analytics, serving state, workspace UI, APIs, and agent tools can consume without re-parsing YAML.
+- The compiler produces the asset graph. Serving state, UI, API, agents, and storage adapters must not rediscover lineage by walking semantic or dashboard internals.
 
-Capability packages own their local contracts and validation. The compiler owns validation that spans multiple contracts. Deployment validation should call the compiler instead of importing semantic/dashboard internals directly.
+Capability packages own their local contracts and validation. The compiler owns validation that spans multiple contracts. Serving state validation should call the compiler instead of importing semantic/dashboard internals directly.
 
 Asset graph rules:
 
 - Every authored object that users can discover, govern, diff, or trace is an asset.
-- Each asset has a stable logical identity independent of deployment, such as `semantic_model:olist` or `visual:executive-sales.revenue`.
-- Each deployment stores immutable asset snapshots tied to the deployment and source bundle digest.
-- Asset snapshot IDs may be deployment-scoped. Logical asset IDs must be stable across deployments.
+- Each asset has a stable logical identity independent of serving state, such as `semantic_model:olist` or `visual:executive-sales.revenue`.
+- Each publish stores immutable asset snapshots tied to the serving state and source bundle digest.
+- Asset snapshot IDs may be serving-state-scoped. Logical asset IDs must be stable across publishes.
 - Asset payloads are explicit, versioned projections such as `semantic_model.v1`, `model_table.v1`, `measure.v1`, `dashboard.v1`, and `visual.v1`.
 - Asset payloads must not be raw `json.Marshal` output of arbitrary Go structs. Persisted payload shape changes through payload versions, not incidental Go field changes.
-- The full authored YAML remains in the deployment artifact. The asset graph stores the metadata needed for catalog views, search, lineage, diffs, policy, API responses, and agent context.
+- The full authored YAML remains in the serving-state artifact. The asset graph stores the metadata needed for catalog views, search, lineage, diffs, policy, API responses, and agent context.
 - Read paths may load asset snapshots. They must not repair, migrate, or reinterpret stale graph shapes during ordinary HTTP requests.
 
 ## Source and Connector Boundaries
@@ -191,8 +191,8 @@ Authored YAML should describe what source to read and under which governed conne
 Start with a flat capability package:
 
 ```text
-internal/deployment/
-  deployment.go
+internal/servingstate/
+  serving state.go
   activate.go
   validate.go
   repository.go
@@ -204,8 +204,8 @@ Use clear files before creating subpackages. A file should usually represent one
 When the package grows, split by workflow or adapter. Do this because dependencies, tests, or workflows diverge, not because every use case needs a subpackage on day one:
 
 ```text
-internal/deployment/
-  deployment.go
+internal/servingstate/
+  serving state.go
   repository.go
   errors.go
   activate/
@@ -222,7 +222,7 @@ internal/deployment/
     handlers.go
 ```
 
-This keeps the default Go experience simple while still giving large areas room to breathe. A small capability can keep `deployment.Activate` or `deployment.Activator` in the root package until there is real pressure to move to `deployment/activate`.
+This keeps the default Go experience simple while still giving large areas room to breathe. A small capability can keep `servingstate.Activate` or `servingstate.Activator` in the root package until there is real pressure to move to `servingstate/activate`.
 
 ## Domain Code
 
@@ -248,15 +248,15 @@ Domain code should not contain:
 Example:
 
 ```go
-type Deployment struct {
+type State struct {
     ID          ID
     WorkspaceID WorkspaceID
     Status      Status
     Digest      Digest
 }
 
-func (d Deployment) CanActivate() bool {
-    return d.Status == Validated || d.Status == Inactive || d.Status == Active
+func (s State) CanActivate() bool {
+    return s.Status == Validated || s.Status == Inactive || s.Status == Active
 }
 ```
 
@@ -268,8 +268,8 @@ Good:
 
 ```go
 type Repository interface {
-    ByID(ctx context.Context, id ID) (Deployment, error)
-    Save(ctx context.Context, deployment Deployment) error
+    ByID(ctx context.Context, id ID) (State, error)
+    Save(ctx context.Context, state State) error
 }
 ```
 
@@ -279,8 +279,8 @@ Good when the use case needs a very specific view:
 package activate
 
 type Repository interface {
-    ByID(ctx context.Context, id deployment.ID) (deployment.Deployment, error)
-    Activate(ctx context.Context, workspaceID deployment.WorkspaceID, deploymentID deployment.ID) error
+    ByID(ctx context.Context, id servingstate.ID) (servingstate.State, error)
+    Activate(ctx context.Context, workspaceID servingstate.WorkspaceID, servingStateID servingstate.ID) error
 }
 ```
 
@@ -302,17 +302,17 @@ Interface ownership rule:
 For example, activation-specific dependencies should live beside the activation workflow:
 
 ```text
-deployment/activate.Repository
-deployment/activate.RuntimeActivator
+servingstate/activate.Repository
+servingstate/activate.RuntimeActivator
 ```
 
 Shared concepts stay in the capability root:
 
 ```text
-deployment.Deployment
-deployment.Status
-deployment.Artifact
-deployment.Repository
+servingstate.State
+servingstate.Status
+servingstate.Artifact
+servingstate.Repository
 ```
 
 ## Application Services
@@ -322,8 +322,8 @@ Application services orchestrate use cases. They are not dumping grounds.
 Prefer focused use-case services:
 
 ```text
-deployment/activate.Service
-deployment/validate.Service
+servingstate/activate.Service
+servingstate/validate.Service
 access/grant.Service
 dashboard/stream.Service
 analytics/materialize.Service
@@ -332,7 +332,7 @@ analytics/materialize.Service
 Avoid one object that accumulates every workflow:
 
 ```text
-deployment.Service
+servingstate.Service
   Create
   Upload
   Validate
@@ -376,9 +376,9 @@ Adapters translate between external systems and capability code.
 Examples:
 
 ```text
-deployment/http        HTTP request/response translation
-deployment/sqlite      sqlc/SQLite persistence adapter
-deployment/filesystem  artifact storage and bundle files
+servingstate/http        HTTP request/response translation
+servingstate/sqlite      sqlc/SQLite persistence adapter
+servingstate/filesystem  artifact storage and bundle files
 analytics/duckdb       DuckDB execution
 dashboard/datastar     signal patch translation
 agent/openai           model API adapter
@@ -450,7 +450,7 @@ Avoid a single cross-capability `internal/api/http` package. It would become the
 workspace/http.Handler
 dashboard/http.Handler
 analytics/query/http.Handler
-deployment/http.Handler
+servingstate/http.Handler
 access/http.Handler
 agent/http.Handler
 ```
@@ -466,30 +466,30 @@ Long-term rules:
 - Generated sqlc code should be private to SQLite adapter packages or a narrow `platform/sqlite` infrastructure package.
 - `platform.Store` should not expose raw `Queries()` to handlers, services, runtime managers, or domain code.
 - `access` owns roles, permissions, and authorization decisions.
-- `deployment`, `workspace`, `access`, and `agent` each get capability-shaped repositories over the SQLite control plane.
+- `servingstate`, `workspace`, `access`, and `agent` each get capability-shaped repositories over the SQLite control plane.
 - Composition code may wire SQLite implementations into use cases, but business workflows should not depend on sqlc row types or transaction types.
 
-`platform` can remain as low-level infrastructure, migrations, or shared SQLite setup. It should not be the place where workspace, deployment, access, sessions, assets, and agent business workflows accumulate.
+`platform` can remain as low-level infrastructure, migrations, or shared SQLite setup. It should not be the place where workspace, serving state, access, sessions, assets, and agent business workflows accumulate.
 
 ## Active Runtime Host
 
-The active workspace runtime lifecycle needs a small explicit owner. It should not be absorbed wholesale by deployment, analytics, dashboard, or composition code.
+The active workspace runtime lifecycle needs a small explicit owner. It should not be absorbed wholesale by serving state, analytics, dashboard, or composition code.
 
 Long-term responsibilities:
 
-- Track the active deployment/runtime for a workspace.
+- Track the active servingstate/runtime for a workspace.
 - Prepare a candidate runtime before activation is committed.
-- Atomically swap the active runtime after deployment activation succeeds.
+- Atomically swap the active runtime after serving state activation succeeds.
 - Close replaced runtimes safely.
 - Expose typed runtime ports to dashboard and agent use cases.
 
 Boundary rules:
 
-- Deployment requests activation through a runtime host port.
+- Serving state requests activation through a runtime host port.
 - Analytics prepares executable engines and query/materialization services.
 - Dashboard queries through typed analytics ports exposed by the active runtime.
-- Composition wires the runtime host, deployment repositories, artifact store, and analytics runtime factory.
-- The runtime host must not own deployment status transitions, semantic query planning, dashboard patch construction, or sqlc persistence.
+- Composition wires the runtime host, serving state repositories, artifact store, and analytics runtime factory.
+- The runtime host must not own serving state status transitions, semantic query planning, dashboard patch construction, or sqlc persistence.
 
 ## Composition Root
 
@@ -525,7 +525,7 @@ HTTP handlers should be thin:
 - Translate the result into HTML, JSON, redirects, or signal patches.
 - Map errors to status codes.
 
-Handlers should not own business workflows such as deployment activation, workspace access mutation, artifact validation, or dashboard query orchestration.
+Handlers should not own business workflows such as serving state activation, workspace access mutation, artifact validation, or dashboard query orchestration.
 
 Datastar-specific logic should live in adapter code near dashboard/workspace capabilities rather than leaking across domain or analytics code.
 
@@ -579,8 +579,8 @@ Repositories should be split by capability and by aggregate/use case when needed
 Good:
 
 ```text
-deployment.Repository
-deployment.ArtifactRepository
+servingstate.Repository
+servingstate.ArtifactRepository
 access.RoleBindingRepository
 agent.ConversationRepository
 workspace.AssetRepository
@@ -589,30 +589,30 @@ workspace.AssetRepository
 SQLite implementations can live under adapter subpackages:
 
 ```text
-deployment/sqlite.Repository
+servingstate/sqlite.Repository
 access/sqlite.RoleBindingRepository
 agent/sqlite.ConversationRepository
 ```
 
 Repository implementations may use sqlc. Domain and application code should not.
 
-## Deployment Boundaries
+## Serving state Boundaries
 
-Deployment owns the lifecycle of published workspace artifacts:
+Serving state owns the lifecycle of published workspace artifacts:
 
 - Bundle envelope and manifest.
 - Artifact identity and digest.
-- Deployment status transitions.
+- Serving state status transitions.
 - Upload, validation, activation, rollback, and failure marking.
-- Persistence of compiler-produced asset snapshots for each deployment.
+- Persistence of compiler-produced asset snapshots for each serving state.
 
-Deployment should not walk semantic/dashboard internals directly. It should depend on ports:
+Serving state should not walk semantic/dashboard internals directly. It should depend on ports:
 
 - A workspace compiler for contract validation, normalization, and asset graph output.
 - An analytics runtime factory for preparing a runtime from a compiled artifact.
-- Capability repositories for deployment and artifact persistence.
+- Capability repositories for serving state and artifact persistence.
 
-Runtime activation should prepare analytics runtime through a port and commit deployment state through deployment repositories. It should not construct DuckDB services or call sqlc queries directly.
+Runtime activation should prepare analytics runtime through a port and commit serving state state through serving state repositories. It should not construct DuckDB services or call sqlc queries directly.
 
 ## Scaling Laws
 
@@ -645,18 +645,18 @@ Signals:
 
 ### Split by Use Case Before Layer
 
-When `deployment/service.go` grows, prefer:
+When `servingstate/service.go` grows, prefer:
 
 ```text
-deployment/activate/
-deployment/validate/
-deployment/upload/
+servingstate/activate/
+servingstate/validate/
+servingstate/upload/
 ```
 
 over:
 
 ```text
-deployment/services/
+servingstate/services/
 ```
 
 Use-case packages are easier to reason about than generic layer packages.
@@ -695,7 +695,7 @@ If a package starts using the same nouns to mean different things, split or rena
 
 Examples:
 
-- Dashboard asset vs deployment artifact.
+- Dashboard asset vs serving state artifact.
 - Workspace role vs provider identity.
 - Query filter vs UI filter signal.
 
@@ -727,7 +727,7 @@ Use cohesion, dependency direction, and test friction as the real signals.
 Prefer business names:
 
 ```text
-deployment
+servingstate
 workspace
 access
 analytics
@@ -770,13 +770,13 @@ helpers
 
 These names are acceptable inside a capability only when they stay small and specific.
 
-## Example: Deployment Activation
+## Example: Serving state Activation
 
 Target shape:
 
 ```text
-internal/deployment/
-  deployment.go
+internal/servingstate/
+  state.go
   repository.go
   activate/
     service.go
@@ -791,14 +791,14 @@ internal/deployment/
 Flow:
 
 ```text
-deployment/http.Handler
-    -> deployment/activate.Service
+servingstate/http.Handler
+    -> servingstate/activate.Service
         -> activate.Repository
         -> activate.RuntimeActivator
     <- activate.Result
 ```
 
-The handler knows HTTP. The service knows the activation workflow. The repository knows SQLite. The runtime activator knows how to prepare and commit the active DuckDB runtime. The domain knows what deployment states are valid.
+The handler knows HTTP. The service knows the activation workflow. The repository knows SQLite. The runtime activator knows how to prepare and commit the active DuckDB runtime. The domain knows which serving-state transitions are valid.
 
 ## Example: Dashboard Updates
 
@@ -854,7 +854,7 @@ Primary migration target:
 
 Other good candidates:
 
-- Deployment activation and validation.
+- Serving state activation and validation.
 - Workspace asset listing and access view shaping.
 - RBAC grant/revoke/authorize workflows.
 - Dashboard command handling and update streaming.

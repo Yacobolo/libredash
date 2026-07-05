@@ -23,7 +23,7 @@ const emptyStorage: AdminStorageSignal = {
   warnings: [],
   tables: [],
   snapshots: [],
-  deployments: [],
+  servingStates: [],
   selectedKey: '',
   selectedTable: null,
 }
@@ -50,7 +50,7 @@ type DatabaseSelection = {
 }
 
 type TableDetailTab = 'schema' | 'files' | 'history'
-type CatalogDetailTab = 'schemas' | 'deployments' | 'snapshots'
+type CatalogDetailTab = 'schemas' | 'servingStates' | 'snapshots'
 
 class StorageExplorer extends LitElement {
   @property({ converter: jsonAttribute<AdminStorageSignal>(emptyStorage) }) storage: AdminStorageSignal = emptyStorage
@@ -249,18 +249,18 @@ class StorageExplorer extends LitElement {
       <div class="storage-detail-body">
         <div class="storage-tabs" role="tablist" aria-label="Catalog metadata">
           ${this.renderCatalogTabButton('schemas', 'Schemas', database.schemas.length)}
-          ${this.renderCatalogTabButton('deployments', 'Deployments', storage.deployments?.length ?? 0)}
+          ${this.renderCatalogTabButton('servingStates', 'Serving states', storage.servingStates?.length ?? 0)}
           ${this.renderCatalogTabButton('snapshots', 'Snapshots', storage.snapshots?.length ?? 0)}
         </div>
         <div class="storage-tab-panel" role="tabpanel">
-          ${this.catalogDetailTab === 'deployments'
+          ${this.catalogDetailTab === 'servingStates'
             ? html`
               <div class="storage-columns">
                 <div class="storage-columns-header">
-                  <h3>Active deployments</h3>
+                  <h3>Active serving states</h3>
                 </div>
                 <div class="storage-column-table-wrap">
-                  <ld-record-table .table=${this.deploymentsTable(storage.deployments ?? [])}></ld-record-table>
+                  <ld-record-table .table=${this.servingStatesTable(storage.servingStates ?? [])}></ld-record-table>
                 </div>
               </div>
             `
@@ -612,25 +612,25 @@ class StorageExplorer extends LitElement {
     }
   }
 
-  private deploymentsTable(deployments: NonNullable<AdminStorageSignal['deployments']>): RecordTableSignal {
+  private servingStatesTable(servingStates: NonNullable<AdminStorageSignal['servingStates']>): RecordTableSignal {
     return {
       columns: [
         { id: 'workspace', header: 'Workspace', kind: 'code', width: '160px' },
         { id: 'environment', header: 'Environment', width: '130px' },
-        { id: 'deployment', header: 'Deployment', kind: 'code', width: '220px' },
+        { id: 'servingState', header: 'Serving state', kind: 'code', width: '220px' },
         { id: 'status', header: 'Status', width: '120px' },
         { id: 'snapshot', header: 'Snapshot', kind: 'number', align: 'right', width: '120px' },
         { id: 'active', header: 'Active', width: '100px' },
       ],
-      rows: deployments.map((deployment) => ({
-        workspace: label(deployment.workspaceId),
-        environment: label(deployment.environment),
-        deployment: label(deployment.deploymentId),
-        status: label(deployment.status),
-        snapshot: deployment.snapshotId || '-',
-        active: deployment.active ? 'Yes' : 'No',
+      rows: servingStates.map((servingState) => ({
+        workspace: label(servingState.workspaceId),
+        environment: label(servingState.environment),
+        servingState: label(servingState.servingStateId),
+        status: label(servingState.status),
+        snapshot: servingState.snapshotId || '-',
+        active: servingState.active ? 'Yes' : 'No',
       })),
-      empty: 'No deployments reference this snapshot.',
+      empty: 'No serving states reference this snapshot.',
       minWidth: '860px',
     }
   }
@@ -642,7 +642,7 @@ class StorageExplorer extends LitElement {
         { id: 'time', header: 'Time', width: '220px' },
         { id: 'version', header: 'Schema version', kind: 'number', align: 'right', width: '150px' },
         { id: 'protected', header: 'Protected', width: '110px' },
-        { id: 'deployments', header: 'Deployments', kind: 'number', align: 'right', width: '130px' },
+        { id: 'servingStates', header: 'Serving states', kind: 'number', align: 'right', width: '150px' },
         { id: 'message', header: 'Message', width: '260px' },
       ],
       rows: snapshots.map((snapshot) => ({
@@ -650,7 +650,7 @@ class StorageExplorer extends LitElement {
         time: label(snapshot.time),
         version: snapshot.schemaVersion,
         protected: snapshot.protected ? 'Yes' : 'No',
-        deployments: snapshot.deploymentCount,
+        servingStates: snapshot.servingStateCount,
         message: label(snapshot.message || snapshot.author || snapshot.changes),
       })),
       empty: 'No DuckLake snapshots recorded.',

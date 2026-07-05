@@ -17,14 +17,14 @@ SELECT
   w.id,
   CASE WHEN a.title IS NOT NULL AND a.title <> '' THEN a.title ELSE w.title END AS title,
   CASE WHEN a.description IS NOT NULL THEN a.description ELSE w.description END AS description,
-  COALESCE(active.deployment_id, '') AS active_deployment_id,
+  COALESCE(active.serving_state_id, '') AS active_serving_state_id,
   w.created_at,
   w.updated_at
 FROM workspaces w
-LEFT JOIN workspace_active_deployments active
+LEFT JOIN workspace_active_serving_states active
   ON active.workspace_id = w.id AND active.environment = ?
 LEFT JOIN assets a
-  ON a.deployment_id = active.deployment_id
+  ON a.serving_state_id = active.serving_state_id
  AND a.asset_type = 'catalog'
  AND a.logical_asset_id = 'catalog:' || w.id
 ORDER BY w.created_at;
@@ -34,53 +34,53 @@ SELECT
   w.id,
   CASE WHEN a.title IS NOT NULL AND a.title <> '' THEN a.title ELSE w.title END AS title,
   CASE WHEN a.description IS NOT NULL THEN a.description ELSE w.description END AS description,
-  COALESCE(active.deployment_id, '') AS active_deployment_id,
+  COALESCE(active.serving_state_id, '') AS active_serving_state_id,
   w.created_at,
   w.updated_at
 FROM workspaces w
-LEFT JOIN workspace_active_deployments active
+LEFT JOIN workspace_active_serving_states active
   ON active.workspace_id = w.id AND active.environment = ?
 LEFT JOIN assets a
-  ON a.deployment_id = active.deployment_id
+  ON a.serving_state_id = active.serving_state_id
  AND a.asset_type = 'catalog'
  AND a.logical_asset_id = 'catalog:' || w.id
 WHERE w.id = ?;
 
--- name: SetActiveDeployment :exec
-INSERT INTO workspace_active_deployments (workspace_id, environment, deployment_id, updated_at)
+-- name: SetActiveServingState :exec
+INSERT INTO workspace_active_serving_states (workspace_id, environment, serving_state_id, updated_at)
 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(workspace_id, environment) DO UPDATE SET
-  deployment_id = excluded.deployment_id,
+  serving_state_id = excluded.serving_state_id,
   updated_at = CURRENT_TIMESTAMP;
 
--- name: CreateDeployment :exec
-INSERT INTO deployments (id, workspace_id, environment, status, source, created_by)
+-- name: CreateServingState :exec
+INSERT INTO serving_states (id, workspace_id, environment, status, source, created_by)
 VALUES (?, ?, ?, ?, ?, ?);
 
--- name: GetDeployment :one
-SELECT * FROM deployments WHERE id = ?;
+-- name: GetServingState :one
+SELECT * FROM serving_states WHERE id = ?;
 
--- name: GetActiveDeployment :one
+-- name: GetActiveServingState :one
 SELECT d.*
-FROM deployments d
-JOIN workspace_active_deployments active ON active.deployment_id = d.id
+FROM serving_states d
+JOIN workspace_active_serving_states active ON active.serving_state_id = d.id
 WHERE active.workspace_id = ? AND active.environment = ?;
 
--- name: ListDeployments :many
-SELECT * FROM deployments
+-- name: ListServingStates :many
+SELECT * FROM serving_states
 WHERE workspace_id = ? AND environment = ?
 ORDER BY created_at DESC;
 
 -- name: ListReferencedDuckLakeSnapshots :many
 SELECT DISTINCT ducklake_snapshot_id
-FROM deployments
+FROM serving_states
 WHERE ducklake_snapshot_id > 0
   AND status = 'active'
 ORDER BY ducklake_snapshot_id;
 
 -- name: ListActiveDuckLakeSnapshots :many
 SELECT DISTINCT ducklake_snapshot_id
-FROM deployments
+FROM serving_states
 WHERE ducklake_snapshot_id > 0
   AND status = 'active'
 ORDER BY ducklake_snapshot_id;
@@ -93,66 +93,65 @@ WHERE ducklake_snapshot_id > 0
   AND expires_at > CURRENT_TIMESTAMP
 ORDER BY ducklake_snapshot_id;
 
--- name: ExpireInactiveDeployments :exec
-UPDATE deployments
+-- name: ExpireInactiveServingStates :exec
+UPDATE serving_states
 SET status = 'expired', error = ''
 WHERE status = 'inactive';
 
--- name: MarkOtherDeploymentsDraining :exec
-UPDATE deployments
+-- name: MarkOtherServingStatesDraining :exec
+UPDATE serving_states
 SET status = 'draining',
     superseded_at = CURRENT_TIMESTAMP,
-    cleanup_after = NULL,
     error = ''
 WHERE workspace_id = ?
   AND environment = ?
   AND id <> ?
   AND status = 'active';
 
--- name: MarkDrainingDeploymentsDeleteScheduled :exec
-UPDATE deployments
+-- name: MarkDrainingServingStatesDeleteScheduled :exec
+UPDATE serving_states
 SET status = 'delete_scheduled', error = ''
 WHERE status = 'draining';
 
--- name: ScheduleExpiredDeploymentDeletion :exec
-UPDATE deployments
+-- name: ScheduleExpiredServingStateDeletion :exec
+UPDATE serving_states
 SET status = 'delete_scheduled', error = ''
 WHERE status = 'expired';
 
--- name: MarkDeleteScheduledDeploymentsDeleted :exec
-UPDATE deployments
+-- name: MarkDeleteScheduledServingStatesDeleted :exec
+UPDATE serving_states
 SET status = 'deleted', error = ''
 WHERE status = 'delete_scheduled';
 
--- name: UpdateDeploymentValidated :exec
-UPDATE deployments
+-- name: UpdateServingStateValidated :exec
+UPDATE serving_states
 SET status = ?, digest = ?, manifest_json = ?, error = ''
 WHERE id = ?;
 
--- name: UpdateDeploymentDuckLakeSnapshot :exec
-UPDATE deployments
+-- name: UpdateServingStateDuckLakeSnapshot :exec
+UPDATE serving_states
 SET ducklake_snapshot_id = ?
 WHERE id = ?;
 
--- name: UpdateDeploymentStatus :exec
-UPDATE deployments
+-- name: UpdateServingStateStatus :exec
+UPDATE serving_states
 SET status = ?, error = ?
 WHERE id = ?;
 
--- name: MarkDeploymentActive :exec
-UPDATE deployments
+-- name: MarkServingStateActive :exec
+UPDATE serving_states
 SET status = 'active', activated_at = CURRENT_TIMESTAMP, error = ''
 WHERE id = ?;
 
--- name: MarkOtherDeploymentsInactive :exec
-UPDATE deployments
+-- name: MarkOtherServingStatesInactive :exec
+UPDATE serving_states
 SET status = 'inactive'
 WHERE workspace_id = ? AND environment = ? AND id <> ? AND status = 'active';
 
--- name: InsertDeploymentArtifact :exec
-INSERT INTO deployment_artifacts (id, deployment_id, workspace_id, environment, digest, format, path, data_root, manifest_json, size_bytes)
+-- name: InsertServingStateArtifact :exec
+INSERT INTO serving_state_artifacts (id, serving_state_id, workspace_id, environment, digest, format, path, data_root, manifest_json, size_bytes)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(deployment_id) DO UPDATE SET
+ON CONFLICT(serving_state_id) DO UPDATE SET
   environment = excluded.environment,
   digest = excluded.digest,
   format = excluded.format,
@@ -161,11 +160,11 @@ ON CONFLICT(deployment_id) DO UPDATE SET
   manifest_json = excluded.manifest_json,
   size_bytes = excluded.size_bytes;
 
--- name: GetArtifactByDeployment :one
-SELECT * FROM deployment_artifacts WHERE deployment_id = ?;
+-- name: GetArtifactByServingState :one
+SELECT * FROM serving_state_artifacts WHERE serving_state_id = ?;
 
 -- name: CreateQuerySnapshotLease :exec
-INSERT INTO query_snapshot_leases (id, workspace_id, environment, deployment_id, ducklake_snapshot_id, owner_id, expires_at)
+INSERT INTO query_snapshot_leases (id, workspace_id, environment, serving_state_id, ducklake_snapshot_id, owner_id, expires_at)
 VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: ReleaseQuerySnapshotLease :exec
@@ -185,29 +184,29 @@ SET released_at = CURRENT_TIMESTAMP
 WHERE released_at IS NULL
   AND expires_at <= CURRENT_TIMESTAMP;
 
--- name: ClearAssetsForDeployment :exec
-DELETE FROM assets WHERE deployment_id = ?;
+-- name: ClearAssetsForServingState :exec
+DELETE FROM assets WHERE serving_state_id = ?;
 
--- name: ClearAssetEdgesForDeployment :exec
-DELETE FROM asset_edges WHERE deployment_id = ?;
+-- name: ClearAssetEdgesForServingState :exec
+DELETE FROM asset_edges WHERE serving_state_id = ?;
 
 -- name: InsertAsset :exec
-INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, source_file, payload_schema, payload_json, content_hash)
+INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, serving_state_id, asset_type, asset_key, parent_logical_asset_id, title, description, source_file, payload_schema, payload_json, content_hash)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertAssetEdge :exec
-INSERT INTO asset_edges (id, workspace_id, deployment_id, from_logical_asset_id, to_logical_asset_id, edge_type)
+INSERT INTO asset_edges (id, workspace_id, serving_state_id, from_logical_asset_id, to_logical_asset_id, edge_type)
 VALUES (?, ?, ?, ?, ?, ?);
 
--- name: ListAssetsByDeployment :many
-SELECT * FROM assets WHERE deployment_id = ? ORDER BY asset_type, asset_key;
+-- name: ListAssetsByServingState :many
+SELECT * FROM assets WHERE serving_state_id = ? ORDER BY asset_type, asset_key;
 
--- name: ListAssetEdgesByDeployment :many
-SELECT * FROM asset_edges WHERE deployment_id = ? ORDER BY edge_type, from_logical_asset_id, to_logical_asset_id;
+-- name: ListAssetEdgesByServingState :many
+SELECT * FROM asset_edges WHERE serving_state_id = ? ORDER BY edge_type, from_logical_asset_id, to_logical_asset_id;
 
 -- name: ListAssetVersions :many
 SELECT
-  d.id AS deployment_id,
+  d.id AS serving_state_id,
   d.workspace_id,
   d.environment,
   d.status,
@@ -217,13 +216,38 @@ SELECT
   d.activated_at,
   a.snapshot_id,
   a.logical_asset_id,
+  a.source_file,
   a.content_hash
-FROM deployments d
-JOIN assets a ON a.deployment_id = d.id
+FROM serving_states d
+JOIN assets a ON a.serving_state_id = d.id
 WHERE d.workspace_id = ?
   AND d.environment = ?
   AND a.logical_asset_id = ?
+  AND d.source = 'publish'
   AND d.status IN ('active', 'draining', 'inactive', 'validated')
+  AND NOT EXISTS (
+    SELECT 1
+    FROM serving_states newer
+    JOIN assets newer_asset ON newer_asset.serving_state_id = newer.id
+    WHERE newer.workspace_id = d.workspace_id
+      AND newer.environment = d.environment
+      AND newer.source = 'publish'
+      AND newer.status IN ('active', 'draining', 'inactive', 'validated')
+      AND newer_asset.logical_asset_id = a.logical_asset_id
+      AND newer_asset.content_hash = a.content_hash
+      AND (
+        COALESCE(newer.activated_at, newer.created_at) > COALESCE(d.activated_at, d.created_at)
+        OR (
+          COALESCE(newer.activated_at, newer.created_at) = COALESCE(d.activated_at, d.created_at)
+          AND newer.created_at > d.created_at
+        )
+        OR (
+          COALESCE(newer.activated_at, newer.created_at) = COALESCE(d.activated_at, d.created_at)
+          AND newer.created_at = d.created_at
+          AND newer.id > d.id
+        )
+      )
+  )
 ORDER BY
   COALESCE(d.activated_at, d.created_at) DESC,
   d.created_at DESC,

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 )
@@ -16,8 +16,8 @@ import (
 func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
-	deploymentID := deployment.ID("dep_ops")
-	manifest, _, err := PackProject(projectPath, "operations", deploymentID, &bundle)
+	servingStateID := servingstate.ID("dep_ops")
+	manifest, _, err := PackProject(projectPath, "operations", servingStateID, &bundle)
 	if err != nil {
 		t.Fatalf("PackProject() error = %v", err)
 	}
@@ -32,7 +32,7 @@ func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	if err := os.WriteFile(path, bundle.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	validation, err := ValidateArtifact(path, deployment.WorkspaceID("operations"), deploymentID)
+	validation, err := ValidateArtifact(path, servingstate.WorkspaceID("operations"), servingStateID)
 	if err != nil {
 		t.Fatalf("ValidateArtifact() error = %v", err)
 	}
@@ -63,8 +63,8 @@ func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 func TestValidateArtifactWithDiscoveryPersistsValidatedCompiledGraph(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
-	deploymentID := deployment.ID("dep_discovered")
-	if _, _, err := PackProject(projectPath, "sales", deploymentID, &bundle); err != nil {
+	servingStateID := servingstate.ID("dep_discovered")
+	if _, _, err := PackProject(projectPath, "sales", servingStateID, &bundle); err != nil {
 		t.Fatalf("PackProject() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
@@ -76,7 +76,7 @@ func TestValidateArtifactWithDiscoveryPersistsValidatedCompiledGraph(t *testing.
 		t.Skipf("Olist data is not available: %v", err)
 	}
 
-	validation, err := ValidateArtifactWithOptions(path, "sales", deploymentID, ValidateOptions{DataDir: dataDir})
+	validation, err := ValidateArtifactWithOptions(path, "sales", servingStateID, ValidateOptions{DataDir: dataDir})
 	if err != nil {
 		t.Fatalf("ValidateArtifactWithOptions() error = %v", err)
 	}
@@ -105,14 +105,14 @@ func TestValidateArtifactWithDiscoveryPersistsValidatedCompiledGraph(t *testing.
 func TestValidateArtifactRejectsWrongDeploymentCompiledGraph(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
-	if _, _, err := PackProject(projectPath, "operations", deployment.ID("dep_ops"), &bundle); err != nil {
+	if _, _, err := PackProject(projectPath, "operations", servingstate.ID("dep_ops"), &bundle); err != nil {
 		t.Fatalf("PackProject() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
 	if err := os.WriteFile(path, bundle.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := ValidateArtifact(path, deployment.WorkspaceID("operations"), deployment.ID("dep_other"))
+	_, err := ValidateArtifact(path, servingstate.WorkspaceID("operations"), servingstate.ID("dep_other"))
 	if err == nil {
 		t.Fatal("ValidateArtifact() error = nil, want deployment mismatch")
 	}
@@ -121,7 +121,7 @@ func TestValidateArtifactRejectsWrongDeploymentCompiledGraph(t *testing.T) {
 func TestValidateArtifactRejectsMissingOrMismatchedEnvironment(t *testing.T) {
 	tests := []struct {
 		name        string
-		environment deployment.Environment
+		environment servingstate.Environment
 		mutate      func(*CompiledWorkspaceArtifact, *Manifest)
 	}{
 		{
@@ -177,11 +177,11 @@ func digestCompiledForTest(t *testing.T, compiled CompiledWorkspaceArtifact) str
 	return digestBytes(raw)
 }
 
-func packedProjectArtifact(t *testing.T, workspaceID string, environment deployment.Environment, deploymentID deployment.ID) string {
+func packedProjectArtifact(t *testing.T, workspaceID string, environment servingstate.Environment, servingStateID servingstate.ID) string {
 	t.Helper()
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
-	if _, _, err := PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, environment, deploymentID, workspace.AssetGraph{}, &bundle); err != nil {
+	if _, _, err := PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, environment, servingStateID, workspace.AssetGraph{}, &bundle); err != nil {
 		t.Fatalf("PackProjectAgainstGraphForEnvironment() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
@@ -243,7 +243,7 @@ func mutateArtifactForTest(t *testing.T, path string, mutate func(*CompiledWorks
 func TestPackProjectRejectsUnknownWorkspace(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
-	_, _, err := PackProject(projectPath, "missing", deployment.ID("dep_missing"), &bundle)
+	_, _, err := PackProject(projectPath, "missing", servingstate.ID("dep_missing"), &bundle)
 	if err == nil {
 		t.Fatal("PackProject() error = nil, want unknown workspace error")
 	}
@@ -251,7 +251,7 @@ func TestPackProjectRejectsUnknownWorkspace(t *testing.T) {
 
 func TestPackProjectStoresActiveDeploymentPlanDiff(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
-	active, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{DeploymentID: workspace.DeploymentID("dep_active")})
+	active, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{ServingStateID: workspace.ServingStateID("dep_active")})
 	if err != nil {
 		t.Fatalf("CompileProject() error = %v", err)
 	}
@@ -271,17 +271,17 @@ func TestPackProjectStoresActiveDeploymentPlanDiff(t *testing.T) {
 		}
 	}
 	activeGraph.Assets = append(activeGraph.Assets, workspace.Asset{
-		ID:            "dashboard:operations.removed",
-		WorkspaceID:   "operations",
-		DeploymentID:  "dep_active",
-		Type:          workspace.AssetTypeDashboard,
-		Key:           "operations.removed",
-		PayloadSchema: workspace.PayloadSchemaForAssetType(workspace.AssetTypeDashboard),
-		ContentHash:   "removed",
+		ID:             "dashboard:operations.removed",
+		WorkspaceID:    "operations",
+		ServingStateID: "dep_active",
+		Type:           workspace.AssetTypeDashboard,
+		Key:            "operations.removed",
+		PayloadSchema:  workspace.PayloadSchemaForAssetType(workspace.AssetTypeDashboard),
+		ContentHash:    "removed",
 	})
 
 	var bundle bytes.Buffer
-	if _, _, err := PackProjectAgainstGraph(projectPath, "operations", deployment.ID("dep_ops"), activeGraph, &bundle); err != nil {
+	if _, _, err := PackProjectAgainstGraph(projectPath, "operations", servingstate.ID("dep_ops"), activeGraph, &bundle); err != nil {
 		t.Fatalf("PackProjectAgainstGraph() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
@@ -430,7 +430,7 @@ spec:
 	})
 
 	var bundle bytes.Buffer
-	if _, _, err := PackProject(projectPath, "sales", deployment.ID("dep_sales"), &bundle); err != nil {
+	if _, _, err := PackProject(projectPath, "sales", servingstate.ID("dep_sales"), &bundle); err != nil {
 		t.Fatalf("PackProject() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "artifact.tar.gz")

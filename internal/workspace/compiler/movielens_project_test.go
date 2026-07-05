@@ -10,7 +10,7 @@ import (
 func TestMovieLensExperimentProjectCompiles(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", "experiments", "movielens", "libredash.yaml")
 
-	compiled, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+	compiled, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 	if err != nil {
 		t.Fatalf("CompileProject(MovieLens) error = %v", err)
 	}
@@ -52,7 +52,7 @@ func TestMovieLensExperimentProjectCompiles(t *testing.T) {
 func TestMovieLensExperimentStaysOutOfDefaultProject(t *testing.T) {
 	defaultProjectPath := filepath.Join("..", "..", "..", "dashboards", "libredash.yaml")
 
-	compiled, err := CompileProject(defaultProjectPath, Options{DeploymentID: "dep_test"})
+	compiled, err := CompileProject(defaultProjectPath, Options{ServingStateID: "dep_test"})
 	if err != nil {
 		t.Fatalf("CompileProject(default) error = %v", err)
 	}

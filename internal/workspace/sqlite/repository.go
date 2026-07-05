@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
 	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
@@ -63,7 +63,7 @@ func (r *Repository) ListWithActiveMetadata(ctx context.Context, environment str
 	}
 	out := make([]workspace.Summary, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, mapWorkspaceWithActiveMetadata(row.ID, queryText(row.Title), queryText(row.Description), row.ActiveDeploymentID, row.CreatedAt, row.UpdatedAt))
+		out = append(out, mapWorkspaceWithActiveMetadata(row.ID, queryText(row.Title), queryText(row.Description), row.ActiveServingStateID, row.CreatedAt, row.UpdatedAt))
 	}
 	return out, nil
 }
@@ -76,13 +76,13 @@ func (r *Repository) ByIDWithActiveMetadata(ctx context.Context, id workspace.Wo
 	if err != nil {
 		return workspace.Summary{}, err
 	}
-	return mapWorkspaceWithActiveMetadata(row.ID, queryText(row.Title), queryText(row.Description), row.ActiveDeploymentID, row.CreatedAt, row.UpdatedAt), nil
+	return mapWorkspaceWithActiveMetadata(row.ID, queryText(row.Title), queryText(row.Description), row.ActiveServingStateID, row.CreatedAt, row.UpdatedAt), nil
 }
 
-func (r *Repository) ActiveDeploymentGraph(ctx context.Context, id workspace.WorkspaceID, environment string) (workspace.AssetGraph, bool, error) {
-	activeDeployment, err := r.q.GetActiveDeployment(ctx, platformdb.GetActiveDeploymentParams{
+func (r *Repository) ActiveServingStateGraph(ctx context.Context, id workspace.WorkspaceID, environment string) (workspace.AssetGraph, bool, error) {
+	activeServingState, err := r.q.GetActiveServingState(ctx, platformdb.GetActiveServingStateParams{
 		WorkspaceID: string(id),
-		Environment: string(deployment.NormalizeEnvironment(deployment.Environment(environment))),
+		Environment: string(servingstate.NormalizeEnvironment(servingstate.Environment(environment))),
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -90,11 +90,11 @@ func (r *Repository) ActiveDeploymentGraph(ctx context.Context, id workspace.Wor
 		}
 		return workspace.AssetGraph{}, false, err
 	}
-	assetRows, err := r.q.ListAssetsByDeployment(ctx, activeDeployment.ID)
+	assetRows, err := r.q.ListAssetsByServingState(ctx, activeServingState.ID)
 	if err != nil {
 		return workspace.AssetGraph{}, false, err
 	}
-	edgeRows, err := r.q.ListAssetEdgesByDeployment(ctx, activeDeployment.ID)
+	edgeRows, err := r.q.ListAssetEdgesByServingState(ctx, activeServingState.ID)
 	if err != nil {
 		return workspace.AssetGraph{}, false, err
 	}
@@ -114,7 +114,7 @@ func (r *Repository) ActiveDeploymentGraph(ctx context.Context, id workspace.Wor
 func (r *Repository) AssetVersions(ctx context.Context, workspaceID workspace.WorkspaceID, environment string, assetID workspace.AssetID) ([]workspace.AssetVersion, error) {
 	rows, err := r.q.ListAssetVersions(ctx, platformdb.ListAssetVersionsParams{
 		WorkspaceID:    string(workspaceID),
-		Environment:    string(deployment.NormalizeEnvironment(deployment.Environment(environment))),
+		Environment:    string(servingstate.NormalizeEnvironment(servingstate.Environment(environment))),
 		LogicalAssetID: string(assetID),
 	})
 	if err != nil {
@@ -123,16 +123,17 @@ func (r *Repository) AssetVersions(ctx context.Context, workspaceID workspace.Wo
 	versions := make([]workspace.AssetVersion, 0, len(rows))
 	for _, row := range rows {
 		version := workspace.AssetVersion{
-			DeploymentID: workspace.DeploymentID(row.DeploymentID),
-			WorkspaceID:  workspace.WorkspaceID(row.WorkspaceID),
-			Environment:  row.Environment,
-			Status:       row.Status,
-			Digest:       row.Digest,
-			CreatedBy:    row.CreatedBy,
-			CreatedAt:    row.CreatedAt,
-			SnapshotID:   workspace.AssetSnapshotID(row.SnapshotID),
-			AssetID:      workspace.AssetID(row.LogicalAssetID),
-			ContentHash:  row.ContentHash,
+			ServingStateID: workspace.ServingStateID(row.ServingStateID),
+			WorkspaceID:    workspace.WorkspaceID(row.WorkspaceID),
+			Environment:    row.Environment,
+			Status:         row.Status,
+			Digest:         row.Digest,
+			CreatedBy:      row.CreatedBy,
+			CreatedAt:      row.CreatedAt,
+			SnapshotID:     workspace.AssetSnapshotID(row.SnapshotID),
+			AssetID:        workspace.AssetID(row.LogicalAssetID),
+			SourceFile:     row.SourceFile,
+			ContentHash:    row.ContentHash,
 		}
 		if row.ActivatedAt.Valid {
 			version.ActivatedAt = row.ActivatedAt.String
@@ -143,7 +144,7 @@ func (r *Repository) AssetVersions(ctx context.Context, workspaceID workspace.Wo
 }
 
 func normalizedEnvironment(environment string) string {
-	return string(deployment.NormalizeEnvironment(deployment.Environment(environment)))
+	return string(servingstate.NormalizeEnvironment(servingstate.Environment(environment)))
 }
 
 func mapWorkspace(row platformdb.Workspace) workspace.Summary {
@@ -157,14 +158,14 @@ func mapWorkspace(row platformdb.Workspace) workspace.Summary {
 	return out
 }
 
-func mapWorkspaceWithActiveMetadata(id, title, description, activeDeploymentID, createdAt, updatedAt string) workspace.Summary {
+func mapWorkspaceWithActiveMetadata(id, title, description, activeServingStateID, createdAt, updatedAt string) workspace.Summary {
 	return workspace.Summary{
-		ID:                 workspace.WorkspaceID(id),
-		Title:              title,
-		Description:        description,
-		ActiveDeploymentID: workspace.DeploymentID(activeDeploymentID),
-		CreatedAt:          createdAt,
-		UpdatedAt:          updatedAt,
+		ID:                   workspace.WorkspaceID(id),
+		Title:                title,
+		Description:          description,
+		ActiveServingStateID: workspace.ServingStateID(activeServingStateID),
+		CreatedAt:            createdAt,
+		UpdatedAt:            updatedAt,
 	}
 }
 
@@ -183,29 +184,29 @@ func queryText(value any) string {
 
 func mapAsset(row platformdb.Asset) workspace.Asset {
 	return workspace.Asset{
-		ID:            workspace.AssetID(row.LogicalAssetID),
-		SnapshotID:    workspace.AssetSnapshotID(row.SnapshotID),
-		WorkspaceID:   workspace.WorkspaceID(row.WorkspaceID),
-		DeploymentID:  workspace.DeploymentID(row.DeploymentID),
-		Type:          workspace.AssetType(row.AssetType),
-		Key:           row.AssetKey,
-		ParentID:      workspace.AssetID(row.ParentLogicalAssetID),
-		Title:         row.Title,
-		Description:   row.Description,
-		SourceFile:    row.SourceFile,
-		PayloadSchema: row.PayloadSchema,
-		PayloadJSON:   row.PayloadJson,
-		ContentHash:   row.ContentHash,
+		ID:             workspace.AssetID(row.LogicalAssetID),
+		SnapshotID:     workspace.AssetSnapshotID(row.SnapshotID),
+		WorkspaceID:    workspace.WorkspaceID(row.WorkspaceID),
+		ServingStateID: workspace.ServingStateID(row.ServingStateID),
+		Type:           workspace.AssetType(row.AssetType),
+		Key:            row.AssetKey,
+		ParentID:       workspace.AssetID(row.ParentLogicalAssetID),
+		Title:          row.Title,
+		Description:    row.Description,
+		SourceFile:     row.SourceFile,
+		PayloadSchema:  row.PayloadSchema,
+		PayloadJSON:    row.PayloadJson,
+		ContentHash:    row.ContentHash,
 	}
 }
 
 func mapAssetEdge(row platformdb.AssetEdge) workspace.AssetEdge {
 	return workspace.AssetEdge{
-		ID:           workspace.AssetEdgeID(row.ID),
-		WorkspaceID:  workspace.WorkspaceID(row.WorkspaceID),
-		DeploymentID: workspace.DeploymentID(row.DeploymentID),
-		FromAssetID:  workspace.AssetID(row.FromLogicalAssetID),
-		ToAssetID:    workspace.AssetID(row.ToLogicalAssetID),
-		Type:         workspace.AssetEdgeType(row.EdgeType),
+		ID:             workspace.AssetEdgeID(row.ID),
+		WorkspaceID:    workspace.WorkspaceID(row.WorkspaceID),
+		ServingStateID: workspace.ServingStateID(row.ServingStateID),
+		FromAssetID:    workspace.AssetID(row.FromLogicalAssetID),
+		ToAssetID:      workspace.AssetID(row.ToLogicalAssetID),
+		Type:           workspace.AssetEdgeType(row.EdgeType),
 	}
 }

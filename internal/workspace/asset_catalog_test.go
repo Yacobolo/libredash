@@ -25,7 +25,7 @@ func TestAssetCatalogServiceReadsActiveDeployment(t *testing.T) {
 	}
 }
 
-func TestAssetCatalogServiceReturnsFalseWithoutActiveDeploymentGraph(t *testing.T) {
+func TestAssetCatalogServiceReturnsFalseWithoutActiveServingStateGraph(t *testing.T) {
 	catalog, ok, err := NewAssetCatalogService(fakeCatalogRepo{}).ActiveAssetCatalog(context.Background(), "test", "dev")
 	if err != nil {
 		t.Fatalf("ActiveAssetCatalog() error = %v", err)
@@ -53,7 +53,7 @@ func (r fakeCatalogRepo) ByID(context.Context, WorkspaceID) (Summary, error) {
 	return Summary{}, nil
 }
 
-func (r fakeCatalogRepo) ActiveDeploymentGraph(context.Context, WorkspaceID, string) (AssetGraph, bool, error) {
+func (r fakeCatalogRepo) ActiveServingStateGraph(context.Context, WorkspaceID, string) (AssetGraph, bool, error) {
 	return r.graph, r.ok, r.err
 }
 
@@ -61,9 +61,9 @@ func (r fakeCatalogRepo) AssetVersions(context.Context, WorkspaceID, string, Ass
 	return nil, r.err
 }
 
-func mustCatalogTestAsset(t *testing.T, workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType, key string) Asset {
+func mustCatalogTestAsset(t *testing.T, workspaceID WorkspaceID, servingStateID ServingStateID, typ AssetType, key string) Asset {
 	t.Helper()
-	asset, err := NewAsset(workspaceID, deploymentID, typ, key, "", key, "", PayloadSchemaForAssetType(typ), map[string]any{"key": key})
+	asset, err := NewAsset(workspaceID, servingStateID, typ, key, "", key, "", PayloadSchemaForAssetType(typ), map[string]any{"key": key})
 	if err != nil {
 		t.Fatalf("NewAsset(): %v", err)
 	}

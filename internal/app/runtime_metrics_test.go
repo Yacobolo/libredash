@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/deployment"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 )
 
 func TestRuntimeMetricsQueryDashboardUsesRuntimeLease(t *testing.T) {
@@ -73,7 +73,7 @@ func (l *recordingLease) Runtime() runtimehost.Runtime {
 	return l.runtime
 }
 
-func (l *recordingLease) DeploymentID() deployment.ID {
+func (l *recordingLease) ServingStateID() servingstate.ID {
 	return "dep_test"
 }
 

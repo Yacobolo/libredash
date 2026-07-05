@@ -31,23 +31,23 @@ INSERT OR IGNORE INTO permissions (name)
 VALUES
   ('workspace:read'),
   ('asset:read'),
-  ('deployment:read'),
-  ('deployment:write'),
-  ('deployment:activate'),
+  ('publish:read'),
+  ('publish:write'),
+  ('publish:activate'),
   ('rbac:read'),
   ('rbac:write'),
   ('agent:use'),
   ('agent:read'),
-  ('materialization:run'),
+  ('refresh:run'),
   ('audit:read'),
   ('token:manage');
 
 INSERT OR IGNORE INTO roles (id, name, permissions_json)
 VALUES
-  ('role_owner', 'owner', '["workspace:read","asset:read","deployment:read","deployment:write","deployment:activate","rbac:read","rbac:write","agent:use","agent:read","materialization:run","audit:read","token:manage"]'),
-  ('role_admin', 'admin', '["workspace:read","asset:read","deployment:read","deployment:write","deployment:activate","rbac:read","rbac:write","agent:use","agent:read","materialization:run","audit:read","token:manage"]'),
-  ('role_deployer', 'deployer', '["workspace:read","asset:read","deployment:read","deployment:write","deployment:activate","materialization:run"]'),
-  ('role_editor', 'editor', '["workspace:read","asset:read","agent:use","agent:read","materialization:run"]'),
+  ('role_owner', 'owner', '["workspace:read","asset:read","publish:read","publish:write","publish:activate","rbac:read","rbac:write","agent:use","agent:read","refresh:run","audit:read","token:manage"]'),
+  ('role_admin', 'admin', '["workspace:read","asset:read","publish:read","publish:write","publish:activate","rbac:read","rbac:write","agent:use","agent:read","refresh:run","audit:read","token:manage"]'),
+  ('role_deployer', 'deployer', '["workspace:read","asset:read","publish:read","publish:write","publish:activate","refresh:run"]'),
+  ('role_editor', 'editor', '["workspace:read","asset:read","agent:use","agent:read","refresh:run"]'),
   ('role_viewer', 'viewer', '["workspace:read","asset:read","agent:use","agent:read"]');
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_name)
@@ -56,14 +56,14 @@ FROM roles r
 JOIN permissions p ON p.name IN (
   'workspace:read',
   'asset:read',
-  'deployment:read',
-  'deployment:write',
-  'deployment:activate',
+  'publish:read',
+  'publish:write',
+  'publish:activate',
   'rbac:read',
   'rbac:write',
   'agent:use',
   'agent:read',
-  'materialization:run',
+  'refresh:run',
   'audit:read',
   'token:manage'
 )
@@ -75,17 +75,17 @@ FROM roles r
 JOIN permissions p ON p.name IN (
   'workspace:read',
   'asset:read',
-  'deployment:read',
-  'deployment:write',
-  'deployment:activate',
-  'materialization:run'
+  'publish:read',
+  'publish:write',
+  'publish:activate',
+  'refresh:run'
 )
 WHERE r.name = 'deployer';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_name)
 SELECT r.id, p.name
 FROM roles r
-JOIN permissions p ON p.name IN ('workspace:read', 'asset:read', 'agent:use', 'agent:read', 'materialization:run')
+JOIN permissions p ON p.name IN ('workspace:read', 'asset:read', 'agent:use', 'agent:read', 'refresh:run')
 WHERE r.name = 'editor';
 
 INSERT OR IGNORE INTO role_permissions (role_id, permission_name)

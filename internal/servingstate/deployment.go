@@ -1,4 +1,4 @@
-package deployment
+package servingstate
 
 import (
 	"errors"
@@ -7,7 +7,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
-var ErrNotFound = errors.New("deployment not found")
+var ErrNotFound = errors.New("serving state not found")
 
 type ID string
 
@@ -38,7 +38,7 @@ const (
 	SourceRefresh Source = "refresh"
 )
 
-type Deployment struct {
+type State struct {
 	ID                 ID
 	WorkspaceID        WorkspaceID
 	Environment        Environment
@@ -50,12 +50,11 @@ type Deployment struct {
 	CreatedAt          string
 	ActivatedAt        string
 	SupersededAt       string
-	CleanupAfter       string
 	Error              string
 	DuckLakeSnapshotID int64
 }
 
-func (d Deployment) CanActivate() bool {
+func (d State) CanActivate() bool {
 	return d.Status == StatusValidated || d.Status == StatusInactive || d.Status == StatusActive
 }
 
@@ -67,23 +66,23 @@ type CreateInput struct {
 }
 
 type Artifact struct {
-	ID           string
-	DeploymentID ID
-	WorkspaceID  WorkspaceID
-	Environment  Environment
-	Digest       string
-	Format       string
-	Path         string
-	DataRoot     string
-	ManifestJSON string
-	SizeBytes    int64
-	CreatedAt    string
+	ID             string
+	ServingStateID ID
+	WorkspaceID    WorkspaceID
+	Environment    Environment
+	Digest         string
+	Format         string
+	Path           string
+	DataRoot       string
+	ManifestJSON   string
+	SizeBytes      int64
+	CreatedAt      string
 }
 
 type SnapshotLeaseInput struct {
 	WorkspaceID        WorkspaceID
 	Environment        Environment
-	DeploymentID       ID
+	ServingStateID     ID
 	DuckLakeSnapshotID int64
 	OwnerID            string
 	ExpiresAt          time.Time

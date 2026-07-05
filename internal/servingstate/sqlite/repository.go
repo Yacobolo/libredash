@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/access"
-	"github.com/Yacobolo/libredash/internal/deployment"
 	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
@@ -27,59 +27,59 @@ func NewRepository(sqlDB *sql.DB) *Repository {
 	return &Repository{db: sqlDB, q: platformdb.New(sqlDB)}
 }
 
-func (r *Repository) Create(ctx context.Context, input deployment.CreateInput) (deployment.Deployment, error) {
-	id := deployment.ID(newID("dep"))
-	if err := r.q.CreateDeployment(ctx, platformdb.CreateDeploymentParams{
+func (r *Repository) Create(ctx context.Context, input servingstate.CreateInput) (servingstate.State, error) {
+	id := servingstate.ID(newID("state"))
+	if err := r.q.CreateServingState(ctx, platformdb.CreateServingStateParams{
 		ID:          string(id),
 		WorkspaceID: string(input.WorkspaceID),
-		Environment: string(deployment.NormalizeEnvironment(input.Environment)),
-		Status:      string(deployment.StatusPending),
-		Source:      string(deployment.NormalizeSource(input.Source)),
+		Environment: string(servingstate.NormalizeEnvironment(input.Environment)),
+		Status:      string(servingstate.StatusPending),
+		Source:      string(servingstate.NormalizeSource(input.Source)),
 		CreatedBy:   input.CreatedBy,
 	}); err != nil {
-		return deployment.Deployment{}, err
+		return servingstate.State{}, err
 	}
 	return r.ByID(ctx, id)
 }
 
-func (r *Repository) ByID(ctx context.Context, id deployment.ID) (deployment.Deployment, error) {
-	row, err := r.q.GetDeployment(ctx, string(id))
+func (r *Repository) ByID(ctx context.Context, id servingstate.ID) (servingstate.State, error) {
+	row, err := r.q.GetServingState(ctx, string(id))
 	if err != nil {
-		return deployment.Deployment{}, mapNotFound(err)
+		return servingstate.State{}, mapNotFound(err)
 	}
-	return mapDeployment(row), nil
+	return mapServingState(row), nil
 }
 
-func (r *Repository) List(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) ([]deployment.Deployment, error) {
-	rows, err := r.q.ListDeployments(ctx, platformdb.ListDeploymentsParams{WorkspaceID: string(workspaceID), Environment: string(deployment.NormalizeEnvironment(environment))})
+func (r *Repository) List(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment) ([]servingstate.State, error) {
+	rows, err := r.q.ListServingStates(ctx, platformdb.ListServingStatesParams{WorkspaceID: string(workspaceID), Environment: string(servingstate.NormalizeEnvironment(environment))})
 	if err != nil {
 		return nil, err
 	}
-	deployments := make([]deployment.Deployment, 0, len(rows))
+	states := make([]servingstate.State, 0, len(rows))
 	for _, row := range rows {
-		deployments = append(deployments, mapDeployment(row))
+		states = append(states, mapServingState(row))
 	}
-	return deployments, nil
+	return states, nil
 }
 
-func (r *Repository) MarkFailed(ctx context.Context, deploymentID deployment.ID, cause error) error {
+func (r *Repository) MarkFailed(ctx context.Context, servingStateID servingstate.ID, cause error) error {
 	if cause == nil {
 		return nil
 	}
-	return r.q.UpdateDeploymentStatus(ctx, platformdb.UpdateDeploymentStatusParams{
-		Status: string(deployment.StatusFailed),
+	return r.q.UpdateServingStateStatus(ctx, platformdb.UpdateServingStateStatusParams{
+		Status: string(servingstate.StatusFailed),
 		Error:  cause.Error(),
-		ID:     string(deploymentID),
+		ID:     string(servingStateID),
 	})
 }
 
-func (r *Repository) RecordDuckLakeSnapshot(ctx context.Context, deploymentID deployment.ID, snapshotID int64) error {
+func (r *Repository) RecordDuckLakeSnapshot(ctx context.Context, servingStateID servingstate.ID, snapshotID int64) error {
 	if snapshotID <= 0 {
 		return fmt.Errorf("ducklake snapshot id must be positive")
 	}
-	return r.q.UpdateDeploymentDuckLakeSnapshot(ctx, platformdb.UpdateDeploymentDuckLakeSnapshotParams{
+	return r.q.UpdateServingStateDuckLakeSnapshot(ctx, platformdb.UpdateServingStateDuckLakeSnapshotParams{
 		DucklakeSnapshotID: snapshotID,
-		ID:                 string(deploymentID),
+		ID:                 string(servingStateID),
 	})
 }
 
@@ -95,12 +95,12 @@ func (r *Repository) LeasedDuckLakeSnapshots(ctx context.Context) ([]int64, erro
 	return r.q.ListLeasedDuckLakeSnapshots(ctx)
 }
 
-func (r *Repository) CreateQuerySnapshotLease(ctx context.Context, input deployment.SnapshotLeaseInput) (string, error) {
+func (r *Repository) CreateQuerySnapshotLease(ctx context.Context, input servingstate.SnapshotLeaseInput) (string, error) {
 	if input.WorkspaceID == "" {
 		return "", fmt.Errorf("workspace id is required")
 	}
-	if input.DeploymentID == "" {
-		return "", fmt.Errorf("deployment id is required")
+	if input.ServingStateID == "" {
+		return "", fmt.Errorf("serving state id is required")
 	}
 	if input.DuckLakeSnapshotID <= 0 {
 		return "", fmt.Errorf("ducklake snapshot id must be positive")
@@ -113,8 +113,8 @@ func (r *Repository) CreateQuerySnapshotLease(ctx context.Context, input deploym
 	if err := r.q.CreateQuerySnapshotLease(ctx, platformdb.CreateQuerySnapshotLeaseParams{
 		ID:                 id,
 		WorkspaceID:        string(input.WorkspaceID),
-		Environment:        string(deployment.NormalizeEnvironment(input.Environment)),
-		DeploymentID:       string(input.DeploymentID),
+		Environment:        string(servingstate.NormalizeEnvironment(input.Environment)),
+		ServingStateID:     string(input.ServingStateID),
 		DucklakeSnapshotID: input.DuckLakeSnapshotID,
 		OwnerID:            input.OwnerID,
 		ExpiresAt:          sqliteTimestamp(expiresAt),
@@ -150,64 +150,64 @@ func (r *Repository) ReleaseExpiredQuerySnapshotLeases(ctx context.Context) erro
 	return r.q.ReleaseExpiredQuerySnapshotLeases(ctx)
 }
 
-func (r *Repository) ExpireInactiveDeployments(ctx context.Context) error {
-	return r.q.ExpireInactiveDeployments(ctx)
+func (r *Repository) ExpireInactiveServingStates(ctx context.Context) error {
+	return r.q.ExpireInactiveServingStates(ctx)
 }
 
-func (r *Repository) ScheduleExpiredDeploymentDeletion(ctx context.Context) error {
-	return r.q.ScheduleExpiredDeploymentDeletion(ctx)
+func (r *Repository) ScheduleExpiredServingStateDeletion(ctx context.Context) error {
+	return r.q.ScheduleExpiredServingStateDeletion(ctx)
 }
 
-func (r *Repository) MarkDeleteScheduledDeploymentsDeleted(ctx context.Context) error {
-	return r.q.MarkDeleteScheduledDeploymentsDeleted(ctx)
+func (r *Repository) MarkDeleteScheduledServingStatesDeleted(ctx context.Context) error {
+	return r.q.MarkDeleteScheduledServingStatesDeleted(ctx)
 }
 
 func (r *Repository) ReconcileRetention(ctx context.Context, now time.Time) error {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	if err := r.q.MarkDrainingDeploymentsDeleteScheduled(ctx); err != nil {
+	if err := r.q.MarkDrainingServingStatesDeleteScheduled(ctx); err != nil {
 		return err
 	}
-	return r.q.MarkDeleteScheduledDeploymentsDeleted(ctx)
+	return r.q.MarkDeleteScheduledServingStatesDeleted(ctx)
 }
 
-func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.ID, validation deployment.Validation, artifact deployment.Artifact) (deployment.Deployment, error) {
+func (r *Repository) SaveValidated(ctx context.Context, servingStateID servingstate.ID, validation servingstate.Validation, artifact servingstate.Artifact) (servingstate.State, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return deployment.Deployment{}, err
+		return servingstate.State{}, err
 	}
 	defer tx.Rollback()
 	q := r.q.WithTx(tx)
-	artifact.DeploymentID = deploymentID
-	current, err := q.GetDeployment(ctx, string(deploymentID))
+	artifact.ServingStateID = servingStateID
+	current, err := q.GetServingState(ctx, string(servingStateID))
 	if err != nil {
-		return deployment.Deployment{}, mapNotFound(err)
+		return servingstate.State{}, mapNotFound(err)
 	}
-	if artifact.WorkspaceID != deployment.WorkspaceID(current.WorkspaceID) {
-		return deployment.Deployment{}, fmt.Errorf("artifact workspace = %q, want %q", artifact.WorkspaceID, current.WorkspaceID)
+	if artifact.WorkspaceID != servingstate.WorkspaceID(current.WorkspaceID) {
+		return servingstate.State{}, fmt.Errorf("artifact workspace = %q, want %q", artifact.WorkspaceID, current.WorkspaceID)
 	}
-	if deployment.NormalizeEnvironment(artifact.Environment) != deployment.Environment(current.Environment) {
-		return deployment.Deployment{}, fmt.Errorf("artifact environment = %q, want %q", deployment.NormalizeEnvironment(artifact.Environment), current.Environment)
+	if servingstate.NormalizeEnvironment(artifact.Environment) != servingstate.Environment(current.Environment) {
+		return servingstate.State{}, fmt.Errorf("artifact environment = %q, want %q", servingstate.NormalizeEnvironment(artifact.Environment), current.Environment)
 	}
-	if err := workspace.ValidateAssetGraphForDeployment(validation.Graph, workspace.WorkspaceID(current.WorkspaceID), workspace.DeploymentID(deploymentID)); err != nil {
-		return deployment.Deployment{}, err
+	if err := workspace.ValidateAssetGraphForServingState(validation.Graph, workspace.WorkspaceID(current.WorkspaceID), workspace.ServingStateID(servingStateID)); err != nil {
+		return servingstate.State{}, err
 	}
-	if err := q.InsertDeploymentArtifact(ctx, mapArtifactParams(artifact)); err != nil {
-		return deployment.Deployment{}, err
+	if err := q.InsertServingStateArtifact(ctx, mapArtifactParams(artifact)); err != nil {
+		return servingstate.State{}, err
 	}
-	if err := q.ClearAssetEdgesForDeployment(ctx, string(deploymentID)); err != nil {
-		return deployment.Deployment{}, err
+	if err := q.ClearAssetEdgesForServingState(ctx, string(servingStateID)); err != nil {
+		return servingstate.State{}, err
 	}
-	if err := q.ClearAssetsForDeployment(ctx, string(deploymentID)); err != nil {
-		return deployment.Deployment{}, err
+	if err := q.ClearAssetsForServingState(ctx, string(servingStateID)); err != nil {
+		return servingstate.State{}, err
 	}
 	for _, asset := range validation.Graph.Assets {
 		if err := q.InsertAsset(ctx, platformdb.InsertAssetParams{
 			SnapshotID:           string(asset.SnapshotID),
 			LogicalAssetID:       string(asset.ID),
 			WorkspaceID:          string(asset.WorkspaceID),
-			DeploymentID:         string(asset.DeploymentID),
+			ServingStateID:       string(asset.ServingStateID),
 			AssetType:            string(asset.Type),
 			AssetKey:             asset.Key,
 			ParentLogicalAssetID: string(asset.ParentID),
@@ -218,91 +218,91 @@ func (r *Repository) SaveValidated(ctx context.Context, deploymentID deployment.
 			PayloadJson:          asset.PayloadJSON,
 			ContentHash:          asset.ContentHash,
 		}); err != nil {
-			return deployment.Deployment{}, err
+			return servingstate.State{}, err
 		}
 	}
 	for _, edge := range validation.Graph.Edges {
 		if err := q.InsertAssetEdge(ctx, platformdb.InsertAssetEdgeParams{
 			ID:                 string(edge.ID),
 			WorkspaceID:        string(edge.WorkspaceID),
-			DeploymentID:       string(edge.DeploymentID),
+			ServingStateID:     string(edge.ServingStateID),
 			FromLogicalAssetID: string(edge.FromAssetID),
 			ToLogicalAssetID:   string(edge.ToAssetID),
 			EdgeType:           string(edge.Type),
 		}); err != nil {
-			return deployment.Deployment{}, err
+			return servingstate.State{}, err
 		}
 	}
-	if err := q.UpdateDeploymentValidated(ctx, platformdb.UpdateDeploymentValidatedParams{
-		Status:       string(deployment.StatusValidated),
+	if err := q.UpdateServingStateValidated(ctx, platformdb.UpdateServingStateValidatedParams{
+		Status:       string(servingstate.StatusValidated),
 		Digest:       validation.Digest,
 		ManifestJson: validation.ManifestJSON,
-		ID:           string(deploymentID),
+		ID:           string(servingStateID),
 	}); err != nil {
-		return deployment.Deployment{}, err
+		return servingstate.State{}, err
 	}
 	if err := tx.Commit(); err != nil {
-		return deployment.Deployment{}, err
+		return servingstate.State{}, err
 	}
-	return r.ByID(ctx, deploymentID)
+	return r.ByID(ctx, servingStateID)
 }
 
-func (r *Repository) Activate(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID) (deployment.Deployment, error) {
-	return r.activate(ctx, workspaceID, environment, deploymentID, nil)
+func (r *Repository) Activate(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment, servingStateID servingstate.ID) (servingstate.State, error) {
+	return r.activate(ctx, workspaceID, environment, servingStateID, nil)
 }
 
-func (r *Repository) ActivateWithWorkspacePolicy(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error) {
-	return r.activate(ctx, workspaceID, environment, deploymentID, &policy)
+func (r *Repository) ActivateWithWorkspacePolicy(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment, servingStateID servingstate.ID, policy workspace.AccessPolicy) (servingstate.State, error) {
+	return r.activate(ctx, workspaceID, environment, servingStateID, &policy)
 }
 
-func (r *Repository) activate(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID, policy *workspace.AccessPolicy) (deployment.Deployment, error) {
-	environment = deployment.NormalizeEnvironment(environment)
+func (r *Repository) activate(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment, servingStateID servingstate.ID, policy *workspace.AccessPolicy) (servingstate.State, error) {
+	environment = servingstate.NormalizeEnvironment(environment)
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return deployment.Deployment{}, err
+		return servingstate.State{}, err
 	}
 	defer tx.Rollback()
 	q := r.q.WithTx(tx)
-	row, err := q.GetDeployment(ctx, string(deploymentID))
+	row, err := q.GetServingState(ctx, string(servingStateID))
 	if err != nil {
-		return deployment.Deployment{}, mapNotFound(err)
+		return servingstate.State{}, mapNotFound(err)
 	}
-	current := mapDeployment(row)
+	current := mapServingState(row)
 	if current.WorkspaceID != workspaceID {
-		return deployment.Deployment{}, fmt.Errorf("deployment %s is not in workspace %s", deploymentID, workspaceID)
+		return servingstate.State{}, fmt.Errorf("serving state %s is not in workspace %s", servingStateID, workspaceID)
 	}
 	if current.Environment != environment {
-		return deployment.Deployment{}, fmt.Errorf("deployment %s environment = %q, want %q", deploymentID, current.Environment, environment)
+		return servingstate.State{}, fmt.Errorf("serving state %s environment = %q, want %q", servingStateID, current.Environment, environment)
 	}
 	if !current.CanActivate() {
-		return deployment.Deployment{}, fmt.Errorf("deployment %s has status %q, want validated", deploymentID, current.Status)
+		return servingstate.State{}, fmt.Errorf("serving state %s has status %q, want validated", servingStateID, current.Status)
 	}
 	if policy != nil {
 		if err := reconcileWorkspacePolicyTx(ctx, q, string(workspaceID), *policy); err != nil {
-			return deployment.Deployment{}, err
+			return servingstate.State{}, err
 		}
 	}
-	if err := q.MarkOtherDeploymentsDraining(ctx, platformdb.MarkOtherDeploymentsDrainingParams{
+	if err := q.MarkOtherServingStatesDraining(ctx, platformdb.MarkOtherServingStatesDrainingParams{
 		WorkspaceID: string(workspaceID),
 		Environment: string(environment),
-		ID:          string(deploymentID),
+		ID:          string(servingStateID),
 	}); err != nil {
-		return deployment.Deployment{}, err
+		return servingstate.State{}, err
 	}
-	if err := q.MarkDeploymentActive(ctx, string(deploymentID)); err != nil {
-		return deployment.Deployment{}, err
+	if err := q.MarkServingStateActive(ctx, string(servingStateID)); err != nil {
+		return servingstate.State{}, err
 	}
-	if err := q.SetActiveDeployment(ctx, platformdb.SetActiveDeploymentParams{
-		WorkspaceID:  string(workspaceID),
-		Environment:  string(environment),
-		DeploymentID: string(deploymentID),
+	if err := q.SetActiveServingState(ctx, platformdb.SetActiveServingStateParams{
+		WorkspaceID:    string(workspaceID),
+		Environment:    string(environment),
+		ServingStateID: string(servingStateID),
 	}); err != nil {
-		return deployment.Deployment{}, err
+		return servingstate.State{}, err
 	}
 	if err := tx.Commit(); err != nil {
-		return deployment.Deployment{}, err
+		return servingstate.State{}, err
 	}
-	return r.ByID(ctx, deploymentID)
+	return r.ByID(ctx, servingStateID)
 }
 
 func reconcileWorkspacePolicyTx(ctx context.Context, q *platformdb.Queries, workspaceID string, policy workspace.AccessPolicy) error {
@@ -407,33 +407,33 @@ func upsertPolicyPrincipalTx(ctx context.Context, q *platformdb.Queries, id, ema
 	return id, nil
 }
 
-func (r *Repository) ActiveArtifact(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) (deployment.Deployment, deployment.Artifact, error) {
-	row, err := r.q.GetActiveDeployment(ctx, platformdb.GetActiveDeploymentParams{WorkspaceID: string(workspaceID), Environment: string(deployment.NormalizeEnvironment(environment))})
+func (r *Repository) ActiveArtifact(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment) (servingstate.State, servingstate.Artifact, error) {
+	row, err := r.q.GetActiveServingState(ctx, platformdb.GetActiveServingStateParams{WorkspaceID: string(workspaceID), Environment: string(servingstate.NormalizeEnvironment(environment))})
 	if err != nil {
-		return deployment.Deployment{}, deployment.Artifact{}, mapNotFound(err)
+		return servingstate.State{}, servingstate.Artifact{}, mapNotFound(err)
 	}
-	artifact, err := r.q.GetArtifactByDeployment(ctx, row.ID)
+	artifact, err := r.q.GetArtifactByServingState(ctx, row.ID)
 	if err != nil {
-		return deployment.Deployment{}, deployment.Artifact{}, mapNotFound(err)
+		return servingstate.State{}, servingstate.Artifact{}, mapNotFound(err)
 	}
-	return mapDeployment(row), mapArtifact(artifact), nil
+	return mapServingState(row), mapArtifact(artifact), nil
 }
 
-func (r *Repository) ArtifactByDeployment(ctx context.Context, deploymentID deployment.ID) (deployment.Artifact, error) {
-	artifact, err := r.q.GetArtifactByDeployment(ctx, string(deploymentID))
+func (r *Repository) ArtifactByServingState(ctx context.Context, servingStateID servingstate.ID) (servingstate.Artifact, error) {
+	artifact, err := r.q.GetArtifactByServingState(ctx, string(servingStateID))
 	if err != nil {
-		return deployment.Artifact{}, mapNotFound(err)
+		return servingstate.Artifact{}, mapNotFound(err)
 	}
 	return mapArtifact(artifact), nil
 }
 
-func mapDeployment(row platformdb.Deployment) deployment.Deployment {
-	out := deployment.Deployment{
-		ID:                 deployment.ID(row.ID),
-		WorkspaceID:        deployment.WorkspaceID(row.WorkspaceID),
-		Environment:        deployment.Environment(row.Environment),
-		Status:             deployment.Status(row.Status),
-		Source:             deployment.NormalizeSource(deployment.Source(row.Source)),
+func mapServingState(row platformdb.ServingState) servingstate.State {
+	out := servingstate.State{
+		ID:                 servingstate.ID(row.ID),
+		WorkspaceID:        servingstate.WorkspaceID(row.WorkspaceID),
+		Environment:        servingstate.Environment(row.Environment),
+		Status:             servingstate.Status(row.Status),
+		Source:             servingstate.NormalizeSource(servingstate.Source(row.Source)),
 		Digest:             row.Digest,
 		ManifestJSON:       row.ManifestJson,
 		CreatedBy:          row.CreatedBy,
@@ -447,46 +447,43 @@ func mapDeployment(row platformdb.Deployment) deployment.Deployment {
 	if row.SupersededAt.Valid {
 		out.SupersededAt = row.SupersededAt.String
 	}
-	if row.CleanupAfter.Valid {
-		out.CleanupAfter = row.CleanupAfter.String
-	}
 	return out
 }
 
-func mapArtifact(row platformdb.DeploymentArtifact) deployment.Artifact {
-	return deployment.Artifact{
-		ID:           row.ID,
-		DeploymentID: deployment.ID(row.DeploymentID),
-		WorkspaceID:  deployment.WorkspaceID(row.WorkspaceID),
-		Environment:  deployment.Environment(row.Environment),
-		Digest:       row.Digest,
-		Format:       row.Format,
-		Path:         row.Path,
-		DataRoot:     row.DataRoot,
-		ManifestJSON: row.ManifestJson,
-		SizeBytes:    row.SizeBytes,
-		CreatedAt:    row.CreatedAt,
+func mapArtifact(row platformdb.ServingStateArtifact) servingstate.Artifact {
+	return servingstate.Artifact{
+		ID:             row.ID,
+		ServingStateID: servingstate.ID(row.ServingStateID),
+		WorkspaceID:    servingstate.WorkspaceID(row.WorkspaceID),
+		Environment:    servingstate.Environment(row.Environment),
+		Digest:         row.Digest,
+		Format:         row.Format,
+		Path:           row.Path,
+		DataRoot:       row.DataRoot,
+		ManifestJSON:   row.ManifestJson,
+		SizeBytes:      row.SizeBytes,
+		CreatedAt:      row.CreatedAt,
 	}
 }
 
-func mapArtifactParams(artifact deployment.Artifact) platformdb.InsertDeploymentArtifactParams {
-	return platformdb.InsertDeploymentArtifactParams{
-		ID:           artifact.ID,
-		DeploymentID: string(artifact.DeploymentID),
-		WorkspaceID:  string(artifact.WorkspaceID),
-		Environment:  string(deployment.NormalizeEnvironment(artifact.Environment)),
-		Digest:       artifact.Digest,
-		Format:       artifact.Format,
-		Path:         artifact.Path,
-		DataRoot:     artifact.DataRoot,
-		ManifestJson: artifact.ManifestJSON,
-		SizeBytes:    artifact.SizeBytes,
+func mapArtifactParams(artifact servingstate.Artifact) platformdb.InsertServingStateArtifactParams {
+	return platformdb.InsertServingStateArtifactParams{
+		ID:             artifact.ID,
+		ServingStateID: string(artifact.ServingStateID),
+		WorkspaceID:    string(artifact.WorkspaceID),
+		Environment:    string(servingstate.NormalizeEnvironment(artifact.Environment)),
+		Digest:         artifact.Digest,
+		Format:         artifact.Format,
+		Path:           artifact.Path,
+		DataRoot:       artifact.DataRoot,
+		ManifestJson:   artifact.ManifestJSON,
+		SizeBytes:      artifact.SizeBytes,
 	}
 }
 
 func mapNotFound(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
-		return deployment.ErrNotFound
+		return servingstate.ErrNotFound
 	}
 	return err
 }

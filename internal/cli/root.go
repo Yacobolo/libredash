@@ -16,7 +16,6 @@ type rootOptions struct {
 	target       string
 	token        string
 	catalog      string
-	deployment   string
 	conversation string
 	jsonOutput   bool
 	pageID       string
@@ -36,14 +35,14 @@ func Execute(ctx context.Context) error {
 	opts := &rootOptions{}
 	root := &cobra.Command{
 		Use:   "libredash",
-		Short: "LibreDash BI-as-code server and deployment CLI",
+		Short: "LibreDash BI-as-code server and publish CLI",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runServe(ctx, opts)
 		},
 	}
 	root.PersistentFlags().StringVar(&opts.workspaceID, "workspace", "", "workspace id")
 	root.AddCommand(serveCommand(ctx, opts))
-	root.AddCommand(deployCommand(ctx, opts))
+	root.AddCommand(publishCommand(ctx, opts))
 	root.AddCommand(validateCommand(ctx, opts))
 	root.AddCommand(planCommand(ctx, opts))
 	root.AddCommand(schemaCommand(opts))
@@ -54,8 +53,7 @@ func Execute(ctx context.Context) error {
 	root.AddCommand(dashboardsCommand(ctx, opts))
 	root.AddCommand(semanticModelsCommand(ctx, opts))
 	root.AddCommand(loginCommand(opts))
-	root.AddCommand(deploymentsCommand(ctx, opts))
-	root.AddCommand(rollbackCommand(ctx, opts))
+	root.AddCommand(publishesCommand(ctx, opts))
 	root.AddCommand(adminCommand(ctx, opts))
 	return root.ExecuteContext(ctx)
 }

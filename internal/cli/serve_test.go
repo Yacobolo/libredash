@@ -9,15 +9,15 @@ import (
 	"github.com/Yacobolo/libredash/internal/access"
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/config"
-	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
 
 func TestDeploymentBackedDevServerAlwaysOpensPlatformStore(t *testing.T) {
 	home := t.TempDir()
-	_, cleanup, err := deploymentBackedServer(context.Background(), config.Config{HomeDir: home}, "", false, deployment.DefaultEnvironment)
+	_, cleanup, err := servingStateBackedServer(context.Background(), config.Config{HomeDir: home}, "", false, servingstate.DefaultEnvironment)
 	if err != nil {
 		t.Fatalf("deployment-backed dev server: %v", err)
 	}
@@ -47,7 +47,7 @@ func TestDeploymentBackedDevServerRemovesLegacyDuckLakeArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, cleanup, err := deploymentBackedServer(context.Background(), config.Config{HomeDir: home}, "", false, deployment.DefaultEnvironment)
+	_, cleanup, err := servingStateBackedServer(context.Background(), config.Config{HomeDir: home}, "", false, servingstate.DefaultEnvironment)
 	if err != nil {
 		t.Fatalf("deployment-backed dev server: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestDeploymentBackedDevServerRemovesLegacyDuckLakeArtifacts(t *testing.T) {
 func TestDeploymentBackedDevServerSeedsPlatformAdminPrincipal(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
-	_, cleanup, err := deploymentBackedServer(ctx, config.Config{HomeDir: home}, "", false, deployment.DefaultEnvironment)
+	_, cleanup, err := servingStateBackedServer(ctx, config.Config{HomeDir: home}, "", false, servingstate.DefaultEnvironment)
 	if err != nil {
 		t.Fatalf("deployment-backed dev server: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestDeploymentBackedDevServerSeedsPlatformAdminPrincipal(t *testing.T) {
 func TestDeploymentBackedDevServerDoesNotCreateWorkspacesOrDeployments(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
-	_, cleanup, err := deploymentBackedServer(ctx, config.Config{HomeDir: home}, "", false, deployment.DefaultEnvironment)
+	_, cleanup, err := servingStateBackedServer(ctx, config.Config{HomeDir: home}, "", false, servingstate.DefaultEnvironment)
 	if err != nil {
 		t.Fatalf("deployment-backed dev server: %v", err)
 	}
@@ -114,8 +114,8 @@ func TestDeploymentBackedDevServerDoesNotCreateWorkspacesOrDeployments(t *testin
 	if len(workspaces) != 0 {
 		t.Fatalf("workspaces = %#v, want none before explicit deploy", workspaces)
 	}
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
-	deployments, err := deploymentRepo.List(ctx, deployment.WorkspaceID("test"), deployment.DefaultEnvironment)
+	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	deployments, err := servingStateRepo.List(ctx, servingstate.WorkspaceID("test"), servingstate.DefaultEnvironment)
 	if err != nil {
 		t.Fatalf("list deployments: %v", err)
 	}

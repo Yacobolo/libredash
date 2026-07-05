@@ -568,7 +568,7 @@ func TestWorkspaceRuntimeWritesDuckLakeCommitMetadata(t *testing.T) {
 		DBDir:            filepath.Join(dir, ".libredash", "duckdb", "dev"),
 		CatalogPath:      catalogPath,
 		DuckLakeDataPath: dataPath,
-		DeploymentID:     "dep_123",
+		ServingStateID:   "dep_123",
 		WorkspaceID:      "sales",
 		Environment:      "prod",
 		SemanticDigest:   "semantic-digest",
@@ -583,7 +583,7 @@ func TestWorkspaceRuntimeWritesDuckLakeCommitMetadata(t *testing.T) {
 
 	extra := duckLakeSnapshotExtraInfo(t, ctx, catalogPath, dataPath, snapshotID)
 	for _, want := range []string{
-		`"deploymentId":"dep_123"`,
+		`"servingStateId":"dep_123"`,
 		`"workspaceId":"sales"`,
 		`"environment":"prod"`,
 		`"semanticModelDigest":"semantic-digest"`,
@@ -1143,24 +1143,24 @@ func TestRunRepositoryPersistsTargetTriggerAndParentRun(t *testing.T) {
 	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
 
 	parent, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{
-		WorkspaceID:  "test",
-		ModelID:      "olist",
-		TargetType:   analyticsmaterialize.TargetSemanticModel,
-		TargetID:     "olist",
-		TriggerType:  analyticsmaterialize.TriggerDirect,
-		DeploymentID: "dep_1",
+		WorkspaceID:    "test",
+		ModelID:        "olist",
+		TargetType:     analyticsmaterialize.TargetSemanticModel,
+		TargetID:       "olist",
+		TriggerType:    analyticsmaterialize.TriggerDirect,
+		ServingStateID: "dep_1",
 	})
 	if err != nil {
 		t.Fatalf("create parent run: %v", err)
 	}
 	child, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{
-		WorkspaceID:  "test",
-		ModelID:      "olist",
-		TargetType:   analyticsmaterialize.TargetModelTable,
-		TargetID:     "olist.orders",
-		TriggerType:  analyticsmaterialize.TriggerSemanticModel,
-		ParentRunID:  parent.ID,
-		DeploymentID: "dep_1",
+		WorkspaceID:    "test",
+		ModelID:        "olist",
+		TargetType:     analyticsmaterialize.TargetModelTable,
+		TargetID:       "olist.orders",
+		TriggerType:    analyticsmaterialize.TriggerSemanticModel,
+		ParentRunID:    parent.ID,
+		ServingStateID: "dep_1",
 	})
 	if err != nil {
 		t.Fatalf("create child run: %v", err)
@@ -1210,18 +1210,18 @@ func TestRunRepositoryFailsRunsForTerminalDeployments(t *testing.T) {
 	defer store.Close()
 	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
 	if _, err := store.SQLDB().ExecContext(ctx, `
-		INSERT INTO deployments (id, workspace_id, status, digest, manifest_json, created_by)
+		INSERT INTO serving_states (id, workspace_id, status, digest, manifest_json, created_by)
 		VALUES ('dep_failed', 'test', 'failed', 'sha256:failed', '{}', 'test')
 	`); err != nil {
 		t.Fatalf("seed failed deployment: %v", err)
 	}
 
 	failedDeploymentRun, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{
-		WorkspaceID:  "test",
-		ModelID:      "olist",
-		DeploymentID: "dep_failed",
-		TargetType:   analyticsmaterialize.TargetModelTable,
-		TargetID:     "olist.orders",
+		WorkspaceID:    "test",
+		ModelID:        "olist",
+		ServingStateID: "dep_failed",
+		TargetType:     analyticsmaterialize.TargetModelTable,
+		TargetID:       "olist.orders",
 	})
 	if err != nil {
 		t.Fatalf("create terminal deployment run: %v", err)
@@ -1230,11 +1230,11 @@ func TestRunRepositoryFailsRunsForTerminalDeployments(t *testing.T) {
 		t.Fatalf("mark terminal deployment run running: %v", err)
 	}
 	activeDeploymentRun, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{
-		WorkspaceID:  "test",
-		ModelID:      "olist",
-		DeploymentID: "dep_1",
-		TargetType:   analyticsmaterialize.TargetModelTable,
-		TargetID:     "olist.customers",
+		WorkspaceID:    "test",
+		ModelID:        "olist",
+		ServingStateID: "dep_1",
+		TargetType:     analyticsmaterialize.TargetModelTable,
+		TargetID:       "olist.customers",
 	})
 	if err != nil {
 		t.Fatalf("create active deployment run: %v", err)
@@ -1243,7 +1243,7 @@ func TestRunRepositoryFailsRunsForTerminalDeployments(t *testing.T) {
 		t.Fatalf("mark active deployment run running: %v", err)
 	}
 
-	if err := repo.FailRunsForTerminalDeployments(ctx, "refresh did not complete"); err != nil {
+	if err := repo.FailRunsForTerminalServingStates(ctx, "refresh did not complete"); err != nil {
 		t.Fatalf("fail terminal deployment runs: %v", err)
 	}
 
@@ -1270,13 +1270,13 @@ func TestRunRepositoryClaimsExecutableRootJobs(t *testing.T) {
 	repo := analyticsmaterialize.NewSQLRunRepository(store.SQLDB())
 
 	parent, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{
-		WorkspaceID:  "test",
-		ModelID:      "olist",
-		DeploymentID: "dep_1",
-		TargetType:   analyticsmaterialize.TargetSemanticModel,
-		TargetID:     "olist",
-		JobKind:      analyticsmaterialize.JobKindWorkspaceAssetRefresh,
-		PayloadJSON:  `{"assetKey":"olist","assetType":"semantic_model"}`,
+		WorkspaceID:    "test",
+		ModelID:        "olist",
+		ServingStateID: "dep_1",
+		TargetType:     analyticsmaterialize.TargetSemanticModel,
+		TargetID:       "olist",
+		JobKind:        analyticsmaterialize.JobKindWorkspaceAssetRefresh,
+		PayloadJSON:    `{"assetKey":"olist","assetType":"semantic_model"}`,
 	})
 	if err != nil {
 		t.Fatalf("create parent run: %v", err)
@@ -1429,7 +1429,7 @@ func openMaterializationStore(t *testing.T, ctx context.Context) *platform.Store
 		t.Fatalf("ensure workspace: %v", err)
 	}
 	if _, err := store.SQLDB().ExecContext(ctx, `
-		INSERT INTO deployments (id, workspace_id, status, digest, manifest_json, created_by)
+		INSERT INTO serving_states (id, workspace_id, status, digest, manifest_json, created_by)
 		VALUES ('dep_1', 'test', 'active', 'sha256:test', '{}', 'test')
 	`); err != nil {
 		t.Fatalf("seed deployment: %v", err)

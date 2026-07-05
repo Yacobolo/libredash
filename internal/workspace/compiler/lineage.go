@@ -9,7 +9,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
-func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, definition *workspace.Definition) (workspace.AssetGraph, error) {
+func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.ServingStateID, definition *workspace.Definition) (workspace.AssetGraph, error) {
 	graph := workspace.AssetGraph{}
 	byKey := map[string]workspace.AssetID{}
 	sourceFilesByID := map[workspace.AssetID]string{}
@@ -44,7 +44,7 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.De
 		if sourceFile == "" && parentID != "" {
 			sourceFile = sourceFilesByID[parentID]
 		}
-		asset, err := workspace.NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parentID, title, description, sourceFile, workspace.PayloadSchemaForAssetType(typ), payload)
+		asset, err := workspace.NewAssetWithSourceFile(workspaceID, servingStateID, typ, key, parentID, title, description, sourceFile, workspace.PayloadSchemaForAssetType(typ), payload)
 		if err != nil {
 			return "", err
 		}
@@ -62,7 +62,7 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, deploymentID workspace.De
 			return
 		}
 		seenEdges[key] = struct{}{}
-		graph.Edges = append(graph.Edges, workspace.NewAssetEdge(workspaceID, deploymentID, fromID, toID, typ))
+		graph.Edges = append(graph.Edges, workspace.NewAssetEdge(workspaceID, servingStateID, fromID, toID, typ))
 	}
 	assetID := func(typ workspace.AssetType, key string) (workspace.AssetID, error) {
 		id := byKey[string(typ)+":"+key]

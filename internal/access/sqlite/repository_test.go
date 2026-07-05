@@ -27,7 +27,7 @@ func TestRepositoryChecksRBAC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("set principal role: %v", err)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionPublishActivate)
 	if err != nil {
 		t.Fatalf("check permission: %v", err)
 	}
@@ -109,7 +109,7 @@ func TestRepositoryChecksGroupRolePermissions(t *testing.T) {
 		t.Fatalf("binding subject = %q/%q, want group/%q", binding.SubjectType, binding.SubjectID, group.ID)
 	}
 
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionPublishActivate)
 	if err != nil {
 		t.Fatalf("check permission: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestRepositoryChecksGroupRolePermissions(t *testing.T) {
 	if err := repo.RemoveGroupMember(ctx, "test", group.ID, principal.ID); err != nil {
 		t.Fatalf("remove group member: %v", err)
 	}
-	allowed, err = repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	allowed, err = repo.HasPermission(ctx, "test", principal.ID, access.PermissionPublishActivate)
 	if err != nil {
 		t.Fatalf("check permission after remove: %v", err)
 	}
@@ -295,7 +295,7 @@ func TestRepositoryResolveExternalPrincipalAttachesBootstrappedEmail(t *testing.
 	if principal.ID != access.PrincipalIDForEmail("owner@example.com") {
 		t.Fatalf("principal id = %q, want bootstrapped email principal", principal.ID)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionPublishActivate)
 	if err != nil {
 		t.Fatalf("check permission: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestRepositoryResolveExternalPrincipalWithoutEmailCreatesUnprivilegedPrinci
 	if err != nil {
 		t.Fatalf("resolve external principal: %v", err)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionDeploymentActivate)
+	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionPublishActivate)
 	if err != nil {
 		t.Fatalf("check permission: %v", err)
 	}

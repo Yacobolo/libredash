@@ -8,8 +8,8 @@ import (
 	"github.com/Yacobolo/libredash/internal/access"
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/config"
-	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
+	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
 	"github.com/spf13/cobra"
 )
@@ -46,7 +46,7 @@ func adminCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	storage := &cobra.Command{Use: "storage", Short: "Maintain analytical storage"}
 	cleanup := &cobra.Command{
 		Use:   "cleanup",
-		Short: "Reconcile deployment snapshots and clean DuckLake storage",
+		Short: "Reconcile serving-state snapshots and clean DuckLake storage",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAdminStorageCleanup(ctx, opts, cmd.OutOrStdout())
 		},
@@ -64,7 +64,7 @@ func runAdminStorageCleanup(ctx context.Context, opts *rootOptions, out io.Write
 		return err
 	}
 	defer store.Close()
-	repo := deploymentsqlite.NewRepository(store.SQLDB())
+	repo := servingstatesqlite.NewRepository(store.SQLDB())
 	_, err = storagemaintenance.Run(ctx, repo, storagemaintenance.Options{
 		RootDir:     cfg.HomeDir,
 		CatalogPath: cfg.DBPath(),

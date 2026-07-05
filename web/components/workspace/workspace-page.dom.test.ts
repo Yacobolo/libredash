@@ -179,9 +179,9 @@ test('workspace catalog cards keep Open links visible with long descriptions', a
         title: 'Workspaces',
         description: 'View published BI workspaces.',
         cards: [
-          { id: 'operations', title: 'Operations Workspace', description: 'Fulfillment and delivery analysis.', href: '/workspaces/operations', deploymentLabel: 'Serving' },
-          { id: 'sales', title: 'Sales Workspace', description: 'Revenue, orders, and product category analysis.', href: '/workspaces/sales', deploymentLabel: 'Serving' },
-          { id: 'visuals', title: 'Visuals Workspace', description: 'Developer QA workspace for exhaustive dashboard visual and table renderer coverage.', href: '/workspaces/visuals', deploymentLabel: 'Serving' },
+          { id: 'operations', title: 'Operations Workspace', description: 'Fulfillment and delivery analysis.', href: '/workspaces/operations', servingLabel: 'Serving' },
+          { id: 'sales', title: 'Sales Workspace', description: 'Revenue, orders, and product category analysis.', href: '/workspaces/sales', servingLabel: 'Serving' },
+          { id: 'visuals', title: 'Visuals Workspace', description: 'Developer QA workspace for exhaustive dashboard visual and table renderer coverage.', href: '/workspaces/visuals', servingLabel: 'Serving' },
         ],
       }
     })
@@ -305,7 +305,7 @@ test('workspace asset refresh page renders refresh tab and emits refresh events'
     const state = await page.evaluate(async () => {
       const asset = document.querySelector('ld-workspace-asset-page') as any
       let refreshEvents = 0
-      asset.addEventListener('ld-refresh-materializations', () => { refreshEvents += 1 })
+      asset.addEventListener('ld-refresh-asset', () => { refreshEvents += 1 })
       asset.page = {
         kind: 'workspace_asset',
         title: 'Olist Commerce',
@@ -328,7 +328,7 @@ test('workspace asset refresh page renders refresh tab and emits refresh events'
           { label: 'Olist Commerce', current: true },
         ],
         actions: [
-          { label: 'Refresh materializations', icon: 'refresh', command: 'refresh-materializations' },
+          { label: 'Refresh data', icon: 'refresh', command: 'refresh' },
           { label: 'Back to workspace', href: '/workspaces/libredash', icon: 'back' },
         ],
         tabs: [
@@ -352,7 +352,7 @@ test('workspace asset refresh page renders refresh tab and emits refresh events'
         },
       }
       await asset.updateComplete
-      const button = asset.shadowRoot.querySelector('button[aria-label="Refresh materializations"]') as HTMLButtonElement
+      const button = asset.shadowRoot.querySelector('button[aria-label="Refresh data"]') as HTMLButtonElement
       button.click()
       return {
         activeTab: asset.shadowRoot.querySelector('.tabs a.active')?.textContent?.trim(),
@@ -371,7 +371,7 @@ test('workspace asset refresh page renders refresh tab and emits refresh events'
   }
 })
 
-test('workspace asset page does not render versions as a product surface', async () => {
+test('workspace asset page renders versions as config history', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
@@ -403,7 +403,32 @@ test('workspace asset page does not render versions as a product surface', async
         tabs: [
           { id: 'details', label: 'Details', href: '/workspaces/libredash/assets/dashboard:executive-sales/details', active: false },
           { id: 'lineage', label: 'Lineage', href: '/workspaces/libredash/assets/dashboard:executive-sales/lineage', active: false, count: 1 },
+          { id: 'versions', label: 'Versions', href: '/workspaces/libredash/assets/dashboard:executive-sales/versions', active: true },
         ],
+        versions: {
+          currentContentHash: 'hash-current',
+          table: {
+            columns: [
+              { id: 'version', header: 'Version', kind: 'code' },
+              { id: 'published', header: 'Published' },
+              { id: 'status', header: 'Status', kind: 'badge' },
+              { id: 'config_hash', header: 'Config hash', kind: 'code' },
+              { id: 'source_file', header: 'Source file', kind: 'code' },
+              { id: 'published_by', header: 'Published by' },
+            ],
+            rows: [
+              {
+                version: 'hash-cur',
+                published: '2026-07-05',
+                status: { label: 'current', tone: 'success' },
+                config_hash: 'hash-cur',
+                source_file: 'dashboards/sales.yaml',
+                published_by: 'Local Developer',
+              },
+            ],
+            empty: 'No config versions recorded for this asset yet.',
+          },
+        },
         details: {
           overview: [
             { label: 'Type', value: 'Dashboard' },
@@ -421,9 +446,11 @@ test('workspace asset page does not render versions as a product surface', async
       }
     })
 
-    expect(state.tabText).not.toMatch(/Versions/)
-    expect(state.sectionTitle).not.toBe('Versions')
-    expect(state.tableText).not.toMatch(/Deployment digest/)
+    expect(state.tabText).toMatch(/Versions/)
+    expect(state.sectionTitle).toBe('Versions')
+    expect(state.tableText).toMatch(/Config hash/)
+    expect(state.tableText).toMatch(/Source file/)
+    expect(state.tableText).toMatch(/Published by/)
     expect(state.bodyText).not.toMatch(/Deployment digest/)
   } finally {
     await page.close()

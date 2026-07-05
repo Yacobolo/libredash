@@ -77,7 +77,7 @@ type Asset struct {
 	SnapshotID           string `json:"snapshot_id"`
 	LogicalAssetID       string `json:"logical_asset_id"`
 	WorkspaceID          string `json:"workspace_id"`
-	DeploymentID         string `json:"deployment_id"`
+	ServingStateID       string `json:"serving_state_id"`
 	AssetType            string `json:"asset_type"`
 	AssetKey             string `json:"asset_key"`
 	ParentLogicalAssetID string `json:"parent_logical_asset_id"`
@@ -93,7 +93,7 @@ type Asset struct {
 type AssetEdge struct {
 	ID                 string `json:"id"`
 	WorkspaceID        string `json:"workspace_id"`
-	DeploymentID       string `json:"deployment_id"`
+	ServingStateID     string `json:"serving_state_id"`
 	FromLogicalAssetID string `json:"from_logical_asset_id"`
 	ToLogicalAssetID   string `json:"to_logical_asset_id"`
 	EdgeType           string `json:"edge_type"`
@@ -109,37 +109,6 @@ type AuditEvent struct {
 	TargetID     string         `json:"target_id"`
 	MetadataJson string         `json:"metadata_json"`
 	CreatedAt    string         `json:"created_at"`
-}
-
-type Deployment struct {
-	ID                 string         `json:"id"`
-	WorkspaceID        string         `json:"workspace_id"`
-	Environment        string         `json:"environment"`
-	Status             string         `json:"status"`
-	Source             string         `json:"source"`
-	Digest             string         `json:"digest"`
-	ManifestJson       string         `json:"manifest_json"`
-	DucklakeSnapshotID int64          `json:"ducklake_snapshot_id"`
-	CreatedBy          string         `json:"created_by"`
-	CreatedAt          string         `json:"created_at"`
-	ActivatedAt        sql.NullString `json:"activated_at"`
-	SupersededAt       sql.NullString `json:"superseded_at"`
-	CleanupAfter       sql.NullString `json:"cleanup_after"`
-	Error              string         `json:"error"`
-}
-
-type DeploymentArtifact struct {
-	ID           string `json:"id"`
-	DeploymentID string `json:"deployment_id"`
-	WorkspaceID  string `json:"workspace_id"`
-	Environment  string `json:"environment"`
-	Digest       string `json:"digest"`
-	Format       string `json:"format"`
-	Path         string `json:"path"`
-	DataRoot     string `json:"data_root"`
-	ManifestJson string `json:"manifest_json"`
-	SizeBytes    int64  `json:"size_bytes"`
-	CreatedAt    string `json:"created_at"`
 }
 
 type ExternalIdentity struct {
@@ -172,7 +141,7 @@ type GroupMember struct {
 type MaterializationJob struct {
 	ID             string         `json:"id"`
 	WorkspaceID    string         `json:"workspace_id"`
-	DeploymentID   sql.NullString `json:"deployment_id"`
+	ServingStateID sql.NullString `json:"serving_state_id"`
 	ModelID        string         `json:"model_id"`
 	Kind           string         `json:"kind"`
 	PayloadJson    string         `json:"payload_json"`
@@ -268,7 +237,7 @@ type QuerySnapshotLease struct {
 	ID                 string         `json:"id"`
 	WorkspaceID        string         `json:"workspace_id"`
 	Environment        string         `json:"environment"`
-	DeploymentID       string         `json:"deployment_id"`
+	ServingStateID     string         `json:"serving_state_id"`
 	DucklakeSnapshotID int64          `json:"ducklake_snapshot_id"`
 	OwnerID            string         `json:"owner_id"`
 	AcquiredAt         string         `json:"acquired_at"`
@@ -297,6 +266,36 @@ type RolePermission struct {
 	CreatedAt      string `json:"created_at"`
 }
 
+type ServingState struct {
+	ID                 string         `json:"id"`
+	WorkspaceID        string         `json:"workspace_id"`
+	Environment        string         `json:"environment"`
+	Status             string         `json:"status"`
+	Source             string         `json:"source"`
+	Digest             string         `json:"digest"`
+	ManifestJson       string         `json:"manifest_json"`
+	DucklakeSnapshotID int64          `json:"ducklake_snapshot_id"`
+	CreatedBy          string         `json:"created_by"`
+	CreatedAt          string         `json:"created_at"`
+	ActivatedAt        sql.NullString `json:"activated_at"`
+	SupersededAt       sql.NullString `json:"superseded_at"`
+	Error              string         `json:"error"`
+}
+
+type ServingStateArtifact struct {
+	ID             string `json:"id"`
+	ServingStateID string `json:"serving_state_id"`
+	WorkspaceID    string `json:"workspace_id"`
+	Environment    string `json:"environment"`
+	Digest         string `json:"digest"`
+	Format         string `json:"format"`
+	Path           string `json:"path"`
+	DataRoot       string `json:"data_root"`
+	ManifestJson   string `json:"manifest_json"`
+	SizeBytes      int64  `json:"size_bytes"`
+	CreatedAt      string `json:"created_at"`
+}
+
 type Session struct {
 	ID          string         `json:"id"`
 	PrincipalID string         `json:"principal_id"`
@@ -315,9 +314,9 @@ type Workspace struct {
 	UpdatedAt   string `json:"updated_at"`
 }
 
-type WorkspaceActiveDeployment struct {
-	WorkspaceID  string `json:"workspace_id"`
-	Environment  string `json:"environment"`
-	DeploymentID string `json:"deployment_id"`
-	UpdatedAt    string `json:"updated_at"`
+type WorkspaceActiveServingState struct {
+	WorkspaceID    string `json:"workspace_id"`
+	Environment    string `json:"environment"`
+	ServingStateID string `json:"serving_state_id"`
+	UpdatedAt      string `json:"updated_at"`
 }

@@ -12,12 +12,12 @@ import (
 )
 
 type materializationRunRequest struct {
-	ModelID      string `json:"modelId"`
-	DeploymentID string `json:"deploymentId,omitempty"`
-	TargetType   string `json:"targetType,omitempty"`
-	TargetID     string `json:"targetId,omitempty"`
-	TriggerType  string `json:"triggerType,omitempty"`
-	ParentRunID  string `json:"parentRunId,omitempty"`
+	ModelID        string `json:"modelId"`
+	ServingStateID string `json:"servingStateId,omitempty"`
+	TargetType     string `json:"targetType,omitempty"`
+	TargetID       string `json:"targetId,omitempty"`
+	TriggerType    string `json:"triggerType,omitempty"`
+	ParentRunID    string `json:"parentRunId,omitempty"`
 }
 
 func (s *Server) createMaterializationRun(w http.ResponseWriter, r *http.Request) {
@@ -36,21 +36,21 @@ func (s *Server) createMaterializationRun(w http.ResponseWriter, r *http.Request
 	}
 	principal, _ := currentPrincipal(s, r)
 	run, err := repo.CreateRun(r.Context(), materialize.RunInput{
-		WorkspaceID:  workspaceID,
-		ModelID:      input.ModelID,
-		DeploymentID: input.DeploymentID,
-		PrincipalID:  principal.ID,
-		TargetType:   input.TargetType,
-		TargetID:     input.TargetID,
-		TriggerType:  input.TriggerType,
-		ParentRunID:  input.ParentRunID,
+		WorkspaceID:    workspaceID,
+		ModelID:        input.ModelID,
+		ServingStateID: input.ServingStateID,
+		PrincipalID:    principal.ID,
+		TargetType:     input.TargetType,
+		TargetID:       input.TargetID,
+		TriggerType:    input.TriggerType,
+		ParentRunID:    input.ParentRunID,
 	})
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
 	}
 	s.dispatchQueuedMaterializationJobs(context.Background())
-	writeJSON(w, http.StatusAccepted, run)
+	writeJSON(w, http.StatusAccepted, refreshRunDTO(run))
 }
 
 func (s *Server) executionService() *execution.Service {
@@ -82,7 +82,11 @@ func (s *Server) listMaterializationRuns(w http.ResponseWriter, r *http.Request)
 		nextCursor = runs[limit-1].ID
 		runs = runs[:limit]
 	}
-	writeJSON(w, http.StatusOK, pagedResponseWithCursor(runs, nextCursor))
+	items := make([]refreshRunResponse, 0, len(runs))
+	for _, run := range runs {
+		items = append(items, refreshRunDTO(run))
+	}
+	writeJSON(w, http.StatusOK, pagedResponseWithCursor(items, nextCursor))
 }
 
 func (s *Server) getMaterializationRun(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +99,45 @@ func (s *Server) getMaterializationRun(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, run)
+	writeJSON(w, http.StatusOK, refreshRunDTO(run))
+}
+
+type refreshRunResponse struct {
+	ID                   string `json:"id"`
+	WorkspaceID          string `json:"workspaceId"`
+	ModelID              string `json:"modelId"`
+	ServingStateID       string `json:"servingStateId,omitempty"`
+	PrincipalID          string `json:"principalId,omitempty"`
+	PrincipalDisplayName string `json:"principalDisplayName,omitempty"`
+	TargetType           string `json:"targetType"`
+	TargetID             string `json:"targetId"`
+	TriggerType          string `json:"triggerType"`
+	ParentRunID          string `json:"parentRunId,omitempty"`
+	Status               string `json:"status"`
+	Error                string `json:"error,omitempty"`
+	CreatedAt            string `json:"createdAt"`
+	StartedAt            string `json:"startedAt,omitempty"`
+	FinishedAt           string `json:"finishedAt,omitempty"`
+}
+
+func refreshRunDTO(run materialize.RunRecord) refreshRunResponse {
+	return refreshRunResponse{
+		ID:                   run.ID,
+		WorkspaceID:          run.WorkspaceID,
+		ModelID:              run.ModelID,
+		ServingStateID:       run.ServingStateID,
+		PrincipalID:          run.PrincipalID,
+		PrincipalDisplayName: run.PrincipalDisplayName,
+		TargetType:           run.TargetType,
+		TargetID:             run.TargetID,
+		TriggerType:          run.TriggerType,
+		ParentRunID:          run.ParentRunID,
+		Status:               run.Status,
+		Error:                run.Error,
+		CreatedAt:            run.CreatedAt,
+		StartedAt:            run.StartedAt,
+		FinishedAt:           run.FinishedAt,
+	}
 }
 
 func (s *Server) materializationRunRepository(w http.ResponseWriter, r *http.Request) (*materialize.SQLRunRepository, string, bool) {

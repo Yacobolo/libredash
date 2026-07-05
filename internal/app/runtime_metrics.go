@@ -47,7 +47,7 @@ type catalogRuntime interface {
 }
 
 type workspaceAssetRuntime interface {
-	WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool)
+	WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool)
 }
 
 type reportRuntime interface {
@@ -122,7 +122,7 @@ func (m runtimeMetrics) Catalog() dashboard.Catalog {
 			title = "LibreDash"
 		}
 		return dashboard.Catalog{
-			Workspace: dashboard.CatalogWorkspace{ID: m.workspaceID, Title: title, Description: "No active deployment."},
+			Workspace: dashboard.CatalogWorkspace{ID: m.workspaceID, Title: title, Description: "No active serving state."},
 		}
 	}
 	defer release()
@@ -349,7 +349,7 @@ func (m runtimeMetrics) Pages(dashboardID string) []dashboard.Page {
 	return port.Pages(dashboardID)
 }
 
-func (m runtimeMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+func (m runtimeMetrics) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
 	runtime, release, err := m.active(context.Background())
 	if err != nil {
 		return nil, nil, false
@@ -359,7 +359,7 @@ func (m runtimeMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]wor
 	if !ok {
 		return nil, nil, false
 	}
-	return port.WorkspaceAssets(workspaceID, deploymentID)
+	return port.WorkspaceAssets(workspaceID, servingStateID)
 }
 
 func (m runtimeMetrics) AgentPolicy() workspace.AgentPolicy {

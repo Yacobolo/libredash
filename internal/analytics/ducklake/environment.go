@@ -305,7 +305,7 @@ func loadExtension(ctx context.Context, db *sql.DB, name string) error {
 	return nil
 }
 
-func (e *Environment) Commit(ctx context.Context, deploymentID string, extra map[string]string, fn func(*sql.Tx) error) (int64, error) {
+func (e *Environment) Commit(ctx context.Context, servingStateID string, extra map[string]string, fn func(*sql.Tx) error) (int64, error) {
 	if e == nil || e.db == nil {
 		return 0, fmt.Errorf("ducklake environment is not initialized")
 	}
@@ -317,7 +317,7 @@ func (e *Environment) Commit(ctx context.Context, deploymentID string, extra map
 		return 0, err
 	}
 	defer tx.Rollback()
-	if err := setCommitMessage(ctx, tx, deploymentID, extra); err != nil {
+	if err := setCommitMessage(ctx, tx, servingStateID, extra); err != nil {
 		return 0, err
 	}
 	if err := fn(tx); err != nil {
@@ -386,12 +386,12 @@ func (e *Environment) DeleteOrphanedFiles(ctx context.Context, dryRun bool) erro
 	return err
 }
 
-func setCommitMessage(ctx context.Context, tx *sql.Tx, deploymentID string, extra map[string]string) error {
-	deploymentID = strings.TrimSpace(deploymentID)
-	if deploymentID == "" {
-		deploymentID = "unknown"
+func setCommitMessage(ctx context.Context, tx *sql.Tx, servingStateID string, extra map[string]string) error {
+	servingStateID = strings.TrimSpace(servingStateID)
+	if servingStateID == "" {
+		servingStateID = "unknown"
 	}
-	payload := map[string]string{"deploymentId": deploymentID}
+	payload := map[string]string{"servingStateId": servingStateID}
 	for key, value := range extra {
 		payload[key] = value
 	}
@@ -402,7 +402,7 @@ func setCommitMessage(ctx context.Context, tx *sql.Tx, deploymentID string, extr
 	_, err = tx.ExecContext(ctx,
 		"CALL "+catalogAlias+".set_commit_message(?, ?, extra_info => ?)",
 		"LibreDash",
-		"deployment "+deploymentID,
+		"serving-state "+servingStateID,
 		string(bytes),
 	)
 	return err

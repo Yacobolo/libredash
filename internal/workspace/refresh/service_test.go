@@ -8,7 +8,7 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
@@ -20,23 +20,23 @@ func TestServiceExecuteClaimedJobActivatesAfterMaterializeAndPrepare(t *testing.
 	runtime := &fakeRuntimeHost{}
 	retention := &fakeRetention{}
 	service := Service{
-		Deployments:  repo,
-		Runs:         repo,
-		Artifacts:    fakeArtifactLoader{definition: refreshTestDefinition()},
-		Materializer: materializer,
-		Runtime:      runtime,
-		Retention:    retention,
-		Publisher:    publisher,
+		ServingStates: repo,
+		Runs:          repo,
+		Artifacts:     fakeArtifactLoader{definition: refreshTestDefinition()},
+		Materializer:  materializer,
+		Runtime:       runtime,
+		Retention:     retention,
+		Publisher:     publisher,
 	}
 
 	err := service.ExecuteClaimedJob(ctx, materialize.JobRecord{
-		ID:           "job_1",
-		WorkspaceID:  "sales",
-		DeploymentID: "dep_candidate",
-		RunID:        "run_root",
-		TargetType:   materialize.TargetModelTable,
-		TargetID:     "sales.orders",
-		Kind:         materialize.JobKindWorkspaceAssetRefresh,
+		ID:             "job_1",
+		WorkspaceID:    "sales",
+		ServingStateID: "dep_candidate",
+		RunID:          "run_root",
+		TargetType:     materialize.TargetModelTable,
+		TargetID:       "sales.orders",
+		Kind:           materialize.JobKindWorkspaceAssetRefresh,
 	})
 	if err != nil {
 		t.Fatalf("execute claimed job: %v", err)
@@ -66,21 +66,21 @@ func TestServiceExecuteClaimedJobMaterializeFailureDoesNotActivate(t *testing.T)
 	ctx := context.Background()
 	repo := newFakeRepo()
 	service := Service{
-		Deployments:  repo,
-		Runs:         repo,
-		Artifacts:    fakeArtifactLoader{definition: refreshTestDefinition()},
-		Materializer: &fakeMaterializer{err: errors.New("materialize failed")},
-		Runtime:      &fakeRuntimeHost{},
+		ServingStates: repo,
+		Runs:          repo,
+		Artifacts:     fakeArtifactLoader{definition: refreshTestDefinition()},
+		Materializer:  &fakeMaterializer{err: errors.New("materialize failed")},
+		Runtime:       &fakeRuntimeHost{},
 	}
 
 	err := service.ExecuteClaimedJob(ctx, materialize.JobRecord{
-		ID:           "job_1",
-		WorkspaceID:  "sales",
-		DeploymentID: "dep_candidate",
-		RunID:        "run_root",
-		TargetType:   materialize.TargetModelTable,
-		TargetID:     "sales.orders",
-		Kind:         materialize.JobKindWorkspaceAssetRefresh,
+		ID:             "job_1",
+		WorkspaceID:    "sales",
+		ServingStateID: "dep_candidate",
+		RunID:          "run_root",
+		TargetType:     materialize.TargetModelTable,
+		TargetID:       "sales.orders",
+		Kind:           materialize.JobKindWorkspaceAssetRefresh,
 	})
 	if err == nil {
 		t.Fatal("execute claimed job error = nil, want materialize failure")
@@ -100,21 +100,21 @@ func TestServiceExecuteClaimedJobRuntimePrepareFailureDoesNotActivate(t *testing
 	ctx := context.Background()
 	repo := newFakeRepo()
 	service := Service{
-		Deployments:  repo,
-		Runs:         repo,
-		Artifacts:    fakeArtifactLoader{definition: refreshTestDefinition()},
-		Materializer: &fakeMaterializer{snapshotID: 42},
-		Runtime:      &fakeRuntimeHost{prepareErr: errors.New("prepare failed")},
+		ServingStates: repo,
+		Runs:          repo,
+		Artifacts:     fakeArtifactLoader{definition: refreshTestDefinition()},
+		Materializer:  &fakeMaterializer{snapshotID: 42},
+		Runtime:       &fakeRuntimeHost{prepareErr: errors.New("prepare failed")},
 	}
 
 	err := service.ExecuteClaimedJob(ctx, materialize.JobRecord{
-		ID:           "job_1",
-		WorkspaceID:  "sales",
-		DeploymentID: "dep_candidate",
-		RunID:        "run_root",
-		TargetType:   materialize.TargetModelTable,
-		TargetID:     "sales.orders",
-		Kind:         materialize.JobKindWorkspaceAssetRefresh,
+		ID:             "job_1",
+		WorkspaceID:    "sales",
+		ServingStateID: "dep_candidate",
+		RunID:          "run_root",
+		TargetType:     materialize.TargetModelTable,
+		TargetID:       "sales.orders",
+		Kind:           materialize.JobKindWorkspaceAssetRefresh,
 	})
 	if err == nil {
 		t.Fatal("execute claimed job error = nil, want prepare failure")
@@ -134,23 +134,23 @@ func TestServiceQueueAssetRefreshCreatesDependencyRuns(t *testing.T) {
 	ctx := context.Background()
 	repo := newFakeRepo()
 	service := Service{
-		Deployments: repo,
-		Runs:        repo,
-		Artifacts:   fakeArtifactLoader{definition: refreshTestDefinition()},
-		Publisher:   &fakePublisher{},
+		ServingStates: repo,
+		Runs:          repo,
+		Artifacts:     fakeArtifactLoader{definition: refreshTestDefinition()},
+		Publisher:     &fakePublisher{},
 	}
 
 	result, err := service.QueueAssetRefresh(ctx, QueueAssetInput{
 		WorkspaceID: "sales",
-		Environment: deployment.DefaultEnvironment,
+		Environment: servingstate.DefaultEnvironment,
 		PrincipalID: "principal",
 		Asset:       workspace.AssetView{Type: string(workspace.AssetTypeModelTable), Key: "sales.orders"},
 	})
 	if err != nil {
 		t.Fatalf("queue asset refresh: %v", err)
 	}
-	if result.DeploymentID != "dep_candidate" {
-		t.Fatalf("deployment id = %s, want dep_candidate", result.DeploymentID)
+	if result.ServingStateID != "dep_candidate" {
+		t.Fatalf("serving state id = %s, want dep_candidate", result.ServingStateID)
 	}
 	if len(repo.createdRuns) != 2 {
 		t.Fatalf("created runs = %#v, want root plus dependency", repo.createdRuns)
@@ -168,29 +168,29 @@ func TestServiceQueueAssetRefreshCreatesDependencyRuns(t *testing.T) {
 func TestServiceCreateRefreshCandidatePersistsResolvedDataRoot(t *testing.T) {
 	ctx := context.Background()
 	repo := newFakeRepo()
-	service := Service{Deployments: repo}
+	service := Service{ServingStates: repo}
 	active := ServingState{
-		Deployment: deployment.Deployment{
+		State: servingstate.State{
 			ID:           "dep_active",
 			WorkspaceID:  "movielens",
-			Environment:  deployment.DefaultEnvironment,
+			Environment:  servingstate.DefaultEnvironment,
 			Digest:       "artifact-digest",
 			ManifestJSON: "{}",
 		},
-		Artifact: deployment.Artifact{
-			DeploymentID: "dep_active",
-			WorkspaceID:  "movielens",
-			Environment:  deployment.DefaultEnvironment,
-			Digest:       "artifact-digest",
-			Format:       "tar.gz",
-			Path:         "/tmp/artifact.tgz",
-			DataRoot:     ".data/movielens",
+		Artifact: servingstate.Artifact{
+			ServingStateID: "dep_active",
+			WorkspaceID:    "movielens",
+			Environment:    servingstate.DefaultEnvironment,
+			Digest:         "artifact-digest",
+			Format:         "tar.gz",
+			Path:           "/tmp/artifact.tgz",
+			DataRoot:       ".data/movielens",
 		},
 	}
 
 	candidate, err := service.CreateRefreshCandidate(ctx, RefreshCandidateInput{
 		WorkspaceID:   "movielens",
-		Environment:   deployment.DefaultEnvironment,
+		Environment:   servingstate.DefaultEnvironment,
 		CreatedBy:     "tester",
 		Active:        active,
 		ArtifactGraph: workspace.AssetGraph{},
@@ -223,57 +223,57 @@ func refreshTestDefinition() *workspace.Definition {
 }
 
 type fakeRepo struct {
-	activeDeployment           deployment.Deployment
-	activeArtifact             deployment.Artifact
-	candidateDeployment        deployment.Deployment
-	candidateArtifact          deployment.Artifact
-	recordedSnapshotDeployment deployment.ID
+	activeDeployment           servingstate.State
+	activeArtifact             servingstate.Artifact
+	candidateState             servingstate.State
+	candidateArtifact          servingstate.Artifact
+	recordedSnapshotDeployment servingstate.ID
 	recordedSnapshot           int64
-	activatedDeployment        deployment.ID
-	failedDeployment           deployment.ID
+	activatedDeployment        servingstate.ID
+	failedDeployment           servingstate.ID
 	runStatuses                map[string]string
 	createdRuns                []materialize.RunInput
-	savedArtifact              deployment.Artifact
-	savedValidation            deployment.Validation
+	savedArtifact              servingstate.Artifact
+	savedValidation            servingstate.Validation
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
-		activeDeployment: deployment.Deployment{
+		activeDeployment: servingstate.State{
 			ID:           "dep_active",
 			WorkspaceID:  "sales",
-			Environment:  deployment.DefaultEnvironment,
-			Status:       deployment.StatusActive,
+			Environment:  servingstate.DefaultEnvironment,
+			Status:       servingstate.StatusActive,
 			Digest:       "digest",
 			ManifestJSON: "{}",
 		},
-		activeArtifact: deployment.Artifact{
-			DeploymentID: "dep_active",
-			WorkspaceID:  "sales",
-			Environment:  deployment.DefaultEnvironment,
-			Digest:       "digest",
-			Format:       "tar.gz",
-			Path:         "/tmp/artifact.tar.gz",
-			DataRoot:     ".data/sales",
-			ManifestJSON: "{}",
+		activeArtifact: servingstate.Artifact{
+			ServingStateID: "dep_active",
+			WorkspaceID:    "sales",
+			Environment:    servingstate.DefaultEnvironment,
+			Digest:         "digest",
+			Format:         "tar.gz",
+			Path:           "/tmp/artifact.tar.gz",
+			DataRoot:       ".data/sales",
+			ManifestJSON:   "{}",
 		},
-		candidateDeployment: deployment.Deployment{
+		candidateState: servingstate.State{
 			ID:           "dep_candidate",
 			WorkspaceID:  "sales",
-			Environment:  deployment.DefaultEnvironment,
-			Status:       deployment.StatusValidated,
+			Environment:  servingstate.DefaultEnvironment,
+			Status:       servingstate.StatusValidated,
 			Digest:       "digest",
 			ManifestJSON: "{}",
 		},
-		candidateArtifact: deployment.Artifact{
-			DeploymentID: "dep_candidate",
-			WorkspaceID:  "sales",
-			Environment:  deployment.DefaultEnvironment,
-			Digest:       "digest",
-			Format:       "tar.gz",
-			Path:         "/tmp/artifact.tar.gz",
-			DataRoot:     ".data/sales",
-			ManifestJSON: "{}",
+		candidateArtifact: servingstate.Artifact{
+			ServingStateID: "dep_candidate",
+			WorkspaceID:    "sales",
+			Environment:    servingstate.DefaultEnvironment,
+			Digest:         "digest",
+			Format:         "tar.gz",
+			Path:           "/tmp/artifact.tar.gz",
+			DataRoot:       ".data/sales",
+			ManifestJSON:   "{}",
 		},
 		runStatuses: map[string]string{
 			"run_root":  materialize.RunStatusRunning,
@@ -282,47 +282,47 @@ func newFakeRepo() *fakeRepo {
 	}
 }
 
-func (r *fakeRepo) ActiveArtifact(context.Context, deployment.WorkspaceID, deployment.Environment) (deployment.Deployment, deployment.Artifact, error) {
+func (r *fakeRepo) ActiveArtifact(context.Context, servingstate.WorkspaceID, servingstate.Environment) (servingstate.State, servingstate.Artifact, error) {
 	return r.activeDeployment, r.activeArtifact, nil
 }
 
-func (r *fakeRepo) Create(context.Context, deployment.CreateInput) (deployment.Deployment, error) {
-	return deployment.Deployment{ID: "dep_candidate", WorkspaceID: "sales", Environment: deployment.DefaultEnvironment, Status: deployment.StatusPending}, nil
+func (r *fakeRepo) Create(context.Context, servingstate.CreateInput) (servingstate.State, error) {
+	return servingstate.State{ID: "dep_candidate", WorkspaceID: "sales", Environment: servingstate.DefaultEnvironment, Status: servingstate.StatusPending}, nil
 }
 
-func (r *fakeRepo) SaveValidated(_ context.Context, deploymentID deployment.ID, validation deployment.Validation, artifact deployment.Artifact) (deployment.Deployment, error) {
+func (r *fakeRepo) SaveValidated(_ context.Context, servingStateID servingstate.ID, validation servingstate.Validation, artifact servingstate.Artifact) (servingstate.State, error) {
 	r.savedValidation = validation
 	r.savedArtifact = artifact
-	r.candidateDeployment.ID = deploymentID
-	r.candidateDeployment.WorkspaceID = artifact.WorkspaceID
-	r.candidateDeployment.Environment = artifact.Environment
-	r.candidateDeployment.Digest = validation.Digest
+	r.candidateState.ID = servingStateID
+	r.candidateState.WorkspaceID = artifact.WorkspaceID
+	r.candidateState.Environment = artifact.Environment
+	r.candidateState.Digest = validation.Digest
 	r.candidateArtifact = artifact
-	return r.candidateDeployment, nil
+	return r.candidateState, nil
 }
 
-func (r *fakeRepo) ByID(context.Context, deployment.ID) (deployment.Deployment, error) {
-	return r.candidateDeployment, nil
+func (r *fakeRepo) ByID(context.Context, servingstate.ID) (servingstate.State, error) {
+	return r.candidateState, nil
 }
 
-func (r *fakeRepo) ArtifactByDeployment(context.Context, deployment.ID) (deployment.Artifact, error) {
+func (r *fakeRepo) ArtifactByServingState(context.Context, servingstate.ID) (servingstate.Artifact, error) {
 	return r.candidateArtifact, nil
 }
 
-func (r *fakeRepo) RecordDuckLakeSnapshot(_ context.Context, deploymentID deployment.ID, snapshotID int64) error {
-	r.recordedSnapshotDeployment = deploymentID
+func (r *fakeRepo) RecordDuckLakeSnapshot(_ context.Context, servingStateID servingstate.ID, snapshotID int64) error {
+	r.recordedSnapshotDeployment = servingStateID
 	r.recordedSnapshot = snapshotID
-	r.candidateDeployment.DuckLakeSnapshotID = snapshotID
+	r.candidateState.DuckLakeSnapshotID = snapshotID
 	return nil
 }
 
-func (r *fakeRepo) Activate(_ context.Context, _ deployment.WorkspaceID, _ deployment.Environment, deploymentID deployment.ID) (deployment.Deployment, error) {
-	r.activatedDeployment = deploymentID
-	return r.candidateDeployment, nil
+func (r *fakeRepo) Activate(_ context.Context, _ servingstate.WorkspaceID, _ servingstate.Environment, servingStateID servingstate.ID) (servingstate.State, error) {
+	r.activatedDeployment = servingStateID
+	return r.candidateState, nil
 }
 
-func (r *fakeRepo) MarkFailed(_ context.Context, deploymentID deployment.ID, _ error) error {
-	r.failedDeployment = deploymentID
+func (r *fakeRepo) MarkFailed(_ context.Context, servingStateID servingstate.ID, _ error) error {
+	r.failedDeployment = servingStateID
 	return nil
 }
 
@@ -333,7 +333,7 @@ func (r *fakeRepo) CreateRun(_ context.Context, input materialize.RunInput) (mat
 		id = "run_child"
 	}
 	r.runStatuses[id] = materialize.RunStatusQueued
-	return materialize.RunRecord{ID: id, WorkspaceID: input.WorkspaceID, DeploymentID: input.DeploymentID, TargetType: input.TargetType, TargetID: input.TargetID, TriggerType: input.TriggerType, ParentRunID: input.ParentRunID}, nil
+	return materialize.RunRecord{ID: id, WorkspaceID: input.WorkspaceID, ServingStateID: input.ServingStateID, TargetType: input.TargetType, TargetID: input.TargetID, TriggerType: input.TriggerType, ParentRunID: input.ParentRunID}, nil
 }
 
 func (r *fakeRepo) ListChildRuns(context.Context, string, string) ([]materialize.RunRecord, error) {
@@ -359,7 +359,7 @@ type fakeArtifactLoader struct {
 	definition *workspace.Definition
 }
 
-func (l fakeArtifactLoader) Load(context.Context, deployment.Artifact) (LoadedArtifact, error) {
+func (l fakeArtifactLoader) Load(context.Context, servingstate.Artifact) (LoadedArtifact, error) {
 	return LoadedArtifact{Definition: l.definition, Graph: workspace.AssetGraph{}}, nil
 }
 
@@ -383,7 +383,7 @@ type fakeRuntimeHost struct {
 	prepareErr error
 }
 
-func (h *fakeRuntimeHost) PrepareDeployment(context.Context, string) (deployment.PreparedRuntime, error) {
+func (h *fakeRuntimeHost) PrepareServingState(context.Context, string) (servingstate.PreparedRuntime, error) {
 	if h.prepareErr != nil {
 		return nil, h.prepareErr
 	}
@@ -391,7 +391,7 @@ func (h *fakeRuntimeHost) PrepareDeployment(context.Context, string) (deployment
 	return fakePrepared{}, nil
 }
 
-func (h *fakeRuntimeHost) CommitPrepared(deployment.PreparedRuntime) error {
+func (h *fakeRuntimeHost) CommitPrepared(servingstate.PreparedRuntime) error {
 	h.committed = true
 	return nil
 }

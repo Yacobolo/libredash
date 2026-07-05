@@ -143,8 +143,8 @@ func (a apiGenAdapter) ListWorkspaceAssets(w http.ResponseWriter, r *http.Reques
 	a.server.apiWorkspaceAssets(w, r)
 }
 
-func (a apiGenAdapter) GetWorkspaceActiveDeploymentGraph(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenGetWorkspaceActiveDeploymentGraphParams) {
-	a.server.apiWorkspaceActiveDeploymentGraph(w, r)
+func (a apiGenAdapter) GetWorkspaceActiveAssetGraph(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenGetWorkspaceActiveAssetGraphParams) {
+	a.server.apiWorkspaceActiveServingStateGraph(w, r)
 }
 
 func (a apiGenAdapter) GetWorkspaceAsset(w http.ResponseWriter, r *http.Request, _, _ string) {
@@ -223,39 +223,39 @@ func (a apiGenAdapter) ListDashboardFilterOptions(w http.ResponseWriter, r *http
 	a.server.listDashboardFilterOptions(w, r)
 }
 
-func (a apiGenAdapter) ListDeployments(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListDeploymentsParams) {
-	a.server.listDeployments(w, r)
+func (a apiGenAdapter) ListPublishes(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListPublishesParams) {
+	a.server.listPublishes(w, r)
 }
 
-func (a apiGenAdapter) CreateDeployment(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.createDeployment(w, r)
+func (a apiGenAdapter) CreatePublish(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.createPublish(w, r)
 }
 
-func (a apiGenAdapter) GetDeployment(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenGetDeploymentParams) {
-	a.server.getDeployment(w, r)
+func (a apiGenAdapter) GetPublish(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenGetPublishParams) {
+	a.server.getPublish(w, r)
 }
 
-func (a apiGenAdapter) UploadDeploymentArtifact(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenUploadDeploymentArtifactHeaders) {
-	a.server.uploadDeploymentArtifact(w, r)
+func (a apiGenAdapter) UploadPublishArtifact(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenUploadPublishArtifactHeaders) {
+	a.server.uploadPublishArtifact(w, r)
 }
 
-func (a apiGenAdapter) ActivateDeployment(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenActivateDeploymentParams) {
-	a.server.activateDeployment(w, r)
+func (a apiGenAdapter) ActivatePublish(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenActivatePublishParams) {
+	a.server.activatePublish(w, r)
 }
 
-func (a apiGenAdapter) ValidateDeployment(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenValidateDeploymentParams) {
-	a.server.validateDeployment(w, r)
+func (a apiGenAdapter) ValidatePublish(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenValidatePublishParams) {
+	a.server.validatePublish(w, r)
 }
 
-func (a apiGenAdapter) CreateMaterializationRun(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) CreateRefreshRun(w http.ResponseWriter, r *http.Request, _ string) {
 	a.server.createMaterializationRun(w, r)
 }
 
-func (a apiGenAdapter) ListMaterializationRuns(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListMaterializationRunsParams) {
+func (a apiGenAdapter) ListRefreshRuns(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListRefreshRunsParams) {
 	a.server.listMaterializationRuns(w, r)
 }
 
-func (a apiGenAdapter) GetMaterializationRun(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) GetRefreshRun(w http.ResponseWriter, r *http.Request, _, _ string) {
 	a.server.getMaterializationRun(w, r)
 }
 

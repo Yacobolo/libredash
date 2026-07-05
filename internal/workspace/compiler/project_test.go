@@ -41,7 +41,7 @@ spec:
 		"workspaces/operations/dashboards/fulfillment-operations.yaml": dashboardYAML("operations", "fulfillment-operations", "operations"),
 	})
 
-	compiled, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+	compiled, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 	if err != nil {
 		t.Fatalf("CompileProject() error = %v", err)
 	}
@@ -106,12 +106,12 @@ func TestCompileRequiresExplicitWorkspaceID(t *testing.T) {
 		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 	})
 
-	_, err := Compile(projectPath, Options{DeploymentID: "dep_test"})
+	_, err := Compile(projectPath, Options{ServingStateID: "dep_test"})
 	if err == nil || !strings.Contains(err.Error(), "workspace id is required") {
 		t.Fatalf("Compile(blank workspace) error = %v, want workspace id required", err)
 	}
 
-	compiled, err := Compile(projectPath, Options{WorkspaceID: "sales", DeploymentID: "dep_test"})
+	compiled, err := Compile(projectPath, Options{WorkspaceID: "sales", ServingStateID: "dep_test"})
 	if err != nil {
 		t.Fatalf("Compile(sales) error = %v", err)
 	}
@@ -133,7 +133,7 @@ func TestCompileProjectCompilesWorkspaceAgentPolicy(t *testing.T) {
 		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 	})
 
-	compiled, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+	compiled, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 	if err != nil {
 		t.Fatalf("CompileProject() error = %v", err)
 	}
@@ -211,7 +211,7 @@ func TestCompileProjectRejectsInvalidWorkspaceAgentPolicy(t *testing.T) {
 				files["workspaces/sales/agent/duplicate.yaml"] = tc.file
 			}
 			projectPath := writeProjectFixture(t, files)
-			_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+			_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 			assertCompileErrorContains(t, err, tc.want)
 			assertDiagnostic(t, err, tc.id, tc.field)
 		})
@@ -279,7 +279,7 @@ func TestCompileProjectRejectsInvalidAccessResources(t *testing.T) {
 				files[path] = content
 			}
 			projectPath := writeProjectFixture(t, files)
-			_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+			_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 			assertCompileErrorContains(t, err, tc.want)
 			if tc.field != "" {
 				diagnostics := configschema.Diagnostics(err)
@@ -310,7 +310,7 @@ spec:
 		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 	})
 
-	_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+	_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 	if err == nil {
 		t.Fatal("CompileProject() error = nil, want allowlist failure")
 	}
@@ -407,7 +407,7 @@ func TestPlanProjectAgainstGraphReportsStableDiff(t *testing.T) {
 		"workspaces/sales/semantic-models/sales.yaml":      semanticModelYAML("sales", "orders", "order_count"),
 		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 	})
-	active, err := CompileProject(projectPath, Options{DeploymentID: "dep_active"})
+	active, err := CompileProject(projectPath, Options{ServingStateID: "dep_active"})
 	if err != nil {
 		t.Fatalf("CompileProject() error = %v", err)
 	}
@@ -427,13 +427,13 @@ func TestPlanProjectAgainstGraphReportsStableDiff(t *testing.T) {
 		}
 	}
 	activeGraph.Assets = append(activeGraph.Assets, workspace.Asset{
-		ID:            "dashboard:sales.removed",
-		WorkspaceID:   "sales",
-		DeploymentID:  "dep_active",
-		Type:          workspace.AssetTypeDashboard,
-		Key:           "sales.removed",
-		PayloadSchema: workspace.PayloadSchemaForAssetType(workspace.AssetTypeDashboard),
-		ContentHash:   "removed",
+		ID:             "dashboard:sales.removed",
+		WorkspaceID:    "sales",
+		ServingStateID: "dep_active",
+		Type:           workspace.AssetTypeDashboard,
+		Key:            "sales.removed",
+		PayloadSchema:  workspace.PayloadSchemaForAssetType(workspace.AssetTypeDashboard),
+		ContentHash:    "removed",
 	})
 	if len(activeGraph.Edges) == 0 {
 		t.Fatal("fixture graph has no edges")
@@ -474,7 +474,7 @@ func TestPlanProjectAgainstGraphReportsSemanticAndAccessImpact(t *testing.T) {
 		"workspaces/sales/semantic-models/sales.yaml":      semanticModelYAML("sales", "orders", "order_count"),
 		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 	})
-	active, err := CompileProject(projectPath, Options{DeploymentID: "dep_active"})
+	active, err := CompileProject(projectPath, Options{ServingStateID: "dep_active"})
 	if err != nil {
 		t.Fatalf("CompileProject() error = %v", err)
 	}
@@ -552,8 +552,8 @@ func TestWorkspaceAgentPolicyValidationUsesRuntimeAgentToolRegistry(t *testing.T
 
 func TestDiffAssetGraphsMarksUsedSemanticChildrenBreaking(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	field := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeField, "sales.orders.order_id", "semantic_table:sales.sales.orders")
 	measure := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeMeasure, "sales.order_count", "semantic_model:sales.sales")
 	visual := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeVisual, "sales.executive-sales.total", "dashboard:sales.executive-sales")
@@ -590,14 +590,14 @@ func TestDiffAssetGraphsMarksUsedSemanticChildrenBreaking(t *testing.T) {
 
 func TestDiffAssetGraphsMarksRemovedDashboardDependencyBreaking(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	field := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeField, "sales.orders.status", "semantic_table:sales.sales.orders")
 	authoredField := field
-	authoredField.DeploymentID = authoredDeployment
+	authoredField.ServingStateID = authoredDeployment
 	visual := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeVisual, "sales.executive-sales.status", "dashboard:sales.executive-sales")
 	authoredVisual := visual
-	authoredVisual.DeploymentID = authoredDeployment
+	authoredVisual.ServingStateID = authoredDeployment
 	active := workspace.AssetGraph{
 		Assets: []workspace.Asset{field, visual},
 		Edges:  []workspace.AssetEdge{workspace.NewAssetEdge(workspaceID, activeDeployment, visual.ID, field.ID, workspace.AssetEdgeUsesField)},
@@ -618,14 +618,14 @@ func TestDiffAssetGraphsMarksRemovedDashboardDependencyBreaking(t *testing.T) {
 
 func TestDiffAssetGraphsMarksRemovedDashboardSemanticModelDependencyBreaking(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	model := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeSemanticModel, "sales.sales", "catalog:sales")
 	authoredModel := model
-	authoredModel.DeploymentID = authoredDeployment
+	authoredModel.ServingStateID = authoredDeployment
 	dashboard := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeDashboard, "sales.executive-sales", "catalog:sales")
 	authoredDashboard := dashboard
-	authoredDashboard.DeploymentID = authoredDeployment
+	authoredDashboard.ServingStateID = authoredDeployment
 	active := workspace.AssetGraph{
 		Assets: []workspace.Asset{model, dashboard},
 		Edges:  []workspace.AssetEdge{workspace.NewAssetEdge(workspaceID, activeDeployment, dashboard.ID, model.ID, workspace.AssetEdgeUsesSemanticModel)},
@@ -640,14 +640,14 @@ func TestDiffAssetGraphsMarksRemovedDashboardSemanticModelDependencyBreaking(t *
 
 func TestDiffAssetGraphsKeepsSourceDependencyRemovalMaterializationOnly(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	source := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales")
 	authoredSource := source
-	authoredSource.DeploymentID = authoredDeployment
+	authoredSource.ServingStateID = authoredDeployment
 	modelTable := testPlanAsset(t, workspaceID, activeDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales")
 	authoredModelTable := modelTable
-	authoredModelTable.DeploymentID = authoredDeployment
+	authoredModelTable.ServingStateID = authoredDeployment
 	active := workspace.AssetGraph{
 		Assets: []workspace.Asset{source, modelTable},
 		Edges:  []workspace.AssetEdge{workspace.NewAssetEdge(workspaceID, activeDeployment, modelTable.ID, source.ID, workspace.AssetEdgeReadsSource)},
@@ -665,8 +665,8 @@ func TestDiffAssetGraphsKeepsSourceDependencyRemovalMaterializationOnly(t *testi
 
 func TestDiffAssetGraphsTreatsUsedFieldLabelChangeAsNonBreaking(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	activeField := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeField, "sales.sales.orders.status", "semantic_table:sales.sales.orders", fieldPayloadV1{
 		Field: "orders.status", Table: "orders", Name: "status", Label: "Status", Type: "string", Expression: "status",
 	})
@@ -694,8 +694,8 @@ func TestDiffAssetGraphsTreatsUsedFieldLabelChangeAsNonBreaking(t *testing.T) {
 
 func TestDiffAssetGraphsTreatsUsedFieldExpressionChangeAsBreaking(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	activeField := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeField, "sales.sales.orders.status", "semantic_table:sales.sales.orders", fieldPayloadV1{
 		Field: "orders.status", Table: "orders", Name: "status", Label: "Status", Type: "string", Expression: "status",
 	})
@@ -720,8 +720,8 @@ func TestDiffAssetGraphsTreatsUsedFieldExpressionChangeAsBreaking(t *testing.T) 
 
 func TestDiffAssetGraphsTreatsUnusedSourceFieldChangeAsNonBreaking(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	activeSource := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", sourcePayloadV1{
 		Fields: map[string]sourceFieldPayloadV1{
 			"order_id": {Name: "order_id", Type: "string"},
@@ -754,8 +754,8 @@ func TestDiffAssetGraphsTreatsUnusedSourceFieldChangeAsNonBreaking(t *testing.T)
 
 func TestDiffAssetGraphsTreatsUsedSourceFieldChangeAsBreaking(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	activeSource := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", sourcePayloadV1{
 		Fields: map[string]sourceFieldPayloadV1{
 			"order_id": {Name: "order_id", Type: "string"},
@@ -786,8 +786,8 @@ func TestDiffAssetGraphsTreatsUsedSourceFieldChangeAsBreaking(t *testing.T) {
 
 func TestDiffAssetGraphsIgnoresRuntimeDiscoveredSchema(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	nullable := true
 	activeSource := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", sourcePayloadV1{
 		Connection: "olist",
@@ -820,8 +820,8 @@ func TestDiffAssetGraphsIgnoresRuntimeDiscoveredSchema(t *testing.T) {
 
 func TestDiffAssetGraphsKeepsAuthoredNestedSchemaFieldsSignificant(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	activeSource := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeSource, "olist.orders", "catalog:sales", map[string]any{
 		"Connection": "olist",
 		"Path":       "orders.csv",
@@ -845,8 +845,8 @@ func TestDiffAssetGraphsKeepsAuthoredNestedSchemaFieldsSignificant(t *testing.T)
 
 func TestDiffAssetGraphsTreatsUnusedModelColumnChangeAsNonBreaking(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	activeModel := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales", modelTablePayloadV1{
 		Columns: map[string]modelColumnPayloadV1{
 			"order_id": {Name: "order_id", Type: "string"},
@@ -877,8 +877,8 @@ func TestDiffAssetGraphsTreatsUnusedModelColumnChangeAsNonBreaking(t *testing.T)
 
 func TestDiffAssetGraphsTreatsUsedModelColumnChangeAsBreaking(t *testing.T) {
 	workspaceID := workspace.WorkspaceID("sales")
-	activeDeployment := workspace.DeploymentID("dep_active")
-	authoredDeployment := workspace.DeploymentID("plan")
+	activeDeployment := workspace.ServingStateID("dep_active")
+	authoredDeployment := workspace.ServingStateID("plan")
 	activeModel := testPlanAssetPayload(t, workspaceID, activeDeployment, workspace.AssetTypeModelTable, "sales.orders", "catalog:sales", modelTablePayloadV1{
 		Columns: map[string]modelColumnPayloadV1{"order_id": {Name: "order_id", Type: "string"}},
 	})
@@ -923,7 +923,7 @@ spec:
 `,
 		}))
 
-		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 		assertCompileErrorContains(t, err, `schema.enum`)
 		assertDiagnostic(t, err, "connection:bad", "spec")
 	})
@@ -951,7 +951,7 @@ spec:
 `,
 		}))
 
-		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 		assertCompileErrorContains(t, err, `escapes connection scope`)
 		assertDiagnostic(t, err, "source:unused.escape", "spec")
 	})
@@ -970,7 +970,7 @@ func TestCompileProjectSupportsMultipleSemanticModelsInWorkspace(t *testing.T) {
 		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 	})
 
-	compiled, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+	compiled, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 	if err != nil {
 		t.Fatalf("CompileProject() error = %v", err)
 	}
@@ -998,7 +998,7 @@ func TestCompileProjectAllowsDuplicateDashboardIDsAcrossWorkspaces(t *testing.T)
 		"workspaces/operations/dashboards/executive-sales.yaml": dashboardYAML("operations", "executive-sales", "operations"),
 	})
 
-	compiled, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+	compiled, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 	if err != nil {
 		t.Fatalf("CompileProject() error = %v", err)
 	}
@@ -1019,7 +1019,7 @@ func TestCompileProjectRejectsDuplicateDashboardIDsWithinWorkspace(t *testing.T)
 		"workspaces/sales/dashboards/two.yaml":        dashboardYAML("sales", "executive-sales", "sales"),
 	})
 
-	_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+	_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 	assertCompileErrorContains(t, err, `duplicate Dashboard "executive-sales"`)
 	assertDiagnostic(t, err, "dashboard:sales.executive-sales", "metadata.name")
 }
@@ -1037,7 +1037,7 @@ func TestCompileProjectRejectsUnknownReferences(t *testing.T) {
 			"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 		})
 
-		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 		assertCompileErrorContains(t, err, `Source "olist.orders" references unknown Connection "missing"`)
 	})
 
@@ -1053,7 +1053,7 @@ func TestCompileProjectRejectsUnknownReferences(t *testing.T) {
 			"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "missing"),
 		})
 
-		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 		assertCompileErrorContains(t, err, `references unknown SemanticModel "missing"`)
 	})
 }
@@ -1073,7 +1073,7 @@ spec:
 `,
 	})
 
-	_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+	_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 	assertCompileErrorContains(t, err, `field not allowed`)
 	assertDiagnostic(t, err, "connection:olist", "spec")
 }
@@ -1090,7 +1090,7 @@ func TestCompileProjectRejectsWorkspaceMismatchWithResourceDiagnostic(t *testing
 		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 	})
 
-	_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+	_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 	assertCompileErrorContains(t, err, `workspace = "operations", want "sales"`)
 	assertDiagnostic(t, err, "model_table:operations.orders", "metadata.workspace")
 }
@@ -1108,7 +1108,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 			"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 		})
 
-		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 		assertCompileErrorContains(t, err, "raw.<name> is internal")
 	})
 
@@ -1124,7 +1124,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 			"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 		})
 
-		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 		assertCompileErrorContains(t, err, "found unqualified relation")
 	})
 
@@ -1134,7 +1134,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 			"connections/olist.yaml": connectionYAML("olist"),
 		})
 
-		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 		assertCompileErrorContains(t, err, "escapes project boundary")
 	})
 
@@ -1144,7 +1144,7 @@ func TestCompileProjectRejectsHiddenImportsAndUnsafeIncludes(t *testing.T) {
 			"connections/olist.yaml": connectionYAML("olist"),
 		})
 
-		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 		assertCompileErrorContains(t, err, "unsupported ** glob")
 	})
 }
@@ -1162,7 +1162,7 @@ func TestCompileProjectRejectsSQLSourceMismatchAndCycles(t *testing.T) {
 			"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 		})
 
-		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 		assertCompileErrorContains(t, err, "SQL source references")
 	})
 
@@ -1179,7 +1179,7 @@ func TestCompileProjectRejectsSQLSourceMismatchAndCycles(t *testing.T) {
 			"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
 		})
 
-		_, err := CompileProject(projectPath, Options{DeploymentID: "dep_test"})
+		_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
 		assertCompileErrorContains(t, err, "model table dependency cycle")
 	})
 }
@@ -1260,18 +1260,18 @@ func minimalProjectFiles(extra map[string]string) map[string]string {
 	return files
 }
 
-func testPlanAsset(t *testing.T, workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, typ workspace.AssetType, key string, parent workspace.AssetID) workspace.Asset {
+func testPlanAsset(t *testing.T, workspaceID workspace.WorkspaceID, servingStateID workspace.ServingStateID, typ workspace.AssetType, key string, parent workspace.AssetID) workspace.Asset {
 	t.Helper()
-	asset, err := workspace.NewAsset(workspaceID, deploymentID, typ, key, parent, key, "", workspace.PayloadSchemaForAssetType(typ), map[string]any{"key": key})
+	asset, err := workspace.NewAsset(workspaceID, servingStateID, typ, key, parent, key, "", workspace.PayloadSchemaForAssetType(typ), map[string]any{"key": key})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return asset
 }
 
-func testPlanAssetPayload(t *testing.T, workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, typ workspace.AssetType, key string, parent workspace.AssetID, payload any) workspace.Asset {
+func testPlanAssetPayload(t *testing.T, workspaceID workspace.WorkspaceID, servingStateID workspace.ServingStateID, typ workspace.AssetType, key string, parent workspace.AssetID, payload any) workspace.Asset {
 	t.Helper()
-	asset, err := workspace.NewAsset(workspaceID, deploymentID, typ, key, parent, key, "", workspace.PayloadSchemaForAssetType(typ), payload)
+	asset, err := workspace.NewAsset(workspaceID, servingStateID, typ, key, parent, key, "", workspace.PayloadSchemaForAssetType(typ), payload)
 	if err != nil {
 		t.Fatal(err)
 	}

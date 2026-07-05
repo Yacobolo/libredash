@@ -10,9 +10,9 @@ import (
 	"time"
 
 	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
-	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
@@ -75,7 +75,7 @@ func TestAdminStorageCleanupDryRunDoesNotMutateDrainingDeployments(t *testing.T)
 	setAdminStorageEnv(t, home)
 	root := home
 	first, second := seedAdminDuckLakeSnapshots(t, ctx, home, root)
-	drainingID := recordAdminDeploymentSnapshotWithStatus(t, ctx, home, "dev", first, deployment.StatusDraining, "")
+	drainingID := recordAdminDeploymentSnapshotWithStatus(t, ctx, home, "dev", first, servingstate.StatusDraining)
 	recordAdminDeploymentSnapshot(t, ctx, home, "dev", second)
 
 	opts := &rootOptions{}
@@ -87,7 +87,7 @@ func TestAdminStorageCleanupDryRunDoesNotMutateDrainingDeployments(t *testing.T)
 		t.Fatalf("admin storage cleanup dry-run: %v", err)
 	}
 	status := adminDeploymentStatus(t, ctx, home, drainingID)
-	if status != string(deployment.StatusDraining) {
+	if status != string(servingstate.StatusDraining) {
 		t.Fatalf("draining deployment status after dry-run = %q, want draining", status)
 	}
 }
@@ -106,7 +106,7 @@ func TestAdminStorageCleanupRejectsMissingReferencedSnapshot(t *testing.T) {
 	cmd.SetOut(&out)
 	cmd.SetArgs([]string{"storage", "cleanup"})
 	err := cmd.Execute()
-	if err == nil || !strings.Contains(err.Error(), "deployment references missing DuckLake snapshots: 999") {
+	if err == nil || !strings.Contains(err.Error(), "serving states reference missing DuckLake snapshots: 999") {
 		t.Fatalf("admin storage cleanup error = %v, want missing snapshot reconciliation error", err)
 	}
 }
@@ -117,7 +117,7 @@ func TestAdminStorageCleanupApplyExpiresDrainingSnapshots(t *testing.T) {
 	setAdminStorageEnv(t, home)
 	root := home
 	first, second := seedAdminDuckLakeSnapshots(t, ctx, home, root)
-	recordAdminDeploymentSnapshotWithStatus(t, ctx, home, "dev", first, deployment.StatusDraining, "2000-01-01T00:00:00Z")
+	recordAdminDeploymentSnapshotWithStatus(t, ctx, home, "dev", first, servingstate.StatusDraining)
 	recordAdminDeploymentSnapshot(t, ctx, home, "dev", second)
 
 	opts := &rootOptions{}
@@ -169,7 +169,7 @@ func TestAdminStorageCleanupApplyProtectsLeasedDrainingSnapshot(t *testing.T) {
 	setAdminStorageEnv(t, home)
 	root := home
 	first, second := seedAdminDuckLakeSnapshots(t, ctx, home, root)
-	drainingID := recordAdminDeploymentSnapshotWithStatus(t, ctx, home, "dev", first, deployment.StatusDraining, "")
+	drainingID := recordAdminDeploymentSnapshotWithStatus(t, ctx, home, "dev", first, servingstate.StatusDraining)
 	recordAdminDeploymentSnapshot(t, ctx, home, "dev", second)
 	createAdminSnapshotLease(t, ctx, home, drainingID, first)
 
@@ -243,12 +243,12 @@ func seedAdminDuckLakeSnapshots(t *testing.T, ctx context.Context, home, root st
 	return first, second
 }
 
-func recordAdminDeploymentSnapshot(t *testing.T, ctx context.Context, home string, environment deployment.Environment, snapshotID int64) deployment.ID {
+func recordAdminDeploymentSnapshot(t *testing.T, ctx context.Context, home string, environment servingstate.Environment, snapshotID int64) servingstate.ID {
 	t.Helper()
-	return recordAdminDeploymentSnapshotWithStatus(t, ctx, home, environment, snapshotID, deployment.StatusActive, "")
+	return recordAdminDeploymentSnapshotWithStatus(t, ctx, home, environment, snapshotID, servingstate.StatusActive)
 }
 
-func recordAdminDeploymentSnapshotWithStatus(t *testing.T, ctx context.Context, home string, environment deployment.Environment, snapshotID int64, status deployment.Status, cleanupAfter string) deployment.ID {
+func recordAdminDeploymentSnapshotWithStatus(t *testing.T, ctx context.Context, home string, environment servingstate.Environment, snapshotID int64, status servingstate.Status) servingstate.ID {
 	t.Helper()
 	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
 	if err != nil {
@@ -258,32 +258,32 @@ func recordAdminDeploymentSnapshotWithStatus(t *testing.T, ctx context.Context, 
 	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
 		t.Fatalf("ensure workspace: %v", err)
 	}
-	repo := deploymentsqlite.NewRepository(store.SQLDB())
-	created, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", Environment: environment, CreatedBy: "tester"})
+	repo := servingstatesqlite.NewRepository(store.SQLDB())
+	created, err := repo.Create(ctx, servingstate.CreateInput{WorkspaceID: "test", Environment: environment, CreatedBy: "tester"})
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
 	if err := repo.RecordDuckLakeSnapshot(ctx, created.ID, snapshotID); err != nil {
 		t.Fatalf("record snapshot: %v", err)
 	}
-	if _, err := store.SQLDB().ExecContext(ctx, "UPDATE deployments SET status = ?, cleanup_after = NULLIF(?, '') WHERE id = ?", string(status), cleanupAfter, string(created.ID)); err != nil {
+	if _, err := store.SQLDB().ExecContext(ctx, "UPDATE serving_states SET status = ? WHERE id = ?", string(status), string(created.ID)); err != nil {
 		t.Fatalf("mark deployment %s: %v", status, err)
 	}
 	return created.ID
 }
 
-func createAdminSnapshotLease(t *testing.T, ctx context.Context, home string, deploymentID deployment.ID, snapshotID int64) {
+func createAdminSnapshotLease(t *testing.T, ctx context.Context, home string, servingStateID servingstate.ID, snapshotID int64) {
 	t.Helper()
 	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
 	defer store.Close()
-	repo := deploymentsqlite.NewRepository(store.SQLDB())
-	if _, err := repo.CreateQuerySnapshotLease(ctx, deployment.SnapshotLeaseInput{
+	repo := servingstatesqlite.NewRepository(store.SQLDB())
+	if _, err := repo.CreateQuerySnapshotLease(ctx, servingstate.SnapshotLeaseInput{
 		WorkspaceID:        "test",
 		Environment:        "dev",
-		DeploymentID:       deploymentID,
+		ServingStateID:     servingStateID,
 		DuckLakeSnapshotID: snapshotID,
 		OwnerID:            "test",
 		ExpiresAt:          time.Now().Add(time.Hour),
@@ -292,7 +292,7 @@ func createAdminSnapshotLease(t *testing.T, ctx context.Context, home string, de
 	}
 }
 
-func adminDeploymentStatus(t *testing.T, ctx context.Context, home string, deploymentID deployment.ID) string {
+func adminDeploymentStatus(t *testing.T, ctx context.Context, home string, servingStateID servingstate.ID) string {
 	t.Helper()
 	store, err := platform.Open(ctx, filepath.Join(home, "libredash.db"))
 	if err != nil {
@@ -300,7 +300,7 @@ func adminDeploymentStatus(t *testing.T, ctx context.Context, home string, deplo
 	}
 	defer store.Close()
 	var status string
-	if err := store.SQLDB().QueryRowContext(ctx, "SELECT status FROM deployments WHERE id = ?", string(deploymentID)).Scan(&status); err != nil {
+	if err := store.SQLDB().QueryRowContext(ctx, "SELECT status FROM serving_states WHERE id = ?", string(servingStateID)).Scan(&status); err != nil {
 		t.Fatalf("read deployment status: %v", err)
 	}
 	return status

@@ -14,10 +14,10 @@ import (
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	"github.com/Yacobolo/libredash/internal/app"
 	"github.com/Yacobolo/libredash/internal/config"
-	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
@@ -35,8 +35,8 @@ func serveCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cfg := config.MustLoad()
 	cmd.Flags().StringVar(&opts.addr, "addr", cfg.ListenAddr(), "listen address")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", cfg.DataDir, "dashboard source data directory")
-	cmd.Flags().StringVar(&opts.environment, "environment", string(deployment.DefaultEnvironment), "deployment environment")
-	cmd.Flags().BoolVar(&opts.production, "production", cfg.Production, "serve active deployment from the platform DB")
+	cmd.Flags().StringVar(&opts.environment, "environment", string(servingstate.DefaultEnvironment), "serving environment")
+	cmd.Flags().BoolVar(&opts.production, "production", cfg.Production, "serve active serving state from the platform DB")
 	return cmd
 }
 
@@ -58,7 +58,7 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 			return err
 		}
 	}
-	server, cleanup, err := deploymentBackedServer(ctx, cfg, dataDir, opts.production, deployment.NormalizeEnvironment(deployment.Environment(opts.environment)))
+	server, cleanup, err := servingStateBackedServer(ctx, cfg, dataDir, opts.production, servingstate.NormalizeEnvironment(servingstate.Environment(opts.environment)))
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	return http.ListenAndServe(addr, server.Routes())
 }
 
-func deploymentBackedServer(ctx context.Context, cfg config.Config, dataDir string, production bool, environment deployment.Environment) (*app.Server, func(), error) {
+func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir string, production bool, environment servingstate.Environment) (*app.Server, func(), error) {
 	cookieSecure, err := cfg.CookieSecure()
 	if err != nil {
 		return nil, nil, err
@@ -97,12 +97,12 @@ func deploymentBackedServer(ctx context.Context, cfg config.Config, dataDir stri
 			return nil, nil, err
 		}
 	}
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
-	if err := materialize.NewSQLRunRepository(store.SQLDB()).FailRunsForTerminalDeployments(ctx, "refresh did not complete"); err != nil {
+	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	if err := materialize.NewSQLRunRepository(store.SQLDB()).FailRunsForTerminalServingStates(ctx, "refresh did not complete"); err != nil {
 		cleanup()
 		return nil, nil, err
 	}
-	if _, err := storagemaintenance.Run(ctx, deploymentRepo, storagemaintenance.Options{
+	if _, err := storagemaintenance.Run(ctx, servingStateRepo, storagemaintenance.Options{
 		RootDir:     cfg.HomeDir,
 		CatalogPath: cfg.DBPath(),
 		DataPath:    cfg.DuckLakeDataDir(),
@@ -117,23 +117,23 @@ func deploymentBackedServer(ctx context.Context, cfg config.Config, dataDir stri
 		cleanup()
 		return nil, nil, err
 	}
-	workspaceIDs := make([]deployment.WorkspaceID, 0, len(summaries))
+	workspaceIDs := make([]servingstate.WorkspaceID, 0, len(summaries))
 	for _, summary := range summaries {
-		workspaceIDs = append(workspaceIDs, deployment.WorkspaceID(summary.ID))
+		workspaceIDs = append(workspaceIDs, servingstate.WorkspaceID(summary.ID))
 	}
 	var registry *runtimehost.Registry
 	registry = runtimehost.NewRegistryWithFactory(runtimehost.RegistryOptions{
-		Repo:         deploymentRepo,
+		Repo:         servingStateRepo,
 		WorkspaceIDs: workspaceIDs,
 		Environment:  environment,
 		DataDir:      dataDir,
-		OnDrained: func(deployment.ID, int64) {
+		OnDrained: func(servingstate.ID, int64) {
 			go func() {
 				protected := []int64(nil)
 				if registry != nil {
 					protected = registry.LeasedSnapshots()
 				}
-				if _, err := storagemaintenance.Run(context.Background(), deploymentRepo, storagemaintenance.Options{
+				if _, err := storagemaintenance.Run(context.Background(), servingStateRepo, storagemaintenance.Options{
 					RootDir:                      cfg.HomeDir,
 					CatalogPath:                  cfg.DBPath(),
 					DataPath:                     cfg.DuckLakeDataDir(),
@@ -144,7 +144,7 @@ func deploymentBackedServer(ctx context.Context, cfg config.Config, dataDir stri
 				}
 			}()
 		},
-		Factory: deploymentRuntimeFactory{
+		Factory: servingStateRuntimeFactory{
 			dataDir:          dataDir,
 			duckDBDir:        cfg.DuckDBDirPath(),
 			runtimeDir:       cfg.RuntimeDir(),
@@ -161,7 +161,7 @@ func deploymentBackedServer(ctx context.Context, cfg config.Config, dataDir stri
 		cleanup()
 	}
 	runtimeMetrics := app.NewDynamicRuntimeMetrics("", dataDir, func(workspaceID string) app.RuntimeProvider {
-		return registry.ProviderForWorkspace(deployment.WorkspaceID(workspaceID))
+		return registry.ProviderForWorkspace(servingstate.WorkspaceID(workspaceID))
 	})
 	assetCatalog := workspace.NewAssetCatalogService(workspaceRepo)
 	authConfig := app.AuthConfig{DevBypass: true, CSRFKey: cfg.CSRFKey, CookieSecure: false}
@@ -183,7 +183,7 @@ func deploymentBackedServer(ctx context.Context, cfg config.Config, dataDir stri
 	rateLimits.Enabled = production && cfg.RateLimitingEnabled()
 	server := app.NewWithOptions(runtimeMetrics, app.Options{
 		Store:               store,
-		DeploymentRepo:      deploymentRepo,
+		ServingStateRepo:    servingStateRepo,
 		WorkspaceRepo:       workspaceRepo,
 		AssetCatalog:        assetCatalog,
 		AccessRepo:          accessRepo,

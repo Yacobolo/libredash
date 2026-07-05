@@ -8,8 +8,8 @@ import (
 )
 
 type Options struct {
-	WorkspaceID  workspace.WorkspaceID
-	DeploymentID workspace.DeploymentID
+	WorkspaceID    workspace.WorkspaceID
+	ServingStateID workspace.ServingStateID
 }
 
 type CompiledWorkspace struct {

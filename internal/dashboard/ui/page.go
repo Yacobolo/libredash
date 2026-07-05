@@ -106,7 +106,6 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 						g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection")),
 						g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/select")),
 						g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/table-window")),
-						g.Attr("data-on:ld-refresh-materializations", postAction("/workspaces/"+catalog.Workspace.ID+"/commands/refresh-materializations?model="+model.Name+"&dashboard="+report.ID)),
 					),
 				),
 				inspectorElement(),

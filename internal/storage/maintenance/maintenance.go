@@ -12,7 +12,7 @@ import (
 	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
 )
 
-type DeploymentRepository interface {
+type ServingStateRepository interface {
 	ReconcileRetention(ctx context.Context, now time.Time) error
 	ReferencedDuckLakeSnapshots(ctx context.Context) ([]int64, error)
 }
@@ -42,9 +42,9 @@ type Report struct {
 	Candidates               []int64
 }
 
-func Run(ctx context.Context, repo DeploymentRepository, options Options) (Report, error) {
+func Run(ctx context.Context, repo ServingStateRepository, options Options) (Report, error) {
 	if repo == nil {
-		return Report{}, fmt.Errorf("deployment repository is required")
+		return Report{}, fmt.Errorf("serving state repository is required")
 	}
 	if !options.DryRun {
 		if leases, ok := repo.(expiredLeaseReconciler); ok {
@@ -93,7 +93,7 @@ func Run(ctx context.Context, repo DeploymentRepository, options Options) (Repor
 		}
 	}
 	if len(missing) > 0 {
-		return Report{}, fmt.Errorf("deployment references missing DuckLake snapshots: %s", FormatSnapshotIDs(missing))
+		return Report{}, fmt.Errorf("serving states reference missing DuckLake snapshots: %s", FormatSnapshotIDs(missing))
 	}
 	candidates, err := env.RetentionCandidates(ctx, protected)
 	if err != nil {
@@ -133,7 +133,7 @@ func Run(ctx context.Context, repo DeploymentRepository, options Options) (Repor
 	}, nil
 }
 
-func protectedSnapshots(ctx context.Context, repo DeploymentRepository) ([]int64, []int64, error) {
+func protectedSnapshots(ctx context.Context, repo ServingStateRepository) ([]int64, []int64, error) {
 	if split, ok := repo.(snapshotProtectionRepository); ok {
 		active, err := split.ActiveDuckLakeSnapshots(ctx)
 		if err != nil {

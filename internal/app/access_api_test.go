@@ -25,7 +25,7 @@ func TestAPITokenWorkspaceAndPermissionAllowlistAreEnforced(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	deploymentsReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/deployments", nil)
+	deploymentsReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes", nil)
 	deploymentsReq.Header.Set("Authorization", "Bearer "+token)
 	deploymentsReq.Header.Set("Accept", "application/json")
 	deploymentsRec := httptest.NewRecorder()
@@ -60,7 +60,7 @@ func TestAPITokenWorkspaceAndPermissionAllowlistAreEnforced(t *testing.T) {
 	if !hasString(permissionsBody.Permissions, access.PermissionWorkspaceRead) {
 		t.Fatalf("permissions = %#v, want workspace read", permissionsBody.Permissions)
 	}
-	if hasString(permissionsBody.Permissions, access.PermissionDeploymentRead) {
+	if hasString(permissionsBody.Permissions, access.PermissionPublishRead) {
 		t.Fatalf("permissions = %#v, token allowlist leaked deployment read", permissionsBody.Permissions)
 	}
 

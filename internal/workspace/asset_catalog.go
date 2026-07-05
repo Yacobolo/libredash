@@ -12,28 +12,28 @@ type AssetCatalog struct {
 }
 
 type AssetRecord struct {
-	ID            AssetID
-	SnapshotID    AssetSnapshotID
-	WorkspaceID   WorkspaceID
-	DeploymentID  DeploymentID
-	Type          AssetType
-	Key           string
-	ParentID      AssetID
-	Title         string
-	Description   string
-	SourceFile    string
-	PayloadSchema string
-	Payload       map[string]any
-	ContentHash   string
+	ID             AssetID
+	SnapshotID     AssetSnapshotID
+	WorkspaceID    WorkspaceID
+	ServingStateID ServingStateID
+	Type           AssetType
+	Key            string
+	ParentID       AssetID
+	Title          string
+	Description    string
+	SourceFile     string
+	PayloadSchema  string
+	Payload        map[string]any
+	ContentHash    string
 }
 
 type AssetEdgeRecord struct {
-	ID           AssetEdgeID
-	WorkspaceID  WorkspaceID
-	DeploymentID DeploymentID
-	FromAssetID  AssetID
-	ToAssetID    AssetID
-	Type         AssetEdgeType
+	ID             AssetEdgeID
+	WorkspaceID    WorkspaceID
+	ServingStateID ServingStateID
+	FromAssetID    AssetID
+	ToAssetID      AssetID
+	Type           AssetEdgeType
 }
 
 type AssetCatalogService struct {
@@ -55,7 +55,7 @@ func (s *AssetCatalogService) ActiveAssetCatalog(ctx context.Context, id Workspa
 	if s.repo == nil {
 		return AssetCatalog{}, false, nil
 	}
-	graph, ok, err := s.repo.ActiveDeploymentGraph(ctx, id, environment)
+	graph, ok, err := s.repo.ActiveServingStateGraph(ctx, id, environment)
 	if err != nil {
 		return AssetCatalog{}, false, err
 	}
@@ -79,29 +79,29 @@ func DecodeAssetCatalog(graph AssetGraph) (AssetCatalog, error) {
 			}
 		}
 		catalog.Assets = append(catalog.Assets, AssetRecord{
-			ID:            asset.ID,
-			SnapshotID:    asset.SnapshotID,
-			WorkspaceID:   asset.WorkspaceID,
-			DeploymentID:  asset.DeploymentID,
-			Type:          asset.Type,
-			Key:           asset.Key,
-			ParentID:      asset.ParentID,
-			Title:         asset.Title,
-			Description:   asset.Description,
-			SourceFile:    asset.SourceFile,
-			PayloadSchema: asset.PayloadSchema,
-			Payload:       payload,
-			ContentHash:   asset.ContentHash,
+			ID:             asset.ID,
+			SnapshotID:     asset.SnapshotID,
+			WorkspaceID:    asset.WorkspaceID,
+			ServingStateID: asset.ServingStateID,
+			Type:           asset.Type,
+			Key:            asset.Key,
+			ParentID:       asset.ParentID,
+			Title:          asset.Title,
+			Description:    asset.Description,
+			SourceFile:     asset.SourceFile,
+			PayloadSchema:  asset.PayloadSchema,
+			Payload:        payload,
+			ContentHash:    asset.ContentHash,
 		})
 	}
 	for _, edge := range graph.Edges {
 		catalog.Edges = append(catalog.Edges, AssetEdgeRecord{
-			ID:           edge.ID,
-			WorkspaceID:  edge.WorkspaceID,
-			DeploymentID: edge.DeploymentID,
-			FromAssetID:  edge.FromAssetID,
-			ToAssetID:    edge.ToAssetID,
-			Type:         edge.Type,
+			ID:             edge.ID,
+			WorkspaceID:    edge.WorkspaceID,
+			ServingStateID: edge.ServingStateID,
+			FromAssetID:    edge.FromAssetID,
+			ToAssetID:      edge.ToAssetID,
+			Type:           edge.Type,
 		})
 	}
 	return catalog, nil

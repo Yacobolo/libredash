@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS deployments (
+CREATE TABLE IF NOT EXISTS serving_states (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   status TEXT NOT NULL,
@@ -23,9 +23,9 @@ CREATE TABLE IF NOT EXISTS deployments (
   error TEXT NOT NULL DEFAULT ''
 );
 
-CREATE TABLE IF NOT EXISTS deployment_artifacts (
+CREATE TABLE IF NOT EXISTS serving_state_artifacts (
   id TEXT PRIMARY KEY,
-  deployment_id TEXT NOT NULL UNIQUE REFERENCES deployments(id) ON DELETE CASCADE,
+  serving_state_id TEXT NOT NULL UNIQUE REFERENCES serving_states(id) ON DELETE CASCADE,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   digest TEXT NOT NULL,
   format TEXT NOT NULL,
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS assets (
   snapshot_id TEXT PRIMARY KEY,
   logical_asset_id TEXT NOT NULL,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  deployment_id TEXT NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+  serving_state_id TEXT NOT NULL REFERENCES serving_states(id) ON DELETE CASCADE,
   asset_type TEXT NOT NULL,
   asset_key TEXT NOT NULL,
   parent_logical_asset_id TEXT NOT NULL DEFAULT '',
@@ -49,13 +49,13 @@ CREATE TABLE IF NOT EXISTS assets (
   payload_json TEXT NOT NULL DEFAULT '{}',
   content_hash TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(deployment_id, logical_asset_id)
+  UNIQUE(serving_state_id, logical_asset_id)
 );
 
 CREATE TABLE IF NOT EXISTS asset_edges (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  deployment_id TEXT NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
+  serving_state_id TEXT NOT NULL REFERENCES serving_states(id) ON DELETE CASCADE,
   from_logical_asset_id TEXT NOT NULL,
   to_logical_asset_id TEXT NOT NULL,
   edge_type TEXT NOT NULL,
@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS api_tokens (
 CREATE TABLE IF NOT EXISTS materialization_jobs (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  deployment_id TEXT REFERENCES deployments(id) ON DELETE SET NULL,
+  serving_state_id TEXT REFERENCES serving_states(id) ON DELETE SET NULL,
   model_id TEXT NOT NULL,
   status TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -164,11 +164,11 @@ CREATE TABLE IF NOT EXISTS audit_events (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS deployments_workspace_created_idx ON deployments(workspace_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS assets_deployment_type_idx ON assets(deployment_id, asset_type);
-CREATE INDEX IF NOT EXISTS assets_deployment_logical_idx ON assets(deployment_id, logical_asset_id);
+CREATE INDEX IF NOT EXISTS serving_states_workspace_created_idx ON serving_states(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS assets_serving_state_type_idx ON assets(serving_state_id, asset_type);
+CREATE INDEX IF NOT EXISTS assets_serving_state_logical_idx ON assets(serving_state_id, logical_asset_id);
 CREATE UNIQUE INDEX IF NOT EXISTS asset_edges_unique_idx
-  ON asset_edges(deployment_id, from_logical_asset_id, to_logical_asset_id, edge_type);
+  ON asset_edges(serving_state_id, from_logical_asset_id, to_logical_asset_id, edge_type);
 CREATE INDEX IF NOT EXISTS role_bindings_principal_idx ON role_bindings(workspace_id, principal_id);
 CREATE UNIQUE INDEX IF NOT EXISTS role_bindings_principal_unique_idx
   ON role_bindings(workspace_id, role_id, principal_id)

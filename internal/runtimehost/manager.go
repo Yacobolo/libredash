@@ -7,14 +7,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 )
 
-type DeploymentRepository interface {
-	ActiveArtifact(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) (deployment.Deployment, deployment.Artifact, error)
-	ByID(ctx context.Context, id deployment.ID) (deployment.Deployment, error)
-	ArtifactByDeployment(ctx context.Context, deploymentID deployment.ID) (deployment.Artifact, error)
-	RecordDuckLakeSnapshot(ctx context.Context, deploymentID deployment.ID, snapshotID int64) error
+type ServingStateRepository interface {
+	ActiveArtifact(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment) (servingstate.State, servingstate.Artifact, error)
+	ByID(ctx context.Context, id servingstate.ID) (servingstate.State, error)
+	ArtifactByServingState(ctx context.Context, servingStateID servingstate.ID) (servingstate.Artifact, error)
+	RecordDuckLakeSnapshot(ctx context.Context, servingStateID servingstate.ID, snapshotID int64) error
 }
 
 type Runtime interface {
@@ -27,7 +27,7 @@ type RuntimeSnapshot interface {
 
 type Lease interface {
 	Runtime() Runtime
-	DeploymentID() deployment.ID
+	ServingStateID() servingstate.ID
 	DuckLakeSnapshotID() int64
 	Release()
 }
@@ -37,54 +37,53 @@ type RuntimeFactory interface {
 }
 
 type SnapshotLeaseRepository interface {
-	CreateQuerySnapshotLease(ctx context.Context, input deployment.SnapshotLeaseInput) (string, error)
+	CreateQuerySnapshotLease(ctx context.Context, input servingstate.SnapshotLeaseInput) (string, error)
 	ReleaseQuerySnapshotLease(ctx context.Context, id string) error
 	ExtendQuerySnapshotLease(ctx context.Context, id string, expiresAt time.Time) error
 }
 
 type RuntimeInput struct {
-	Deployment deployment.Deployment
-	Artifact   deployment.Artifact
+	State      servingstate.State
+	Artifact   servingstate.Artifact
 	DataDir    string
 	DuckDBDir  string
 	RuntimeDir string
 }
 
 type Manager struct {
-	mu          sync.RWMutex
-	repo        DeploymentRepository
-	workspaceID deployment.WorkspaceID
-	environment deployment.Environment
-	dataDir     string
-	factory     RuntimeFactory
-	onDrained   func(deployment.ID, int64)
-	leaseTTL    time.Duration
-	leaseOwner  string
-
-	activeDeployment deployment.ID
-	activeDigest     string
-	activeSnapshotID int64
-	current          *managedRuntime
-	retired          []*managedRuntime
+	mu                   sync.RWMutex
+	repo                 ServingStateRepository
+	workspaceID          servingstate.WorkspaceID
+	environment          servingstate.Environment
+	dataDir              string
+	factory              RuntimeFactory
+	onDrained            func(servingstate.ID, int64)
+	leaseTTL             time.Duration
+	leaseOwner           string
+	activeServingStateID servingstate.ID
+	activeDigest         string
+	activeSnapshotID     int64
+	current              *managedRuntime
+	retired              []*managedRuntime
 }
 
 type ManagerOptions struct {
-	Repo        DeploymentRepository
-	WorkspaceID deployment.WorkspaceID
-	Environment deployment.Environment
+	Repo        ServingStateRepository
+	WorkspaceID servingstate.WorkspaceID
+	Environment servingstate.Environment
 	DataDir     string
 	Factory     RuntimeFactory
-	OnDrained   func(deployment.ID, int64)
+	OnDrained   func(servingstate.ID, int64)
 	LeaseTTL    time.Duration
 	LeaseOwner  string
 }
 
 type Prepared struct {
-	deploymentID deployment.ID
-	digest       string
-	runtime      Runtime
-	noChange     bool
-	snapshotID   int64
+	servingStateID servingstate.ID
+	digest         string
+	runtime        Runtime
+	noChange       bool
+	snapshotID     int64
 }
 
 func (p *Prepared) Close() error {
@@ -105,7 +104,7 @@ func NewManagerWithFactory(options ManagerOptions) *Manager {
 	return &Manager{
 		repo:        options.Repo,
 		workspaceID: options.WorkspaceID,
-		environment: deployment.NormalizeEnvironment(options.Environment),
+		environment: servingstate.NormalizeEnvironment(options.Environment),
 		dataDir:     options.DataDir,
 		factory:     options.Factory,
 		onDrained:   options.OnDrained,
@@ -117,7 +116,7 @@ func NewManagerWithFactory(options ManagerOptions) *Manager {
 func (m *Manager) Reload(ctx context.Context) error {
 	current, artifact, err := m.repo.ActiveArtifact(ctx, m.workspaceID, m.environment)
 	if err != nil {
-		if errors.Is(err, deployment.ErrNotFound) {
+		if errors.Is(err, servingstate.ErrNotFound) {
 			return m.Close()
 		}
 		return err
@@ -135,33 +134,33 @@ func (m *Manager) Reload(ctx context.Context) error {
 	return m.CommitPrepared(prepared)
 }
 
-func (m *Manager) PrepareDeployment(ctx context.Context, deploymentID string) (deployment.PreparedRuntime, error) {
-	current, err := m.repo.ByID(ctx, deployment.ID(deploymentID))
+func (m *Manager) PrepareServingState(ctx context.Context, servingStateID string) (servingstate.PreparedRuntime, error) {
+	current, err := m.repo.ByID(ctx, servingstate.ID(servingStateID))
 	if err != nil {
 		return nil, err
 	}
 	if current.WorkspaceID != m.workspaceID {
-		return nil, fmt.Errorf("deployment %s is not in workspace %s", deploymentID, m.workspaceID)
+		return nil, fmt.Errorf("serving state %s is not in workspace %s", servingStateID, m.workspaceID)
 	}
-	artifact, err := m.repo.ArtifactByDeployment(ctx, current.ID)
+	artifact, err := m.repo.ArtifactByServingState(ctx, current.ID)
 	if err != nil {
 		return nil, err
 	}
 	return m.prepare(ctx, current, artifact)
 }
 
-func (m *Manager) prepare(ctx context.Context, current deployment.Deployment, artifact deployment.Artifact) (*Prepared, error) {
+func (m *Manager) prepare(ctx context.Context, current servingstate.State, artifact servingstate.Artifact) (*Prepared, error) {
 	m.mu.RLock()
-	if m.current != nil && m.activeDeployment == current.ID && m.activeDigest == artifact.Digest && m.activeSnapshotID == current.DuckLakeSnapshotID {
+	if m.current != nil && m.activeServingStateID == current.ID && m.activeDigest == artifact.Digest && m.activeSnapshotID == current.DuckLakeSnapshotID {
 		m.mu.RUnlock()
-		return &Prepared{deploymentID: current.ID, digest: artifact.Digest, noChange: true}, nil
+		return &Prepared{servingStateID: current.ID, digest: artifact.Digest, noChange: true}, nil
 	}
 	m.mu.RUnlock()
 
 	runtime, err := m.factory.Prepare(ctx, RuntimeInput{
-		Deployment: current,
-		Artifact:   artifact,
-		DataDir:    m.dataDir,
+		State:    current,
+		Artifact: artifact,
+		DataDir:  m.dataDir,
 	})
 	if err != nil {
 		return nil, err
@@ -173,10 +172,10 @@ func (m *Manager) prepare(ctx context.Context, current deployment.Deployment, ar
 	if snapshotID == 0 {
 		snapshotID = current.DuckLakeSnapshotID
 	}
-	return &Prepared{deploymentID: current.ID, digest: artifact.Digest, runtime: runtime, snapshotID: snapshotID}, nil
+	return &Prepared{servingStateID: current.ID, digest: artifact.Digest, runtime: runtime, snapshotID: snapshotID}, nil
 }
 
-func (m *Manager) CommitPrepared(candidate deployment.PreparedRuntime) error {
+func (m *Manager) CommitPrepared(candidate servingstate.PreparedRuntime) error {
 	prepared, ok := candidate.(*Prepared)
 	if !ok {
 		return fmt.Errorf("prepared runtime belongs to a different host")
@@ -191,12 +190,12 @@ func (m *Manager) CommitPrepared(candidate deployment.PreparedRuntime) error {
 	m.mu.Lock()
 	old := m.current
 	m.current = &managedRuntime{
-		deploymentID: prepared.deploymentID,
-		digest:       prepared.digest,
-		runtime:      prepared.runtime,
-		snapshotID:   prepared.snapshotID,
+		servingStateID: prepared.servingStateID,
+		digest:         prepared.digest,
+		runtime:        prepared.runtime,
+		snapshotID:     prepared.snapshotID,
 	}
-	m.activeDeployment = prepared.deploymentID
+	m.activeServingStateID = prepared.servingStateID
 	m.activeDigest = prepared.digest
 	m.activeSnapshotID = prepared.snapshotID
 	prepared.runtime = nil
@@ -210,7 +209,7 @@ func (m *Manager) Close() error {
 	m.mu.Lock()
 	current := m.current
 	m.current = nil
-	m.activeDeployment = ""
+	m.activeServingStateID = ""
 	m.activeDigest = ""
 	m.activeSnapshotID = 0
 	currentToClose := m.retireLocked(current)
@@ -235,7 +234,7 @@ func (m *Manager) Acquire() (Lease, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.current == nil || m.current.closing {
-		return nil, fmt.Errorf("no active LibreDash deployment")
+		return nil, fmt.Errorf("no active LibreDash serving state")
 	}
 	leaseID, heartbeatCancel, err := m.createPersistentLeaseLocked()
 	if err != nil {
@@ -327,18 +326,18 @@ func (m *Manager) closeManaged(runtime *managedRuntime) error {
 	}
 	err := runtime.runtime.Close()
 	if runtime.closing && m.onDrained != nil {
-		m.onDrained(runtime.deploymentID, runtime.snapshotID)
+		m.onDrained(runtime.servingStateID, runtime.snapshotID)
 	}
 	return err
 }
 
 type managedRuntime struct {
-	deploymentID deployment.ID
-	digest       string
-	runtime      Runtime
-	snapshotID   int64
-	refs         int
-	closing      bool
+	servingStateID servingstate.ID
+	digest         string
+	runtime        Runtime
+	snapshotID     int64
+	refs           int
+	closing        bool
 }
 
 type runtimeLease struct {
@@ -356,11 +355,11 @@ func (l *runtimeLease) Runtime() Runtime {
 	return l.managed.runtime
 }
 
-func (l *runtimeLease) DeploymentID() deployment.ID {
+func (l *runtimeLease) ServingStateID() servingstate.ID {
 	if l == nil || l.managed == nil {
 		return ""
 	}
-	return l.managed.deploymentID
+	return l.managed.servingStateID
 }
 
 func (l *runtimeLease) DuckLakeSnapshotID() int64 {
@@ -385,10 +384,10 @@ func (m *Manager) createPersistentLeaseLocked() (string, context.CancelFunc, err
 		return "", nil, nil
 	}
 	expiresAt := time.Now().Add(m.leaseTTL)
-	leaseID, err := repo.CreateQuerySnapshotLease(context.Background(), deployment.SnapshotLeaseInput{
+	leaseID, err := repo.CreateQuerySnapshotLease(context.Background(), servingstate.SnapshotLeaseInput{
 		WorkspaceID:        m.workspaceID,
 		Environment:        m.environment,
-		DeploymentID:       m.current.deploymentID,
+		ServingStateID:     m.current.servingStateID,
 		DuckLakeSnapshotID: m.current.snapshotID,
 		OwnerID:            m.leaseOwner,
 		ExpiresAt:          expiresAt,

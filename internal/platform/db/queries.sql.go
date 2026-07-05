@@ -154,21 +154,21 @@ func (q *Queries) ArchiveAgentConversation(ctx context.Context, arg ArchiveAgent
 	return i, err
 }
 
-const clearAssetEdgesForDeployment = `-- name: ClearAssetEdgesForDeployment :exec
-DELETE FROM asset_edges WHERE deployment_id = ?
+const clearAssetEdgesForServingState = `-- name: ClearAssetEdgesForServingState :exec
+DELETE FROM asset_edges WHERE serving_state_id = ?
 `
 
-func (q *Queries) ClearAssetEdgesForDeployment(ctx context.Context, deploymentID string) error {
-	_, err := q.db.ExecContext(ctx, clearAssetEdgesForDeployment, deploymentID)
+func (q *Queries) ClearAssetEdgesForServingState(ctx context.Context, servingStateID string) error {
+	_, err := q.db.ExecContext(ctx, clearAssetEdgesForServingState, servingStateID)
 	return err
 }
 
-const clearAssetsForDeployment = `-- name: ClearAssetsForDeployment :exec
-DELETE FROM assets WHERE deployment_id = ?
+const clearAssetsForServingState = `-- name: ClearAssetsForServingState :exec
+DELETE FROM assets WHERE serving_state_id = ?
 `
 
-func (q *Queries) ClearAssetsForDeployment(ctx context.Context, deploymentID string) error {
-	_, err := q.db.ExecContext(ctx, clearAssetsForDeployment, deploymentID)
+func (q *Queries) ClearAssetsForServingState(ctx context.Context, servingStateID string) error {
+	_, err := q.db.ExecContext(ctx, clearAssetsForServingState, servingStateID)
 	return err
 }
 
@@ -301,34 +301,8 @@ func (q *Queries) CreateAgentRun(ctx context.Context, arg CreateAgentRunParams) 
 	return i, err
 }
 
-const createDeployment = `-- name: CreateDeployment :exec
-INSERT INTO deployments (id, workspace_id, environment, status, source, created_by)
-VALUES (?, ?, ?, ?, ?, ?)
-`
-
-type CreateDeploymentParams struct {
-	ID          string `json:"id"`
-	WorkspaceID string `json:"workspace_id"`
-	Environment string `json:"environment"`
-	Status      string `json:"status"`
-	Source      string `json:"source"`
-	CreatedBy   string `json:"created_by"`
-}
-
-func (q *Queries) CreateDeployment(ctx context.Context, arg CreateDeploymentParams) error {
-	_, err := q.db.ExecContext(ctx, createDeployment,
-		arg.ID,
-		arg.WorkspaceID,
-		arg.Environment,
-		arg.Status,
-		arg.Source,
-		arg.CreatedBy,
-	)
-	return err
-}
-
 const createQuerySnapshotLease = `-- name: CreateQuerySnapshotLease :exec
-INSERT INTO query_snapshot_leases (id, workspace_id, environment, deployment_id, ducklake_snapshot_id, owner_id, expires_at)
+INSERT INTO query_snapshot_leases (id, workspace_id, environment, serving_state_id, ducklake_snapshot_id, owner_id, expires_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
@@ -336,7 +310,7 @@ type CreateQuerySnapshotLeaseParams struct {
 	ID                 string `json:"id"`
 	WorkspaceID        string `json:"workspace_id"`
 	Environment        string `json:"environment"`
-	DeploymentID       string `json:"deployment_id"`
+	ServingStateID     string `json:"serving_state_id"`
 	DucklakeSnapshotID int64  `json:"ducklake_snapshot_id"`
 	OwnerID            string `json:"owner_id"`
 	ExpiresAt          string `json:"expires_at"`
@@ -347,10 +321,36 @@ func (q *Queries) CreateQuerySnapshotLease(ctx context.Context, arg CreateQueryS
 		arg.ID,
 		arg.WorkspaceID,
 		arg.Environment,
-		arg.DeploymentID,
+		arg.ServingStateID,
 		arg.DucklakeSnapshotID,
 		arg.OwnerID,
 		arg.ExpiresAt,
+	)
+	return err
+}
+
+const createServingState = `-- name: CreateServingState :exec
+INSERT INTO serving_states (id, workspace_id, environment, status, source, created_by)
+VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type CreateServingStateParams struct {
+	ID          string `json:"id"`
+	WorkspaceID string `json:"workspace_id"`
+	Environment string `json:"environment"`
+	Status      string `json:"status"`
+	Source      string `json:"source"`
+	CreatedBy   string `json:"created_by"`
+}
+
+func (q *Queries) CreateServingState(ctx context.Context, arg CreateServingStateParams) error {
+	_, err := q.db.ExecContext(ctx, createServingState,
+		arg.ID,
+		arg.WorkspaceID,
+		arg.Environment,
+		arg.Status,
+		arg.Source,
+		arg.CreatedBy,
 	)
 	return err
 }
@@ -447,14 +447,14 @@ func (q *Queries) DeleteSessionByTokenHash(ctx context.Context, tokenHash string
 	return err
 }
 
-const expireInactiveDeployments = `-- name: ExpireInactiveDeployments :exec
-UPDATE deployments
+const expireInactiveServingStates = `-- name: ExpireInactiveServingStates :exec
+UPDATE serving_states
 SET status = 'expired', error = ''
 WHERE status = 'inactive'
 `
 
-func (q *Queries) ExpireInactiveDeployments(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, expireInactiveDeployments)
+func (q *Queries) ExpireInactiveServingStates(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, expireInactiveServingStates)
 	return err
 }
 
@@ -564,21 +564,21 @@ func (q *Queries) GetAPITokenByHash(ctx context.Context, tokenHash string) (ApiT
 	return i, err
 }
 
-const getActiveDeployment = `-- name: GetActiveDeployment :one
-SELECT d.id, d.workspace_id, d.environment, d.status, d.source, d.digest, d.manifest_json, d.ducklake_snapshot_id, d.created_by, d.created_at, d.activated_at, d.superseded_at, d.cleanup_after, d.error
-FROM deployments d
-JOIN workspace_active_deployments active ON active.deployment_id = d.id
+const getActiveServingState = `-- name: GetActiveServingState :one
+SELECT d.id, d.workspace_id, d.environment, d.status, d.source, d.digest, d.manifest_json, d.ducklake_snapshot_id, d.created_by, d.created_at, d.activated_at, d.superseded_at, d.error
+FROM serving_states d
+JOIN workspace_active_serving_states active ON active.serving_state_id = d.id
 WHERE active.workspace_id = ? AND active.environment = ?
 `
 
-type GetActiveDeploymentParams struct {
+type GetActiveServingStateParams struct {
 	WorkspaceID string `json:"workspace_id"`
 	Environment string `json:"environment"`
 }
 
-func (q *Queries) GetActiveDeployment(ctx context.Context, arg GetActiveDeploymentParams) (Deployment, error) {
-	row := q.db.QueryRowContext(ctx, getActiveDeployment, arg.WorkspaceID, arg.Environment)
-	var i Deployment
+func (q *Queries) GetActiveServingState(ctx context.Context, arg GetActiveServingStateParams) (ServingState, error) {
+	row := q.db.QueryRowContext(ctx, getActiveServingState, arg.WorkspaceID, arg.Environment)
+	var i ServingState
 	err := row.Scan(
 		&i.ID,
 		&i.WorkspaceID,
@@ -592,7 +592,6 @@ func (q *Queries) GetActiveDeployment(ctx context.Context, arg GetActiveDeployme
 		&i.CreatedAt,
 		&i.ActivatedAt,
 		&i.SupersededAt,
-		&i.CleanupAfter,
 		&i.Error,
 	)
 	return i, err
@@ -627,16 +626,16 @@ func (q *Queries) GetAgentConversation(ctx context.Context, arg GetAgentConversa
 	return i, err
 }
 
-const getArtifactByDeployment = `-- name: GetArtifactByDeployment :one
-SELECT id, deployment_id, workspace_id, environment, digest, format, path, data_root, manifest_json, size_bytes, created_at FROM deployment_artifacts WHERE deployment_id = ?
+const getArtifactByServingState = `-- name: GetArtifactByServingState :one
+SELECT id, serving_state_id, workspace_id, environment, digest, format, path, data_root, manifest_json, size_bytes, created_at FROM serving_state_artifacts WHERE serving_state_id = ?
 `
 
-func (q *Queries) GetArtifactByDeployment(ctx context.Context, deploymentID string) (DeploymentArtifact, error) {
-	row := q.db.QueryRowContext(ctx, getArtifactByDeployment, deploymentID)
-	var i DeploymentArtifact
+func (q *Queries) GetArtifactByServingState(ctx context.Context, servingStateID string) (ServingStateArtifact, error) {
+	row := q.db.QueryRowContext(ctx, getArtifactByServingState, servingStateID)
+	var i ServingStateArtifact
 	err := row.Scan(
 		&i.ID,
-		&i.DeploymentID,
+		&i.ServingStateID,
 		&i.WorkspaceID,
 		&i.Environment,
 		&i.Digest,
@@ -646,32 +645,6 @@ func (q *Queries) GetArtifactByDeployment(ctx context.Context, deploymentID stri
 		&i.ManifestJson,
 		&i.SizeBytes,
 		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getDeployment = `-- name: GetDeployment :one
-SELECT id, workspace_id, environment, status, source, digest, manifest_json, ducklake_snapshot_id, created_by, created_at, activated_at, superseded_at, cleanup_after, error FROM deployments WHERE id = ?
-`
-
-func (q *Queries) GetDeployment(ctx context.Context, id string) (Deployment, error) {
-	row := q.db.QueryRowContext(ctx, getDeployment, id)
-	var i Deployment
-	err := row.Scan(
-		&i.ID,
-		&i.WorkspaceID,
-		&i.Environment,
-		&i.Status,
-		&i.Source,
-		&i.Digest,
-		&i.ManifestJson,
-		&i.DucklakeSnapshotID,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.ActivatedAt,
-		&i.SupersededAt,
-		&i.CleanupAfter,
-		&i.Error,
 	)
 	return i, err
 }
@@ -893,6 +866,31 @@ func (q *Queries) GetRoleByName(ctx context.Context, name string) (Role, error) 
 	return i, err
 }
 
+const getServingState = `-- name: GetServingState :one
+SELECT id, workspace_id, environment, status, source, digest, manifest_json, ducklake_snapshot_id, created_by, created_at, activated_at, superseded_at, error FROM serving_states WHERE id = ?
+`
+
+func (q *Queries) GetServingState(ctx context.Context, id string) (ServingState, error) {
+	row := q.db.QueryRowContext(ctx, getServingState, id)
+	var i ServingState
+	err := row.Scan(
+		&i.ID,
+		&i.WorkspaceID,
+		&i.Environment,
+		&i.Status,
+		&i.Source,
+		&i.Digest,
+		&i.ManifestJson,
+		&i.DucklakeSnapshotID,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.ActivatedAt,
+		&i.SupersededAt,
+		&i.Error,
+	)
+	return i, err
+}
+
 const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
 SELECT id, principal_id, token_hash, expires_at, created_at, last_seen_at, revoked_at FROM sessions
 WHERE token_hash = ? AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL
@@ -935,14 +933,14 @@ SELECT
   w.id,
   CASE WHEN a.title IS NOT NULL AND a.title <> '' THEN a.title ELSE w.title END AS title,
   CASE WHEN a.description IS NOT NULL THEN a.description ELSE w.description END AS description,
-  COALESCE(active.deployment_id, '') AS active_deployment_id,
+  COALESCE(active.serving_state_id, '') AS active_serving_state_id,
   w.created_at,
   w.updated_at
 FROM workspaces w
-LEFT JOIN workspace_active_deployments active
+LEFT JOIN workspace_active_serving_states active
   ON active.workspace_id = w.id AND active.environment = ?
 LEFT JOIN assets a
-  ON a.deployment_id = active.deployment_id
+  ON a.serving_state_id = active.serving_state_id
  AND a.asset_type = 'catalog'
  AND a.logical_asset_id = 'catalog:' || w.id
 WHERE w.id = ?
@@ -954,12 +952,12 @@ type GetWorkspaceWithActiveMetadataParams struct {
 }
 
 type GetWorkspaceWithActiveMetadataRow struct {
-	ID                 string      `json:"id"`
-	Title              interface{} `json:"title"`
-	Description        interface{} `json:"description"`
-	ActiveDeploymentID string      `json:"active_deployment_id"`
-	CreatedAt          string      `json:"created_at"`
-	UpdatedAt          string      `json:"updated_at"`
+	ID                   string      `json:"id"`
+	Title                interface{} `json:"title"`
+	Description          interface{} `json:"description"`
+	ActiveServingStateID string      `json:"active_serving_state_id"`
+	CreatedAt            string      `json:"created_at"`
+	UpdatedAt            string      `json:"updated_at"`
 }
 
 func (q *Queries) GetWorkspaceWithActiveMetadata(ctx context.Context, arg GetWorkspaceWithActiveMetadataParams) (GetWorkspaceWithActiveMetadataRow, error) {
@@ -969,7 +967,7 @@ func (q *Queries) GetWorkspaceWithActiveMetadata(ctx context.Context, arg GetWor
 		&i.ID,
 		&i.Title,
 		&i.Description,
-		&i.ActiveDeploymentID,
+		&i.ActiveServingStateID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -977,7 +975,7 @@ func (q *Queries) GetWorkspaceWithActiveMetadata(ctx context.Context, arg GetWor
 }
 
 const insertAsset = `-- name: InsertAsset :exec
-INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, source_file, payload_schema, payload_json, content_hash)
+INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, serving_state_id, asset_type, asset_key, parent_logical_asset_id, title, description, source_file, payload_schema, payload_json, content_hash)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
@@ -985,7 +983,7 @@ type InsertAssetParams struct {
 	SnapshotID           string `json:"snapshot_id"`
 	LogicalAssetID       string `json:"logical_asset_id"`
 	WorkspaceID          string `json:"workspace_id"`
-	DeploymentID         string `json:"deployment_id"`
+	ServingStateID       string `json:"serving_state_id"`
 	AssetType            string `json:"asset_type"`
 	AssetKey             string `json:"asset_key"`
 	ParentLogicalAssetID string `json:"parent_logical_asset_id"`
@@ -1002,7 +1000,7 @@ func (q *Queries) InsertAsset(ctx context.Context, arg InsertAssetParams) error 
 		arg.SnapshotID,
 		arg.LogicalAssetID,
 		arg.WorkspaceID,
-		arg.DeploymentID,
+		arg.ServingStateID,
 		arg.AssetType,
 		arg.AssetKey,
 		arg.ParentLogicalAssetID,
@@ -1017,14 +1015,14 @@ func (q *Queries) InsertAsset(ctx context.Context, arg InsertAssetParams) error 
 }
 
 const insertAssetEdge = `-- name: InsertAssetEdge :exec
-INSERT INTO asset_edges (id, workspace_id, deployment_id, from_logical_asset_id, to_logical_asset_id, edge_type)
+INSERT INTO asset_edges (id, workspace_id, serving_state_id, from_logical_asset_id, to_logical_asset_id, edge_type)
 VALUES (?, ?, ?, ?, ?, ?)
 `
 
 type InsertAssetEdgeParams struct {
 	ID                 string `json:"id"`
 	WorkspaceID        string `json:"workspace_id"`
-	DeploymentID       string `json:"deployment_id"`
+	ServingStateID     string `json:"serving_state_id"`
 	FromLogicalAssetID string `json:"from_logical_asset_id"`
 	ToLogicalAssetID   string `json:"to_logical_asset_id"`
 	EdgeType           string `json:"edge_type"`
@@ -1034,7 +1032,7 @@ func (q *Queries) InsertAssetEdge(ctx context.Context, arg InsertAssetEdgeParams
 	_, err := q.db.ExecContext(ctx, insertAssetEdge,
 		arg.ID,
 		arg.WorkspaceID,
-		arg.DeploymentID,
+		arg.ServingStateID,
 		arg.FromLogicalAssetID,
 		arg.ToLogicalAssetID,
 		arg.EdgeType,
@@ -1066,48 +1064,6 @@ func (q *Queries) InsertAuditEvent(ctx context.Context, arg InsertAuditEventPara
 		arg.TargetType,
 		arg.TargetID,
 		arg.MetadataJson,
-	)
-	return err
-}
-
-const insertDeploymentArtifact = `-- name: InsertDeploymentArtifact :exec
-INSERT INTO deployment_artifacts (id, deployment_id, workspace_id, environment, digest, format, path, data_root, manifest_json, size_bytes)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(deployment_id) DO UPDATE SET
-  environment = excluded.environment,
-  digest = excluded.digest,
-  format = excluded.format,
-  path = excluded.path,
-  data_root = excluded.data_root,
-  manifest_json = excluded.manifest_json,
-  size_bytes = excluded.size_bytes
-`
-
-type InsertDeploymentArtifactParams struct {
-	ID           string `json:"id"`
-	DeploymentID string `json:"deployment_id"`
-	WorkspaceID  string `json:"workspace_id"`
-	Environment  string `json:"environment"`
-	Digest       string `json:"digest"`
-	Format       string `json:"format"`
-	Path         string `json:"path"`
-	DataRoot     string `json:"data_root"`
-	ManifestJson string `json:"manifest_json"`
-	SizeBytes    int64  `json:"size_bytes"`
-}
-
-func (q *Queries) InsertDeploymentArtifact(ctx context.Context, arg InsertDeploymentArtifactParams) error {
-	_, err := q.db.ExecContext(ctx, insertDeploymentArtifact,
-		arg.ID,
-		arg.DeploymentID,
-		arg.WorkspaceID,
-		arg.Environment,
-		arg.Digest,
-		arg.Format,
-		arg.Path,
-		arg.DataRoot,
-		arg.ManifestJson,
-		arg.SizeBytes,
 	)
 	return err
 }
@@ -1291,6 +1247,48 @@ func (q *Queries) InsertRolePermission(ctx context.Context, arg InsertRolePermis
 	return err
 }
 
+const insertServingStateArtifact = `-- name: InsertServingStateArtifact :exec
+INSERT INTO serving_state_artifacts (id, serving_state_id, workspace_id, environment, digest, format, path, data_root, manifest_json, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(serving_state_id) DO UPDATE SET
+  environment = excluded.environment,
+  digest = excluded.digest,
+  format = excluded.format,
+  path = excluded.path,
+  data_root = excluded.data_root,
+  manifest_json = excluded.manifest_json,
+  size_bytes = excluded.size_bytes
+`
+
+type InsertServingStateArtifactParams struct {
+	ID             string `json:"id"`
+	ServingStateID string `json:"serving_state_id"`
+	WorkspaceID    string `json:"workspace_id"`
+	Environment    string `json:"environment"`
+	Digest         string `json:"digest"`
+	Format         string `json:"format"`
+	Path           string `json:"path"`
+	DataRoot       string `json:"data_root"`
+	ManifestJson   string `json:"manifest_json"`
+	SizeBytes      int64  `json:"size_bytes"`
+}
+
+func (q *Queries) InsertServingStateArtifact(ctx context.Context, arg InsertServingStateArtifactParams) error {
+	_, err := q.db.ExecContext(ctx, insertServingStateArtifact,
+		arg.ID,
+		arg.ServingStateID,
+		arg.WorkspaceID,
+		arg.Environment,
+		arg.Digest,
+		arg.Format,
+		arg.Path,
+		arg.DataRoot,
+		arg.ManifestJson,
+		arg.SizeBytes,
+	)
+	return err
+}
+
 const listAPITokensByPrincipal = `-- name: ListAPITokensByPrincipal :many
 SELECT id, principal_id, workspace_id, name, token_hash, permissions_json, expires_at, created_at, last_used_at, revoked_at FROM api_tokens
 WHERE principal_id = ?
@@ -1333,7 +1331,7 @@ func (q *Queries) ListAPITokensByPrincipal(ctx context.Context, principalID stri
 
 const listActiveDuckLakeSnapshots = `-- name: ListActiveDuckLakeSnapshots :many
 SELECT DISTINCT ducklake_snapshot_id
-FROM deployments
+FROM serving_states
 WHERE ducklake_snapshot_id > 0
   AND status = 'active'
 ORDER BY ducklake_snapshot_id
@@ -1548,12 +1546,12 @@ func (q *Queries) ListAgentRuns(ctx context.Context, arg ListAgentRunsParams) ([
 	return items, nil
 }
 
-const listAssetEdgesByDeployment = `-- name: ListAssetEdgesByDeployment :many
-SELECT id, workspace_id, deployment_id, from_logical_asset_id, to_logical_asset_id, edge_type, created_at FROM asset_edges WHERE deployment_id = ? ORDER BY edge_type, from_logical_asset_id, to_logical_asset_id
+const listAssetEdgesByServingState = `-- name: ListAssetEdgesByServingState :many
+SELECT id, workspace_id, serving_state_id, from_logical_asset_id, to_logical_asset_id, edge_type, created_at FROM asset_edges WHERE serving_state_id = ? ORDER BY edge_type, from_logical_asset_id, to_logical_asset_id
 `
 
-func (q *Queries) ListAssetEdgesByDeployment(ctx context.Context, deploymentID string) ([]AssetEdge, error) {
-	rows, err := q.db.QueryContext(ctx, listAssetEdgesByDeployment, deploymentID)
+func (q *Queries) ListAssetEdgesByServingState(ctx context.Context, servingStateID string) ([]AssetEdge, error) {
+	rows, err := q.db.QueryContext(ctx, listAssetEdgesByServingState, servingStateID)
 	if err != nil {
 		return nil, err
 	}
@@ -1564,7 +1562,7 @@ func (q *Queries) ListAssetEdgesByDeployment(ctx context.Context, deploymentID s
 		if err := rows.Scan(
 			&i.ID,
 			&i.WorkspaceID,
-			&i.DeploymentID,
+			&i.ServingStateID,
 			&i.FromLogicalAssetID,
 			&i.ToLogicalAssetID,
 			&i.EdgeType,
@@ -1585,7 +1583,7 @@ func (q *Queries) ListAssetEdgesByDeployment(ctx context.Context, deploymentID s
 
 const listAssetVersions = `-- name: ListAssetVersions :many
 SELECT
-  d.id AS deployment_id,
+  d.id AS serving_state_id,
   d.workspace_id,
   d.environment,
   d.status,
@@ -1595,13 +1593,38 @@ SELECT
   d.activated_at,
   a.snapshot_id,
   a.logical_asset_id,
+  a.source_file,
   a.content_hash
-FROM deployments d
-JOIN assets a ON a.deployment_id = d.id
+FROM serving_states d
+JOIN assets a ON a.serving_state_id = d.id
 WHERE d.workspace_id = ?
   AND d.environment = ?
   AND a.logical_asset_id = ?
+  AND d.source = 'publish'
   AND d.status IN ('active', 'draining', 'inactive', 'validated')
+  AND NOT EXISTS (
+    SELECT 1
+    FROM serving_states newer
+    JOIN assets newer_asset ON newer_asset.serving_state_id = newer.id
+    WHERE newer.workspace_id = d.workspace_id
+      AND newer.environment = d.environment
+      AND newer.source = 'publish'
+      AND newer.status IN ('active', 'draining', 'inactive', 'validated')
+      AND newer_asset.logical_asset_id = a.logical_asset_id
+      AND newer_asset.content_hash = a.content_hash
+      AND (
+        COALESCE(newer.activated_at, newer.created_at) > COALESCE(d.activated_at, d.created_at)
+        OR (
+          COALESCE(newer.activated_at, newer.created_at) = COALESCE(d.activated_at, d.created_at)
+          AND newer.created_at > d.created_at
+        )
+        OR (
+          COALESCE(newer.activated_at, newer.created_at) = COALESCE(d.activated_at, d.created_at)
+          AND newer.created_at = d.created_at
+          AND newer.id > d.id
+        )
+      )
+  )
 ORDER BY
   COALESCE(d.activated_at, d.created_at) DESC,
   d.created_at DESC,
@@ -1615,7 +1638,7 @@ type ListAssetVersionsParams struct {
 }
 
 type ListAssetVersionsRow struct {
-	DeploymentID   string         `json:"deployment_id"`
+	ServingStateID string         `json:"serving_state_id"`
 	WorkspaceID    string         `json:"workspace_id"`
 	Environment    string         `json:"environment"`
 	Status         string         `json:"status"`
@@ -1625,6 +1648,7 @@ type ListAssetVersionsRow struct {
 	ActivatedAt    sql.NullString `json:"activated_at"`
 	SnapshotID     string         `json:"snapshot_id"`
 	LogicalAssetID string         `json:"logical_asset_id"`
+	SourceFile     string         `json:"source_file"`
 	ContentHash    string         `json:"content_hash"`
 }
 
@@ -1638,7 +1662,7 @@ func (q *Queries) ListAssetVersions(ctx context.Context, arg ListAssetVersionsPa
 	for rows.Next() {
 		var i ListAssetVersionsRow
 		if err := rows.Scan(
-			&i.DeploymentID,
+			&i.ServingStateID,
 			&i.WorkspaceID,
 			&i.Environment,
 			&i.Status,
@@ -1648,6 +1672,7 @@ func (q *Queries) ListAssetVersions(ctx context.Context, arg ListAssetVersionsPa
 			&i.ActivatedAt,
 			&i.SnapshotID,
 			&i.LogicalAssetID,
+			&i.SourceFile,
 			&i.ContentHash,
 		); err != nil {
 			return nil, err
@@ -1663,12 +1688,12 @@ func (q *Queries) ListAssetVersions(ctx context.Context, arg ListAssetVersionsPa
 	return items, nil
 }
 
-const listAssetsByDeployment = `-- name: ListAssetsByDeployment :many
-SELECT snapshot_id, logical_asset_id, workspace_id, deployment_id, asset_type, asset_key, parent_logical_asset_id, title, description, source_file, payload_schema, payload_json, content_hash, created_at FROM assets WHERE deployment_id = ? ORDER BY asset_type, asset_key
+const listAssetsByServingState = `-- name: ListAssetsByServingState :many
+SELECT snapshot_id, logical_asset_id, workspace_id, serving_state_id, asset_type, asset_key, parent_logical_asset_id, title, description, source_file, payload_schema, payload_json, content_hash, created_at FROM assets WHERE serving_state_id = ? ORDER BY asset_type, asset_key
 `
 
-func (q *Queries) ListAssetsByDeployment(ctx context.Context, deploymentID string) ([]Asset, error) {
-	rows, err := q.db.QueryContext(ctx, listAssetsByDeployment, deploymentID)
+func (q *Queries) ListAssetsByServingState(ctx context.Context, servingStateID string) ([]Asset, error) {
+	rows, err := q.db.QueryContext(ctx, listAssetsByServingState, servingStateID)
 	if err != nil {
 		return nil, err
 	}
@@ -1680,7 +1705,7 @@ func (q *Queries) ListAssetsByDeployment(ctx context.Context, deploymentID strin
 			&i.SnapshotID,
 			&i.LogicalAssetID,
 			&i.WorkspaceID,
-			&i.DeploymentID,
+			&i.ServingStateID,
 			&i.AssetType,
 			&i.AssetKey,
 			&i.ParentLogicalAssetID,
@@ -1779,55 +1804,6 @@ func (q *Queries) ListAuditEvents(ctx context.Context, arg ListAuditEventsParams
 			&i.TargetID,
 			&i.MetadataJson,
 			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listDeployments = `-- name: ListDeployments :many
-SELECT id, workspace_id, environment, status, source, digest, manifest_json, ducklake_snapshot_id, created_by, created_at, activated_at, superseded_at, cleanup_after, error FROM deployments
-WHERE workspace_id = ? AND environment = ?
-ORDER BY created_at DESC
-`
-
-type ListDeploymentsParams struct {
-	WorkspaceID string `json:"workspace_id"`
-	Environment string `json:"environment"`
-}
-
-func (q *Queries) ListDeployments(ctx context.Context, arg ListDeploymentsParams) ([]Deployment, error) {
-	rows, err := q.db.QueryContext(ctx, listDeployments, arg.WorkspaceID, arg.Environment)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Deployment{}
-	for rows.Next() {
-		var i Deployment
-		if err := rows.Scan(
-			&i.ID,
-			&i.WorkspaceID,
-			&i.Environment,
-			&i.Status,
-			&i.Source,
-			&i.Digest,
-			&i.ManifestJson,
-			&i.DucklakeSnapshotID,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.ActivatedAt,
-			&i.SupersededAt,
-			&i.CleanupAfter,
-			&i.Error,
 		); err != nil {
 			return nil, err
 		}
@@ -2163,7 +2139,7 @@ func (q *Queries) ListQueryEvents(ctx context.Context, arg ListQueryEventsParams
 
 const listReferencedDuckLakeSnapshots = `-- name: ListReferencedDuckLakeSnapshots :many
 SELECT DISTINCT ducklake_snapshot_id
-FROM deployments
+FROM serving_states
 WHERE ducklake_snapshot_id > 0
   AND status = 'active'
 ORDER BY ducklake_snapshot_id
@@ -2289,6 +2265,54 @@ func (q *Queries) ListRoles(ctx context.Context) ([]Role, error) {
 	return items, nil
 }
 
+const listServingStates = `-- name: ListServingStates :many
+SELECT id, workspace_id, environment, status, source, digest, manifest_json, ducklake_snapshot_id, created_by, created_at, activated_at, superseded_at, error FROM serving_states
+WHERE workspace_id = ? AND environment = ?
+ORDER BY created_at DESC
+`
+
+type ListServingStatesParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	Environment string `json:"environment"`
+}
+
+func (q *Queries) ListServingStates(ctx context.Context, arg ListServingStatesParams) ([]ServingState, error) {
+	rows, err := q.db.QueryContext(ctx, listServingStates, arg.WorkspaceID, arg.Environment)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ServingState{}
+	for rows.Next() {
+		var i ServingState
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkspaceID,
+			&i.Environment,
+			&i.Status,
+			&i.Source,
+			&i.Digest,
+			&i.ManifestJson,
+			&i.DucklakeSnapshotID,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.ActivatedAt,
+			&i.SupersededAt,
+			&i.Error,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSessionsByPrincipal = `-- name: ListSessionsByPrincipal :many
 SELECT id, principal_id, token_hash, expires_at, created_at, last_seen_at, revoked_at FROM sessions
 WHERE principal_id = ?
@@ -2364,26 +2388,26 @@ SELECT
   w.id,
   CASE WHEN a.title IS NOT NULL AND a.title <> '' THEN a.title ELSE w.title END AS title,
   CASE WHEN a.description IS NOT NULL THEN a.description ELSE w.description END AS description,
-  COALESCE(active.deployment_id, '') AS active_deployment_id,
+  COALESCE(active.serving_state_id, '') AS active_serving_state_id,
   w.created_at,
   w.updated_at
 FROM workspaces w
-LEFT JOIN workspace_active_deployments active
+LEFT JOIN workspace_active_serving_states active
   ON active.workspace_id = w.id AND active.environment = ?
 LEFT JOIN assets a
-  ON a.deployment_id = active.deployment_id
+  ON a.serving_state_id = active.serving_state_id
  AND a.asset_type = 'catalog'
  AND a.logical_asset_id = 'catalog:' || w.id
 ORDER BY w.created_at
 `
 
 type ListWorkspacesWithActiveMetadataRow struct {
-	ID                 string      `json:"id"`
-	Title              interface{} `json:"title"`
-	Description        interface{} `json:"description"`
-	ActiveDeploymentID string      `json:"active_deployment_id"`
-	CreatedAt          string      `json:"created_at"`
-	UpdatedAt          string      `json:"updated_at"`
+	ID                   string      `json:"id"`
+	Title                interface{} `json:"title"`
+	Description          interface{} `json:"description"`
+	ActiveServingStateID string      `json:"active_serving_state_id"`
+	CreatedAt            string      `json:"created_at"`
+	UpdatedAt            string      `json:"updated_at"`
 }
 
 func (q *Queries) ListWorkspacesWithActiveMetadata(ctx context.Context, environment string) ([]ListWorkspacesWithActiveMetadataRow, error) {
@@ -2399,7 +2423,7 @@ func (q *Queries) ListWorkspacesWithActiveMetadata(ctx context.Context, environm
 			&i.ID,
 			&i.Title,
 			&i.Description,
-			&i.ActiveDeploymentID,
+			&i.ActiveServingStateID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -2416,44 +2440,32 @@ func (q *Queries) ListWorkspacesWithActiveMetadata(ctx context.Context, environm
 	return items, nil
 }
 
-const markDeleteScheduledDeploymentsDeleted = `-- name: MarkDeleteScheduledDeploymentsDeleted :exec
-UPDATE deployments
+const markDeleteScheduledServingStatesDeleted = `-- name: MarkDeleteScheduledServingStatesDeleted :exec
+UPDATE serving_states
 SET status = 'deleted', error = ''
 WHERE status = 'delete_scheduled'
 `
 
-func (q *Queries) MarkDeleteScheduledDeploymentsDeleted(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, markDeleteScheduledDeploymentsDeleted)
+func (q *Queries) MarkDeleteScheduledServingStatesDeleted(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, markDeleteScheduledServingStatesDeleted)
 	return err
 }
 
-const markDeploymentActive = `-- name: MarkDeploymentActive :exec
-UPDATE deployments
-SET status = 'active', activated_at = CURRENT_TIMESTAMP, error = ''
-WHERE id = ?
-`
-
-func (q *Queries) MarkDeploymentActive(ctx context.Context, id string) error {
-	_, err := q.db.ExecContext(ctx, markDeploymentActive, id)
-	return err
-}
-
-const markDrainingDeploymentsDeleteScheduled = `-- name: MarkDrainingDeploymentsDeleteScheduled :exec
-UPDATE deployments
+const markDrainingServingStatesDeleteScheduled = `-- name: MarkDrainingServingStatesDeleteScheduled :exec
+UPDATE serving_states
 SET status = 'delete_scheduled', error = ''
 WHERE status = 'draining'
 `
 
-func (q *Queries) MarkDrainingDeploymentsDeleteScheduled(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, markDrainingDeploymentsDeleteScheduled)
+func (q *Queries) MarkDrainingServingStatesDeleteScheduled(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, markDrainingServingStatesDeleteScheduled)
 	return err
 }
 
-const markOtherDeploymentsDraining = `-- name: MarkOtherDeploymentsDraining :exec
-UPDATE deployments
+const markOtherServingStatesDraining = `-- name: MarkOtherServingStatesDraining :exec
+UPDATE serving_states
 SET status = 'draining',
     superseded_at = CURRENT_TIMESTAMP,
-    cleanup_after = NULL,
     error = ''
 WHERE workspace_id = ?
   AND environment = ?
@@ -2461,31 +2473,42 @@ WHERE workspace_id = ?
   AND status = 'active'
 `
 
-type MarkOtherDeploymentsDrainingParams struct {
+type MarkOtherServingStatesDrainingParams struct {
 	WorkspaceID string `json:"workspace_id"`
 	Environment string `json:"environment"`
 	ID          string `json:"id"`
 }
 
-func (q *Queries) MarkOtherDeploymentsDraining(ctx context.Context, arg MarkOtherDeploymentsDrainingParams) error {
-	_, err := q.db.ExecContext(ctx, markOtherDeploymentsDraining, arg.WorkspaceID, arg.Environment, arg.ID)
+func (q *Queries) MarkOtherServingStatesDraining(ctx context.Context, arg MarkOtherServingStatesDrainingParams) error {
+	_, err := q.db.ExecContext(ctx, markOtherServingStatesDraining, arg.WorkspaceID, arg.Environment, arg.ID)
 	return err
 }
 
-const markOtherDeploymentsInactive = `-- name: MarkOtherDeploymentsInactive :exec
-UPDATE deployments
+const markOtherServingStatesInactive = `-- name: MarkOtherServingStatesInactive :exec
+UPDATE serving_states
 SET status = 'inactive'
 WHERE workspace_id = ? AND environment = ? AND id <> ? AND status = 'active'
 `
 
-type MarkOtherDeploymentsInactiveParams struct {
+type MarkOtherServingStatesInactiveParams struct {
 	WorkspaceID string `json:"workspace_id"`
 	Environment string `json:"environment"`
 	ID          string `json:"id"`
 }
 
-func (q *Queries) MarkOtherDeploymentsInactive(ctx context.Context, arg MarkOtherDeploymentsInactiveParams) error {
-	_, err := q.db.ExecContext(ctx, markOtherDeploymentsInactive, arg.WorkspaceID, arg.Environment, arg.ID)
+func (q *Queries) MarkOtherServingStatesInactive(ctx context.Context, arg MarkOtherServingStatesInactiveParams) error {
+	_, err := q.db.ExecContext(ctx, markOtherServingStatesInactive, arg.WorkspaceID, arg.Environment, arg.ID)
+	return err
+}
+
+const markServingStateActive = `-- name: MarkServingStateActive :exec
+UPDATE serving_states
+SET status = 'active', activated_at = CURRENT_TIMESTAMP, error = ''
+WHERE id = ?
+`
+
+func (q *Queries) MarkServingStateActive(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, markServingStateActive, id)
 	return err
 }
 
@@ -2591,33 +2614,33 @@ func (q *Queries) RevokeSessionForPrincipal(ctx context.Context, arg RevokeSessi
 	return i, err
 }
 
-const scheduleExpiredDeploymentDeletion = `-- name: ScheduleExpiredDeploymentDeletion :exec
-UPDATE deployments
+const scheduleExpiredServingStateDeletion = `-- name: ScheduleExpiredServingStateDeletion :exec
+UPDATE serving_states
 SET status = 'delete_scheduled', error = ''
 WHERE status = 'expired'
 `
 
-func (q *Queries) ScheduleExpiredDeploymentDeletion(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, scheduleExpiredDeploymentDeletion)
+func (q *Queries) ScheduleExpiredServingStateDeletion(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, scheduleExpiredServingStateDeletion)
 	return err
 }
 
-const setActiveDeployment = `-- name: SetActiveDeployment :exec
-INSERT INTO workspace_active_deployments (workspace_id, environment, deployment_id, updated_at)
+const setActiveServingState = `-- name: SetActiveServingState :exec
+INSERT INTO workspace_active_serving_states (workspace_id, environment, serving_state_id, updated_at)
 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(workspace_id, environment) DO UPDATE SET
-  deployment_id = excluded.deployment_id,
+  serving_state_id = excluded.serving_state_id,
   updated_at = CURRENT_TIMESTAMP
 `
 
-type SetActiveDeploymentParams struct {
-	WorkspaceID  string `json:"workspace_id"`
-	Environment  string `json:"environment"`
-	DeploymentID string `json:"deployment_id"`
+type SetActiveServingStateParams struct {
+	WorkspaceID    string `json:"workspace_id"`
+	Environment    string `json:"environment"`
+	ServingStateID string `json:"serving_state_id"`
 }
 
-func (q *Queries) SetActiveDeployment(ctx context.Context, arg SetActiveDeploymentParams) error {
-	_, err := q.db.ExecContext(ctx, setActiveDeployment, arg.WorkspaceID, arg.Environment, arg.DeploymentID)
+func (q *Queries) SetActiveServingState(ctx context.Context, arg SetActiveServingStateParams) error {
+	_, err := q.db.ExecContext(ctx, setActiveServingState, arg.WorkspaceID, arg.Environment, arg.ServingStateID)
 	return err
 }
 
@@ -2707,62 +2730,6 @@ func (q *Queries) UpdateDefaultAgentConversationTitle(ctx context.Context, arg U
 	return i, err
 }
 
-const updateDeploymentDuckLakeSnapshot = `-- name: UpdateDeploymentDuckLakeSnapshot :exec
-UPDATE deployments
-SET ducklake_snapshot_id = ?
-WHERE id = ?
-`
-
-type UpdateDeploymentDuckLakeSnapshotParams struct {
-	DucklakeSnapshotID int64  `json:"ducklake_snapshot_id"`
-	ID                 string `json:"id"`
-}
-
-func (q *Queries) UpdateDeploymentDuckLakeSnapshot(ctx context.Context, arg UpdateDeploymentDuckLakeSnapshotParams) error {
-	_, err := q.db.ExecContext(ctx, updateDeploymentDuckLakeSnapshot, arg.DucklakeSnapshotID, arg.ID)
-	return err
-}
-
-const updateDeploymentStatus = `-- name: UpdateDeploymentStatus :exec
-UPDATE deployments
-SET status = ?, error = ?
-WHERE id = ?
-`
-
-type UpdateDeploymentStatusParams struct {
-	Status string `json:"status"`
-	Error  string `json:"error"`
-	ID     string `json:"id"`
-}
-
-func (q *Queries) UpdateDeploymentStatus(ctx context.Context, arg UpdateDeploymentStatusParams) error {
-	_, err := q.db.ExecContext(ctx, updateDeploymentStatus, arg.Status, arg.Error, arg.ID)
-	return err
-}
-
-const updateDeploymentValidated = `-- name: UpdateDeploymentValidated :exec
-UPDATE deployments
-SET status = ?, digest = ?, manifest_json = ?, error = ''
-WHERE id = ?
-`
-
-type UpdateDeploymentValidatedParams struct {
-	Status       string `json:"status"`
-	Digest       string `json:"digest"`
-	ManifestJson string `json:"manifest_json"`
-	ID           string `json:"id"`
-}
-
-func (q *Queries) UpdateDeploymentValidated(ctx context.Context, arg UpdateDeploymentValidatedParams) error {
-	_, err := q.db.ExecContext(ctx, updateDeploymentValidated,
-		arg.Status,
-		arg.Digest,
-		arg.ManifestJson,
-		arg.ID,
-	)
-	return err
-}
-
 const updateRoleBindingByID = `-- name: UpdateRoleBindingByID :exec
 UPDATE role_bindings
 SET role_id = ?, principal_id = ?, group_id = ?
@@ -2783,6 +2750,62 @@ func (q *Queries) UpdateRoleBindingByID(ctx context.Context, arg UpdateRoleBindi
 		arg.PrincipalID,
 		arg.GroupID,
 		arg.WorkspaceID,
+		arg.ID,
+	)
+	return err
+}
+
+const updateServingStateDuckLakeSnapshot = `-- name: UpdateServingStateDuckLakeSnapshot :exec
+UPDATE serving_states
+SET ducklake_snapshot_id = ?
+WHERE id = ?
+`
+
+type UpdateServingStateDuckLakeSnapshotParams struct {
+	DucklakeSnapshotID int64  `json:"ducklake_snapshot_id"`
+	ID                 string `json:"id"`
+}
+
+func (q *Queries) UpdateServingStateDuckLakeSnapshot(ctx context.Context, arg UpdateServingStateDuckLakeSnapshotParams) error {
+	_, err := q.db.ExecContext(ctx, updateServingStateDuckLakeSnapshot, arg.DucklakeSnapshotID, arg.ID)
+	return err
+}
+
+const updateServingStateStatus = `-- name: UpdateServingStateStatus :exec
+UPDATE serving_states
+SET status = ?, error = ?
+WHERE id = ?
+`
+
+type UpdateServingStateStatusParams struct {
+	Status string `json:"status"`
+	Error  string `json:"error"`
+	ID     string `json:"id"`
+}
+
+func (q *Queries) UpdateServingStateStatus(ctx context.Context, arg UpdateServingStateStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateServingStateStatus, arg.Status, arg.Error, arg.ID)
+	return err
+}
+
+const updateServingStateValidated = `-- name: UpdateServingStateValidated :exec
+UPDATE serving_states
+SET status = ?, digest = ?, manifest_json = ?, error = ''
+WHERE id = ?
+`
+
+type UpdateServingStateValidatedParams struct {
+	Status       string `json:"status"`
+	Digest       string `json:"digest"`
+	ManifestJson string `json:"manifest_json"`
+	ID           string `json:"id"`
+}
+
+func (q *Queries) UpdateServingStateValidated(ctx context.Context, arg UpdateServingStateValidatedParams) error {
+	_, err := q.db.ExecContext(ctx, updateServingStateValidated,
+		arg.Status,
+		arg.Digest,
+		arg.ManifestJson,
 		arg.ID,
 	)
 	return err

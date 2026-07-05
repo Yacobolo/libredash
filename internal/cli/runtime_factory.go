@@ -13,12 +13,12 @@ import (
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
 	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
 )
 
-type deploymentRuntimeFactory struct {
+type servingStateRuntimeFactory struct {
 	dataDir          string
 	duckDBDir        string
 	runtimeDir       string
@@ -26,43 +26,43 @@ type deploymentRuntimeFactory struct {
 	duckLakeDataPath string
 }
 
-func (f deploymentRuntimeFactory) Prepare(_ context.Context, input runtimehost.RuntimeInput) (runtimehost.Runtime, error) {
+func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost.RuntimeInput) (runtimehost.Runtime, error) {
 	dataDir := runtimeDataDir(input, f.dataDir)
 	duckDBDir := runtimeFirstNonEmpty(input.DuckDBDir, f.duckDBDir)
 	runtimeDir := runtimeFirstNonEmpty(input.RuntimeDir, f.runtimeDir)
-	targetDir := filepath.Join(runtimeDir, string(input.Deployment.ID)+"-"+shortDigest(input.Artifact.Digest))
+	targetDir := filepath.Join(runtimeDir, string(input.State.ID)+"-"+shortDigest(input.Artifact.Digest))
 	if err := os.RemoveAll(targetDir); err != nil {
 		return nil, err
 	}
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
 		return nil, err
 	}
-	if err := deploymentfs.ExtractArtifact(input.Artifact.Path, targetDir); err != nil {
+	if err := servingstatefs.ExtractArtifact(input.Artifact.Path, targetDir); err != nil {
 		return nil, err
 	}
-	duckDir := filepath.Join(duckDBDir, string(deployment.NormalizeEnvironment(input.Deployment.Environment)))
-	compiled, _, err := deploymentfs.LoadCompiledWorkspaceArtifact(targetDir)
+	duckDir := filepath.Join(duckDBDir, string(servingstate.NormalizeEnvironment(input.State.Environment)))
+	compiled, _, err := servingstatefs.LoadCompiledWorkspaceArtifact(targetDir)
 	if err != nil {
 		return nil, err
 	}
-	if compiled.WorkspaceID != string(input.Deployment.WorkspaceID) {
-		return nil, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, input.Deployment.WorkspaceID)
+	if compiled.WorkspaceID != string(input.State.WorkspaceID) {
+		return nil, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, input.State.WorkspaceID)
 	}
 	dataPath := runtimeFirstNonEmpty(f.duckLakeDataPath, filepath.Join(duckDir, "data"))
 	service, err := dashboardruntime.NewFromDefinition(dataDir, duckDir, dashboardDataRuntimeFactory{
-		snapshotID:          input.Deployment.DuckLakeSnapshotID,
+		snapshotID:          input.State.DuckLakeSnapshotID,
 		catalogPath:         f.catalogPath,
 		duckLakeDataPath:    dataPath,
-		deploymentID:        string(input.Deployment.ID),
-		workspaceID:         string(input.Deployment.WorkspaceID),
-		environment:         string(deployment.NormalizeEnvironment(input.Deployment.Environment)),
-		semanticModelDigest: input.Deployment.Digest,
+		servingStateID:      string(input.State.ID),
+		workspaceID:         string(input.State.WorkspaceID),
+		environment:         string(servingstate.NormalizeEnvironment(input.State.Environment)),
+		semanticModelDigest: input.State.Digest,
 		artifactDigest:      input.Artifact.Digest,
 	}, compiled.Definition)
 	if err != nil {
 		return nil, err
 	}
-	if input.Deployment.DuckLakeSnapshotID == 0 {
+	if input.State.DuckLakeSnapshotID == 0 {
 		snapshotID := service.DuckLakeSnapshotID()
 		if snapshotID > 0 {
 			if err := service.Close(); err != nil {
@@ -72,10 +72,10 @@ func (f deploymentRuntimeFactory) Prepare(_ context.Context, input runtimehost.R
 				snapshotID:          snapshotID,
 				catalogPath:         f.catalogPath,
 				duckLakeDataPath:    dataPath,
-				deploymentID:        string(input.Deployment.ID),
-				workspaceID:         string(input.Deployment.WorkspaceID),
-				environment:         string(deployment.NormalizeEnvironment(input.Deployment.Environment)),
-				semanticModelDigest: input.Deployment.Digest,
+				servingStateID:      string(input.State.ID),
+				workspaceID:         string(input.State.WorkspaceID),
+				environment:         string(servingstate.NormalizeEnvironment(input.State.Environment)),
+				semanticModelDigest: input.State.Digest,
 				artifactDigest:      input.Artifact.Digest,
 			}, compiled.Definition)
 			if err != nil {
@@ -90,7 +90,7 @@ type dashboardDataRuntimeFactory struct {
 	snapshotID          int64
 	catalogPath         string
 	duckLakeDataPath    string
-	deploymentID        string
+	servingStateID      string
 	workspaceID         string
 	environment         string
 	semanticModelDigest string
@@ -109,7 +109,7 @@ func (f dashboardDataRuntimeFactory) OpenDashboardWorkspaceDataRuntimes(ctx cont
 		CatalogPath:      f.catalogPath,
 		DuckLakeDataPath: f.duckLakeDataPath,
 		SnapshotID:       f.snapshotID,
-		DeploymentID:     f.deploymentID,
+		ServingStateID:   f.servingStateID,
 		WorkspaceID:      f.workspaceID,
 		Environment:      f.environment,
 		SemanticDigest:   f.semanticModelDigest,
@@ -278,7 +278,7 @@ func runtimeDataDir(input runtimehost.RuntimeInput, fallback string) string {
 	if input.Artifact.DataRoot != "" {
 		return input.Artifact.DataRoot
 	}
-	workspaceDataDir := filepath.Join(".data", string(input.Deployment.WorkspaceID))
+	workspaceDataDir := filepath.Join(".data", string(input.State.WorkspaceID))
 	if info, err := os.Stat(workspaceDataDir); err == nil && info.IsDir() {
 		return workspaceDataDir
 	}

@@ -98,13 +98,13 @@ func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/preview",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/query/explain",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/preview/explain",
-		"/api/v1/workspaces/{workspace}/deployments",
-		"/api/v1/workspaces/{workspace}/deployments/{deployment}",
-		"/api/v1/workspaces/{workspace}/deployments/{deployment}/artifact",
-		"/api/v1/workspaces/{workspace}/deployments/{deployment}/validate",
-		"/api/v1/workspaces/{workspace}/deployments/{deployment}/activate",
-		"/api/v1/workspaces/{workspace}/materialization-runs",
-		"/api/v1/workspaces/{workspace}/materialization-runs/{run}",
+		"/api/v1/workspaces/{workspace}/publishes",
+		"/api/v1/workspaces/{workspace}/publishes/{publish}",
+		"/api/v1/workspaces/{workspace}/publishes/{publish}/artifact",
+		"/api/v1/workspaces/{workspace}/publishes/{publish}/validate",
+		"/api/v1/workspaces/{workspace}/publishes/{publish}/activate",
+		"/api/v1/workspaces/{workspace}/refresh-runs",
+		"/api/v1/workspaces/{workspace}/refresh-runs/{run}",
 		"/api/v1/workspaces/{workspace}/agent/conversations",
 		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}",
 		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/messages",
@@ -127,7 +127,7 @@ func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 		}
 	}
 
-	for _, path := range []string{"/api/workspaces", "/api/deployments", "/api/v1/workspaces/{workspace}/deployments/{deployment}/rollback", "/updates", "/commands/select", "/workspaces/{workspace}/chat/updates", "/dashboards/{dashboard}"} {
+	for _, path := range []string{"/api/workspaces", "/api/publishes", "/api/v1/workspaces/{workspace}/publishes/{publish}/rollback", "/updates", "/commands/select", "/workspaces/{workspace}/chat/updates", "/dashboards/{dashboard}"} {
 		if _, ok := paths[path]; ok {
 			t.Fatalf("generated OpenAPI should not include UI transport path %s", path)
 		}
@@ -152,27 +152,27 @@ func TestAPIGenOperationAuthCoverage(t *testing.T) {
 			t.Fatalf("%s has app permission mapping but no generated contract", operationID)
 		}
 	}
-	if got := apigenOperationPermissions["uploadDeploymentArtifact"]; got != access.PermissionDeploymentCreate {
-		t.Fatalf("uploadDeploymentArtifact permission = %q, want %q", got, access.PermissionDeploymentCreate)
+	if got := apigenOperationPermissions["uploadPublishArtifact"]; got != access.PermissionPublishCreate {
+		t.Fatalf("uploadPublishArtifact permission = %q, want %q", got, access.PermissionPublishCreate)
 	}
 }
 
 func TestAPIGenOperationExtensions(t *testing.T) {
 	contracts := apigenapi.GetAPIGenOperationContracts()
 	agentTools := map[string]string{
-		"getDeployment":              "get_deployment",
+		"getPublish":                 "get_publish",
 		"getDashboard":               "describe_dashboard",
 		"getDashboardVisual":         "describe_dashboard_visual",
 		"getWorkspaceAsset":          "describe_asset",
 		"getWorkspaceAssetLineage":   "asset_lineage",
 		"getSemanticModel":           "describe_model",
 		"getSemanticDataset":         "describe_semantic_dataset",
-		"getMaterializationRun":      "get_materialization_run",
+		"getRefreshRun":              "get_refresh_run",
 		"listDashboardComponents":    "list_dashboard_components",
 		"listDashboards":             "list_dashboards",
-		"listDeployments":            "list_deployments",
+		"listPublishes":              "list_publishes",
 		"listDashboardFilterOptions": "list_dashboard_filter_options",
-		"listMaterializationRuns":    "list_materialization_runs",
+		"listRefreshRuns":            "list_refresh_runs",
 		"listSemanticDatasets":       "list_semantic_datasets",
 		"listSemanticFields":         "list_semantic_fields",
 		"listSemanticModels":         "list_semantic_models",
@@ -232,7 +232,7 @@ func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
 	if !ok {
 		t.Fatalf("openapi paths missing: %#v", spec["paths"])
 	}
-	operation := mustOpenAPIOperation(t, paths, "/api/v1/workspaces/{workspace}/deployments/{deployment}/artifact", "put")
+	operation := mustOpenAPIOperation(t, paths, "/api/v1/workspaces/{workspace}/publishes/{publish}/artifact", "put")
 	if _, ok := operation["x-libredash-dispatch"]; ok {
 		t.Fatalf("upload operation should not use x-libredash-dispatch: %#v", operation["x-libredash-dispatch"])
 	}
@@ -273,7 +273,7 @@ func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
 		t.Fatalf("decode APIGen IR: %v", err)
 	}
 	for _, endpoint := range irDoc.Endpoints {
-		if endpoint.OperationID != "uploadDeploymentArtifact" {
+		if endpoint.OperationID != "uploadPublishArtifact" {
 			continue
 		}
 		if endpoint.RequestBody == nil || len(endpoint.RequestBody.Contents) != 1 {
@@ -283,11 +283,11 @@ func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
 		if content.ContentType != "application/octet-stream" || content.BodyKind != "binary" {
 			t.Fatalf("upload IR content = %#v, want application/octet-stream binary", content)
 		}
-		var generatedBody apigenapi.GenUploadDeploymentArtifactBody
+		var generatedBody apigenapi.GenUploadPublishArtifactBody
 		_ = []byte(generatedBody)
 		return
 	}
-	t.Fatal("uploadDeploymentArtifact missing from APIGen IR")
+	t.Fatal("uploadPublishArtifact missing from APIGen IR")
 }
 
 func TestAPIGenListOperationsUseStandardEnvelope(t *testing.T) {
@@ -315,8 +315,8 @@ func TestAPIGenListOperationsUseStandardEnvelope(t *testing.T) {
 		{"/api/v1/workspaces/{workspace}/semantic-models", "get"},
 		{"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets", "get"},
 		{"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/fields", "get"},
-		{"/api/v1/workspaces/{workspace}/deployments", "get"},
-		{"/api/v1/workspaces/{workspace}/materialization-runs", "get"},
+		{"/api/v1/workspaces/{workspace}/publishes", "get"},
+		{"/api/v1/workspaces/{workspace}/refresh-runs", "get"},
 		{"/api/v1/workspaces/{workspace}/agent/conversations", "get"},
 	} {
 		operation := mustOpenAPIOperation(t, paths, tc.path, tc.method)

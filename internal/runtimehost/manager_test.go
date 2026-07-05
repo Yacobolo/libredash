@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 )
 
 func TestManagerReloadIgnoresMissingActiveDeployment(t *testing.T) {
-	manager := NewManagerWithFactory(ManagerOptions{Repo: &fakeRepo{activeErr: deployment.ErrNotFound}, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: &fakeRepo{activeErr: servingstate.ErrNotFound}, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
 
 	if err := manager.Reload(context.Background()); err != nil {
 		t.Fatalf("reload: %v", err)
@@ -21,14 +21,14 @@ func TestManagerReloadIgnoresMissingActiveDeployment(t *testing.T) {
 func TestManagerReloadClearsStaleRuntimeWhenActiveDeploymentMissing(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
 	}
 	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("reload active: %v", err)
 	}
-	repo.activeErr = deployment.ErrNotFound
+	repo.activeErr = servingstate.ErrNotFound
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("reload missing active: %v", err)
 	}
@@ -39,8 +39,8 @@ func TestManagerReloadClearsStaleRuntimeWhenActiveDeploymentMissing(t *testing.T
 
 func TestManagerReloadUsesConfiguredEnvironment(t *testing.T) {
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_prod", WorkspaceID: "test", Environment: "prod", Status: deployment.StatusValidated},
-		artifact:   deployment.Artifact{DeploymentID: "dep_prod", Environment: "prod", Digest: "digest"},
+		deployment: servingstate.State{ID: "dep_prod", WorkspaceID: "test", Environment: "prod", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_prod", Environment: "prod", Digest: "digest"},
 	}
 	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "prod", DataDir: "/data", Factory: &fakeFactory{}})
 
@@ -55,13 +55,13 @@ func TestManagerReloadUsesConfiguredEnvironment(t *testing.T) {
 func TestManagerPrepareCommitSwapsRuntimeAndClosesOld(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Status: deployment.StatusValidated},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", Digest: "digest"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", Digest: "digest"},
 	}
 	factory := &fakeFactory{}
 	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: factory})
 
-	prepared, err := manager.PrepareDeployment(ctx, "dep_1")
+	prepared, err := manager.PrepareServingState(ctx, "dep_1")
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestManagerPrepareCommitSwapsRuntimeAndClosesOld(t *testing.T) {
 		t.Fatal("active runtime is nil")
 	}
 
-	second, err := manager.PrepareDeployment(ctx, "dep_1")
+	second, err := manager.PrepareServingState(ctx, "dep_1")
 	if err != nil {
 		t.Fatalf("prepare second: %v", err)
 	}
@@ -91,8 +91,8 @@ func TestManagerPrepareCommitSwapsRuntimeAndClosesOld(t *testing.T) {
 func TestManagerKeepsOldRuntimeOpenUntilLeaseRelease(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 11},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest-1"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, DuckLakeSnapshotID: 11},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest-1"},
 	}
 	var drained []int64
 	manager := NewManagerWithFactory(ManagerOptions{
@@ -101,7 +101,7 @@ func TestManagerKeepsOldRuntimeOpenUntilLeaseRelease(t *testing.T) {
 		Environment: "dev",
 		DataDir:     "/data",
 		Factory:     &fakeFactory{},
-		OnDrained: func(_ deployment.ID, snapshotID int64) {
+		OnDrained: func(_ servingstate.ID, snapshotID int64) {
 			drained = append(drained, snapshotID)
 		},
 	})
@@ -114,8 +114,8 @@ func TestManagerKeepsOldRuntimeOpenUntilLeaseRelease(t *testing.T) {
 	}
 	oldRuntime := oldLease.Runtime().(*fakeRuntime)
 
-	repo.deployment = deployment.Deployment{ID: "dep_2", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 22}
-	repo.artifact = deployment.Artifact{DeploymentID: "dep_2", WorkspaceID: "test", Environment: "dev", Digest: "digest-2"}
+	repo.deployment = servingstate.State{ID: "dep_2", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, DuckLakeSnapshotID: 22}
+	repo.artifact = servingstate.Artifact{ServingStateID: "dep_2", WorkspaceID: "test", Environment: "dev", Digest: "digest-2"}
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("reload second: %v", err)
 	}
@@ -149,8 +149,8 @@ func TestManagerKeepsOldRuntimeOpenUntilLeaseRelease(t *testing.T) {
 func TestManagerPersistsSnapshotLeaseOnAcquireAndRelease(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 11},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, DuckLakeSnapshotID: 11},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
 	}
 	manager := NewManagerWithFactory(ManagerOptions{
 		Repo:        repo,
@@ -172,7 +172,7 @@ func TestManagerPersistsSnapshotLeaseOnAcquireAndRelease(t *testing.T) {
 		t.Fatalf("created leases = %#v, want one", repo.createdLeases)
 	}
 	created := repo.createdLeases[0]
-	if created.WorkspaceID != "test" || created.Environment != "dev" || created.DeploymentID != "dep_1" || created.DuckLakeSnapshotID != 11 || created.OwnerID != "test-owner" {
+	if created.WorkspaceID != "test" || created.Environment != "dev" || created.ServingStateID != "dep_1" || created.DuckLakeSnapshotID != 11 || created.OwnerID != "test-owner" {
 		t.Fatalf("created lease = %#v", created)
 	}
 	lease.Release()
@@ -188,8 +188,8 @@ func TestManagerPersistsSnapshotLeaseOnAcquireAndRelease(t *testing.T) {
 func TestManagerRetriesPersistentLeaseRelease(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment:        deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 42},
-		artifact:          deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
+		deployment:        servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, DuckLakeSnapshotID: 42},
+		artifact:          servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
 		releaseFailures:   2,
 		releaseFailureErr: errors.New("database is locked"),
 	}
@@ -218,8 +218,8 @@ func TestManagerRetriesPersistentLeaseRelease(t *testing.T) {
 func TestManagerCloseDefersRuntimeCloseUntilLeaseRelease(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 11},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, DuckLakeSnapshotID: 11},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
 	}
 	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
 	if err := manager.Reload(ctx); err != nil {
@@ -248,8 +248,8 @@ func TestManagerCloseDefersRuntimeCloseUntilLeaseRelease(t *testing.T) {
 func TestManagerPreparedRuntimeExposesDuckLakeSnapshot(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Status: deployment.StatusValidated},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", Digest: "digest"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", Digest: "digest"},
 	}
 	manager := NewManagerWithFactory(ManagerOptions{
 		Repo:        repo,
@@ -259,7 +259,7 @@ func TestManagerPreparedRuntimeExposesDuckLakeSnapshot(t *testing.T) {
 		Factory:     &fakeFactory{snapshotID: 42},
 	})
 
-	prepared, err := manager.PrepareDeployment(ctx, "dep_1")
+	prepared, err := manager.PrepareServingState(ctx, "dep_1")
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
@@ -275,8 +275,8 @@ func TestManagerPreparedRuntimeExposesDuckLakeSnapshot(t *testing.T) {
 func TestManagerReloadBackfillsMissingDeploymentSnapshot(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
 	}
 	manager := NewManagerWithFactory(ManagerOptions{
 		Repo:        repo,
@@ -289,16 +289,16 @@ func TestManagerReloadBackfillsMissingDeploymentSnapshot(t *testing.T) {
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("reload: %v", err)
 	}
-	if repo.recordedDeploymentID != "dep_1" || repo.recordedSnapshotID != 42 {
-		t.Fatalf("recorded snapshot = (%s, %d), want (dep_1, 42)", repo.recordedDeploymentID, repo.recordedSnapshotID)
+	if repo.recordedServingStateID != "dep_1" || repo.recordedSnapshotID != 42 {
+		t.Fatalf("recorded snapshot = (%s, %d), want (dep_1, 42)", repo.recordedServingStateID, repo.recordedSnapshotID)
 	}
 }
 
 func TestManagerReloadRoutesWhenOnlyActiveDeploymentPointerChanges(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 11},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, DuckLakeSnapshotID: 11},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"},
 	}
 	factory := &fakeFactory{}
 	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: factory})
@@ -314,8 +314,8 @@ func TestManagerReloadRoutesWhenOnlyActiveDeploymentPointerChanges(t *testing.T)
 		t.Fatalf("first active snapshot = %d, want 11", got)
 	}
 
-	repo.deployment = deployment.Deployment{ID: "dep_2", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 22}
-	repo.artifact = deployment.Artifact{DeploymentID: "dep_2", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"}
+	repo.deployment = servingstate.State{ID: "dep_2", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, DuckLakeSnapshotID: 22}
+	repo.artifact = servingstate.Artifact{ServingStateID: "dep_2", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"}
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("second reload: %v", err)
 	}
@@ -334,8 +334,8 @@ func TestManagerReloadRoutesWhenOnlyActiveDeploymentPointerChanges(t *testing.T)
 func TestManagerReloadRoutesWhenOnlyDuckLakeSnapshotPointerChanges(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 11},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, DuckLakeSnapshotID: 11},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"},
 	}
 	factory := &fakeFactory{}
 	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: factory})
@@ -362,8 +362,8 @@ func TestManagerReloadRoutesWhenOnlyDuckLakeSnapshotPointerChanges(t *testing.T)
 func TestManagerReloadReusesRuntimeWhenDeploymentDigestAndSnapshotMatch(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: deployment.StatusActive, DuckLakeSnapshotID: 11},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, DuckLakeSnapshotID: 11},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"},
 	}
 	factory := &fakeFactory{}
 	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: factory})
@@ -389,11 +389,11 @@ func TestManagerRejectsPreparedFromDifferentHost(t *testing.T) {
 func TestManagerCloseClearsActiveRuntime(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Status: deployment.StatusValidated},
-		artifact:   deployment.Artifact{DeploymentID: "dep_1", Digest: "digest"},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", Digest: "digest"},
 	}
 	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
-	prepared, err := manager.PrepareDeployment(ctx, "dep_1")
+	prepared, err := manager.PrepareServingState(ctx, "dep_1")
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
@@ -412,21 +412,21 @@ func TestManagerCloseClearsActiveRuntime(t *testing.T) {
 func TestRegistryReloadLoadsConfiguredEnvironmentForEachWorkspace(t *testing.T) {
 	repo := newFakeRegistryRepo()
 	repo.active["sales/prod"] = registryDeploymentArtifact{
-		deployment: deployment.Deployment{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: deployment.StatusValidated},
-		artifact:   deployment.Artifact{DeploymentID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"},
+		deployment: servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"},
 	}
 	repo.active["operations/prod"] = registryDeploymentArtifact{
-		deployment: deployment.Deployment{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: deployment.StatusValidated},
-		artifact:   deployment.Artifact{DeploymentID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
+		deployment: servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
 	}
 	repo.active["sales/dev"] = registryDeploymentArtifact{
-		deployment: deployment.Deployment{ID: "dep_sales_dev", WorkspaceID: "sales", Environment: "dev", Status: deployment.StatusValidated},
-		artifact:   deployment.Artifact{DeploymentID: "dep_sales_dev", WorkspaceID: "sales", Environment: "dev", Digest: "sales-dev"},
+		deployment: servingstate.State{ID: "dep_sales_dev", WorkspaceID: "sales", Environment: "dev", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_dev", WorkspaceID: "sales", Environment: "dev", Digest: "sales-dev"},
 	}
 	factory := &recordingRegistryFactory{}
 	registry := NewRegistryWithFactory(RegistryOptions{
 		Repo:         repo,
-		WorkspaceIDs: []deployment.WorkspaceID{"sales", "operations", "empty"},
+		WorkspaceIDs: []servingstate.WorkspaceID{"sales", "operations", "empty"},
 		Environment:  "prod",
 		DataDir:      "/data",
 		Factory:      factory,
@@ -454,18 +454,18 @@ func TestRegistryReloadLoadsConfiguredEnvironmentForEachWorkspace(t *testing.T) 
 
 func TestRegistryPrepareCommitRoutesDeploymentByWorkspace(t *testing.T) {
 	repo := newFakeRegistryRepo()
-	repo.deployments["dep_ops_prod"] = deployment.Deployment{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: deployment.StatusValidated}
-	repo.artifacts["dep_ops_prod"] = deployment.Artifact{DeploymentID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"}
+	repo.deployments["dep_ops_prod"] = servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_ops_prod"] = servingstate.Artifact{ServingStateID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"}
 	factory := &recordingRegistryFactory{}
 	registry := NewRegistryWithFactory(RegistryOptions{
 		Repo:         repo,
-		WorkspaceIDs: []deployment.WorkspaceID{"sales"},
+		WorkspaceIDs: []servingstate.WorkspaceID{"sales"},
 		Environment:  "prod",
 		DataDir:      "/data",
 		Factory:      factory,
 	})
 
-	prepared, err := registry.PrepareDeployment(context.Background(), "dep_ops_prod")
+	prepared, err := registry.PrepareServingState(context.Background(), "dep_ops_prod")
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
 	}
@@ -473,8 +473,8 @@ func TestRegistryPrepareCommitRoutesDeploymentByWorkspace(t *testing.T) {
 		t.Fatalf("commit: %v", err)
 	}
 	repo.active["operations/prod"] = registryDeploymentArtifact{
-		deployment: deployment.Deployment{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: deployment.StatusActive},
-		artifact:   deployment.Artifact{DeploymentID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
+		deployment: servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusActive},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
 	}
 	if _, err := registry.ActiveForWorkspace(context.Background(), "operations"); err != nil {
 		t.Fatalf("operations active after commit: %v", err)
@@ -489,17 +489,17 @@ func TestRegistryPrepareCommitRoutesDeploymentByWorkspace(t *testing.T) {
 
 func TestRegistryRejectsPreparedDeploymentFromDifferentEnvironment(t *testing.T) {
 	repo := newFakeRegistryRepo()
-	repo.deployments["dep_ops_dev"] = deployment.Deployment{ID: "dep_ops_dev", WorkspaceID: "operations", Environment: "dev", Status: deployment.StatusValidated}
-	repo.artifacts["dep_ops_dev"] = deployment.Artifact{DeploymentID: "dep_ops_dev", WorkspaceID: "operations", Environment: "dev", Digest: "ops-dev"}
+	repo.deployments["dep_ops_dev"] = servingstate.State{ID: "dep_ops_dev", WorkspaceID: "operations", Environment: "dev", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_ops_dev"] = servingstate.Artifact{ServingStateID: "dep_ops_dev", WorkspaceID: "operations", Environment: "dev", Digest: "ops-dev"}
 	registry := NewRegistryWithFactory(RegistryOptions{
 		Repo:         repo,
-		WorkspaceIDs: []deployment.WorkspaceID{"operations"},
+		WorkspaceIDs: []servingstate.WorkspaceID{"operations"},
 		Environment:  "prod",
 		DataDir:      "/data",
 		Factory:      &recordingRegistryFactory{},
 	})
 
-	if _, err := registry.PrepareDeployment(context.Background(), "dep_ops_dev"); err == nil {
+	if _, err := registry.PrepareServingState(context.Background(), "dep_ops_dev"); err == nil {
 		t.Fatal("prepare error = nil, want environment mismatch")
 	}
 }
@@ -507,17 +507,17 @@ func TestRegistryRejectsPreparedDeploymentFromDifferentEnvironment(t *testing.T)
 func TestRegistryCloseClosesEveryActiveWorkspaceRuntime(t *testing.T) {
 	repo := newFakeRegistryRepo()
 	repo.active["sales/prod"] = registryDeploymentArtifact{
-		deployment: deployment.Deployment{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: deployment.StatusValidated},
-		artifact:   deployment.Artifact{DeploymentID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"},
+		deployment: servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"},
 	}
 	repo.active["operations/prod"] = registryDeploymentArtifact{
-		deployment: deployment.Deployment{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: deployment.StatusValidated},
-		artifact:   deployment.Artifact{DeploymentID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
+		deployment: servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
 	}
 	factory := &recordingRegistryFactory{}
 	registry := NewRegistryWithFactory(RegistryOptions{
 		Repo:         repo,
-		WorkspaceIDs: []deployment.WorkspaceID{"sales", "operations"},
+		WorkspaceIDs: []servingstate.WorkspaceID{"sales", "operations"},
 		Environment:  "prod",
 		DataDir:      "/data",
 		Factory:      factory,
@@ -537,49 +537,49 @@ func TestRegistryCloseClosesEveryActiveWorkspaceRuntime(t *testing.T) {
 }
 
 type fakeRepo struct {
-	deployment           deployment.Deployment
-	artifact             deployment.Artifact
-	activeErr            error
-	activeEnvironment    deployment.Environment
-	recordedDeploymentID deployment.ID
-	recordedSnapshotID   int64
-	createdLeases        []deployment.SnapshotLeaseInput
-	releasedLeases       []string
-	extendedLeases       []string
-	releaseFailures      int
-	releaseFailureErr    error
+	deployment             servingstate.State
+	artifact               servingstate.Artifact
+	activeErr              error
+	activeEnvironment      servingstate.Environment
+	recordedServingStateID servingstate.ID
+	recordedSnapshotID     int64
+	createdLeases          []servingstate.SnapshotLeaseInput
+	releasedLeases         []string
+	extendedLeases         []string
+	releaseFailures        int
+	releaseFailureErr      error
 }
 
-func (r *fakeRepo) ActiveArtifact(_ context.Context, _ deployment.WorkspaceID, environment deployment.Environment) (deployment.Deployment, deployment.Artifact, error) {
+func (r *fakeRepo) ActiveArtifact(_ context.Context, _ servingstate.WorkspaceID, environment servingstate.Environment) (servingstate.State, servingstate.Artifact, error) {
 	r.activeEnvironment = environment
 	if r.activeErr != nil {
-		return deployment.Deployment{}, deployment.Artifact{}, r.activeErr
+		return servingstate.State{}, servingstate.Artifact{}, r.activeErr
 	}
 	return r.deployment, r.artifact, nil
 }
 
-func (r *fakeRepo) ByID(context.Context, deployment.ID) (deployment.Deployment, error) {
+func (r *fakeRepo) ByID(context.Context, servingstate.ID) (servingstate.State, error) {
 	if r.deployment.ID == "" {
-		return deployment.Deployment{}, deployment.ErrNotFound
+		return servingstate.State{}, servingstate.ErrNotFound
 	}
 	return r.deployment, nil
 }
 
-func (r *fakeRepo) ArtifactByDeployment(context.Context, deployment.ID) (deployment.Artifact, error) {
+func (r *fakeRepo) ArtifactByServingState(context.Context, servingstate.ID) (servingstate.Artifact, error) {
 	if r.artifact.Digest == "" {
-		return deployment.Artifact{}, deployment.ErrNotFound
+		return servingstate.Artifact{}, servingstate.ErrNotFound
 	}
 	return r.artifact, nil
 }
 
-func (r *fakeRepo) RecordDuckLakeSnapshot(_ context.Context, deploymentID deployment.ID, snapshotID int64) error {
-	r.recordedDeploymentID = deploymentID
+func (r *fakeRepo) RecordDuckLakeSnapshot(_ context.Context, servingStateID servingstate.ID, snapshotID int64) error {
+	r.recordedServingStateID = servingStateID
 	r.recordedSnapshotID = snapshotID
 	r.deployment.DuckLakeSnapshotID = snapshotID
 	return nil
 }
 
-func (r *fakeRepo) CreateQuerySnapshotLease(_ context.Context, input deployment.SnapshotLeaseInput) (string, error) {
+func (r *fakeRepo) CreateQuerySnapshotLease(_ context.Context, input servingstate.SnapshotLeaseInput) (string, error) {
 	r.createdLeases = append(r.createdLeases, input)
 	return fmt.Sprintf("lease_%d", len(r.createdLeases)), nil
 }
@@ -612,8 +612,8 @@ func (f *fakeFactory) Prepare(_ context.Context, input RuntimeInput) (Runtime, e
 	if f.err != nil {
 		return nil, f.err
 	}
-	if input.Deployment.DuckLakeSnapshotID > 0 {
-		return &fakeRuntime{snapshotID: input.Deployment.DuckLakeSnapshotID}, nil
+	if input.State.DuckLakeSnapshotID > 0 {
+		return &fakeRuntime{snapshotID: input.State.DuckLakeSnapshotID}, nil
 	}
 	return &fakeRuntime{snapshotID: f.snapshotID}, nil
 }
@@ -637,57 +637,57 @@ type fakePrepared struct{}
 func (fakePrepared) Close() error { return errors.New("unused") }
 
 type registryDeploymentArtifact struct {
-	deployment deployment.Deployment
-	artifact   deployment.Artifact
+	deployment servingstate.State
+	artifact   servingstate.Artifact
 }
 
 type fakeRegistryRepo struct {
 	active      map[string]registryDeploymentArtifact
-	deployments map[deployment.ID]deployment.Deployment
-	artifacts   map[deployment.ID]deployment.Artifact
+	deployments map[servingstate.ID]servingstate.State
+	artifacts   map[servingstate.ID]servingstate.Artifact
 	activeCalls []string
 }
 
 func newFakeRegistryRepo() *fakeRegistryRepo {
 	return &fakeRegistryRepo{
 		active:      map[string]registryDeploymentArtifact{},
-		deployments: map[deployment.ID]deployment.Deployment{},
-		artifacts:   map[deployment.ID]deployment.Artifact{},
+		deployments: map[servingstate.ID]servingstate.State{},
+		artifacts:   map[servingstate.ID]servingstate.Artifact{},
 	}
 }
 
-func (r *fakeRegistryRepo) ActiveArtifact(_ context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) (deployment.Deployment, deployment.Artifact, error) {
+func (r *fakeRegistryRepo) ActiveArtifact(_ context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment) (servingstate.State, servingstate.Artifact, error) {
 	key := string(workspaceID) + "/" + string(environment)
 	r.activeCalls = append(r.activeCalls, key)
 	current, ok := r.active[key]
 	if !ok {
-		return deployment.Deployment{}, deployment.Artifact{}, deployment.ErrNotFound
+		return servingstate.State{}, servingstate.Artifact{}, servingstate.ErrNotFound
 	}
 	return current.deployment, current.artifact, nil
 }
 
-func (r *fakeRegistryRepo) ByID(_ context.Context, id deployment.ID) (deployment.Deployment, error) {
+func (r *fakeRegistryRepo) ByID(_ context.Context, id servingstate.ID) (servingstate.State, error) {
 	current, ok := r.deployments[id]
 	if !ok {
-		return deployment.Deployment{}, deployment.ErrNotFound
+		return servingstate.State{}, servingstate.ErrNotFound
 	}
 	return current, nil
 }
 
-func (r *fakeRegistryRepo) ArtifactByDeployment(_ context.Context, id deployment.ID) (deployment.Artifact, error) {
+func (r *fakeRegistryRepo) ArtifactByServingState(_ context.Context, id servingstate.ID) (servingstate.Artifact, error) {
 	artifact, ok := r.artifacts[id]
 	if !ok {
-		return deployment.Artifact{}, deployment.ErrNotFound
+		return servingstate.Artifact{}, servingstate.ErrNotFound
 	}
 	return artifact, nil
 }
 
-func (r *fakeRegistryRepo) RecordDuckLakeSnapshot(_ context.Context, deploymentID deployment.ID, snapshotID int64) error {
-	current := r.deployments[deploymentID]
+func (r *fakeRegistryRepo) RecordDuckLakeSnapshot(_ context.Context, servingStateID servingstate.ID, snapshotID int64) error {
+	current := r.deployments[servingStateID]
 	current.DuckLakeSnapshotID = snapshotID
-	r.deployments[deploymentID] = current
+	r.deployments[servingStateID] = current
 	for key, pair := range r.active {
-		if pair.deployment.ID == deploymentID {
+		if pair.deployment.ID == servingStateID {
 			pair.deployment.DuckLakeSnapshotID = snapshotID
 			r.active[key] = pair
 		}
@@ -701,7 +701,7 @@ type recordingRegistryFactory struct {
 }
 
 func (f *recordingRegistryFactory) Prepare(_ context.Context, input RuntimeInput) (Runtime, error) {
-	f.inputs = append(f.inputs, fmt.Sprintf("%s/%s/%s", input.Deployment.WorkspaceID, input.Deployment.Environment, input.Deployment.ID))
+	f.inputs = append(f.inputs, fmt.Sprintf("%s/%s/%s", input.State.WorkspaceID, input.State.Environment, input.State.ID))
 	runtime := &recordingRuntime{}
 	f.runtimes = append(f.runtimes, runtime)
 	return runtime, nil

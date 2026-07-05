@@ -1,60 +1,60 @@
 package api
 
 type WorkspaceResponse struct {
-	ID                 string `json:"id"`
-	Title              string `json:"title"`
-	Description        string `json:"description"`
-	ActiveDeploymentID string `json:"activeDeploymentId,omitempty"`
-	CreatedAt          string `json:"createdAt"`
-	UpdatedAt          string `json:"updatedAt"`
+	ID                   string `json:"id"`
+	Title                string `json:"title"`
+	Description          string `json:"description"`
+	ActiveServingStateID string `json:"activeServingStateId,omitempty"`
+	CreatedAt            string `json:"createdAt"`
+	UpdatedAt            string `json:"updatedAt"`
 }
 
 type AssetResponse struct {
-	ID            string         `json:"id"`
-	SnapshotID    string         `json:"snapshotId"`
-	WorkspaceID   string         `json:"workspaceId"`
-	DeploymentID  string         `json:"deploymentId"`
-	Type          string         `json:"type"`
-	Key           string         `json:"key"`
-	ParentID      string         `json:"parentId,omitempty"`
-	Title         string         `json:"title"`
-	Description   string         `json:"description"`
-	SourceFile    string         `json:"sourceFile,omitempty"`
-	PayloadSchema string         `json:"payloadSchema"`
-	Payload       map[string]any `json:"payload"`
-	Href          string         `json:"href,omitempty"`
+	ID             string         `json:"id"`
+	SnapshotID     string         `json:"snapshotId"`
+	WorkspaceID    string         `json:"workspaceId"`
+	ServingStateID string         `json:"servingStateId"`
+	Type           string         `json:"type"`
+	Key            string         `json:"key"`
+	ParentID       string         `json:"parentId,omitempty"`
+	Title          string         `json:"title"`
+	Description    string         `json:"description"`
+	SourceFile     string         `json:"sourceFile,omitempty"`
+	PayloadSchema  string         `json:"payloadSchema"`
+	Payload        map[string]any `json:"payload"`
+	Href           string         `json:"href,omitempty"`
 }
 
 type AssetSummaryResponse struct {
-	ID            string `json:"id"`
-	SnapshotID    string `json:"snapshotId"`
-	WorkspaceID   string `json:"workspaceId"`
-	DeploymentID  string `json:"deploymentId"`
-	Type          string `json:"type"`
-	Key           string `json:"key"`
-	ParentID      string `json:"parentId,omitempty"`
-	Title         string `json:"title"`
-	Description   string `json:"description"`
-	SourceFile    string `json:"sourceFile,omitempty"`
-	PayloadSchema string `json:"payloadSchema"`
-	ContentHash   string `json:"contentHash"`
-	Href          string `json:"href,omitempty"`
+	ID             string `json:"id"`
+	SnapshotID     string `json:"snapshotId"`
+	WorkspaceID    string `json:"workspaceId"`
+	ServingStateID string `json:"servingStateId"`
+	Type           string `json:"type"`
+	Key            string `json:"key"`
+	ParentID       string `json:"parentId,omitempty"`
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	SourceFile     string `json:"sourceFile,omitempty"`
+	PayloadSchema  string `json:"payloadSchema"`
+	ContentHash    string `json:"contentHash"`
+	Href           string `json:"href,omitempty"`
 }
 
 type AssetGraphAssetResponse struct {
-	ID            string         `json:"id"`
-	SnapshotID    string         `json:"snapshotId"`
-	WorkspaceID   string         `json:"workspaceId"`
-	DeploymentID  string         `json:"deploymentId"`
-	Type          string         `json:"type"`
-	Key           string         `json:"key"`
-	ParentID      string         `json:"parentId,omitempty"`
-	Title         string         `json:"title"`
-	Description   string         `json:"description"`
-	SourceFile    string         `json:"sourceFile,omitempty"`
-	PayloadSchema string         `json:"payloadSchema"`
-	Payload       map[string]any `json:"payload"`
-	ContentHash   string         `json:"contentHash"`
+	ID             string         `json:"id"`
+	SnapshotID     string         `json:"snapshotId"`
+	WorkspaceID    string         `json:"workspaceId"`
+	ServingStateID string         `json:"servingStateId"`
+	Type           string         `json:"type"`
+	Key            string         `json:"key"`
+	ParentID       string         `json:"parentId,omitempty"`
+	Title          string         `json:"title"`
+	Description    string         `json:"description"`
+	SourceFile     string         `json:"sourceFile,omitempty"`
+	PayloadSchema  string         `json:"payloadSchema"`
+	Payload        map[string]any `json:"payload"`
+	ContentHash    string         `json:"contentHash"`
 }
 
 type WorkspaceAssetGraphResponse struct {
@@ -63,12 +63,12 @@ type WorkspaceAssetGraphResponse struct {
 }
 
 type AssetEdgeResponse struct {
-	ID           string `json:"id"`
-	WorkspaceID  string `json:"workspaceId"`
-	DeploymentID string `json:"deploymentId"`
-	FromAssetID  string `json:"fromAssetId"`
-	ToAssetID    string `json:"toAssetId"`
-	Type         string `json:"type"`
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspaceId"`
+	ServingStateID string `json:"servingStateId"`
+	FromAssetID    string `json:"fromAssetId"`
+	ToAssetID      string `json:"toAssetId"`
+	Type           string `json:"type"`
 }
 
 type AssetLineageResponse struct {

@@ -1,12 +1,12 @@
 package api
 
-type DeploymentCreateRequest struct {
+type PublishCreateRequest struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Environment string `json:"environment"`
 }
 
-type DeploymentResponse struct {
+type PublishResponse struct {
 	ID          string `json:"id"`
 	WorkspaceID string `json:"workspaceId"`
 	Environment string `json:"environment"`

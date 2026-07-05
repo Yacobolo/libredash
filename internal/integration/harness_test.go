@@ -26,9 +26,9 @@ import (
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
 	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
@@ -568,8 +568,8 @@ func writeFixture(t *testing.T, dir, name, content string) {
 func seedIntegrationActiveDeployment(t *testing.T, store *platform.Store, workspaceID, catalogPath string) {
 	t.Helper()
 	ctx := context.Background()
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
-	created, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: deployment.WorkspaceID(workspaceID), CreatedBy: "integration"})
+	deploymentRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	created, err := deploymentRepo.Create(ctx, servingstate.CreateInput{WorkspaceID: servingstate.WorkspaceID(workspaceID), CreatedBy: "integration"})
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
@@ -582,11 +582,11 @@ func seedIntegrationActiveDeployment(t *testing.T, store *platform.Store, worksp
 	if workspaceDef == nil {
 		t.Fatalf("compile project: missing workspace %q", workspaceID)
 	}
-	graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(created.ID), workspaceDef)
+	graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(created.ID), workspaceDef)
 	if err != nil {
 		t.Fatalf("extract workspace assets: %v", err)
 	}
-	validation := deployment.Validation{
+	validation := servingstate.Validation{
 		Digest:       "digest-" + string(created.ID),
 		ManifestJSON: "{}",
 		Graph:        graph,
@@ -594,20 +594,20 @@ func seedIntegrationActiveDeployment(t *testing.T, store *platform.Store, worksp
 	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, integrationZeroArtifact(created.ID, workspaceID)); err != nil {
 		t.Fatalf("save validated deployment: %v", err)
 	}
-	if _, err := deploymentRepo.Activate(ctx, deployment.WorkspaceID(workspaceID), deployment.DefaultEnvironment, created.ID); err != nil {
-		t.Fatalf("activate deployment: %v", err)
+	if _, err := deploymentRepo.Activate(ctx, servingstate.WorkspaceID(workspaceID), servingstate.DefaultEnvironment, created.ID); err != nil {
+		t.Fatalf("activate serving state: %v", err)
 	}
 }
 
 func integrationAssetID(t *testing.T, store *platform.Store, workspaceID, assetType, key string) string {
 	t.Helper()
 	repo := workspacesqlite.NewRepository(store.SQLDB())
-	graph, ok, err := repo.ActiveDeploymentGraph(context.Background(), workspace.WorkspaceID(workspaceID), string(deployment.DefaultEnvironment))
+	graph, ok, err := repo.ActiveServingStateGraph(context.Background(), workspace.WorkspaceID(workspaceID), string(servingstate.DefaultEnvironment))
 	if err != nil {
-		t.Fatalf("active deployment graph: %v", err)
+		t.Fatalf("active serving-state graph: %v", err)
 	}
 	if !ok {
-		t.Fatalf("workspace %q has no active deployment graph", workspaceID)
+		t.Fatalf("workspace %q has no active serving-state graph", workspaceID)
 	}
 	for _, asset := range graph.Assets {
 		if string(asset.Type) == assetType && asset.Key == key {
@@ -618,15 +618,15 @@ func integrationAssetID(t *testing.T, store *platform.Store, workspaceID, assetT
 	return ""
 }
 
-func integrationZeroArtifact(deploymentID deployment.ID, workspaceID string) deployment.Artifact {
-	return deployment.Artifact{
-		ID:           "artifact_" + string(deploymentID),
-		DeploymentID: deploymentID,
-		WorkspaceID:  deployment.WorkspaceID(workspaceID),
-		Digest:       "digest",
-		Format:       "tar.gz",
-		Path:         "artifact.tar.gz",
-		ManifestJSON: "{}",
+func integrationZeroArtifact(deploymentID servingstate.ID, workspaceID string) servingstate.Artifact {
+	return servingstate.Artifact{
+		ID:             "artifact_" + string(deploymentID),
+		ServingStateID: deploymentID,
+		WorkspaceID:    servingstate.WorkspaceID(workspaceID),
+		Digest:         "digest",
+		Format:         "tar.gz",
+		Path:           "artifact.tar.gz",
+		ManifestJSON:   "{}",
 	}
 }
 

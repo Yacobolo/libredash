@@ -1,6 +1,5 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { property, state } from 'lit/decorators.js'
-import { RefreshCw } from 'lucide'
 import type {
   DashboardComponentSignal,
   DashboardFilters,
@@ -11,7 +10,6 @@ import type {
   DashboardVisual,
   ReportFilterConfig,
 } from '../../generated/signals'
-import { lucideIcon } from '../shared/lucide-icons'
 import { jsonAttribute } from '../shared/json-attribute'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../navigation/sub-sidebar'
@@ -267,11 +265,6 @@ class LibreDashDashboardPage extends LitElement {
               <h1>${this.page.title}</h1>
               <p class="detail">${this.page.headerDetail}</p>
             </div>
-            <div class="actions">
-              <button class="icon-button" type="button" title="Refresh model materializations" aria-label="Refresh model materializations" ?disabled=${this.status.loading} @click=${this.refreshMaterializations}>
-                ${lucideIcon(RefreshCw)}
-              </button>
-            </div>
           </header>
           <div class="body">
             <div class="canvas-wrap">
@@ -399,10 +392,6 @@ class LibreDashDashboardPage extends LitElement {
 
   private visualFor(component: DashboardComponentSignal): DashboardVisual | undefined {
     return component.visual ? this.visuals[component.visual] : undefined
-  }
-
-  private refreshMaterializations = (): void => {
-    this.dispatchEvent(new CustomEvent('ld-refresh-materializations', { bubbles: true, composed: true }))
   }
 
   private loadRenderedComponents(): void {

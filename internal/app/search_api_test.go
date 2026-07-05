@@ -10,7 +10,7 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 )
 
 func TestWorkspaceSearchReturnsProgressiveDiscoveryResults(t *testing.T) {
@@ -181,7 +181,7 @@ func TestWorkspaceSearchDoesNotFallbackToRuntimeCatalogForOtherWorkspaces(t *tes
 
 func TestWorkspaceSearchUsesAssetGraphFallbackWithoutRuntimeDocs(t *testing.T) {
 	store := testStore(t)
-	seedEnvironmentAssetDeployment(t, store, "asset-only", deployment.DefaultEnvironment, "Graph Only Dashboard", "Graph Only Connection")
+	seedEnvironmentAssetDeployment(t, store, "asset-only", servingstate.DefaultEnvironment, "Graph Only Dashboard", "Graph Only Connection")
 	server := NewWithOptions(NewMultiWorkspaceMetrics("sales", map[string]QueryMetrics{
 		"sales": workspaceSearchMetrics{workspaceID: "sales", dashboardID: "executive-sales", title: "Executive Sales Dashboard"},
 	}), Options{Store: store, DefaultWorkspaceID: "sales"})

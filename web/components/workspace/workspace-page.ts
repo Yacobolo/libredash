@@ -89,7 +89,7 @@ class LibreDashWorkspacePage extends LitElement {
                 <p class="muted">${card.description}</p>
               </div>
               <footer>
-                ${card.deploymentLabel ? html`<span>${card.deploymentLabel}</span>` : html`<span></span>`}
+                ${card.servingLabel ? html`<span>${card.servingLabel}</span>` : html`<span></span>`}
                 <a class="primary-link" href=${card.href}>${lucideIcon(ExternalLink)}<span>Open</span></a>
               </footer>
             </article>
@@ -218,7 +218,9 @@ class LibreDashWorkspaceAssetPage extends LitElement {
               ? this.renderLineage(page)
               : page.activeSection === 'refreshes'
                 ? this.renderRefreshes(page)
-                : this.renderDetails(page)}
+                : page.activeSection === 'versions'
+                  ? this.renderVersions(page)
+                  : this.renderDetails(page)}
           </div>
         </div>
       </section>
@@ -226,7 +228,7 @@ class LibreDashWorkspaceAssetPage extends LitElement {
   }
 
   private renderAction(action: NonNullable<WorkspaceAssetPageSignal['actions']>[number], page: WorkspaceAssetPageSignal) {
-    if (action.command === 'refresh-materializations') {
+    if (action.command === 'refresh') {
       return html`
         <button
           type="button"
@@ -234,7 +236,7 @@ class LibreDashWorkspaceAssetPage extends LitElement {
           title=${action.label}
           aria-label=${action.label}
           ?disabled=${Boolean(action.disabled || page.refresh?.running)}
-          @click=${() => this.dispatchEvent(new CustomEvent('ld-refresh-materializations', { bubbles: true, composed: true }))}
+          @click=${() => this.dispatchEvent(new CustomEvent('ld-refresh-asset', { bubbles: true, composed: true }))}
         >
           ${lucideIcon(RefreshCw, { className: page.refresh?.running ? 'spin' : '' })}
         </button>
@@ -276,6 +278,14 @@ class LibreDashWorkspaceAssetPage extends LitElement {
     return html`
       <section class="details" id="refreshes" aria-label="Refresh runs">
         ${renderRecordTableSection('Refreshes', page.refresh?.runsTable)}
+      </section>
+    `
+  }
+
+  private renderVersions(page: WorkspaceAssetPageSignal) {
+    return html`
+      <section class="details" id="versions" aria-label="Asset versions">
+        ${renderRecordTableSection('Versions', page.versions?.table)}
       </section>
     `
   }

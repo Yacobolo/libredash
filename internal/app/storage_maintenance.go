@@ -12,11 +12,11 @@ type leasedSnapshotProvider interface {
 }
 
 type retentionRepository interface {
-	storagemaintenance.DeploymentRepository
+	storagemaintenance.ServingStateRepository
 }
 
 func (s *Server) reconcileStorageRetention(ctx context.Context, dryRun bool) error {
-	repo, ok := s.deploymentRepo.(retentionRepository)
+	repo, ok := s.servingStateRepo.(retentionRepository)
 	if !ok || repo == nil {
 		return nil
 	}

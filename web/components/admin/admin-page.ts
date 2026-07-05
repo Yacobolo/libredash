@@ -30,7 +30,7 @@ const emptyStorage: AdminStorageSignal = {
   warnings: [],
   tables: [],
   snapshots: [],
-  deployments: [],
+  servingStates: [],
   selectedKey: '',
   selectedTable: null,
 }

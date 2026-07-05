@@ -25,18 +25,18 @@ func TestWorkspaceViewHelpersFilterAndNavigateAssets(t *testing.T) {
 func TestAssetViewFromCatalogRecordKeepsPayloadContract(t *testing.T) {
 	payload := map[string]any{"kind": "duckdb", "credentials_configured": true}
 	view := AssetViewFromCatalogRecord(AssetRecord{
-		ID:            "connection:olist.olist",
-		SnapshotID:    "asset_snapshot_123",
-		WorkspaceID:   "libredash",
-		DeploymentID:  "deploy_a",
-		Type:          AssetTypeConnection,
-		Key:           "olist.olist",
-		ParentID:      "catalog:libredash",
-		Title:         "Olist connection",
-		Description:   "Local files",
-		PayloadSchema: "connection.v1",
-		Payload:       payload,
-		ContentHash:   "hash",
+		ID:             "connection:olist.olist",
+		SnapshotID:     "asset_snapshot_123",
+		WorkspaceID:    "libredash",
+		ServingStateID: "deploy_a",
+		Type:           AssetTypeConnection,
+		Key:            "olist.olist",
+		ParentID:       "catalog:libredash",
+		Title:          "Olist connection",
+		Description:    "Local files",
+		PayloadSchema:  "connection.v1",
+		Payload:        payload,
+		ContentHash:    "hash",
 	})
 	if view.ID != "connection:olist.olist" || view.SnapshotID != "asset_snapshot_123" || view.ParentID != "catalog:libredash" {
 		t.Fatalf("asset view identity = %#v", view)

@@ -34,11 +34,11 @@ func TestNewAssetContentHashIgnoresSourceFile(t *testing.T) {
 	}
 }
 
-func TestValidateAssetGraphForDeploymentRejectsInvalidGraph(t *testing.T) {
+func TestValidateAssetGraphForServingStateRejectsInvalidGraph(t *testing.T) {
 	workspaceID := WorkspaceID("test")
-	deploymentID := DeploymentID("dep")
-	dashboard := mustTestAsset(workspaceID, deploymentID, AssetTypeDashboard, "sales", "")
-	model := mustTestAsset(workspaceID, deploymentID, AssetTypeSemanticModel, "olist", "")
+	servingStateID := ServingStateID("dep")
+	dashboard := mustTestAsset(workspaceID, servingStateID, AssetTypeDashboard, "sales", "")
+	model := mustTestAsset(workspaceID, servingStateID, AssetTypeSemanticModel, "olist", "")
 
 	tests := []struct {
 		name   string
@@ -53,7 +53,7 @@ func TestValidateAssetGraphForDeploymentRejectsInvalidGraph(t *testing.T) {
 		{
 			name: "generated child missing source file",
 			mutate: func(graph *AssetGraph) {
-				field, err := NewAsset(workspaceID, deploymentID, AssetTypeField, "sales.status", model.ID, "status", "", "field.v1", map[string]any{"key": "status"})
+				field, err := NewAsset(workspaceID, servingStateID, AssetTypeField, "sales.status", model.ID, "status", "", "field.v1", map[string]any{"key": "status"})
 				if err != nil {
 					panic(err)
 				}
@@ -81,13 +81,13 @@ func TestValidateAssetGraphForDeploymentRejectsInvalidGraph(t *testing.T) {
 		{
 			name: "dangling from edge",
 			mutate: func(graph *AssetGraph) {
-				graph.Edges[0] = NewAssetEdge(workspaceID, deploymentID, "dashboard:missing", model.ID, AssetEdgeUsesSemanticModel)
+				graph.Edges[0] = NewAssetEdge(workspaceID, servingStateID, "dashboard:missing", model.ID, AssetEdgeUsesSemanticModel)
 			},
 		},
 		{
 			name: "dangling to edge",
 			mutate: func(graph *AssetGraph) {
-				graph.Edges[0] = NewAssetEdge(workspaceID, deploymentID, dashboard.ID, "semantic_model:missing", AssetEdgeUsesSemanticModel)
+				graph.Edges[0] = NewAssetEdge(workspaceID, servingStateID, dashboard.ID, "semantic_model:missing", AssetEdgeUsesSemanticModel)
 			},
 		},
 	}
@@ -95,32 +95,32 @@ func TestValidateAssetGraphForDeploymentRejectsInvalidGraph(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			graph := AssetGraph{
 				Assets: []Asset{dashboard, model},
-				Edges:  []AssetEdge{NewAssetEdge(workspaceID, deploymentID, dashboard.ID, model.ID, AssetEdgeUsesSemanticModel)},
+				Edges:  []AssetEdge{NewAssetEdge(workspaceID, servingStateID, dashboard.ID, model.ID, AssetEdgeUsesSemanticModel)},
 			}
 			tt.mutate(&graph)
-			if err := ValidateAssetGraphForDeployment(graph, workspaceID, deploymentID); err == nil {
-				t.Fatal("ValidateAssetGraphForDeployment() error = nil, want invalid graph failure")
+			if err := ValidateAssetGraphForServingState(graph, workspaceID, servingStateID); err == nil {
+				t.Fatal("ValidateAssetGraphForServingState() error = nil, want invalid graph failure")
 			}
 		})
 	}
 }
 
-func TestValidateAssetGraphForDeploymentAcceptsValidGraph(t *testing.T) {
+func TestValidateAssetGraphForServingStateAcceptsValidGraph(t *testing.T) {
 	workspaceID := WorkspaceID("test")
-	deploymentID := DeploymentID("dep")
-	dashboard := mustTestAsset(workspaceID, deploymentID, AssetTypeDashboard, "sales", "")
-	model := mustTestAsset(workspaceID, deploymentID, AssetTypeSemanticModel, "olist", dashboard.ID)
+	servingStateID := ServingStateID("dep")
+	dashboard := mustTestAsset(workspaceID, servingStateID, AssetTypeDashboard, "sales", "")
+	model := mustTestAsset(workspaceID, servingStateID, AssetTypeSemanticModel, "olist", dashboard.ID)
 	graph := AssetGraph{
 		Assets: []Asset{dashboard, model},
-		Edges:  []AssetEdge{NewAssetEdge(workspaceID, deploymentID, dashboard.ID, model.ID, AssetEdgeUsesSemanticModel)},
+		Edges:  []AssetEdge{NewAssetEdge(workspaceID, servingStateID, dashboard.ID, model.ID, AssetEdgeUsesSemanticModel)},
 	}
-	if err := ValidateAssetGraphForDeployment(graph, workspaceID, deploymentID); err != nil {
-		t.Fatalf("ValidateAssetGraphForDeployment() error = %v, want valid graph", err)
+	if err := ValidateAssetGraphForServingState(graph, workspaceID, servingStateID); err != nil {
+		t.Fatalf("ValidateAssetGraphForServingState() error = %v, want valid graph", err)
 	}
 }
 
-func mustTestAsset(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType, key string, parent AssetID) Asset {
-	asset, err := NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parent, key, "", "testdata/"+string(typ)+"-"+key+".yaml", string(typ)+".v1", map[string]any{"key": key})
+func mustTestAsset(workspaceID WorkspaceID, servingStateID ServingStateID, typ AssetType, key string, parent AssetID) Asset {
+	asset, err := NewAssetWithSourceFile(workspaceID, servingStateID, typ, key, parent, key, "", "testdata/"+string(typ)+"-"+key+".yaml", string(typ)+".v1", map[string]any{"key": key})
 	if err != nil {
 		panic(err)
 	}

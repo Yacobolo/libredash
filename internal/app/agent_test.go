@@ -331,7 +331,7 @@ func TestMaterializationRunAPIPersistsAsyncRefreshStatus(t *testing.T) {
 	store := testStore(t)
 	principal := testPrincipal(t, ctx, store, "editor@example.com", "Editor", "editor")
 	if _, err := store.SQLDB().ExecContext(ctx, `
-		INSERT INTO deployments (id, workspace_id, status, digest, manifest_json, created_by)
+		INSERT INTO serving_states (id, workspace_id, status, digest, manifest_json, created_by)
 		VALUES ('dep_1', 'test', 'active', 'sha256:test', '{}', ?)
 	`, principal.ID); err != nil {
 		t.Fatalf("seed deployment: %v", err)
@@ -341,7 +341,7 @@ func TestMaterializationRunAPIPersistsAsyncRefreshStatus(t *testing.T) {
 	metrics := &materializationAPIMetrics{done: make(chan string, 1)}
 	server := NewWithOptions(metrics, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 
-	createReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/materialization-runs", token, `{"modelId":"model.orders","deploymentId":"dep_1"}`)
+	createReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/refresh-runs", token, `{"modelId":"model.orders","servingStateId":"dep_1"}`)
 	createRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusAccepted {
@@ -350,7 +350,7 @@ func TestMaterializationRunAPIPersistsAsyncRefreshStatus(t *testing.T) {
 	var created struct {
 		ID                   string `json:"id"`
 		ModelID              string `json:"modelId"`
-		DeploymentID         string `json:"deploymentId"`
+		ServingStateID       string `json:"servingStateId"`
 		Status               string `json:"status"`
 		PrincipalID          string `json:"principalId"`
 		PrincipalDisplayName string `json:"principalDisplayName"`
@@ -358,7 +358,7 @@ func TestMaterializationRunAPIPersistsAsyncRefreshStatus(t *testing.T) {
 	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
-	if created.ID == "" || created.Status != "queued" || created.ModelID != "model.orders" || created.DeploymentID != "dep_1" {
+	if created.ID == "" || created.Status != "queued" || created.ModelID != "model.orders" || created.ServingStateID != "dep_1" {
 		t.Fatalf("created run = %#v", created)
 	}
 	if created.PrincipalID != principal.ID || created.PrincipalDisplayName != "Editor" {
@@ -374,13 +374,13 @@ func TestMaterializationRunAPIPersistsAsyncRefreshStatus(t *testing.T) {
 		t.Fatal("timed out waiting for async refresh")
 	}
 
-	getReq := authedJSONRequest(http.MethodGet, "/api/v1/workspaces/test/materialization-runs/"+created.ID, token, "")
+	getReq := authedJSONRequest(http.MethodGet, "/api/v1/workspaces/test/refresh-runs/"+created.ID, token, "")
 	getRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(getRec, getReq)
 	if getRec.Code != http.StatusOK || !strings.Contains(getRec.Body.String(), `"status":"succeeded"`) || !strings.Contains(getRec.Body.String(), `"principalDisplayName":"Editor"`) {
 		t.Fatalf("get status=%d body=%s", getRec.Code, getRec.Body.String())
 	}
-	listReq := authedJSONRequest(http.MethodGet, "/api/v1/workspaces/test/materialization-runs?limit=1", token, "")
+	listReq := authedJSONRequest(http.MethodGet, "/api/v1/workspaces/test/refresh-runs?limit=1", token, "")
 	listRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(listRec, listReq)
 	if listRec.Code != http.StatusOK || !strings.Contains(listRec.Body.String(), created.ID) || !strings.Contains(listRec.Body.String(), `"principalDisplayName":"Editor"`) {

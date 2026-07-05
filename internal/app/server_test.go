@@ -822,28 +822,28 @@ func (m *localDevStyleModelTableMetrics) RefreshTables(_ context.Context, modelI
 	return nil
 }
 
-func (m *dependentModelTableMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
-	catalog, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeCatalog, workspaceID, "", "Catalog", "", "catalog.v1", map[string]any{})
+func (m *dependentModelTableMetrics) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+	catalog, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeCatalog, workspaceID, "", "Catalog", "", "catalog.v1", map[string]any{})
 	if err != nil {
 		return nil, nil, false
 	}
-	model, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeSemanticModel, "olist", catalog.ID, "Olist", "", "semantic_model.v1", map[string]any{})
+	model, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeSemanticModel, "olist", catalog.ID, "Olist", "", "semantic_model.v1", map[string]any{})
 	if err != nil {
 		return nil, nil, false
 	}
-	orders, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeModelTable, "olist.orders", model.ID, "orders", "", "model_table.v1", map[string]any{"PrimaryKey": "order_id", "Source": "orders"})
+	orders, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeModelTable, "olist.orders", model.ID, "orders", "", "model_table.v1", map[string]any{"PrimaryKey": "order_id", "Source": "orders"})
 	if err != nil {
 		return nil, nil, false
 	}
-	summary, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeModelTable, "olist.order_summary", model.ID, "order_summary", "", "model_table.v1", map[string]any{"PrimaryKey": "status", "SQL": "SELECT status FROM model.orders"})
+	summary, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeModelTable, "olist.order_summary", model.ID, "order_summary", "", "model_table.v1", map[string]any{"PrimaryKey": "status", "SQL": "SELECT status FROM model.orders"})
 	if err != nil {
 		return nil, nil, false
 	}
 	return []workspace.Asset{catalog, model, orders, summary}, []workspace.AssetEdge{
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), catalog.ID, model.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), model.ID, orders.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), model.ID, summary.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), summary.ID, orders.ID, workspace.AssetEdgeUsesModelTable),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), catalog.ID, model.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), model.ID, orders.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), model.ID, summary.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), summary.ID, orders.ID, workspace.AssetEdgeUsesModelTable),
 	}, true
 }
 
@@ -969,16 +969,16 @@ func TestUpdatesStreamsPageScopedChartSignals(t *testing.T) {
 	}
 }
 
-func TestRefreshMaterializationsCommandAcceptsDatastarSignals(t *testing.T) {
+func TestDashboardRefreshCommandRouteIsRemoved(t *testing.T) {
 	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"all","start":0,"count":50}}`)
-	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/refresh-materializations", body)
+	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
 	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNotFound, rec.Body.String())
 	}
 }
 
@@ -1016,11 +1016,6 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 			path: "/workspaces/test-workspace/commands/reset-filters",
 			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":200,"count":50}}`,
 		},
-		{
-			name: "refresh materializations",
-			path: "/workspaces/test-workspace/commands/refresh-materializations",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":0,"count":50}}`,
-		},
 	}
 
 	for _, tt := range tests {
@@ -1042,7 +1037,7 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 	}
 }
 
-func TestDashboardRefreshCommandPersistsMaterializationRun(t *testing.T) {
+func TestDashboardRefreshCommandDoesNotPersistRefreshRun(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
 	principal := testPrincipal(t, ctx, store, "editor@example.com", "Editor", "editor")
@@ -1050,26 +1045,23 @@ func TestDashboardRefreshCommandPersistsMaterializationRun(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{},"tableCommand":{"block":"all","start":0,"count":50}}`)
-	req := httptest.NewRequest(http.MethodPost, "/workspaces/test/commands/refresh-materializations", body)
+	req := httptest.NewRequest(http.MethodPost, "/workspaces/test/commands/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 
 	server.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNotFound, rec.Body.String())
 	}
 	repo := materialize.NewSQLRunRepository(store.SQLDB())
 	runs, err := repo.ListModelRuns(context.Background(), "test", "test", materialize.RunPage{Limit: 10})
 	if err != nil {
 		t.Fatalf("list model runs: %v", err)
 	}
-	if len(runs) != 1 || runs[0].Status != materialize.RunStatusSucceeded || runs[0].ModelID != "test" {
-		t.Fatalf("runs = %#v, want one succeeded test model run", runs)
-	}
-	if runs[0].PrincipalID != principal.ID || runs[0].PrincipalDisplayName != "Editor" {
-		t.Fatalf("run attribution = %#v, want Editor principal", runs[0])
+	if len(runs) != 0 {
+		t.Fatalf("runs = %#v, want none for removed dashboard refresh command", runs)
 	}
 }
 
@@ -1169,7 +1161,7 @@ func TestWorkspaceAssetRefreshCommandPublishesRunningAndFinalState(t *testing.T)
 	assetID := workspace.NewAssetID(workspace.AssetTypeSemanticModel, "olist")
 	updates, unsubscribe := server.broker.Subscribe(workspaceAssetStreamID("test", string(assetID), "details"))
 	defer unsubscribe()
-	path := "/workspaces/test/assets/" + string(assetID) + "/refresh-materializations"
+	path := "/workspaces/test/assets/" + string(assetID) + "/refresh"
 	req := httptest.NewRequest(http.MethodPost, path, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -1208,7 +1200,7 @@ func TestWorkspaceAssetRefreshCommandPublishesFailedError(t *testing.T) {
 	assetID := workspace.NewAssetID(workspace.AssetTypeSemanticModel, "olist")
 	updates, unsubscribe := server.broker.Subscribe(workspaceAssetStreamID("test", string(assetID), "refreshes"))
 	defer unsubscribe()
-	path := "/workspaces/test/assets/" + string(assetID) + "/refresh-materializations"
+	path := "/workspaces/test/assets/" + string(assetID) + "/refresh"
 	req := httptest.NewRequest(http.MethodPost, path, nil)
 	req.Header.Set("Authorization", "Bearer dev")
 	rec := httptest.NewRecorder()
@@ -1242,7 +1234,7 @@ func TestWorkspaceModelTableRefreshCommandPersistsDirectAndDependencyRuns(t *tes
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(metrics, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 	assetID := workspace.NewAssetID(workspace.AssetTypeModelTable, "olist.order_summary")
-	path := "/workspaces/test/assets/" + string(assetID) + "/refresh-materializations"
+	path := "/workspaces/test/assets/" + string(assetID) + "/refresh"
 	req := httptest.NewRequest(http.MethodPost, path, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -1356,7 +1348,7 @@ func TestMaterializationRunAPICanExecuteModelTableTargetWithLocalDevRuntimeShape
 	metrics := &localDevStyleModelTableMetrics{done: make(chan []string, 1)}
 	server := NewWithOptions(metrics, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 
-	createReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/materialization-runs", token, `{"modelId":"olist","targetType":"model_table","targetId":"olist.orders"}`)
+	createReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/refresh-runs", token, `{"modelId":"olist","targetType":"model_table","targetId":"olist.orders"}`)
 	createRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusAccepted {
@@ -1436,7 +1428,7 @@ func TestMaterializationRunAPIMalformedModelTableTargetFailsPersistedRun(t *test
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(&localDevStyleModelTableMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 
-	createReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/materialization-runs", token, `{"modelId":"olist","targetType":"model_table","targetId":"other.orders"}`)
+	createReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/refresh-runs", token, `{"modelId":"olist","targetType":"model_table","targetId":"other.orders"}`)
 	createRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusAccepted {
@@ -1482,7 +1474,7 @@ func TestWorkspaceSemanticModelRefreshFailsWhenGraphMissing(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(metrics, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 	assetID := workspace.NewAssetID(workspace.AssetTypeSemanticModel, "olist")
-	path := "/workspaces/test/assets/" + string(assetID) + "/refresh-materializations"
+	path := "/workspaces/test/assets/" + string(assetID) + "/refresh"
 	req := httptest.NewRequest(http.MethodPost, path, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -1512,7 +1504,7 @@ func TestWorkspaceModelTableRefreshMarksDependencyAndRootFailedWhenDependencyFai
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(metrics, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 	assetID := workspace.NewAssetID(workspace.AssetTypeModelTable, "olist.order_summary")
-	path := "/workspaces/test/assets/" + string(assetID) + "/refresh-materializations"
+	path := "/workspaces/test/assets/" + string(assetID) + "/refresh"
 	req := httptest.NewRequest(http.MethodPost, path, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -1552,7 +1544,7 @@ func TestWorkspaceSemanticModelRefreshCommandPersistsTableChildRuns(t *testing.T
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(metrics, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 	assetID := workspace.NewAssetID(workspace.AssetTypeSemanticModel, "olist")
-	path := "/workspaces/test/assets/" + string(assetID) + "/refresh-materializations"
+	path := "/workspaces/test/assets/" + string(assetID) + "/refresh"
 	req := httptest.NewRequest(http.MethodPost, path, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()

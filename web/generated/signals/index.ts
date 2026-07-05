@@ -157,17 +157,6 @@ export interface AdminStorageCommand {
   table: string
 }
 
-export interface AdminStorageDeploymentSignal {
-  workspaceId: string
-  environment: string
-  deploymentId: string
-  status: string
-  snapshotId: number
-  digest: string
-  active: boolean
-  activatedAt: string
-}
-
 export interface AdminStorageFileSignal {
   id: number
   path: string
@@ -180,13 +169,24 @@ export interface AdminStorageFileSignal {
   endSnapshot: number
 }
 
+export interface AdminStorageServingStateSignal {
+  workspaceId: string
+  environment: string
+  servingStateId: string
+  status: string
+  snapshotId: number
+  digest: string
+  active: boolean
+  activatedAt: string
+}
+
 export interface AdminStorageSignal {
   summary: AdminStorageSummary
   status: string
   warnings: string[]
   tables: AdminStorageTableSignal[]
   snapshots: AdminStorageSnapshotSignal[]
-  deployments: AdminStorageDeploymentSignal[]
+  servingStates: AdminStorageServingStateSignal[]
   selectedKey: string
   selectedTable: AdminStorageTableSignal
 }
@@ -200,7 +200,7 @@ export interface AdminStorageSnapshotSignal {
   changes: string
   extraInfo: string
   protected: boolean
-  deploymentCount: number
+  servingStateCount: number
 }
 
 export interface AdminStorageSummary {
@@ -251,7 +251,7 @@ export interface AdminStorageTableSignal {
   columns?: AdminStorageColumnSignal[]
   files?: AdminStorageFileSignal[]
   history?: AdminStorageTableHistorySignal[]
-  deployments?: AdminStorageDeploymentSignal[]
+  servingStates?: AdminStorageServingStateSignal[]
 }
 
 export interface AssetLineageEdgeSignal {
@@ -1135,7 +1135,7 @@ export interface WorkspaceAssetSummarySignal {
 }
 
 export interface WorkspaceAssetVersionsSignal {
-  currentDeploymentId: string
+  currentContentHash: string
   table: RecordTableSignal
 }
 
@@ -1150,7 +1150,7 @@ export interface WorkspaceCardSignal {
   title: string
   description: string
   href: string
-  deploymentLabel: string
+  servingLabel: string
 }
 
 export interface WorkspaceDetailSectionSignal {

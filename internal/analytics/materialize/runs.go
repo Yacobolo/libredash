@@ -33,7 +33,7 @@ type RunRecord struct {
 	ID                   string `json:"id"`
 	WorkspaceID          string `json:"workspaceId"`
 	ModelID              string `json:"modelId"`
-	DeploymentID         string `json:"deploymentId,omitempty"`
+	ServingStateID       string `json:"servingStateId,omitempty"`
 	PrincipalID          string `json:"principalId,omitempty"`
 	PrincipalDisplayName string `json:"principalDisplayName,omitempty"`
 	TargetType           string `json:"targetType"`
@@ -49,30 +49,30 @@ type RunRecord struct {
 }
 
 type RunInput struct {
-	WorkspaceID  string
-	ModelID      string
-	DeploymentID string
-	PrincipalID  string
-	TargetType   string
-	TargetID     string
-	TriggerType  string
-	ParentRunID  string
-	JobKind      string
-	PayloadJSON  string
+	WorkspaceID    string
+	ModelID        string
+	ServingStateID string
+	PrincipalID    string
+	TargetType     string
+	TargetID       string
+	TriggerType    string
+	ParentRunID    string
+	JobKind        string
+	PayloadJSON    string
 }
 
 type JobRecord struct {
-	ID           string
-	WorkspaceID  string
-	DeploymentID string
-	ModelID      string
-	Kind         string
-	PayloadJSON  string
-	RunID        string
-	TargetType   string
-	TargetID     string
-	TriggerType  string
-	AttemptCount int
+	ID             string
+	WorkspaceID    string
+	ServingStateID string
+	ModelID        string
+	Kind           string
+	PayloadJSON    string
+	RunID          string
+	TargetType     string
+	TargetID       string
+	TriggerType    string
+	AttemptCount   int
 }
 
 type JobQueueStats struct {
@@ -123,9 +123,9 @@ func (r *SQLRunRepository) CreateRun(ctx context.Context, input RunInput) (RunRe
 	jobID := newRunID("matjob")
 	runID := newRunID("matrun")
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO materialization_jobs (id, workspace_id, deployment_id, model_id, kind, payload_json, status, queued_at)
+		INSERT INTO materialization_jobs (id, workspace_id, serving_state_id, model_id, kind, payload_json, status, queued_at)
 		VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, ?, CURRENT_TIMESTAMP)
-	`, jobID, normalized.WorkspaceID, normalized.DeploymentID, normalized.ModelID, normalized.JobKind, normalized.PayloadJSON, RunStatusQueued); err != nil {
+	`, jobID, normalized.WorkspaceID, normalized.ServingStateID, normalized.ModelID, normalized.JobKind, normalized.PayloadJSON, RunStatusQueued); err != nil {
 		return RunRecord{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -157,7 +157,7 @@ func (r *SQLRunRepository) ClaimNextExecutableJob(ctx context.Context, owner str
 	}
 	defer tx.Rollback()
 	row := tx.QueryRowContext(ctx, `
-		SELECT j.id, j.workspace_id, COALESCE(j.deployment_id, ''), j.model_id, j.kind, j.payload_json,
+		SELECT j.id, j.workspace_id, COALESCE(j.serving_state_id, ''), j.model_id, j.kind, j.payload_json,
 		       r.id, r.target_type, r.target_id, r.trigger_type, j.attempt_count
 		FROM materialization_jobs j
 		JOIN materialization_job_runs r ON r.job_id = j.id
@@ -171,7 +171,7 @@ func (r *SQLRunRepository) ClaimNextExecutableJob(ctx context.Context, owner str
 		LIMIT 1
 	`, JobKindMaterialization, JobKindWorkspaceAssetRefresh, RunStatusQueued, RunStatusQueued, RunStatusRunning)
 	var job JobRecord
-	if err := row.Scan(&job.ID, &job.WorkspaceID, &job.DeploymentID, &job.ModelID, &job.Kind, &job.PayloadJSON, &job.RunID, &job.TargetType, &job.TargetID, &job.TriggerType, &job.AttemptCount); err != nil {
+	if err := row.Scan(&job.ID, &job.WorkspaceID, &job.ServingStateID, &job.ModelID, &job.Kind, &job.PayloadJSON, &job.RunID, &job.TargetType, &job.TargetID, &job.TriggerType, &job.AttemptCount); err != nil {
 		if err == sql.ErrNoRows {
 			return JobRecord{}, false, nil
 		}
@@ -418,7 +418,7 @@ func (r *SQLRunRepository) MarkRunFailed(ctx context.Context, workspaceID, runID
 	return r.markRun(ctx, workspaceID, runID, RunStatusFailed, message)
 }
 
-func (r *SQLRunRepository) FailRunsForTerminalDeployments(ctx context.Context, message string) error {
+func (r *SQLRunRepository) FailRunsForTerminalServingStates(ctx context.Context, message string) error {
 	if r == nil || r.db == nil {
 		return fmt.Errorf("materialization run database is required")
 	}
@@ -439,7 +439,7 @@ func (r *SQLRunRepository) FailRunsForTerminalDeployments(ctx context.Context, m
 		  AND job_id IN (
 		    SELECT j.id
 		    FROM materialization_jobs j
-		    JOIN deployments d ON d.id = j.deployment_id
+		    JOIN serving_states d ON d.id = j.serving_state_id
 		    WHERE d.status IN ('failed', 'delete_scheduled', 'deleted')
 		  )
 	`, RunStatusFailed, message, RunStatusQueued, RunStatusRunning); err != nil {
@@ -449,8 +449,8 @@ func (r *SQLRunRepository) FailRunsForTerminalDeployments(ctx context.Context, m
 		UPDATE materialization_jobs
 		SET status = ?, updated_at = CURRENT_TIMESTAMP
 		WHERE status IN (?, ?)
-		  AND deployment_id IN (
-		    SELECT id FROM deployments WHERE status IN ('failed', 'delete_scheduled', 'deleted')
+		  AND serving_state_id IN (
+		    SELECT id FROM serving_states WHERE status IN ('failed', 'delete_scheduled', 'deleted')
 		  )
 	`, RunStatusFailed, RunStatusQueued, RunStatusRunning); err != nil {
 		return err
@@ -565,11 +565,11 @@ func scanRunRows(rows runRows) ([]RunRecord, error) {
 
 func scanRun(row runScanner) (RunRecord, error) {
 	var run RunRecord
-	var deploymentID, principalID, principalDisplayName, parentRunID, finishedAt sql.NullString
+	var servingStateID, principalID, principalDisplayName, parentRunID, finishedAt sql.NullString
 	if err := row.Scan(
 		&run.ID,
 		&run.WorkspaceID,
-		&deploymentID,
+		&servingStateID,
 		&run.ModelID,
 		&principalID,
 		&principalDisplayName,
@@ -586,8 +586,8 @@ func scanRun(row runScanner) (RunRecord, error) {
 	); err != nil {
 		return RunRecord{}, err
 	}
-	if deploymentID.Valid {
-		run.DeploymentID = deploymentID.String
+	if servingStateID.Valid {
+		run.ServingStateID = servingStateID.String
 	}
 	if principalID.Valid {
 		run.PrincipalID = principalID.String
@@ -609,7 +609,7 @@ func scanRun(row runScanner) (RunRecord, error) {
 
 func materializationRunSelect() string {
 	return `
-		SELECT r.id, j.workspace_id, j.deployment_id, j.model_id, r.principal_id, COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name, r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at, r.started_at, r.finished_at, r.error
+		SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id, COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name, r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at, r.started_at, r.finished_at, r.error
 		FROM materialization_job_runs r
 		JOIN materialization_jobs j ON j.id = r.job_id
 		LEFT JOIN principals p ON p.id = r.principal_id
@@ -617,22 +617,22 @@ func materializationRunSelect() string {
 }
 
 type normalizedRunInput struct {
-	WorkspaceID  string
-	ModelID      string
-	DeploymentID string
-	PrincipalID  string
-	TargetType   string
-	TargetID     string
-	TriggerType  string
-	ParentRunID  string
-	JobKind      string
-	PayloadJSON  string
+	WorkspaceID    string
+	ModelID        string
+	ServingStateID string
+	PrincipalID    string
+	TargetType     string
+	TargetID       string
+	TriggerType    string
+	ParentRunID    string
+	JobKind        string
+	PayloadJSON    string
 }
 
 func normalizeRunInput(input RunInput) (normalizedRunInput, error) {
 	workspaceID := strings.TrimSpace(input.WorkspaceID)
 	modelID := strings.TrimSpace(input.ModelID)
-	deploymentID := strings.TrimSpace(input.DeploymentID)
+	servingStateID := strings.TrimSpace(input.ServingStateID)
 	principalID := strings.TrimSpace(input.PrincipalID)
 	targetType := strings.TrimSpace(input.TargetType)
 	targetID := strings.TrimSpace(input.TargetID)
@@ -675,16 +675,16 @@ func normalizeRunInput(input RunInput) (normalizedRunInput, error) {
 		return normalizedRunInput{}, err
 	}
 	return normalizedRunInput{
-		WorkspaceID:  workspaceID,
-		ModelID:      modelID,
-		DeploymentID: deploymentID,
-		PrincipalID:  principalID,
-		TargetType:   targetType,
-		TargetID:     targetID,
-		TriggerType:  triggerType,
-		ParentRunID:  parentRunID,
-		JobKind:      jobKind,
-		PayloadJSON:  payloadJSON,
+		WorkspaceID:    workspaceID,
+		ModelID:        modelID,
+		ServingStateID: servingStateID,
+		PrincipalID:    principalID,
+		TargetType:     targetType,
+		TargetID:       targetID,
+		TriggerType:    triggerType,
+		ParentRunID:    parentRunID,
+		JobKind:        jobKind,
+		PayloadJSON:    payloadJSON,
 	}, nil
 }
 

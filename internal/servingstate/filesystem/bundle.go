@@ -15,7 +15,7 @@ import (
 	"strings"
 
 	analyticsduckdb "github.com/Yacobolo/libredash/internal/analytics/duckdb"
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 )
@@ -42,7 +42,7 @@ type ManifestFile struct {
 type ValidateOptions struct {
 	DataDir     string
 	DuckDBDir   string
-	Environment deployment.Environment
+	Environment servingstate.Environment
 }
 
 type CompiledWorkspaceArtifact struct {
@@ -50,7 +50,7 @@ type CompiledWorkspaceArtifact struct {
 	WorkspaceID    string                                 `json:"workspaceId"`
 	WorkspaceTitle string                                 `json:"workspaceTitle"`
 	Environment    string                                 `json:"environment"`
-	DeploymentID   string                                 `json:"deploymentId"`
+	ServingStateID string                                 `json:"servingStateId"`
 	Validation     CompiledArtifactValidation             `json:"validation"`
 	Definition     *workspace.Definition                  `json:"definition"`
 	Graph          workspace.AssetGraph                   `json:"graph"`
@@ -70,27 +70,27 @@ type CompiledArtifactDiagnostic struct {
 	Message  string `json:"message"`
 }
 
-func PackProject(projectPath, workspaceID string, deploymentID deployment.ID, out io.Writer) (Manifest, string, error) {
-	return PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, deployment.DefaultEnvironment, deploymentID, workspace.AssetGraph{}, out)
+func PackProject(projectPath, workspaceID string, servingStateID servingstate.ID, out io.Writer) (Manifest, string, error) {
+	return PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, servingstate.DefaultEnvironment, servingStateID, workspace.AssetGraph{}, out)
 }
 
-func PackProjectAgainstGraph(projectPath, workspaceID string, deploymentID deployment.ID, active workspace.AssetGraph, out io.Writer) (Manifest, string, error) {
-	return PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, deployment.DefaultEnvironment, deploymentID, active, out)
+func PackProjectAgainstGraph(projectPath, workspaceID string, servingStateID servingstate.ID, active workspace.AssetGraph, out io.Writer) (Manifest, string, error) {
+	return PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, servingstate.DefaultEnvironment, servingStateID, active, out)
 }
 
-func PackProjectAgainstGraphForEnvironment(projectPath, workspaceID string, environment deployment.Environment, deploymentID deployment.ID, active workspace.AssetGraph, out io.Writer) (Manifest, string, error) {
+func PackProjectAgainstGraphForEnvironment(projectPath, workspaceID string, environment servingstate.Environment, servingStateID servingstate.ID, active workspace.AssetGraph, out io.Writer) (Manifest, string, error) {
 	projectPath, err := filepath.Abs(projectPath)
 	if err != nil {
 		return Manifest{}, "", err
 	}
-	environment = deployment.NormalizeEnvironment(environment)
+	environment = servingstate.NormalizeEnvironment(environment)
 	if workspaceID == "" {
-		return Manifest{}, "", fmt.Errorf("project deploy requires explicit workspace")
+		return Manifest{}, "", fmt.Errorf("project publish requires explicit workspace")
 	}
-	if deploymentID == "" {
-		return Manifest{}, "", fmt.Errorf("project deploy requires deployment id")
+	if servingStateID == "" {
+		return Manifest{}, "", fmt.Errorf("project publish requires serving state id")
 	}
-	compiled, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{DeploymentID: workspace.DeploymentID(deploymentID)})
+	compiled, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{ServingStateID: workspace.ServingStateID(servingStateID)})
 	if err != nil {
 		return Manifest{}, "", err
 	}
@@ -98,7 +98,7 @@ func PackProjectAgainstGraphForEnvironment(projectPath, workspaceID string, envi
 	if !ok {
 		return Manifest{}, "", fmt.Errorf("project %q has no workspace %q", projectPath, workspaceID)
 	}
-	if err := workspace.ValidateAssetGraphForDeployment(compiledWorkspace.Workspace.Graph, workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID)); err != nil {
+	if err := workspace.ValidateAssetGraphForServingState(compiledWorkspace.Workspace.Graph, workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID)); err != nil {
 		return Manifest{}, "", err
 	}
 	plan, err := workspacecompiler.PlanProjectAgainstGraph(projectPath, workspaceID, active)
@@ -114,7 +114,7 @@ func PackProjectAgainstGraphForEnvironment(projectPath, workspaceID string, envi
 		WorkspaceID:    workspaceID,
 		WorkspaceTitle: compiledWorkspace.Workspace.Title,
 		Environment:    string(environment),
-		DeploymentID:   string(deploymentID),
+		ServingStateID: string(servingStateID),
 		Validation: CompiledArtifactValidation{
 			Status:        "passed",
 			GraphHash:     graphHash(compiledWorkspace.Workspace.Graph),
@@ -270,93 +270,93 @@ func writeBundle(baseDir string, relFiles []string, rootRel string, rootPath str
 	return manifest, hex.EncodeToString(hash.Sum(nil)), nil
 }
 
-func ValidateArtifact(path string, workspaceID deployment.WorkspaceID, deploymentID deployment.ID) (deployment.Validation, error) {
-	return ValidateArtifactWithOptions(path, workspaceID, deploymentID, ValidateOptions{})
+func ValidateArtifact(path string, workspaceID servingstate.WorkspaceID, servingStateID servingstate.ID) (servingstate.Validation, error) {
+	return ValidateArtifactWithOptions(path, workspaceID, servingStateID, ValidateOptions{})
 }
 
-func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID, deploymentID deployment.ID, options ValidateOptions) (deployment.Validation, error) {
+func ValidateArtifactWithOptions(path string, workspaceID servingstate.WorkspaceID, servingStateID servingstate.ID, options ValidateOptions) (servingstate.Validation, error) {
 	digest, err := fileDigest(path)
 	if err != nil {
-		return deployment.Validation{}, err
+		return servingstate.Validation{}, err
 	}
 	root, err := os.MkdirTemp("", "libredash-deploy-*")
 	if err != nil {
-		return deployment.Validation{}, err
+		return servingstate.Validation{}, err
 	}
 	if err := ExtractArtifact(path, root); err != nil {
 		os.RemoveAll(root)
-		return deployment.Validation{}, err
+		return servingstate.Validation{}, err
 	}
 	manifest, err := readManifest(root)
 	if err != nil {
 		os.RemoveAll(root)
-		return deployment.Validation{}, err
+		return servingstate.Validation{}, err
 	}
 	if _, err := validateManifestFiles(root, manifest); err != nil {
 		os.RemoveAll(root)
-		return deployment.Validation{}, err
+		return servingstate.Validation{}, err
 	}
 	compiled, err := readCompiledWorkspaceArtifact(root, manifest)
 	if err != nil {
 		os.RemoveAll(root)
-		return deployment.Validation{}, err
+		return servingstate.Validation{}, err
 	}
 	if workspaceID == "" {
 		if strings.TrimSpace(manifest.WorkspaceID) == "" {
 			os.RemoveAll(root)
-			return deployment.Validation{}, fmt.Errorf("project artifact manifest requires workspaceId")
+			return servingstate.Validation{}, fmt.Errorf("project artifact manifest requires workspaceId")
 		}
-		workspaceID = deployment.WorkspaceID(manifest.WorkspaceID)
+		workspaceID = servingstate.WorkspaceID(manifest.WorkspaceID)
 	}
 	if compiled.WorkspaceID != string(workspaceID) {
 		os.RemoveAll(root)
-		return deployment.Validation{}, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, workspaceID)
+		return servingstate.Validation{}, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, workspaceID)
 	}
 	if strings.TrimSpace(compiled.Environment) == "" {
 		os.RemoveAll(root)
-		return deployment.Validation{}, fmt.Errorf("compiled artifact requires environment")
+		return servingstate.Validation{}, fmt.Errorf("compiled artifact requires environment")
 	}
 	if strings.TrimSpace(manifest.Environment) == "" {
 		os.RemoveAll(root)
-		return deployment.Validation{}, fmt.Errorf("project artifact manifest requires environment")
+		return servingstate.Validation{}, fmt.Errorf("project artifact manifest requires environment")
 	}
 	if compiled.Environment != manifest.Environment {
 		os.RemoveAll(root)
-		return deployment.Validation{}, fmt.Errorf("compiled artifact environment = %q, manifest environment = %q", compiled.Environment, manifest.Environment)
+		return servingstate.Validation{}, fmt.Errorf("compiled artifact environment = %q, manifest environment = %q", compiled.Environment, manifest.Environment)
 	}
 	if options.Environment != "" {
-		expectedEnvironment := deployment.NormalizeEnvironment(options.Environment)
-		if deployment.Environment(compiled.Environment) != expectedEnvironment {
+		expectedEnvironment := servingstate.NormalizeEnvironment(options.Environment)
+		if servingstate.Environment(compiled.Environment) != expectedEnvironment {
 			os.RemoveAll(root)
-			return deployment.Validation{}, fmt.Errorf("compiled artifact environment = %q, want %q", compiled.Environment, expectedEnvironment)
+			return servingstate.Validation{}, fmt.Errorf("compiled artifact environment = %q, want %q", compiled.Environment, expectedEnvironment)
 		}
 	}
-	if compiled.DeploymentID != string(deploymentID) {
+	if compiled.ServingStateID != string(servingStateID) {
 		os.RemoveAll(root)
-		return deployment.Validation{}, fmt.Errorf("compiled artifact deployment = %q, want %q", compiled.DeploymentID, deploymentID)
+		return servingstate.Validation{}, fmt.Errorf("compiled artifact serving state = %q, want %q", compiled.ServingStateID, servingStateID)
 	}
-	if err := workspace.ValidateAssetGraphForDeployment(compiled.Graph, workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID)); err != nil {
+	if err := workspace.ValidateAssetGraphForServingState(compiled.Graph, workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID)); err != nil {
 		os.RemoveAll(root)
-		return deployment.Validation{}, err
+		return servingstate.Validation{}, err
 	}
 	if err := validateCompiledArtifactValidation(compiled); err != nil {
 		os.RemoveAll(root)
-		return deployment.Validation{}, err
+		return servingstate.Validation{}, err
 	}
 	if options.DataDir != "" {
 		if err := discoverSchemasForDefinition(context.Background(), compiled.Definition, options); err != nil {
 			os.RemoveAll(root)
-			return deployment.Validation{}, err
+			return servingstate.Validation{}, err
 		}
-		graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), compiled.Definition)
+		graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), compiled.Definition)
 		if err != nil {
 			os.RemoveAll(root)
-			return deployment.Validation{}, err
+			return servingstate.Validation{}, err
 		}
 		compiled.Graph = graph
-		if err := workspace.ValidateAssetGraphForDeployment(compiled.Graph, workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID)); err != nil {
+		if err := workspace.ValidateAssetGraphForServingState(compiled.Graph, workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID)); err != nil {
 			os.RemoveAll(root)
-			return deployment.Validation{}, err
+			return servingstate.Validation{}, err
 		}
 		compiled.Validation = CompiledArtifactValidation{
 			Status:        "passed",
@@ -366,15 +366,15 @@ func ValidateArtifactWithOptions(path string, workspaceID deployment.WorkspaceID
 		manifest, digest, err = persistValidatedArtifact(path, root, manifest, compiled)
 		if err != nil {
 			os.RemoveAll(root)
-			return deployment.Validation{}, err
+			return servingstate.Validation{}, err
 		}
 	}
 	manifestJSON, err := json.Marshal(manifest)
 	if err != nil {
 		os.RemoveAll(root)
-		return deployment.Validation{}, err
+		return servingstate.Validation{}, err
 	}
-	return deployment.Validation{
+	return servingstate.Validation{
 		Digest:       digest,
 		ManifestJSON: string(manifestJSON),
 		RootDir:      root,

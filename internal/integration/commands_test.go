@@ -3,6 +3,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -73,19 +74,6 @@ func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {
 				requireTableResetVersion(t, patches, "orders_table", 3)
 			},
 		},
-		{
-			name: "/commands/refresh-materializations",
-			path: "/commands/refresh-materializations",
-			signals: mergeSignals(runtimeSignals("cmd-refresh", "overview"), map[string]any{
-				"tableCommand": tableCommand("orders_table", "all", 0, 50, 6, 0),
-			}),
-			assert: func(t *testing.T, patches []map[string]any) {
-				t.Helper()
-				requireStatusLoading(t, patches, true)
-				requireVisual(t, patches, "total_orders")
-				requireTable(t, patches, "orders_table")
-			},
-		},
 	}
 
 	for _, tt := range tests {
@@ -139,22 +127,28 @@ func TestTableWindowCommandDoesNotPublishCanceledTablePatch(t *testing.T) {
 	stream.expectNoPatch(t, 500*time.Millisecond)
 }
 
-func TestRefreshMaterializationsCommandPublishesErrorPatch(t *testing.T) {
+func TestRefreshMaterializationsCommandIsRemoved(t *testing.T) {
 	h := newHarness(t, withOlistFixture(func(t *testing.T, dir string) {}))
-	stream := h.openUpdatesStream(t, "executive-sales", "overview", runtimeSignals("cmd-refresh-error", "overview"))
-	drainInitialSnapshot(t, stream)
-
 	signals := runtimeSignals("cmd-refresh-error", "overview")
 	runtime := signals["runtime"].(map[string]any)
 	runtime["modelId"] = "olist"
-	status := h.postCommand(t, "/commands/refresh-materializations", signals)
-	if status != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", status, http.StatusNoContent)
+	encodedSignals, err := json.Marshal(signals)
+	if err != nil {
+		t.Fatalf("marshal Datastar signals: %v", err)
 	}
-
-	patches := nextPatches(t, stream, 2)
-	requireStatusLoading(t, patches, true)
-	requireStatusError(t, patches, true)
+	req, err := http.NewRequest(http.MethodPost, h.serverURL(t)+h.workspaceCommandPath("/commands/refresh-materializations"), bytes.NewReader(encodedSignals))
+	if err != nil {
+		t.Fatalf("create removed command request: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST removed command: %v", err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", res.StatusCode, http.StatusNotFound)
+	}
 }
 
 func TestCommandRejectsMalformedDatastarBody(t *testing.T) {

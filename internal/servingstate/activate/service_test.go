@@ -8,15 +8,15 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
 func TestServiceActivatesPreparedRuntime(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Status: deployment.StatusValidated},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Status: servingstate.StatusValidated},
 	}
 	runtime := &fakeRuntime{}
 	service := NewService(repo, runtime)
@@ -25,7 +25,7 @@ func TestServiceActivatesPreparedRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("activate: %v", err)
 	}
-	if activated.Status != deployment.StatusActive {
+	if activated.Status != servingstate.StatusActive {
 		t.Fatalf("status = %q, want active", activated.Status)
 	}
 	if runtime.prepareID != "dep_1" || runtime.commitCalls != 1 {
@@ -36,7 +36,7 @@ func TestServiceActivatesPreparedRuntime(t *testing.T) {
 func TestServiceRecordsPreparedDuckLakeSnapshotBeforeActivation(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Status: deployment.StatusValidated},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Status: servingstate.StatusValidated},
 	}
 	runtime := &fakeRuntime{snapshotID: 42}
 	service := NewService(repo, runtime)
@@ -48,8 +48,8 @@ func TestServiceRecordsPreparedDuckLakeSnapshotBeforeActivation(t *testing.T) {
 	if activated.DuckLakeSnapshotID != 42 {
 		t.Fatalf("activated snapshot = %d, want 42", activated.DuckLakeSnapshotID)
 	}
-	if repo.snapshotDeploymentID != "dep_1" || repo.snapshotID != 42 {
-		t.Fatalf("recorded snapshot = %s/%d, want dep_1/42", repo.snapshotDeploymentID, repo.snapshotID)
+	if repo.snapshotServingStateID != "dep_1" || repo.snapshotID != 42 {
+		t.Fatalf("recorded snapshot = %s/%d, want dep_1/42", repo.snapshotServingStateID, repo.snapshotID)
 	}
 	if repo.snapshotRecordOrder == 0 || repo.activateOrder == 0 || repo.snapshotRecordOrder > repo.activateOrder {
 		t.Fatalf("record/activate order = %d/%d, want record before activate", repo.snapshotRecordOrder, repo.activateOrder)
@@ -58,10 +58,10 @@ func TestServiceRecordsPreparedDuckLakeSnapshotBeforeActivation(t *testing.T) {
 
 func TestServiceReconcilesAccessPolicyFromValidatedArtifact(t *testing.T) {
 	ctx := context.Background()
-	deploymentID := deployment.ID("dep_access")
-	projectPath := filepath.Join("..", "..", "..", "dashboards", deploymentfs.ProjectFile)
+	servingStateID := servingstate.ID("dep_access")
+	projectPath := filepath.Join("..", "..", "..", "dashboards", servingstatefs.ProjectFile)
 	var bundle bytes.Buffer
-	if _, _, err := deploymentfs.PackProject(projectPath, "sales", deploymentID, &bundle); err != nil {
+	if _, _, err := servingstatefs.PackProject(projectPath, "sales", servingStateID, &bundle); err != nil {
 		t.Fatalf("PackProject() error = %v", err)
 	}
 	artifactPath := filepath.Join(t.TempDir(), "artifact.tar.gz")
@@ -69,13 +69,13 @@ func TestServiceReconcilesAccessPolicyFromValidatedArtifact(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: deploymentID, WorkspaceID: "sales", Status: deployment.StatusValidated},
-		artifact:   deployment.Artifact{DeploymentID: deploymentID, WorkspaceID: "sales", Path: artifactPath},
+		deployment: servingstate.State{ID: servingStateID, WorkspaceID: "sales", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: servingStateID, WorkspaceID: "sales", Path: artifactPath},
 	}
 	reconciler := &fakeAccessReconciler{}
 	service := NewServiceWithAccess(repo, &fakeRuntime{}, repo, reconciler)
 
-	if _, err := service.Activate(ctx, deploymentID); err != nil {
+	if _, err := service.Activate(ctx, servingStateID); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
 	if _, ok := repo.policy.Groups["analysts"]; !ok {
@@ -92,7 +92,7 @@ func TestServiceReconcilesAccessPolicyFromValidatedArtifact(t *testing.T) {
 func TestServicePrepareFailureLeavesDeploymentUnchanged(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Status: deployment.StatusValidated},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Status: servingstate.StatusValidated},
 	}
 	runtime := &fakeRuntime{prepareErr: errors.New("load failed")}
 	service := NewService(repo, runtime)
@@ -108,7 +108,7 @@ func TestServicePrepareFailureLeavesDeploymentUnchanged(t *testing.T) {
 func TestServiceRejectsInvalidStatusBeforePrepare(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Status: deployment.StatusPending},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Status: servingstate.StatusPending},
 	}
 	runtime := &fakeRuntime{}
 	service := NewService(repo, runtime)
@@ -122,56 +122,56 @@ func TestServiceRejectsInvalidStatusBeforePrepare(t *testing.T) {
 }
 
 type fakeRepo struct {
-	deployment              deployment.Deployment
-	artifact                deployment.Artifact
+	deployment              servingstate.State
+	artifact                servingstate.Artifact
 	activateErr             error
 	activateCalls           int
 	activateWithPolicyCalls int
 	policy                  workspace.AccessPolicy
-	snapshotDeploymentID    deployment.ID
+	snapshotServingStateID  servingstate.ID
 	snapshotID              int64
 	snapshotRecordOrder     int
 	activateOrder           int
 	order                   int
 }
 
-func (r *fakeRepo) ByID(context.Context, deployment.ID) (deployment.Deployment, error) {
+func (r *fakeRepo) ByID(context.Context, servingstate.ID) (servingstate.State, error) {
 	return r.deployment, nil
 }
 
-func (r *fakeRepo) Activate(context.Context, deployment.WorkspaceID, deployment.Environment, deployment.ID) (deployment.Deployment, error) {
+func (r *fakeRepo) Activate(context.Context, servingstate.WorkspaceID, servingstate.Environment, servingstate.ID) (servingstate.State, error) {
 	r.activateCalls++
 	r.order++
 	r.activateOrder = r.order
 	if r.activateErr != nil {
-		return deployment.Deployment{}, r.activateErr
+		return servingstate.State{}, r.activateErr
 	}
-	r.deployment.Status = deployment.StatusActive
+	r.deployment.Status = servingstate.StatusActive
 	return r.deployment, nil
 }
 
-func (r *fakeRepo) ActivateWithWorkspacePolicy(_ context.Context, _ deployment.WorkspaceID, _ deployment.Environment, _ deployment.ID, policy workspace.AccessPolicy) (deployment.Deployment, error) {
+func (r *fakeRepo) ActivateWithWorkspacePolicy(_ context.Context, _ servingstate.WorkspaceID, _ servingstate.Environment, _ servingstate.ID, policy workspace.AccessPolicy) (servingstate.State, error) {
 	r.activateWithPolicyCalls++
 	r.order++
 	r.activateOrder = r.order
 	r.policy = policy
 	if r.activateErr != nil {
-		return deployment.Deployment{}, r.activateErr
+		return servingstate.State{}, r.activateErr
 	}
-	r.deployment.Status = deployment.StatusActive
+	r.deployment.Status = servingstate.StatusActive
 	return r.deployment, nil
 }
 
-func (r *fakeRepo) RecordDuckLakeSnapshot(_ context.Context, deploymentID deployment.ID, snapshotID int64) error {
+func (r *fakeRepo) RecordDuckLakeSnapshot(_ context.Context, servingStateID servingstate.ID, snapshotID int64) error {
 	r.order++
 	r.snapshotRecordOrder = r.order
-	r.snapshotDeploymentID = deploymentID
+	r.snapshotServingStateID = servingStateID
 	r.snapshotID = snapshotID
 	r.deployment.DuckLakeSnapshotID = snapshotID
 	return nil
 }
 
-func (r *fakeRepo) ArtifactByDeployment(context.Context, deployment.ID) (deployment.Artifact, error) {
+func (r *fakeRepo) ArtifactByServingState(context.Context, servingstate.ID) (servingstate.Artifact, error) {
 	return r.artifact, nil
 }
 
@@ -182,15 +182,15 @@ type fakeRuntime struct {
 	snapshotID  int64
 }
 
-func (r *fakeRuntime) PrepareDeployment(_ context.Context, deploymentID string) (deployment.PreparedRuntime, error) {
-	r.prepareID = deploymentID
+func (r *fakeRuntime) PrepareServingState(_ context.Context, servingStateID string) (servingstate.PreparedRuntime, error) {
+	r.prepareID = servingStateID
 	if r.prepareErr != nil {
 		return nil, r.prepareErr
 	}
 	return fakePrepared{snapshotID: r.snapshotID}, nil
 }
 
-func (r *fakeRuntime) CommitPrepared(deployment.PreparedRuntime) error {
+func (r *fakeRuntime) CommitPrepared(servingstate.PreparedRuntime) error {
 	r.commitCalls++
 	return nil
 }

@@ -6,38 +6,38 @@ import (
 )
 
 type WorkspaceView struct {
-	ID                 string
-	Title              string
-	Description        string
-	ActiveDeploymentID string
-	CreatedAt          string
-	UpdatedAt          string
+	ID                   string
+	Title                string
+	Description          string
+	ActiveServingStateID string
+	CreatedAt            string
+	UpdatedAt            string
 }
 
 type AssetView struct {
-	ID            string
-	SnapshotID    string
-	WorkspaceID   string
-	DeploymentID  string
-	Type          string
-	Key           string
-	ParentID      string
-	Title         string
-	Description   string
-	SourceFile    string
-	PayloadSchema string
-	Payload       map[string]any
-	ContentHash   string
-	Href          string
+	ID             string
+	SnapshotID     string
+	WorkspaceID    string
+	ServingStateID string
+	Type           string
+	Key            string
+	ParentID       string
+	Title          string
+	Description    string
+	SourceFile     string
+	PayloadSchema  string
+	Payload        map[string]any
+	ContentHash    string
+	Href           string
 }
 
 type AssetEdgeView struct {
-	ID           string
-	WorkspaceID  string
-	DeploymentID string
-	FromAssetID  string
-	ToAssetID    string
-	Type         string
+	ID             string
+	WorkspaceID    string
+	ServingStateID string
+	FromAssetID    string
+	ToAssetID      string
+	Type           string
 }
 
 type RoleView struct {
@@ -60,47 +60,47 @@ type RoleBindingView struct {
 }
 
 func WorkspaceViewFromSummary(row Summary) WorkspaceView {
-	activeDeploymentID := ""
-	if row.ActiveDeploymentID != "" {
-		activeDeploymentID = string(row.ActiveDeploymentID)
+	activeServingStateID := ""
+	if row.ActiveServingStateID != "" {
+		activeServingStateID = string(row.ActiveServingStateID)
 	}
 	return WorkspaceView{
-		ID:                 string(row.ID),
-		Title:              row.Title,
-		Description:        row.Description,
-		ActiveDeploymentID: activeDeploymentID,
-		CreatedAt:          row.CreatedAt,
-		UpdatedAt:          row.UpdatedAt,
+		ID:                   string(row.ID),
+		Title:                row.Title,
+		Description:          row.Description,
+		ActiveServingStateID: activeServingStateID,
+		CreatedAt:            row.CreatedAt,
+		UpdatedAt:            row.UpdatedAt,
 	}
 }
 
 func AssetViewFromCatalogRecord(row AssetRecord) AssetView {
 	return AssetView{
-		ID:            string(row.ID),
-		SnapshotID:    string(row.SnapshotID),
-		WorkspaceID:   string(row.WorkspaceID),
-		DeploymentID:  string(row.DeploymentID),
-		Type:          string(row.Type),
-		Key:           row.Key,
-		ParentID:      string(row.ParentID),
-		Title:         row.Title,
-		Description:   row.Description,
-		SourceFile:    row.SourceFile,
-		PayloadSchema: row.PayloadSchema,
-		Payload:       row.Payload,
-		ContentHash:   row.ContentHash,
-		Href:          AssetHrefForAsset(string(row.WorkspaceID), string(row.Type), row.Key, row.Payload),
+		ID:             string(row.ID),
+		SnapshotID:     string(row.SnapshotID),
+		WorkspaceID:    string(row.WorkspaceID),
+		ServingStateID: string(row.ServingStateID),
+		Type:           string(row.Type),
+		Key:            row.Key,
+		ParentID:       string(row.ParentID),
+		Title:          row.Title,
+		Description:    row.Description,
+		SourceFile:     row.SourceFile,
+		PayloadSchema:  row.PayloadSchema,
+		Payload:        row.Payload,
+		ContentHash:    row.ContentHash,
+		Href:           AssetHrefForAsset(string(row.WorkspaceID), string(row.Type), row.Key, row.Payload),
 	}
 }
 
 func AssetEdgeViewFromCatalogRecord(row AssetEdgeRecord) AssetEdgeView {
 	return AssetEdgeView{
-		ID:           string(row.ID),
-		WorkspaceID:  string(row.WorkspaceID),
-		DeploymentID: string(row.DeploymentID),
-		FromAssetID:  string(row.FromAssetID),
-		ToAssetID:    string(row.ToAssetID),
-		Type:         string(row.Type),
+		ID:             string(row.ID),
+		WorkspaceID:    string(row.WorkspaceID),
+		ServingStateID: string(row.ServingStateID),
+		FromAssetID:    string(row.FromAssetID),
+		ToAssetID:      string(row.ToAssetID),
+		Type:           string(row.Type),
 	}
 }
 

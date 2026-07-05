@@ -173,37 +173,37 @@ func (m dataExplorerFixtureMetrics) ExecuteDataQuery(ctx context.Context, reques
 	}
 }
 
-func (m dataExplorerFixtureMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
-	catalog, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeCatalog, workspaceID, "", "Catalog", "", "catalog.v1", map[string]any{})
+func (m dataExplorerFixtureMetrics) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+	catalog, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeCatalog, workspaceID, "", "Catalog", "", "catalog.v1", map[string]any{})
 	if err != nil {
 		return nil, nil, false
 	}
-	connection, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeConnection, "olist.local", catalog.ID, "local", "", "connection.v1", map[string]any{"Kind": "local"})
+	connection, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeConnection, "olist.local", catalog.ID, "local", "", "connection.v1", map[string]any{"Kind": "local"})
 	if err != nil {
 		return nil, nil, false
 	}
 	modelID := firstNonEmpty(m.modelID, "olist")
 	sourceKey := firstNonEmpty(m.sourceKey, "orders")
 	sourceAssetKey := firstNonEmpty(m.sourceKey, "olist.orders")
-	source, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeSource, sourceAssetKey, catalog.ID, "orders source", "", "source.v1", map[string]any{"Connection": "local", "Format": "csv", "Path": "orders.csv"})
+	source, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeSource, sourceAssetKey, catalog.ID, "orders source", "", "source.v1", map[string]any{"Connection": "local", "Format": "csv", "Path": "orders.csv"})
 	if err != nil {
 		return nil, nil, false
 	}
-	model, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeSemanticModel, modelID, catalog.ID, modelID, "", "semantic_model.v1", map[string]any{})
+	model, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeSemanticModel, modelID, catalog.ID, modelID, "", "semantic_model.v1", map[string]any{})
 	if err != nil {
 		return nil, nil, false
 	}
-	table, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeModelTable, modelID+".orders", model.ID, "orders", "", "model_table.v1", map[string]any{"Source": sourceKey})
+	table, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeModelTable, modelID+".orders", model.ID, "orders", "", "model_table.v1", map[string]any{"Source": sourceKey})
 	if err != nil {
 		return nil, nil, false
 	}
 	return []workspace.Asset{catalog, connection, source, model, table}, []workspace.AssetEdge{
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), catalog.ID, connection.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), catalog.ID, source.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), catalog.ID, model.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), model.ID, table.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), source.ID, connection.ID, workspace.AssetEdgeUsesConnection),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), table.ID, source.ID, workspace.AssetEdgeReadsSource),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), catalog.ID, connection.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), catalog.ID, source.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), catalog.ID, model.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), model.ID, table.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), source.ID, connection.ID, workspace.AssetEdgeUsesConnection),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), table.ID, source.ID, workspace.AssetEdgeReadsSource),
 	}, true
 }
 

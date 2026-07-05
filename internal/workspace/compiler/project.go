@@ -58,9 +58,9 @@ func CompileProject(projectPath string, opts Options) (CompiledProject, error) {
 		if err != nil {
 			return CompiledProject{}, err
 		}
-		deploymentID := opts.DeploymentID
+		servingStateID := opts.ServingStateID
 		workspaceID := workspace.WorkspaceID(id)
-		graph, err := ExtractLineage(workspaceID, deploymentID, definition)
+		graph, err := ExtractLineage(workspaceID, servingStateID, definition)
 		if err != nil {
 			return CompiledProject{}, err
 		}

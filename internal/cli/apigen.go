@@ -10,10 +10,7 @@ import (
 )
 
 func apiOperationURL(target, operationID string, pathParams map[string]string, query url.Values) (string, error) {
-	path, ok := deploymentV1CLIPath(operationID)
-	if !ok {
-		path, ok = generatedCLIPath(operationID)
-	}
+	path, ok := generatedCLIPath(operationID)
 	if !ok {
 		contract, contractOK := apigenapi.GetAPIGenOperationContract(operationID)
 		if !contractOK {
@@ -35,23 +32,6 @@ func apiOperationURL(target, operationID string, pathParams map[string]string, q
 		u.RawQuery = query.Encode()
 	}
 	return u.String(), nil
-}
-
-func deploymentV1CLIPath(operationID string) (string, bool) {
-	switch operationID {
-	case "createDeployment", "listDeployments":
-		return "/api/v1/workspaces/{workspace}/deployments", true
-	case "getDeployment":
-		return "/api/v1/workspaces/{workspace}/deployments/{deployment}", true
-	case "uploadDeploymentArtifact":
-		return "/api/v1/workspaces/{workspace}/deployments/{deployment}/artifact", true
-	case "validateDeployment":
-		return "/api/v1/workspaces/{workspace}/deployments/{deployment}/validate", true
-	case "activateDeployment", "rollbackDeployment":
-		return "/api/v1/workspaces/{workspace}/deployments/{deployment}/activate", true
-	default:
-		return "", false
-	}
 }
 
 func generatedCLIPath(operationID string) (string, bool) {

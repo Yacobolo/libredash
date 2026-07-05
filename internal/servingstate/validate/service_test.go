@@ -5,17 +5,17 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 )
 
 func TestServiceValidatesPromotesAndSaves(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Status: deployment.StatusPending},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Status: servingstate.StatusPending},
 	}
 	artifacts := &fakeArtifacts{}
 	validator := &fakeValidator{
-		validation: deployment.Validation{Digest: "digest", ManifestJSON: `{"version":1}`, RootDir: "/tmp/root"},
+		validation: servingstate.Validation{Digest: "digest", ManifestJSON: `{"version":1}`, RootDir: "/tmp/root"},
 	}
 	service := NewService(repo, artifacts, validator)
 
@@ -23,7 +23,7 @@ func TestServiceValidatesPromotesAndSaves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("validate: %v", err)
 	}
-	if validated.Status != deployment.StatusValidated {
+	if validated.Status != servingstate.StatusValidated {
 		t.Fatalf("status = %q, want validated", validated.Status)
 	}
 	if artifacts.promotedDigest != "digest" || !repo.saved {
@@ -37,7 +37,7 @@ func TestServiceValidatesPromotesAndSaves(t *testing.T) {
 func TestServiceMarksFailedWhenValidationFails(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
-		deployment: deployment.Deployment{ID: "dep_1", WorkspaceID: "test", Status: deployment.StatusPending},
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Status: servingstate.StatusPending},
 	}
 	validator := &fakeValidator{err: errors.New("bad bundle")}
 	service := NewService(repo, &fakeArtifacts{}, validator)
@@ -54,23 +54,23 @@ func TestServiceMarksFailedWhenValidationFails(t *testing.T) {
 }
 
 type fakeRepo struct {
-	deployment deployment.Deployment
+	deployment servingstate.State
 	saved      bool
 	failed     bool
 }
 
-func (r *fakeRepo) ByID(context.Context, deployment.ID) (deployment.Deployment, error) {
+func (r *fakeRepo) ByID(context.Context, servingstate.ID) (servingstate.State, error) {
 	return r.deployment, nil
 }
 
-func (r *fakeRepo) MarkFailed(context.Context, deployment.ID, error) error {
+func (r *fakeRepo) MarkFailed(context.Context, servingstate.ID, error) error {
 	r.failed = true
 	return nil
 }
 
-func (r *fakeRepo) SaveValidated(_ context.Context, _ deployment.ID, validation deployment.Validation, artifact deployment.Artifact) (deployment.Deployment, error) {
+func (r *fakeRepo) SaveValidated(_ context.Context, _ servingstate.ID, validation servingstate.Validation, artifact servingstate.Artifact) (servingstate.State, error) {
 	r.saved = true
-	r.deployment.Status = deployment.StatusValidated
+	r.deployment.Status = servingstate.StatusValidated
 	r.deployment.Digest = validation.Digest
 	r.deployment.ManifestJSON = artifact.ManifestJSON
 	return r.deployment, nil
@@ -80,31 +80,31 @@ type fakeArtifacts struct {
 	promotedDigest string
 }
 
-func (a *fakeArtifacts) UploadPath(deployment.ID) string {
+func (a *fakeArtifacts) UploadPath(servingstate.ID) string {
 	return "upload.tar.gz"
 }
 
-func (a *fakeArtifacts) PromoteUploaded(_ context.Context, deploymentID deployment.ID, digest, manifestJSON string) (deployment.Artifact, error) {
+func (a *fakeArtifacts) PromoteUploaded(_ context.Context, servingStateID servingstate.ID, digest, manifestJSON string) (servingstate.Artifact, error) {
 	a.promotedDigest = digest
-	return deployment.Artifact{ID: "artifact_" + string(deploymentID), DeploymentID: deploymentID, Digest: digest, ManifestJSON: manifestJSON}, nil
+	return servingstate.Artifact{ID: "artifact_" + string(servingStateID), ServingStateID: servingStateID, Digest: digest, ManifestJSON: manifestJSON}, nil
 }
 
 type fakeValidator struct {
-	validation  deployment.Validation
+	validation  servingstate.Validation
 	err         error
 	cleaned     bool
-	environment deployment.Environment
+	environment servingstate.Environment
 }
 
-func (v *fakeValidator) ValidateArtifact(_ string, _ deployment.WorkspaceID, environment deployment.Environment, _ deployment.ID) (deployment.Validation, error) {
+func (v *fakeValidator) ValidateArtifact(_ string, _ servingstate.WorkspaceID, environment servingstate.Environment, _ servingstate.ID) (servingstate.Validation, error) {
 	v.environment = environment
 	if v.err != nil {
-		return deployment.Validation{}, v.err
+		return servingstate.Validation{}, v.err
 	}
 	return v.validation, nil
 }
 
-func (v *fakeValidator) Cleanup(deployment.Validation) error {
+func (v *fakeValidator) Cleanup(servingstate.Validation) error {
 	v.cleaned = true
 	return nil
 }

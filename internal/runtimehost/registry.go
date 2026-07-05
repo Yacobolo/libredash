@@ -6,32 +6,32 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 )
 
 type RegistryOptions struct {
-	Repo         DeploymentRepository
-	WorkspaceIDs []deployment.WorkspaceID
-	Environment  deployment.Environment
+	Repo         ServingStateRepository
+	WorkspaceIDs []servingstate.WorkspaceID
+	Environment  servingstate.Environment
 	DataDir      string
 	Factory      RuntimeFactory
-	OnDrained    func(deployment.ID, int64)
+	OnDrained    func(servingstate.ID, int64)
 }
 
 type Registry struct {
 	mu          sync.RWMutex
-	repo        DeploymentRepository
-	environment deployment.Environment
+	repo        ServingStateRepository
+	environment servingstate.Environment
 	dataDir     string
 	factory     RuntimeFactory
-	onDrained   func(deployment.ID, int64)
-	managers    map[deployment.WorkspaceID]*Manager
+	onDrained   func(servingstate.ID, int64)
+	managers    map[servingstate.WorkspaceID]*Manager
 }
 
 type RegistryPrepared struct {
-	workspaceID deployment.WorkspaceID
+	workspaceID servingstate.WorkspaceID
 	manager     *Manager
-	prepared    deployment.PreparedRuntime
+	prepared    servingstate.PreparedRuntime
 }
 
 func (p *RegistryPrepared) Close() error {
@@ -43,17 +43,17 @@ func (p *RegistryPrepared) Close() error {
 
 type WorkspaceProvider struct {
 	registry    *Registry
-	workspaceID deployment.WorkspaceID
+	workspaceID servingstate.WorkspaceID
 }
 
 func NewRegistryWithFactory(options RegistryOptions) *Registry {
 	registry := &Registry{
 		repo:        options.Repo,
-		environment: deployment.NormalizeEnvironment(options.Environment),
+		environment: servingstate.NormalizeEnvironment(options.Environment),
 		dataDir:     options.DataDir,
 		factory:     options.Factory,
 		onDrained:   options.OnDrained,
-		managers:    map[deployment.WorkspaceID]*Manager{},
+		managers:    map[servingstate.WorkspaceID]*Manager{},
 	}
 	for _, workspaceID := range options.WorkspaceIDs {
 		registry.managerForWorkspace(workspaceID)
@@ -71,23 +71,23 @@ func (r *Registry) Reload(ctx context.Context) error {
 	return nil
 }
 
-func (r *Registry) PrepareDeployment(ctx context.Context, deploymentID string) (deployment.PreparedRuntime, error) {
-	current, err := r.repo.ByID(ctx, deployment.ID(deploymentID))
+func (r *Registry) PrepareServingState(ctx context.Context, servingStateID string) (servingstate.PreparedRuntime, error) {
+	current, err := r.repo.ByID(ctx, servingstate.ID(servingStateID))
 	if err != nil {
 		return nil, err
 	}
-	if deployment.NormalizeEnvironment(current.Environment) != r.environment {
-		return nil, fmt.Errorf("deployment %s environment = %q, want %q", deploymentID, current.Environment, r.environment)
+	if servingstate.NormalizeEnvironment(current.Environment) != r.environment {
+		return nil, fmt.Errorf("serving state %s environment = %q, want %q", servingStateID, current.Environment, r.environment)
 	}
 	manager := r.managerForWorkspace(current.WorkspaceID)
-	prepared, err := manager.PrepareDeployment(ctx, deploymentID)
+	prepared, err := manager.PrepareServingState(ctx, servingStateID)
 	if err != nil {
 		return nil, err
 	}
 	return &RegistryPrepared{workspaceID: current.WorkspaceID, manager: manager, prepared: prepared}, nil
 }
 
-func (r *Registry) CommitPrepared(candidate deployment.PreparedRuntime) error {
+func (r *Registry) CommitPrepared(candidate servingstate.PreparedRuntime) error {
 	prepared, ok := candidate.(*RegistryPrepared)
 	if !ok {
 		return fmt.Errorf("prepared runtime belongs to a different host")
@@ -108,7 +108,7 @@ func (r *Registry) Close() error {
 	return first
 }
 
-func (r *Registry) ActiveForWorkspace(ctx context.Context, workspaceID deployment.WorkspaceID) (Runtime, error) {
+func (r *Registry) ActiveForWorkspace(ctx context.Context, workspaceID servingstate.WorkspaceID) (Runtime, error) {
 	lease, err := r.AcquireForWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, err
@@ -118,12 +118,12 @@ func (r *Registry) ActiveForWorkspace(ctx context.Context, workspaceID deploymen
 	return runtime, nil
 }
 
-func (r *Registry) AcquireForWorkspace(ctx context.Context, workspaceID deployment.WorkspaceID) (Lease, error) {
+func (r *Registry) AcquireForWorkspace(ctx context.Context, workspaceID servingstate.WorkspaceID) (Lease, error) {
 	r.mu.RLock()
 	manager := r.managers[workspaceID]
 	r.mu.RUnlock()
 	if manager == nil {
-		return nil, fmt.Errorf("no active LibreDash deployment")
+		return nil, fmt.Errorf("no active LibreDash serving state")
 	}
 	if err := manager.Reload(ctx); err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func (r *Registry) AcquireForWorkspace(ctx context.Context, workspaceID deployme
 	return manager.Acquire()
 }
 
-func (r *Registry) ProviderForWorkspace(workspaceID deployment.WorkspaceID) *WorkspaceProvider {
+func (r *Registry) ProviderForWorkspace(workspaceID servingstate.WorkspaceID) *WorkspaceProvider {
 	r.managerForWorkspace(workspaceID)
 	return &WorkspaceProvider{registry: r, workspaceID: workspaceID}
 }
@@ -166,7 +166,7 @@ func (r *Registry) LeasedSnapshots() []int64 {
 	return snapshotKeys(snapshots)
 }
 
-func (r *Registry) managerForWorkspace(workspaceID deployment.WorkspaceID) *Manager {
+func (r *Registry) managerForWorkspace(workspaceID servingstate.WorkspaceID) *Manager {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if manager := r.managers[workspaceID]; manager != nil {
@@ -184,9 +184,9 @@ func (r *Registry) managerForWorkspace(workspaceID deployment.WorkspaceID) *Mana
 	return manager
 }
 
-func (r *Registry) workspaceIDs() []deployment.WorkspaceID {
+func (r *Registry) workspaceIDs() []servingstate.WorkspaceID {
 	r.mu.RLock()
-	ids := make([]deployment.WorkspaceID, 0, len(r.managers))
+	ids := make([]servingstate.WorkspaceID, 0, len(r.managers))
 	for id := range r.managers {
 		ids = append(ids, id)
 	}

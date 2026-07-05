@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 )
 
 const (
@@ -24,30 +24,30 @@ func NewArtifactStore(dir string) *ArtifactStore {
 	return &ArtifactStore{dir: dir}
 }
 
-func (s *ArtifactStore) UploadPath(deploymentID deployment.ID) string {
-	return filepath.Join(s.dir, string(deploymentID)+".upload.tar.gz")
+func (s *ArtifactStore) UploadPath(servingStateID servingstate.ID) string {
+	return filepath.Join(s.dir, string(servingStateID)+".upload.tar.gz")
 }
 
-func (s *ArtifactStore) PromoteUploaded(_ context.Context, deploymentID deployment.ID, digest, manifestJSON string) (deployment.Artifact, error) {
+func (s *ArtifactStore) PromoteUploaded(_ context.Context, servingStateID servingstate.ID, digest, manifestJSON string) (servingstate.Artifact, error) {
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
-		return deployment.Artifact{}, err
+		return servingstate.Artifact{}, err
 	}
-	uploadPath := s.UploadPath(deploymentID)
+	uploadPath := s.UploadPath(servingStateID)
 	finalPath := filepath.Join(s.dir, digest+".tar.gz")
 	if err := os.Rename(uploadPath, finalPath); err != nil {
 		if copyErr := copyFile(uploadPath, finalPath); copyErr != nil {
-			return deployment.Artifact{}, copyErr
+			return servingstate.Artifact{}, copyErr
 		}
 		_ = os.Remove(uploadPath)
 	}
-	return deployment.Artifact{
-		ID:           "artifact_" + string(deploymentID),
-		DeploymentID: deploymentID,
-		Digest:       digest,
-		Format:       BundleFormat,
-		Path:         finalPath,
-		ManifestJSON: manifestJSON,
-		SizeBytes:    fileSize(finalPath),
+	return servingstate.Artifact{
+		ID:             "artifact_" + string(servingStateID),
+		ServingStateID: servingStateID,
+		Digest:         digest,
+		Format:         BundleFormat,
+		Path:           finalPath,
+		ManifestJSON:   manifestJSON,
+		SizeBytes:      fileSize(finalPath),
 	}, nil
 }
 

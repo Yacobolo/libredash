@@ -19,10 +19,10 @@ import (
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 	"github.com/Yacobolo/libredash/internal/dataquery"
-	"github.com/Yacobolo/libredash/internal/deployment"
 	"github.com/Yacobolo/libredash/internal/execution"
 	"github.com/Yacobolo/libredash/internal/platform"
 	queryauditsqlite "github.com/Yacobolo/libredash/internal/queryaudit/sqlite"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
@@ -89,7 +89,7 @@ type Server struct {
 	executor            *execution.Service
 	broker              *dashboardstream.Broker
 	store               *platform.Store
-	deploymentRepo      deploymentRepository
+	servingStateRepo    servingStateRepository
 	workspaceRepo       workspace.Repository
 	assetCatalog        workspace.AssetCatalogReader
 	accessRepo          access.Repository
@@ -119,7 +119,7 @@ func New(metrics QueryMetrics) *Server {
 
 type Options struct {
 	Store               *platform.Store
-	DeploymentRepo      deploymentRepository
+	ServingStateRepo    servingStateRepository
 	WorkspaceRepo       workspace.Repository
 	AssetCatalog        workspace.AssetCatalogReader
 	AccessRepo          access.Repository
@@ -158,7 +158,7 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server := New(metrics)
 	server.executor = executor
 	server.store = options.Store
-	server.deploymentRepo = options.DeploymentRepo
+	server.servingStateRepo = options.ServingStateRepo
 	server.workspaceRepo = options.WorkspaceRepo
 	server.assetCatalog = options.AssetCatalog
 	server.accessRepo = options.AccessRepo
@@ -170,7 +170,7 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.duckLakeCatalogPath = options.DuckLakeCatalogPath
 	server.duckLakeDataPath = options.DuckLakeDataPath
 	server.defaultWorkspaceID = options.DefaultWorkspaceID
-	server.defaultEnvironment = string(deployment.NormalizeEnvironment(deployment.Environment(options.DefaultEnvironment)))
+	server.defaultEnvironment = string(servingstate.NormalizeEnvironment(servingstate.Environment(options.DefaultEnvironment)))
 	server.rateLimits = options.RateLimits
 	server.securityHeaders = options.SecurityHeaders
 	server.requestLogging = options.RequestLogging

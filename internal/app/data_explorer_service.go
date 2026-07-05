@@ -34,7 +34,7 @@ func (s *Server) globalDataExplorerStateWithCurrent(r *http.Request, command uis
 		}
 		return workspaces[i].ID < workspaces[j].ID
 	})
-	environment := string(s.requestDeploymentEnvironment(r))
+	environment := string(s.requestServingEnvironment(r))
 	objects := []uisignals.DataExplorerObjectSignal{}
 	warnings := []string{}
 	for _, workspace := range workspaces {

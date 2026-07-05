@@ -18,7 +18,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/assetnav"
 	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacerefresh "github.com/Yacobolo/libredash/internal/workspace/refresh"
@@ -181,7 +181,7 @@ func (s *Server) workspaceAssetSection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	refresh.CSRFToken = csrfToken(r, s.auth)
-	versions, err := s.assetVersionsStateForSection(r.Context(), workspaceID, string(s.requestDeploymentEnvironment(r)), selected, section)
+	versions, err := s.assetVersionsStateForSection(r.Context(), workspaceID, string(s.requestServingEnvironment(r)), selected, section)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -191,10 +191,6 @@ func (s *Server) workspaceAssetSection(w http.ResponseWriter, r *http.Request) {
 	if err := ui.WorkspaceAssetPageWithRefreshAndVersions(s.catalogForWorkspace(workspaceID), workspace, selected, assets, edges, section, s.currentRoleLabel(r), refresh, versions, s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-}
-
-func (s *Server) refreshWorkspaceAssetMaterializations(w http.ResponseWriter, r *http.Request) {
-	s.refreshWorkspaceAsset(w, r)
 }
 
 func (s *Server) refreshWorkspaceAsset(w http.ResponseWriter, r *http.Request) {
@@ -214,7 +210,7 @@ func (s *Server) refreshWorkspaceAsset(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "platform store is required", http.StatusServiceUnavailable)
 		return
 	}
-	if err := s.refreshWorkspaceAssetDeploymentWithPatches(r, workspaceID, selected, assets, edges); err != nil {
+	if err := s.refreshWorkspaceAssetServingStateWithPatches(r, workspaceID, selected, assets, edges); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -272,14 +268,14 @@ func (s *Server) refreshWorkspaceAssetWithPatches(r *http.Request, workspaceID s
 	}
 }
 
-func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
+func (s *Server) refreshWorkspaceAssetServingStateWithPatches(r *http.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
 	ctx := r.Context()
 	runRepo := materialize.NewSQLRunRepository(s.store.SQLDB())
 	service, err := s.workspaceRefreshService(runRepo)
 	if err != nil {
 		return err
 	}
-	environment := s.requestDeploymentEnvironment(r)
+	environment := s.requestServingEnvironment(r)
 	activeState, err := service.Active(ctx, workspaceID, environment)
 	if err != nil {
 		return err
@@ -308,7 +304,7 @@ func (s *Server) refreshWorkspaceAssetDeploymentWithPatches(r *http.Request, wor
 	return nil
 }
 
-func (s *Server) executeWorkspaceAssetRefreshPlan(ctx context.Context, definition *workspace.Definition, active, refreshed deployment.Deployment, artifact deployment.Artifact, environment deployment.Environment, plan workspacerefresh.Plan) (int64, error) {
+func (s *Server) executeWorkspaceAssetRefreshPlan(ctx context.Context, definition *workspace.Definition, active, refreshed servingstate.State, artifact servingstate.Artifact, environment servingstate.Environment, plan workspacerefresh.Plan) (int64, error) {
 	runtime, err := s.openWorkspaceRefreshRuntime(ctx, definition, active, refreshed, artifact, environment, plan)
 	if err != nil {
 		return 0, err
@@ -324,22 +320,22 @@ func (s *Server) executeWorkspaceAssetRefreshPlan(ctx context.Context, definitio
 	return snapshotID, nil
 }
 
-func (s *Server) openWorkspaceRefreshRuntime(ctx context.Context, definition *workspace.Definition, active, refreshed deployment.Deployment, artifact deployment.Artifact, environment deployment.Environment, plan workspacerefresh.Plan) (*analyticsduckdb.WorkspaceRuntime, error) {
+func (s *Server) openWorkspaceRefreshRuntime(ctx context.Context, definition *workspace.Definition, active, refreshed servingstate.State, artifact servingstate.Artifact, environment servingstate.Environment, plan workspacerefresh.Plan) (*analyticsduckdb.WorkspaceRuntime, error) {
 	dataDir := s.dataDirForWorkspace(string(refreshed.WorkspaceID), artifact)
 	dbDir := s.duckDBDir
 	if strings.TrimSpace(dbDir) == "" {
 		dbDir = filepath.Join(".libredash", "duckdb")
 	}
-	dbDir = filepath.Join(dbDir, string(deployment.NormalizeEnvironment(environment)))
+	dbDir = filepath.Join(dbDir, string(servingstate.NormalizeEnvironment(environment)))
 	return analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
 		Models:             definition.Models,
 		DataDir:            dataDir,
 		DBDir:              dbDir,
 		CatalogPath:        s.duckLakeCatalogPath,
 		DuckLakeDataPath:   s.duckLakeDataPath,
-		DeploymentID:       string(refreshed.ID),
+		ServingStateID:     string(refreshed.ID),
 		WorkspaceID:        string(refreshed.WorkspaceID),
-		Environment:        string(deployment.NormalizeEnvironment(environment)),
+		Environment:        string(servingstate.NormalizeEnvironment(environment)),
 		TargetType:         plan.TargetType,
 		TargetID:           plan.TargetID,
 		SemanticDigest:     refreshed.Digest,
@@ -348,7 +344,7 @@ func (s *Server) openWorkspaceRefreshRuntime(ctx context.Context, definition *wo
 	})
 }
 
-func (s *Server) dataDirForWorkspace(workspaceID string, artifact deployment.Artifact) string {
+func (s *Server) dataDirForWorkspace(workspaceID string, artifact servingstate.Artifact) string {
 	if strings.TrimSpace(artifact.DataRoot) != "" {
 		return artifact.DataRoot
 	}
@@ -481,7 +477,7 @@ func (s *Server) publishWorkspaceAssetRefreshPatchesForTarget(ctx context.Contex
 }
 
 func (s *Server) workspaceAssetsAndEdgesForRefresh(ctx context.Context, workspaceID string) ([]workspace.AssetView, []workspace.AssetEdgeView, bool) {
-	catalog, ok, err := s.workspaceAssetCatalog(ctx, workspaceID, string(s.defaultDeploymentEnvironment()))
+	catalog, ok, err := s.workspaceAssetCatalog(ctx, workspaceID, string(s.defaultServingEnvironment()))
 	if err != nil || !ok {
 		return nil, nil, false
 	}
@@ -546,7 +542,7 @@ func (s *Server) assetRefreshStateForContext(ctx context.Context, workspaceID st
 }
 
 func (s *Server) assetVersionsStateForSection(ctx context.Context, workspaceID, environment string, asset workspace.AssetView, section string) (ui.AssetVersionsState, error) {
-	state := ui.AssetVersionsState{CurrentDeploymentID: asset.DeploymentID}
+	state := ui.AssetVersionsState{CurrentContentHash: asset.ContentHash}
 	if section != "versions" {
 		return state, nil
 	}
@@ -564,13 +560,14 @@ func (s *Server) assetVersionsStateForSection(ctx context.Context, workspaceID, 
 	state.Versions = make([]ui.AssetVersionState, 0, len(versions))
 	for _, version := range versions {
 		state.Versions = append(state.Versions, ui.AssetVersionState{
-			DeploymentID: string(version.DeploymentID),
-			Status:       version.Status,
-			Digest:       version.Digest,
-			CreatedBy:    version.CreatedBy,
-			CreatedAt:    version.CreatedAt,
-			ActivatedAt:  version.ActivatedAt,
-			ContentHash:  version.ContentHash,
+			ServingStateID: string(version.ServingStateID),
+			Status:         version.Status,
+			Digest:         version.Digest,
+			CreatedBy:      version.CreatedBy,
+			CreatedAt:      version.CreatedAt,
+			ActivatedAt:    version.ActivatedAt,
+			SourceFile:     version.SourceFile,
+			ContentHash:    version.ContentHash,
 		})
 	}
 	return state, nil
@@ -588,7 +585,7 @@ func uiRefreshRun(run materialize.RunRecord) ui.AssetRefreshRun {
 	return ui.AssetRefreshRun{
 		ID:                   run.ID,
 		ModelID:              run.ModelID,
-		DeploymentID:         run.DeploymentID,
+		ServingStateID:       run.ServingStateID,
 		PrincipalID:          run.PrincipalID,
 		PrincipalDisplayName: run.PrincipalDisplayName,
 		TargetType:           run.TargetType,
@@ -680,7 +677,7 @@ func (s *Server) connectionSourceAssetSection(w http.ResponseWriter, r *http.Req
 		return
 	}
 	workspace := platformAssetWorkspaceView()
-	versions, err := s.assetVersionsStateForSection(r.Context(), source.WorkspaceID, string(s.requestDeploymentEnvironment(r)), source, section)
+	versions, err := s.assetVersionsStateForSection(r.Context(), source.WorkspaceID, string(s.requestServingEnvironment(r)), source, section)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -740,7 +737,7 @@ func (s *Server) connectionAssetSection(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	workspace := platformAssetWorkspaceView()
-	versions, err := s.assetVersionsStateForSection(r.Context(), selected.WorkspaceID, string(s.requestDeploymentEnvironment(r)), selected, section)
+	versions, err := s.assetVersionsStateForSection(r.Context(), selected.WorkspaceID, string(s.requestServingEnvironment(r)), selected, section)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -897,7 +894,7 @@ func (s *Server) apiWorkspaceAssets(w http.ResponseWriter, r *http.Request) {
 	_ = writePagedJSON(w, r, apiAssetSummaryDTOs(filtered))
 }
 
-func (s *Server) apiWorkspaceActiveDeploymentGraph(w http.ResponseWriter, r *http.Request) {
+func (s *Server) apiWorkspaceActiveServingStateGraph(w http.ResponseWriter, r *http.Request) {
 	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
 	repo, err := s.workspaceRepository()
 	if err != nil {
@@ -907,7 +904,7 @@ func (s *Server) apiWorkspaceActiveDeploymentGraph(w http.ResponseWriter, r *htt
 	graph := workspace.AssetGraph{}
 	if repo != nil {
 		var ok bool
-		graph, ok, err = repo.ActiveDeploymentGraph(r.Context(), workspace.WorkspaceID(workspaceID), string(s.requestDeploymentEnvironment(r)))
+		graph, ok, err = repo.ActiveServingStateGraph(r.Context(), workspace.WorkspaceID(workspaceID), string(s.requestServingEnvironment(r)))
 		if err != nil {
 			writeJSONError(w, err, http.StatusInternalServerError)
 			return
@@ -1058,7 +1055,7 @@ func (s *Server) workspaceList(r *http.Request) ([]workspace.WorkspaceView, erro
 	if repo == nil {
 		return []workspace.WorkspaceView{catalogWorkspaceView(s.metrics.Catalog())}, nil
 	}
-	rows, err := listWorkspaceRows(r, repo, string(s.requestDeploymentEnvironment(r)))
+	rows, err := listWorkspaceRows(r, repo, string(s.requestServingEnvironment(r)))
 	if err != nil {
 		return nil, err
 	}
@@ -1140,7 +1137,7 @@ func (s *Server) workspaceResponse(r *http.Request, workspaceID string) workspac
 		var row workspace.Summary
 		var err error
 		if activeRepo, ok := repo.(activeWorkspaceMetadataRepository); ok {
-			row, err = activeRepo.ByIDWithActiveMetadata(r.Context(), workspace.WorkspaceID(workspaceID), string(s.requestDeploymentEnvironment(r)))
+			row, err = activeRepo.ByIDWithActiveMetadata(r.Context(), workspace.WorkspaceID(workspaceID), string(s.requestServingEnvironment(r)))
 		} else {
 			row, err = repo.ByID(r.Context(), workspace.WorkspaceID(workspaceID))
 		}
@@ -1154,7 +1151,7 @@ func (s *Server) workspaceResponse(r *http.Request, workspaceID string) workspac
 }
 
 func (s *Server) workspaceAssetsAndEdges(r *http.Request, workspaceID string) ([]workspace.AssetView, []workspace.AssetEdgeView, error) {
-	catalog, ok, err := s.workspaceAssetCatalog(r.Context(), workspaceID, string(s.requestDeploymentEnvironment(r)))
+	catalog, ok, err := s.workspaceAssetCatalog(r.Context(), workspaceID, string(s.requestServingEnvironment(r)))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1173,7 +1170,7 @@ func (s *Server) platformConnectionAssetsAndEdges(r *http.Request) ([]workspace.
 	if err != nil {
 		return nil, nil, err
 	}
-	environment := string(s.requestDeploymentEnvironment(r))
+	environment := string(s.requestServingEnvironment(r))
 	assetsByID := map[string]workspace.AssetView{}
 	edgeKeys := map[string]workspace.AssetEdgeView{}
 	for _, row := range rows {
@@ -1353,12 +1350,12 @@ func apiWorkspaceDTOs(rows []workspace.WorkspaceView) []api.WorkspaceResponse {
 	out := make([]api.WorkspaceResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, api.WorkspaceResponse{
-			ID:                 row.ID,
-			Title:              row.Title,
-			Description:        row.Description,
-			ActiveDeploymentID: row.ActiveDeploymentID,
-			CreatedAt:          row.CreatedAt,
-			UpdatedAt:          row.UpdatedAt,
+			ID:                   row.ID,
+			Title:                row.Title,
+			Description:          row.Description,
+			ActiveServingStateID: row.ActiveServingStateID,
+			CreatedAt:            row.CreatedAt,
+			UpdatedAt:            row.UpdatedAt,
 		})
 	}
 	return out
@@ -1368,19 +1365,19 @@ func apiAssetDTOs(rows []workspace.AssetView) []api.AssetResponse {
 	out := make([]api.AssetResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, api.AssetResponse{
-			ID:            row.ID,
-			SnapshotID:    row.SnapshotID,
-			WorkspaceID:   row.WorkspaceID,
-			DeploymentID:  row.DeploymentID,
-			Type:          row.Type,
-			Key:           row.Key,
-			ParentID:      row.ParentID,
-			Title:         row.Title,
-			Description:   row.Description,
-			SourceFile:    row.SourceFile,
-			PayloadSchema: row.PayloadSchema,
-			Payload:       row.Payload,
-			Href:          row.Href,
+			ID:             row.ID,
+			SnapshotID:     row.SnapshotID,
+			WorkspaceID:    row.WorkspaceID,
+			ServingStateID: row.ServingStateID,
+			Type:           row.Type,
+			Key:            row.Key,
+			ParentID:       row.ParentID,
+			Title:          row.Title,
+			Description:    row.Description,
+			SourceFile:     row.SourceFile,
+			PayloadSchema:  row.PayloadSchema,
+			Payload:        row.Payload,
+			Href:           row.Href,
 		})
 	}
 	return out
@@ -1390,19 +1387,19 @@ func apiAssetSummaryDTOs(rows []workspace.AssetView) []api.AssetSummaryResponse 
 	out := make([]api.AssetSummaryResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, api.AssetSummaryResponse{
-			ID:            row.ID,
-			SnapshotID:    row.SnapshotID,
-			WorkspaceID:   row.WorkspaceID,
-			DeploymentID:  row.DeploymentID,
-			Type:          row.Type,
-			Key:           row.Key,
-			ParentID:      row.ParentID,
-			Title:         row.Title,
-			Description:   row.Description,
-			SourceFile:    row.SourceFile,
-			PayloadSchema: row.PayloadSchema,
-			ContentHash:   row.ContentHash,
-			Href:          row.Href,
+			ID:             row.ID,
+			SnapshotID:     row.SnapshotID,
+			WorkspaceID:    row.WorkspaceID,
+			ServingStateID: row.ServingStateID,
+			Type:           row.Type,
+			Key:            row.Key,
+			ParentID:       row.ParentID,
+			Title:          row.Title,
+			Description:    row.Description,
+			SourceFile:     row.SourceFile,
+			PayloadSchema:  row.PayloadSchema,
+			ContentHash:    row.ContentHash,
+			Href:           row.Href,
 		})
 	}
 	return out
@@ -1418,19 +1415,19 @@ func apiWorkspaceAssetGraphDTO(graph workspace.AssetGraph) (api.WorkspaceAssetGr
 			}
 		}
 		assets = append(assets, api.AssetGraphAssetResponse{
-			ID:            string(row.ID),
-			SnapshotID:    string(row.SnapshotID),
-			WorkspaceID:   string(row.WorkspaceID),
-			DeploymentID:  string(row.DeploymentID),
-			Type:          string(row.Type),
-			Key:           row.Key,
-			ParentID:      string(row.ParentID),
-			Title:         row.Title,
-			Description:   row.Description,
-			SourceFile:    row.SourceFile,
-			PayloadSchema: row.PayloadSchema,
-			Payload:       payload,
-			ContentHash:   row.ContentHash,
+			ID:             string(row.ID),
+			SnapshotID:     string(row.SnapshotID),
+			WorkspaceID:    string(row.WorkspaceID),
+			ServingStateID: string(row.ServingStateID),
+			Type:           string(row.Type),
+			Key:            row.Key,
+			ParentID:       string(row.ParentID),
+			Title:          row.Title,
+			Description:    row.Description,
+			SourceFile:     row.SourceFile,
+			PayloadSchema:  row.PayloadSchema,
+			Payload:        payload,
+			ContentHash:    row.ContentHash,
 		})
 	}
 	return api.WorkspaceAssetGraphResponse{
@@ -1443,12 +1440,12 @@ func apiWorkspaceAssetGraphEdgeDTOs(rows []workspace.AssetEdge) []api.AssetEdgeR
 	out := make([]api.AssetEdgeResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, api.AssetEdgeResponse{
-			ID:           string(row.ID),
-			WorkspaceID:  string(row.WorkspaceID),
-			DeploymentID: string(row.DeploymentID),
-			FromAssetID:  string(row.FromAssetID),
-			ToAssetID:    string(row.ToAssetID),
-			Type:         string(row.Type),
+			ID:             string(row.ID),
+			WorkspaceID:    string(row.WorkspaceID),
+			ServingStateID: string(row.ServingStateID),
+			FromAssetID:    string(row.FromAssetID),
+			ToAssetID:      string(row.ToAssetID),
+			Type:           string(row.Type),
 		})
 	}
 	return out
@@ -1458,12 +1455,12 @@ func apiAssetEdgeDTOs(rows []workspace.AssetEdgeView) []api.AssetEdgeResponse {
 	out := make([]api.AssetEdgeResponse, 0, len(rows))
 	for _, row := range rows {
 		out = append(out, api.AssetEdgeResponse{
-			ID:           row.ID,
-			WorkspaceID:  row.WorkspaceID,
-			DeploymentID: row.DeploymentID,
-			FromAssetID:  row.FromAssetID,
-			ToAssetID:    row.ToAssetID,
-			Type:         row.Type,
+			ID:             row.ID,
+			WorkspaceID:    row.WorkspaceID,
+			ServingStateID: row.ServingStateID,
+			FromAssetID:    row.FromAssetID,
+			ToAssetID:      row.ToAssetID,
+			Type:           row.Type,
 		})
 	}
 	return out

@@ -134,7 +134,7 @@ func (m multiWorkspaceMetrics) Pages(dashboardID string) []dashboard.Page {
 	return nil
 }
 
-func (m multiWorkspaceMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+func (m multiWorkspaceMetrics) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
 	metrics, ok := m.MetricsForWorkspace(workspaceID)
 	if !ok {
 		return nil, nil, false
@@ -143,7 +143,7 @@ func (m multiWorkspaceMetrics) WorkspaceAssets(workspaceID, deploymentID string)
 	if !ok {
 		return nil, nil, false
 	}
-	return provider.WorkspaceAssets(workspaceID, deploymentID)
+	return provider.WorkspaceAssets(workspaceID, servingStateID)
 }
 
 func (m *dynamicRuntimeMetrics) Catalog() dashboard.Catalog {
@@ -272,7 +272,7 @@ func (m *dynamicRuntimeMetrics) Pages(dashboardID string) []dashboard.Page {
 	return nil
 }
 
-func (m *dynamicRuntimeMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+func (m *dynamicRuntimeMetrics) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
 	metrics, ok := m.MetricsForWorkspace(workspaceID)
 	if !ok {
 		return nil, nil, false
@@ -281,5 +281,5 @@ func (m *dynamicRuntimeMetrics) WorkspaceAssets(workspaceID, deploymentID string
 	if !ok {
 		return nil, nil, false
 	}
-	return provider.WorkspaceAssets(workspaceID, deploymentID)
+	return provider.WorkspaceAssets(workspaceID, servingStateID)
 }

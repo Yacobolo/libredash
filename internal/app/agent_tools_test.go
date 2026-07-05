@@ -32,16 +32,16 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		"describe_dashboard",
 		"describe_dashboard_visual",
 		"describe_model",
-		"get_deployment",
-		"get_materialization_run",
+		"get_publish",
+		"get_refresh_run",
 		"asset_lineage",
 		"describe_asset",
 		"list_dashboard_components",
 		"list_dashboard_filter_options",
 		"list_assets",
 		"list_dashboards",
-		"list_deployments",
-		"list_materialization_runs",
+		"list_publishes",
+		"list_refresh_runs",
 		"list_semantic_datasets",
 		"list_semantic_fields",
 		"list_semantic_models",
@@ -62,12 +62,12 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
-		"activate_deployment",
+		"activate_publish",
 		"create_agent_turn",
-		"create_deployment",
+		"create_publish",
 		"create_role_binding",
 		"revoke_current_api_token",
-		"upload_deployment_artifact",
+		"upload_publish_artifact",
 	} {
 		if _, ok := names[forbidden]; ok {
 			t.Fatalf("risky operation exposed as agent tool %q", forbidden)
@@ -510,7 +510,7 @@ func TestAPIGenAgentListWorkspacesUsesDeclarativeOutputShape(t *testing.T) {
 		if _, ok := item["description"]; !ok {
 			t.Fatalf("workspace item missing description: %#v", item)
 		}
-		for _, forbidden := range []string{"activeDeploymentId", "createdAt", "updatedAt"} {
+		for _, forbidden := range []string{"activeServingStateId", "createdAt", "updatedAt"} {
 			if _, ok := item[forbidden]; ok {
 				t.Fatalf("workspace item kept noisy metadata field %q: %#v", forbidden, item)
 			}
@@ -825,7 +825,7 @@ func TestAPIGenAgentAssetDescribeAndLineageToolsUseTypeSpecContracts(t *testing.
 	if err := json.Unmarshal(body, &describedMap); err != nil {
 		t.Fatalf("decode describe_asset map: %v", err)
 	}
-	for _, forbidden := range []string{"snapshotId", "workspaceId", "deploymentId", "payload", "key", "sourceFile"} {
+	for _, forbidden := range []string{"snapshotId", "workspaceId", "servingStateId", "payload", "key", "sourceFile"} {
 		if _, ok := describedMap[forbidden]; ok {
 			t.Fatalf("describe_asset kept noisy field %q: %#v", forbidden, describedMap)
 		}
@@ -958,7 +958,7 @@ func TestAPIGenAgentListToolInjectsDefaultLimit(t *testing.T) {
 				t.Fatalf("edge item missing %q: %#v", want, item)
 			}
 		}
-		if _, ok := item["deploymentId"]; ok {
+		if _, ok := item["servingStateId"]; ok {
 			t.Fatalf("edge item kept noisy metadata: %#v", item)
 		}
 	}
@@ -1231,24 +1231,24 @@ func (f fakeAssetCatalogReader) ActiveAssetCatalog(_ context.Context, _ workspac
 func testAgentAssetCatalog(t *testing.T) workspace.AssetCatalog {
 	t.Helper()
 	workspaceID := workspace.WorkspaceID("test")
-	deploymentID := workspace.DeploymentID("deploy_a")
-	dashboard, err := workspace.NewAsset(workspaceID, deploymentID, workspace.AssetTypeDashboard, "executive-sales", "", "Executive Sales", "", "dashboard.v1", map[string]any{"semantic_model": "olist"})
+	servingStateID := workspace.ServingStateID("deploy_a")
+	dashboard, err := workspace.NewAsset(workspaceID, servingStateID, workspace.AssetTypeDashboard, "executive-sales", "", "Executive Sales", "", "dashboard.v1", map[string]any{"semantic_model": "olist"})
 	if err != nil {
 		t.Fatalf("dashboard asset: %v", err)
 	}
-	measure, err := workspace.NewAsset(workspaceID, deploymentID, workspace.AssetTypeMeasure, "olist.revenue", "", "Revenue", "", "measure.v1", map[string]any{"table": "orders"})
+	measure, err := workspace.NewAsset(workspaceID, servingStateID, workspace.AssetTypeMeasure, "olist.revenue", "", "Revenue", "", "measure.v1", map[string]any{"table": "orders"})
 	if err != nil {
 		t.Fatalf("measure asset: %v", err)
 	}
-	visual, err := workspace.NewAsset(workspaceID, deploymentID, workspace.AssetTypeVisual, "executive-sales.revenue", dashboard.ID, "Revenue", "", "visual.v1", map[string]any{"query_kind": "aggregate"})
+	visual, err := workspace.NewAsset(workspaceID, servingStateID, workspace.AssetTypeVisual, "executive-sales.revenue", dashboard.ID, "Revenue", "", "visual.v1", map[string]any{"query_kind": "aggregate"})
 	if err != nil {
 		t.Fatalf("visual asset: %v", err)
 	}
 	graph := workspace.AssetGraph{
 		Assets: []workspace.Asset{dashboard, measure, visual},
 		Edges: []workspace.AssetEdge{
-			workspace.NewAssetEdge(workspaceID, deploymentID, dashboard.ID, visual.ID, workspace.AssetEdgeContains),
-			workspace.NewAssetEdge(workspaceID, deploymentID, visual.ID, measure.ID, workspace.AssetEdgeUsesMeasure),
+			workspace.NewAssetEdge(workspaceID, servingStateID, dashboard.ID, visual.ID, workspace.AssetEdgeContains),
+			workspace.NewAssetEdge(workspaceID, servingStateID, visual.ID, measure.ID, workspace.AssetEdgeUsesMeasure),
 		},
 	}
 	catalog, err := workspace.DecodeAssetCatalog(graph)
@@ -1311,8 +1311,8 @@ func (m manySemanticRowsMetrics) ExecuteDataQuery(ctx context.Context, request d
 	return dataquery.Result{Columns: dataquery.ColumnsFromNames([]string{"status", "order_count"}), Rows: out}, nil
 }
 
-func (manyEdgesMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
-	root, err := workspace.NewAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeCatalog, "catalog", "", "Catalog", "", "catalog.v1", map[string]any{})
+func (manyEdgesMetrics) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+	root, err := workspace.NewAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeCatalog, "catalog", "", "Catalog", "", "catalog.v1", map[string]any{})
 	if err != nil {
 		return nil, nil, false
 	}
@@ -1320,12 +1320,12 @@ func (manyEdgesMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]wor
 	edges := make([]workspace.AssetEdge, 0, 30)
 	for i := 0; i < 30; i++ {
 		key := "dashboard-" + strconv.Itoa(i)
-		child, err := workspace.NewAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeDashboard, key, root.ID, "Dashboard", "", "dashboard.v1", map[string]any{"index": i})
+		child, err := workspace.NewAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeDashboard, key, root.ID, "Dashboard", "", "dashboard.v1", map[string]any{"index": i})
 		if err != nil {
 			return nil, nil, false
 		}
 		assets = append(assets, child)
-		edges = append(edges, workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), root.ID, child.ID, workspace.AssetEdgeContains))
+		edges = append(edges, workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), root.ID, child.ID, workspace.AssetEdgeContains))
 	}
 	return assets, edges, true
 }

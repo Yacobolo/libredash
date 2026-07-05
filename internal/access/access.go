@@ -13,20 +13,20 @@ import (
 const (
 	PermissionWorkspaceRead      = "workspace:read"
 	PermissionAssetRead          = "asset:read"
-	PermissionDeploymentRead     = "deployment:read"
-	PermissionDeploymentWrite    = "deployment:write"
-	PermissionDeploymentActivate = "deployment:activate"
+	PermissionPublishRead        = "publish:read"
+	PermissionPublishWrite       = "publish:write"
+	PermissionPublishActivate    = "publish:activate"
 	PermissionRBACRead           = "rbac:read"
 	PermissionRBACWrite          = "rbac:write"
 	PermissionAgentUse           = "agent:use"
 	PermissionAgentRead          = "agent:read"
-	PermissionMaterializationRun = "materialization:run"
+	PermissionMaterializationRun = "refresh:run"
 	PermissionAuditRead          = "audit:read"
 	PermissionTokenManage        = "token:manage"
 
 	PermissionDashboardView           = PermissionWorkspaceRead
-	PermissionDeploymentCreate        = PermissionDeploymentWrite
-	PermissionDeploymentRollback      = PermissionDeploymentActivate
+	PermissionPublishCreate           = PermissionPublishWrite
+	PermissionPublishRollback         = PermissionPublishActivate
 	PermissionMaterializationsRefresh = PermissionMaterializationRun
 	PermissionRBACManage              = PermissionRBACWrite
 )
@@ -45,9 +45,9 @@ var defaultRoles = []Role{
 		Permissions: []string{
 			PermissionWorkspaceRead,
 			PermissionAssetRead,
-			PermissionDeploymentRead,
-			PermissionDeploymentWrite,
-			PermissionDeploymentActivate,
+			PermissionPublishRead,
+			PermissionPublishWrite,
+			PermissionPublishActivate,
 			PermissionRBACRead,
 			PermissionRBACWrite,
 			PermissionAgentUse,
@@ -62,9 +62,9 @@ var defaultRoles = []Role{
 		Permissions: []string{
 			PermissionWorkspaceRead,
 			PermissionAssetRead,
-			PermissionDeploymentRead,
-			PermissionDeploymentWrite,
-			PermissionDeploymentActivate,
+			PermissionPublishRead,
+			PermissionPublishWrite,
+			PermissionPublishActivate,
 			PermissionRBACRead,
 			PermissionRBACWrite,
 			PermissionAgentUse,
@@ -79,9 +79,9 @@ var defaultRoles = []Role{
 		Permissions: []string{
 			PermissionWorkspaceRead,
 			PermissionAssetRead,
-			PermissionDeploymentRead,
-			PermissionDeploymentWrite,
-			PermissionDeploymentActivate,
+			PermissionPublishRead,
+			PermissionPublishWrite,
+			PermissionPublishActivate,
 			PermissionMaterializationRun,
 		},
 	},

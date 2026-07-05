@@ -9,7 +9,7 @@ import (
 func TestAssetDTOUsesLogicalIDAndTypedPayload(t *testing.T) {
 	asset, err := workspace.NewAsset(
 		workspace.WorkspaceID("test"),
-		workspace.DeploymentID("deploy_a"),
+		workspace.ServingStateID("deploy_a"),
 		workspace.AssetTypeVisual,
 		"executive-sales.orders",
 		workspace.AssetID("dashboard:executive-sales"),

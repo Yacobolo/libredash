@@ -20,11 +20,11 @@ import (
 	agentappsqlite "github.com/Yacobolo/libredash/internal/agentapp/sqlite"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
-	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
+	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
@@ -61,13 +61,13 @@ type testWorkspaceAssetRuntime struct {
 }
 
 type workspaceAssetGraphProvider interface {
-	WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool)
+	WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool)
 }
 
-func (runtimeAssetMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+func (runtimeAssetMetrics) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
 	connection, err := testWorkspaceAsset(
 		workspace.WorkspaceID(workspaceID),
-		workspace.DeploymentID(deploymentID),
+		workspace.ServingStateID(servingStateID),
 		workspace.AssetTypeConnection,
 		"quack.remote_quack",
 		"",
@@ -82,36 +82,36 @@ func (runtimeAssetMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]
 	return []workspace.Asset{connection}, nil, true
 }
 
-func (emptyPageRuntimeAssetMetrics) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
-	catalog, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeCatalog, workspaceID, "", "Catalog", "", "catalog.v1", map[string]any{})
+func (emptyPageRuntimeAssetMetrics) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+	catalog, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeCatalog, workspaceID, "", "Catalog", "", "catalog.v1", map[string]any{})
 	if err != nil {
 		return nil, nil, false
 	}
-	model, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeSemanticModel, "olist", catalog.ID, "Olist", "", "semantic_model.v1", map[string]any{})
+	model, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeSemanticModel, "olist", catalog.ID, "Olist", "", "semantic_model.v1", map[string]any{})
 	if err != nil {
 		return nil, nil, false
 	}
-	modelTable, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeModelTable, "olist.orders", model.ID, "orders", "", "model_table.v1", map[string]any{
+	modelTable, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeModelTable, "olist.orders", model.ID, "orders", "", "model_table.v1", map[string]any{
 		"PrimaryKey": "order_id",
 		"Source":     "orders",
 	})
 	if err != nil {
 		return nil, nil, false
 	}
-	table, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeSemanticTable, "olist.orders", model.ID, "orders", "", "semantic_table.v1", map[string]any{})
+	table, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeSemanticTable, "olist.orders", model.ID, "orders", "", "semantic_table.v1", map[string]any{})
 	if err != nil {
 		return nil, nil, false
 	}
-	dashboard, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), workspace.AssetTypeDashboard, "sales", catalog.ID, "Sales", "", "dashboard.v1", map[string]any{})
+	dashboard, err := testWorkspaceAsset(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), workspace.AssetTypeDashboard, "sales", catalog.ID, "Sales", "", "dashboard.v1", map[string]any{})
 	if err != nil {
 		return nil, nil, false
 	}
 	return []workspace.Asset{catalog, model, modelTable, table, dashboard}, []workspace.AssetEdge{
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), catalog.ID, model.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), model.ID, modelTable.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), model.ID, table.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), catalog.ID, dashboard.ID, workspace.AssetEdgeContains),
-		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), dashboard.ID, model.ID, workspace.AssetEdgeUsesSemanticModel),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), catalog.ID, model.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), model.ID, modelTable.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), model.ID, table.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), catalog.ID, dashboard.ID, workspace.AssetEdgeContains),
+		workspace.NewAssetEdge(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), dashboard.ID, model.ID, workspace.AssetEdgeUsesSemanticModel),
 	}, true
 }
 
@@ -135,9 +135,9 @@ func (emptyPageRuntimeAssetMetrics) RefreshModelTables(context.Context, string, 
 	return nil
 }
 
-func testWorkspaceAsset(workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, typ workspace.AssetType, key string, parentID workspace.AssetID, title, description, payloadSchema string, payload any) (workspace.Asset, error) {
+func testWorkspaceAsset(workspaceID workspace.WorkspaceID, servingStateID workspace.ServingStateID, typ workspace.AssetType, key string, parentID workspace.AssetID, title, description, payloadSchema string, payload any) (workspace.Asset, error) {
 	sourceFile := "testdata/" + strings.ReplaceAll(string(typ)+"-"+key, ".", "-") + ".yaml"
-	return workspace.NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parentID, title, description, sourceFile, payloadSchema, payload)
+	return workspace.NewAssetWithSourceFile(workspaceID, servingStateID, typ, key, parentID, title, description, sourceFile, payloadSchema, payload)
 }
 
 func (m dataDirMetrics) DataDir() string {
@@ -165,7 +165,7 @@ func (r *fakeReloader) Reload(context.Context) error {
 	return nil
 }
 
-func (r *fakeReloader) PrepareDeployment(context.Context, string) (deployment.PreparedRuntime, error) {
+func (r *fakeReloader) PrepareServingState(context.Context, string) (servingstate.PreparedRuntime, error) {
 	r.prepareCalls++
 	if r.prepareErr != nil {
 		return nil, r.prepareErr
@@ -173,7 +173,7 @@ func (r *fakeReloader) PrepareDeployment(context.Context, string) (deployment.Pr
 	return fakePreparedRuntime{}, nil
 }
 
-func (r *fakeReloader) CommitPrepared(deployment.PreparedRuntime) error {
+func (r *fakeReloader) CommitPrepared(servingstate.PreparedRuntime) error {
 	r.commitCalls++
 	return nil
 }
@@ -187,7 +187,7 @@ func TestDeploymentAPIRequiresAuthentication(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/deployments", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes", nil)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -204,7 +204,7 @@ func TestDeploymentAPIRejectsBrowserPostWithoutCSRF(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/deployments", bytes.NewBufferString(`{"title":"Test"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/publishes", bytes.NewBufferString(`{"title":"Test"}`))
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -342,7 +342,7 @@ func TestDeploymentAPIRejectsViewer(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/deployments", bytes.NewBufferString(`{"title":"Test"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/publishes", bytes.NewBufferString(`{"title":"Test"}`))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
@@ -360,7 +360,7 @@ func TestDeploymentAPIV1CreateUsesPathWorkspaceAndRejectsMalformedJSON(t *testin
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	malformedReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/path-workspace/deployments", bytes.NewBufferString(`{"workspaceId":`))
+	malformedReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/path-workspace/publishes", bytes.NewBufferString(`{"workspaceId":`))
 	malformedReq.Header.Set("Authorization", "Bearer dev")
 	malformedReq.Header.Set("Accept", "application/json")
 	malformedRec := httptest.NewRecorder()
@@ -370,7 +370,7 @@ func TestDeploymentAPIV1CreateUsesPathWorkspaceAndRejectsMalformedJSON(t *testin
 	}
 	assertAPIError(t, malformedRec, http.StatusBadRequest, "malformed JSON")
 
-	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/path-workspace/deployments", bytes.NewBufferString(`{"title":"Path wins"}`))
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/path-workspace/publishes", bytes.NewBufferString(`{"title":"Path wins"}`))
 	createReq.Header.Set("Authorization", "Bearer dev")
 	createReq.Header.Set("Accept", "application/json")
 	createRec := httptest.NewRecorder()
@@ -378,7 +378,7 @@ func TestDeploymentAPIV1CreateUsesPathWorkspaceAndRejectsMalformedJSON(t *testin
 	if createRec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d body=%s", createRec.Code, createRec.Body.String())
 	}
-	var created api.DeploymentResponse
+	var created api.PublishResponse
 	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
@@ -401,7 +401,7 @@ func TestDeploymentAPIV1CreateRejectsBodyWorkspaceID(t *testing.T) {
 		{name: "mismatched", body: `{"workspaceId":"other-workspace","title":"Ignored"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/path-workspace/deployments", bytes.NewBufferString(tc.body))
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/path-workspace/publishes", bytes.NewBufferString(tc.body))
 			req.Header.Set("Authorization", "Bearer dev")
 			req.Header.Set("Accept", "application/json")
 			rec := httptest.NewRecorder()
@@ -420,7 +420,7 @@ func TestDeploymentAPIListUsesEnvelopeAndOpaquePageToken(t *testing.T) {
 	for i, id := range []string{"dep_old", "dep_mid", "dep_new"} {
 		createdAt := time.Date(2026, 1, 2, 15, 4, i+1, 0, time.UTC).Format(time.RFC3339)
 		if _, err := store.SQLDB().ExecContext(ctx, `
-			INSERT INTO deployments (id, workspace_id, status, digest, manifest_json, created_by, created_at)
+			INSERT INTO serving_states (id, workspace_id, status, digest, manifest_json, created_by, created_at)
 			VALUES (?, 'test', 'created', ?, '{}', 'tester', ?)
 		`, id, "sha256:"+id, createdAt); err != nil {
 			t.Fatalf("seed deployment %s: %v", id, err)
@@ -429,7 +429,7 @@ func TestDeploymentAPIListUsesEnvelopeAndOpaquePageToken(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	firstReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/deployments?limit=2", nil)
+	firstReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes?limit=2", nil)
 	firstReq.Header.Set("Authorization", "Bearer dev")
 	firstReq.Header.Set("Accept", "application/json")
 	firstRec := httptest.NewRecorder()
@@ -438,7 +438,7 @@ func TestDeploymentAPIListUsesEnvelopeAndOpaquePageToken(t *testing.T) {
 		t.Fatalf("first status = %d body=%s", firstRec.Code, firstRec.Body.String())
 	}
 	var first struct {
-		Items []api.DeploymentResponse `json:"items"`
+		Items []api.PublishResponse `json:"items"`
 		Page  struct {
 			NextCursor string `json:"nextCursor"`
 		} `json:"page"`
@@ -453,7 +453,7 @@ func TestDeploymentAPIListUsesEnvelopeAndOpaquePageToken(t *testing.T) {
 		t.Fatalf("next cursor = %q, want non-empty opaque cursor", first.Page.NextCursor)
 	}
 
-	nextReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/deployments?limit=2&pageToken="+first.Page.NextCursor, nil)
+	nextReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes?limit=2&pageToken="+first.Page.NextCursor, nil)
 	nextReq.Header.Set("Authorization", "Bearer dev")
 	nextReq.Header.Set("Accept", "application/json")
 	nextRec := httptest.NewRecorder()
@@ -462,7 +462,7 @@ func TestDeploymentAPIListUsesEnvelopeAndOpaquePageToken(t *testing.T) {
 		t.Fatalf("next status = %d body=%s", nextRec.Code, nextRec.Body.String())
 	}
 	var next struct {
-		Items []api.DeploymentResponse `json:"items"`
+		Items []api.PublishResponse `json:"items"`
 		Page  struct {
 			NextCursor string `json:"nextCursor"`
 		} `json:"page"`
@@ -484,7 +484,7 @@ func TestDeploymentAPIQueryBindingErrorUsesErrorContract(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/deployments?limit=oops", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes?limit=oops", nil)
 	req.Header.Set("Authorization", "Bearer dev")
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
@@ -499,12 +499,12 @@ func TestDeploymentAPIV1WrongWorkspaceDeploymentReturnsNotFound(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	ctx := context.Background()
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
-	created, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	created, err := servingStateRepo.Create(ctx, servingstate.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
-	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, deployment.Validation{Digest: "digest", ManifestJSON: "{}"}, zeroArtifact(created.ID, "test")); err != nil {
+	if _, err := servingStateRepo.SaveValidated(ctx, created.ID, servingstate.Validation{Digest: "digest", ManifestJSON: "{}"}, zeroArtifact(created.ID, "test")); err != nil {
 		t.Fatalf("validate deployment: %v", err)
 	}
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -515,8 +515,8 @@ func TestDeploymentAPIV1WrongWorkspaceDeploymentReturnsNotFound(t *testing.T) {
 		method string
 		path   string
 	}{
-		{name: "get", method: http.MethodGet, path: "/api/v1/workspaces/other/deployments/" + string(created.ID)},
-		{name: "activate", method: http.MethodPost, path: "/api/v1/workspaces/other/deployments/" + string(created.ID) + "/activate"},
+		{name: "get", method: http.MethodGet, path: "/api/v1/workspaces/other/publishes/" + string(created.ID)},
+		{name: "activate", method: http.MethodPost, path: "/api/v1/workspaces/other/publishes/" + string(created.ID) + "/activate"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, nil)
@@ -542,7 +542,7 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 	auth := testAuth(store, "sales", AuthConfig{DevBypass: true})
 	server := NewWithOptions(dataDirMetrics{dataDir: dataDir}, Options{Store: store, Auth: auth, Reloader: reloader, ArtifactDir: artifactDir, DefaultWorkspaceID: "sales"})
 
-	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/sales/deployments", bytes.NewBufferString(`{"title":"Test"}`))
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/sales/publishes", bytes.NewBufferString(`{"title":"Test"}`))
 	createReq.Header.Set("Authorization", "Bearer dev")
 	createReq.Header.Set("Accept", "application/json")
 	createRec := httptest.NewRecorder()
@@ -550,16 +550,16 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 	if createRec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d body=%s", createRec.Code, createRec.Body.String())
 	}
-	var created api.DeploymentResponse
+	var created api.PublishResponse
 	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
 
 	var bundle bytes.Buffer
-	if _, _, err := deploymentfs.PackProject(filepath.Join("..", "..", "dashboards", "libredash.yaml"), "sales", deployment.ID(created.ID), &bundle); err != nil {
+	if _, _, err := servingstatefs.PackProject(filepath.Join("..", "..", "dashboards", "libredash.yaml"), "sales", servingstate.ID(created.ID), &bundle); err != nil {
 		t.Fatalf("pack project: %v", err)
 	}
-	uploadReq := httptest.NewRequest(http.MethodPut, "/api/v1/workspaces/sales/deployments/"+created.ID+"/artifact", bytes.NewReader(bundle.Bytes()))
+	uploadReq := httptest.NewRequest(http.MethodPut, "/api/v1/workspaces/sales/publishes/"+created.ID+"/artifact", bytes.NewReader(bundle.Bytes()))
 	uploadReq.Header.Set("Authorization", "Bearer dev")
 	uploadReq.Header.Set("Accept", "application/json")
 	uploadReq.Header.Set("Content-Type", "application/octet-stream")
@@ -569,7 +569,7 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 		t.Fatalf("upload status = %d body=%s", uploadRec.Code, uploadRec.Body.String())
 	}
 
-	validateReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/sales/deployments/"+created.ID+"/validate", nil)
+	validateReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/sales/publishes/"+created.ID+"/validate", nil)
 	validateReq.Header.Set("Authorization", "Bearer dev")
 	validateReq.Header.Set("Accept", "application/json")
 	validateRec := httptest.NewRecorder()
@@ -578,7 +578,7 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 		t.Fatalf("validate status = %d body=%s", validateRec.Code, validateRec.Body.String())
 	}
 
-	activateReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/sales/deployments/"+created.ID+"/activate", nil)
+	activateReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/sales/publishes/"+created.ID+"/activate", nil)
 	activateReq.Header.Set("Authorization", "Bearer dev")
 	activateReq.Header.Set("Accept", "application/json")
 	activateRec := httptest.NewRecorder()
@@ -598,19 +598,19 @@ func TestDeploymentActivationPrepareFailureLeavesDeploymentInactive(t *testing.T
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	ctx := context.Background()
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
-	created, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	created, err := servingStateRepo.Create(ctx, servingstate.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
-	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, deployment.Validation{Digest: "digest", ManifestJSON: "{}"}, zeroArtifact(created.ID, "test")); err != nil {
+	if _, err := servingStateRepo.SaveValidated(ctx, created.ID, servingstate.Validation{Digest: "digest", ManifestJSON: "{}"}, zeroArtifact(created.ID, "test")); err != nil {
 		t.Fatalf("validate deployment: %v", err)
 	}
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	reloader := &fakeReloader{prepareErr: errors.New("runtime load failed")}
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Reloader: reloader, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/deployments/"+string(created.ID)+"/activate", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/publishes/"+string(created.ID)+"/activate", nil)
 	req.Header.Set("Authorization", "Bearer dev")
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
@@ -619,11 +619,11 @@ func TestDeploymentActivationPrepareFailureLeavesDeploymentInactive(t *testing.T
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
-	after, err := deploymentRepo.ByID(ctx, deployment.ID(created.ID))
+	after, err := servingStateRepo.ByID(ctx, servingstate.ID(created.ID))
 	if err != nil {
 		t.Fatalf("get deployment: %v", err)
 	}
-	if after.Status != deployment.StatusValidated {
+	if after.Status != servingstate.StatusValidated {
 		t.Fatalf("status = %q, want validated", after.Status)
 	}
 	if reloader.commitCalls != 0 {
@@ -745,7 +745,7 @@ func TestWorkspaceAssetAPIListsActiveDeploymentAssets(t *testing.T) {
 	}
 }
 
-func TestWorkspaceAssetAPIIncludeAllReturnsFullActiveDeploymentGraph(t *testing.T) {
+func TestWorkspaceAssetAPIIncludeAllReturnsFullActiveServingStateGraph(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
@@ -796,14 +796,14 @@ func TestWorkspaceAssetAPIIncludeAllReturnsFullActiveDeploymentGraph(t *testing.
 	}
 }
 
-func TestWorkspaceActiveDeploymentGraphAPIReturnsPayloadsAndEdges(t *testing.T) {
+func TestWorkspaceActiveServingStateGraphAPIReturnsPayloadsAndEdges(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/active-deployment/graph?environment=dev", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/active-asset-graph?environment=dev", nil)
 	req.Header.Set("Authorization", "Bearer dev")
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
@@ -864,7 +864,7 @@ func TestWorkspaceListUsesActiveDeploymentCatalogMetadata(t *testing.T) {
 		t.Fatalf("workspace count = %d body=%s", len(body.Items), rec.Body.String())
 	}
 	got := body.Items[0]
-	if got.Title != "Sales Workspace" || got.Description != "Revenue, orders, and product category analysis." || got.ActiveDeploymentID == "" {
+	if got.Title != "Sales Workspace" || got.Description != "Revenue, orders, and product category analysis." || got.ActiveServingStateID == "" {
 		t.Fatalf("workspace = %#v, want active catalog metadata", got)
 	}
 }
@@ -891,11 +891,11 @@ func TestWorkspaceListUsesRepositoryActiveMetadataWithoutGraphLoads(t *testing.T
 		t.Fatalf("workspace count = %d body=%s", len(body.Items), rec.Body.String())
 	}
 	got := body.Items[0]
-	if got.Title != "Active Sales" || got.Description != "from active catalog" || got.ActiveDeploymentID != "dep_active" {
+	if got.Title != "Active Sales" || got.Description != "from active catalog" || got.ActiveServingStateID != "dep_active" {
 		t.Fatalf("workspace = %#v, want repository active metadata", got)
 	}
 	if repo.graphCalls != 0 {
-		t.Fatalf("ActiveDeploymentGraph calls = %d, want 0", repo.graphCalls)
+		t.Fatalf("ActiveServingStateGraph calls = %d, want 0", repo.graphCalls)
 	}
 }
 
@@ -944,7 +944,7 @@ func (r *metadataWorkspaceRepo) ByID(context.Context, workspace.WorkspaceID) (wo
 	return workspace.Summary{ID: "sales", Title: "stale", Description: "stale"}, nil
 }
 
-func (r *metadataWorkspaceRepo) ActiveDeploymentGraph(context.Context, workspace.WorkspaceID, string) (workspace.AssetGraph, bool, error) {
+func (r *metadataWorkspaceRepo) ActiveServingStateGraph(context.Context, workspace.WorkspaceID, string) (workspace.AssetGraph, bool, error) {
 	r.graphCalls++
 	return workspace.AssetGraph{}, false, nil
 }
@@ -954,11 +954,11 @@ func (r *metadataWorkspaceRepo) AssetVersions(context.Context, workspace.Workspa
 }
 
 func (r *metadataWorkspaceRepo) ListWithActiveMetadata(context.Context, string) ([]workspace.Summary, error) {
-	return []workspace.Summary{{ID: "sales", Title: "Active Sales", Description: "from active catalog", ActiveDeploymentID: "dep_active"}}, nil
+	return []workspace.Summary{{ID: "sales", Title: "Active Sales", Description: "from active catalog", ActiveServingStateID: "dep_active"}}, nil
 }
 
 func (r *metadataWorkspaceRepo) ByIDWithActiveMetadata(context.Context, workspace.WorkspaceID, string) (workspace.Summary, error) {
-	return workspace.Summary{ID: "sales", Title: "Active Sales", Description: "from active catalog", ActiveDeploymentID: "dep_active"}, nil
+	return workspace.Summary{ID: "sales", Title: "Active Sales", Description: "from active catalog", ActiveServingStateID: "dep_active"}, nil
 }
 
 func TestWorkspacePageDefaultsToTopLevelAssets(t *testing.T) {
@@ -1276,7 +1276,7 @@ func TestWorkspaceSourceAssetRedirectsToConnectionScopedSourceSurface(t *testing
 	}
 }
 
-func TestWorkspaceAssetVersionsRouteIsHiddenForV1(t *testing.T) {
+func TestWorkspaceAssetVersionsRouteShowsConfigHistory(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	seedActiveDeployment(t, store, "test")
@@ -1289,8 +1289,11 @@ func TestWorkspaceAssetVersionsRouteIsHiddenForV1(t *testing.T) {
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("versions status = %d, want 404 body=%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("versions status = %d, want 200 body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Config hash") || strings.Contains(rec.Body.String(), "Deployment digest") {
+		t.Fatalf("versions body does not show asset config history cleanly:\n%s", rec.Body.String())
 	}
 }
 
@@ -1314,7 +1317,7 @@ func TestConnectionsPageDoesNotFallbackToRuntimeAssetsWithoutActiveDeployment(t 
 	}
 	for _, forbidden := range []string{"remote_quack", "Runtime connection"} {
 		if strings.Contains(body, forbidden) {
-			t.Fatalf("connections page rendered runtime-only asset %q without active deployment:\n%s", forbidden, body)
+			t.Fatalf("connections page rendered runtime-only asset %q without active serving state:\n%s", forbidden, body)
 		}
 	}
 }
@@ -1356,8 +1359,8 @@ func TestWorkspaceAssetsDoesNotRefreshCleanGraphWithoutPageItems(t *testing.T) {
 	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
 		t.Fatalf("ensure workspace: %v", err)
 	}
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
-	created, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	created, err := servingStateRepo.Create(ctx, servingstate.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
@@ -1365,15 +1368,15 @@ func TestWorkspaceAssetsDoesNotRefreshCleanGraphWithoutPageItems(t *testing.T) {
 	if !ok {
 		t.Fatal("runtime graph unavailable")
 	}
-	validation := deployment.Validation{
+	validation := servingstate.Validation{
 		Digest:       "digest",
 		ManifestJSON: "{}",
 		Graph:        workspace.AssetGraph{Assets: runtimeAssets, Edges: runtimeEdges},
 	}
-	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, zeroArtifact(created.ID, "test")); err != nil {
+	if _, err := servingStateRepo.SaveValidated(ctx, created.ID, validation, zeroArtifact(created.ID, "test")); err != nil {
 		t.Fatalf("save validated: %v", err)
 	}
-	if _, err := deploymentRepo.Activate(ctx, "test", deployment.DefaultEnvironment, created.ID); err != nil {
+	if _, err := servingStateRepo.Activate(ctx, "test", servingstate.DefaultEnvironment, created.ID); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
@@ -1386,7 +1389,7 @@ func TestWorkspaceAssetsDoesNotRefreshCleanGraphWithoutPageItems(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
-	graph, ok, err := workspacesqlite.NewRepository(store.SQLDB()).ActiveDeploymentGraph(ctx, "test", string(deployment.DefaultEnvironment))
+	graph, ok, err := workspacesqlite.NewRepository(store.SQLDB()).ActiveServingStateGraph(ctx, "test", string(servingstate.DefaultEnvironment))
 	if err != nil {
 		t.Fatalf("active graph: %v", err)
 	}
@@ -1400,10 +1403,10 @@ func TestWorkspaceAssetsDoesNotRefreshCleanGraphWithoutPageItems(t *testing.T) {
 	}
 }
 
-func mustWorkspaceAsset(t *testing.T, workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID, typ workspace.AssetType, key string, parentID workspace.AssetID, title string, content any) workspace.Asset {
+func mustWorkspaceAsset(t *testing.T, workspaceID workspace.WorkspaceID, servingStateID workspace.ServingStateID, typ workspace.AssetType, key string, parentID workspace.AssetID, title string, content any) workspace.Asset {
 	t.Helper()
 	sourceFile := "testdata/" + strings.ReplaceAll(string(typ)+"-"+key, ".", "-") + ".yaml"
-	asset, err := workspace.NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parentID, title, "", sourceFile, string(typ)+".v1", content)
+	asset, err := workspace.NewAssetWithSourceFile(workspaceID, servingStateID, typ, key, parentID, title, "", sourceFile, string(typ)+".v1", content)
 	if err != nil {
 		t.Fatalf("new asset %s %s: %v", typ, key, err)
 	}
@@ -1788,8 +1791,8 @@ func assertAPIError(t *testing.T, rec *httptest.ResponseRecorder, wantCode int, 
 func seedActiveDeployment(t *testing.T, store *platform.Store, workspaceID string) {
 	t.Helper()
 	ctx := context.Background()
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
-	created, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: deployment.WorkspaceID(workspaceID), CreatedBy: "tester"})
+	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	created, err := servingStateRepo.Create(ctx, servingstate.CreateInput{WorkspaceID: servingstate.WorkspaceID(workspaceID), CreatedBy: "tester"})
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
@@ -1802,31 +1805,31 @@ func seedActiveDeployment(t *testing.T, store *platform.Store, workspaceID strin
 		t.Fatal("compile project: missing sales workspace definition")
 	}
 	workspaceDef.SourceFiles = remapTestSourceFiles(workspaceDef.SourceFiles, "sales", workspaceID)
-	graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(created.ID), workspaceDef)
+	graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(created.ID), workspaceDef)
 	if err != nil {
 		t.Fatalf("extract assets: %v", err)
 	}
-	validation := deployment.Validation{
+	validation := servingstate.Validation{
 		Digest:       "digest-" + string(created.ID),
 		ManifestJSON: "{}",
 		Graph:        graph,
 	}
-	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, zeroArtifact(created.ID, workspaceID)); err != nil {
+	if _, err := servingStateRepo.SaveValidated(ctx, created.ID, validation, zeroArtifact(created.ID, workspaceID)); err != nil {
 		t.Fatalf("validate deployment: %v", err)
 	}
-	if _, err := deploymentRepo.Activate(ctx, deployment.WorkspaceID(workspaceID), deployment.DefaultEnvironment, created.ID); err != nil {
+	if _, err := servingStateRepo.Activate(ctx, servingstate.WorkspaceID(workspaceID), servingstate.DefaultEnvironment, created.ID); err != nil {
 		t.Fatalf("activate deployment: %v", err)
 	}
 }
 
-func seedActiveDeploymentFromWorkspaceAssets(t *testing.T, store *platform.Store, workspaceID string, provider workspaceAssetGraphProvider) deployment.ID {
+func seedActiveDeploymentFromWorkspaceAssets(t *testing.T, store *platform.Store, workspaceID string, provider workspaceAssetGraphProvider) servingstate.ID {
 	t.Helper()
 	ctx := context.Background()
 	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: workspace.WorkspaceID(workspaceID), Title: workspaceID}); err != nil {
 		t.Fatalf("ensure workspace: %v", err)
 	}
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
-	created, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: deployment.WorkspaceID(workspaceID), CreatedBy: "tester"})
+	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	created, err := servingStateRepo.Create(ctx, servingstate.CreateInput{WorkspaceID: servingstate.WorkspaceID(workspaceID), CreatedBy: "tester"})
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
@@ -1834,52 +1837,52 @@ func seedActiveDeploymentFromWorkspaceAssets(t *testing.T, store *platform.Store
 	if !ok {
 		t.Fatal("workspace asset graph unavailable")
 	}
-	validation := deployment.Validation{
+	validation := servingstate.Validation{
 		Digest:       "digest-" + string(created.ID),
 		ManifestJSON: "{}",
 		Graph:        workspace.AssetGraph{Assets: assets, Edges: edges},
 	}
-	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, zeroArtifact(created.ID, workspaceID)); err != nil {
+	if _, err := servingStateRepo.SaveValidated(ctx, created.ID, validation, zeroArtifact(created.ID, workspaceID)); err != nil {
 		t.Fatalf("validate deployment: %v", err)
 	}
-	if _, err := deploymentRepo.Activate(ctx, deployment.WorkspaceID(workspaceID), deployment.DefaultEnvironment, created.ID); err != nil {
+	if _, err := servingStateRepo.Activate(ctx, servingstate.WorkspaceID(workspaceID), servingstate.DefaultEnvironment, created.ID); err != nil {
 		t.Fatalf("activate deployment: %v", err)
 	}
 	return created.ID
 }
 
-func seedEnvironmentAssetDeployment(t *testing.T, store *platform.Store, workspaceID string, environment deployment.Environment, dashboardTitle, connectionTitle string) {
+func seedEnvironmentAssetDeployment(t *testing.T, store *platform.Store, workspaceID string, environment servingstate.Environment, dashboardTitle, connectionTitle string) {
 	t.Helper()
 	ctx := context.Background()
 	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: workspace.WorkspaceID(workspaceID), Title: workspaceID}); err != nil {
 		t.Fatalf("ensure workspace: %v", err)
 	}
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
-	created, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: deployment.WorkspaceID(workspaceID), Environment: environment, CreatedBy: "tester"})
+	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	created, err := servingStateRepo.Create(ctx, servingstate.CreateInput{WorkspaceID: servingstate.WorkspaceID(workspaceID), Environment: environment, CreatedBy: "tester"})
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
 	workspaceIDValue := workspace.WorkspaceID(workspaceID)
-	deploymentID := workspace.DeploymentID(created.ID)
-	catalog := mustWorkspaceAsset(t, workspaceIDValue, deploymentID, workspace.AssetTypeCatalog, workspaceID, "", workspaceID, map[string]any{"key": workspaceID})
-	connection := mustWorkspaceAsset(t, workspaceIDValue, deploymentID, workspace.AssetTypeConnection, string(environment)+"_conn", catalog.ID, connectionTitle, map[string]any{"key": string(environment) + "_conn"})
-	source := mustWorkspaceAsset(t, workspaceIDValue, deploymentID, workspace.AssetTypeSource, string(environment)+".orders", catalog.ID, string(environment)+" source", map[string]any{"key": string(environment) + ".orders"})
-	dashboard := mustWorkspaceAsset(t, workspaceIDValue, deploymentID, workspace.AssetTypeDashboard, string(environment)+"-dashboard", catalog.ID, dashboardTitle, map[string]any{"key": string(environment) + "-dashboard"})
+	servingStateID := workspace.ServingStateID(created.ID)
+	catalog := mustWorkspaceAsset(t, workspaceIDValue, servingStateID, workspace.AssetTypeCatalog, workspaceID, "", workspaceID, map[string]any{"key": workspaceID})
+	connection := mustWorkspaceAsset(t, workspaceIDValue, servingStateID, workspace.AssetTypeConnection, string(environment)+"_conn", catalog.ID, connectionTitle, map[string]any{"key": string(environment) + "_conn"})
+	source := mustWorkspaceAsset(t, workspaceIDValue, servingStateID, workspace.AssetTypeSource, string(environment)+".orders", catalog.ID, string(environment)+" source", map[string]any{"key": string(environment) + ".orders"})
+	dashboard := mustWorkspaceAsset(t, workspaceIDValue, servingStateID, workspace.AssetTypeDashboard, string(environment)+"-dashboard", catalog.ID, dashboardTitle, map[string]any{"key": string(environment) + "-dashboard"})
 	graph := workspace.AssetGraph{
 		Assets: []workspace.Asset{catalog, connection, source, dashboard},
 		Edges: []workspace.AssetEdge{
-			workspace.NewAssetEdge(workspaceIDValue, deploymentID, catalog.ID, connection.ID, workspace.AssetEdgeContains),
-			workspace.NewAssetEdge(workspaceIDValue, deploymentID, catalog.ID, source.ID, workspace.AssetEdgeContains),
-			workspace.NewAssetEdge(workspaceIDValue, deploymentID, catalog.ID, dashboard.ID, workspace.AssetEdgeContains),
-			workspace.NewAssetEdge(workspaceIDValue, deploymentID, source.ID, connection.ID, workspace.AssetEdgeUsesConnection),
+			workspace.NewAssetEdge(workspaceIDValue, servingStateID, catalog.ID, connection.ID, workspace.AssetEdgeContains),
+			workspace.NewAssetEdge(workspaceIDValue, servingStateID, catalog.ID, source.ID, workspace.AssetEdgeContains),
+			workspace.NewAssetEdge(workspaceIDValue, servingStateID, catalog.ID, dashboard.ID, workspace.AssetEdgeContains),
+			workspace.NewAssetEdge(workspaceIDValue, servingStateID, source.ID, connection.ID, workspace.AssetEdgeUsesConnection),
 		},
 	}
 	artifact := zeroArtifact(created.ID, workspaceID)
 	artifact.Environment = environment
-	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, deployment.Validation{Digest: "digest-" + string(environment), ManifestJSON: "{}", Graph: graph}, artifact); err != nil {
+	if _, err := servingStateRepo.SaveValidated(ctx, created.ID, servingstate.Validation{Digest: "digest-" + string(environment), ManifestJSON: "{}", Graph: graph}, artifact); err != nil {
 		t.Fatalf("save validated: %v", err)
 	}
-	if _, err := deploymentRepo.Activate(ctx, deployment.WorkspaceID(workspaceID), environment, created.ID); err != nil {
+	if _, err := servingStateRepo.Activate(ctx, servingstate.WorkspaceID(workspaceID), environment, created.ID); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
 }
@@ -1897,12 +1900,12 @@ func remapTestSourceFiles(sourceFiles map[string]string, fromWorkspace, toWorksp
 func activeAssetID(t *testing.T, store *platform.Store, workspaceID, typ, key string) string {
 	t.Helper()
 	repo := workspacesqlite.NewRepository(store.SQLDB())
-	graph, ok, err := repo.ActiveDeploymentGraph(context.Background(), workspace.WorkspaceID(workspaceID), string(deployment.DefaultEnvironment))
+	graph, ok, err := repo.ActiveServingStateGraph(context.Background(), workspace.WorkspaceID(workspaceID), string(servingstate.DefaultEnvironment))
 	if err != nil {
-		t.Fatalf("active deployment graph: %v", err)
+		t.Fatalf("active serving state graph: %v", err)
 	}
 	if !ok {
-		t.Fatalf("workspace %q has no active deployment graph", workspaceID)
+		t.Fatalf("workspace %q has no active serving state graph", workspaceID)
 	}
 	for _, asset := range graph.Assets {
 		if string(asset.Type) == typ && asset.Key == key {
@@ -1916,12 +1919,12 @@ func activeAssetID(t *testing.T, store *platform.Store, workspaceID, typ, key st
 func activeAssetIDByType(t *testing.T, store *platform.Store, workspaceID, typ string) string {
 	t.Helper()
 	repo := workspacesqlite.NewRepository(store.SQLDB())
-	graph, ok, err := repo.ActiveDeploymentGraph(context.Background(), workspace.WorkspaceID(workspaceID), string(deployment.DefaultEnvironment))
+	graph, ok, err := repo.ActiveServingStateGraph(context.Background(), workspace.WorkspaceID(workspaceID), string(servingstate.DefaultEnvironment))
 	if err != nil {
-		t.Fatalf("active deployment graph: %v", err)
+		t.Fatalf("active serving state graph: %v", err)
 	}
 	if !ok {
-		t.Fatalf("workspace %q has no active deployment graph", workspaceID)
+		t.Fatalf("workspace %q has no active serving state graph", workspaceID)
 	}
 	for _, asset := range graph.Assets {
 		if string(asset.Type) == typ {
@@ -1932,15 +1935,15 @@ func activeAssetIDByType(t *testing.T, store *platform.Store, workspaceID, typ s
 	return ""
 }
 
-func zeroArtifact(deploymentID deployment.ID, workspaceID string) deployment.Artifact {
-	return deployment.Artifact{
-		ID:           "artifact_" + string(deploymentID),
-		DeploymentID: deploymentID,
-		WorkspaceID:  deployment.WorkspaceID(workspaceID),
-		Digest:       "digest",
-		Format:       "tar.gz",
-		Path:         "artifact.tar.gz",
-		ManifestJSON: "{}",
+func zeroArtifact(servingStateID servingstate.ID, workspaceID string) servingstate.Artifact {
+	return servingstate.Artifact{
+		ID:             "artifact_" + string(servingStateID),
+		ServingStateID: servingStateID,
+		WorkspaceID:    servingstate.WorkspaceID(workspaceID),
+		Digest:         "digest",
+		Format:         "tar.gz",
+		Path:           "artifact.tar.gz",
+		ManifestJSON:   "{}",
 	}
 }
 

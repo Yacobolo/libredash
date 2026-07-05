@@ -8,7 +8,7 @@ model WorkspaceResponse {
   id: string;
   title: string;
   description: string;
-  activeDeploymentId?: string;
+  activeServingStateId?: string;
   createdAt: utcDateTime;
   updatedAt: utcDateTime;
 }
@@ -22,7 +22,7 @@ model AssetResponse {
   id: string;
   snapshotId: string;
   workspaceId: string;
-  deploymentId: string;
+  servingStateId: string;
   type: string;
   key: string;
   parentId?: string;
@@ -38,7 +38,7 @@ model AssetSummaryResponse {
   id: string;
   snapshotId: string;
   workspaceId: string;
-  deploymentId: string;
+  servingStateId: string;
   type: string;
   key: string;
   parentId?: string;
@@ -54,7 +54,7 @@ model AssetGraphAssetResponse {
   id: string;
   snapshotId: string;
   workspaceId: string;
-  deploymentId: string;
+  servingStateId: string;
   type: string;
   key: string;
   parentId?: string;
@@ -79,7 +79,7 @@ model AssetListResponse {
 model AssetEdgeResponse {
   id: string;
   workspaceId: string;
-  deploymentId: string;
+  servingStateId: string;
   fromAssetId: string;
   toAssetId: string;
   type: string;
@@ -130,11 +130,11 @@ alias ListWorkspaceAssetsOK = OkJson<AssetListResponse>;
 op listWorkspaceAssets(@path workspace: string, @query type?: string, @query q?: string, @query limit?: int32, @query pageToken?: string): ListWorkspaceAssetsOK | CommonErrors;
 
 @tag("Workspaces")
-@summary("Get the active deployment asset graph")
-@route("/workspaces/{workspace}/active-deployment/graph")
+@summary("Get the active asset graph")
+@route("/workspaces/{workspace}/active-asset-graph")
 @get
-@apigen.authz(#{ mode: "permission", permission: "deployment:read" })
-op getWorkspaceActiveDeploymentGraph(@path workspace: string, @query environment?: string): OkJson<WorkspaceAssetGraphResponse> | CommonErrors;
+@apigen.authz(#{ mode: "permission", permission: "publish:read" })
+op getWorkspaceActiveAssetGraph(@path workspace: string, @query environment?: string): OkJson<WorkspaceAssetGraphResponse> | CommonErrors;
 
 @tag("Workspaces")
 @summary("Describe a workspace asset")

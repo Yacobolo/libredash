@@ -25,8 +25,8 @@ func (m *Service) Catalog() dashboard.Catalog {
 	return m.catalog.Catalog()
 }
 
-func (m *Service) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
-	return m.catalog.WorkspaceAssets(workspaceID, deploymentID)
+func (m *Service) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+	return m.catalog.WorkspaceAssets(workspaceID, servingStateID)
 }
 
 func (m *Service) AgentPolicy() workspace.AgentPolicy {
@@ -52,13 +52,13 @@ func (s *CatalogService) AgentPolicy() workspace.AgentPolicy {
 	return policy
 }
 
-func (s *CatalogService) WorkspaceAssets(workspaceID, deploymentID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
+func (s *CatalogService) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if s.workspace == nil {
 		return nil, nil, false
 	}
-	graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.DeploymentID(deploymentID), s.workspace)
+	graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID), s.workspace)
 	if err != nil {
 		return nil, nil, false
 	}

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
@@ -36,7 +36,7 @@ func TestRepositoryEnsureRejectsBlankWorkspaceID(t *testing.T) {
 	}
 }
 
-func TestRepositoryActiveDeploymentGraphUsesLogicalAssetIDs(t *testing.T) {
+func TestRepositoryActiveServingStateGraphUsesLogicalAssetIDs(t *testing.T) {
 	ctx := context.Background()
 	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
 	if err != nil {
@@ -45,35 +45,35 @@ func TestRepositoryActiveDeploymentGraphUsesLogicalAssetIDs(t *testing.T) {
 	t.Cleanup(func() { _ = store.Close() })
 
 	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
+	deploymentRepo := servingstatesqlite.NewRepository(store.SQLDB())
 	if err := workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
 		t.Fatalf("ensure workspace: %v", err)
 	}
-	created, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: "test"})
+	created, err := deploymentRepo.Create(ctx, servingstate.CreateInput{WorkspaceID: "test"})
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
 
 	model := mustAsset(t, workspace.AssetTypeSemanticModel, "olist", "", created.ID)
 	dashboard := mustAsset(t, workspace.AssetTypeDashboard, "sales", model.ID, created.ID)
-	validation := deployment.Validation{
+	validation := servingstate.Validation{
 		Digest:       "digest",
 		ManifestJSON: "{}",
 		Graph: workspace.AssetGraph{
 			Assets: []workspace.Asset{model, dashboard},
 			Edges: []workspace.AssetEdge{
-				workspace.NewAssetEdge("test", workspace.DeploymentID(created.ID), dashboard.ID, model.ID, workspace.AssetEdgeUsesSemanticModel),
+				workspace.NewAssetEdge("test", workspace.ServingStateID(created.ID), dashboard.ID, model.ID, workspace.AssetEdgeUsesSemanticModel),
 			},
 		},
 	}
-	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, deployment.Artifact{ID: "artifact", DeploymentID: created.ID, WorkspaceID: "test", Environment: deployment.DefaultEnvironment, Digest: "digest", Format: "tar.gz", Path: "artifact.tar.gz", ManifestJSON: "{}"}); err != nil {
+	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, servingstate.Artifact{ID: "artifact", ServingStateID: created.ID, WorkspaceID: "test", Environment: servingstate.DefaultEnvironment, Digest: "digest", Format: "tar.gz", Path: "artifact.tar.gz", ManifestJSON: "{}"}); err != nil {
 		t.Fatalf("save validated: %v", err)
 	}
-	if _, err := deploymentRepo.Activate(ctx, "test", deployment.DefaultEnvironment, created.ID); err != nil {
+	if _, err := deploymentRepo.Activate(ctx, "test", servingstate.DefaultEnvironment, created.ID); err != nil {
 		t.Fatalf("activate: %v", err)
 	}
 
-	got, ok, err := workspaceRepo.ActiveDeploymentGraph(ctx, "test", string(deployment.DefaultEnvironment))
+	got, ok, err := workspaceRepo.ActiveServingStateGraph(ctx, "test", string(servingstate.DefaultEnvironment))
 	if err != nil {
 		t.Fatalf("active graph: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestRepositoryActiveDeploymentGraphUsesLogicalAssetIDs(t *testing.T) {
 	}
 }
 
-func TestRepositoryAssetVersionsAreEnvironmentScopedSuccessfulDeployments(t *testing.T) {
+func TestRepositoryAssetVersionsAreDistinctPublishedConfigVersions(t *testing.T) {
 	ctx := context.Background()
 	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
 	if err != nil {
@@ -113,7 +113,7 @@ func TestRepositoryAssetVersionsAreEnvironmentScopedSuccessfulDeployments(t *tes
 	t.Cleanup(func() { _ = store.Close() })
 
 	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
-	deploymentRepo := deploymentsqlite.NewRepository(store.SQLDB())
+	deploymentRepo := servingstatesqlite.NewRepository(store.SQLDB())
 	if err := workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
 		t.Fatalf("ensure workspace: %v", err)
 	}
@@ -121,79 +121,95 @@ func TestRepositoryAssetVersionsAreEnvironmentScopedSuccessfulDeployments(t *tes
 		t.Fatalf("ensure other workspace: %v", err)
 	}
 
-	inactive := seedVersionDeployment(t, ctx, deploymentRepo, "test", "dev", deployment.StatusActive)
-	current := seedVersionDeployment(t, ctx, deploymentRepo, "test", "dev", deployment.StatusActive)
-	validated := seedVersionDeployment(t, ctx, deploymentRepo, "test", "dev", deployment.StatusValidated)
-	_ = seedVersionDeployment(t, ctx, deploymentRepo, "test", "prod", deployment.StatusActive)
-	_ = seedVersionDeployment(t, ctx, deploymentRepo, "other", "dev", deployment.StatusActive)
-	failed := seedVersionDeployment(t, ctx, deploymentRepo, "test", "dev", deployment.StatusFailed)
-	pending, err := deploymentRepo.Create(ctx, deployment.CreateInput{WorkspaceID: "test", Environment: "dev", CreatedBy: "tester"})
+	first := seedVersionDeployment(t, ctx, deploymentRepo, versionSeed{WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, Source: servingstate.SourcePublish, VersionKey: "v1"})
+	duplicate := seedVersionDeployment(t, ctx, deploymentRepo, versionSeed{WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, Source: servingstate.SourcePublish, VersionKey: "v1"})
+	current := seedVersionDeployment(t, ctx, deploymentRepo, versionSeed{WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, Source: servingstate.SourcePublish, VersionKey: "v2"})
+	refreshCopy := seedVersionDeployment(t, ctx, deploymentRepo, versionSeed{WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, Source: servingstate.SourceRefresh, VersionKey: "v2"})
+	_ = seedVersionDeployment(t, ctx, deploymentRepo, versionSeed{WorkspaceID: "test", Environment: "prod", Status: servingstate.StatusActive, Source: servingstate.SourcePublish, VersionKey: "prod"})
+	_ = seedVersionDeployment(t, ctx, deploymentRepo, versionSeed{WorkspaceID: "other", Environment: "dev", Status: servingstate.StatusActive, Source: servingstate.SourcePublish, VersionKey: "other"})
+	failed := seedVersionDeployment(t, ctx, deploymentRepo, versionSeed{WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusFailed, Source: servingstate.SourcePublish, VersionKey: "failed"})
+	pending, err := deploymentRepo.Create(ctx, servingstate.CreateInput{WorkspaceID: "test", Environment: "dev", CreatedBy: "tester", Source: servingstate.SourcePublish})
 	if err != nil {
 		t.Fatalf("create pending deployment: %v", err)
 	}
 	_ = pending
 	_ = failed
-	_ = inactive
+	_ = first
+	_ = duplicate
+	_ = refreshCopy
 
 	versions, err := workspaceRepo.AssetVersions(ctx, "test", "dev", workspace.NewAssetID(workspace.AssetTypeDashboard, "sales"))
 	if err != nil {
 		t.Fatalf("asset versions: %v", err)
 	}
-	if len(versions) != 3 {
-		t.Fatalf("versions len = %d, want 3 successful dev versions: %#v", len(versions), versions)
+	if len(versions) != 2 {
+		t.Fatalf("versions len = %d, want 2 distinct published config versions: %#v", len(versions), versions)
 	}
-	seen := map[workspace.DeploymentID]string{}
+	hashes := map[string]int{}
+	seen := map[workspace.ServingStateID]string{}
 	for _, version := range versions {
 		if version.WorkspaceID != "test" || version.Environment != "dev" || version.AssetID != "dashboard:sales" {
 			t.Fatalf("unexpected version scope: %#v", version)
 		}
-		seen[version.DeploymentID] = version.Status
+		hashes[version.ContentHash]++
+		seen[version.ServingStateID] = version.Status
 	}
-	if seen[workspace.DeploymentID(current.ID)] != string(deployment.StatusActive) {
-		t.Fatalf("current deployment missing or not active: %#v", seen)
+	for hash, count := range hashes {
+		if count != 1 {
+			t.Fatalf("content hash %s appeared %d times, want deduped versions: %#v", hash, count, versions)
+		}
 	}
-	if seen[workspace.DeploymentID(validated.ID)] != string(deployment.StatusValidated) {
-		t.Fatalf("validated deployment missing: %#v", seen)
+	_ = current
+	if _, ok := seen[workspace.ServingStateID(refreshCopy.ID)]; ok {
+		t.Fatalf("refresh serving state included as asset config version: %#v", seen)
 	}
-	if _, ok := seen[workspace.DeploymentID(failed.ID)]; ok {
+	if _, ok := seen[workspace.ServingStateID(failed.ID)]; ok {
 		t.Fatalf("failed deployment included: %#v", seen)
 	}
-	if _, ok := seen[workspace.DeploymentID(pending.ID)]; ok {
+	if _, ok := seen[workspace.ServingStateID(pending.ID)]; ok {
 		t.Fatalf("pending deployment included: %#v", seen)
 	}
 }
 
-func seedVersionDeployment(t *testing.T, ctx context.Context, repo *deploymentsqlite.Repository, workspaceID deployment.WorkspaceID, environment deployment.Environment, finalStatus deployment.Status) deployment.Deployment {
+type versionSeed struct {
+	WorkspaceID servingstate.WorkspaceID
+	Environment servingstate.Environment
+	Status      servingstate.Status
+	Source      servingstate.Source
+	VersionKey  string
+}
+
+func seedVersionDeployment(t *testing.T, ctx context.Context, repo *servingstatesqlite.Repository, seed versionSeed) servingstate.State {
 	t.Helper()
-	created, err := repo.Create(ctx, deployment.CreateInput{WorkspaceID: workspaceID, Environment: environment, CreatedBy: "tester"})
+	created, err := repo.Create(ctx, servingstate.CreateInput{WorkspaceID: seed.WorkspaceID, Environment: seed.Environment, CreatedBy: "tester", Source: seed.Source})
 	if err != nil {
 		t.Fatalf("create deployment: %v", err)
 	}
-	assetWorkspaceID := workspace.WorkspaceID(workspaceID)
-	asset := mustAssetForWorkspace(t, assetWorkspaceID, workspace.AssetTypeDashboard, "sales", "", created.ID)
-	validation := deployment.Validation{
+	assetWorkspaceID := workspace.WorkspaceID(seed.WorkspaceID)
+	asset := mustAssetForWorkspaceWithVersion(t, assetWorkspaceID, workspace.AssetTypeDashboard, "sales", "", created.ID, seed.VersionKey)
+	validation := servingstate.Validation{
 		Digest:       "digest-" + string(created.ID),
 		ManifestJSON: "{}",
 		Graph:        workspace.AssetGraph{Assets: []workspace.Asset{asset}},
 	}
-	artifact := deployment.Artifact{ID: "artifact_" + string(created.ID), DeploymentID: created.ID, WorkspaceID: workspaceID, Environment: environment, Digest: validation.Digest, Format: "tar.gz", Path: "artifact.tar.gz", ManifestJSON: "{}"}
+	artifact := servingstate.Artifact{ID: "artifact_" + string(created.ID), ServingStateID: created.ID, WorkspaceID: seed.WorkspaceID, Environment: seed.Environment, Digest: validation.Digest, Format: "tar.gz", Path: "artifact.tar.gz", ManifestJSON: "{}"}
 	if _, err := repo.SaveValidated(ctx, created.ID, validation, artifact); err != nil {
 		t.Fatalf("save validated deployment: %v", err)
 	}
-	switch finalStatus {
-	case deployment.StatusActive:
-		active, err := repo.Activate(ctx, workspaceID, environment, created.ID)
+	switch seed.Status {
+	case servingstate.StatusActive:
+		active, err := repo.Activate(ctx, seed.WorkspaceID, seed.Environment, created.ID)
 		if err != nil {
 			t.Fatalf("activate deployment: %v", err)
 		}
 		return active
-	case deployment.StatusValidated:
+	case servingstate.StatusValidated:
 		validated, err := repo.ByID(ctx, created.ID)
 		if err != nil {
 			t.Fatalf("get validated deployment: %v", err)
 		}
 		return validated
-	case deployment.StatusFailed:
+	case servingstate.StatusFailed:
 		if err := repo.MarkFailed(ctx, created.ID, errVersionFailure{}); err != nil {
 			t.Fatalf("mark failed: %v", err)
 		}
@@ -203,8 +219,8 @@ func seedVersionDeployment(t *testing.T, ctx context.Context, repo *deploymentsq
 		}
 		return failed
 	default:
-		t.Fatalf("unsupported final status %q", finalStatus)
-		return deployment.Deployment{}
+		t.Fatalf("unsupported final status %q", seed.Status)
+		return servingstate.State{}
 	}
 }
 
@@ -212,14 +228,18 @@ type errVersionFailure struct{}
 
 func (errVersionFailure) Error() string { return "failed" }
 
-func mustAsset(t *testing.T, typ workspace.AssetType, key string, parent workspace.AssetID, deploymentID deployment.ID) workspace.Asset {
+func mustAsset(t *testing.T, typ workspace.AssetType, key string, parent workspace.AssetID, servingStateID servingstate.ID) workspace.Asset {
 	t.Helper()
-	return mustAssetForWorkspace(t, "test", typ, key, parent, deploymentID)
+	return mustAssetForWorkspace(t, "test", typ, key, parent, servingStateID)
 }
 
-func mustAssetForWorkspace(t *testing.T, workspaceID workspace.WorkspaceID, typ workspace.AssetType, key string, parent workspace.AssetID, deploymentID deployment.ID) workspace.Asset {
+func mustAssetForWorkspace(t *testing.T, workspaceID workspace.WorkspaceID, typ workspace.AssetType, key string, parent workspace.AssetID, servingStateID servingstate.ID) workspace.Asset {
+	return mustAssetForWorkspaceWithVersion(t, workspaceID, typ, key, parent, servingStateID, key)
+}
+
+func mustAssetForWorkspaceWithVersion(t *testing.T, workspaceID workspace.WorkspaceID, typ workspace.AssetType, key string, parent workspace.AssetID, servingStateID servingstate.ID, versionKey string) workspace.Asset {
 	t.Helper()
-	asset, err := workspace.NewAssetWithSourceFile(workspaceID, workspace.DeploymentID(deploymentID), typ, key, parent, key, "", "testdata/"+string(typ)+"-"+key+".yaml", string(typ)+".v1", map[string]any{"key": key})
+	asset, err := workspace.NewAssetWithSourceFile(workspaceID, workspace.ServingStateID(servingStateID), typ, key, parent, key, "", "testdata/"+string(typ)+"-"+key+".yaml", string(typ)+".v1", map[string]any{"key": key, "version": versionKey})
 	if err != nil {
 		t.Fatalf("new asset: %v", err)
 	}

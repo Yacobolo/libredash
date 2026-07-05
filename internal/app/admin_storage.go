@@ -75,7 +75,7 @@ func (s *Server) adminStorageData(r interface{ Context() context.Context }) ui.A
 	}
 	data.Tables = metadata.Tables
 	data.Snapshots = metadata.Snapshots
-	data.Deployments = metadata.Deployments
+	data.ServingStates = metadata.ServingStates
 	data.Warnings = metadata.Warnings
 	data.SnapshotCount = metadata.SnapshotCount
 	data.DataFileCount = metadata.DataFileCount
@@ -161,7 +161,7 @@ func adminStorageStreamID(clientID string) string {
 type duckLakeStorageMetadata struct {
 	Tables             []ui.AdminStorageTable
 	Snapshots          []ui.AdminStorageSnapshot
-	Deployments        []ui.AdminStorageDeployment
+	ServingStates      []ui.AdminStorageServingState
 	Warnings           []string
 	SnapshotCount      int
 	DataFileCount      int
@@ -175,18 +175,18 @@ func inspectDuckLakeStorage(ctx context.Context, catalogPath, dataPath string) (
 	}
 	defer db.Close()
 
-	deployments, err := inspectDuckLakeDeployments(ctx, db)
+	serving_states, err := inspectDuckLakeServingStates(ctx, db)
 	if err != nil {
 		return duckLakeStorageMetadata{}, err
 	}
-	tables, err := inspectDuckLakeTables(ctx, db, deployments)
+	tables, err := inspectDuckLakeTables(ctx, db, serving_states)
 	if err != nil {
 		return duckLakeStorageMetadata{}, err
 	}
 	for i := range tables {
 		tables[i].DatabasePath = catalogPath
 	}
-	snapshots, err := inspectDuckLakeSnapshots(ctx, db, deployments)
+	snapshots, err := inspectDuckLakeSnapshots(ctx, db, serving_states)
 	if err != nil {
 		return duckLakeStorageMetadata{}, err
 	}
@@ -197,7 +197,7 @@ func inspectDuckLakeStorage(ctx context.Context, catalogPath, dataPath string) (
 	return duckLakeStorageMetadata{
 		Tables:             tables,
 		Snapshots:          snapshots,
-		Deployments:        deployments,
+		ServingStates:      serving_states,
 		SnapshotCount:      summary.SnapshotCount,
 		DataFileCount:      summary.DataFileCount,
 		TotalDataSizeBytes: summary.TotalDataSizeBytes,
@@ -242,7 +242,7 @@ SELECT
 	return summary, nil
 }
 
-func inspectDuckLakeTables(ctx context.Context, db *sql.DB, deployments []ui.AdminStorageDeployment) ([]ui.AdminStorageTable, error) {
+func inspectDuckLakeTables(ctx context.Context, db *sql.DB, serving_states []ui.AdminStorageServingState) ([]ui.AdminStorageTable, error) {
 	columns, err := inspectDuckLakeColumns(ctx, db)
 	if err != nil {
 		return nil, err
@@ -320,7 +320,7 @@ ORDER BY a.schema_name, a.table_name`)
 			Columns:       columns[tableID],
 			Files:         files[tableID],
 			History:       history[tableID],
-			Deployments:   deploymentsVisibleForTable(deployments, beginSnapshot, end),
+			ServingStates: servingStatesVisibleForTable(serving_states, beginSnapshot, end),
 		}
 		tables = append(tables, table)
 	}
@@ -512,7 +512,7 @@ ORDER BY e.table_id, s.snapshot_id`)
 	return history, rows.Err()
 }
 
-func inspectDuckLakeSnapshots(ctx context.Context, db *sql.DB, deployments []ui.AdminStorageDeployment) ([]ui.AdminStorageSnapshot, error) {
+func inspectDuckLakeSnapshots(ctx context.Context, db *sql.DB, serving_states []ui.AdminStorageServingState) ([]ui.AdminStorageSnapshot, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT s.snapshot_id, s.snapshot_time, s.schema_version,
        coalesce(c.changes_made, ''), coalesce(c.author, ''), coalesce(c.commit_message, ''), coalesce(c.commit_extra_info, '')
@@ -523,10 +523,10 @@ ORDER BY s.snapshot_id`)
 		return nil, duckLakeMetadataError(err)
 	}
 	defer rows.Close()
-	deploymentCounts := map[int64]int{}
-	for _, deployment := range deployments {
-		if deployment.SnapshotID > 0 && deployment.Status == "active" {
-			deploymentCounts[deployment.SnapshotID]++
+	servingStateCounts := map[int64]int{}
+	for _, servingState := range serving_states {
+		if servingState.SnapshotID > 0 && servingState.Status == "active" {
+			servingStateCounts[servingState.SnapshotID]++
 		}
 	}
 	var snapshots []ui.AdminStorageSnapshot
@@ -535,23 +535,23 @@ ORDER BY s.snapshot_id`)
 		if err := rows.Scan(&snapshot.ID, &snapshot.Time, &snapshot.SchemaVersion, &snapshot.Changes, &snapshot.Author, &snapshot.Message, &snapshot.ExtraInfo); err != nil {
 			return nil, err
 		}
-		snapshot.DeploymentCount = deploymentCounts[snapshot.ID]
-		snapshot.Protected = snapshot.DeploymentCount > 0
+		snapshot.ServingStateCount = servingStateCounts[snapshot.ID]
+		snapshot.Protected = snapshot.ServingStateCount > 0
 		snapshots = append(snapshots, snapshot)
 	}
 	return snapshots, rows.Err()
 }
 
-func inspectDuckLakeDeployments(ctx context.Context, db *sql.DB) ([]ui.AdminStorageDeployment, error) {
+func inspectDuckLakeServingStates(ctx context.Context, db *sql.DB) ([]ui.AdminStorageServingState, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT d.workspace_id, d.environment, d.id, d.status, d.ducklake_snapshot_id, d.digest,
        coalesce(d.activated_at, ''),
-       CASE WHEN active.deployment_id IS NOT NULL THEN 1 ELSE 0 END
-FROM meta.deployments d
-LEFT JOIN meta.workspace_active_deployments active
+       CASE WHEN active.serving_state_id IS NOT NULL THEN 1 ELSE 0 END
+FROM meta.serving_states d
+LEFT JOIN meta.workspace_active_serving_states active
   ON active.workspace_id = d.workspace_id
  AND active.environment = d.environment
- AND active.deployment_id = d.id
+ AND active.serving_state_id = d.id
 WHERE d.ducklake_snapshot_id > 0
 ORDER BY d.workspace_id, d.environment, d.created_at, d.id`)
 	if err != nil {
@@ -561,29 +561,29 @@ ORDER BY d.workspace_id, d.environment, d.created_at, d.id`)
 		return nil, err
 	}
 	defer rows.Close()
-	var deployments []ui.AdminStorageDeployment
+	var serving_states []ui.AdminStorageServingState
 	for rows.Next() {
-		var deployment ui.AdminStorageDeployment
+		var servingState ui.AdminStorageServingState
 		var active int
-		if err := rows.Scan(&deployment.WorkspaceID, &deployment.Environment, &deployment.DeploymentID, &deployment.Status, &deployment.SnapshotID, &deployment.Digest, &deployment.ActivatedAt, &active); err != nil {
+		if err := rows.Scan(&servingState.WorkspaceID, &servingState.Environment, &servingState.ServingStateID, &servingState.Status, &servingState.SnapshotID, &servingState.Digest, &servingState.ActivatedAt, &active); err != nil {
 			return nil, err
 		}
-		deployment.Active = active == 1
-		deployments = append(deployments, deployment)
+		servingState.Active = active == 1
+		serving_states = append(serving_states, servingState)
 	}
-	return deployments, rows.Err()
+	return serving_states, rows.Err()
 }
 
-func deploymentsVisibleForTable(deployments []ui.AdminStorageDeployment, beginSnapshot, endSnapshot int64) []ui.AdminStorageDeployment {
-	var out []ui.AdminStorageDeployment
-	for _, deployment := range deployments {
-		if deployment.SnapshotID < beginSnapshot {
+func servingStatesVisibleForTable(serving_states []ui.AdminStorageServingState, beginSnapshot, endSnapshot int64) []ui.AdminStorageServingState {
+	var out []ui.AdminStorageServingState
+	for _, servingState := range serving_states {
+		if servingState.SnapshotID < beginSnapshot {
 			continue
 		}
-		if endSnapshot > 0 && deployment.SnapshotID >= endSnapshot {
+		if endSnapshot > 0 && servingState.SnapshotID >= endSnapshot {
 			continue
 		}
-		out = append(out, deployment)
+		out = append(out, servingState)
 	}
 	return out
 }

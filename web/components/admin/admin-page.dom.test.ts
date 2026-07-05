@@ -813,7 +813,7 @@ test('admin storage route renders storage explorer from typed signal data', asyn
         columns: [{ id: 91, name: 'order_id', type: 'VARCHAR', ordinal: 1, nullable: 'No', default: '', initialDefault: '', defaultValueType: 'literal', defaultValueDialect: 'duckdb', beginSnapshot: 7, containsNull: 'No', containsNan: '-', minValue: 'o_001', maxValue: 'o_999', extraStats: '' }],
         files: [{ id: 9, path: 'model/orders/file.parquet', format: 'parquet', recordCount: 32000204, recordCountLabel: '32,000,204', sizeBytes: 12288, sizeLabel: '12 KiB', beginSnapshot: 7, endSnapshot: 0 }],
         history: [{ snapshotId: 7, time: '2026-07-03T10:00:00Z', schemaVersion: 1, source: 'table,data_file', changes: 'tables_inserted_into', author: 'tester', message: 'materialize orders', extraInfo: '{}' }],
-        deployments: [{ workspaceId: 'sales', environment: 'dev', deploymentId: 'dep_1', status: 'active', snapshotId: 7, digest: 'digest', active: true, activatedAt: 'now' }],
+        servingStates: [{ workspaceId: 'sales', environment: 'dev', servingStateId: 'state_1', status: 'active', snapshotId: 7, digest: 'digest', active: true, activatedAt: 'now' }],
       }
       const storage = {
         summary: {
@@ -832,8 +832,8 @@ test('admin storage route renders storage explorer from typed signal data', asyn
         warnings: ['Storage warning'],
         selectedKey: 'ducklake-catalog\u0000model\u0000orders',
         tables: [table],
-        snapshots: [{ id: 7, time: '2026-07-03T10:00:00Z', schemaVersion: 1, author: 'tester', message: 'materialize', changes: 'tables_inserted_into', extraInfo: '{}', protected: true, deploymentCount: 1 }],
-        deployments: [{ workspaceId: 'sales', environment: 'dev', deploymentId: 'dep_1', status: 'active', snapshotId: 7, digest: 'digest', active: true, activatedAt: 'now' }],
+        snapshots: [{ id: 7, time: '2026-07-03T10:00:00Z', schemaVersion: 1, author: 'tester', message: 'materialize', changes: 'tables_inserted_into', extraInfo: '{}', protected: true, servingStateCount: 1 }],
+        servingStates: [{ workspaceId: 'sales', environment: 'dev', servingStateId: 'state_1', status: 'active', snapshotId: 7, digest: 'digest', active: true, activatedAt: 'now' }],
         selectedTable: table,
       }
       element.page = {
@@ -1476,7 +1476,7 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
         columns: [{ id: 81, name: 'customer_id', type: 'VARCHAR', ordinal: 1, nullable: 'No', default: '', initialDefault: '', defaultValueType: 'literal', defaultValueDialect: 'duckdb', beginSnapshot: 6, containsNull: 'No', containsNan: '-', minValue: 'c_001', maxValue: 'c_999', extraStats: '' }],
         files: [{ id: 1, path: 'model/customers/file.parquet', format: 'parquet', recordCount: 10, recordCountLabel: '10', sizeBytes: 12288, sizeLabel: '12 KiB', beginSnapshot: 6, endSnapshot: 0 }],
         history: [{ snapshotId: 6, time: '2026-07-03T10:00:00Z', schemaVersion: 1, source: 'table,data_file', changes: 'tables_inserted_into', author: 'tester', message: 'materialize customers', extraInfo: '{}' }],
-        deployments: [{ workspaceId: 'olist', environment: 'dev', deploymentId: 'dep_1', status: 'active', snapshotId: 6, digest: 'digest', active: true, activatedAt: 'now' }],
+        servingStates: [{ workspaceId: 'olist', environment: 'dev', servingStateId: 'state_1', status: 'active', snapshotId: 6, digest: 'digest', active: true, activatedAt: 'now' }],
       }
       const orders = {
         ...customers,
@@ -1508,8 +1508,8 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
         warnings: [],
         selectedKey: customers.key,
         tables: [customers, orders],
-        snapshots: [{ id: 6, time: '2026-07-03T10:00:00Z', schemaVersion: 1, author: 'tester', message: 'materialize', changes: 'tables_inserted_into', extraInfo: '{}', protected: true, deploymentCount: 1 }],
-        deployments: [{ workspaceId: 'olist', environment: 'dev', deploymentId: 'dep_1', status: 'active', snapshotId: 6, digest: 'digest', active: true, activatedAt: 'now' }],
+        snapshots: [{ id: 6, time: '2026-07-03T10:00:00Z', schemaVersion: 1, author: 'tester', message: 'materialize', changes: 'tables_inserted_into', extraInfo: '{}', protected: true, servingStateCount: 1 }],
+        servingStates: [{ workspaceId: 'olist', environment: 'dev', servingStateId: 'state_1', status: 'active', snapshotId: 6, digest: 'digest', active: true, activatedAt: 'now' }],
         selectedTable: customers,
       }
       const commands: unknown[] = []
@@ -1569,10 +1569,10 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
       const catalogTabs = Array.from(root.querySelectorAll('.storage-tab')).map((tab) => tabText(tab))
       const catalogActiveTab = tabText(root.querySelector('.storage-tab.is-active'))
       const catalogDefaultDetail = detailText()
-      const catalogDeploymentsTab = Array.from(root.querySelectorAll<HTMLButtonElement>('.storage-tab')).find((button) => button.textContent?.includes('Deployments'))!
-      catalogDeploymentsTab.click()
+      const catalogServingStatesTab = Array.from(root.querySelectorAll<HTMLButtonElement>('.storage-tab')).find((button) => button.textContent?.includes('Serving states'))!
+      catalogServingStatesTab.click()
       await element.updateComplete
-      const catalogDeploymentsDetail = detailText()
+      const catalogServingStatesDetail = detailText()
       const catalogSnapshotsTab = Array.from(root.querySelectorAll<HTMLButtonElement>('.storage-tab')).find((button) => button.textContent?.includes('Snapshots'))!
       catalogSnapshotsTab.click()
       await element.updateComplete
@@ -1585,7 +1585,7 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
         catalogTabs,
         catalogActiveTab,
         catalogDefaultDetail,
-        catalogDeploymentsDetail,
+        catalogServingStatesDetail,
         catalogSnapshotsDetail,
       }
 
@@ -1610,11 +1610,11 @@ test('admin storage explorer keeps table, schema, and breadcrumb selection coher
 
     expect(state.afterBreadcrumb.selectedNames).toHaveLength(0)
     expect(state.afterBreadcrumb.catalogActiveTab).toContain('Schemas')
-    expect(state.afterBreadcrumb.catalogTabs).toEqual(['Schemas 1', 'Deployments 1', 'Snapshots 1'])
+    expect(state.afterBreadcrumb.catalogTabs).toEqual(['Schemas 1', 'Serving states 1', 'Snapshots 1'])
     expect(state.afterBreadcrumb.catalogDefaultDetail).toContain('Schemas')
     expect(state.afterBreadcrumb.catalogDefaultDetail).toContain('model')
-    expect(state.afterBreadcrumb.catalogDefaultDetail).not.toContain('dep_1')
-    expect(state.afterBreadcrumb.catalogDeploymentsDetail).toContain('dep_1')
+    expect(state.afterBreadcrumb.catalogDefaultDetail).not.toContain('state_1')
+    expect(state.afterBreadcrumb.catalogServingStatesDetail).toContain('state_1')
     expect(state.afterBreadcrumb.catalogSnapshotsDetail).toContain('materialize')
     expect(state.afterBreadcrumb.schemaRows).toBe(1)
     expect(state.afterBreadcrumb.schemaRowsBeforeBreadcrumb).toBe(2)

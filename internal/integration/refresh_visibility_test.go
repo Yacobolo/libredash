@@ -19,7 +19,7 @@ func TestRefreshVisibilityStreamsAndPersistsSemanticModelRuns(t *testing.T) {
 	ordersAssetID := integrationAssetID(t, h.store, workspaceID, "model_table", "sales.orders")
 
 	details := h.getAuthenticated(t, "/workspaces/"+workspaceID+"/assets/"+semanticAssetID+"/details")
-	for _, want := range []string{"Refresh status", "refresh-materializations", "/updates?section=details"} {
+	for _, want := range []string{"Refresh status", "Refresh data", "/updates?section=details"} {
 		if !strings.Contains(details, want) {
 			t.Fatalf("semantic model details page did not contain %q", want)
 		}
@@ -36,7 +36,7 @@ func TestRefreshVisibilityStreamsAndPersistsSemanticModelRuns(t *testing.T) {
 	_ = semanticStream.nextPatch(t)
 	_ = ordersStream.nextPatch(t)
 
-	if got := h.postAuthenticated(t, "/workspaces/"+workspaceID+"/assets/"+semanticAssetID+"/refresh-materializations"); got != http.StatusNoContent {
+	if got := h.postAuthenticated(t, "/workspaces/"+workspaceID+"/assets/"+semanticAssetID+"/refresh"); got != http.StatusNoContent {
 		t.Fatalf("semantic model refresh status = %d, want %d", got, http.StatusNoContent)
 	}
 	requireAssetRefreshStatus(t, semanticStream, materialize.RunStatusRunning)

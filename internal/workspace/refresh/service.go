@@ -5,19 +5,19 @@ import (
 	"fmt"
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	"github.com/Yacobolo/libredash/internal/deployment"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
-type DeploymentRepository interface {
-	ActiveArtifact(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) (deployment.Deployment, deployment.Artifact, error)
-	Create(ctx context.Context, input deployment.CreateInput) (deployment.Deployment, error)
-	SaveValidated(ctx context.Context, deploymentID deployment.ID, validation deployment.Validation, artifact deployment.Artifact) (deployment.Deployment, error)
-	ByID(ctx context.Context, id deployment.ID) (deployment.Deployment, error)
-	ArtifactByDeployment(ctx context.Context, deploymentID deployment.ID) (deployment.Artifact, error)
-	RecordDuckLakeSnapshot(ctx context.Context, deploymentID deployment.ID, snapshotID int64) error
-	Activate(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment, deploymentID deployment.ID) (deployment.Deployment, error)
-	MarkFailed(ctx context.Context, deploymentID deployment.ID, cause error) error
+type ServingStateRepository interface {
+	ActiveArtifact(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment) (servingstate.State, servingstate.Artifact, error)
+	Create(ctx context.Context, input servingstate.CreateInput) (servingstate.State, error)
+	SaveValidated(ctx context.Context, servingStateID servingstate.ID, validation servingstate.Validation, artifact servingstate.Artifact) (servingstate.State, error)
+	ByID(ctx context.Context, id servingstate.ID) (servingstate.State, error)
+	ArtifactByServingState(ctx context.Context, servingStateID servingstate.ID) (servingstate.Artifact, error)
+	RecordDuckLakeSnapshot(ctx context.Context, servingStateID servingstate.ID, snapshotID int64) error
+	Activate(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment, servingStateID servingstate.ID) (servingstate.State, error)
+	MarkFailed(ctx context.Context, servingStateID servingstate.ID, cause error) error
 }
 
 type RunRepository interface {
@@ -34,7 +34,7 @@ type LoadedArtifact struct {
 }
 
 type ArtifactLoader interface {
-	Load(ctx context.Context, artifact deployment.Artifact) (LoadedArtifact, error)
+	Load(ctx context.Context, artifact servingstate.Artifact) (LoadedArtifact, error)
 }
 
 type Materializer interface {
@@ -43,16 +43,16 @@ type Materializer interface {
 
 type MaterializeInput struct {
 	Definition  *workspace.Definition
-	Active      deployment.Deployment
-	Candidate   deployment.Deployment
-	Artifact    deployment.Artifact
-	Environment deployment.Environment
+	Active      servingstate.State
+	Candidate   servingstate.State
+	Artifact    servingstate.Artifact
+	Environment servingstate.Environment
 	Plan        Plan
 }
 
 type RuntimeHost interface {
-	PrepareDeployment(ctx context.Context, deploymentID string) (deployment.PreparedRuntime, error)
-	CommitPrepared(prepared deployment.PreparedRuntime) error
+	PrepareServingState(ctx context.Context, servingStateID string) (servingstate.PreparedRuntime, error)
+	CommitPrepared(prepared servingstate.PreparedRuntime) error
 	Reload(ctx context.Context) error
 }
 
@@ -65,23 +65,23 @@ type Publisher interface {
 }
 
 type Service struct {
-	Deployments  DeploymentRepository
-	Runs         RunRepository
-	Artifacts    ArtifactLoader
-	Materializer Materializer
-	Runtime      RuntimeHost
-	Retention    RetentionRunner
-	Publisher    Publisher
+	ServingStates ServingStateRepository
+	Runs          RunRepository
+	Artifacts     ArtifactLoader
+	Materializer  Materializer
+	Runtime       RuntimeHost
+	Retention     RetentionRunner
+	Publisher     Publisher
 }
 
 type ServingState struct {
-	Deployment deployment.Deployment
-	Artifact   deployment.Artifact
+	State    servingstate.State
+	Artifact servingstate.Artifact
 }
 
 type QueueAssetInput struct {
 	WorkspaceID string
-	Environment deployment.Environment
+	Environment servingstate.Environment
 	PrincipalID string
 	Asset       workspace.AssetView
 	DataRoot    string
@@ -90,12 +90,12 @@ type QueueAssetInput struct {
 type QueueAssetResult struct {
 	Run            materialize.RunRecord
 	DependencyRuns []materialize.RunRecord
-	DeploymentID   deployment.ID
+	ServingStateID servingstate.ID
 }
 
 func (s Service) QueueAssetRefresh(ctx context.Context, input QueueAssetInput) (QueueAssetResult, error) {
-	if s.Deployments == nil {
-		return QueueAssetResult{}, fmt.Errorf("deployment repository is required")
+	if s.ServingStates == nil {
+		return QueueAssetResult{}, fmt.Errorf("serving state repository is required")
 	}
 	if s.Runs == nil {
 		return QueueAssetResult{}, fmt.Errorf("refresh run repository is required")
@@ -103,7 +103,7 @@ func (s Service) QueueAssetRefresh(ctx context.Context, input QueueAssetInput) (
 	if s.Artifacts == nil {
 		return QueueAssetResult{}, fmt.Errorf("artifact loader is required")
 	}
-	environment := deployment.NormalizeEnvironment(input.Environment)
+	environment := servingstate.NormalizeEnvironment(input.Environment)
 	active, err := s.Active(ctx, input.WorkspaceID, environment)
 	if err != nil {
 		return QueueAssetResult{}, err
@@ -153,15 +153,15 @@ func (s Service) QueueAssetRefresh(ctx context.Context, input QueueAssetInput) (
 		return QueueAssetResult{}, err
 	}
 	rootRun, err = s.Runs.CreateRun(ctx, materialize.RunInput{
-		WorkspaceID:  input.WorkspaceID,
-		ModelID:      plan.ModelID,
-		DeploymentID: string(candidate.Deployment.ID),
-		PrincipalID:  input.PrincipalID,
-		TargetType:   plan.TargetType,
-		TargetID:     plan.TargetID,
-		TriggerType:  materialize.TriggerDirect,
-		JobKind:      materialize.JobKindWorkspaceAssetRefresh,
-		PayloadJSON:  fmt.Sprintf(`{"assetKey":%q,"assetType":%q}`, input.Asset.Key, input.Asset.Type),
+		WorkspaceID:    input.WorkspaceID,
+		ModelID:        plan.ModelID,
+		ServingStateID: string(candidate.State.ID),
+		PrincipalID:    input.PrincipalID,
+		TargetType:     plan.TargetType,
+		TargetID:       plan.TargetID,
+		TriggerType:    materialize.TriggerDirect,
+		JobKind:        materialize.JobKindWorkspaceAssetRefresh,
+		PayloadJSON:    fmt.Sprintf(`{"assetKey":%q,"assetType":%q}`, input.Asset.Key, input.Asset.Type),
 	})
 	if err != nil {
 		_ = s.MarkFailed(ctx, candidate, err)
@@ -170,15 +170,15 @@ func (s Service) QueueAssetRefresh(ctx context.Context, input QueueAssetInput) (
 	dependencyRuns = make([]materialize.RunRecord, 0, len(plan.DependencyTables))
 	for _, table := range plan.DependencyTables {
 		run, err := s.Runs.CreateRun(ctx, materialize.RunInput{
-			WorkspaceID:  input.WorkspaceID,
-			ModelID:      WorkspaceRefreshModelID,
-			DeploymentID: string(candidate.Deployment.ID),
-			PrincipalID:  input.PrincipalID,
-			TargetType:   materialize.TargetModelTable,
-			TargetID:     input.WorkspaceID + "." + table,
-			TriggerType:  plan.ChildTrigger,
-			ParentRunID:  rootRun.ID,
-			JobKind:      materialize.JobKindChildRun,
+			WorkspaceID:    input.WorkspaceID,
+			ModelID:        WorkspaceRefreshModelID,
+			ServingStateID: string(candidate.State.ID),
+			PrincipalID:    input.PrincipalID,
+			TargetType:     materialize.TargetModelTable,
+			TargetID:       input.WorkspaceID + "." + table,
+			TriggerType:    plan.ChildTrigger,
+			ParentRunID:    rootRun.ID,
+			JobKind:        materialize.JobKindChildRun,
 		})
 		if err != nil {
 			_, _ = s.Runs.MarkRunFailed(ctx, input.WorkspaceID, rootRun.ID, err.Error())
@@ -192,12 +192,12 @@ func (s Service) QueueAssetRefresh(ctx context.Context, input QueueAssetInput) (
 		s.publish(ctx, input.WorkspaceID, run.TargetType, run.TargetID)
 	}
 	finalized = true
-	return QueueAssetResult{Run: rootRun, DependencyRuns: dependencyRuns, DeploymentID: candidate.Deployment.ID}, nil
+	return QueueAssetResult{Run: rootRun, DependencyRuns: dependencyRuns, ServingStateID: candidate.State.ID}, nil
 }
 
 func (s Service) ExecuteClaimedJob(ctx context.Context, job materialize.JobRecord) error {
-	if s.Deployments == nil {
-		return fmt.Errorf("deployment repository is required")
+	if s.ServingStates == nil {
+		return fmt.Errorf("serving state repository is required")
 	}
 	if s.Runs == nil {
 		return fmt.Errorf("refresh run repository is required")
@@ -208,22 +208,22 @@ func (s Service) ExecuteClaimedJob(ctx context.Context, job materialize.JobRecor
 	if s.Materializer == nil {
 		return fmt.Errorf("refresh materializer is required")
 	}
-	if job.DeploymentID == "" {
-		return fmt.Errorf("workspace refresh job deployment id is required")
+	if job.ServingStateID == "" {
+		return fmt.Errorf("workspace refresh job serving state id is required")
 	}
-	candidateDeployment, err := s.Deployments.ByID(ctx, deployment.ID(job.DeploymentID))
+	candidateState, err := s.ServingStates.ByID(ctx, servingstate.ID(job.ServingStateID))
 	if err != nil {
 		return err
 	}
-	if candidateDeployment.Status == deployment.StatusActive && candidateDeployment.DuckLakeSnapshotID > 0 {
+	if candidateState.Status == servingstate.StatusActive && candidateState.DuckLakeSnapshotID > 0 {
 		_, _ = s.Runs.MarkRunSucceeded(ctx, job.WorkspaceID, job.RunID)
 		return nil
 	}
-	candidateArtifact, err := s.Deployments.ArtifactByDeployment(ctx, candidateDeployment.ID)
+	candidateArtifact, err := s.ServingStates.ArtifactByServingState(ctx, candidateState.ID)
 	if err != nil {
 		return err
 	}
-	activeState, err := s.Active(ctx, job.WorkspaceID, candidateDeployment.Environment)
+	activeState, err := s.Active(ctx, job.WorkspaceID, candidateState.Environment)
 	if err != nil {
 		return err
 	}
@@ -248,13 +248,13 @@ func (s Service) ExecuteClaimedJob(ctx context.Context, job materialize.JobRecor
 		s.publish(ctx, job.WorkspaceID, child.TargetType, child.TargetID)
 	}
 	s.publish(ctx, job.WorkspaceID, job.TargetType, job.TargetID)
-	candidate := ServingState{Deployment: candidateDeployment, Artifact: candidateArtifact}
+	candidate := ServingState{State: candidateState, Artifact: candidateArtifact}
 	snapshotID, err := s.Materializer.Materialize(ctx, MaterializeInput{
 		Definition:  loaded.Definition,
-		Active:      activeState.Deployment,
-		Candidate:   candidate.Deployment,
+		Active:      activeState.State,
+		Candidate:   candidate.State,
 		Artifact:    candidate.Artifact,
-		Environment: candidateDeployment.Environment,
+		Environment: candidateState.Environment,
 		Plan:        plan,
 	})
 	if err != nil {
@@ -265,9 +265,9 @@ func (s Service) ExecuteClaimedJob(ctx context.Context, job materialize.JobRecor
 		s.failJob(ctx, job, childRuns, candidate, err)
 		return err
 	}
-	var prepared deployment.PreparedRuntime
+	var prepared servingstate.PreparedRuntime
 	if s.Runtime != nil {
-		prepared, err = s.Runtime.PrepareDeployment(ctx, string(candidateDeployment.ID))
+		prepared, err = s.Runtime.PrepareServingState(ctx, string(candidateState.ID))
 		if err != nil {
 			s.failJob(ctx, job, childRuns, candidate, err)
 			return err
@@ -320,92 +320,92 @@ func (s Service) publish(ctx context.Context, workspaceID, targetType, targetID 
 
 type RefreshCandidateInput struct {
 	WorkspaceID   string
-	Environment   deployment.Environment
+	Environment   servingstate.Environment
 	CreatedBy     string
 	Active        ServingState
 	ArtifactGraph workspace.AssetGraph
 }
 
-func (s Service) Active(ctx context.Context, workspaceID string, environment deployment.Environment) (ServingState, error) {
-	active, artifact, err := s.Deployments.ActiveArtifact(ctx, deployment.WorkspaceID(workspaceID), environment)
+func (s Service) Active(ctx context.Context, workspaceID string, environment servingstate.Environment) (ServingState, error) {
+	active, artifact, err := s.ServingStates.ActiveArtifact(ctx, servingstate.WorkspaceID(workspaceID), environment)
 	if err != nil {
 		return ServingState{}, err
 	}
-	return ServingState{Deployment: active, Artifact: artifact}, nil
+	return ServingState{State: active, Artifact: artifact}, nil
 }
 
 func (s Service) CreateRefreshCandidate(ctx context.Context, input RefreshCandidateInput) (ServingState, error) {
 	active := input.Active
-	workspaceID := deployment.WorkspaceID(input.WorkspaceID)
-	environment := deployment.NormalizeEnvironment(input.Environment)
-	created, err := s.Deployments.Create(ctx, deployment.CreateInput{
+	workspaceID := servingstate.WorkspaceID(input.WorkspaceID)
+	environment := servingstate.NormalizeEnvironment(input.Environment)
+	created, err := s.ServingStates.Create(ctx, servingstate.CreateInput{
 		WorkspaceID: workspaceID,
 		Environment: environment,
 		CreatedBy:   input.CreatedBy,
-		Source:      deployment.SourceRefresh,
+		Source:      servingstate.SourceRefresh,
 	})
 	if err != nil {
 		return ServingState{}, err
 	}
-	candidateArtifact := deployment.Artifact{
-		ID:           "artifact_" + string(created.ID),
-		DeploymentID: created.ID,
-		WorkspaceID:  workspaceID,
-		Environment:  environment,
-		Digest:       active.Artifact.Digest,
-		Format:       active.Artifact.Format,
-		Path:         active.Artifact.Path,
-		DataRoot:     active.Artifact.DataRoot,
-		ManifestJSON: active.Artifact.ManifestJSON,
-		SizeBytes:    active.Artifact.SizeBytes,
-		CreatedAt:    active.Artifact.CreatedAt,
+	candidateArtifact := servingstate.Artifact{
+		ID:             "artifact_" + string(created.ID),
+		ServingStateID: created.ID,
+		WorkspaceID:    workspaceID,
+		Environment:    environment,
+		Digest:         active.Artifact.Digest,
+		Format:         active.Artifact.Format,
+		Path:           active.Artifact.Path,
+		DataRoot:       active.Artifact.DataRoot,
+		ManifestJSON:   active.Artifact.ManifestJSON,
+		SizeBytes:      active.Artifact.SizeBytes,
+		CreatedAt:      active.Artifact.CreatedAt,
 	}
-	validated, err := s.Deployments.SaveValidated(ctx, created.ID, deployment.Validation{
-		Digest:       active.Deployment.Digest,
-		ManifestJSON: active.Deployment.ManifestJSON,
-		Graph:        RetargetAssetGraph(input.ArtifactGraph, workspace.WorkspaceID(input.WorkspaceID), workspace.DeploymentID(created.ID)),
+	validated, err := s.ServingStates.SaveValidated(ctx, created.ID, servingstate.Validation{
+		Digest:       active.State.Digest,
+		ManifestJSON: active.State.ManifestJSON,
+		Graph:        RetargetAssetGraph(input.ArtifactGraph, workspace.WorkspaceID(input.WorkspaceID), workspace.ServingStateID(created.ID)),
 		DataRoot:     active.Artifact.DataRoot,
 	}, candidateArtifact)
 	if err != nil {
-		_ = s.Deployments.MarkFailed(ctx, created.ID, err)
+		_ = s.ServingStates.MarkFailed(ctx, created.ID, err)
 		return ServingState{}, err
 	}
-	return ServingState{Deployment: validated, Artifact: candidateArtifact}, nil
+	return ServingState{State: validated, Artifact: candidateArtifact}, nil
 }
 
 func (s Service) RecordSnapshot(ctx context.Context, candidate ServingState, snapshotID int64) error {
 	if snapshotID <= 0 {
 		return fmt.Errorf("serving state snapshot id must be positive")
 	}
-	return s.Deployments.RecordDuckLakeSnapshot(ctx, candidate.Deployment.ID, snapshotID)
+	return s.ServingStates.RecordDuckLakeSnapshot(ctx, candidate.State.ID, snapshotID)
 }
 
-func (s Service) Activate(ctx context.Context, candidate ServingState) (deployment.Deployment, error) {
-	return s.Deployments.Activate(ctx, candidate.Deployment.WorkspaceID, candidate.Deployment.Environment, candidate.Deployment.ID)
+func (s Service) Activate(ctx context.Context, candidate ServingState) (servingstate.State, error) {
+	return s.ServingStates.Activate(ctx, candidate.State.WorkspaceID, candidate.State.Environment, candidate.State.ID)
 }
 
 func (s Service) MarkFailed(ctx context.Context, state ServingState, cause error) error {
-	if state.Deployment.ID == "" || cause == nil {
+	if state.State.ID == "" || cause == nil {
 		return nil
 	}
-	return s.Deployments.MarkFailed(ctx, state.Deployment.ID, cause)
+	return s.ServingStates.MarkFailed(ctx, state.State.ID, cause)
 }
 
-func RetargetAssetGraph(graph workspace.AssetGraph, workspaceID workspace.WorkspaceID, deploymentID workspace.DeploymentID) workspace.AssetGraph {
+func RetargetAssetGraph(graph workspace.AssetGraph, workspaceID workspace.WorkspaceID, servingStateID workspace.ServingStateID) workspace.AssetGraph {
 	out := workspace.AssetGraph{
 		Assets: make([]workspace.Asset, 0, len(graph.Assets)),
 		Edges:  make([]workspace.AssetEdge, 0, len(graph.Edges)),
 	}
 	for _, asset := range graph.Assets {
 		asset.WorkspaceID = workspaceID
-		asset.DeploymentID = deploymentID
-		asset.SnapshotID = workspace.NewAssetSnapshotID(deploymentID, asset.ID)
+		asset.ServingStateID = servingStateID
+		asset.SnapshotID = workspace.NewAssetSnapshotID(servingStateID, asset.ID)
 		out.Assets = append(out.Assets, asset)
 	}
 	for _, edge := range graph.Edges {
 		edge.WorkspaceID = workspaceID
-		edge.DeploymentID = deploymentID
-		edge.ID = workspace.NewAssetEdgeID(deploymentID, edge.FromAssetID, edge.ToAssetID, edge.Type)
+		edge.ServingStateID = servingStateID
+		edge.ID = workspace.NewAssetEdgeID(servingStateID, edge.FromAssetID, edge.ToAssetID, edge.Type)
 		out.Edges = append(out.Edges, edge)
 	}
 	return out

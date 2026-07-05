@@ -12,32 +12,32 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/api"
-	"github.com/Yacobolo/libredash/internal/deployment"
-	"github.com/Yacobolo/libredash/internal/deployment/activate"
-	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
-	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
-	"github.com/Yacobolo/libredash/internal/deployment/validate"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/libredash/internal/servingstate/activate"
+	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
+	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
+	"github.com/Yacobolo/libredash/internal/servingstate/validate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/go-chi/chi/v5"
 )
 
 type runtimeReloader interface {
 	Reload(ctx context.Context) error
-	PrepareDeployment(ctx context.Context, deploymentID string) (deployment.PreparedRuntime, error)
-	CommitPrepared(prepared deployment.PreparedRuntime) error
+	PrepareServingState(ctx context.Context, servingStateID string) (servingstate.PreparedRuntime, error)
+	CommitPrepared(prepared servingstate.PreparedRuntime) error
 }
 
-type deploymentRepository interface {
+type servingStateRepository interface {
 	validate.Repository
 	activate.Repository
 	activate.ArtifactRepository
-	ActiveArtifact(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) (deployment.Deployment, deployment.Artifact, error)
-	Create(ctx context.Context, input deployment.CreateInput) (deployment.Deployment, error)
-	List(ctx context.Context, workspaceID deployment.WorkspaceID, environment deployment.Environment) ([]deployment.Deployment, error)
+	ActiveArtifact(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment) (servingstate.State, servingstate.Artifact, error)
+	Create(ctx context.Context, input servingstate.CreateInput) (servingstate.State, error)
+	List(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment) ([]servingstate.State, error)
 }
 
-func (s *Server) createDeployment(w http.ResponseWriter, r *http.Request) {
-	var input api.DeploymentCreateRequest
+func (s *Server) createPublish(w http.ResponseWriter, r *http.Request) {
+	var input api.PublishCreateRequest
 	if err := decodeOptionalJSONBody(r, &input); err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
@@ -56,7 +56,7 @@ func (s *Server) createDeployment(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	repo, err := s.deploymentRepository()
+	repo, err := s.servingStateRepository()
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
@@ -67,23 +67,23 @@ func (s *Server) createDeployment(w http.ResponseWriter, r *http.Request) {
 			createdBy = principal.ID
 		}
 	}
-	environment := requestDeploymentEnvironment(r, input.Environment)
-	deployment, err := repo.Create(r.Context(), deployment.CreateInput{WorkspaceID: deployment.WorkspaceID(workspaceID), Environment: environment, CreatedBy: createdBy})
+	environment := requestServingEnvironment(r, input.Environment)
+	state, err := repo.Create(r.Context(), servingstate.CreateInput{WorkspaceID: servingstate.WorkspaceID(workspaceID), Environment: environment, CreatedBy: createdBy})
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusCreated, deploymentDTO(deployment))
+	writeJSON(w, http.StatusCreated, publishDTO(state))
 }
 
-func (s *Server) uploadDeploymentArtifact(w http.ResponseWriter, r *http.Request) {
-	deploymentID := chi.URLParam(r, "deployment")
-	repo, err := s.deploymentRepository()
+func (s *Server) uploadPublishArtifact(w http.ResponseWriter, r *http.Request) {
+	servingStateID := chi.URLParam(r, "publish")
+	repo, err := s.servingStateRepository()
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	deployment, err := s.deploymentByIDForRequestWorkspace(r, repo, deployment.ID(deploymentID))
+	state, err := s.servingStateByIDForRequestWorkspace(r, repo, servingstate.ID(servingStateID))
 	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
@@ -92,8 +92,8 @@ func (s *Server) uploadDeploymentArtifact(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	artifactStore := deploymentfs.NewArtifactStore(s.artifactDir)
-	path := artifactStore.UploadPath(deployment.ID)
+	artifactStore := servingstatefs.NewArtifactStore(s.artifactDir)
+	path := artifactStore.UploadPath(state.ID)
 	out, err := os.Create(path)
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
@@ -109,17 +109,17 @@ func (s *Server) uploadDeploymentArtifact(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, closeErr, http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deploymentId": deployment.ID, "sizeBytes": size})
+	writeJSON(w, http.StatusOK, map[string]any{"publishId": state.ID, "sizeBytes": size})
 }
 
-func (s *Server) validateDeployment(w http.ResponseWriter, r *http.Request) {
-	deploymentID := chi.URLParam(r, "deployment")
-	repo, err := s.deploymentRepository()
+func (s *Server) validatePublish(w http.ResponseWriter, r *http.Request) {
+	servingStateID := chi.URLParam(r, "publish")
+	repo, err := s.servingStateRepository()
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	if _, err := s.deploymentByIDForRequestWorkspace(r, repo, deployment.ID(deploymentID)); err != nil {
+	if _, err := s.servingStateByIDForRequestWorkspace(r, repo, servingstate.ID(servingStateID)); err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
@@ -127,23 +127,23 @@ func (s *Server) validateDeployment(w http.ResponseWriter, r *http.Request) {
 	if s.metrics != nil {
 		dataDir = s.metrics.DataDir()
 	}
-	service := validate.NewService(repo, deploymentfs.NewArtifactStore(s.artifactDir), deploymentfs.Validator{DataDir: dataDir})
-	deployment, err := service.Validate(r.Context(), deployment.ID(deploymentID))
+	service := validate.NewService(repo, servingstatefs.NewArtifactStore(s.artifactDir), servingstatefs.Validator{DataDir: dataDir})
+	state, err := service.Validate(r.Context(), servingstate.ID(servingStateID))
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
 	}
-	writeJSON(w, http.StatusOK, deploymentDTO(deployment))
+	writeJSON(w, http.StatusOK, publishDTO(state))
 }
 
-func (s *Server) activateDeployment(w http.ResponseWriter, r *http.Request) {
-	deploymentID := chi.URLParam(r, "deployment")
-	repo, err := s.deploymentRepository()
+func (s *Server) activatePublish(w http.ResponseWriter, r *http.Request) {
+	servingStateID := chi.URLParam(r, "publish")
+	repo, err := s.servingStateRepository()
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	if _, err := s.deploymentByIDForRequestWorkspace(r, repo, deployment.ID(deploymentID)); err != nil {
+	if _, err := s.servingStateByIDForRequestWorkspace(r, repo, servingstate.ID(servingStateID)); err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
@@ -159,62 +159,62 @@ func (s *Server) activateDeployment(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	service := activate.NewServiceWithAccess(repo, s.reloader, repo, accessReconciler)
-	deployment, err := service.Activate(r.Context(), deployment.ID(deploymentID))
+	state, err := service.Activate(r.Context(), servingstate.ID(servingStateID))
 	if err != nil {
 		writeJSONError(w, err, statusForActivationError(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, deploymentDTO(deployment))
+	writeJSON(w, http.StatusOK, publishDTO(state))
 }
 
-func (s *Server) listDeployments(w http.ResponseWriter, r *http.Request) {
+func (s *Server) listPublishes(w http.ResponseWriter, r *http.Request) {
 	workspaceID := s.workspaceID(firstNonEmpty(chi.URLParam(r, "workspace"), r.URL.Query().Get("workspace")))
-	repo, err := s.deploymentRepository()
+	repo, err := s.servingStateRepository()
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	rows, err := repo.List(r.Context(), deployment.WorkspaceID(workspaceID), requestDeploymentEnvironment(r, ""))
+	rows, err := repo.List(r.Context(), servingstate.WorkspaceID(workspaceID), requestServingEnvironment(r, ""))
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	response := make([]api.DeploymentResponse, 0, len(rows))
+	response := make([]api.PublishResponse, 0, len(rows))
 	for _, row := range rows {
-		response = append(response, deploymentDTO(row))
+		response = append(response, publishDTO(row))
 	}
 	limit, ok := apiLimitForRequest(w, r)
 	if !ok {
 		return
 	}
-	page, nextCursor := pageDeployments(response, limit, r.URL.Query().Get("pageToken"))
+	page, nextCursor := pagePublishes(response, limit, r.URL.Query().Get("pageToken"))
 	writeJSON(w, http.StatusOK, pagedResponseWithCursor(page, nextCursor))
 }
 
-func (s *Server) getDeployment(w http.ResponseWriter, r *http.Request) {
-	repo, err := s.deploymentRepository()
+func (s *Server) getPublish(w http.ResponseWriter, r *http.Request) {
+	repo, err := s.servingStateRepository()
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	deployment, err := s.deploymentByIDForRequestWorkspace(r, repo, deployment.ID(chi.URLParam(r, "deployment")))
+	state, err := s.servingStateByIDForRequestWorkspace(r, repo, servingstate.ID(chi.URLParam(r, "publish")))
 	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	writeJSON(w, http.StatusOK, deploymentDTO(deployment))
+	writeJSON(w, http.StatusOK, publishDTO(state))
 }
 
-func (s *Server) deploymentByIDForRequestWorkspace(r *http.Request, repo deploymentRepository, deploymentID deployment.ID) (deployment.Deployment, error) {
-	row, err := repo.ByID(r.Context(), deploymentID)
+func (s *Server) servingStateByIDForRequestWorkspace(r *http.Request, repo servingStateRepository, servingStateID servingstate.ID) (servingstate.State, error) {
+	row, err := repo.ByID(r.Context(), servingStateID)
 	if err != nil {
-		return deployment.Deployment{}, err
+		return servingstate.State{}, err
 	}
-	if workspaceID := chi.URLParam(r, "workspace"); workspaceID != "" && row.WorkspaceID != deployment.WorkspaceID(s.workspaceID(workspaceID)) {
-		return deployment.Deployment{}, deployment.ErrNotFound
+	if workspaceID := chi.URLParam(r, "workspace"); workspaceID != "" && row.WorkspaceID != servingstate.WorkspaceID(s.workspaceID(workspaceID)) {
+		return servingstate.State{}, servingstate.ErrNotFound
 	}
-	if row.Environment != requestDeploymentEnvironment(r, "") {
-		return deployment.Deployment{}, deployment.ErrNotFound
+	if row.Environment != requestServingEnvironment(r, "") {
+		return servingstate.State{}, servingstate.ErrNotFound
 	}
 	return row, nil
 }
@@ -223,22 +223,22 @@ func (s *Server) workspaceID(candidate string) string {
 	return candidate
 }
 
-func (s *Server) deploymentRepository() (deploymentRepository, error) {
-	if s.deploymentRepo != nil {
-		return s.deploymentRepo, nil
+func (s *Server) servingStateRepository() (servingStateRepository, error) {
+	if s.servingStateRepo != nil {
+		return s.servingStateRepo, nil
 	}
 	if s.store == nil {
-		return nil, fmt.Errorf("deployment repository is not configured")
+		return nil, fmt.Errorf("serving state repository is not configured")
 	}
-	s.deploymentRepo = deploymentsqlite.NewRepository(s.store.SQLDB())
-	return s.deploymentRepo, nil
+	s.servingStateRepo = servingstatesqlite.NewRepository(s.store.SQLDB())
+	return s.servingStateRepo, nil
 }
 
-func deploymentDTO(row deployment.Deployment) api.DeploymentResponse {
-	out := api.DeploymentResponse{
+func publishDTO(row servingstate.State) api.PublishResponse {
+	out := api.PublishResponse{
 		ID:          string(row.ID),
 		WorkspaceID: string(row.WorkspaceID),
-		Environment: string(deployment.NormalizeEnvironment(row.Environment)),
+		Environment: string(servingstate.NormalizeEnvironment(row.Environment)),
 		Status:      string(row.Status),
 		Digest:      row.Digest,
 		CreatedAt:   row.CreatedAt,
@@ -248,22 +248,22 @@ func deploymentDTO(row deployment.Deployment) api.DeploymentResponse {
 	return out
 }
 
-func requestDeploymentEnvironment(r *http.Request, fallback string) deployment.Environment {
+func requestServingEnvironment(r *http.Request, fallback string) servingstate.Environment {
 	if query := r.URL.Query().Get("environment"); query != "" {
 		fallback = query
 	}
-	return deployment.NormalizeEnvironment(deployment.Environment(fallback))
+	return servingstate.NormalizeEnvironment(servingstate.Environment(fallback))
 }
 
-func (s *Server) defaultDeploymentEnvironment() deployment.Environment {
-	return deployment.NormalizeEnvironment(deployment.Environment(s.defaultEnvironment))
+func (s *Server) defaultServingEnvironment() servingstate.Environment {
+	return servingstate.NormalizeEnvironment(servingstate.Environment(s.defaultEnvironment))
 }
 
-func (s *Server) requestDeploymentEnvironment(r *http.Request) deployment.Environment {
-	return requestDeploymentEnvironment(r, string(s.defaultDeploymentEnvironment()))
+func (s *Server) requestServingEnvironment(r *http.Request) servingstate.Environment {
+	return requestServingEnvironment(r, string(s.defaultServingEnvironment()))
 }
 
-func pageDeployments(rows []api.DeploymentResponse, limit int, pageToken string) ([]api.DeploymentResponse, string) {
+func pagePublishes(rows []api.PublishResponse, limit int, pageToken string) ([]api.PublishResponse, string) {
 	cursorCreatedAt, cursorID := decodeCursor(pageToken)
 	start := 0
 	if cursorCreatedAt != "" && cursorID != "" {
@@ -327,14 +327,14 @@ func decodeOptionalJSONBody(r *http.Request, dst any) error {
 }
 
 func statusForNotFound(err error) int {
-	if err == sql.ErrNoRows || errors.Is(err, deployment.ErrNotFound) {
+	if err == sql.ErrNoRows || errors.Is(err, servingstate.ErrNotFound) {
 		return http.StatusNotFound
 	}
 	return http.StatusInternalServerError
 }
 
 func statusForActivationError(err error) int {
-	if errors.Is(err, deployment.ErrNotFound) {
+	if errors.Is(err, servingstate.ErrNotFound) {
 		return http.StatusNotFound
 	}
 	if errors.Is(err, activate.ErrInvalidStatus) {

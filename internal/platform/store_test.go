@@ -100,6 +100,50 @@ func TestStoreCatalogCanBeSharedWithDuckLake(t *testing.T) {
 	}
 }
 
+func TestStoreUsesServingStateSchemaTerminology(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+
+	tables := map[string]bool{}
+	rows, err := store.SQLDB().QueryContext(ctx, `SELECT name FROM sqlite_master WHERE type = 'table'`)
+	if err != nil {
+		t.Fatalf("list tables: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			t.Fatalf("scan table: %v", err)
+		}
+		tables[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("table rows: %v", err)
+	}
+	for _, name := range []string{"serving_states", "workspace_active_serving_states", "serving_state_artifacts"} {
+		if !tables[name] {
+			t.Fatalf("missing canonical serving-state table %q; tables=%v", name, tables)
+		}
+	}
+	for _, name := range []string{"deployments", "workspace_active_deployments", "deployment_artifacts"} {
+		if tables[name] {
+			t.Fatalf("legacy deployment table %q should not be created", name)
+		}
+	}
+
+	var cleanupAfterCount int
+	if err := store.SQLDB().QueryRowContext(ctx, `SELECT count(*) FROM pragma_table_info('serving_states') WHERE name = 'cleanup_after'`).Scan(&cleanupAfterCount); err != nil {
+		t.Fatalf("inspect serving_states columns: %v", err)
+	}
+	if cleanupAfterCount != 0 {
+		t.Fatal("serving_states.cleanup_after should not be part of the canonical schema")
+	}
+}
+
 func duckLakeExtensionUnavailable(err error) bool {
 	if err == nil {
 		return false

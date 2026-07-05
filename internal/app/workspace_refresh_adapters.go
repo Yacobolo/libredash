@@ -6,42 +6,42 @@ import (
 	"os"
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	"github.com/Yacobolo/libredash/internal/deployment"
-	deploymentfs "github.com/Yacobolo/libredash/internal/deployment/filesystem"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
 	"github.com/Yacobolo/libredash/internal/workspace/refresh"
 )
 
 func (s *Server) workspaceRefreshService(runRepo refresh.RunRepository) (refresh.Service, error) {
-	repo, err := s.deploymentRepository()
+	repo, err := s.servingStateRepository()
 	if err != nil {
 		return refresh.Service{}, err
 	}
 	if repo == nil {
-		return refresh.Service{}, fmt.Errorf("deployment repository is required")
+		return refresh.Service{}, fmt.Errorf("serving state repository is required")
 	}
 	return refresh.Service{
-		Deployments:  repo,
-		Runs:         runRepo,
-		Artifacts:    appRefreshArtifactLoader{},
-		Materializer: appRefreshMaterializer{server: s},
-		Runtime:      appRefreshRuntimeHost{reloader: s.reloader},
-		Retention:    appRefreshRetention{server: s},
-		Publisher:    appRefreshPublisher{server: s},
+		ServingStates: repo,
+		Runs:          runRepo,
+		Artifacts:     appRefreshArtifactLoader{},
+		Materializer:  appRefreshMaterializer{server: s},
+		Runtime:       appRefreshRuntimeHost{reloader: s.reloader},
+		Retention:     appRefreshRetention{server: s},
+		Publisher:     appRefreshPublisher{server: s},
 	}, nil
 }
 
 type appRefreshArtifactLoader struct{}
 
-func (appRefreshArtifactLoader) Load(_ context.Context, artifact deployment.Artifact) (refresh.LoadedArtifact, error) {
+func (appRefreshArtifactLoader) Load(_ context.Context, artifact servingstate.Artifact) (refresh.LoadedArtifact, error) {
 	root, err := os.MkdirTemp("", "libredash-refresh-artifact-*")
 	if err != nil {
 		return refresh.LoadedArtifact{}, err
 	}
 	defer os.RemoveAll(root)
-	if err := deploymentfs.ExtractArtifact(artifact.Path, root); err != nil {
+	if err := servingstatefs.ExtractArtifact(artifact.Path, root); err != nil {
 		return refresh.LoadedArtifact{}, err
 	}
-	compiled, _, err := deploymentfs.LoadCompiledWorkspaceArtifact(root)
+	compiled, _, err := servingstatefs.LoadCompiledWorkspaceArtifact(root)
 	if err != nil {
 		return refresh.LoadedArtifact{}, err
 	}
@@ -63,14 +63,14 @@ type appRefreshRuntimeHost struct {
 	reloader runtimeReloader
 }
 
-func (h appRefreshRuntimeHost) PrepareDeployment(ctx context.Context, deploymentID string) (deployment.PreparedRuntime, error) {
+func (h appRefreshRuntimeHost) PrepareServingState(ctx context.Context, servingStateID string) (servingstate.PreparedRuntime, error) {
 	if h.reloader == nil {
 		return nil, nil
 	}
-	return h.reloader.PrepareDeployment(ctx, deploymentID)
+	return h.reloader.PrepareServingState(ctx, servingStateID)
 }
 
-func (h appRefreshRuntimeHost) CommitPrepared(prepared deployment.PreparedRuntime) error {
+func (h appRefreshRuntimeHost) CommitPrepared(prepared servingstate.PreparedRuntime) error {
 	if h.reloader == nil || prepared == nil {
 		return nil
 	}

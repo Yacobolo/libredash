@@ -1,4 +1,4 @@
-package deployment
+package servingstate
 
 type RetentionPolicy struct {
 	ProtectActive              bool

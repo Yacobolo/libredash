@@ -76,7 +76,7 @@ type WorkspaceRuntimeConfig struct {
 	CatalogPath        string
 	DuckLakeDataPath   string
 	SnapshotID         int64
-	DeploymentID       string
+	ServingStateID     string
 	WorkspaceID        string
 	Environment        string
 	TargetType         string
@@ -103,7 +103,7 @@ type WorkspaceRuntime struct {
 }
 
 type duckLakeCommitter interface {
-	Commit(ctx context.Context, deploymentID string, extra map[string]string, fn func(*sql.Tx) error) (int64, error)
+	Commit(ctx context.Context, servingStateID string, extra map[string]string, fn func(*sql.Tx) error) (int64, error)
 }
 
 func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntimeConfig) (*WorkspaceRuntime, error) {
@@ -308,8 +308,8 @@ func (r *WorkspaceRuntime) refreshModel(ctx context.Context, model *semanticmode
 	for key, value := range r.commitMetadata {
 		metadata[key] = value
 	}
-	deploymentID := firstNonEmpty(r.commitMetadata["deploymentId"], "workspace-refresh")
-	snapshotID, err := r.committer.Commit(ctx, deploymentID, metadata, func(tx *sql.Tx) error {
+	servingStateID := firstNonEmpty(r.commitMetadata["servingStateId"], "workspace-refresh")
+	snapshotID, err := r.committer.Commit(ctx, servingStateID, metadata, func(tx *sql.Tx) error {
 		executor := txExecutor{tx: tx}
 		sources := txSourceRuntime{SourceRuntime: r.sources, tx: tx}
 		if len(tableNames) > 0 {
@@ -325,7 +325,7 @@ func (r *WorkspaceRuntime) refreshModel(ctx context.Context, model *semanticmode
 
 func workspaceCommitMetadata(config WorkspaceRuntimeConfig) map[string]string {
 	metadata := map[string]string{}
-	addCommitMetadata(metadata, "deploymentId", config.DeploymentID)
+	addCommitMetadata(metadata, "servingStateId", config.ServingStateID)
 	addCommitMetadata(metadata, "workspaceId", config.WorkspaceID)
 	addCommitMetadata(metadata, "environment", config.Environment)
 	addCommitMetadata(metadata, "targetType", config.TargetType)

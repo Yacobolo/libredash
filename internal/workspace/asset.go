@@ -8,28 +8,28 @@ import (
 )
 
 type Asset struct {
-	ID            AssetID
-	SnapshotID    AssetSnapshotID
-	WorkspaceID   WorkspaceID
-	DeploymentID  DeploymentID
-	Type          AssetType
-	Key           string
-	ParentID      AssetID
-	Title         string
-	Description   string
-	SourceFile    string `json:"sourceFile,omitempty"`
-	PayloadSchema string
-	PayloadJSON   string
-	ContentHash   string
+	ID             AssetID
+	SnapshotID     AssetSnapshotID
+	WorkspaceID    WorkspaceID
+	ServingStateID ServingStateID
+	Type           AssetType
+	Key            string
+	ParentID       AssetID
+	Title          string
+	Description    string
+	SourceFile     string `json:"sourceFile,omitempty"`
+	PayloadSchema  string
+	PayloadJSON    string
+	ContentHash    string
 }
 
 type AssetEdge struct {
-	ID           AssetEdgeID
-	WorkspaceID  WorkspaceID
-	DeploymentID DeploymentID
-	FromAssetID  AssetID
-	ToAssetID    AssetID
-	Type         AssetEdgeType
+	ID             AssetEdgeID
+	WorkspaceID    WorkspaceID
+	ServingStateID ServingStateID
+	FromAssetID    AssetID
+	ToAssetID      AssetID
+	Type           AssetEdgeType
 }
 
 type AssetGraph struct {
@@ -47,11 +47,11 @@ type AssetHashInput struct {
 	PayloadJSON   json.RawMessage
 }
 
-func NewAsset(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType, key string, parentID AssetID, title, description, payloadSchema string, payload any) (Asset, error) {
-	return NewAssetWithSourceFile(workspaceID, deploymentID, typ, key, parentID, title, description, "", payloadSchema, payload)
+func NewAsset(workspaceID WorkspaceID, servingStateID ServingStateID, typ AssetType, key string, parentID AssetID, title, description, payloadSchema string, payload any) (Asset, error) {
+	return NewAssetWithSourceFile(workspaceID, servingStateID, typ, key, parentID, title, description, "", payloadSchema, payload)
 }
 
-func NewAssetWithSourceFile(workspaceID WorkspaceID, deploymentID DeploymentID, typ AssetType, key string, parentID AssetID, title, description, sourceFile, payloadSchema string, payload any) (Asset, error) {
+func NewAssetWithSourceFile(workspaceID WorkspaceID, servingStateID ServingStateID, typ AssetType, key string, parentID AssetID, title, description, sourceFile, payloadSchema string, payload any) (Asset, error) {
 	if err := validatePayloadSchema(typ, payloadSchema); err != nil {
 		return Asset{}, err
 	}
@@ -73,19 +73,19 @@ func NewAssetWithSourceFile(workspaceID WorkspaceID, deploymentID DeploymentID, 
 		return Asset{}, err
 	}
 	return Asset{
-		ID:            id,
-		SnapshotID:    NewAssetSnapshotID(deploymentID, id),
-		WorkspaceID:   workspaceID,
-		DeploymentID:  deploymentID,
-		Type:          typ,
-		Key:           key,
-		ParentID:      parentID,
-		Title:         title,
-		Description:   description,
-		SourceFile:    sourceFile,
-		PayloadSchema: payloadSchema,
-		PayloadJSON:   string(payloadBytes),
-		ContentHash:   contentHash,
+		ID:             id,
+		SnapshotID:     NewAssetSnapshotID(servingStateID, id),
+		WorkspaceID:    workspaceID,
+		ServingStateID: servingStateID,
+		Type:           typ,
+		Key:            key,
+		ParentID:       parentID,
+		Title:          title,
+		Description:    description,
+		SourceFile:     sourceFile,
+		PayloadSchema:  payloadSchema,
+		PayloadJSON:    string(payloadBytes),
+		ContentHash:    contentHash,
 	}, nil
 }
 
@@ -116,18 +116,18 @@ type assetHashPayload struct {
 	PayloadJSON   json.RawMessage `json:"payload"`
 }
 
-func NewAssetEdge(workspaceID WorkspaceID, deploymentID DeploymentID, fromID, toID AssetID, typ AssetEdgeType) AssetEdge {
+func NewAssetEdge(workspaceID WorkspaceID, servingStateID ServingStateID, fromID, toID AssetID, typ AssetEdgeType) AssetEdge {
 	return AssetEdge{
-		ID:           NewAssetEdgeID(deploymentID, fromID, toID, typ),
-		WorkspaceID:  workspaceID,
-		DeploymentID: deploymentID,
-		FromAssetID:  fromID,
-		ToAssetID:    toID,
-		Type:         typ,
+		ID:             NewAssetEdgeID(servingStateID, fromID, toID, typ),
+		WorkspaceID:    workspaceID,
+		ServingStateID: servingStateID,
+		FromAssetID:    fromID,
+		ToAssetID:      toID,
+		Type:           typ,
 	}
 }
 
-func ValidateAssetGraphForDeployment(graph AssetGraph, workspaceID WorkspaceID, deploymentID DeploymentID) error {
+func ValidateAssetGraphForServingState(graph AssetGraph, workspaceID WorkspaceID, servingStateID ServingStateID) error {
 	assetIDs := make(map[AssetID]struct{}, len(graph.Assets))
 	for _, asset := range graph.Assets {
 		if asset.ID == "" {
@@ -140,10 +140,10 @@ func ValidateAssetGraphForDeployment(graph AssetGraph, workspaceID WorkspaceID, 
 		if asset.WorkspaceID != workspaceID {
 			return fmt.Errorf("asset %s workspace = %q, want %q", asset.ID, asset.WorkspaceID, workspaceID)
 		}
-		if asset.DeploymentID != deploymentID {
-			return fmt.Errorf("asset %s deployment = %q, want %q", asset.ID, asset.DeploymentID, deploymentID)
+		if asset.ServingStateID != servingStateID {
+			return fmt.Errorf("asset %s serving state = %q, want %q", asset.ID, asset.ServingStateID, servingStateID)
 		}
-		if want := NewAssetSnapshotID(deploymentID, asset.ID); asset.SnapshotID != want {
+		if want := NewAssetSnapshotID(servingStateID, asset.ID); asset.SnapshotID != want {
 			return fmt.Errorf("asset %s snapshot id = %q, want %q", asset.ID, asset.SnapshotID, want)
 		}
 		if err := validatePayloadSchema(asset.Type, asset.PayloadSchema); err != nil {
@@ -167,10 +167,10 @@ func ValidateAssetGraphForDeployment(graph AssetGraph, workspaceID WorkspaceID, 
 		if edge.WorkspaceID != workspaceID {
 			return fmt.Errorf("asset edge %s workspace = %q, want %q", edge.ID, edge.WorkspaceID, workspaceID)
 		}
-		if edge.DeploymentID != deploymentID {
-			return fmt.Errorf("asset edge %s deployment = %q, want %q", edge.ID, edge.DeploymentID, deploymentID)
+		if edge.ServingStateID != servingStateID {
+			return fmt.Errorf("asset edge %s serving state = %q, want %q", edge.ID, edge.ServingStateID, servingStateID)
 		}
-		if want := NewAssetEdgeID(deploymentID, edge.FromAssetID, edge.ToAssetID, edge.Type); edge.ID != want {
+		if want := NewAssetEdgeID(servingStateID, edge.FromAssetID, edge.ToAssetID, edge.Type); edge.ID != want {
 			return fmt.Errorf("asset edge %s id = %q, want %q", edge.Type, edge.ID, want)
 		}
 		if _, ok := assetIDs[edge.FromAssetID]; !ok {

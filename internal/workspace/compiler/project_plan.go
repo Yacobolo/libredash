@@ -87,7 +87,7 @@ func PlanProject(projectPath string) (ProjectPlan, error) {
 }
 
 func PlanProjectAgainstGraph(projectPath, workspaceID string, active workspace.AssetGraph) (ProjectPlan, error) {
-	compiled, err := CompileProject(projectPath, Options{DeploymentID: workspace.DeploymentID("plan")})
+	compiled, err := CompileProject(projectPath, Options{ServingStateID: workspace.ServingStateID("plan")})
 	if err != nil {
 		return ProjectPlan{}, err
 	}
@@ -135,7 +135,7 @@ func diffAssetGraphs(authored, active workspace.AssetGraph) ([]ProjectPlanChange
 		asset := authoredAssets[id]
 		activeAsset, ok := activeAssets[id]
 		if !ok {
-			changes = append(changes, projectPlanChange("add", asset, workspace.Asset{}, "not in active deployment", impact))
+			changes = append(changes, projectPlanChange("add", asset, workspace.Asset{}, "not in active serving state", impact))
 			continue
 		}
 		if activeAsset.ContentHash != asset.ContentHash {

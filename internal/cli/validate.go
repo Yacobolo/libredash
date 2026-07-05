@@ -58,9 +58,9 @@ func planCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
-	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL for active deployment diff")
+	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL for active publish diff")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
-	cmd.Flags().StringVar(&opts.environment, "environment", "dev", "deployment environment for active diff")
+	cmd.Flags().StringVar(&opts.environment, "environment", "dev", "publish environment for active diff")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "emit JSON plan")
 	return cmd
 }
@@ -189,7 +189,7 @@ func fetchActiveWorkspaceGraphFor(ctx context.Context, opts *rootOptions, worksp
 		return workspace.AssetGraph{}, err
 	}
 	query := url.Values{}
-	endpoint, err := apiOperationURL(target, "getWorkspaceActiveDeploymentGraph", map[string]string{"workspace": workspaceID}, withEnvironmentQuery(cliEnvironment(opts), query))
+	endpoint, err := apiOperationURL(target, "getWorkspaceActiveAssetGraph", map[string]string{"workspace": workspaceID}, withEnvironmentQuery(cliEnvironment(opts), query))
 	if err != nil {
 		return workspace.AssetGraph{}, err
 	}
@@ -203,29 +203,29 @@ func fetchActiveWorkspaceGraphFor(ctx context.Context, opts *rootOptions, worksp
 	}
 	for _, asset := range response.Assets {
 		graph.Assets = append(graph.Assets, workspace.Asset{
-			ID:            workspace.AssetID(asset.ID),
-			SnapshotID:    workspace.AssetSnapshotID(asset.SnapshotID),
-			WorkspaceID:   workspace.WorkspaceID(asset.WorkspaceID),
-			DeploymentID:  workspace.DeploymentID(asset.DeploymentID),
-			Type:          workspace.AssetType(asset.Type),
-			Key:           asset.Key,
-			ParentID:      workspace.AssetID(asset.ParentID),
-			Title:         asset.Title,
-			Description:   asset.Description,
-			PayloadSchema: asset.PayloadSchema,
-			SourceFile:    asset.SourceFile,
-			PayloadJSON:   assetPayloadJSON(asset.Payload),
-			ContentHash:   asset.ContentHash,
+			ID:             workspace.AssetID(asset.ID),
+			SnapshotID:     workspace.AssetSnapshotID(asset.SnapshotID),
+			WorkspaceID:    workspace.WorkspaceID(asset.WorkspaceID),
+			ServingStateID: workspace.ServingStateID(asset.ServingStateID),
+			Type:           workspace.AssetType(asset.Type),
+			Key:            asset.Key,
+			ParentID:       workspace.AssetID(asset.ParentID),
+			Title:          asset.Title,
+			Description:    asset.Description,
+			PayloadSchema:  asset.PayloadSchema,
+			SourceFile:     asset.SourceFile,
+			PayloadJSON:    assetPayloadJSON(asset.Payload),
+			ContentHash:    asset.ContentHash,
 		})
 	}
 	for _, edge := range response.Edges {
 		graph.Edges = append(graph.Edges, workspace.AssetEdge{
-			ID:           workspace.AssetEdgeID(edge.ID),
-			WorkspaceID:  workspace.WorkspaceID(edge.WorkspaceID),
-			DeploymentID: workspace.DeploymentID(edge.DeploymentID),
-			FromAssetID:  workspace.AssetID(edge.FromAssetID),
-			ToAssetID:    workspace.AssetID(edge.ToAssetID),
-			Type:         workspace.AssetEdgeType(edge.Type),
+			ID:             workspace.AssetEdgeID(edge.ID),
+			WorkspaceID:    workspace.WorkspaceID(edge.WorkspaceID),
+			ServingStateID: workspace.ServingStateID(edge.ServingStateID),
+			FromAssetID:    workspace.AssetID(edge.FromAssetID),
+			ToAssetID:      workspace.AssetID(edge.ToAssetID),
+			Type:           workspace.AssetEdgeType(edge.Type),
 		})
 	}
 	return graph, nil
