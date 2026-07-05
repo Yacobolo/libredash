@@ -191,10 +191,21 @@ func (a *Auth) Middleware(privilege access.Privilege, next http.Handler) http.Ha
 				writeAuthError(w, r, errForbidden, http.StatusForbidden)
 				return
 			}
-			decision, err := a.repo.AuthorizeAny(r.Context(), principal.ID, privilege, authObjectsForRequest(privilege, r, workspaceID))
+			objects := authObjectsForRequest(privilege, r, workspaceID)
+			decision, err := a.repo.AuthorizeAny(r.Context(), principal.ID, privilege, objects)
 			if err != nil {
 				writeAuthError(w, r, err, http.StatusInternalServerError)
 				return
+			}
+			if !decision.Allowed && routeCanDeferDashboardDataAuth(privilege, r) {
+				viewDecision, err := a.repo.AuthorizeAny(r.Context(), principal.ID, access.PrivilegeViewItem, objects)
+				if err != nil {
+					writeAuthError(w, r, err, http.StatusInternalServerError)
+					return
+				}
+				if viewDecision.Allowed {
+					decision.Allowed = true
+				}
 			}
 			if !decision.Allowed {
 				writeAuthError(w, r, errForbidden, http.StatusForbidden)

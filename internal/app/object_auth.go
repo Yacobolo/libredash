@@ -20,6 +20,10 @@ func authObjectsForRequest(privilege access.Privilege, r *http.Request, workspac
 	return objects
 }
 
+func routeCanDeferDashboardDataAuth(privilege access.Privilege, r *http.Request) bool {
+	return privilege == access.PrivilegeQueryData && strings.TrimSpace(chi.URLParam(r, "dashboard")) != ""
+}
+
 func routeObjectRefs(r *http.Request, workspaceID string) []access.ObjectRef {
 	workspaceID = strings.TrimSpace(workspaceID)
 	objects := []access.ObjectRef{}
@@ -57,6 +61,33 @@ func semanticModelObjectFromRequest(r *http.Request) access.ObjectRef {
 func semanticDatasetObjectFromRequest(r *http.Request) access.ObjectRef {
 	model := semanticModelObjectFromRequest(r)
 	return access.ItemObjectWithParent(access.SecurableDataset, chi.URLParam(r, "workspace"), chi.URLParam(r, "model")+"/"+chi.URLParam(r, "dataset"), model)
+}
+
+func objectWithInferredParent(typ access.SecurableType, workspaceID, objectID string) access.ObjectRef {
+	parts := strings.Split(objectID, "/")
+	switch typ {
+	case access.SecurableDataset, access.SecurableTable:
+		if len(parts) >= 2 && strings.TrimSpace(parts[0]) != "" {
+			return access.ItemObjectWithParent(typ, workspaceID, objectID, access.ItemObject(access.SecurableSemanticModel, workspaceID, parts[0]))
+		}
+	case access.SecurableColumn:
+		if len(parts) >= 3 && strings.TrimSpace(parts[0]) != "" && strings.TrimSpace(parts[1]) != "" {
+			parent := access.ItemObjectWithParent(access.SecurableDataset, workspaceID, parts[0]+"/"+parts[1], access.ItemObject(access.SecurableSemanticModel, workspaceID, parts[0]))
+			return access.ItemObjectWithParent(typ, workspaceID, objectID, parent)
+		}
+	}
+	return access.ItemObject(typ, workspaceID, objectID)
+}
+
+func dashboardQueryObjects(metrics QueryMetrics, r *http.Request) []access.ObjectRef {
+	workspaceID := chi.URLParam(r, "workspace")
+	dashboardID := chi.URLParam(r, "dashboard")
+	objects := []access.ObjectRef{access.ItemObject(access.SecurableDashboard, workspaceID, dashboardID)}
+	if modelID := strings.TrimSpace(metrics.ModelIDForDashboard(dashboardID)); modelID != "" {
+		objects = append(objects, access.ItemObject(access.SecurableSemanticModel, workspaceID, modelID))
+	}
+	objects = append(objects, access.WorkspaceObject(workspaceID))
+	return objects
 }
 
 func (s *Server) authorizeCurrentObject(w http.ResponseWriter, r *http.Request, privilege access.Privilege, object access.ObjectRef) bool {

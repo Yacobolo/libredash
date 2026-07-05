@@ -1171,7 +1171,7 @@ func objectRefFromValues(w http.ResponseWriter, r *http.Request, objectType, obj
 		writeJSONError(w, fmt.Errorf("objectId is required for %s grants", objectType), http.StatusBadRequest)
 		return access.ObjectRef{}, false
 	}
-	return access.ItemObject(typ, workspaceID, objectID), true
+	return objectWithInferredParent(typ, workspaceID, objectID), true
 }
 
 func parseBoolQuery(value string) bool {

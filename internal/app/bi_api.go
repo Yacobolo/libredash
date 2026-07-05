@@ -345,10 +345,7 @@ func (s *Server) queryDashboardPage(w http.ResponseWriter, r *http.Request) {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
 	pageID := chi.URLParam(r, "page")
-	if !s.authorizeCurrentAny(w, r, access.PrivilegeQueryData, []access.ObjectRef{
-		dashboardObjectFromRequest(r),
-		access.WorkspaceObject(chi.URLParam(r, "workspace")),
-	}) {
+	if !s.authorizeCurrentAny(w, r, access.PrivilegeQueryData, dashboardQueryObjects(metrics, r)) {
 		return
 	}
 	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_page", dashboardID+":"+pageID))
@@ -381,10 +378,7 @@ func (s *Server) queryDashboardTable(w http.ResponseWriter, r *http.Request) {
 	}
 	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: chi.URLParam(r, "table"), Block: "a", Count: count})
 	request.Count = count
-	if !s.authorizeCurrentAny(w, r, access.PrivilegeQueryData, []access.ObjectRef{
-		dashboardObjectFromRequest(r),
-		access.WorkspaceObject(chi.URLParam(r, "workspace")),
-	}) {
+	if !s.authorizeCurrentAny(w, r, access.PrivilegeQueryData, dashboardQueryObjects(metrics, r)) {
 		return
 	}
 	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_table", dashboardID+":"+chi.URLParam(r, "table")))
@@ -424,10 +418,7 @@ func (s *Server) queryDashboardVisualData(w http.ResponseWriter, r *http.Request
 	if filters.Controls == nil && filters.Selections == nil {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
-	if !s.authorizeCurrentAny(w, r, access.PrivilegeQueryData, []access.ObjectRef{
-		dashboardObjectFromRequest(r),
-		access.WorkspaceObject(chi.URLParam(r, "workspace")),
-	}) {
+	if !s.authorizeCurrentAny(w, r, access.PrivilegeQueryData, dashboardQueryObjects(metrics, r)) {
 		return
 	}
 	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_visual", dashboardID+":"+visualID))
@@ -478,10 +469,7 @@ func (s *Server) queryDashboardTableData(w http.ResponseWriter, r *http.Request)
 	}
 	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: tableID, Block: "a", Count: count})
 	request.Count = count
-	if !s.authorizeCurrentAny(w, r, access.PrivilegeQueryData, []access.ObjectRef{
-		dashboardObjectFromRequest(r),
-		access.WorkspaceObject(chi.URLParam(r, "workspace")),
-	}) {
+	if !s.authorizeCurrentAny(w, r, access.PrivilegeQueryData, dashboardQueryObjects(metrics, r)) {
 		return
 	}
 	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_table", dashboardID+":"+tableID))
@@ -521,10 +509,7 @@ func (s *Server) listDashboardFilterOptions(w http.ResponseWriter, r *http.Reque
 	if filters.Controls == nil && filters.Selections == nil {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
-	if !s.authorizeCurrentAny(w, r, access.PrivilegeQueryData, []access.ObjectRef{
-		dashboardObjectFromRequest(r),
-		access.WorkspaceObject(chi.URLParam(r, "workspace")),
-	}) {
+	if !s.authorizeCurrentAny(w, r, access.PrivilegeQueryData, dashboardQueryObjects(metrics, r)) {
 		return
 	}
 	ctx := dataquery.WithMetadata(r.Context(), requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_filter", dashboardID+":"+filterID))
