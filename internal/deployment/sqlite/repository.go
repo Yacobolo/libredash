@@ -399,6 +399,7 @@ func upsertPolicyPrincipalTx(ctx context.Context, q *platformdb.Queries, id, ema
 	}
 	if err := q.UpsertPrincipal(ctx, platformdb.UpsertPrincipalParams{
 		ID:          id,
+		Kind:        string(access.PrincipalKindUser),
 		Email:       email,
 		DisplayName: firstNonEmpty(strings.TrimSpace(displayName), email, id),
 	}); err != nil {

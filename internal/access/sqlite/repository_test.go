@@ -128,6 +128,166 @@ func TestRepositoryChecksGroupRolePermissions(t *testing.T) {
 	}
 }
 
+func TestRepositoryResolvesDBBackedObjectInheritance(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "dataset_reader",
+		Email:       "dataset@example.com",
+		DisplayName: "Dataset Reader",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	semanticModel := access.ItemObject(access.SecurableSemanticModel, "test", "sales")
+	dataset := access.ItemObjectWithParent(access.SecurableDataset, "test", "sales/orders", semanticModel)
+	column := access.ItemObjectWithParent(access.SecurableColumn, "test", "sales/orders/net_revenue", dataset)
+	if _, err := repo.CreateGrant(ctx, access.GrantInput{
+		Object:      dataset,
+		SubjectType: access.SubjectPrincipal,
+		SubjectID:   principal.ID,
+		Privilege:   access.PrivilegeQueryData,
+	}); err != nil {
+		t.Fatalf("create dataset grant: %v", err)
+	}
+
+	decision, err := repo.Authorize(ctx, principal.ID, access.PrivilegeQueryData, column)
+	if err != nil {
+		t.Fatalf("authorize column: %v", err)
+	}
+	if !decision.Allowed || !decision.Inherited || decision.Reason != "grant" {
+		t.Fatalf("decision = %#v, want inherited dataset grant", decision)
+	}
+	if decision.GrantObjectID != dataset.CanonicalID() {
+		t.Fatalf("grant object = %q, want %q", decision.GrantObjectID, dataset.CanonicalID())
+	}
+}
+
+func TestRepositoryExplainsEffectiveAccessAndAuthorizeAny(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "viewer", Email: "viewer@example.com"})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	dashboard := access.ItemObject(access.SecurableDashboard, "test", "exec")
+	if _, err := repo.CreateGrant(ctx, access.GrantInput{
+		Object:      dashboard,
+		SubjectType: access.SubjectPrincipal,
+		SubjectID:   principal.ID,
+		Privilege:   access.PrivilegeViewItem,
+	}); err != nil {
+		t.Fatalf("create dashboard grant: %v", err)
+	}
+
+	decision, err := repo.AuthorizeAny(ctx, principal.ID, access.PrivilegeViewItem, []access.ObjectRef{
+		access.ItemObject(access.SecurableSemanticModel, "test", "sales"),
+		dashboard,
+	})
+	if err != nil {
+		t.Fatalf("authorize any: %v", err)
+	}
+	if !decision.Allowed || decision.Object.CanonicalID() != dashboard.CanonicalID() {
+		t.Fatalf("decision = %#v, want dashboard grant", decision)
+	}
+
+	effective, err := repo.EffectiveAccess(ctx, principal.ID, dashboard)
+	if err != nil {
+		t.Fatalf("effective access: %v", err)
+	}
+	var found bool
+	for _, row := range effective {
+		if row.Privilege == access.PrivilegeViewItem {
+			found = true
+			if row.Reason != "grant" || row.GrantID == "" || row.GrantObjectID != dashboard.CanonicalID() {
+				t.Fatalf("view explanation = %#v, want direct grant provenance", row)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("effective access = %#v, missing VIEW_ITEM", effective)
+	}
+}
+
+func TestRepositorySupportsServicePrincipalSecrets(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	sp, err := repo.CreateServicePrincipal(ctx, access.ServicePrincipalInput{
+		ID:          "sp_deployer",
+		DisplayName: "Deploy Bot",
+	})
+	if err != nil {
+		t.Fatalf("create service principal: %v", err)
+	}
+	if sp.Kind != access.PrincipalKindServicePrincipal {
+		t.Fatalf("kind = %q, want service_principal", sp.Kind)
+	}
+	secret, row, err := repo.CreateServicePrincipalSecret(ctx, sp.ID, "ci")
+	if err != nil {
+		t.Fatalf("create secret: %v", err)
+	}
+	if secret == "" || row.Secret == "" || row.Secret == secret {
+		t.Fatalf("secret row = %#v, raw secret %q should be returned once and never stored", row, secret)
+	}
+	resolved, err := repo.PrincipalForServicePrincipalSecret(ctx, sp.ID, secret)
+	if err != nil {
+		t.Fatalf("resolve secret: %v", err)
+	}
+	if resolved.ID != sp.ID || resolved.Kind != access.PrincipalKindServicePrincipal {
+		t.Fatalf("resolved = %#v, want service principal", resolved)
+	}
+	if err := repo.RevokeServicePrincipalSecret(ctx, sp.ID, row.ID); err != nil {
+		t.Fatalf("revoke secret: %v", err)
+	}
+	if _, err := repo.PrincipalForServicePrincipalSecret(ctx, sp.ID, secret); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("resolve revoked secret error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestRepositoryStoresDataPoliciesBySecurableObject(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	object := access.ItemObjectWithParent(
+		access.SecurableDataset,
+		"test",
+		"sales/orders",
+		access.ItemObject(access.SecurableSemanticModel, "test", "sales"),
+	)
+	policy, err := repo.UpsertDataPolicy(ctx, access.DataPolicyInput{
+		ID:             "policy_region",
+		Object:         object,
+		PolicyType:     "row_filter",
+		ExpressionJSON: `{"field":"region","op":"=","value":"EMEA"}`,
+	})
+	if err != nil {
+		t.Fatalf("upsert data policy: %v", err)
+	}
+	if policy.ObjectID != object.CanonicalID() {
+		t.Fatalf("object id = %q, want %q", policy.ObjectID, object.CanonicalID())
+	}
+	policies, err := repo.ListDataPolicies(ctx, object)
+	if err != nil {
+		t.Fatalf("list data policies: %v", err)
+	}
+	if len(policies) != 1 || policies[0].ID != "policy_region" || policies[0].PolicyType != "row_filter" {
+		t.Fatalf("policies = %#v, want row filter policy", policies)
+	}
+	if err := repo.DeleteDataPolicy(ctx, "test", "policy_region"); err != nil {
+		t.Fatalf("delete data policy: %v", err)
+	}
+	policies, err = repo.ListDataPolicies(ctx, object)
+	if err != nil {
+		t.Fatalf("list after delete: %v", err)
+	}
+	if len(policies) != 0 {
+		t.Fatalf("policies after delete = %#v, want empty", policies)
+	}
+}
+
 func TestRepositoryReconcilesWorkspacePolicySnapshot(t *testing.T) {
 	ctx := context.Background()
 	_, repo := openAccessRepo(t, ctx)

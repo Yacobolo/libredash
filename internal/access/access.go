@@ -203,6 +203,7 @@ type ObjectRef struct {
 	Type        SecurableType
 	WorkspaceID string
 	ObjectID    string
+	ParentID    string
 }
 
 func PlatformObject() ObjectRef {
@@ -215,6 +216,12 @@ func WorkspaceObject(workspaceID string) ObjectRef {
 
 func ItemObject(typ SecurableType, workspaceID, objectID string) ObjectRef {
 	return ObjectRef{Type: typ, WorkspaceID: strings.TrimSpace(workspaceID), ObjectID: strings.TrimSpace(objectID)}
+}
+
+func ItemObjectWithParent(typ SecurableType, workspaceID, objectID string, parent ObjectRef) ObjectRef {
+	object := ItemObject(typ, workspaceID, objectID)
+	object.ParentID = parent.CanonicalID()
+	return object
 }
 
 func (r ObjectRef) CanonicalID() string {
@@ -261,6 +268,14 @@ type Grant struct {
 	CreatedAt   string
 }
 
+type GrantView struct {
+	Grant
+	Inherited    bool
+	ParentID     string
+	ParentType   SecurableType
+	ParentObject string
+}
+
 type GrantInput struct {
 	Object      ObjectRef
 	SubjectType SubjectType
@@ -269,21 +284,25 @@ type GrantInput struct {
 }
 
 type AuthorizationDecision struct {
-	Allowed   bool
-	Privilege Privilege
-	Object    ObjectRef
-	Reason    string
-	GrantID   string
-	Inherited bool
-	Owner     bool
-	Platform  bool
+	Allowed       bool
+	Privilege     Privilege
+	Object        ObjectRef
+	Reason        string
+	GrantID       string
+	GrantObjectID string
+	SubjectType   SubjectType
+	SubjectID     string
+	Inherited     bool
+	Owner         bool
+	Platform      bool
 }
 
 type SubjectType string
 
 const (
-	SubjectPrincipal SubjectType = "principal"
-	SubjectGroup     SubjectType = "group"
+	SubjectPrincipal        SubjectType = "principal"
+	SubjectGroup            SubjectType = "group"
+	SubjectServicePrincipal SubjectType = "service_principal"
 )
 
 type RoleBinding struct {
@@ -324,8 +343,46 @@ type PlatformRoleInput struct {
 
 type PrincipalInput struct {
 	ID          string
+	Kind        PrincipalKind
 	Email       string
 	DisplayName string
+}
+
+type ServicePrincipalInput struct {
+	ID          string
+	DisplayName string
+}
+
+type ServicePrincipalSecretInput struct {
+	Name      string
+	ExpiresAt time.Time
+}
+
+type ServicePrincipalSecret struct {
+	ID                 string
+	ServicePrincipalID string
+	Name               string
+	Secret             string
+	ExpiresAt          string
+	CreatedAt          string
+	RevokedAt          string
+}
+
+type DataPolicy struct {
+	ID             string
+	WorkspaceID    string
+	ObjectID       string
+	PolicyType     string
+	ExpressionJSON string
+	CreatedAt      string
+	UpdatedAt      string
+}
+
+type DataPolicyInput struct {
+	ID             string
+	Object         ObjectRef
+	PolicyType     string
+	ExpressionJSON string
 }
 
 type ExternalIdentityInput struct {
@@ -397,12 +454,16 @@ type Session struct {
 }
 
 type AuditEventInput struct {
-	WorkspaceID  string
-	PrincipalID  string
-	Action       string
-	TargetType   string
-	TargetID     string
-	MetadataJSON string
+	WorkspaceID   string
+	PrincipalID   string
+	Action        string
+	TargetType    string
+	TargetID      string
+	Privilege     Privilege
+	Status        string
+	RequestID     string
+	CorrelationID string
+	MetadataJSON  string
 }
 
 type AuditEventFilter struct {
@@ -420,14 +481,18 @@ type AuditEventFilter struct {
 }
 
 type AuditEvent struct {
-	ID           string
-	WorkspaceID  string
-	PrincipalID  string
-	Action       string
-	TargetType   string
-	TargetID     string
-	MetadataJSON string
-	CreatedAt    string
+	ID            string
+	WorkspaceID   string
+	PrincipalID   string
+	Action        string
+	TargetType    string
+	TargetID      string
+	Privilege     Privilege
+	Status        string
+	RequestID     string
+	CorrelationID string
+	MetadataJSON  string
+	CreatedAt     string
 }
 
 type Repository interface {
@@ -443,10 +508,20 @@ type Repository interface {
 	ListRoleBindings(ctx context.Context, workspaceID string) ([]RoleBinding, error)
 	ListRoles(ctx context.Context) ([]Role, error)
 	Authorize(ctx context.Context, principalID string, privilege Privilege, object ObjectRef) (AuthorizationDecision, error)
+	AuthorizeAny(ctx context.Context, principalID string, privilege Privilege, objects []ObjectRef) (AuthorizationDecision, error)
 	EffectivePrivileges(ctx context.Context, principalID string, object ObjectRef) ([]Privilege, error)
+	EffectiveAccess(ctx context.Context, principalID string, object ObjectRef) ([]AuthorizationDecision, error)
 	CreateGrant(ctx context.Context, input GrantInput) (Grant, error)
 	DeleteGrant(ctx context.Context, workspaceID, id string) error
 	ListGrants(ctx context.Context, object ObjectRef) ([]Grant, error)
+	ListGrantsWithOptions(ctx context.Context, object ObjectRef, includeInherited bool) ([]GrantView, error)
+	CreateServicePrincipal(ctx context.Context, input ServicePrincipalInput) (Principal, error)
+	ListServicePrincipals(ctx context.Context) ([]Principal, error)
+	UpdateServicePrincipal(ctx context.Context, id string, input ServicePrincipalInput) (Principal, error)
+	DeleteServicePrincipal(ctx context.Context, id string) error
+	CreateServicePrincipalSecret(ctx context.Context, servicePrincipalID, name string) (string, ServicePrincipalSecret, error)
+	RevokeServicePrincipalSecret(ctx context.Context, servicePrincipalID, secretID string) error
+	PrincipalForServicePrincipalSecret(ctx context.Context, servicePrincipalID, secret string) (Principal, error)
 	BootstrapAdmin(ctx context.Context, workspaceID, email string) error
 	ResolveExternalPrincipal(ctx context.Context, input ExternalIdentityInput) (Principal, error)
 	UpsertGroup(ctx context.Context, input GroupInput) (Group, error)

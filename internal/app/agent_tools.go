@@ -323,7 +323,7 @@ func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, o
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
 	}
-	if errResult, ok := s.authorizeAPIGenAgentTool(ctx, toolScope, operation); !ok {
+	if errResult, ok := s.authorizeAPIGenAgentTool(ctx, toolScope, operation, args); !ok {
 		return errResult
 	}
 	ctx = dataquery.WithMetadata(ctx, dataquery.Metadata{
@@ -346,15 +346,19 @@ func (s *Server) runAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, o
 	return apigenAgentToolResult(operation.Extension, recorder.Result())
 }
 
-func (s *Server) authorizeAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, operation apigenAgentOperation) (agent.ToolResult, bool) {
+func (s *Server) authorizeAPIGenAgentTool(ctx context.Context, scope agentapp.Scope, operation apigenAgentOperation, args map[string]any) (agent.ToolResult, bool) {
 	permission := apigenOperationPermissions[operation.Contract.OperationID]
 	if permission == "" {
 		return apigenAgentToolError("forbidden", "operation has no LibreDash permission mapping"), false
 	}
-	return s.authorizeAgentPermission(ctx, scope, permission)
+	request, err := apigenAgentToolRequest(ctx, scope, operation, args)
+	if err != nil {
+		return apigenAgentToolError("invalid_arguments", err.Error()), false
+	}
+	return s.authorizeAgentPermission(ctx, scope, permission, authObjectsForRequest(permission, request, scope.WorkspaceID))
 }
 
-func (s *Server) authorizeAgentPermission(ctx context.Context, scope agentapp.Scope, privilege access.Privilege) (agent.ToolResult, bool) {
+func (s *Server) authorizeAgentPermission(ctx context.Context, scope agentapp.Scope, privilege access.Privilege, objects []access.ObjectRef) (agent.ToolResult, bool) {
 	if scope.PrincipalID == "" {
 		return apigenAgentToolError("unauthorized", "agent tool requires an authenticated principal"), false
 	}
@@ -371,7 +375,7 @@ func (s *Server) authorizeAgentPermission(ctx context.Context, scope agentapp.Sc
 	if repo == nil {
 		return agent.ToolResult{}, true
 	}
-	decision, err := repo.Authorize(ctx, scope.PrincipalID, privilege, access.WorkspaceObject(scope.WorkspaceID))
+	decision, err := repo.AuthorizeAny(ctx, scope.PrincipalID, privilege, objects)
 	if err != nil {
 		return apigenAgentToolError("authorization_failed", err.Error()), false
 	}

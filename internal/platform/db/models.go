@@ -101,14 +101,18 @@ type AssetEdge struct {
 }
 
 type AuditEvent struct {
-	ID           string         `json:"id"`
-	WorkspaceID  sql.NullString `json:"workspace_id"`
-	PrincipalID  sql.NullString `json:"principal_id"`
-	Action       string         `json:"action"`
-	TargetType   string         `json:"target_type"`
-	TargetID     string         `json:"target_id"`
-	MetadataJson string         `json:"metadata_json"`
-	CreatedAt    string         `json:"created_at"`
+	ID            string         `json:"id"`
+	WorkspaceID   sql.NullString `json:"workspace_id"`
+	PrincipalID   sql.NullString `json:"principal_id"`
+	Action        string         `json:"action"`
+	TargetType    string         `json:"target_type"`
+	TargetID      string         `json:"target_id"`
+	Privilege     string         `json:"privilege"`
+	Status        string         `json:"status"`
+	RequestID     string         `json:"request_id"`
+	CorrelationID string         `json:"correlation_id"`
+	MetadataJson  string         `json:"metadata_json"`
+	CreatedAt     string         `json:"created_at"`
 }
 
 type DataPolicy struct {
@@ -332,6 +336,16 @@ type SecurableObject struct {
 	DisplayName      string `json:"display_name"`
 	CreatedAt        string `json:"created_at"`
 	UpdatedAt        string `json:"updated_at"`
+}
+
+type ServicePrincipalSecret struct {
+	ID                 string         `json:"id"`
+	ServicePrincipalID string         `json:"service_principal_id"`
+	Name               string         `json:"name"`
+	SecretHash         string         `json:"secret_hash"`
+	ExpiresAt          sql.NullString `json:"expires_at"`
+	CreatedAt          string         `json:"created_at"`
+	RevokedAt          sql.NullString `json:"revoked_at"`
 }
 
 type Session struct {

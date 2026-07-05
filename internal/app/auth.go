@@ -191,7 +191,7 @@ func (a *Auth) Middleware(privilege access.Privilege, next http.Handler) http.Ha
 				writeAuthError(w, r, errForbidden, http.StatusForbidden)
 				return
 			}
-			decision, err := a.repo.Authorize(r.Context(), principal.ID, privilege, authObjectForWorkspace(workspaceID))
+			decision, err := a.repo.AuthorizeAny(r.Context(), principal.ID, privilege, authObjectsForRequest(privilege, r, workspaceID))
 			if err != nil {
 				writeAuthError(w, r, err, http.StatusInternalServerError)
 				return

@@ -40,8 +40,12 @@ func (r *Repository) UpsertPrincipal(ctx context.Context, input access.Principal
 	if strings.TrimSpace(input.ID) == "" {
 		input.ID = newID("principal")
 	}
+	if input.Kind == "" {
+		input.Kind = access.PrincipalKindUser
+	}
 	if err := r.q.UpsertPrincipal(ctx, platformdb.UpsertPrincipalParams{
 		ID:          input.ID,
+		Kind:        string(input.Kind),
 		Email:       input.Email,
 		DisplayName: input.DisplayName,
 	}); err != nil {
@@ -287,17 +291,15 @@ func (r *Repository) Authorize(ctx context.Context, principalID string, privileg
 		decision.Allowed = true
 		decision.Platform = true
 		decision.GrantID = platformDecision.GrantID
+		decision.GrantObjectID = platformDecision.GrantObjectID
+		decision.SubjectType = platformDecision.SubjectType
+		decision.SubjectID = platformDecision.SubjectID
 		decision.Reason = "platform_admin"
 		return decision, nil
 	}
-	objectIDs := []string{}
-	for current := object; ; {
-		objectIDs = append(objectIDs, current.CanonicalID())
-		parent, ok := current.Parent()
-		if !ok {
-			break
-		}
-		current = parent
+	objectIDs, err := r.objectAncestry(ctx, objectID)
+	if err != nil {
+		return decision, err
 	}
 	grantDecision, err := r.authorizeByGrant(ctx, principalID, privilege, objectIDs)
 	if err != nil {
@@ -312,15 +314,45 @@ func (r *Repository) Authorize(ctx context.Context, principalID string, privileg
 	return decision, nil
 }
 
+func (r *Repository) AuthorizeAny(ctx context.Context, principalID string, privilege access.Privilege, objects []access.ObjectRef) (access.AuthorizationDecision, error) {
+	if len(objects) == 0 {
+		return access.AuthorizationDecision{Privilege: privilege, Reason: "missing_object"}, nil
+	}
+	var last access.AuthorizationDecision
+	for _, object := range objects {
+		decision, err := r.Authorize(ctx, principalID, privilege, object)
+		if err != nil {
+			return decision, err
+		}
+		if decision.Allowed {
+			return decision, nil
+		}
+		last = decision
+	}
+	return last, nil
+}
+
 func (r *Repository) EffectivePrivileges(ctx context.Context, principalID string, object access.ObjectRef) ([]access.Privilege, error) {
 	out := []access.Privilege{}
+	effective, err := r.EffectiveAccess(ctx, principalID, object)
+	if err != nil {
+		return nil, err
+	}
+	for _, decision := range effective {
+		out = append(out, decision.Privilege)
+	}
+	return out, nil
+}
+
+func (r *Repository) EffectiveAccess(ctx context.Context, principalID string, object access.ObjectRef) ([]access.AuthorizationDecision, error) {
+	out := []access.AuthorizationDecision{}
 	for _, privilege := range knownPrivileges() {
 		decision, err := r.Authorize(ctx, principalID, privilege, object)
 		if err != nil {
 			return nil, err
 		}
 		if decision.Allowed {
-			out = append(out, privilege)
+			out = append(out, decision)
 		}
 	}
 	return out, nil
@@ -358,32 +390,140 @@ WHERE id = ?
 	return err
 }
 
-func (r *Repository) ListGrants(ctx context.Context, object access.ObjectRef) ([]access.Grant, error) {
+func (r *Repository) UpsertDataPolicy(ctx context.Context, input access.DataPolicyInput) (access.DataPolicy, error) {
+	if strings.TrimSpace(input.ID) == "" {
+		input.ID = newID("datapolicy")
+	}
+	if strings.TrimSpace(input.PolicyType) == "" {
+		return access.DataPolicy{}, fmt.Errorf("data policy type is required")
+	}
+	if strings.TrimSpace(input.ExpressionJSON) == "" {
+		input.ExpressionJSON = "{}"
+	}
+	objectID, err := r.ensureSecurableObject(ctx, input.Object)
+	if err != nil {
+		return access.DataPolicy{}, err
+	}
+	_, err = r.db.ExecContext(ctx, `
+INSERT INTO data_policies (id, workspace_id, object_id, policy_type, expression_json)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+  workspace_id = excluded.workspace_id,
+  object_id = excluded.object_id,
+  policy_type = excluded.policy_type,
+  expression_json = excluded.expression_json,
+  updated_at = CURRENT_TIMESTAMP
+`, input.ID, input.Object.WorkspaceID, objectID, input.PolicyType, input.ExpressionJSON)
+	if err != nil {
+		return access.DataPolicy{}, err
+	}
+	return r.GetDataPolicy(ctx, input.Object.WorkspaceID, input.ID)
+}
+
+func (r *Repository) GetDataPolicy(ctx context.Context, workspaceID, id string) (access.DataPolicy, error) {
+	row := r.db.QueryRowContext(ctx, `
+SELECT id, workspace_id, object_id, policy_type, expression_json, created_at, updated_at
+FROM data_policies
+WHERE id = ? AND workspace_id = ?
+`, id, workspaceID)
+	var policy access.DataPolicy
+	if err := row.Scan(&policy.ID, &policy.WorkspaceID, &policy.ObjectID, &policy.PolicyType, &policy.ExpressionJSON, &policy.CreatedAt, &policy.UpdatedAt); err != nil {
+		return access.DataPolicy{}, err
+	}
+	return policy, nil
+}
+
+func (r *Repository) ListDataPolicies(ctx context.Context, object access.ObjectRef) ([]access.DataPolicy, error) {
 	objectID, err := r.ensureSecurableObject(ctx, object)
 	if err != nil {
 		return nil, err
 	}
 	rows, err := r.db.QueryContext(ctx, `
-SELECT g.id, g.object_id, so.object_type, so.workspace_id, g.subject_type, g.subject_id, g.privilege, g.created_at
-FROM grants g
-JOIN securable_objects so ON so.id = g.object_id
-WHERE g.object_id = ?
-ORDER BY g.subject_type, g.subject_id, g.privilege
+SELECT id, workspace_id, object_id, policy_type, expression_json, created_at, updated_at
+FROM data_policies
+WHERE object_id = ?
+ORDER BY policy_type, id
 `, objectID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	grants := []access.Grant{}
+	policies := []access.DataPolicy{}
 	for rows.Next() {
-		var grant access.Grant
+		var policy access.DataPolicy
+		if err := rows.Scan(&policy.ID, &policy.WorkspaceID, &policy.ObjectID, &policy.PolicyType, &policy.ExpressionJSON, &policy.CreatedAt, &policy.UpdatedAt); err != nil {
+			return nil, err
+		}
+		policies = append(policies, policy)
+	}
+	return policies, rows.Err()
+}
+
+func (r *Repository) DeleteDataPolicy(ctx context.Context, workspaceID, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("data policy id is required")
+	}
+	_, err := r.db.ExecContext(ctx, `DELETE FROM data_policies WHERE workspace_id = ? AND id = ?`, workspaceID, id)
+	return err
+}
+
+func (r *Repository) ListGrants(ctx context.Context, object access.ObjectRef) ([]access.Grant, error) {
+	views, err := r.ListGrantsWithOptions(ctx, object, false)
+	if err != nil {
+		return nil, err
+	}
+	grants := make([]access.Grant, 0, len(views))
+	for _, view := range views {
+		grants = append(grants, view.Grant)
+	}
+	return grants, nil
+}
+
+func (r *Repository) ListGrantsWithOptions(ctx context.Context, object access.ObjectRef, includeInherited bool) ([]access.GrantView, error) {
+	objectID, err := r.ensureSecurableObject(ctx, object)
+	if err != nil {
+		return nil, err
+	}
+	objectIDs := []string{objectID}
+	if includeInherited {
+		objectIDs, err = r.objectAncestry(ctx, objectID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(objectIDs)), ",")
+	args := make([]any, 0, len(objectIDs)*2)
+	for _, id := range objectIDs {
+		args = append(args, id)
+	}
+	rows, err := r.db.QueryContext(ctx, `
+SELECT g.id, g.object_id, so.object_type, so.workspace_id, so.parent_id,
+       parent.object_type, parent.id,
+       g.subject_type, g.subject_id, g.privilege, g.created_at
+FROM grants g
+JOIN securable_objects so ON so.id = g.object_id
+LEFT JOIN securable_objects parent ON parent.id = so.parent_id
+WHERE g.object_id IN (`+placeholders+`)
+ORDER BY CASE g.object_id`+grantOrderCase(objectIDs)+` ELSE 999 END, g.subject_type, g.subject_id, g.privilege
+`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	grants := []access.GrantView{}
+	for rows.Next() {
+		var grant access.GrantView
 		var objectType, subjectType, privilege string
-		if err := rows.Scan(&grant.ID, &grant.ObjectID, &objectType, &grant.WorkspaceID, &subjectType, &grant.SubjectID, &privilege, &grant.CreatedAt); err != nil {
+		var parentType, parentID sql.NullString
+		if err := rows.Scan(&grant.ID, &grant.ObjectID, &objectType, &grant.WorkspaceID, &grant.ParentID, &parentType, &parentID, &subjectType, &grant.SubjectID, &privilege, &grant.CreatedAt); err != nil {
 			return nil, err
 		}
 		grant.ObjectType = access.SecurableType(objectType)
 		grant.SubjectType = access.SubjectType(subjectType)
 		grant.Privilege = access.Privilege(privilege)
+		grant.Inherited = grant.ObjectID != objectID
+		grant.ParentType = access.SecurableType(nullString(parentType))
+		grant.ParentObject = nullString(parentID)
 		grants = append(grants, grant)
 	}
 	return grants, rows.Err()
@@ -400,7 +540,7 @@ func (r *Repository) authorizeByGrant(ctx context.Context, principalID string, p
 		args = append(args, id)
 	}
 	query := `
-SELECT g.id, g.object_id
+SELECT g.id, g.object_id, g.subject_type, g.subject_id
 FROM grants g
 LEFT JOIN group_members gm
   ON g.subject_type = 'group'
@@ -415,8 +555,8 @@ ORDER BY CASE g.object_id`
 		args = append(args, id)
 	}
 	query += " ELSE 999 END LIMIT 1"
-	var grantID, objectID string
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(&grantID, &objectID)
+	var grantID, objectID, subjectType, subjectID string
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(&grantID, &objectID, &subjectType, &subjectID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return decision, nil
@@ -425,6 +565,9 @@ ORDER BY CASE g.object_id`
 	}
 	decision.Allowed = true
 	decision.GrantID = grantID
+	decision.GrantObjectID = objectID
+	decision.SubjectType = access.SubjectType(subjectType)
+	decision.SubjectID = subjectID
 	decision.Inherited = len(objectIDs) > 0 && objectID != objectIDs[0]
 	decision.Reason = "grant"
 	return decision, nil
@@ -436,7 +579,9 @@ func (r *Repository) ensureSecurableObject(ctx context.Context, object access.Ob
 		return "", fmt.Errorf("securable object id is required")
 	}
 	parentID := ""
-	if parent, ok := object.Parent(); ok {
+	if strings.TrimSpace(object.ParentID) != "" {
+		parentID = strings.TrimSpace(object.ParentID)
+	} else if parent, ok := object.Parent(); ok {
 		parentID = parent.CanonicalID()
 		if _, err := r.ensureSecurableObject(ctx, parent); err != nil {
 			return "", err
@@ -453,6 +598,37 @@ ON CONFLICT(id) DO UPDATE SET
   updated_at = CURRENT_TIMESTAMP
 `, objectID, string(object.Type), object.WorkspaceID, parentID, objectDisplayName(object))
 	return objectID, err
+}
+
+func (r *Repository) objectAncestry(ctx context.Context, objectID string) ([]string, error) {
+	ids := []string{}
+	seen := map[string]bool{}
+	current := objectID
+	for current != "" {
+		if seen[current] {
+			return nil, fmt.Errorf("securable object parent cycle at %q", current)
+		}
+		seen[current] = true
+		ids = append(ids, current)
+		var parentID string
+		err := r.db.QueryRowContext(ctx, `SELECT parent_id FROM securable_objects WHERE id = ?`, current).Scan(&parentID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				break
+			}
+			return nil, err
+		}
+		current = parentID
+	}
+	return ids, nil
+}
+
+func grantOrderCase(objectIDs []string) string {
+	out := ""
+	for i, id := range objectIDs {
+		out += fmt.Sprintf(" WHEN '%s' THEN %d", strings.ReplaceAll(id, "'", "''"), i)
+	}
+	return out
 }
 
 func objectDisplayName(object access.ObjectRef) string {
@@ -1038,6 +1214,120 @@ func (r *Repository) RevokeAPITokenForPrincipal(ctx context.Context, principalID
 	return err
 }
 
+func (r *Repository) CreateServicePrincipal(ctx context.Context, input access.ServicePrincipalInput) (access.Principal, error) {
+	id := strings.TrimSpace(input.ID)
+	if id == "" {
+		id = newID("sp")
+	}
+	displayName := strings.TrimSpace(input.DisplayName)
+	if displayName == "" {
+		displayName = id
+	}
+	return r.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          id,
+		Kind:        access.PrincipalKindServicePrincipal,
+		DisplayName: displayName,
+	})
+}
+
+func (r *Repository) ListServicePrincipals(ctx context.Context) ([]access.Principal, error) {
+	rows, err := r.q.ListServicePrincipals(ctx)
+	if err != nil {
+		return nil, err
+	}
+	principals := make([]access.Principal, 0, len(rows))
+	for _, row := range rows {
+		principals = append(principals, mapPrincipal(row))
+	}
+	return principals, nil
+}
+
+func (r *Repository) UpdateServicePrincipal(ctx context.Context, id string, input access.ServicePrincipalInput) (access.Principal, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return access.Principal{}, fmt.Errorf("service principal id is required")
+	}
+	existing, err := r.q.GetPrincipal(ctx, id)
+	if err != nil {
+		return access.Principal{}, err
+	}
+	if access.PrincipalKind(existing.Kind) != access.PrincipalKindServicePrincipal {
+		return access.Principal{}, fmt.Errorf("principal %q is not a service principal", id)
+	}
+	displayName := firstNonEmpty(strings.TrimSpace(input.DisplayName), existing.DisplayName, id)
+	return r.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          id,
+		Kind:        access.PrincipalKindServicePrincipal,
+		DisplayName: displayName,
+	})
+}
+
+func (r *Repository) DeleteServicePrincipal(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("service principal id is required")
+	}
+	return r.q.DeleteServicePrincipal(ctx, id)
+}
+
+func (r *Repository) CreateServicePrincipalSecret(ctx context.Context, servicePrincipalID, name string) (string, access.ServicePrincipalSecret, error) {
+	servicePrincipalID = strings.TrimSpace(servicePrincipalID)
+	if servicePrincipalID == "" {
+		return "", access.ServicePrincipalSecret{}, fmt.Errorf("service principal id is required")
+	}
+	principal, err := r.q.GetPrincipal(ctx, servicePrincipalID)
+	if err != nil {
+		return "", access.ServicePrincipalSecret{}, err
+	}
+	if access.PrincipalKind(principal.Kind) != access.PrincipalKindServicePrincipal {
+		return "", access.ServicePrincipalSecret{}, fmt.Errorf("principal %q is not a service principal", servicePrincipalID)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "default"
+	}
+	secret := newSecret()
+	row := access.ServicePrincipalSecret{
+		ID:                 newID("spsecret"),
+		ServicePrincipalID: servicePrincipalID,
+		Name:               name,
+		Secret:             tokenHash(secret),
+	}
+	if err := r.q.CreateServicePrincipalSecret(ctx, platformdb.CreateServicePrincipalSecretParams{
+		ID:                 row.ID,
+		ServicePrincipalID: row.ServicePrincipalID,
+		Name:               row.Name,
+		SecretHash:         row.Secret,
+	}); err != nil {
+		return "", access.ServicePrincipalSecret{}, err
+	}
+	return secret, row, nil
+}
+
+func (r *Repository) RevokeServicePrincipalSecret(ctx context.Context, servicePrincipalID, secretID string) error {
+	if strings.TrimSpace(servicePrincipalID) == "" || strings.TrimSpace(secretID) == "" {
+		return fmt.Errorf("service principal id and secret id are required")
+	}
+	return r.q.RevokeServicePrincipalSecret(ctx, platformdb.RevokeServicePrincipalSecretParams{
+		ServicePrincipalID: servicePrincipalID,
+		ID:                 secretID,
+	})
+}
+
+func (r *Repository) PrincipalForServicePrincipalSecret(ctx context.Context, servicePrincipalID, secret string) (access.Principal, error) {
+	row, err := r.q.GetServicePrincipalSecretByHash(ctx, platformdb.GetServicePrincipalSecretByHashParams{
+		ServicePrincipalID: strings.TrimSpace(servicePrincipalID),
+		SecretHash:         tokenHash(secret),
+	})
+	if err != nil {
+		return access.Principal{}, err
+	}
+	principal, err := r.q.GetPrincipal(ctx, row.ServicePrincipalID)
+	if err != nil {
+		return access.Principal{}, err
+	}
+	return mapPrincipal(principal), nil
+}
+
 func (r *Repository) RecordAuditEvent(ctx context.Context, input access.AuditEventInput) error {
 	if strings.TrimSpace(input.Action) == "" {
 		return fmt.Errorf("audit action is required")
@@ -1046,13 +1336,17 @@ func (r *Repository) RecordAuditEvent(ctx context.Context, input access.AuditEve
 		input.MetadataJSON = "{}"
 	}
 	return r.q.InsertAuditEvent(ctx, platformdb.InsertAuditEventParams{
-		ID:           newID("audit"),
-		WorkspaceID:  sql.NullString{String: input.WorkspaceID, Valid: strings.TrimSpace(input.WorkspaceID) != ""},
-		PrincipalID:  sql.NullString{String: input.PrincipalID, Valid: strings.TrimSpace(input.PrincipalID) != ""},
-		Action:       input.Action,
-		TargetType:   input.TargetType,
-		TargetID:     input.TargetID,
-		MetadataJson: input.MetadataJSON,
+		ID:            newID("audit"),
+		WorkspaceID:   sql.NullString{String: input.WorkspaceID, Valid: strings.TrimSpace(input.WorkspaceID) != ""},
+		PrincipalID:   sql.NullString{String: input.PrincipalID, Valid: strings.TrimSpace(input.PrincipalID) != ""},
+		Action:        input.Action,
+		TargetType:    input.TargetType,
+		TargetID:      input.TargetID,
+		Privilege:     string(input.Privilege),
+		Status:        input.Status,
+		RequestID:     input.RequestID,
+		CorrelationID: input.CorrelationID,
+		MetadataJson:  input.MetadataJSON,
 	})
 }
 
@@ -1097,14 +1391,18 @@ func (r *Repository) ListAuditEvents(ctx context.Context, filter access.AuditEve
 	events := make([]access.AuditEvent, 0, len(rows))
 	for _, row := range rows {
 		events = append(events, access.AuditEvent{
-			ID:           row.ID,
-			WorkspaceID:  nullString(row.WorkspaceID),
-			PrincipalID:  nullString(row.PrincipalID),
-			Action:       row.Action,
-			TargetType:   row.TargetType,
-			TargetID:     row.TargetID,
-			MetadataJSON: row.MetadataJson,
-			CreatedAt:    row.CreatedAt,
+			ID:            row.ID,
+			WorkspaceID:   nullString(row.WorkspaceID),
+			PrincipalID:   nullString(row.PrincipalID),
+			Action:        row.Action,
+			TargetType:    row.TargetType,
+			TargetID:      row.TargetID,
+			Privilege:     access.Privilege(row.Privilege),
+			Status:        row.Status,
+			RequestID:     row.RequestID,
+			CorrelationID: row.CorrelationID,
+			MetadataJSON:  row.MetadataJson,
+			CreatedAt:     row.CreatedAt,
 		})
 	}
 	return events, nil

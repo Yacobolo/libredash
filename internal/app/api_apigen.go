@@ -319,6 +319,30 @@ func (a apiGenAdapter) UpdatePrincipal(w http.ResponseWriter, r *http.Request, _
 	a.server.apiUpdatePrincipal(w, r)
 }
 
+func (a apiGenAdapter) ListServicePrincipals(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListServicePrincipalsParams) {
+	a.server.apiListServicePrincipals(w, r)
+}
+
+func (a apiGenAdapter) CreateServicePrincipal(w http.ResponseWriter, r *http.Request) {
+	a.server.apiCreateServicePrincipal(w, r)
+}
+
+func (a apiGenAdapter) UpdateServicePrincipal(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiUpdateServicePrincipal(w, r)
+}
+
+func (a apiGenAdapter) DeleteServicePrincipal(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiDeleteServicePrincipal(w, r)
+}
+
+func (a apiGenAdapter) CreateServicePrincipalSecret(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.apiCreateServicePrincipalSecret(w, r)
+}
+
+func (a apiGenAdapter) RevokeServicePrincipalSecret(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.apiRevokeServicePrincipalSecret(w, r)
+}
+
 func (a apiGenAdapter) ListWorkspaceRoles(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListWorkspaceRolesParams) {
 	a.server.apiWorkspaceRoles(w, r)
 }

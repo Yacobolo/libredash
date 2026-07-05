@@ -200,6 +200,16 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   revoked_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS service_principal_secrets (
+  id TEXT PRIMARY KEY,
+  service_principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  secret_hash TEXT NOT NULL UNIQUE,
+  expires_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  revoked_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS securable_objects (
   id TEXT PRIMARY KEY,
   object_type TEXT NOT NULL,
@@ -297,6 +307,10 @@ CREATE TABLE IF NOT EXISTS audit_events (
   action TEXT NOT NULL,
   target_type TEXT NOT NULL DEFAULT '',
   target_id TEXT NOT NULL DEFAULT '',
+  privilege TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT '',
+  request_id TEXT NOT NULL DEFAULT '',
+  correlation_id TEXT NOT NULL DEFAULT '',
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -399,6 +413,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS platform_role_bindings_principal_unique_idx
   ON platform_role_bindings(role_id, principal_id);
 CREATE INDEX IF NOT EXISTS sessions_token_hash_idx ON sessions(token_hash);
 CREATE INDEX IF NOT EXISTS api_tokens_principal_idx ON api_tokens(principal_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS service_principal_secrets_principal_idx ON service_principal_secrets(service_principal_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS audit_events_workspace_created_idx ON audit_events(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS query_events_workspace_created_idx ON query_events(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS query_events_principal_created_idx ON query_events(principal_id, created_at DESC);

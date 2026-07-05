@@ -230,9 +230,10 @@ ORDER BY
   d.id DESC;
 
 -- name: UpsertPrincipal :exec
-INSERT INTO principals (id, email, display_name, updated_at)
-VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+INSERT INTO principals (id, kind, email, display_name, updated_at)
+VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(id) DO UPDATE SET
+  kind = excluded.kind,
   email = excluded.email,
   display_name = excluded.display_name,
   updated_at = CURRENT_TIMESTAMP;
@@ -242,6 +243,15 @@ SELECT * FROM principals WHERE id = ?;
 
 -- name: GetPrincipalByEmail :one
 SELECT * FROM principals WHERE lower(email) = lower(?) AND email <> '' LIMIT 1;
+
+-- name: ListServicePrincipals :many
+SELECT * FROM principals
+WHERE kind = 'service_principal'
+ORDER BY display_name, id;
+
+-- name: DeleteServicePrincipal :exec
+DELETE FROM principals
+WHERE id = ? AND kind = 'service_principal';
 
 -- name: UpsertExternalIdentity :exec
 INSERT INTO external_identities (id, principal_id, provider, tenant_id, subject, email, updated_at)
@@ -466,9 +476,28 @@ SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
 WHERE principal_id = ? AND id = ?
 RETURNING *;
 
+-- name: CreateServicePrincipalSecret :exec
+INSERT INTO service_principal_secrets (id, service_principal_id, name, secret_hash, expires_at)
+VALUES (?, ?, ?, ?, ?);
+
+-- name: GetServicePrincipalSecretByHash :one
+SELECT s.*
+FROM service_principal_secrets s
+JOIN principals p ON p.id = s.service_principal_id
+WHERE p.kind = 'service_principal'
+  AND s.service_principal_id = ?
+  AND s.secret_hash = ?
+  AND s.revoked_at IS NULL
+  AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP);
+
+-- name: RevokeServicePrincipalSecret :exec
+UPDATE service_principal_secrets
+SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+WHERE service_principal_id = ? AND id = ?;
+
 -- name: InsertAuditEvent :exec
-INSERT INTO audit_events (id, workspace_id, principal_id, action, target_type, target_id, metadata_json)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO audit_events (id, workspace_id, principal_id, action, target_type, target_id, privilege, status, request_id, correlation_id, metadata_json)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: ListAuditEvents :many
 SELECT * FROM audit_events

@@ -221,6 +221,70 @@ func (s *Server) apiRevokeCurrentSession(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
 
+func (s *Server) oauthToken(w http.ResponseWriter, r *http.Request) {
+	repo, err := s.accessRepository()
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	var input struct {
+		GrantType    string `json:"grant_type"`
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
+		Scope        string `json:"scope"`
+		WorkspaceID  string `json:"workspace_id"`
+	}
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			writeJSONError(w, err, http.StatusBadRequest)
+			return
+		}
+	} else {
+		if err := r.ParseForm(); err != nil {
+			writeJSONError(w, err, http.StatusBadRequest)
+			return
+		}
+		input.GrantType = r.Form.Get("grant_type")
+		input.ClientID = r.Form.Get("client_id")
+		input.ClientSecret = r.Form.Get("client_secret")
+		input.Scope = r.Form.Get("scope")
+		input.WorkspaceID = r.Form.Get("workspace_id")
+	}
+	if strings.TrimSpace(input.GrantType) != "client_credentials" {
+		writeJSONError(w, fmt.Errorf("unsupported grant_type %q", input.GrantType), http.StatusBadRequest)
+		return
+	}
+	principal, err := repo.PrincipalForServicePrincipalSecret(r.Context(), input.ClientID, input.ClientSecret)
+	if err != nil {
+		writeJSONError(w, errUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	ttl := time.Hour
+	permissions, err := privilegesFromOAuthScope(input.Scope)
+	if err != nil {
+		writeJSONError(w, err, http.StatusBadRequest)
+		return
+	}
+	token, row, err := repo.CreateAPITokenWithMetadata(r.Context(), access.APITokenInput{
+		PrincipalID: principal.ID,
+		WorkspaceID: input.WorkspaceID,
+		Name:        "oauth-client-credentials",
+		Permissions: permissions,
+		ExpiresAt:   time.Now().Add(ttl),
+	})
+	if err != nil {
+		writeJSONError(w, err, http.StatusBadRequest)
+		return
+	}
+	recordAccessAudit(r, repo, "oauth.token.created", principal.ID, input.WorkspaceID, "api_token", row.ID, "", "success", map[string]any{"grantType": "client_credentials"})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"access_token": token,
+		"token_type":   "Bearer",
+		"expires_in":   int(ttl.Seconds()),
+		"scope":        input.Scope,
+	})
+}
+
 func (s *Server) apiListPrincipals(w http.ResponseWriter, r *http.Request) {
 	if _, ok := apiLimitForRequest(w, r); !ok {
 		return
@@ -271,12 +335,133 @@ func (s *Server) apiUpdatePrincipal(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(input.DisplayName) != "" {
 		existing.DisplayName = input.DisplayName
 	}
-	principal, err := repo.UpsertPrincipal(r.Context(), access.PrincipalInput{ID: existing.ID, Email: existing.Email, DisplayName: existing.DisplayName})
+	principal, err := repo.UpsertPrincipal(r.Context(), access.PrincipalInput{ID: existing.ID, Kind: existing.Kind, Email: existing.Email, DisplayName: existing.DisplayName})
 	if err != nil {
 		writeJSONError(w, err, http.StatusBadRequest)
 		return
 	}
 	writeJSON(w, http.StatusOK, principalDTO(principal))
+}
+
+func (s *Server) apiListServicePrincipals(w http.ResponseWriter, r *http.Request) {
+	repo, err := s.accessRepository()
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	rows, err := repo.ListServicePrincipals(r.Context())
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	out := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, principalDTO(row))
+	}
+	_ = writePagedJSON(w, r, out)
+}
+
+func (s *Server) apiCreateServicePrincipal(w http.ResponseWriter, r *http.Request) {
+	principal, _ := currentPrincipal(s, r)
+	var input struct {
+		ID          string `json:"id"`
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSONError(w, err, http.StatusBadRequest)
+		return
+	}
+	repo, err := s.accessRepository()
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	row, err := repo.CreateServicePrincipal(r.Context(), access.ServicePrincipalInput{ID: input.ID, DisplayName: input.DisplayName})
+	if err != nil {
+		writeJSONError(w, err, http.StatusBadRequest)
+		return
+	}
+	recordAccessAudit(r, repo, "service_principal.created", principal.ID, "", "service_principal", row.ID, access.PrivilegeManagePlatform, "success", nil)
+	writeJSON(w, http.StatusCreated, principalDTO(row))
+}
+
+func (s *Server) apiUpdateServicePrincipal(w http.ResponseWriter, r *http.Request) {
+	principal, _ := currentPrincipal(s, r)
+	var input struct {
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSONError(w, err, http.StatusBadRequest)
+		return
+	}
+	repo, err := s.accessRepository()
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	row, err := repo.UpdateServicePrincipal(r.Context(), chi.URLParam(r, "servicePrincipal"), access.ServicePrincipalInput{DisplayName: input.DisplayName})
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	recordAccessAudit(r, repo, "service_principal.updated", principal.ID, "", "service_principal", row.ID, access.PrivilegeManagePlatform, "success", nil)
+	writeJSON(w, http.StatusOK, principalDTO(row))
+}
+
+func (s *Server) apiDeleteServicePrincipal(w http.ResponseWriter, r *http.Request) {
+	principal, _ := currentPrincipal(s, r)
+	repo, err := s.accessRepository()
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	id := chi.URLParam(r, "servicePrincipal")
+	if err := repo.DeleteServicePrincipal(r.Context(), id); err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	recordAccessAudit(r, repo, "service_principal.deleted", principal.ID, "", "service_principal", id, access.PrivilegeManagePlatform, "success", nil)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+func (s *Server) apiCreateServicePrincipalSecret(w http.ResponseWriter, r *http.Request) {
+	principal, _ := currentPrincipal(s, r)
+	var input struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSONError(w, err, http.StatusBadRequest)
+		return
+	}
+	repo, err := s.accessRepository()
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	rawSecret, row, err := repo.CreateServicePrincipalSecret(r.Context(), chi.URLParam(r, "servicePrincipal"), input.Name)
+	if err != nil {
+		writeJSONError(w, err, http.StatusBadRequest)
+		return
+	}
+	recordAccessAudit(r, repo, "service_principal_secret.created", principal.ID, "", "service_principal", row.ServicePrincipalID, access.PrivilegeManagePlatform, "success", map[string]any{"secretId": row.ID})
+	writeJSON(w, http.StatusCreated, map[string]any{"secret": rawSecret, "clientSecret": servicePrincipalSecretDTO(row, "")})
+}
+
+func (s *Server) apiRevokeServicePrincipalSecret(w http.ResponseWriter, r *http.Request) {
+	principal, _ := currentPrincipal(s, r)
+	repo, err := s.accessRepository()
+	if err != nil {
+		writeJSONError(w, err, http.StatusInternalServerError)
+		return
+	}
+	servicePrincipalID := chi.URLParam(r, "servicePrincipal")
+	secretID := chi.URLParam(r, "secret")
+	if err := repo.RevokeServicePrincipalSecret(r.Context(), servicePrincipalID, secretID); err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	recordAccessAudit(r, repo, "service_principal_secret.revoked", principal.ID, "", "service_principal", servicePrincipalID, access.PrivilegeManagePlatform, "success", map[string]any{"secretId": secretID})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "revoked"})
 }
 
 func (s *Server) apiListGroups(w http.ResponseWriter, r *http.Request) {
@@ -447,24 +632,27 @@ func (s *Server) apiListEffectivePrivileges(w http.ResponseWriter, r *http.Reque
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	privileges, err := repo.EffectivePrivileges(r.Context(), principal.ID, object)
+	effective, err := repo.EffectiveAccess(r.Context(), principal.ID, object)
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	allowed := make([]string, 0, len(privileges))
+	allowed := make([]string, 0, len(effective))
+	explanations := make([]map[string]any, 0, len(effective))
 	workspaceID := s.workspaceID(chi.URLParam(r, "workspace"))
-	for _, privilege := range privileges {
-		if credential, ok := currentAPICredential(s, r); ok && !apiTokenAllows(credential.Token, workspaceID, privilege) {
+	for _, decision := range effective {
+		if credential, ok := currentAPICredential(s, r); ok && !apiTokenAllows(credential.Token, workspaceID, decision.Privilege) {
 			continue
 		}
-		allowed = append(allowed, string(privilege))
+		allowed = append(allowed, string(decision.Privilege))
+		explanations = append(explanations, authorizationDecisionDTO(decision))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"workspaceId": object.WorkspaceID,
-		"objectType":  string(object.Type),
-		"objectId":    emptyToNil(object.ObjectID),
-		"privileges":  allowed,
+		"workspaceId":     object.WorkspaceID,
+		"objectType":      string(object.Type),
+		"objectId":        emptyToNil(object.ObjectID),
+		"privileges":      allowed,
+		"effectiveGrants": explanations,
 	})
 }
 
@@ -478,14 +666,14 @@ func (s *Server) apiListGrants(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
-	rows, err := repo.ListGrants(r.Context(), object)
+	rows, err := repo.ListGrantsWithOptions(r.Context(), object, parseBoolQuery(r.URL.Query().Get("includeInherited")))
 	if err != nil {
 		writeJSONError(w, err, http.StatusInternalServerError)
 		return
 	}
 	out := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, grantDTO(row))
+		out = append(out, grantViewDTO(row))
 	}
 	_ = writePagedJSON(w, r, out)
 }
@@ -508,13 +696,13 @@ func (s *Server) apiCreateGrant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	subjectType := access.SubjectType(strings.TrimSpace(input.SubjectType))
-	if subjectType != access.SubjectPrincipal && subjectType != access.SubjectGroup {
+	if subjectType != access.SubjectPrincipal && subjectType != access.SubjectGroup && subjectType != access.SubjectServicePrincipal {
 		writeJSONError(w, fmt.Errorf("unsupported subject type %q", input.SubjectType), http.StatusBadRequest)
 		return
 	}
 	privilege := access.Privilege(strings.TrimSpace(input.Privilege))
-	if privilege == "" {
-		writeJSONError(w, fmt.Errorf("privilege is required"), http.StatusBadRequest)
+	if !knownPrivilege(privilege) {
+		writeJSONError(w, fmt.Errorf("unsupported privilege %q", input.Privilege), http.StatusBadRequest)
 		return
 	}
 	repo, err := s.accessRepository()
@@ -716,6 +904,31 @@ func grantDTO(row access.Grant) map[string]any {
 	}
 }
 
+func grantViewDTO(row access.GrantView) map[string]any {
+	out := grantDTO(row.Grant)
+	out["inherited"] = row.Inherited
+	out["parentId"] = emptyToNil(row.ParentID)
+	out["parentType"] = emptyToNil(string(row.ParentType))
+	out["parentObject"] = emptyToNil(row.ParentObject)
+	return out
+}
+
+func authorizationDecisionDTO(row access.AuthorizationDecision) map[string]any {
+	return map[string]any{
+		"privilege":     string(row.Privilege),
+		"reason":        row.Reason,
+		"objectType":    string(row.Object.Type),
+		"objectId":      emptyToNil(row.Object.ObjectID),
+		"grantId":       emptyToNil(row.GrantID),
+		"grantObjectId": emptyToNil(row.GrantObjectID),
+		"subjectType":   emptyToNil(string(row.SubjectType)),
+		"subjectId":     emptyToNil(row.SubjectID),
+		"inherited":     row.Inherited,
+		"owner":         row.Owner,
+		"platform":      row.Platform,
+	}
+}
+
 func recordGrantAudit(r *http.Request, repo access.Repository, action, principalID string, grant access.Grant) {
 	metadata, _ := json.Marshal(map[string]string{
 		"objectId":    grant.ObjectID,
@@ -725,12 +938,16 @@ func recordGrantAudit(r *http.Request, repo access.Repository, action, principal
 		"privilege":   string(grant.Privilege),
 	})
 	_ = repo.RecordAuditEvent(r.Context(), access.AuditEventInput{
-		WorkspaceID:  grant.WorkspaceID,
-		PrincipalID:  principalID,
-		Action:       action,
-		TargetType:   "grant",
-		TargetID:     grant.ID,
-		MetadataJSON: string(metadata),
+		WorkspaceID:   grant.WorkspaceID,
+		PrincipalID:   principalID,
+		Action:        action,
+		TargetType:    "grant",
+		TargetID:      grant.ID,
+		Privilege:     grant.Privilege,
+		Status:        "success",
+		RequestID:     requestIDFromRequest(r),
+		CorrelationID: correlationIDFromRequest(r),
+		MetadataJSON:  string(metadata),
 	})
 }
 
@@ -738,8 +955,41 @@ func apiTokenDTO(row access.APIToken) map[string]any {
 	return map[string]any{"id": row.ID, "name": row.Name, "workspaceId": row.WorkspaceID, "permissions": row.Permissions, "expiresAt": emptyToNil(row.ExpiresAt), "revokedAt": emptyToNil(row.RevokedAt), "createdAt": row.CreatedAt, "lastUsedAt": emptyToNil(row.LastUsedAt)}
 }
 
+func servicePrincipalSecretDTO(row access.ServicePrincipalSecret, rawSecret string) map[string]any {
+	out := map[string]any{
+		"id":                 row.ID,
+		"servicePrincipalId": row.ServicePrincipalID,
+		"name":               row.Name,
+		"createdAt":          emptyToNil(row.CreatedAt),
+		"revokedAt":          emptyToNil(row.RevokedAt),
+	}
+	if strings.TrimSpace(rawSecret) != "" {
+		out["secret"] = rawSecret
+	}
+	return out
+}
+
 func sessionDTO(row access.Session) map[string]any {
 	return map[string]any{"id": row.ID, "createdAt": row.CreatedAt, "expiresAt": row.ExpiresAt, "lastSeenAt": emptyToNil(row.LastSeenAt), "revokedAt": emptyToNil(row.RevokedAt)}
+}
+
+func recordAccessAudit(r *http.Request, repo access.Repository, action, principalID, workspaceID, targetType, targetID string, privilege access.Privilege, status string, metadata map[string]any) {
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	bytes, _ := json.Marshal(metadata)
+	_ = repo.RecordAuditEvent(r.Context(), access.AuditEventInput{
+		WorkspaceID:   workspaceID,
+		PrincipalID:   principalID,
+		Action:        action,
+		TargetType:    targetType,
+		TargetID:      targetID,
+		Privilege:     privilege,
+		Status:        status,
+		RequestID:     requestIDFromRequest(r),
+		CorrelationID: correlationIDFromRequest(r),
+		MetadataJSON:  string(bytes),
+	})
 }
 
 func auditEventDTO(row access.AuditEvent) map[string]any {
@@ -750,7 +1000,20 @@ func auditEventDTO(row access.AuditEvent) map[string]any {
 	if metadata == nil {
 		metadata = map[string]any{}
 	}
-	return map[string]any{"id": row.ID, "workspaceId": row.WorkspaceID, "principalId": row.PrincipalID, "action": row.Action, "targetType": row.TargetType, "targetId": row.TargetID, "metadata": metadata, "createdAt": row.CreatedAt}
+	return map[string]any{
+		"id":            row.ID,
+		"workspaceId":   row.WorkspaceID,
+		"principalId":   row.PrincipalID,
+		"action":        row.Action,
+		"targetType":    row.TargetType,
+		"targetId":      row.TargetID,
+		"privilege":     emptyToNil(string(row.Privilege)),
+		"status":        emptyToNil(row.Status),
+		"requestId":     emptyToNil(row.RequestID),
+		"correlationId": emptyToNil(row.CorrelationID),
+		"metadata":      metadata,
+		"createdAt":     row.CreatedAt,
+	}
 }
 
 func queryEventDTO(row queryaudit.Event) map[string]any {
@@ -825,6 +1088,54 @@ func privilegesFromStrings(values []string) []access.Privilege {
 	return privileges
 }
 
+func privilegesFromOAuthScope(scope string) ([]access.Privilege, error) {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		return nil, nil
+	}
+	values := strings.FieldsFunc(scope, func(r rune) bool {
+		return r == ' ' || r == ',' || r == '\n' || r == '\t'
+	})
+	privileges := make([]access.Privilege, 0, len(values))
+	for _, value := range values {
+		privilege := access.Privilege(strings.TrimSpace(value))
+		if privilege == "" {
+			continue
+		}
+		if !knownPrivilege(privilege) {
+			return nil, fmt.Errorf("unsupported OAuth scope privilege %q", value)
+		}
+		privileges = append(privileges, privilege)
+	}
+	if len(privileges) == 0 {
+		return nil, nil
+	}
+	return privileges, nil
+}
+
+func knownPrivilege(value access.Privilege) bool {
+	switch value {
+	case access.PrivilegeUseWorkspace,
+		access.PrivilegeViewItem,
+		access.PrivilegeEditItem,
+		access.PrivilegeManageItem,
+		access.PrivilegeQueryData,
+		access.PrivilegePreviewData,
+		access.PrivilegeRefreshData,
+		access.PrivilegeDeploy,
+		access.PrivilegeActivateDeployment,
+		access.PrivilegeUseAgent,
+		access.PrivilegeViewAgent,
+		access.PrivilegeManageGrants,
+		access.PrivilegeViewAudit,
+		access.PrivilegeManageWorkspace,
+		access.PrivilegeManagePlatform:
+		return true
+	default:
+		return false
+	}
+}
+
 func objectRefFromRequest(w http.ResponseWriter, r *http.Request) (access.ObjectRef, bool) {
 	return objectRefFromValues(w, r, r.URL.Query().Get("objectType"), r.URL.Query().Get("objectId"))
 }
@@ -838,7 +1149,18 @@ func objectRefFromValues(w http.ResponseWriter, r *http.Request, objectType, obj
 	objectType = strings.TrimSpace(objectType)
 	objectID = strings.TrimSpace(objectID)
 	if objectType == "" || objectType == string(access.SecurableWorkspace) {
+		if objectID != "" {
+			writeJSONError(w, fmt.Errorf("workspace objectId must be empty"), http.StatusBadRequest)
+			return access.ObjectRef{}, false
+		}
 		return access.WorkspaceObject(workspaceID), true
+	}
+	if access.SecurableType(objectType) == access.SecurablePlatform {
+		if objectID != "" {
+			writeJSONError(w, fmt.Errorf("platform objectId must be empty"), http.StatusBadRequest)
+			return access.ObjectRef{}, false
+		}
+		return access.PlatformObject(), true
 	}
 	typ := access.SecurableType(objectType)
 	if !validWorkspaceSecurableType(typ) {
@@ -850,6 +1172,23 @@ func objectRefFromValues(w http.ResponseWriter, r *http.Request, objectType, obj
 		return access.ObjectRef{}, false
 	}
 	return access.ItemObject(typ, workspaceID, objectID), true
+}
+
+func parseBoolQuery(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "1", "t", "true", "yes", "y":
+		return true
+	default:
+		return false
+	}
+}
+
+func requestIDFromRequest(r *http.Request) string {
+	return firstNonEmpty(r.Header.Get("X-Request-Id"), r.Header.Get("X-Request-ID"))
+}
+
+func correlationIDFromRequest(r *http.Request) string {
+	return firstNonEmpty(r.Header.Get("X-Correlation-Id"), r.Header.Get("X-Correlation-ID"), requestIDFromRequest(r))
 }
 
 func validWorkspaceSecurableType(typ access.SecurableType) bool {

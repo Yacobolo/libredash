@@ -22,6 +22,38 @@ model PrincipalPatchRequest {
   displayName?: string;
 }
 
+model ServicePrincipalCreateRequest {
+  id?: string;
+  displayName: string;
+}
+
+model ServicePrincipalPatchRequest {
+  displayName?: string;
+}
+
+model ServicePrincipalListResponse {
+  items: PrincipalResponse[];
+  page: PageInfo;
+}
+
+model ServicePrincipalSecretCreateRequest {
+  name: string;
+}
+
+model ServicePrincipalSecretResponse {
+  id: string;
+  servicePrincipalId: string;
+  name: string;
+  secret?: string;
+  createdAt?: utcDateTime;
+  revokedAt?: utcDateTime;
+}
+
+model ServicePrincipalSecretCreatedResponse {
+  secret: string;
+  clientSecret: ServicePrincipalSecretResponse;
+}
+
 model RoleResponse {
   name: string;
   permissions: string[];
@@ -97,6 +129,10 @@ model GrantResponse {
   subjectType: string;
   subjectId: string;
   privilege: string;
+  inherited?: boolean;
+  parentId?: string;
+  parentType?: string;
+  parentObject?: string;
   createdAt: utcDateTime;
 }
 
@@ -110,6 +146,21 @@ model EffectivePrivilegeListResponse {
   objectType: string;
   objectId?: string;
   privileges: string[];
+  effectiveGrants: AuthorizationDecisionResponse[];
+}
+
+model AuthorizationDecisionResponse {
+  privilege: string;
+  reason: string;
+  objectType: string;
+  objectId?: string;
+  grantId?: string;
+  grantObjectId?: string;
+  subjectType?: string;
+  subjectId?: string;
+  inherited: boolean;
+  owner: boolean;
+  platform: boolean;
 }
 
 alias ListPrincipalsOK = OkJson<PrincipalListResponse>;
@@ -138,6 +189,60 @@ alias UpdatePrincipalOK = OkJson<PrincipalResponse>;
 @patch
 @apigen.authz(#{ mode: "permission", permission: "MANAGE_GRANTS" })
 op updatePrincipal(@path principal: string, @body body: PrincipalPatchRequest): UpdatePrincipalOK | CommonErrors;
+
+alias ListServicePrincipalsOK = OkJson<ServicePrincipalListResponse>;
+
+@tag("Access")
+@summary("List service principals")
+@route("/service-principals")
+@get
+@apigen.authz(#{ mode: "permission", permission: "MANAGE_PLATFORM" })
+op listServicePrincipals(@query limit?: int32, @query pageToken?: string): ListServicePrincipalsOK | CommonErrors;
+
+alias CreateServicePrincipalCreated = CreatedJson<PrincipalResponse>;
+
+@tag("Access")
+@summary("Create a service principal")
+@route("/service-principals")
+@post
+@apigen.authz(#{ mode: "permission", permission: "MANAGE_PLATFORM" })
+op createServicePrincipal(@body body: ServicePrincipalCreateRequest): CreateServicePrincipalCreated | CommonErrors;
+
+alias UpdateServicePrincipalOK = OkJson<PrincipalResponse>;
+
+@tag("Access")
+@summary("Update a service principal")
+@route("/service-principals/{servicePrincipal}")
+@patch
+@apigen.authz(#{ mode: "permission", permission: "MANAGE_PLATFORM" })
+op updateServicePrincipal(@path servicePrincipal: string, @body body: ServicePrincipalPatchRequest): UpdateServicePrincipalOK | CommonErrors;
+
+alias DeleteServicePrincipalOK = OkJson<StatusResponse>;
+
+@tag("Access")
+@summary("Delete a service principal")
+@route("/service-principals/{servicePrincipal}")
+@delete
+@apigen.authz(#{ mode: "permission", permission: "MANAGE_PLATFORM" })
+op deleteServicePrincipal(@path servicePrincipal: string): DeleteServicePrincipalOK | CommonErrors;
+
+alias CreateServicePrincipalSecretCreated = CreatedJson<ServicePrincipalSecretCreatedResponse>;
+
+@tag("Access")
+@summary("Create a service principal secret")
+@route("/service-principals/{servicePrincipal}/secrets")
+@post
+@apigen.authz(#{ mode: "permission", permission: "MANAGE_PLATFORM" })
+op createServicePrincipalSecret(@path servicePrincipal: string, @body body: ServicePrincipalSecretCreateRequest): CreateServicePrincipalSecretCreated | CommonErrors;
+
+alias RevokeServicePrincipalSecretOK = OkJson<StatusResponse>;
+
+@tag("Access")
+@summary("Revoke a service principal secret")
+@route("/service-principals/{servicePrincipal}/secrets/{secret}")
+@delete
+@apigen.authz(#{ mode: "permission", permission: "MANAGE_PLATFORM" })
+op revokeServicePrincipalSecret(@path servicePrincipal: string, @path secret: string): RevokeServicePrincipalSecretOK | CommonErrors;
 
 alias ListGroupsOK = OkJson<GroupListResponse>;
 
@@ -272,7 +377,7 @@ alias ListGrantsOK = OkJson<GrantListResponse>;
 @route("/workspaces/{workspace}/grants")
 @get
 @apigen.authz(#{ mode: "permission", permission: "MANAGE_GRANTS" })
-op listGrants(@path workspace: string, @query objectType?: string, @query objectId?: string, @query limit?: int32, @query pageToken?: string): ListGrantsOK | CommonErrors;
+op listGrants(@path workspace: string, @query objectType?: string, @query objectId?: string, @query includeInherited?: boolean, @query limit?: int32, @query pageToken?: string): ListGrantsOK | CommonErrors;
 
 alias CreateGrantCreated = CreatedJson<GrantResponse>;
 

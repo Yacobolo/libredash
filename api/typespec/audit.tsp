@@ -11,6 +11,10 @@ model AuditEventResponse {
   action: string;
   targetType: string;
   targetId: string;
+  privilege?: string;
+  status?: string;
+  requestId?: string;
+  correlationId?: string;
   metadata: Record<string>;
   createdAt: utcDateTime;
 }

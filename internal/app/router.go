@@ -77,6 +77,7 @@ func (s *Server) Routes() http.Handler {
 		r.Use(s.rateLimits.authMiddleware())
 		r.Get("/auth/{provider}", s.authBegin)
 		r.Get("/auth/{provider}/callback", s.authCallback)
+		r.Post("/oauth/token", s.oauthToken)
 	})
 	if s.store != nil {
 		mux.Group(func(r chi.Router) {
