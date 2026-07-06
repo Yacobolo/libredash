@@ -9,7 +9,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/execution"
 )
 
-func TestDispatcherExecutesLegacyJobThroughWriteLane(t *testing.T) {
+func TestDispatcherExecutesDirectJobThroughWriteLane(t *testing.T) {
 	ctx := context.Background()
 	queue := &fakeQueueRepository{jobs: []materialize.JobRecord{{
 		ID:          "job_1",
@@ -17,19 +17,19 @@ func TestDispatcherExecutesLegacyJobThroughWriteLane(t *testing.T) {
 		RunID:       "run_1",
 		Kind:        materialize.JobKindRefresh,
 	}}}
-	legacy := &fakeLegacyExecutor{}
+	direct := &fakeDirectExecutor{}
 	executor := execution.New(execution.Config{MaxRunningJobs: 1, MaxQueuedJobs: 1})
 
 	Dispatcher{
 		Runs:         queue,
 		Executor:     executor,
-		Legacy:       legacy,
+		Direct:       direct,
 		Owner:        "test-owner",
 		LeaseTimeout: time.Minute,
 	}.Run(ctx)
 
-	if legacy.executedRun != "run_1" {
-		t.Fatalf("executed run = %q, want run_1", legacy.executedRun)
+	if direct.executedRun != "run_1" {
+		t.Fatalf("executed run = %q, want run_1", direct.executedRun)
 	}
 	if queue.claimOwner != "test-owner" {
 		t.Fatalf("claim owner = %q, want test-owner", queue.claimOwner)
@@ -111,11 +111,11 @@ func (r *fakeQueueRepository) MarkRunFailed(_ context.Context, _ string, runID, 
 	return materialize.RunRecord{ID: runID, Status: materialize.RunStatusFailed, Error: message}, nil
 }
 
-type fakeLegacyExecutor struct {
+type fakeDirectExecutor struct {
 	executedRun string
 }
 
-func (e *fakeLegacyExecutor) ExecuteLegacyJob(_ context.Context, job materialize.JobRecord) error {
+func (e *fakeDirectExecutor) ExecuteDirectJob(_ context.Context, job materialize.JobRecord) error {
 	e.executedRun = job.RunID
 	return nil
 }

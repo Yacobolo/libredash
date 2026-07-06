@@ -637,7 +637,7 @@ func TestDeploymentAPIAuditsRollbackWhenInactiveDeploymentIsActivated(t *testing
 	if len(events) != 1 {
 		t.Fatalf("rollback audit events = %d, want 1: %#v", len(events), events)
 	}
-	if events[0].Privilege != access.PrivilegeActivateDeployment || events[0].Status != "success" {
+	if events[0].Privilege != access.PrivilegeActivatePublish || events[0].Status != "success" {
 		t.Fatalf("rollback audit event = %#v, want activate privilege success", events[0])
 	}
 }

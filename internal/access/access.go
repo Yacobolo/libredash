@@ -13,21 +13,21 @@ import (
 type Privilege string
 
 const (
-	PrivilegeUseWorkspace       Privilege = "USE_WORKSPACE"
-	PrivilegeViewItem           Privilege = "VIEW_ITEM"
-	PrivilegeEditItem           Privilege = "EDIT_ITEM"
-	PrivilegeManageItem         Privilege = "MANAGE_ITEM"
-	PrivilegeQueryData          Privilege = "QUERY_DATA"
-	PrivilegePreviewData        Privilege = "PREVIEW_DATA"
-	PrivilegeRefreshData        Privilege = "REFRESH_DATA"
-	PrivilegeDeploy             Privilege = "DEPLOY"
-	PrivilegeActivateDeployment Privilege = "ACTIVATE_DEPLOYMENT"
-	PrivilegeUseAgent           Privilege = "USE_AGENT"
-	PrivilegeViewAgent          Privilege = "VIEW_AGENT"
-	PrivilegeManageGrants       Privilege = "MANAGE_GRANTS"
-	PrivilegeViewAudit          Privilege = "VIEW_AUDIT"
-	PrivilegeManageWorkspace    Privilege = "MANAGE_WORKSPACE"
-	PrivilegeManagePlatform     Privilege = "MANAGE_PLATFORM"
+	PrivilegeUseWorkspace    Privilege = "USE_WORKSPACE"
+	PrivilegeViewItem        Privilege = "VIEW_ITEM"
+	PrivilegeEditItem        Privilege = "EDIT_ITEM"
+	PrivilegeManageItem      Privilege = "MANAGE_ITEM"
+	PrivilegeQueryData       Privilege = "QUERY_DATA"
+	PrivilegePreviewData     Privilege = "PREVIEW_DATA"
+	PrivilegeRefreshData     Privilege = "REFRESH_DATA"
+	PrivilegeDeploy          Privilege = "DEPLOY"
+	PrivilegeActivatePublish Privilege = "ACTIVATE_PUBLISH"
+	PrivilegeUseAgent        Privilege = "USE_AGENT"
+	PrivilegeViewAgent       Privilege = "VIEW_AGENT"
+	PrivilegeManageGrants    Privilege = "MANAGE_GRANTS"
+	PrivilegeViewAudit       Privilege = "VIEW_AUDIT"
+	PrivilegeManageWorkspace Privilege = "MANAGE_WORKSPACE"
+	PrivilegeManagePlatform  Privilege = "MANAGE_PLATFORM"
 )
 
 const (
@@ -53,7 +53,7 @@ var defaultRoles = []Role{
 			PrivilegePreviewData,
 			PrivilegeRefreshData,
 			PrivilegeDeploy,
-			PrivilegeActivateDeployment,
+			PrivilegeActivatePublish,
 			PrivilegeUseAgent,
 			PrivilegeViewAgent,
 			PrivilegeManageGrants,
@@ -72,7 +72,7 @@ var defaultRoles = []Role{
 			PrivilegePreviewData,
 			PrivilegeRefreshData,
 			PrivilegeDeploy,
-			PrivilegeActivateDeployment,
+			PrivilegeActivatePublish,
 			PrivilegeUseAgent,
 			PrivilegeViewAgent,
 			PrivilegeManageGrants,
@@ -88,7 +88,7 @@ var defaultRoles = []Role{
 			PrivilegeQueryData,
 			PrivilegeRefreshData,
 			PrivilegeDeploy,
-			PrivilegeActivateDeployment,
+			PrivilegeActivatePublish,
 		},
 	},
 	{
@@ -152,7 +152,7 @@ var defaultRoles = []Role{
 			PrivilegePreviewData,
 			PrivilegeRefreshData,
 			PrivilegeDeploy,
-			PrivilegeActivateDeployment,
+			PrivilegeActivatePublish,
 			PrivilegeUseAgent,
 			PrivilegeViewAgent,
 			PrivilegeManageGrants,

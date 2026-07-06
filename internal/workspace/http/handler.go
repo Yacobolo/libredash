@@ -709,6 +709,17 @@ func assetAccessObject(r *nethttp.Request, workspaceID string) (access.ObjectRef
 	}
 }
 
+func AssetObjectRefs(r *nethttp.Request, workspaceID string) []access.ObjectRef {
+	objects := []access.ObjectRef{}
+	if object, ok := assetAccessObject(r, workspaceID); ok {
+		objects = append(objects, object)
+	}
+	if strings.TrimSpace(workspaceID) != "" {
+		objects = append(objects, access.WorkspaceObject(workspaceID))
+	}
+	return objects
+}
+
 func (h Handler) AssetUpdatesStream(w nethttp.ResponseWriter, r *nethttp.Request) {
 	workspaceID := h.workspaceID(chi.URLParam(r, "workspace"))
 	assetID := chi.URLParam(r, "asset")

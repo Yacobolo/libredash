@@ -943,7 +943,7 @@ func knownPrivileges() []access.Privilege {
 		access.PrivilegePreviewData,
 		access.PrivilegeRefreshData,
 		access.PrivilegeDeploy,
-		access.PrivilegeActivateDeployment,
+		access.PrivilegeActivatePublish,
 		access.PrivilegeUseAgent,
 		access.PrivilegeViewAgent,
 		access.PrivilegeManageGrants,

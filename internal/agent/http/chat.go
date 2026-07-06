@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/agent"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	lddatastar "github.com/Yacobolo/libredash/internal/dashboard/datastar"
@@ -36,6 +37,17 @@ type ChatTurnExecution struct {
 	ClientID           string
 	LiveConversations  []ui.ChatConversationSummary
 	Emit               ChatTurnEmitter
+}
+
+func ConversationObjectRefs(r *nethttp.Request, workspaceID string) []access.ObjectRef {
+	objects := []access.ObjectRef{}
+	if conversationID := strings.TrimSpace(chi.URLParam(r, "conversation")); conversationID != "" {
+		objects = append(objects, access.ItemObjectWithParent(access.SecurableAgentPolicy, workspaceID, "conversation/"+conversationID, access.WorkspaceObject(workspaceID)))
+	}
+	if strings.TrimSpace(workspaceID) != "" {
+		objects = append(objects, access.WorkspaceObject(workspaceID))
+	}
+	return objects
 }
 
 func (h *Handler) Chat(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -125,14 +137,6 @@ func (h *Handler) ChatUpdates(w nethttp.ResponseWriter, r *nethttp.Request) {
 			}
 		}
 	}
-}
-
-func LegacyChatRedirect(w nethttp.ResponseWriter, r *nethttp.Request) {
-	status := nethttp.StatusFound
-	if r.Method != nethttp.MethodGet && r.Method != nethttp.MethodHead {
-		status = nethttp.StatusTemporaryRedirect
-	}
-	nethttp.Redirect(w, r, legacyGlobalChatPath(chi.URLParam(r, "conversation"), strings.TrimSuffix(r.URL.Path, "/")), status)
 }
 
 func (h *Handler) renderChat(w nethttp.ResponseWriter, r *nethttp.Request, view string, signal ui.ChatSignal) {
@@ -316,21 +320,6 @@ func chatRoutePath(workspaceID string, parts ...string) string {
 		path += "/" + url.PathEscape(part)
 	}
 	return path
-}
-
-func legacyGlobalChatPath(conversationID, path string) string {
-	switch {
-	case strings.HasSuffix(path, "/new"):
-		return chatRoutePath("", "new")
-	case strings.HasSuffix(path, "/updates"):
-		return chatRoutePath("", "updates")
-	case strings.HasSuffix(path, "/turns"):
-		return chatRoutePath("", "turns")
-	case strings.TrimSpace(conversationID) != "":
-		return chatRoutePath("", conversationID)
-	default:
-		return chatRoutePath("")
-	}
 }
 
 func chatClientID(r *nethttp.Request) string {

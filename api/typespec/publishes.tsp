@@ -59,7 +59,7 @@ op getPublish(@path workspace: string, @path publish: string, @query environment
 @summary("Activate a publish")
 @route("/workspaces/{workspace}/publishes/{publish}/activate")
 @post
-@apigen.authz(#{ mode: "privilege", privilege: "ACTIVATE_DEPLOYMENT" })
+@apigen.authz(#{ mode: "privilege", privilege: "ACTIVATE_PUBLISH" })
 op activatePublish(@path workspace: string, @path publish: string, @query environment?: string): OkJson<PublishResponse> | CommonErrors;
 
 @tag("Publishes")

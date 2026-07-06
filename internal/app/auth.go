@@ -250,6 +250,10 @@ func (a *Auth) APICredential(r *http.Request) (access.APICredential, bool) {
 }
 
 func (a *Auth) Middleware(privilege access.Privilege, next http.Handler) http.Handler {
+	return a.MiddlewareWithObjectResolver(privilege, nil, next)
+}
+
+func (a *Auth) MiddlewareWithObjectResolver(privilege access.Privilege, objectResolver httpauth.ObjectResolver, next http.Handler) http.Handler {
 	if !a.Enabled() {
 		return next
 	}
@@ -270,12 +274,17 @@ func (a *Auth) Middleware(privilege access.Privilege, next http.Handler) http.Ha
 				return
 			}
 			objects := httpauth.ObjectsForRequest(privilege, r, workspaceID)
+			if objectResolver != nil && privilege != access.PrivilegeManagePlatform {
+				if resolved := objectResolver(r, workspaceID); len(resolved) > 0 {
+					objects = resolved
+				}
+			}
 			decision, err := a.repo.AuthorizeAny(r.Context(), principal.ID, privilege, objects)
 			if err != nil {
 				writeAuthError(w, r, err, http.StatusInternalServerError)
 				return
 			}
-			if !decision.Allowed && httpauth.RouteCanDeferDataAuth(privilege, r) {
+			if !decision.Allowed && httpauth.CanDeferDataAuth(privilege) {
 				useDecision, err := a.repo.Authorize(r.Context(), principal.ID, access.PrivilegeUseWorkspace, httpauth.ObjectForWorkspace(workspaceID))
 				if err != nil {
 					writeAuthError(w, r, err, http.StatusInternalServerError)
@@ -285,7 +294,7 @@ func (a *Auth) Middleware(privilege access.Privilege, next http.Handler) http.Ha
 					decision.Allowed = true
 				}
 			}
-			if !decision.Allowed && httpauth.RouteCanDeferDataAuth(privilege, r) {
+			if !decision.Allowed && httpauth.CanDeferDataAuth(privilege) {
 				viewDecision, err := a.repo.AuthorizeAny(r.Context(), principal.ID, access.PrivilegeViewItem, objects)
 				if err != nil {
 					writeAuthError(w, r, err, http.StatusInternalServerError)

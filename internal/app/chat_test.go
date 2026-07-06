@@ -104,33 +104,26 @@ func TestChatPageDisabledState(t *testing.T) {
 	}
 }
 
-func TestLegacyWorkspaceChatRoutesRedirectToGlobalChat(t *testing.T) {
+func TestWorkspaceChatRoutesAreRemoved(t *testing.T) {
 	store := testStore(t)
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 	_, token := chatPrincipalAndToken(t, context.Background(), store)
 
-	for path, want := range map[string]string{
-		"/workspaces/test/chat":             "/chat",
-		"/workspaces/test/chat/new":         "/chat/new",
-		"/workspaces/test/chat/updates":     "/chat/updates",
-		"/workspaces/test/chat/agentconv_1": "/chat/agentconv_1",
+	for _, path := range []string{
+		"/workspaces/test/chat",
+		"/workspaces/test/chat/new",
+		"/workspaces/test/chat/updates",
+		"/workspaces/test/chat/agentconv_1",
+		"/workspaces/test/chat/turns",
 	} {
 		req := httptest.NewRequest(http.MethodGet, path, nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec := httptest.NewRecorder()
 		server.Routes().ServeHTTP(rec, req)
-		if rec.Code != http.StatusFound || rec.Header().Get("Location") != want {
-			t.Fatalf("%s status=%d location=%q want %q", path, rec.Code, rec.Header().Get("Location"), want)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s status=%d location=%q body=%s", path, rec.Code, rec.Header().Get("Location"), rec.Body.String())
 		}
-	}
-
-	req := httptest.NewRequest(http.MethodPost, "/workspaces/test/chat/turns", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
-	rec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusTemporaryRedirect || rec.Header().Get("Location") != "/chat/turns" {
-		t.Fatalf("legacy turns status=%d location=%q", rec.Code, rec.Header().Get("Location"))
 	}
 }
 

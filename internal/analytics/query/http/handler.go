@@ -9,7 +9,9 @@ import (
 	"io"
 	nethttp "net/http"
 	"sort"
+	"strings"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
 	queryauthz "github.com/Yacobolo/libredash/internal/analytics/query/authz"
@@ -32,6 +34,22 @@ type Handler struct {
 	Metrics             Metrics
 	MetricsForWorkspace func(workspaceID string) (Metrics, bool)
 	CurrentPrincipalID  func(r *nethttp.Request) string
+}
+
+func SemanticDatasetObjectRefs(r *nethttp.Request, workspaceID string) []access.ObjectRef {
+	objects := []access.ObjectRef{}
+	modelID := strings.TrimSpace(chi.URLParam(r, "model"))
+	if modelID != "" {
+		model := access.ItemObjectWithParent(access.SecurableSemanticModel, workspaceID, modelID, access.WorkspaceObject(workspaceID))
+		if datasetID := strings.TrimSpace(chi.URLParam(r, "dataset")); datasetID != "" {
+			objects = append(objects, access.ItemObjectWithParent(access.SecurableDataset, workspaceID, modelID+"/"+datasetID, model))
+		}
+		objects = append(objects, model)
+	}
+	if strings.TrimSpace(workspaceID) != "" {
+		objects = append(objects, access.WorkspaceObject(workspaceID))
+	}
+	return objects
 }
 
 func (h Handler) ListSemanticModels(w nethttp.ResponseWriter, r *nethttp.Request) {

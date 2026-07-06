@@ -6,8 +6,11 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/libredash/internal/access/httpauth"
 	"github.com/Yacobolo/libredash/internal/access/scimprov"
 	agenthttp "github.com/Yacobolo/libredash/internal/agent/http"
+	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
+	workspacehttp "github.com/Yacobolo/libredash/internal/workspace/http"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -28,23 +31,18 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/data/command", s.protected(access.PrivilegeViewItem, workspaceHTTP.DataExplorerCommand))
 		r.Get("/workspaces", s.protected(access.PrivilegeViewItem, workspaceHTTP.WorkspaceCatalog))
 		r.Get("/workspaces/{workspace}", s.protected(access.PrivilegeViewItem, workspaceHTTP.WorkspaceAssets))
-		r.Get("/workspaces/{workspace}/assets/{asset}", s.protected(access.PrivilegeViewItem, workspaceHTTP.WorkspaceAsset))
-		r.Get("/workspaces/{workspace}/assets/{asset}/updates", s.protected(access.PrivilegeViewItem, workspaceHTTP.AssetUpdatesStream))
-		r.Get("/workspaces/{workspace}/assets/{asset}/{section}", s.protected(access.PrivilegeViewItem, workspaceHTTP.WorkspaceAssetSection))
-		r.Post("/workspaces/{workspace}/assets/{asset}/refresh", s.protected(access.PrivilegeRefreshData, workspaceHTTP.RefreshAsset))
-		r.Post("/workspaces/{workspace}/assets/{asset}/refresh-materializations", s.protected(access.PrivilegeRefreshData, workspaceHTTP.RefreshAssetMaterializations))
+		r.Get("/workspaces/{workspace}/assets/{asset}", s.protectedWithObjects(access.PrivilegeViewItem, workspacehttp.AssetObjectRefs, workspaceHTTP.WorkspaceAsset))
+		r.Get("/workspaces/{workspace}/assets/{asset}/updates", s.protectedWithObjects(access.PrivilegeViewItem, workspacehttp.AssetObjectRefs, workspaceHTTP.AssetUpdatesStream))
+		r.Get("/workspaces/{workspace}/assets/{asset}/{section}", s.protectedWithObjects(access.PrivilegeViewItem, workspacehttp.AssetObjectRefs, workspaceHTTP.WorkspaceAssetSection))
+		r.Post("/workspaces/{workspace}/assets/{asset}/refresh", s.protectedWithObjects(access.PrivilegeRefreshData, workspacehttp.AssetObjectRefs, workspaceHTTP.RefreshAsset))
+		r.Post("/workspaces/{workspace}/assets/{asset}/refresh-materializations", s.protectedWithObjects(access.PrivilegeRefreshData, workspacehttp.AssetObjectRefs, workspaceHTTP.RefreshAssetMaterializations))
 		r.Get("/workspaces/{workspace}/data", s.protected(access.PrivilegeViewItem, workspaceHTTP.WorkspaceDataExplorerRedirect))
 		agentHTTP := s.agentHTTPHandler()
 		r.Get("/chat", s.protected(access.PrivilegeViewAgent, agentHTTP.Chat))
 		r.Get("/chat/new", s.protected(access.PrivilegeViewAgent, agentHTTP.ChatNew))
 		r.Get("/chat/updates", s.protected(access.PrivilegeViewAgent, agentHTTP.ChatUpdates))
-		r.Get("/chat/{conversation}", s.protected(access.PrivilegeViewAgent, agentHTTP.ChatConversation))
+		r.Get("/chat/{conversation}", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.ChatConversation))
 		r.Post("/chat/turns", s.protected(access.PrivilegeUseAgent, agentHTTP.ChatTurn))
-		r.Get("/workspaces/{workspace}/chat", s.protected(access.PrivilegeViewItem, agenthttp.LegacyChatRedirect))
-		r.Get("/workspaces/{workspace}/chat/new", s.protected(access.PrivilegeViewItem, agenthttp.LegacyChatRedirect))
-		r.Get("/workspaces/{workspace}/chat/updates", s.protected(access.PrivilegeViewItem, agenthttp.LegacyChatRedirect))
-		r.Get("/workspaces/{workspace}/chat/{conversation}", s.protected(access.PrivilegeViewItem, agenthttp.LegacyChatRedirect))
-		r.Post("/workspaces/{workspace}/chat/turns", s.protected(access.PrivilegeViewItem, agenthttp.LegacyChatRedirect))
 		adminHTTP := s.adminHTTPHandler()
 		r.Get("/admin", s.protected(access.PrivilegeManageGrants, adminHTTP.General))
 		r.Get("/admin/principals", s.protected(access.PrivilegeManageGrants, adminHTTP.Principals))
@@ -60,16 +58,16 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/admin/queries/command", s.protected(access.PrivilegeViewAudit, adminHTTP.QueryCommand))
 		r.Post("/workspaces/{workspace}/access/upsert", s.protected(access.PrivilegeManageGrants, workspaceHTTP.AccessUpsert))
 		r.Post("/workspaces/{workspace}/access/remove", s.protected(access.PrivilegeManageGrants, workspaceHTTP.AccessRemove))
-		r.Post("/workspaces/{workspace}/assets/{asset}/access/upsert", s.protected(access.PrivilegeManageGrants, workspaceHTTP.AccessUpsert))
-		r.Post("/workspaces/{workspace}/assets/{asset}/access/remove", s.protected(access.PrivilegeManageGrants, workspaceHTTP.AccessRemove))
+		r.Post("/workspaces/{workspace}/assets/{asset}/access/upsert", s.protectedWithObjects(access.PrivilegeManageGrants, workspacehttp.AssetObjectRefs, workspaceHTTP.AccessUpsert))
+		r.Post("/workspaces/{workspace}/assets/{asset}/access/remove", s.protectedWithObjects(access.PrivilegeManageGrants, workspacehttp.AssetObjectRefs, workspaceHTTP.AccessRemove))
 		r.Get("/connections", s.protected(access.PrivilegeViewItem, workspaceHTTP.Connections))
 		r.Get("/connections/{connection}/sources/{source}", s.protected(access.PrivilegeViewItem, workspaceHTTP.ConnectionSource))
 		r.Get("/connections/{connection}/sources/{source}/{section}", s.protected(access.PrivilegeViewItem, workspaceHTTP.ConnectionSourceSection))
 		r.Get("/connections/{asset}", s.protected(access.PrivilegeViewItem, workspaceHTTP.ConnectionAsset))
 		r.Get("/connections/{asset}/{section}", s.protected(access.PrivilegeViewItem, workspaceHTTP.ConnectionAssetSection))
 		dashboardHTTP := s.dashboardHTTP()
-		r.Get("/workspaces/{workspace}/dashboards/{dashboard}", s.protected(access.PrivilegeViewItem, dashboardHTTP.Dashboard))
-		r.Get("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}", s.protected(access.PrivilegeViewItem, dashboardHTTP.Page))
+		r.Get("/workspaces/{workspace}/dashboards/{dashboard}", s.protectedWithObjects(access.PrivilegeViewItem, dashboardhttp.DashboardObjectRefs, dashboardHTTP.Dashboard))
+		r.Get("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}", s.protectedWithObjects(access.PrivilegeViewItem, dashboardhttp.DashboardObjectRefs, dashboardHTTP.Page))
 		r.With(s.rateLimits.updatesMiddleware()).Get("/workspaces/{workspace}/updates", s.protected(access.PrivilegeViewItem, dashboardHTTP.Updates))
 		r.Post("/workspaces/{workspace}/commands/table-window", s.protected(access.PrivilegeViewItem, dashboardHTTP.TableWindow))
 		r.Post("/workspaces/{workspace}/commands/select", s.protected(access.PrivilegeViewItem, dashboardHTTP.Select))
@@ -97,14 +95,14 @@ func (s *Server) Routes() http.Handler {
 			agentHTTP := s.agentHTTPHandler()
 			r.Get("/api/v1/agent/conversations", s.protected(access.PrivilegeViewAgent, agentHTTP.ListConversations))
 			r.Post("/api/v1/agent/conversations", s.protected(access.PrivilegeUseAgent, agentHTTP.CreateConversation))
-			r.Get("/api/v1/agent/conversations/{conversation}", s.protected(access.PrivilegeViewAgent, agentHTTP.GetConversation))
-			r.Patch("/api/v1/agent/conversations/{conversation}", s.protected(access.PrivilegeUseAgent, agentHTTP.UpdateConversation))
-			r.Delete("/api/v1/agent/conversations/{conversation}", s.protected(access.PrivilegeUseAgent, agentHTTP.ArchiveConversation))
-			r.Get("/api/v1/agent/conversations/{conversation}/messages", s.protected(access.PrivilegeViewAgent, agentHTTP.ListMessages))
-			r.Get("/api/v1/agent/conversations/{conversation}/runs", s.protected(access.PrivilegeViewAgent, agentHTTP.ListRuns))
-			r.Get("/api/v1/agent/conversations/{conversation}/runs/{run}", s.protected(access.PrivilegeViewAgent, agentHTTP.GetRun))
-			r.Get("/api/v1/agent/conversations/{conversation}/runs/{run}/events", s.protected(access.PrivilegeViewAgent, agentHTTP.ListEvents))
-			r.Post("/api/v1/agent/conversations/{conversation}/turns", s.protected(access.PrivilegeUseAgent, agentHTTP.CreateTurn))
+			r.Get("/api/v1/agent/conversations/{conversation}", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.GetConversation))
+			r.Patch("/api/v1/agent/conversations/{conversation}", s.protectedWithObjects(access.PrivilegeUseAgent, agenthttp.ConversationObjectRefs, agentHTTP.UpdateConversation))
+			r.Delete("/api/v1/agent/conversations/{conversation}", s.protectedWithObjects(access.PrivilegeUseAgent, agenthttp.ConversationObjectRefs, agentHTTP.ArchiveConversation))
+			r.Get("/api/v1/agent/conversations/{conversation}/messages", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.ListMessages))
+			r.Get("/api/v1/agent/conversations/{conversation}/runs", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.ListRuns))
+			r.Get("/api/v1/agent/conversations/{conversation}/runs/{run}", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.GetRun))
+			r.Get("/api/v1/agent/conversations/{conversation}/runs/{run}/events", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.ListEvents))
+			r.Post("/api/v1/agent/conversations/{conversation}/turns", s.protectedWithObjects(access.PrivilegeUseAgent, agenthttp.ConversationObjectRefs, agentHTTP.CreateTurn))
 			s.registerAPIGenRoutes(r)
 		})
 	}
@@ -117,14 +115,22 @@ func (s *Server) protected(privilege access.Privilege, handler http.HandlerFunc)
 	return s.protect(privilege, handler).ServeHTTP
 }
 
+func (s *Server) protectedWithObjects(privilege access.Privilege, objectResolver httpauth.ObjectResolver, handler http.HandlerFunc) http.HandlerFunc {
+	return s.protectWithObjects(privilege, objectResolver, handler).ServeHTTP
+}
+
 func (s *Server) protect(privilege access.Privilege, next http.Handler) http.Handler {
+	return s.protectWithObjects(privilege, nil, next)
+}
+
+func (s *Server) protectWithObjects(privilege access.Privilege, objectResolver httpauth.ObjectResolver, next http.Handler) http.Handler {
 	if s.auth == nil {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := context.WithValue(r.Context(), principalContextKey{}, localDeveloperPrincipal())
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
-	return s.auth.Middleware(privilege, next)
+	return s.auth.MiddlewareWithObjectResolver(privilege, objectResolver, next)
 }
 
 func (s *Server) csrf(next http.Handler) http.Handler {
