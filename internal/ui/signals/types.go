@@ -122,7 +122,6 @@ type DashboardEnvelope struct {
 	Chrome             ChromeSignal                        `json:"chrome"`
 	Page               DashboardPageSignal                 `json:"page"`
 	Runtime            RouteRuntimeSignal                  `json:"runtime"`
-	CSRFToken          string                              `json:"csrfToken"`
 	FilterConfig       []reportdef.FilterConfig            `json:"filterConfig"`
 	Filters            dashboard.Filters                   `json:"filters"`
 	URLParams          map[string]any                      `json:"urlParams"`
@@ -178,13 +177,12 @@ type DashboardComponentSignal struct {
 }
 
 type ChatEnvelope struct {
-	Chrome    ChromeSignal                `json:"chrome"`
-	Page      ChatPageSignal              `json:"page"`
-	Runtime   RouteRuntimeSignal          `json:"runtime"`
-	CSRFToken string                      `json:"csrfToken"`
-	Agent     ChatSignal                  `json:"agent"`
-	Visuals   map[string]dashboard.Visual `json:"visuals"`
-	Tables    map[string]dashboard.Table  `json:"tables"`
+	Chrome  ChromeSignal                `json:"chrome"`
+	Page    ChatPageSignal              `json:"page"`
+	Runtime RouteRuntimeSignal          `json:"runtime"`
+	Agent   ChatSignal                  `json:"agent"`
+	Visuals map[string]dashboard.Visual `json:"visuals"`
+	Tables  map[string]dashboard.Table  `json:"tables"`
 }
 
 type ChatPageSignal struct {
@@ -228,6 +226,7 @@ type WorkspacePageSignal struct {
 	Title       string                   `json:"title"`
 	Description string                   `json:"description,omitempty"`
 	WorkspaceID string                   `json:"workspaceId,omitempty"`
+	Environment string                   `json:"environment,omitempty"`
 	Cards       []WorkspaceCardSignal    `json:"cards,omitempty"`
 	AssetList   WorkspaceAssetListSignal `json:"assetList,omitempty"`
 }
@@ -243,6 +242,7 @@ type WorkspaceAssetPageSignal struct {
 	Kind          RouteKind                     `json:"kind"`
 	Title         string                        `json:"title"`
 	WorkspaceID   string                        `json:"workspaceId"`
+	Environment   string                        `json:"environment,omitempty"`
 	AssetID       string                        `json:"assetId"`
 	ActiveSection string                        `json:"activeSection"`
 	Asset         WorkspaceAssetSummarySignal   `json:"asset"`
@@ -267,6 +267,7 @@ type ConnectionsPageSignal struct {
 	Title       string                   `json:"title"`
 	Description string                   `json:"description,omitempty"`
 	WorkspaceID string                   `json:"workspaceId,omitempty"`
+	Environment string                   `json:"environment,omitempty"`
 	AssetList   WorkspaceAssetListSignal `json:"assetList,omitempty"`
 }
 
@@ -679,7 +680,6 @@ type AdminAgentSignal struct {
 	Model        string                 `json:"model,omitempty"`
 	SystemPrompt string                 `json:"systemPrompt"`
 	CanWrite     bool                   `json:"canWrite"`
-	CSRFToken    string                 `json:"csrfToken"`
 	UpdatePath   string                 `json:"updatePath"`
 	Tools        []AdminAgentToolSignal `json:"tools"`
 }
@@ -992,9 +992,8 @@ type WorkspaceAccessResponse struct {
 
 type WorkspaceAccessSignal struct {
 	WorkspaceAccessResponse
-	CSRFToken string                 `json:"csrfToken"`
-	Command   WorkspaceAccessCommand `json:"command"`
-	Search    string                 `json:"search"`
+	Command WorkspaceAccessCommand `json:"command"`
+	Search  string                 `json:"search"`
 }
 
 type WorkspaceAccessStatus struct {
@@ -1114,7 +1113,7 @@ type ComposerSignal struct {
 	Placeholder string `json:"placeholder"`
 }
 
-func DashboardInitialEnvelope(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {
+func DashboardInitialEnvelope(dataDir, clientID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {
 	activePage = activePage.WithDefaults()
 	tableRequest := DefaultTableRequest(report, activePage)
 	initialFilters = report.NormalizeFiltersForPage(activePage.ID, initialFilters).WithDefaults()
@@ -1148,7 +1147,6 @@ func DashboardInitialEnvelope(dataDir, clientID, csrfToken string, catalog dashb
 			PageID:      activePage.ID,
 			ModelID:     modelID,
 		},
-		CSRFToken:          csrfToken,
 		FilterConfig:       report.FilterConfigForPage(activePage.ID),
 		Filters:            initialFilters,
 		URLParams:          report.URLParamsFromFiltersForPage(activePage.ID, initialFilters),
@@ -1168,17 +1166,16 @@ func DashboardInitialEnvelope(dataDir, clientID, csrfToken string, catalog dashb
 	}
 }
 
-func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view string, agent ChatSignal) ChatEnvelope {
+func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, roleLabel, view string, agent ChatSignal) ChatEnvelope {
 	chrome := ChromeSignal{Sidebar: SidebarConfigForChat(catalog, workspaceID, roleLabel, view)}
 	AttachChatSidebar(&chrome.Sidebar, agent)
 	return ChatEnvelope{
-		Chrome:    chrome,
-		Page:      ChatPage(workspaceID, view, agent),
-		Runtime:   RouteRuntimeSignal{Kind: RouteChat},
-		CSRFToken: csrfToken,
-		Agent:     agent,
-		Visuals:   agent.Visuals,
-		Tables:    agent.Tables,
+		Chrome:  chrome,
+		Page:    ChatPage(workspaceID, view, agent),
+		Runtime: RouteRuntimeSignal{Kind: RouteChat},
+		Agent:   agent,
+		Visuals: agent.Visuals,
+		Tables:  agent.Tables,
 	}
 }
 
@@ -1224,10 +1221,9 @@ func ChatHistoryItems(agent ChatSignal) []SidebarHistoryItemSignal {
 	return items
 }
 
-func WorkspaceAccessSignals(access WorkspaceAccessResponse, csrfToken string) WorkspaceAccessSignal {
+func WorkspaceAccessSignals(access WorkspaceAccessResponse) WorkspaceAccessSignal {
 	return WorkspaceAccessSignal{
 		WorkspaceAccessResponse: access,
-		CSRFToken:               csrfToken,
 		Command:                 WorkspaceAccessCommand{},
 		Search:                  "",
 	}

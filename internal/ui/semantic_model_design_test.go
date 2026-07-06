@@ -18,6 +18,7 @@ func TestSemanticModelDesignWorkspaceVocabulary(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(WorkspaceBootstrapSignals(catalog, workspace, assets, "", "", "Owner", access))
 
 	for _, want := range []string{"Semantic model", "Dashboard", "Olist Commerce", "Executive Sales Dashboard"} {
 		if !strings.Contains(rendered, want) {
@@ -41,6 +42,7 @@ func TestSemanticModelDesignDetailsVocabulary(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, nil, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
 
 	for _, want := range []string{"Model tables (1)", "Measures (1)", "Relationships (1)", "From table", "From field", "To table", "To field"} {
 		if !strings.Contains(rendered, want) {

@@ -12,16 +12,8 @@ func DataExplorerPage(catalog dashboard.Catalog, page uisignals.DataExplorerPage
 	catalog = catalogWithoutWorkspaceContext(catalog)
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, "data", roleLabel)}
 	applyChromeOptions(&chrome, chromeOptions)
-	explorerUpdatesURL := updatesURL(uisignals.RouteData)
-	signals := map[string]any{
-		"chrome":              chrome,
-		"page":                page,
-		"dataExplorer":        explorer,
-		"dataExplorerCommand": explorer.Command,
-		"csrfToken":           csrfToken,
-		"runtime":             runtimeSignal(uisignals.RouteData, explorerUpdatesURL),
-		"status":              dashboard.Status{},
-	}
+	explorerUpdatesURL := updatesURL(uisignals.RouteData, "workspace", explorer.Command.WorkspaceID, "object", explorer.Command.ObjectKey)
+	_ = chrome
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: page.Title,
 		HTMLAttrs: []g.Node{
@@ -30,12 +22,12 @@ func DataExplorerPage(catalog dashboard.Catalog, page uisignals.DataExplorerPage
 			g.Attr("data-dark-theme", "dark"),
 		},
 		Head: pageHead(
+			csrfMeta(csrfToken),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/app-shell.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/data-explorer.js"))),
 			inspectorScript(),
 		),
 		MainAttrs:  []g.Node{h.Class(appRootClass)},
-		Signals:    signals,
 		UpdatesURL: explorerUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-app-shell",
@@ -47,4 +39,17 @@ func DataExplorerPage(catalog dashboard.Catalog, page uisignals.DataExplorerPage
 			inspectorElement(),
 		},
 	})
+}
+
+func DataExplorerBootstrapSignals(catalog dashboard.Catalog, page uisignals.DataExplorerPageSignal, explorer uisignals.DataExplorerSignal, roleLabel string, chromeOptions ...ChromeOption) map[string]any {
+	catalog = catalogWithoutWorkspaceContext(catalog)
+	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, "data", roleLabel)}
+	applyChromeOptions(&chrome, chromeOptions)
+	return map[string]any{
+		"chrome":              chrome,
+		"page":                page,
+		"dataExplorer":        explorer,
+		"dataExplorerCommand": explorer.Command,
+		"status":              dashboard.Status{},
+	}
 }

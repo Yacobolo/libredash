@@ -18,13 +18,13 @@ func TestRefreshVisibilityStreamsAndPersistsSemanticModelRuns(t *testing.T) {
 	semanticAssetID := integrationAssetID(t, h.store, workspaceID, "semantic_model", "sales.sales")
 	ordersAssetID := integrationAssetID(t, h.store, workspaceID, "model_table", "sales.orders")
 
-	details := h.getAuthenticated(t, "/workspaces/"+workspaceID+"/assets/"+semanticAssetID+"/details")
+	details := h.getAuthenticatedHydrated(t, "/workspaces/"+workspaceID+"/assets/"+semanticAssetID+"/details")
 	for _, want := range []string{"Refresh status", "refresh-materializations", "/updates?asset=", "route=workspace_asset", "section=details"} {
 		if !strings.Contains(details, want) {
 			t.Fatalf("semantic model details page did not contain %q", want)
 		}
 	}
-	refreshes := h.getAuthenticated(t, "/workspaces/"+workspaceID+"/assets/"+semanticAssetID+"/refreshes")
+	refreshes := h.getAuthenticatedHydrated(t, "/workspaces/"+workspaceID+"/assets/"+semanticAssetID+"/refreshes")
 	for _, want := range []string{"Triggered by", "Trigger", "Run ID"} {
 		if !strings.Contains(refreshes, want) {
 			t.Fatalf("semantic model refreshes page did not contain %q", want)
@@ -68,13 +68,13 @@ func TestRefreshVisibilityStreamsAndPersistsSemanticModelRuns(t *testing.T) {
 		t.Fatalf("orders table run = %#v, want semantic model child run attributed to dev", child)
 	}
 
-	semanticRefreshes := h.getAuthenticated(t, "/workspaces/"+workspaceID+"/assets/"+semanticAssetID+"/refreshes")
+	semanticRefreshes := h.getAuthenticatedHydrated(t, "/workspaces/"+workspaceID+"/assets/"+semanticAssetID+"/refreshes")
 	for _, want := range []string{"Local Developer", "Direct", shortRunID(parent.ID)} {
 		if !strings.Contains(semanticRefreshes, want) {
 			t.Fatalf("semantic model refreshes page did not contain %q after refresh", want)
 		}
 	}
-	ordersRefreshes := h.getAuthenticated(t, "/workspaces/"+workspaceID+"/assets/"+ordersAssetID+"/refreshes")
+	ordersRefreshes := h.getAuthenticatedHydrated(t, "/workspaces/"+workspaceID+"/assets/"+ordersAssetID+"/refreshes")
 	for _, want := range []string{"Local Developer", "Semantic model", shortRunID(child.ID)} {
 		if !strings.Contains(ordersRefreshes, want) {
 			t.Fatalf("orders refreshes page did not contain %q after refresh", want)

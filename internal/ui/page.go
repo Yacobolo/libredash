@@ -13,15 +13,11 @@ import (
 )
 
 func postAction(path string) string {
-	return "@post('" + path + "', {headers: {'X-CSRF-Token': $csrfToken}})"
-}
-
-func postActionWithCSRFSignal(path, signal string) string {
-	return "@post('" + path + "', {headers: {'X-CSRF-Token': " + signal + "}})"
+	return "@post('" + path + "', {headers: window.LibreDashCommand.headers()})"
 }
 
 func patchAction(path string) string {
-	return "@patch('" + path + "', {headers: {'X-CSRF-Token': $csrfToken}})"
+	return "@patch('" + path + "', {headers: window.LibreDashCommand.headers()})"
 }
 
 func staticAsset(path string) string {
@@ -62,18 +58,20 @@ func pageHead(extra ...g.Node) []g.Node {
 	nodes := []g.Node{
 		h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
 		h.Script(h.Src(staticAsset("/static/theme.js"))),
+		h.Script(h.Type("module"), h.Src(staticAsset("/static/command.js"))),
 	}
 	return append(nodes, extra...)
 }
 
+func csrfMeta(token string) g.Node {
+	if strings.TrimSpace(token) == "" {
+		return nil
+	}
+	return h.Meta(h.Name("csrf-token"), h.Content(token))
+}
+
 func LoginPage() g.Node {
 	favicon := "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%230969da'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-family='Arial,sans-serif' font-size='20' font-weight='700' fill='white'%3ELD%3C/text%3E%3C/svg%3E"
-	page := uisignals.LoginPageSignal{
-		Kind:                uisignals.RouteLogin,
-		Title:               "LibreDash",
-		ProviderLabel:       "Sign in with Azure Active Directory",
-		BackgroundModuleSrc: staticAsset("/static/topology-background.js"),
-	}
 	loginUpdatesURL := updatesURL(uisignals.RouteLogin)
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash Login",
@@ -90,18 +88,25 @@ func LoginPage() g.Node {
 			loginBackgroundLoaderScript(),
 			inspectorScript(),
 		},
-		MainAttrs: []g.Node{h.Class(appRootClass)},
-		Signals: map[string]any{
-			"page":    page,
-			"runtime": runtimeSignal(uisignals.RouteLogin, loginUpdatesURL),
-			"status":  dashboard.Status{},
-		},
+		MainAttrs:  []g.Node{h.Class(appRootClass)},
 		UpdatesURL: loginUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-login-page"),
 			inspectorElement(),
 		},
 	})
+}
+
+func LoginBootstrapSignals() map[string]any {
+	return map[string]any{
+		"page": uisignals.LoginPageSignal{
+			Kind:                uisignals.RouteLogin,
+			Title:               "LibreDash",
+			ProviderLabel:       "Sign in with Azure Active Directory",
+			BackgroundModuleSrc: staticAsset("/static/topology-background.js"),
+		},
+		"status": dashboard.Status{},
+	}
 }
 
 func CatalogPage(catalog dashboard.Catalog, chromeOptions ...ChromeOption) g.Node {
@@ -134,13 +139,7 @@ func CatalogPageForCatalogs(catalogs []dashboard.Catalog, chromeOptions ...Chrom
 func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSignal, chromeOptions ...ChromeOption) g.Node {
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForCatalog(catalog)}
 	applyChromeOptions(&chrome, chromeOptions)
-	signals := map[string]any{
-		"chrome": chrome,
-		"page":   page,
-		"status": dashboard.Status{},
-	}
 	catalogUpdatesURL := updatesURL(uisignals.RouteCatalog)
-	signals["runtime"] = runtimeSignal(uisignals.RouteCatalog, catalogUpdatesURL)
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash Dashboards",
 		HTMLAttrs: []g.Node{
@@ -154,7 +153,6 @@ func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSi
 			inspectorScript(),
 		),
 		MainAttrs:  []g.Node{h.Class(appRootClass)},
-		Signals:    signals,
 		UpdatesURL: catalogUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-app-shell",
@@ -165,6 +163,43 @@ func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSi
 			inspectorElement(),
 		},
 	})
+}
+
+func CatalogBootstrapSignals(catalog dashboard.Catalog, chromeOptions ...ChromeOption) map[string]any {
+	return CatalogBootstrapSignalsForPage(catalog, catalogPageSignal(catalog), chromeOptions...)
+}
+
+func CatalogBootstrapSignalsForCatalogs(catalogs []dashboard.Catalog, chromeOptions ...ChromeOption) map[string]any {
+	if len(catalogs) == 0 {
+		return CatalogBootstrapSignals(dashboard.Catalog{}, chromeOptions...)
+	}
+	dashboards := []uisignals.CatalogDashboardSignal{}
+	for _, catalog := range catalogs {
+		for _, report := range catalog.Dashboards {
+			dashboards = append(dashboards, uisignals.CatalogDashboardSignal{
+				ID:            catalog.Workspace.ID + "." + report.ID,
+				Title:         report.Title,
+				Description:   report.Description,
+				SemanticModel: report.SemanticModel,
+				PageCount:     report.PageCount,
+				Tags:          append([]string{}, report.Tags...),
+				Href:          "/workspaces/" + catalog.Workspace.ID + "/dashboards/" + report.ID,
+			})
+		}
+	}
+	page := catalogPageSignal(catalogs[0])
+	page.Dashboards = dashboards
+	return CatalogBootstrapSignalsForPage(catalogs[0], page, chromeOptions...)
+}
+
+func CatalogBootstrapSignalsForPage(catalog dashboard.Catalog, page uisignals.CatalogPageSignal, chromeOptions ...ChromeOption) map[string]any {
+	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForCatalog(catalog)}
+	applyChromeOptions(&chrome, chromeOptions)
+	return map[string]any{
+		"chrome": chrome,
+		"page":   page,
+		"status": dashboard.Status{},
+	}
 }
 
 type recordTable = uisignals.RecordTableSignal

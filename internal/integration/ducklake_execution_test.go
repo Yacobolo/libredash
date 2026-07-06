@@ -448,7 +448,7 @@ func TestAdminStorageReflectsDuckLakeAfterCleanup(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(legacyDir, "libredash-stale.duckdb"), []byte("legacy"), 0o644); err != nil {
 		t.Fatalf("write legacy duckdb file: %v", err)
 	}
-	body := h.getAuthenticated(t, "/admin/storage")
+	body := h.getAuthenticatedHydrated(t, "/admin/storage")
 	for _, want := range []string{"DuckLake catalog", "model", "orders", "Snapshots", "Tables"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("admin storage missing %q:\n%s", want, body)

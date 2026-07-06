@@ -7,12 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +43,8 @@ type harness struct {
 	store       *platform.Store
 	workspaceID string
 }
+
+var integrationDataInitUpdatesPattern = regexp.MustCompile(`data-init="@get\('([^']+)'`)
 
 type harnessConfig struct {
 	catalogPath string
@@ -336,6 +340,57 @@ func (h *harness) getAuthenticated(t *testing.T, path string) string {
 		t.Fatalf("GET %s status = %d, body:\n%s", path, res.StatusCode, string(body))
 	}
 	return string(body)
+}
+
+func (h *harness) getAuthenticatedHydrated(t *testing.T, path string) string {
+	t.Helper()
+	body := h.getAuthenticated(t, path)
+	return html.UnescapeString(body) + h.streamPageBootstrap(t, body)
+}
+
+func (h *harness) streamPageBootstrap(t *testing.T, pageBody string) string {
+	t.Helper()
+	decoded := html.UnescapeString(pageBody)
+	matches := integrationDataInitUpdatesPattern.FindStringSubmatch(decoded)
+	if len(matches) != 2 {
+		t.Fatalf("rendered page did not include literal /updates data-init:\n%s", pageBody)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.serverURL(t)+matches[1], nil)
+	if err != nil {
+		t.Fatalf("create bootstrap request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer dev")
+	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "integration-stream-first"})
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET bootstrap %s: %v", matches[1], err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(res.Body)
+		t.Fatalf("GET bootstrap %s status = %d, body:\n%s", matches[1], res.StatusCode, string(body))
+	}
+	client := &streamClient{
+		cancel:  cancel,
+		body:    res.Body,
+		patches: make(chan map[string]any, 16),
+		errs:    make(chan error, 1),
+	}
+	go client.read()
+	t.Cleanup(client.close)
+	patch := client.nextPatch(t)
+	cancel()
+	return patchString(patch)
+}
+
+func patchString(patch map[string]any) string {
+	encoded, err := json.Marshal(patch)
+	if err != nil {
+		return fmt.Sprintf("%#v", patch)
+	}
+	return string(encoded)
 }
 
 func (h *harness) postAuthenticated(t *testing.T, path string) int {

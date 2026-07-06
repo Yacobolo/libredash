@@ -55,6 +55,14 @@ func (s *Server) workspaceDataExplorerRedirect(w http.ResponseWriter, r *http.Re
 func (s *Server) dataExplorerUpdates(w http.ResponseWriter, r *http.Request) {
 	clientID := pagestream.EnsureClientID(w, r)
 	updates := pagestream.NewSignalStream(w, r)
+	page, explorer, err := s.globalDataExplorerState(r, dataExplorerCommandFromQuery(r.URL.Query().Get("workspace"), r.URL.Query().Get("object")))
+	if err != nil {
+		http.Error(w, err.Error(), statusForNotFound(err))
+		return
+	}
+	if err := updates.Patch(ui.DataExplorerBootstrapSignals(s.catalogForWorkspacesPage(r, nil), page, explorer, s.currentRoleLabel(r), s.chatChromeOption(r))); err != nil {
+		return
+	}
 	_ = updates.Forward(r.Context(), s.broker, dataExplorerStreamID(clientID))
 }
 

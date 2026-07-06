@@ -105,6 +105,48 @@ func (s *Server) renderAdminPage(w http.ResponseWriter, r *http.Request, active 
 	}
 }
 
+func (s *Server) adminBootstrapUpdates(w http.ResponseWriter, r *http.Request) {
+	active := strings.TrimSpace(r.URL.Query().Get("section"))
+	if active == "" {
+		active = "general"
+	}
+	data, err := s.adminDataForUpdates(r, active)
+	if err != nil {
+		http.Error(w, err.Error(), statusForNotFound(err))
+		return
+	}
+	s.patchAndWait(w, r, ui.AdminBootstrapSignals(s.metrics.Catalog(), active, s.currentAdminRoleLabel(r), data, s.chatChromeOption(r)))
+}
+
+func (s *Server) adminDataForUpdates(r *http.Request, active string) (ui.AdminData, error) {
+	data, err := s.adminData(r)
+	if err != nil {
+		return data, err
+	}
+	switch active {
+	case "principal-detail":
+		principalID := strings.TrimSpace(r.URL.Query().Get("principal"))
+		for i := range data.Principals {
+			if data.Principals[i].ID == principalID {
+				data.SelectedPrincipal = &data.Principals[i]
+				return data, nil
+			}
+		}
+		return data, sql.ErrNoRows
+	case "group-detail":
+		groupID := strings.TrimSpace(r.URL.Query().Get("group"))
+		for i := range data.Groups {
+			if data.Groups[i].ID == groupID {
+				data.SelectedGroup = &data.Groups[i]
+				return data, nil
+			}
+		}
+		return data, sql.ErrNoRows
+	default:
+		return data, nil
+	}
+}
+
 func (s *Server) currentAdminRoleLabel(r *http.Request) string {
 	if s.auth == nil {
 		return "Local platform"
@@ -203,6 +245,14 @@ func (s *Server) adminQueryHistoryData(r *http.Request, filters uisignals.AdminQ
 func (s *Server) adminQueryHistoryUpdates(w http.ResponseWriter, r *http.Request) {
 	clientID := pagestream.EnsureClientID(w, r)
 	updates := pagestream.NewSignalStream(w, r)
+	data, err := s.adminDataForUpdates(r, "queries")
+	if err != nil {
+		http.Error(w, err.Error(), statusForNotFound(err))
+		return
+	}
+	if err := updates.Patch(ui.AdminBootstrapSignals(s.metrics.Catalog(), "queries", s.currentAdminRoleLabel(r), data, s.chatChromeOption(r))); err != nil {
+		return
+	}
 	_ = updates.Forward(r.Context(), s.broker, adminQueryHistoryStreamID(clientID))
 }
 

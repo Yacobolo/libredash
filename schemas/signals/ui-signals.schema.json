@@ -6,9 +6,6 @@
         "canWrite": {
           "type": "boolean"
         },
-        "csrfToken": {
-          "type": "string"
-        },
         "enabled": {
           "type": "boolean"
         },
@@ -30,7 +27,6 @@
       },
       "required": [
         "canWrite",
-        "csrfToken",
         "enabled",
         "systemPrompt",
         "tools",
@@ -1202,9 +1198,6 @@
         "chrome": {
           "$ref": "#/$defs/ChromeSignal"
         },
-        "csrfToken": {
-          "type": "string"
-        },
         "page": {
           "$ref": "#/$defs/ChatPageSignal"
         },
@@ -1227,7 +1220,6 @@
       "required": [
         "agent",
         "chrome",
-        "csrfToken",
         "page",
         "runtime",
         "tables",
@@ -1447,6 +1439,9 @@
         "description": {
           "type": "string"
         },
+        "environment": {
+          "type": "string"
+        },
         "kind": {
           "type": "string"
         },
@@ -1532,9 +1527,6 @@
         "chrome": {
           "$ref": "#/$defs/ChromeSignal"
         },
-        "csrfToken": {
-          "type": "string"
-        },
         "filterConfig": {
           "items": {
             "$ref": "#/$defs/ReportFilterConfig"
@@ -1591,7 +1583,6 @@
       },
       "required": [
         "chrome",
-        "csrfToken",
         "filterConfig",
         "filterOptions",
         "filters",
@@ -3778,9 +3769,6 @@
         "command": {
           "$ref": "#/$defs/WorkspaceAccessCommand"
         },
-        "csrfToken": {
-          "type": "string"
-        },
         "roles": {
           "items": {},
           "type": "array"
@@ -3797,7 +3785,6 @@
         "bindings",
         "canManage",
         "command",
-        "csrfToken",
         "roles",
         "search",
         "status",
@@ -3987,6 +3974,9 @@
         },
         "details": {
           "$ref": "#/$defs/WorkspaceAssetDetailsSignal"
+        },
+        "environment": {
+          "type": "string"
         },
         "kind": {
           "type": "string"
@@ -4222,6 +4212,9 @@
           "type": "array"
         },
         "description": {
+          "type": "string"
+        },
+        "environment": {
           "type": "string"
         },
         "kind": {

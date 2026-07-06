@@ -49,7 +49,6 @@ const emptyWorkspaceAccess: WorkspaceAccessSignal = {
   bindings: [],
   canManage: false,
   status: { loading: false, error: '', message: '' },
-  csrfToken: '',
   command: { email: '', role: '', principalId: '' },
   search: '',
 }

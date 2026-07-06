@@ -247,18 +247,36 @@ func (s *Server) chatUpdates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	updates := pagestream.NewSignalStream(w, r)
-	signals := chatTurnCommandSignals{}
-	if err := pagestream.ReadSignals(r, &signals); err == nil {
-		activeID := strings.TrimSpace(signals.Agent.ActiveConversationID)
-		if activeID != "" {
-			if state, stateErr := s.agent.ConversationTranscriptState(r.Context(), scope, activeID); stateErr == nil {
-				if err := updates.Patch(chatSignalPatch(s.chatSignalWith(r.Context(), scope, activeID, state.Transcript, state.Artifacts, "", s.agent.ConversationRunning(activeID)))); err != nil {
-					return
-				}
-			}
-		}
+	signal, view := s.chatBootstrapSignal(r, scope)
+	workspaceID := s.chatDefaultWorkspaceID()
+	catalog := s.catalogForWorkspace(workspaceID)
+	if err := updates.Patch(ui.ChatBootstrapSignals(catalog, workspaceID, s.currentRoleLabel(r), view, signal)); err != nil {
+		return
 	}
 	_ = updates.Forward(r.Context(), s.broker, chatStreamID(scope, chatClientID(r)))
+}
+
+func (s *Server) chatBootstrapUpdates(w http.ResponseWriter, r *http.Request) {
+	scope := s.chatScope(r)
+	signal, view := s.chatBootstrapSignal(r, scope)
+	workspaceID := s.chatDefaultWorkspaceID()
+	s.patchAndWait(w, r, ui.ChatBootstrapSignals(s.catalogForWorkspace(workspaceID), workspaceID, s.currentRoleLabel(r), view, signal))
+}
+
+func (s *Server) chatBootstrapSignal(r *http.Request, scope agentapp.Scope) (ui.ChatSignal, string) {
+	view := strings.TrimSpace(r.URL.Query().Get("view"))
+	if view == "" {
+		view = "list"
+	}
+	conversationID := strings.TrimSpace(r.URL.Query().Get("conversation"))
+	if conversationID == "" || s.agent == nil || !s.agent.Enabled() || scope.PrincipalID == "" {
+		return s.chatSignal(r.Context(), scope, "", "", false), view
+	}
+	state, err := s.agent.ConversationTranscriptState(r.Context(), scope, conversationID)
+	if err != nil {
+		return s.chatSignal(r.Context(), scope, "", "", false), view
+	}
+	return s.chatSignalWith(r.Context(), scope, conversationID, state.Transcript, state.Artifacts, "", s.agent.ConversationRunning(conversationID)), view
 }
 
 func (s *Server) chatService(w http.ResponseWriter, r *http.Request) (*agentapp.Service, agentapp.Scope, bool) {

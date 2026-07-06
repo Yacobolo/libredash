@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"encoding/json"
 	"net/url"
 	"strconv"
+	"strings"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
@@ -24,8 +24,31 @@ func updatesURL(workspaceID, dashboardID, pageID string) string {
 	return "/updates?" + values.Encode()
 }
 
+func updatesURLWithParams(workspaceID, dashboardID, pageID string, params map[string]any) string {
+	values := url.Values{}
+	values.Set("route", string(uisignals.RouteDashboard))
+	values.Set("workspace", workspaceID)
+	values.Set("dashboard", dashboardID)
+	values.Set("page", pageID)
+	for key, raw := range params {
+		switch typed := raw.(type) {
+		case []string:
+			for _, value := range typed {
+				if strings.TrimSpace(value) != "" {
+					values.Add(key, value)
+				}
+			}
+		case string:
+			if strings.TrimSpace(typed) != "" {
+				values.Set(key, typed)
+			}
+		}
+	}
+	return "/updates?" + values.Encode()
+}
+
 func postAction(path string) string {
-	return "@post('" + path + "', {headers: {'X-CSRF-Token': $csrfToken}})"
+	return "@post('" + path + "', {headers: window.LibreDashCommand.headers()})"
 }
 
 func staticAsset(path string) string {
@@ -50,20 +73,28 @@ func pageHead(extra ...g.Node) []g.Node {
 	nodes := []g.Node{
 		h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/app.css"))),
 		h.Script(h.Src(staticAsset("/static/theme.js"))),
+		h.Script(h.Type("module"), h.Src(staticAsset("/static/command.js"))),
 	}
 	return append(nodes, extra...)
+}
+
+func csrfMeta(token string) g.Node {
+	if strings.TrimSpace(token) == "" {
+		return nil
+	}
+	return h.Meta(h.Name("csrf-token"), h.Content(token))
 }
 
 func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) g.Node {
 	if activePage.ID == "" {
 		activePage = defaultPage()
 	}
-	dashboardUpdatesURL := updatesURL(catalog.Workspace.ID, report.ID, activePage.ID)
-	reloadAction := postAction("/workspaces/" + catalog.Workspace.ID + "/commands/reload")
 	tableReset := tableResetExpression()
-	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + tableReset
 	initialFilters = report.NormalizeFiltersForPage(activePage.ID, initialFilters)
-	signals := initialSignals(dataDir, clientID, csrfToken, catalog, report, model, pages, activePage, initialFilters, chromeDecorators...)
+	initialURLParams := report.URLParamsFromFiltersForPage(activePage.ID, initialFilters)
+	dashboardUpdatesURL := updatesURLWithParams(catalog.Workspace.ID, report.ID, activePage.ID, initialURLParams)
+	reloadAction := postAction("/workspaces/" + catalog.Workspace.ID + "/commands/reload")
+	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + tableReset
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash",
 		HTMLAttrs: []g.Node{
@@ -72,6 +103,7 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 			g.Attr("data-dark-theme", "dark"),
 		},
 		Head: pageHead(
+			csrfMeta(csrfToken),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/app-shell.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/dashboard-page.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/url-sync.js"))),
@@ -80,15 +112,16 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 		MainAttrs: []g.Node{
 			h.ID("dashboard"),
 			h.Class(appRootClass),
-			g.Attr("data-url-param-shape", jsonString(signals["urlParamShape"])),
 			g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+tableReset+reloadAction),
 		},
-		Signals:    signals,
 		UpdatesURL: dashboardUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-app-shell",
 				g.El("ld-dashboard-page",
 					g.Attr("slot", "page"),
+					g.Attr("workspace-id", catalog.Workspace.ID),
+					g.Attr("dashboard-id", report.ID),
+					g.Attr("page-id", activePage.ID),
 					g.Attr("data-on:ld-filters-change", filtersUpdate+reloadAction),
 					g.Attr("data-on:ld-filters-reset", filtersUpdate+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters")),
 					g.Attr("data-on:ld-filters-refresh", reloadAction),
@@ -112,19 +145,10 @@ func defaultPage() dashboard.Page {
 	}
 }
 
-func jsonString(value any) string {
-	bytes, err := json.Marshal(value)
-	if err != nil {
-		return "{}"
-	}
-	return string(bytes)
-}
-
-func initialSignals(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) map[string]any {
-	envelope := uisignals.DashboardInitialEnvelope(dataDir, clientID, csrfToken, catalog, report, model, pages, activePage, initialFilters)
+func BootstrapSignals(dataDir, clientID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) map[string]any {
+	envelope := uisignals.DashboardInitialEnvelope(dataDir, clientID, catalog, report, model, pages, activePage, initialFilters)
 	envelope.Runtime.WorkspaceID = catalog.Workspace.ID
 	envelope.Runtime.RouteKey = string(uisignals.RouteDashboard)
-	envelope.Runtime.UpdatesURL = updatesURL(catalog.Workspace.ID, report.ID, activePage.ID)
 	for _, decorate := range chromeDecorators {
 		if decorate != nil {
 			decorate(&envelope.Chrome)
@@ -134,7 +158,6 @@ func initialSignals(dataDir, clientID, csrfToken string, catalog dashboard.Catal
 		"chrome":             envelope.Chrome,
 		"page":               envelope.Page,
 		"runtime":            envelope.Runtime,
-		"csrfToken":          envelope.CSRFToken,
 		"filterConfig":       envelope.FilterConfig,
 		"filters":            envelope.Filters,
 		"urlParams":          envelope.URLParams,

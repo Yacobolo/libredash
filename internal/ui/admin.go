@@ -138,29 +138,17 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 	applyChromeOptions(&chrome, chromeOptions)
 	storageSignal := page.Storage
 	adminUpdatesURL := updatesURL(uisignals.RouteAdmin, "section", active)
-	runtime := runtimeSignal(uisignals.RouteAdmin, adminUpdatesURL)
-	signals := map[string]any{
-		"chrome":    chrome,
-		"page":      page,
-		"runtime":   runtime,
-		"status":    dashboard.Status{},
-		"csrfToken": data.CSRFToken,
+	if active == "principal-detail" && data.SelectedPrincipal != nil {
+		adminUpdatesURL = updatesURL(uisignals.RouteAdmin, "section", active, "principal", data.SelectedPrincipal.ID)
 	}
-	if active == "agent" {
-		signals["adminAgentCommand"] = map[string]string{"systemPrompt": data.Agent.SystemPrompt}
+	if active == "group-detail" && data.SelectedGroup != nil {
+		adminUpdatesURL = updatesURL(uisignals.RouteAdmin, "section", active, "group", data.SelectedGroup.ID)
 	}
-	if active == "storage" {
-		signals["adminStorage"] = storageSignal
-		signals["adminStorageCommand"] = AdminStorageCommand{}
-	}
-	if active == "queries" {
-		queryHistory := AdminQueryHistorySignalFromData(data.QueryHistory)
-		signals["adminQueryHistory"] = queryHistory
-		signals["adminQueryDetail"] = uisignals.AdminQueryDetailSignal{}
-		signals["adminQueryHistoryCommand"] = uisignals.AdminQueryHistoryCommand{Action: "load_more", Filters: queryHistory.Filters, PageToken: queryHistory.NextCursor, Limit: queryHistory.Limit}
-	}
+	_ = chrome
+	_ = storageSignal
 	adminAttrs := []g.Node{
 		g.Attr("slot", "page"),
+		g.Attr("section", active),
 	}
 	if active == "storage" {
 		adminAttrs = append(adminAttrs,
@@ -185,13 +173,13 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 			g.Attr("data-dark-theme", "dark"),
 		},
 		Head: pageHead(
+			csrfMeta(data.CSRFToken),
 			h.Link(h.Rel("stylesheet"), h.Href(staticAsset("/static/admin-page.css"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/app-shell.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/admin-page.js"))),
 			inspectorScript(),
 		),
 		MainAttrs:  []g.Node{h.Class(appRootClass)},
-		Signals:    signals,
 		UpdatesURL: adminUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-app-shell",
@@ -200,6 +188,32 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 			inspectorElement(),
 		},
 	})
+}
+
+func AdminBootstrapSignals(catalog dashboard.Catalog, active, roleLabel string, data AdminData, chromeOptions ...ChromeOption) map[string]any {
+	page := adminPageSignal(active, data)
+	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, "admin", roleLabel)}
+	applyChromeOptions(&chrome, chromeOptions)
+	signals := map[string]any{
+		"chrome":  chrome,
+		"page":    page,
+		"runtime": uisignals.RouteRuntimeSignal{Kind: uisignals.RouteAdmin, RouteKey: string(uisignals.RouteAdmin)},
+		"status":  dashboard.Status{},
+	}
+	if active == "agent" {
+		signals["adminAgentCommand"] = map[string]string{"systemPrompt": data.Agent.SystemPrompt}
+	}
+	if active == "storage" {
+		signals["adminStorage"] = page.Storage
+		signals["adminStorageCommand"] = AdminStorageCommand{}
+	}
+	if active == "queries" {
+		queryHistory := AdminQueryHistorySignalFromData(data.QueryHistory)
+		signals["adminQueryHistory"] = queryHistory
+		signals["adminQueryDetail"] = uisignals.AdminQueryDetailSignal{}
+		signals["adminQueryHistoryCommand"] = uisignals.AdminQueryHistoryCommand{Action: "load_more", Filters: queryHistory.Filters, PageToken: queryHistory.NextCursor, Limit: queryHistory.Limit}
+	}
+	return signals
 }
 
 func adminPageSignal(active string, data AdminData) uisignals.AdminPageSignal {
@@ -439,7 +453,6 @@ func adminAgentSignal(data AdminAgentData) uisignals.AdminAgentSignal {
 		Model:        data.Model,
 		SystemPrompt: data.SystemPrompt,
 		CanWrite:     data.CanWrite,
-		CSRFToken:    data.CSRFToken,
 		UpdatePath:   data.UpdatePath,
 		Tools:        tools,
 	}

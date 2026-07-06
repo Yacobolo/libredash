@@ -20,6 +20,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	"github.com/Yacobolo/libredash/internal/ui"
+	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacerefresh "github.com/Yacobolo/libredash/internal/workspace/refresh"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
@@ -42,7 +43,7 @@ func (s *Server) workspaces(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspacesPage(s.catalogForWorkspacesPage(r, workspaces), workspaces, s.currentRoleLabel(r), s.chatChromeOption(r)).Render(w); err != nil {
+	if err := ui.WorkspacesPageForEnvironment(s.catalogForWorkspacesPage(r, workspaces), workspaces, string(s.requestDeploymentEnvironment(r)), s.currentRoleLabel(r), s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -68,7 +69,7 @@ func (s *Server) workspaceAssets(w http.ResponseWriter, r *http.Request) {
 	access := s.workspaceAccessResponse(r, workspace, canManage, ui.WorkspaceAccessStatus{})
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspacePage(s.catalogForWorkspace(workspaceID), workspace, filtered, r.URL.Query().Get("type"), r.URL.Query().Get("q"), s.currentRoleLabel(r), access, csrfToken(r, s.auth), s.chatChromeOption(r)).Render(w); err != nil {
+	if err := ui.WorkspacePageForEnvironment(s.catalogForWorkspace(workspaceID), workspace, filtered, r.URL.Query().Get("type"), r.URL.Query().Get("q"), string(s.requestDeploymentEnvironment(r)), s.currentRoleLabel(r), access, csrfToken(r, s.auth), s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -83,9 +84,48 @@ func (s *Server) connections(w http.ResponseWriter, r *http.Request) {
 	filtered := workspace.FilterConnectionAssets(assets, activeType, r.URL.Query().Get("q"))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionsPage(s.catalogForWorkspacesPage(r, nil), "platform", filtered, edges, activeType, r.URL.Query().Get("q"), s.currentRoleLabel(r), s.chatChromeOption(r)).Render(w); err != nil {
+	if err := ui.ConnectionsPageForEnvironment(s.catalogForWorkspacesPage(r, nil), "platform", filtered, edges, activeType, r.URL.Query().Get("q"), string(s.requestDeploymentEnvironment(r)), s.currentRoleLabel(r), s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (s *Server) workspaceBootstrapUpdates(w http.ResponseWriter, r *http.Request) {
+	workspaceID := s.workspaceID(r.URL.Query().Get("workspace"))
+	if strings.TrimSpace(workspaceID) == "" {
+		workspaces, err := s.workspaceList(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		s.patchAndWait(w, r, ui.WorkspacesBootstrapSignalsForEnvironment(s.catalogForWorkspacesPage(r, workspaces), workspaces, string(s.requestDeploymentEnvironment(r)), s.currentRoleLabel(r), s.chatChromeOption(r)))
+		return
+	}
+	assets, _, err := s.workspaceAssetsAndEdges(r, workspaceID)
+	if err != nil {
+		http.Error(w, err.Error(), statusForNotFound(err))
+		return
+	}
+	activeType := r.URL.Query().Get("type")
+	query := r.URL.Query().Get("q")
+	filtered := workspace.FilterWorkspaceAssets(assets, activeType, query)
+	workspaceView := s.workspaceResponse(r, workspaceID)
+	canManage := s.canManageWorkspaceAccess(r, workspaceID)
+	access := s.workspaceAccessResponse(r, workspaceView, canManage, ui.WorkspaceAccessStatus{})
+	environment := string(s.requestDeploymentEnvironment(r))
+	s.patchAndWait(w, r, ui.WorkspaceBootstrapSignalsForEnvironment(s.catalogForWorkspace(workspaceID), workspaceView, filtered, activeType, query, environment, s.currentRoleLabel(r), access, s.chatChromeOption(r)))
+}
+
+func (s *Server) connectionsBootstrapUpdates(w http.ResponseWriter, r *http.Request) {
+	assets, edges, err := s.platformConnectionAssetsAndEdges(r)
+	if err != nil {
+		http.Error(w, err.Error(), statusForNotFound(err))
+		return
+	}
+	activeType := workspace.NormalizeConnectionAssetType(r.URL.Query().Get("type"))
+	query := r.URL.Query().Get("q")
+	filtered := workspace.FilterConnectionAssets(assets, activeType, query)
+	environment := string(s.requestDeploymentEnvironment(r))
+	s.patchAndWait(w, r, ui.ConnectionsBootstrapSignalsForEnvironment(s.catalogForWorkspacesPage(r, nil), "platform", filtered, edges, activeType, query, environment, s.currentRoleLabel(r), s.chatChromeOption(r)))
 }
 
 func (s *Server) workspaceAsset(w http.ResponseWriter, r *http.Request) {
@@ -188,7 +228,7 @@ func (s *Server) workspaceAssetSection(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.WorkspaceAssetPageWithRefreshAndVersions(s.catalogForWorkspace(workspaceID), workspace, selected, assets, edges, section, s.currentRoleLabel(r), refresh, versions, s.chatChromeOption(r)).Render(w); err != nil {
+	if err := ui.WorkspaceAssetPageWithRefreshAndVersionsForEnvironment(s.catalogForWorkspace(workspaceID), workspace, selected, assets, edges, section, string(s.requestDeploymentEnvironment(r)), s.currentRoleLabel(r), refresh, versions, s.chatChromeOption(r)).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -225,23 +265,61 @@ func (s *Server) workspaceAssetUpdates(w http.ResponseWriter, r *http.Request) {
 	workspaceID := s.workspaceID(firstNonEmpty(chi.URLParam(r, "workspace"), r.URL.Query().Get("workspace")))
 	assetID := firstNonEmpty(chi.URLParam(r, "asset"), r.URL.Query().Get("asset"))
 	section := workspaceAssetUpdateSection(r)
-	assets, edges, err := s.workspaceAssetsAndEdges(r, workspaceID)
+	route := uisignals.RouteKind(r.URL.Query().Get("route"))
+	var (
+		assets []workspace.AssetView
+		edges  []workspace.AssetEdgeView
+		err    error
+	)
+	if route == uisignals.RouteConnectionAsset {
+		assets, edges, err = s.platformConnectionAssetsAndEdges(r)
+	} else {
+		assets, edges, err = s.workspaceAssetsAndEdges(r, workspaceID)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), statusForNotFound(err))
 		return
 	}
 	selected, ok := workspace.AssetByID(assets, assetID)
-	if !ok || !workspaceAssetRefreshable(selected) {
+	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-	if s.store == nil {
+	if route == uisignals.RouteConnectionAsset && selected.WorkspaceID != "" {
+		workspaceID = selected.WorkspaceID
+	}
+	if workspaceAssetRefreshable(selected) && s.store == nil {
 		http.Error(w, "platform store is required", http.StatusServiceUnavailable)
 		return
 	}
 
 	updates := pagestream.NewSignalStream(w, r)
-	if err := updates.Patch(s.workspaceAssetRefreshPatch(r, workspaceID, selected, assets, edges, section)); err != nil {
+	refresh, err := s.assetRefreshState(r, workspaceID, selected)
+	if err != nil {
+		http.Error(w, err.Error(), statusForNotFound(err))
+		return
+	}
+	versions, err := s.assetVersionsStateForSection(r.Context(), workspaceID, string(s.requestDeploymentEnvironment(r)), selected, section)
+	if err != nil {
+		http.Error(w, err.Error(), statusForNotFound(err))
+		return
+	}
+	environment := string(s.requestDeploymentEnvironment(r))
+	var patch pagestream.SignalPatch
+	if route == uisignals.RouteConnectionAsset {
+		if selected.Type == "source" {
+			connectionID := assetnav.SourceConnectionID(selected.ID, edges)
+			if connection, ok := workspace.AssetByID(assets, connectionID); ok {
+				patch = ui.ConnectionSourceAssetBootstrapSignalsForEnvironment(s.catalogForWorkspacesPage(r, nil), platformAssetWorkspaceView(), connection, selected, assets, edges, section, environment, s.currentRoleLabel(r), versions)
+			}
+		}
+		if patch == nil {
+			patch = ui.ConnectionAssetBootstrapSignalsForEnvironment(s.catalogForWorkspacesPage(r, nil), platformAssetWorkspaceView(), selected, assets, edges, section, environment, s.currentRoleLabel(r), versions)
+		}
+	} else {
+		patch = ui.WorkspaceAssetBootstrapSignalsForEnvironment(s.catalogForWorkspace(workspaceID), s.workspaceResponse(r, workspaceID), selected, assets, edges, section, environment, s.currentRoleLabel(r), refresh, versions, s.chatChromeOption(r))
+	}
+	if err := updates.Patch(patch); err != nil {
 		return
 	}
 	_ = updates.Forward(r.Context(), s.broker, workspaceAssetStreamID(workspaceID, assetID, section))
@@ -673,7 +751,7 @@ func (s *Server) connectionSourceAssetSection(w http.ResponseWriter, r *http.Req
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionSourceAssetPageWithVersions(s.catalogForWorkspacesPage(r, nil), workspace, connection, source, assets, edges, section, s.currentRoleLabel(r), versions).Render(w); err != nil {
+	if err := ui.ConnectionSourceAssetPageWithVersionsForEnvironment(s.catalogForWorkspacesPage(r, nil), workspace, connection, source, assets, edges, section, string(s.requestDeploymentEnvironment(r)), s.currentRoleLabel(r), versions).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -733,7 +811,7 @@ func (s *Server) connectionAssetSection(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	if err := ui.ConnectionAssetPageWithVersions(s.catalogForWorkspacesPage(r, nil), workspace, selected, assets, edges, section, s.currentRoleLabel(r), versions).Render(w); err != nil {
+	if err := ui.ConnectionAssetPageWithVersionsForEnvironment(s.catalogForWorkspacesPage(r, nil), workspace, selected, assets, edges, section, string(s.requestDeploymentEnvironment(r)), s.currentRoleLabel(r), versions).Render(w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -855,7 +933,7 @@ func (s *Server) patchWorkspaceAccess(w http.ResponseWriter, r *http.Request, wo
 	workspace := s.workspaceResponse(r, workspaceID)
 	access := s.workspaceAccessResponse(r, workspace, true, status)
 	_ = pagestream.PatchResponse(w, r, pagestream.SignalPatch{
-		"workspaceAccess": ui.WorkspaceAccessSignals(access, csrfToken(r, s.auth)),
+		"workspaceAccess": ui.WorkspaceAccessSignals(access),
 	})
 }
 

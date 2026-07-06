@@ -969,7 +969,6 @@ test('admin agent route renders prompt editor, tools catalog, and emits save com
           model: 'fake-model',
           systemPrompt: 'Initial prompt',
           canWrite: true,
-          csrfToken: 'csrf-token',
           updatePath: '/api/v1/admin/agent/config',
           tools: [{
             name: 'query_visual',
@@ -1166,7 +1165,6 @@ test('admin agent prompt editor disables saves for read-only users', async () =>
           model: 'fake-model',
           systemPrompt: 'Initial prompt',
           canWrite: false,
-          csrfToken: '',
           updatePath: '/api/v1/admin/agent/config',
           tools: [],
         },

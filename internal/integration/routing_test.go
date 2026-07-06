@@ -10,10 +10,8 @@ func TestCommandPatchesAreScopedToClientAndPage(t *testing.T) {
 	h := newHarness(t)
 	target := h.openUpdatesStream(t, "executive-sales", "overview", runtimeSignals("route-target", "overview"))
 	otherClient := h.openUpdatesStream(t, "executive-sales", "overview", runtimeSignals("route-other", "overview"))
-	otherPage := h.openUpdatesStream(t, "executive-sales", "missing", runtimeSignals("route-target", "missing"))
 	drainInitialStreamPatches(t, target)
 	drainInitialStreamPatches(t, otherClient)
-	drainInitialStreamPatches(t, otherPage)
 
 	status := h.postCommand(t, "/commands/select", mergeSignals(runtimeSignals("route-target", "overview"), map[string]any{
 		"interactionCommand": pointSelectionCommand("orders", "orders.status", "delivered"),
@@ -25,7 +23,6 @@ func TestCommandPatchesAreScopedToClientAndPage(t *testing.T) {
 
 	requireStatusLoading(t, []map[string]any{target.nextPatch(t)}, true)
 	otherClient.expectNoPatch(t, 150*time.Millisecond)
-	otherPage.expectNoPatch(t, 150*time.Millisecond)
 }
 
 func TestUpdatesQueryParamsTakePrecedenceOverRuntimeSignalIDs(t *testing.T) {

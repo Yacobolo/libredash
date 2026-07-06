@@ -21,6 +21,7 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForSemanticModel(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, edges, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
 
 	for _, want := range []string{
 		"<ld-app-shell",
@@ -133,6 +134,8 @@ func TestWorkspaceAssetPageHidesVersionsSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, edges, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
+	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, edges, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
 	for _, notWant := range []string{`"label":"Versions"`, `"versions":`, "Deployment digest", `/updates?section=versions`} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("workspace asset page rendered versions surface %q:\n%s", notWant, rendered)
@@ -250,6 +253,7 @@ func TestWorkspaceAssetDetailsRenderModelTableComposition(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, edges, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
 
 	for _, want := range []string{
 		"<ld-workspace-asset-page",
@@ -288,6 +292,7 @@ func TestWorkspaceAssetDetailsRenderDirectSourceModelTableWithoutSQL(t *testing.
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, edges, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
 
 	for _, want := range []string{
 		"<ld-workspace-asset-page",
@@ -321,6 +326,7 @@ func TestWorkspaceAssetDetailsRenderSourceSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(WorkspaceAssetBootstrapSignals(catalog, workspace, asset, assets, edges, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}))
 
 	for _, want := range []string{
 		"<ld-workspace-asset-page",
@@ -683,6 +689,7 @@ func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(ConnectionAssetBootstrapSignals(catalog, workspace, connection, assets, edges, "details", "Owner", AssetVersionsState{}))
 
 	for _, want := range []string{
 		"<ld-workspace-asset-page",
@@ -729,6 +736,7 @@ func TestConnectionsPageUsesConnectionAssetTabs(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(ConnectionsBootstrapSignals(catalog, workspace.ID, visibleAssets, edges, "source", "", "Owner"))
 
 	for _, want := range []string{
 		`<ld-connections-page`,
@@ -759,6 +767,7 @@ func TestConnectionSourceAssetDetailsRenderConnectionChrome(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(ConnectionSourceAssetBootstrapSignals(catalog, workspace, connection, source, assets, edges, "details", "Owner", AssetVersionsState{}))
 
 	for _, want := range []string{
 		`<ld-workspace-asset-page`,
@@ -794,6 +803,8 @@ func TestWorkspaceAssetTabsUseWorkspaceAssetTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	access := testWorkspaceAccess(workspace, true)
+	rendered += bootstrapJSON(WorkspaceBootstrapSignals(catalog, workspace, assets, "", "", "Owner", access))
 
 	for _, want := range []string{
 		`<ld-workspace-page`,
@@ -851,6 +862,8 @@ func TestWorkspaceAssetRowsRenderTokenBackedIconColors(t *testing.T) {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	access := testWorkspaceAccess(workspace, true)
+	rendered += bootstrapJSON(WorkspaceBootstrapSignals(catalog, workspace, visibleAssets, "", "", "Owner", access))
 
 	for _, want := range []string{
 		`<ld-workspace-page`,
@@ -877,13 +890,15 @@ func TestWorkspaceAssetRowsRenderTokenBackedIconColors(t *testing.T) {
 
 func TestWorkspaceAccessControlRendersForManagers(t *testing.T) {
 	workspace, catalog, assets, _ := testWorkspaceAssetFixtures()
+	access := testWorkspaceAccess(workspace, true)
 
 	var out strings.Builder
-	err := WorkspacePage(catalog, workspace, []workspaceview.AssetView{assets[0]}, "", "", "Owner", testWorkspaceAccess(workspace, true), "csrf").Render(&out)
+	err := WorkspacePage(catalog, workspace, []workspaceview.AssetView{assets[0]}, "", "", "Owner", access, "csrf").Render(&out)
 	if err != nil {
 		t.Fatal(err)
 	}
 	rendered := html.UnescapeString(out.String())
+	rendered += bootstrapJSON(WorkspaceBootstrapSignals(catalog, workspace, []workspaceview.AssetView{assets[0]}, "", "", "Owner", access))
 
 	for _, want := range []string{
 		`<ld-workspace-page`,
@@ -893,7 +908,7 @@ func TestWorkspaceAccessControlRendersForManagers(t *testing.T) {
 		`workspaceAccess`,
 		`command`,
 		`search`,
-		`csrfToken`,
+		`meta name="csrf-token" content="csrf"`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("workspace access control did not render %q:\n%s", want, rendered)
@@ -909,6 +924,10 @@ func TestWorkspaceAccessControlRendersForManagers(t *testing.T) {
 			t.Fatalf("workspace access control rendered root-level access signal %q:\n%s", notWant, rendered)
 		}
 	}
+}
+
+func bootstrapJSON(signals map[string]any) string {
+	return html.UnescapeString(jsonString(signals))
 }
 
 func TestWorkspaceAccessControlDoesNotRenderForViewers(t *testing.T) {

@@ -72,6 +72,50 @@ test('DatastarLit schedules one Lit update when a tracked signal changes', () =>
   })
 })
 
+test('DatastarLit tracks signal root additions during cold hydration', () => {
+  const state: Record<string, unknown> = {}
+  const effects: Array<() => void> = []
+  let rootReads = 0
+  setDatastarLitRuntimeForTests({
+    get root() {
+      rootReads++
+      return state
+    },
+    getPath(path: string) {
+      return path.split('.').reduce<unknown>((value, key) => {
+        return value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined
+      }, state)
+    },
+    effect(fn: () => void) {
+      effects.push(fn)
+      fn()
+      return () => {
+        const index = effects.indexOf(fn)
+        if (index >= 0) effects.splice(index, 1)
+      }
+    },
+  })
+
+  const element = new TestElement()
+  element.performUpdate()
+  expect(rootReads).toBeGreaterThan(0)
+  expect(element.rendered.at(-1)).toEqual({
+    title: 'Untitled',
+    missing: 'fallback',
+    root: undefined,
+  })
+
+  state.dashboard = { title: 'Revenue' }
+  effects[0]()
+  expect(element.requestUpdates).toBe(1)
+  element.performUpdate()
+  expect(element.rendered.at(-1)).toEqual({
+    title: 'Revenue',
+    missing: 'fallback',
+    root: { title: 'Revenue' },
+  })
+})
+
 test('DatastarLit disconnect disposes the render effect', () => {
   const disposers: Dispose[] = []
   setDatastarLitRuntimeForTests({

@@ -44,7 +44,12 @@ async function verifyRoute(route: RouteExpectation): Promise<void> {
       throw new Error(`${route.path}: status ${response?.status() ?? 'unknown'}`)
     }
     await page.waitForSelector(route.root)
-    await page.waitForTimeout(1000)
+    await page.waitForFunction((expectedRoot) => {
+      if (expectedRoot === 'ld-chat-page') return true
+      const root = document.querySelector(expectedRoot)
+      return (root?.shadowRoot?.textContent?.replace(/\s+/g, ' ').trim().length ?? 0) > 0
+    }, route.root, { timeout: 5000 })
+    await waitForUpdatesRequest(route.path, updates)
     const state = await page.evaluate((expectedRoot) => {
       const root = document.querySelector(expectedRoot)
       return {
@@ -63,6 +68,14 @@ async function verifyRoute(route: RouteExpectation): Promise<void> {
     assertNoBlockingConsoleMessages(route.path, messages)
   } finally {
     await page.close()
+  }
+}
+
+async function waitForUpdatesRequest(label: string, updates: string[]): Promise<void> {
+  const deadline = Date.now() + 5000
+  while (updates.length === 0) {
+    if (Date.now() > deadline) throw new Error(`${label}: timed out waiting for /updates request`)
+    await new Promise((resolve) => setTimeout(resolve, 25))
   }
 }
 

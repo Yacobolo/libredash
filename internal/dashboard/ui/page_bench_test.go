@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 	g "maragu.dev/gomponents"
+	dsattr "maragu.dev/gomponents-datastar"
 	h "maragu.dev/gomponents/html"
 )
 
@@ -28,7 +30,7 @@ func benchmarkDashboardBridge(b *testing.B, legacy bool) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		signals := initialSignals(".data/olist", "client", "csrf", catalog, report, model, report.Pages, activePage, dashboard.Filters{})
+		signals := BootstrapSignals(".data/olist", "client", catalog, report, model, report.Pages, activePage, dashboard.Filters{})
 		node := benchmarkDashboardDocument(catalog, report, model, activePage, signals, legacy)
 		var out strings.Builder
 		if err := node.Render(&out); err != nil {
@@ -55,6 +57,17 @@ func benchmarkDashboardDocument(catalog dashboard.Catalog, report reportdef.Dash
 	if legacy {
 		body = benchmarkLegacyDashboardRoot(catalog, report, model, signals, filtersUpdate, reloadAction)
 	}
+	mainAttrs := []g.Node{
+		h.ID("dashboard"),
+		h.Class(appRootClass),
+		g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+tableReset+reloadAction),
+	}
+	if legacy {
+		mainAttrs = append(mainAttrs,
+			dsattr.Signals(signals),
+			g.Attr("data-url-param-shape", jsonString(signals["urlParamShape"])),
+		)
+	}
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash",
 		HTMLAttrs: []g.Node{
@@ -68,19 +81,21 @@ func benchmarkDashboardDocument(catalog dashboard.Catalog, report reportdef.Dash
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/url-sync.js"))),
 			inspectorScript(),
 		),
-		MainAttrs: []g.Node{
-			h.ID("dashboard"),
-			h.Class(appRootClass),
-			g.Attr("data-url-param-shape", jsonString(signals["urlParamShape"])),
-			g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+tableReset+reloadAction),
-		},
-		Signals:    signals,
+		MainAttrs:  mainAttrs,
 		UpdatesURL: dashboardUpdatesURL,
 		Body: []g.Node{
 			body,
 			inspectorElement(),
 		},
 	})
+}
+
+func jsonString(value any) string {
+	bytes, err := json.Marshal(value)
+	if err != nil {
+		return "{}"
+	}
+	return string(bytes)
 }
 
 func benchmarkDatastarLitDashboardRoot(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, filtersUpdate, reloadAction string) g.Node {

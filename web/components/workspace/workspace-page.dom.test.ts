@@ -580,7 +580,6 @@ function testDocument(root: 'workspace' | 'connections' | 'asset'): string {
     }],
     canManage: true,
     status: { loading: false, error: '', message: '' },
-    csrfToken: 'token',
     command: { email: '', role: '', principalId: '' },
     search: '',
   }

@@ -9,10 +9,7 @@ import (
 )
 
 func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view string, signal ChatSignal) g.Node {
-	envelope := uisignals.ChatInitialEnvelope(catalog, workspaceID, csrfToken, roleLabel, view, signal)
-	chatUpdatesURL := updatesURL(uisignals.RouteChat)
-	envelope.Runtime = runtimeSignal(uisignals.RouteChat, chatUpdatesURL)
-	envelope.Runtime.WorkspaceID = workspaceID
+	chatUpdatesURL := updatesURL(uisignals.RouteChat, "workspace", workspaceID, "view", view, "conversation", signal.ActiveConversationID)
 	chatBasePath := "/chat"
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash Chat",
@@ -22,25 +19,19 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 			g.Attr("data-dark-theme", "dark"),
 		},
 		Head: pageHead(
+			csrfMeta(csrfToken),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/app-shell.js"))),
 			h.Script(h.Type("module"), h.Src(staticAsset("/static/chat-page.js"))),
 			inspectorScript(),
 		),
-		MainAttrs: []g.Node{h.Class(appRootClass)},
-		Signals: map[string]any{
-			"chrome":    envelope.Chrome,
-			"page":      envelope.Page,
-			"runtime":   envelope.Runtime,
-			"csrfToken": envelope.CSRFToken,
-			"agent":     envelope.Agent,
-			"visuals":   envelope.Visuals,
-			"tables":    envelope.Tables,
-		},
+		MainAttrs:  []g.Node{h.Class(appRootClass)},
 		UpdatesURL: chatUpdatesURL,
 		Body: []g.Node{
 			g.El("ld-app-shell",
 				g.El("ld-chat-page",
 					g.Attr("slot", "page"),
+					g.Attr("workspace-id", workspaceID),
+					g.Attr("view", view),
 					g.Attr("data-indicator", "agentTurnPending"),
 					g.Attr("data-on:ld-chat-submit", "$agent.composer.value = evt.detail.input; "+postAction(chatBasePath+"/turns")),
 				),
@@ -48,4 +39,17 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 			inspectorElement(),
 		},
 	})
+}
+
+func ChatBootstrapSignals(catalog dashboard.Catalog, workspaceID, roleLabel, view string, signal ChatSignal) map[string]any {
+	envelope := uisignals.ChatInitialEnvelope(catalog, workspaceID, roleLabel, view, signal)
+	envelope.Runtime = uisignals.RouteRuntimeSignal{Kind: uisignals.RouteChat, WorkspaceID: workspaceID, RouteKey: string(uisignals.RouteChat)}
+	return map[string]any{
+		"chrome":  envelope.Chrome,
+		"page":    envelope.Page,
+		"runtime": envelope.Runtime,
+		"agent":   envelope.Agent,
+		"visuals": envelope.Visuals,
+		"tables":  envelope.Tables,
+	}
 }

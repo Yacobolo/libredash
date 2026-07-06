@@ -51,6 +51,7 @@ export function DatastarLit<T extends Constructor<ReactiveElement>>(
 
       let updateFromLit = true
       this.#renderDispose = activeRuntime.effect(() => {
+        trackSignalRoot(activeRuntime.root)
         if (updateFromLit) {
           updateFromLit = false
           super.performUpdate()
@@ -88,6 +89,10 @@ export function setDatastarLitRuntimeForTests(runtime: Runtime | null): void {
 
 function runtime(): Runtime | null {
   return runtimeForTests ?? loadedRuntime
+}
+
+function trackSignalRoot(root: SignalRoot): void {
+  Object.keys(root)
 }
 
 async function loadRuntime(): Promise<Runtime> {

@@ -233,22 +233,22 @@ func TestDataExplorerRouteRendersSignalsAndWiring(t *testing.T) {
 	for _, want := range []string{
 		"<ld-data-explorer",
 		"/static/data-explorer.js",
-		"dataExplorer",
-		`"csrfToken":"`,
-		"/updates?route=data",
+		`<meta name="csrf-token" content="`,
+		"/static/command.js",
+		`data-init="@get('/updates?`,
+		"route=data",
+		"workspace=test",
 		"/data/command",
-		"X-CSRF-Token",
-		"workspaceId",
-		"model_table:model_table:olist.orders",
-		"semantic_view:olist.orders",
-		`"active":"data"`,
-		`"primaryAction":{"label":"New chat","href":"/chat/new","icon":"plus"}`,
-		`"history":{"label":"Chats"`,
+		"window.LibreDashCommand.headers()",
+		"object=model_table%3Amodel_table%3Aolist.orders",
 	} {
 		body = html.UnescapeString(body)
 		if !strings.Contains(body, want) {
 			t.Fatalf("data route missing %q:\n%s", want, body)
 		}
+	}
+	if strings.Contains(body, "data-signals=") || strings.Contains(body, `"csrfToken"`) {
+		t.Fatalf("data route should not embed initial signals or csrfToken signal:\n%s", body)
 	}
 }
 
@@ -772,9 +772,9 @@ func TestDataExplorerBrowserCommandRequiresAndAcceptsCSRF(t *testing.T) {
 
 func dataExplorerCSRFToken(t *testing.T, body string) string {
 	t.Helper()
-	matches := regexp.MustCompile(`"csrfToken":"([^"]+)"`).FindStringSubmatch(html.UnescapeString(body))
+	matches := regexp.MustCompile(`<meta name="csrf-token" content="([^"]+)"`).FindStringSubmatch(html.UnescapeString(body))
 	if len(matches) != 2 || strings.TrimSpace(matches[1]) == "" {
-		t.Fatalf("data route did not render csrfToken signal:\n%s", body)
+		t.Fatalf("data route did not render csrf meta token:\n%s", body)
 	}
 	return matches[1]
 }

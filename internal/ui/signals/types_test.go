@@ -12,7 +12,7 @@ import (
 func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 	report := testDashboardReport()
 	model := testSemanticModel()
-	envelope := DashboardInitialEnvelope(".data", "client", "", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})
+	envelope := DashboardInitialEnvelope(".data", "client", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})
 
 	if err := ValidateDashboardEnvelope(envelope); err != nil {
 		t.Fatalf("validate dashboard envelope: %v", err)
@@ -33,7 +33,7 @@ func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 
 func TestDashboardEnvelopeRejectsMissingReferencedPayload(t *testing.T) {
 	report := testDashboardReport()
-	envelope := DashboardInitialEnvelope(".data", "client", "", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
+	envelope := DashboardInitialEnvelope(".data", "client", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
 	delete(envelope.Visuals, "active_chart")
 
 	err := ValidateDashboardEnvelope(envelope)
@@ -44,7 +44,7 @@ func TestDashboardEnvelopeRejectsMissingReferencedPayload(t *testing.T) {
 
 func TestDashboardEnvelopeRejectsUnusedPayload(t *testing.T) {
 	report := testDashboardReport()
-	envelope := DashboardInitialEnvelope(".data", "client", "", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
+	envelope := DashboardInitialEnvelope(".data", "client", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
 	envelope.Visuals["off_page_chart"] = dashboard.Visual{ID: "off_page_chart"}
 
 	err := ValidateDashboardEnvelope(envelope)
@@ -54,7 +54,7 @@ func TestDashboardEnvelopeRejectsUnusedPayload(t *testing.T) {
 }
 
 func TestChatInitialEnvelopeValidates(t *testing.T) {
-	envelope := ChatInitialEnvelope(dashboard.Catalog{}, "test", "csrf", "", "list", ChatSignal{
+	envelope := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "list", ChatSignal{
 		ActiveConversationID: "",
 		Conversations:        []ChatConversationSummary{},
 		Transcript:           nil,
@@ -80,7 +80,7 @@ func TestChatInitialEnvelopeValidates(t *testing.T) {
 }
 
 func TestChatInitialEnvelopeOnlyListActivatesChatNav(t *testing.T) {
-	list := ChatInitialEnvelope(dashboard.Catalog{}, "test", "csrf", "", "list", ChatSignal{
+	list := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "list", ChatSignal{
 		ActiveConversationID: "",
 		Conversations:        []ChatConversationSummary{},
 		Transcript:           nil,
@@ -91,7 +91,7 @@ func TestChatInitialEnvelopeOnlyListActivatesChatNav(t *testing.T) {
 		t.Fatalf("list chat sidebar active = %q, want chat", list.Chrome.Sidebar.Active)
 	}
 
-	draft := ChatInitialEnvelope(dashboard.Catalog{}, "test", "csrf", "", "new", ChatSignal{
+	draft := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "new", ChatSignal{
 		ActiveConversationID: "",
 		Conversations:        []ChatConversationSummary{},
 		Transcript:           nil,
@@ -102,7 +102,7 @@ func TestChatInitialEnvelopeOnlyListActivatesChatNav(t *testing.T) {
 		t.Fatalf("draft chat sidebar active = %q, want none", draft.Chrome.Sidebar.Active)
 	}
 
-	conversation := ChatInitialEnvelope(dashboard.Catalog{}, "test", "csrf", "", "conversation", ChatSignal{
+	conversation := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "conversation", ChatSignal{
 		ActiveConversationID: "agentconv_1",
 		Conversations: []ChatConversationSummary{{
 			ID:    "agentconv_1",

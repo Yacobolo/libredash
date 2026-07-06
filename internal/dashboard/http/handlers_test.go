@@ -102,7 +102,7 @@ func TestPageSetsClientCookieAndRendersReport(t *testing.T) {
 		t.Fatalf("cookies = %#v", cookies)
 	}
 	body := html.UnescapeString(rec.Body.String())
-	if !strings.Contains(body, `<ld-dashboard-page`) || !strings.Contains(body, `/updates?dashboard=dash`) || !strings.Contains(body, `route=dashboard`) || !strings.Contains(body, `@get($runtime.updatesUrl`) {
+	if !strings.Contains(body, `<ld-dashboard-page`) || !strings.Contains(body, `/updates?dashboard=dash`) || !strings.Contains(body, `route=dashboard`) || !strings.Contains(body, `@get('/updates?`) || strings.Contains(body, `data-signals=`) {
 		t.Fatalf("page did not render report shell:\n%s", body)
 	}
 	if strings.Contains(body, `<ld-report-canvas`) {

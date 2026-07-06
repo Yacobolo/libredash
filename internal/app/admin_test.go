@@ -75,14 +75,14 @@ func TestAdminPagesRenderReadOnlyAccessData(t *testing.T) {
 		path string
 		want []string
 	}{
-		{path: "/admin", want: []string{"General", "Principals", "Groups", "Role bindings", "Roles"}},
-		{path: "/admin/principals", want: []string{"<ld-admin-page", "Principals", "sections", "Group count", "/admin/principals/" + analyst.ID, "analyst@example.com", "viewer", analyst.ID}},
-		{path: "/admin/principals/" + analyst.ID, want: []string{"Principals / Analyst", "Email", "analyst@example.com", "Principal ID", analyst.ID, "Direct roles", "viewer", "Group count", "Groups", "/admin/groups/group_finance", "Finance", "local", "finance", "editor"}},
-		{path: "/admin/groups", want: []string{"<ld-admin-page", "Groups", "sections", "Member count", "/admin/groups/group_finance", "Finance", "local", "finance", "editor"}},
-		{path: "/admin/groups/group_finance", want: []string{"Groups / Finance", "Provider", "local", "External ID", "finance", "Group ID", "group_finance", "Members", "Principal ID", "analyst@example.com", "viewer", analyst.ID}},
-		{path: "/admin/agent", want: []string{"<ld-admin-page", "adminAgentCommand", "systemPrompt", "You are LibreDash", "Tools", "query_visual", "/api/v1/admin/agent/config"}},
-		{path: "/admin/storage", want: []string{"<ld-admin-page", "Storage", "Catalog path", "Data path", "Snapshots", "Tables", "adminStorage", "/updates?route=admin", "section=storage", "/admin/storage/select-table", "No DuckLake catalog has been initialized."}},
-		{path: "/admin/queries", want: []string{"<ld-admin-page", "Query History", "adminQueryHistory", "adminQueryDetail", "adminQueryHistoryCommand", "/updates?route=admin", "section=queries", "/admin/queries/command", "csrfToken"}},
+		{path: "/admin", want: []string{"<ld-admin-page", "section=\"general\"", "/updates?route=admin", "section=general"}},
+		{path: "/admin/principals", want: []string{"<ld-admin-page", "section=\"principals\"", "/updates?route=admin", "section=principals"}},
+		{path: "/admin/principals/" + analyst.ID, want: []string{"<ld-admin-page", "section=\"principal-detail\"", "principal=" + analyst.ID}},
+		{path: "/admin/groups", want: []string{"<ld-admin-page", "section=\"groups\"", "/updates?route=admin", "section=groups"}},
+		{path: "/admin/groups/group_finance", want: []string{"<ld-admin-page", "section=\"group-detail\"", "group=group_finance"}},
+		{path: "/admin/agent", want: []string{"<ld-admin-page", "section=\"agent\"", "/api/v1/admin/agent/config"}},
+		{path: "/admin/storage", want: []string{"<ld-admin-page", "section=\"storage\"", "/updates?route=admin", "section=storage", "/admin/storage/select-table"}},
+		{path: "/admin/queries", want: []string{"<ld-admin-page", "section=\"queries\"", "/updates?route=admin", "section=queries", "/admin/queries/command"}},
 	}
 	for _, tc := range cases {
 		req := httptest.NewRequest(http.MethodGet, tc.path, nil)
@@ -534,8 +534,8 @@ func TestAdminStorageUpdatesSubscribesWithoutInitialRescan(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "text/event-stream") {
 		t.Fatalf("content type = %q, want text/event-stream", got)
 	}
-	if strings.Contains(rec.Body.String(), `"tables"`) || strings.Contains(rec.Body.String(), `"selectedTable"`) {
-		t.Fatalf("storage updates should not send initial full table signal data:\n%s", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), `"adminStorage"`) || !strings.Contains(rec.Body.String(), `"selectedKey":"sentinel"`) {
+		t.Fatalf("storage updates should send bootstrap and forwarded patch:\n%s", rec.Body.String())
 	}
 }
 
@@ -779,7 +779,7 @@ func TestAdminGeneralRendersWithoutStore(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"General", "RBAC store is not configured", "Platform"} {
+	for _, want := range []string{"<ld-admin-page", "section=\"general\"", "/updates?route=admin"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("admin general missing %q:\n%s", want, body)
 		}
@@ -796,7 +796,7 @@ func TestAdminStorageRendersEmptyStateWithoutDuckDBFiles(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Storage", "No DuckLake catalog has been initialized.", "Catalog path"} {
+	for _, want := range []string{"<ld-admin-page", "section=\"storage\"", "/updates?route=admin", "/admin/storage/select-table"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("admin storage missing %q:\n%s", want, body)
 		}

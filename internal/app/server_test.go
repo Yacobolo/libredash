@@ -368,12 +368,13 @@ func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/operations", nil)
 	rec := httptest.NewRecorder()
 
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	server := New(fakeMetrics{})
+	server.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	body := rec.Body.String()
+	body := renderedWithBootstrap(t, server, rec.Body.String(), "")
 	if !strings.Contains(body, `<ld-app-shell`) || !strings.Contains(body, `<ld-dashboard-page`) {
 		t.Fatalf("report page did not render app shell and dashboard route root:\n%s", body)
 	}
@@ -383,7 +384,7 @@ func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
 	if strings.Contains(body, `<ld-sub-sidebar`) || strings.Contains(body, `<ld-report-canvas`) || strings.Contains(body, `<ld-echart`) || strings.Contains(body, `<ld-report-table`) {
 		t.Fatalf("report page rendered dashboard product internals below route root:\n%s", body)
 	}
-	if !strings.Contains(body, `&#34;compact&#34;:true`) {
+	if !strings.Contains(body, `"compact":true`) {
 		t.Fatalf("report page did not compact the primary sidebar:\n%s", body)
 	}
 	if !strings.Contains(body, `/workspaces/test-workspace/dashboards/executive-sales/pages/operations`) {
@@ -414,22 +415,23 @@ func TestPageRouteSeedsPageScopedFiltersFromURL(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/overview?state=SP&state=RJ&category=ignored", nil)
 	rec := httptest.NewRecorder()
 
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	server := New(fakeMetrics{})
+	server.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	body := rec.Body.String()
+	body := renderedWithBootstrap(t, server, rec.Body.String(), "")
 	if !strings.Contains(body, `/static/url-sync.js`) {
 		t.Fatalf("page did not include url sync script:\n%s", body)
 	}
-	if !strings.Contains(body, `&#34;state&#34;:[&#34;RJ&#34;,&#34;SP&#34;]`) {
+	if !strings.Contains(body, `"state":["RJ","SP"]`) {
 		t.Fatalf("page did not seed state url params:\n%s", body)
 	}
-	if !strings.Contains(body, `&#34;values&#34;:[&#34;RJ&#34;,&#34;SP&#34;]`) {
+	if !strings.Contains(body, `"values":["RJ","SP"]`) {
 		t.Fatalf("page did not seed state filter values:\n%s", body)
 	}
-	if strings.Contains(body, `&#34;category&#34;`) {
+	if strings.Contains(body, `"category"`) {
 		t.Fatalf("overview page seeded off-page category filter:\n%s", body)
 	}
 }
@@ -438,16 +440,17 @@ func TestPageRouteSeedsOperationsPageFiltersFromURL(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/workspaces/test-workspace/dashboards/executive-sales/pages/operations?state=SP&category=ops", nil)
 	rec := httptest.NewRecorder()
 
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	server := New(fakeMetrics{})
+	server.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	body := rec.Body.String()
-	if !strings.Contains(body, `&#34;category&#34;:&#34;ops&#34;`) && !strings.Contains(body, `&#34;value&#34;:&#34;ops&#34;`) {
+	body := renderedWithBootstrap(t, server, rec.Body.String(), "")
+	if !strings.Contains(body, `"category":"ops"`) && !strings.Contains(body, `"value":"ops"`) {
 		t.Fatalf("operations page did not seed category URL filter:\n%s", body)
 	}
-	if strings.Contains(body, `&#34;state&#34;`) {
+	if strings.Contains(body, `"state":{"type"`) || strings.Contains(body, `"urlParams":{"state"`) || strings.Contains(body, `"urlParamShape":{"state"`) {
 		t.Fatalf("operations page seeded off-page state filter:\n%s", body)
 	}
 }
@@ -488,13 +491,14 @@ func TestHomeRouteRendersDashboardCatalog(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	server := New(fakeMetrics{})
+	server.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	body := rec.Body.String()
-	rendered := html.UnescapeString(body)
+	body := renderedWithBootstrap(t, server, rec.Body.String(), "")
+	rendered := body
 	if !strings.Contains(rendered, `<ld-app-shell`) || !strings.Contains(rendered, `<ld-catalog-page`) {
 		t.Fatalf("home did not mount catalog route root:\n%s", rendered)
 	}
@@ -555,7 +559,7 @@ func TestHomeRouteAggregatesDBBackedWorkspaceCatalogs(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	rendered := html.UnescapeString(rec.Body.String())
+	rendered := renderedWithBootstrap(t, server, rec.Body.String(), "")
 	for _, want := range []string{
 		`Fulfillment Operations`,
 		`Executive Sales`,
@@ -574,12 +578,13 @@ func TestLoginRouteRendersAzureADLogin(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/login", nil)
 	rec := httptest.NewRecorder()
 
-	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+	server := New(fakeMetrics{})
+	server.Routes().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 	}
-	body := rec.Body.String()
+	body := renderedWithBootstrap(t, server, rec.Body.String(), "")
 	if !strings.Contains(body, `<ld-login-page`) {
 		t.Fatalf("login page did not mount login route root:\n%s", body)
 	}

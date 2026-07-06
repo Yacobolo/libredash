@@ -214,14 +214,23 @@ func (m canceledTableWindowMetrics) QueryTablePage(_ context.Context, _ string, 
 func drainInitialStreamPatches(t *testing.T, stream *streamClient) []map[string]any {
 	t.Helper()
 	patches := []map[string]any{}
-	for len(patches) < 6 {
+	sawSnapshotStatus := false
+	sawSnapshotTables := false
+	for len(patches) < 8 {
 		patch := stream.nextPatch(t)
 		patches = append(patches, patch)
-		if _, ok := patch["tables"]; ok {
+		status := mapAt(patch, "status")
+		if status["loading"] == false {
+			sawSnapshotStatus = true
+		}
+		if hasKey(patch, "tables") && !hasKey(patch, "runtime") {
+			sawSnapshotTables = true
+		}
+		if sawSnapshotStatus && sawSnapshotTables {
 			return patches
 		}
 	}
-	t.Fatalf("initial stream did not include tables patch: %#v", patches)
+	t.Fatalf("initial stream did not include snapshot status and tables patches: %#v", patches)
 	return nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/libredash/internal/ui"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 )
@@ -77,7 +78,7 @@ func (s *Server) serveUpdates(w http.ResponseWriter, r *http.Request, route stri
 		s.dashboardHTTP().Updates(w, r)
 	case uisignals.RouteChat:
 		if s.agent == nil || !s.agent.Enabled() {
-			s.noopUpdates(w, r)
+			s.chatBootstrapUpdates(w, r)
 			return
 		}
 		s.chatUpdates(w, r)
@@ -90,25 +91,35 @@ func (s *Server) serveUpdates(w http.ResponseWriter, r *http.Request, route stri
 		case "storage":
 			s.adminStorageUpdates(w, r)
 		default:
-			s.noopUpdates(w, r)
+			s.adminBootstrapUpdates(w, r)
 		}
 	case uisignals.RouteWorkspaceAsset, uisignals.RouteConnectionAsset:
 		if strings.TrimSpace(r.URL.Query().Get("asset")) != "" {
 			s.workspaceAssetUpdates(w, r)
 			return
 		}
-		s.noopUpdates(w, r)
-	case uisignals.RouteLogin, uisignals.RouteCatalog, uisignals.RouteWorkspace, uisignals.RouteConnections:
-		s.noopUpdates(w, r)
+		s.patchAndWait(w, r, pagestream.SignalPatch{"status": map[string]any{"loading": false, "error": ""}})
+	case uisignals.RouteLogin:
+		s.patchAndWait(w, r, ui.LoginBootstrapSignals())
+	case uisignals.RouteCatalog:
+		s.patchAndWait(w, r, ui.CatalogBootstrapSignalsForCatalogs(s.catalogsForVisibleWorkspaces(r), s.chatChromeOption(r)))
+	case uisignals.RouteWorkspace:
+		s.workspaceBootstrapUpdates(w, r)
+	case uisignals.RouteConnections:
+		s.connectionsBootstrapUpdates(w, r)
 	default:
 		http.Error(w, "unknown updates route", http.StatusBadRequest)
 	}
 }
 
 func (s *Server) noopUpdates(w http.ResponseWriter, r *http.Request) {
+	s.patchAndWait(w, r, pagestream.SignalPatch{"status": map[string]any{"loading": false, "error": ""}})
+}
+
+func (s *Server) patchAndWait(w http.ResponseWriter, r *http.Request, patch pagestream.SignalPatch) {
 	_ = pagestream.EnsureClientID(w, r)
 	updates := pagestream.NewSignalStream(w, r)
-	if err := updates.Patch(pagestream.SignalPatch{"status": map[string]any{"loading": false, "error": ""}}); err != nil {
+	if err := updates.Patch(patch); err != nil {
 		return
 	}
 	updates.Wait(r.Context())

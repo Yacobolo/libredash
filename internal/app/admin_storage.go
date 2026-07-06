@@ -92,6 +92,14 @@ func (s *Server) adminStorageData(r interface{ Context() context.Context }) ui.A
 func (s *Server) adminStorageUpdates(w http.ResponseWriter, r *http.Request) {
 	clientID := pagestream.EnsureClientID(w, r)
 	updates := pagestream.NewSignalStream(w, r)
+	data, err := s.adminDataForUpdates(r, "storage")
+	if err != nil {
+		http.Error(w, err.Error(), statusForNotFound(err))
+		return
+	}
+	if err := updates.Patch(ui.AdminBootstrapSignals(s.metrics.Catalog(), "storage", s.currentAdminRoleLabel(r), data, s.chatChromeOption(r))); err != nil {
+		return
+	}
 	_ = updates.Forward(r.Context(), s.broker, adminStorageStreamID(clientID))
 }
 
