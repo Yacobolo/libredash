@@ -1,7 +1,7 @@
 import { filtersFromURLParams, type FilterConfig, type FiltersSignal, type URLParamsShape } from './filter-url'
+import { loadDatastarRuntime } from '../../shared/datastar-runtime'
 
 const dataStarURLSyncEvent = 'datastar-url-params-sync'
-const datastarRuntimeURL = '/static/vendor/datastar-1.0.2.js?v=dev'
 
 type DatastarRuntime = {
   effect(fn: () => void): () => void
@@ -111,7 +111,7 @@ function bindPopstate(fallback: unknown): void {
 
 async function bindSignalPopstate(): Promise<void> {
   try {
-    const runtime = await import(datastarRuntimeURL) as DatastarRuntime
+    const runtime = await loadDatastarRuntime() as DatastarRuntime
     let dispose: (() => void) | null = null
     let bound = false
     dispose = runtime.effect(() => {

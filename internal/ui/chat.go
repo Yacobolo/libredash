@@ -43,7 +43,7 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 
 func ChatBootstrapSignals(catalog dashboard.Catalog, workspaceID, roleLabel, view string, signal ChatSignal) map[string]any {
 	envelope := uisignals.ChatInitialEnvelope(catalog, workspaceID, roleLabel, view, signal)
-	envelope.Runtime = uisignals.RouteRuntimeSignal{Kind: uisignals.RouteChat, WorkspaceID: workspaceID, RouteKey: string(uisignals.RouteChat)}
+	envelope.Runtime = uisignals.RouteRuntimeSignal{Kind: uisignals.RouteChat, WorkspaceID: workspaceID}
 	return map[string]any{
 		"chrome":  envelope.Chrome,
 		"page":    envelope.Page,

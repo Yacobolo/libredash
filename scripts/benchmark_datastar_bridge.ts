@@ -2,6 +2,7 @@ import { chromium, type Browser } from '@playwright/test'
 import { createServer, type Server } from 'node:http'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join, normalize } from 'node:path'
+import { datastarRuntimeURL } from '../web/components/shared/datastar-runtime'
 
 type BridgeVariant = 'legacy' | 'ignition' | 'datastar-lit'
 type BenchmarkResult = {
@@ -63,7 +64,7 @@ async function buildBenchmarkBundle(): Promise<void> {
     entrypoints: ['web/benchmarks/datastar-bridge.ts'],
     target: 'browser',
     format: 'esm',
-    external: ['/static/vendor/datastar-1.0.2.js?v=dev'],
+    external: [datastarRuntimeURL],
     outdir: outDir,
     naming: { entry: 'datastar-bridge-bench.[ext]' },
   })
@@ -150,7 +151,7 @@ function documentForVariant(variant: BridgeVariant): string {
         <main data-signals="${attr(payload)}">
           ${componentMarkup(variant, payload)}
         </main>
-        <script type="module" src="/static/vendor/datastar-1.0.2.js?v=dev"></script>
+        <script type="module" src="${datastarRuntimeURL}"></script>
         <script type="module" src="/datastar-bridge-bench.js"></script>
       </body>
     </html>

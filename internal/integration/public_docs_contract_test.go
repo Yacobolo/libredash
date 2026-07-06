@@ -25,10 +25,11 @@ func TestPublicDocsAndScriptsDoNotAdvertiseRemovedCaCSurfaces(t *testing.T) {
 				"`/dashboards/",
 				"('/dashboards/",
 				"\"/dashboards/",
-				"GET /updates",
-				"`/updates",
-				"('/updates",
-				"\"/updates",
+				"/workspaces/{workspace}/updates",
+				"/chat/updates",
+				"/data/updates",
+				"/admin/storage/updates",
+				"/admin/queries/updates",
 			} {
 				if strings.Contains(body, forbidden) {
 					t.Fatalf("%s still advertises removed surface %q", name, forbidden)

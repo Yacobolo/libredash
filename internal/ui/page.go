@@ -38,11 +38,9 @@ func updatesURL(route uisignals.RouteKind, pairs ...string) string {
 	return "/updates?" + values.Encode()
 }
 
-func runtimeSignal(kind uisignals.RouteKind, updates string) uisignals.RouteRuntimeSignal {
+func runtimeSignal(kind uisignals.RouteKind) uisignals.RouteRuntimeSignal {
 	return uisignals.RouteRuntimeSignal{
-		Kind:       kind,
-		RouteKey:   string(kind),
-		UpdatesURL: updates,
+		Kind: kind,
 	}
 }
 

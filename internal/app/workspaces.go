@@ -264,6 +264,7 @@ func (s *Server) refreshWorkspaceAsset(w http.ResponseWriter, r *http.Request) {
 func (s *Server) workspaceAssetUpdates(w http.ResponseWriter, r *http.Request) {
 	workspaceID := s.workspaceID(firstNonEmpty(chi.URLParam(r, "workspace"), r.URL.Query().Get("workspace")))
 	assetID := firstNonEmpty(chi.URLParam(r, "asset"), r.URL.Query().Get("asset"))
+	assetWorkspaceID := s.workspaceID(r.URL.Query().Get("assetWorkspace"))
 	section := workspaceAssetUpdateSection(r)
 	route := uisignals.RouteKind(r.URL.Query().Get("route"))
 	var (
@@ -285,8 +286,12 @@ func (s *Server) workspaceAssetUpdates(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if route == uisignals.RouteConnectionAsset && selected.WorkspaceID != "" {
-		workspaceID = selected.WorkspaceID
+	if route == uisignals.RouteConnectionAsset {
+		if strings.TrimSpace(assetWorkspaceID) == "" {
+			http.Error(w, "assetWorkspace is required", http.StatusBadRequest)
+			return
+		}
+		workspaceID = assetWorkspaceID
 	}
 	if workspaceAssetRefreshable(selected) && s.store == nil {
 		http.Error(w, "platform store is required", http.StatusServiceUnavailable)

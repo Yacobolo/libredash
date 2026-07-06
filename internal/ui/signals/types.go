@@ -87,8 +87,6 @@ type RouteRuntimeSignal struct {
 	DashboardID string    `json:"dashboardId,omitempty"`
 	PageID      string    `json:"pageId,omitempty"`
 	ModelID     string    `json:"modelId,omitempty"`
-	RouteKey    string    `json:"routeKey,omitempty"`
-	UpdatesURL  string    `json:"updatesUrl,omitempty"`
 	Kind        RouteKind `json:"kind"`
 }
 

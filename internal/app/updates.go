@@ -10,10 +10,6 @@ import (
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 )
 
-type updateRouteSignals struct {
-	Runtime uisignals.RouteRuntimeSignal `json:"runtime"`
-}
-
 func (s *Server) updates(w http.ResponseWriter, r *http.Request) {
 	route := updateRoute(r)
 	if route == "" {
@@ -35,23 +31,7 @@ func (s *Server) updates(w http.ResponseWriter, r *http.Request) {
 }
 
 func updateRoute(r *http.Request) string {
-	route := strings.TrimSpace(r.URL.Query().Get("route"))
-	if route != "" {
-		return route
-	}
-	if strings.TrimSpace(r.URL.Query().Get("dashboard")) != "" {
-		return string(uisignals.RouteDashboard)
-	}
-	var signals updateRouteSignals
-	if err := pagestream.ReadSignals(r, &signals); err == nil {
-		if signals.Runtime.RouteKey != "" {
-			return string(signals.Runtime.RouteKey)
-		}
-		if signals.Runtime.Kind != "" {
-			return string(signals.Runtime.Kind)
-		}
-	}
-	return ""
+	return strings.TrimSpace(r.URL.Query().Get("route"))
 }
 
 func updatesPermission(route, section string) (string, bool) {

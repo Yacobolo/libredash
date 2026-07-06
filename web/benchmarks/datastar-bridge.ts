@@ -1,6 +1,7 @@
 import { html, LitElement, type TemplateResult } from 'lit'
 import { jsonAttribute } from '../components/shared/json-attribute'
-import { DatastarLit, datastarRuntimeURL } from '../components/shared/datastar-lit'
+import { DatastarLit } from '../components/shared/datastar-lit'
+import { loadDatastarRuntime } from '../components/shared/datastar-runtime'
 import { DatastarWatcher } from '../vendor/ignition/datastar-watcher'
 
 type BridgeVariant = 'legacy' | 'ignition' | 'datastar-lit'
@@ -136,7 +137,7 @@ window.runDatastarBridgeBenchmark = async (options = {}) => {
 
   const iterations = options.iterations ?? 120
   const warmup = options.warmup ?? 20
-  const runtime = await import(datastarRuntimeURL) as { mergePatch(patch: Record<string, unknown>): void }
+  const runtime = await loadDatastarRuntime() as { mergePatch(patch: Record<string, unknown>): void }
   const observer = observeMutations(element)
 
   for (let i = 0; i < warmup; i++) {

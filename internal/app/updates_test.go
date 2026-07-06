@@ -39,6 +39,20 @@ func TestUpdatesRejectsUnknownRoute(t *testing.T) {
 	}
 }
 
+func TestUpdatesRequiresRouteQuery(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/updates?dashboard=executive-sales&datastar=%7B%22runtime%22%3A%7B%22kind%22%3A%22dashboard%22%7D%7D", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "updates route is required") {
+		t.Fatalf("body = %q, want controlled missing route error", rec.Body.String())
+	}
+}
+
 func TestLegacyUpdateRoutesAreNotRegistered(t *testing.T) {
 	server := New(fakeMetrics{})
 	for _, path := range []string{

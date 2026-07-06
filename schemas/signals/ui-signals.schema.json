@@ -3322,12 +3322,6 @@
         "pageId": {
           "type": "string"
         },
-        "routeKey": {
-          "type": "string"
-        },
-        "updatesUrl": {
-          "type": "string"
-        },
         "workspaceId": {
           "type": "string"
         }

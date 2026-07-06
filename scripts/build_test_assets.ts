@@ -1,3 +1,5 @@
+import { datastarRuntimeURL } from '../web/components/shared/datastar-runtime'
+
 type BuildOptions = Parameters<typeof Bun.build>[0]
 
 type FixtureBuild = {
@@ -7,7 +9,7 @@ type FixtureBuild = {
   copy?: Array<{ from: string; to: string }>
 }
 
-const externalModules = ['/static/vendor/datastar-1.0.2.js?v=dev']
+const externalModules = [datastarRuntimeURL]
 
 const fixtures = new Map<string, FixtureBuild>([
   ['app-shell', single('app-shell', 'web/components/app/app-shell.ts', '.tmp/app-shell-test/app-shell-under-test.js')],

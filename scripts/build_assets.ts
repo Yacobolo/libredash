@@ -1,3 +1,5 @@
+import { datastarRuntimeURL } from '../web/components/shared/datastar-runtime'
+
 type BuildOptions = Parameters<typeof Bun.build>[0]
 
 type AssetBuild = {
@@ -6,7 +8,7 @@ type AssetBuild = {
   options: BuildOptions
 }
 
-const externalModules = ['/static/vendor/datastar-1.0.2.js?v=dev']
+const externalModules = [datastarRuntimeURL]
 
 const builds: AssetBuild[] = [
   {

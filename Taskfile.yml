@@ -95,6 +95,13 @@ tasks:
     cmds:
       - bun run bench:datastar-bridge
 
+  qa:ui-framework:
+    desc: Run browser QA for the stream-first DatastarLit UI framework
+    deps:
+      - node:deps
+    cmds:
+      - bun scripts/qa_ui_framework.ts
+
   generate:
     desc: Generate all checked-out derived code needed for local development
     cmds:
@@ -187,6 +194,8 @@ tasks:
     desc: Run the full CI test suite
     deps:
       - test
+    cmds:
+      - task: qa:ui-framework
 
   agent:e2e:
     desc: Run opt-in DeepSeek-backed headless agent E2E

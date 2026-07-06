@@ -921,8 +921,6 @@ export interface RouteRuntimeSignal {
   dashboardId?: string
   pageId?: string
   modelId?: string
-  routeKey?: string
-  updatesUrl?: string
   kind: string
 }
 

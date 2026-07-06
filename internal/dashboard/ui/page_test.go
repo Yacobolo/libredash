@@ -107,6 +107,11 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	if strings.Contains(showcaseSignals, `"kpis"`) {
 		t.Fatalf("showcase bootstrap included legacy kpis signal:\n%s", showcaseSignals)
 	}
+	for _, forbidden := range []string{`"updatesUrl"`, `"routeKey"`, `"csrfToken"`} {
+		if strings.Contains(showcaseSignals, forbidden) {
+			t.Fatalf("showcase bootstrap leaked %s:\n%s", forbidden, showcaseSignals)
+		}
+	}
 	assertNoDashboardProductDOM(t, showcase)
 	if !strings.Contains(showcaseSignals, `"tables":{}`) {
 		t.Fatalf("showcase bootstrap should include no tables:\n%s", showcaseSignals)

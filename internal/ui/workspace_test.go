@@ -693,6 +693,7 @@ func TestConnectionAssetDetailsRenderConnectionSurface(t *testing.T) {
 
 	for _, want := range []string{
 		"<ld-workspace-asset-page",
+		`assetWorkspace=libredash`,
 		`"breadcrumbs":[`,
 		"Olist connection",
 		`"overview":[`,
@@ -771,6 +772,7 @@ func TestConnectionSourceAssetDetailsRenderConnectionChrome(t *testing.T) {
 
 	for _, want := range []string{
 		`<ld-workspace-asset-page`,
+		`assetWorkspace=libredash`,
 		"Connections",
 		"Olist connection",
 		"Sources",
@@ -919,6 +921,10 @@ func TestWorkspaceAccessControlRendersForManagers(t *testing.T) {
 		`data-attr:workspaceaccess="$workspaceAccess"`,
 		`workspaceAccessCommand`,
 		`workspaceAccessSearch`,
+		`_csrfMeta`,
+		`csrfToken`,
+		`updatesUrl`,
+		`routeKey`,
 	} {
 		if strings.Contains(rendered, notWant) {
 			t.Fatalf("workspace access control rendered root-level access signal %q:\n%s", notWant, rendered)

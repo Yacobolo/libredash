@@ -148,7 +148,6 @@ func defaultPage() dashboard.Page {
 func BootstrapSignals(dataDir, clientID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) map[string]any {
 	envelope := uisignals.DashboardInitialEnvelope(dataDir, clientID, catalog, report, model, pages, activePage, initialFilters)
 	envelope.Runtime.WorkspaceID = catalog.Workspace.ID
-	envelope.Runtime.RouteKey = string(uisignals.RouteDashboard)
 	for _, decorate := range chromeDecorators {
 		if decorate != nil {
 			decorate(&envelope.Chrome)

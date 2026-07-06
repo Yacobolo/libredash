@@ -21,7 +21,8 @@ func NewSignalStream(w http.ResponseWriter, r *http.Request) SignalStream {
 	return SignalStream{sse: datastar.NewSSE(w, r)}
 }
 
-// Redirect emits a Datastar redirect response.
+// Redirect emits a Datastar redirect response for short-lived command handlers.
+// Long-lived update streams should use SignalStream and Patch only.
 func Redirect(w http.ResponseWriter, r *http.Request, location string) error {
 	return datastar.NewSSE(w, r).Redirect(location)
 }

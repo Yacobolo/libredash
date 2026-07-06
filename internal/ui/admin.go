@@ -197,7 +197,7 @@ func AdminBootstrapSignals(catalog dashboard.Catalog, active, roleLabel string, 
 	signals := map[string]any{
 		"chrome":  chrome,
 		"page":    page,
-		"runtime": uisignals.RouteRuntimeSignal{Kind: uisignals.RouteAdmin, RouteKey: string(uisignals.RouteAdmin)},
+		"runtime": uisignals.RouteRuntimeSignal{Kind: uisignals.RouteAdmin},
 		"status":  dashboard.Status{},
 	}
 	if active == "agent" {

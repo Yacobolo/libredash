@@ -3,10 +3,12 @@ export type JSONPatch = Record<string, unknown>
 export type MergePatchArgs = { ifMissing?: boolean }
 export type Paths = [string, unknown][]
 
-export {
-  actions,
-  effect,
-  mergePatch,
-  mergePaths,
-  root,
-} from '/static/vendor/datastar-1.0.2.js?v=dev'
+import { loadDatastarRuntime } from '../../components/shared/datastar-runtime'
+
+const runtime = await loadDatastarRuntime()
+
+export const actions = runtime.actions
+export const effect = runtime.effect
+export const mergePatch = runtime.mergePatch
+export const mergePaths = runtime.mergePaths
+export const root = runtime.root

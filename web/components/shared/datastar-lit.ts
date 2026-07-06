@@ -1,14 +1,9 @@
 import type { ReactiveElement } from 'lit'
+import { loadDatastarRuntime, type DatastarRuntime } from './datastar-runtime'
 
 type Constructor<T = object> = new (...args: any[]) => T
 type Dispose = () => void
-type Runtime = {
-  effect(fn: () => void): Dispose
-  getPath<T = unknown>(path: string): T | undefined
-  root: Record<string, unknown>
-}
-
-export const datastarRuntimeURL = '/static/vendor/datastar-1.0.2.js?v=dev'
+type Runtime = Pick<DatastarRuntime, 'effect' | 'getPath' | 'root'>
 export type SignalRoot = Record<string, unknown>
 
 export interface DatastarLitHost {
@@ -98,7 +93,7 @@ function trackSignalRoot(root: SignalRoot): void {
 async function loadRuntime(): Promise<Runtime> {
   if (runtimeForTests) return runtimeForTests
   if (loadedRuntime) return loadedRuntime
-  runtimePromise ??= import(datastarRuntimeURL) as Promise<Runtime>
+  runtimePromise ??= loadDatastarRuntime() as Promise<Runtime>
   loadedRuntime = await runtimePromise
   return loadedRuntime
 }

@@ -35,7 +35,7 @@ go run ./cmd/libredash
 - `GET /connections` renders global connection administration and inspection.
 - `GET /workspaces/{workspace}/assets/{asset}/details` renders canonical asset details, including semantic model, model table, field, measure, source, and dashboard definitions.
 - `GET /workspaces/{workspace}/assets/{asset}/lineage` renders canonical asset lineage.
-- `GET /workspaces/{workspace}/updates?dashboard={dashboard}&page={page}` opens a long-running Datastar SSE stream and patches signals with `datastar.MarshalAndPatchSignals`.
+- `GET /updates?...` is the canonical long-running Datastar SSE transport; pages open it from `data-init`, and commands publish signal patches back to that stream.
 - `GET /workspaces/{workspace}/chat` renders workspace-scoped agent chat when the workspace policy enables it.
 - DuckDB registers local CSV files as views and materializes model-scoped import tables.
 - `dashboards/libredash.yaml` is the CaC project entrypoint for global connections/sources and workspace-scoped models, semantic models, dashboards, access, and agent policy.

@@ -49,5 +49,11 @@ func streamBootstrapBody(t *testing.T, server *Server, pageBody, authorization s
 	}
 	cancel()
 	<-done
-	return html.UnescapeString(rec.Body.String())
+	body := html.UnescapeString(rec.Body.String())
+	for _, forbidden := range []string{`"updatesUrl"`, `"routeKey"`, `"csrfToken"`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("updates bootstrap leaked %s for %q:\n%s", forbidden, matches[1], body)
+		}
+	}
+	return body
 }
