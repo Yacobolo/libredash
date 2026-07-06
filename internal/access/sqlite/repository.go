@@ -82,6 +82,7 @@ func (r *Repository) principalDisabled(ctx context.Context, principalID string) 
 }
 
 func (r *Repository) UpsertPrincipal(ctx context.Context, input access.PrincipalInput) (access.Principal, error) {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(input.ID) == "" {
 		input.ID = newID("principal")
 	}
@@ -104,6 +105,7 @@ func (r *Repository) UpsertPrincipal(ctx context.Context, input access.Principal
 }
 
 func (r *Repository) SetPrincipalRole(ctx context.Context, input access.PrincipalRoleInput) (access.Principal, error) {
+	access.ClearAuthorizationCache(ctx)
 	email := access.NormalizeEmail(input.Email)
 	if email == "" {
 		return access.Principal{}, fmt.Errorf("email is required")
@@ -148,6 +150,7 @@ func (r *Repository) SetPrincipalRole(ctx context.Context, input access.Principa
 }
 
 func (r *Repository) SetPlatformRole(ctx context.Context, input access.PlatformRoleInput) (access.Principal, error) {
+	access.ClearAuthorizationCache(ctx)
 	principalID := strings.TrimSpace(input.PrincipalID)
 	email := access.NormalizeEmail(input.Email)
 	if principalID == "" && email == "" {
@@ -196,6 +199,7 @@ func (r *Repository) SetPlatformRole(ctx context.Context, input access.PlatformR
 }
 
 func (r *Repository) RemovePrincipalRoles(ctx context.Context, workspaceID, principalID string) error {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(principalID) == "" {
 		return fmt.Errorf("principal id is required")
 	}
@@ -206,6 +210,7 @@ func (r *Repository) RemovePrincipalRoles(ctx context.Context, workspaceID, prin
 }
 
 func (r *Repository) CreateRoleBinding(ctx context.Context, input access.RoleBindingInput) (access.RoleBinding, error) {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(input.ID) == "" {
 		input.ID = newID("rolebinding")
 	}
@@ -243,6 +248,7 @@ func (r *Repository) GetRoleBinding(ctx context.Context, workspaceID, id string)
 }
 
 func (r *Repository) UpdateRoleBinding(ctx context.Context, workspaceID, id string, input access.RoleBindingInput) (access.RoleBinding, error) {
+	access.ClearAuthorizationCache(ctx)
 	input.WorkspaceID = workspaceID
 	role, principalID, groupID, err := r.roleBindingParts(ctx, input)
 	if err != nil {
@@ -267,6 +273,7 @@ func (r *Repository) UpdateRoleBinding(ctx context.Context, workspaceID, id stri
 }
 
 func (r *Repository) DeleteRoleBinding(ctx context.Context, workspaceID, id string) error {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("role binding id is required")
 	}
@@ -337,81 +344,128 @@ func (r *Repository) ListRoles(ctx context.Context) ([]access.Role, error) {
 }
 
 func (r *Repository) Authorize(ctx context.Context, principalID string, privilege access.Privilege, object access.ObjectRef) (access.AuthorizationDecision, error) {
-	decision := access.AuthorizationDecision{Privilege: privilege, Object: object}
-	principalID = strings.TrimSpace(principalID)
-	if principalID == "" {
-		decision.Reason = "missing_principal"
-		return decision, nil
-	}
-	if strings.TrimSpace(string(privilege)) == "" {
-		decision.Reason = "missing_privilege"
-		return decision, nil
-	}
-	if disabled, err := r.principalDisabled(ctx, principalID); err != nil {
-		return decision, err
-	} else if disabled {
-		decision.Reason = "principal_disabled"
-		return decision, nil
-	}
-	objectID, err := r.ensureSecurableObject(ctx, object)
+	decisions, err := r.AuthorizeBatch(ctx, principalID, []access.AuthorizationCheck{{Privilege: privilege, Object: object}})
 	if err != nil {
-		return decision, err
+		return access.AuthorizationDecision{Privilege: privilege, Object: object}, err
 	}
-	if owner, err := r.objectOwner(ctx, objectID); err != nil {
-		return decision, err
-	} else if owner != "" && owner == principalID {
-		decision.Allowed = true
-		decision.Owner = true
-		decision.Reason = "owner"
-		return decision, nil
+	if len(decisions) == 0 {
+		return access.AuthorizationDecision{Privilege: privilege, Object: object, Reason: access.ReasonMissingObject}, nil
 	}
-	platformDecision, err := r.authorizeByGrant(ctx, principalID, access.PrivilegeManagePlatform, []string{access.PlatformObject().CanonicalID()})
-	if err != nil {
-		return decision, err
-	}
-	if platformDecision.Allowed {
-		decision.Allowed = true
-		decision.Platform = true
-		decision.GrantID = platformDecision.GrantID
-		decision.GrantObjectID = platformDecision.GrantObjectID
-		decision.SubjectType = platformDecision.SubjectType
-		decision.SubjectID = platformDecision.SubjectID
-		decision.Reason = "platform_admin"
-		return decision, nil
-	}
-	objectIDs, err := r.objectAncestry(ctx, objectID)
-	if err != nil {
-		return decision, err
-	}
-	grantDecision, err := r.authorizeByGrant(ctx, principalID, privilege, objectIDs)
-	if err != nil {
-		return decision, err
-	}
-	if grantDecision.Allowed {
-		grantDecision.Privilege = privilege
-		grantDecision.Object = object
-		return grantDecision, nil
-	}
-	decision.Reason = "no_grant"
-	return decision, nil
+	return decisions[0], nil
 }
 
 func (r *Repository) AuthorizeAny(ctx context.Context, principalID string, privilege access.Privilege, objects []access.ObjectRef) (access.AuthorizationDecision, error) {
 	if len(objects) == 0 {
-		return access.AuthorizationDecision{Privilege: privilege, Reason: "missing_object"}, nil
+		return access.AuthorizationDecision{Privilege: privilege, Reason: access.ReasonMissingObject}, nil
+	}
+	checks := make([]access.AuthorizationCheck, 0, len(objects))
+	for _, object := range objects {
+		checks = append(checks, access.AuthorizationCheck{Privilege: privilege, Object: object})
+	}
+	decisions, err := r.AuthorizeBatch(ctx, principalID, checks)
+	if err != nil {
+		return access.AuthorizationDecision{Privilege: privilege}, err
 	}
 	var last access.AuthorizationDecision
-	for _, object := range objects {
-		decision, err := r.Authorize(ctx, principalID, privilege, object)
-		if err != nil {
-			return decision, err
-		}
+	for _, decision := range decisions {
 		if decision.Allowed {
 			return decision, nil
 		}
 		last = decision
 	}
 	return last, nil
+}
+
+func (r *Repository) AuthorizeBatch(ctx context.Context, principalID string, checks []access.AuthorizationCheck) ([]access.AuthorizationDecision, error) {
+	out := make([]access.AuthorizationDecision, len(checks))
+	principalID = strings.TrimSpace(principalID)
+	pending := make([]int, 0, len(checks))
+	for i, check := range checks {
+		decision := access.AuthorizationDecision{Privilege: check.Privilege, Object: check.Object}
+		if principalID == "" {
+			decision.Reason = access.ReasonMissingPrincipal
+			out[i] = decision
+			continue
+		}
+		if strings.TrimSpace(string(check.Privilege)) == "" {
+			decision.Reason = access.ReasonMissingPrivilege
+			out[i] = decision
+			continue
+		}
+		if cached, ok := access.CachedAuthorizationDecision(ctx, principalID, check.Privilege, check.Object); ok {
+			out[i] = cached
+			continue
+		}
+		out[i] = decision
+		pending = append(pending, i)
+	}
+	if len(pending) == 0 {
+		return out, nil
+	}
+	disabled, err := r.principalDisabled(ctx, principalID)
+	if err != nil {
+		return nil, err
+	}
+	if disabled {
+		for _, i := range pending {
+			out[i].Reason = access.ReasonPrincipalDisabled
+			access.StoreAuthorizationDecision(ctx, principalID, out[i])
+		}
+		return out, nil
+	}
+	platformDecision, err := r.authorizeByGrant(ctx, principalID, access.PrivilegeManagePlatform, []string{access.PlatformObject().CanonicalID()})
+	if err != nil {
+		return nil, err
+	}
+	for _, i := range pending {
+		check := checks[i]
+		objectID, exists, err := r.lookupSecurableObjectID(ctx, check.Object)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			out[i].Reason = access.ReasonUnknownObject
+			access.StoreAuthorizationDecision(ctx, principalID, out[i])
+			continue
+		}
+		if owner, err := r.objectOwner(ctx, objectID); err != nil {
+			return nil, err
+		} else if owner != "" && owner == principalID {
+			out[i].Allowed = true
+			out[i].Owner = true
+			out[i].Reason = access.ReasonOwner
+			access.StoreAuthorizationDecision(ctx, principalID, out[i])
+			continue
+		}
+		if platformDecision.Allowed {
+			out[i].Allowed = true
+			out[i].Platform = true
+			out[i].GrantID = platformDecision.GrantID
+			out[i].GrantObjectID = platformDecision.GrantObjectID
+			out[i].SubjectType = platformDecision.SubjectType
+			out[i].SubjectID = platformDecision.SubjectID
+			out[i].Reason = access.ReasonPlatformAdmin
+			access.StoreAuthorizationDecision(ctx, principalID, out[i])
+			continue
+		}
+		objectIDs, err := r.objectAncestry(ctx, objectID)
+		if err != nil {
+			return nil, err
+		}
+		grantDecision, err := r.authorizeByGrant(ctx, principalID, check.Privilege, objectIDs)
+		if err != nil {
+			return nil, err
+		}
+		if grantDecision.Allowed {
+			grantDecision.Privilege = check.Privilege
+			grantDecision.Object = check.Object
+			out[i] = grantDecision
+		} else {
+			out[i].Reason = access.ReasonNoGrant
+		}
+		access.StoreAuthorizationDecision(ctx, principalID, out[i])
+	}
+	return out, nil
 }
 
 func (r *Repository) EffectivePrivileges(ctx context.Context, principalID string, object access.ObjectRef) ([]access.Privilege, error) {
@@ -428,11 +482,16 @@ func (r *Repository) EffectivePrivileges(ctx context.Context, principalID string
 
 func (r *Repository) EffectiveAccess(ctx context.Context, principalID string, object access.ObjectRef) ([]access.AuthorizationDecision, error) {
 	out := []access.AuthorizationDecision{}
-	for _, privilege := range knownPrivileges() {
-		decision, err := r.Authorize(ctx, principalID, privilege, object)
-		if err != nil {
-			return nil, err
-		}
+	privileges := knownPrivileges()
+	checks := make([]access.AuthorizationCheck, 0, len(privileges))
+	for _, privilege := range privileges {
+		checks = append(checks, access.AuthorizationCheck{Privilege: privilege, Object: object})
+	}
+	decisions, err := r.AuthorizeBatch(ctx, principalID, checks)
+	if err != nil {
+		return nil, err
+	}
+	for _, decision := range decisions {
 		if decision.Allowed {
 			out = append(out, decision)
 		}
@@ -440,7 +499,27 @@ func (r *Repository) EffectiveAccess(ctx context.Context, principalID string, ob
 	return out, nil
 }
 
+func (r *Repository) UpsertSecurableObject(ctx context.Context, object access.ObjectRef, ownerPrincipalID string) (access.SecurableObject, error) {
+	access.ClearAuthorizationCache(ctx)
+	objectID, err := r.ensureSecurableObject(ctx, object)
+	if err != nil {
+		return access.SecurableObject{}, err
+	}
+	ownerPrincipalID = strings.TrimSpace(ownerPrincipalID)
+	if ownerPrincipalID != "" {
+		if _, err := r.db.ExecContext(ctx, `
+UPDATE securable_objects
+SET owner_principal_id = COALESCE(NULLIF(owner_principal_id, ''), ?), updated_at = CURRENT_TIMESTAMP
+WHERE id = ?
+`, ownerPrincipalID, objectID); err != nil {
+			return access.SecurableObject{}, err
+		}
+	}
+	return r.securableObjectByID(ctx, objectID)
+}
+
 func (r *Repository) CreateGrant(ctx context.Context, input access.GrantInput) (access.Grant, error) {
+	access.ClearAuthorizationCache(ctx)
 	id := newID("grant")
 	if err := r.upsertGrantWithID(ctx, id, input); err != nil {
 		return access.Grant{}, err
@@ -477,6 +556,7 @@ WHERE g.id = ?
 }
 
 func (r *Repository) DeleteGrant(ctx context.Context, workspaceID, id string) error {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("grant id is required")
 	}
@@ -492,6 +572,7 @@ WHERE id = ?
 }
 
 func (r *Repository) UpsertDataPolicy(ctx context.Context, input access.DataPolicyInput) (access.DataPolicy, error) {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(input.ID) == "" {
 		input.ID = newID("datapolicy")
 	}
@@ -546,9 +627,9 @@ func (r *Repository) ListDataPolicies(ctx context.Context, object access.ObjectR
 }
 
 func (r *Repository) ListDataPoliciesWithOptions(ctx context.Context, object access.ObjectRef, includeInherited bool) ([]access.DataPolicy, error) {
-	objectID, err := r.ensureSecurableObject(ctx, object)
-	if err != nil {
-		return nil, err
+	objectID, exists, err := r.lookupSecurableObjectID(ctx, object)
+	if err != nil || !exists {
+		return []access.DataPolicy{}, err
 	}
 	objectIDs := []string{objectID}
 	if includeInherited {
@@ -627,6 +708,7 @@ LIMIT 1
 }
 
 func (r *Repository) DeleteDataPolicy(ctx context.Context, workspaceID, id string) error {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("data policy id is required")
 	}
@@ -635,6 +717,7 @@ func (r *Repository) DeleteDataPolicy(ctx context.Context, workspaceID, id strin
 }
 
 func (r *Repository) SetObjectOwner(ctx context.Context, object access.ObjectRef, ownerPrincipalID string) (access.SecurableObject, error) {
+	access.ClearAuthorizationCache(ctx)
 	ownerPrincipalID = strings.TrimSpace(ownerPrincipalID)
 	if ownerPrincipalID == "" {
 		return access.SecurableObject{}, fmt.Errorf("owner principal id is required")
@@ -666,9 +749,9 @@ func (r *Repository) ListGrants(ctx context.Context, object access.ObjectRef) ([
 }
 
 func (r *Repository) ListGrantsWithOptions(ctx context.Context, object access.ObjectRef, includeInherited bool) ([]access.GrantView, error) {
-	objectID, err := r.ensureSecurableObject(ctx, object)
-	if err != nil {
-		return nil, err
+	objectID, exists, err := r.lookupSecurableObjectID(ctx, object)
+	if err != nil || !exists {
+		return []access.GrantView{}, err
 	}
 	objectIDs := []string{objectID}
 	if includeInherited {
@@ -755,8 +838,24 @@ ORDER BY CASE g.object_id`
 	decision.SubjectType = access.SubjectType(subjectType)
 	decision.SubjectID = subjectID
 	decision.Inherited = len(objectIDs) > 0 && objectID != objectIDs[0]
-	decision.Reason = "grant"
+	decision.Reason = access.ReasonGrant
 	return decision, nil
+}
+
+func (r *Repository) lookupSecurableObjectID(ctx context.Context, object access.ObjectRef) (string, bool, error) {
+	objectID := object.CanonicalID()
+	if strings.TrimSpace(objectID) == "" {
+		return "", false, fmt.Errorf("securable object id is required")
+	}
+	var found string
+	err := r.db.QueryRowContext(ctx, `SELECT id FROM securable_objects WHERE id = ?`, objectID).Scan(&found)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return found, true, nil
 }
 
 func (r *Repository) ensureSecurableObject(ctx context.Context, object access.ObjectRef) (string, error) {
@@ -986,6 +1085,7 @@ func (r *Repository) BootstrapAdmin(ctx context.Context, workspaceID, email stri
 }
 
 func (r *Repository) ResolveExternalPrincipal(ctx context.Context, input access.ExternalIdentityInput) (access.Principal, error) {
+	access.ClearAuthorizationCache(ctx)
 	input.Email = access.NormalizeEmail(input.Email)
 	if input.Provider == "" || input.Subject == "" {
 		return access.Principal{}, fmt.Errorf("external identity requires provider and subject")
@@ -1060,6 +1160,7 @@ func (r *Repository) ResolveExternalPrincipal(ctx context.Context, input access.
 }
 
 func (r *Repository) UpsertSCIMUser(ctx context.Context, input access.SCIMUserInput) (access.SCIMUser, error) {
+	access.ClearAuthorizationCache(ctx)
 	id := strings.TrimSpace(input.ID)
 	existingSubject := ""
 	if id == "" {
@@ -1165,6 +1266,7 @@ func (r *Repository) ListSCIMUsers(ctx context.Context, filter access.SCIMUserFi
 }
 
 func (r *Repository) DisableSCIMUser(ctx context.Context, principalID string) (access.SCIMUser, error) {
+	access.ClearAuthorizationCache(ctx)
 	principalID = strings.TrimSpace(principalID)
 	if principalID == "" {
 		return access.SCIMUser{}, fmt.Errorf("principal id is required")
@@ -1196,6 +1298,7 @@ func (r *Repository) DisableSCIMUser(ctx context.Context, principalID string) (a
 }
 
 func (r *Repository) UpsertGroup(ctx context.Context, input access.GroupInput) (access.Group, error) {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(input.WorkspaceID) == "" {
 		return access.Group{}, fmt.Errorf("workspace id is required")
 	}
@@ -1264,6 +1367,7 @@ ORDER BY workspace_id, name, id
 }
 
 func (r *Repository) DeleteGroup(ctx context.Context, workspaceID, groupID string) error {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(groupID) == "" {
 		return fmt.Errorf("group id is required")
 	}
@@ -1274,6 +1378,7 @@ func (r *Repository) DeleteGroup(ctx context.Context, workspaceID, groupID strin
 }
 
 func (r *Repository) AddGroupMember(ctx context.Context, workspaceID, groupID, principalID string) error {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(groupID) == "" || strings.TrimSpace(principalID) == "" {
 		return fmt.Errorf("group id and principal id are required")
 	}
@@ -1285,6 +1390,7 @@ func (r *Repository) AddGroupMember(ctx context.Context, workspaceID, groupID, p
 }
 
 func (r *Repository) RemoveGroupMember(ctx context.Context, workspaceID, groupID, principalID string) error {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(groupID) == "" || strings.TrimSpace(principalID) == "" {
 		return fmt.Errorf("group id and principal id are required")
 	}
@@ -1342,6 +1448,7 @@ ORDER BY p.email, p.display_name, gm.principal_id
 }
 
 func (r *Repository) UpsertSCIMGroup(ctx context.Context, input access.SCIMGroupInput) (access.Group, error) {
+	access.ClearAuthorizationCache(ctx)
 	externalID := strings.TrimSpace(firstNonEmpty(input.ExternalID, input.ID, input.Name))
 	if externalID == "" {
 		return access.Group{}, fmt.Errorf("scim group requires external id, id, or display name")
@@ -1414,6 +1521,7 @@ func (r *Repository) ListSCIMGroups(ctx context.Context, filter access.SCIMGroup
 }
 
 func (r *Repository) DeleteSCIMGroup(ctx context.Context, groupID string) error {
+	access.ClearAuthorizationCache(ctx)
 	groupID = strings.TrimSpace(groupID)
 	if groupID == "" {
 		return fmt.Errorf("group id is required")
@@ -1425,6 +1533,7 @@ func (r *Repository) DeleteSCIMGroup(ctx context.Context, groupID string) error 
 }
 
 func (r *Repository) AddSCIMGroupMember(ctx context.Context, groupID, principalID string) error {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(groupID) == "" || strings.TrimSpace(principalID) == "" {
 		return fmt.Errorf("group id and principal id are required")
 	}
@@ -1436,6 +1545,7 @@ func (r *Repository) AddSCIMGroupMember(ctx context.Context, groupID, principalI
 }
 
 func (r *Repository) RemoveSCIMGroupMember(ctx context.Context, groupID, principalID string) error {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(groupID) == "" || strings.TrimSpace(principalID) == "" {
 		return fmt.Errorf("group id and principal id are required")
 	}
@@ -1928,6 +2038,7 @@ func (r *Repository) RevokeAPITokenForPrincipal(ctx context.Context, principalID
 }
 
 func (r *Repository) CreateServicePrincipal(ctx context.Context, input access.ServicePrincipalInput) (access.Principal, error) {
+	access.ClearAuthorizationCache(ctx)
 	id := strings.TrimSpace(input.ID)
 	if id == "" {
 		id = newID("sp")
@@ -1956,6 +2067,7 @@ func (r *Repository) ListServicePrincipals(ctx context.Context) ([]access.Princi
 }
 
 func (r *Repository) UpdateServicePrincipal(ctx context.Context, id string, input access.ServicePrincipalInput) (access.Principal, error) {
+	access.ClearAuthorizationCache(ctx)
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return access.Principal{}, fmt.Errorf("service principal id is required")
@@ -1976,6 +2088,7 @@ func (r *Repository) UpdateServicePrincipal(ctx context.Context, id string, inpu
 }
 
 func (r *Repository) DeleteServicePrincipal(ctx context.Context, id string) error {
+	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("service principal id is required")
 	}

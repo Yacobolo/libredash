@@ -148,7 +148,7 @@ func TestSCIMDisableRevokesCredentialsAndBlocksAuthorization(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authorize disabled principal: %v", err)
 	}
-	if decision.Allowed || decision.Reason != "principal_disabled" {
+	if decision.Allowed || decision.Reason != access.ReasonPrincipalDisabled {
 		t.Fatalf("disabled principal decision = %#v, want denied principal_disabled", decision)
 	}
 }

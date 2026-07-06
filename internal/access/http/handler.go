@@ -1215,7 +1215,7 @@ func securableObjectDTO(row access.SecurableObject) map[string]any {
 func authorizationDecisionDTO(row access.AuthorizationDecision) map[string]any {
 	return map[string]any{
 		"privilege":     string(row.Privilege),
-		"reason":        row.Reason,
+		"reason":        string(row.Reason),
 		"objectType":    string(row.Object.Type),
 		"objectId":      emptyToNil(row.Object.ObjectID),
 		"grantId":       emptyToNil(row.GrantID),

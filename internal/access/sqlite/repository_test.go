@@ -51,6 +51,9 @@ func TestRepositoryChecksPlatformRolePrivileges(t *testing.T) {
 		t.Fatalf("set platform role: %v", err)
 	}
 	for _, workspaceID := range []string{"test", "other"} {
+		if _, err := repo.UpsertSecurableObject(ctx, access.WorkspaceObject(workspaceID), ""); err != nil {
+			t.Fatalf("upsert securable workspace %s: %v", workspaceID, err)
+		}
 		allowed, err := testAuthorize(ctx, repo, workspaceID, principal.ID, access.PrivilegeManageGrants)
 		if err != nil {
 			t.Fatalf("check privilege for %s: %v", workspaceID, err)
@@ -152,16 +155,48 @@ func TestRepositoryResolvesDBBackedObjectInheritance(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("create dataset grant: %v", err)
 	}
+	if _, err := repo.UpsertSecurableObject(ctx, column, ""); err != nil {
+		t.Fatalf("upsert column securable: %v", err)
+	}
 
 	decision, err := repo.Authorize(ctx, principal.ID, access.PrivilegeQueryData, column)
 	if err != nil {
 		t.Fatalf("authorize column: %v", err)
 	}
-	if !decision.Allowed || !decision.Inherited || decision.Reason != "grant" {
+	if !decision.Allowed || !decision.Inherited || decision.Reason != access.ReasonGrant {
 		t.Fatalf("decision = %#v, want inherited dataset grant", decision)
 	}
 	if decision.GrantObjectID != dataset.CanonicalID() {
 		t.Fatalf("grant object = %q, want %q", decision.GrantObjectID, dataset.CanonicalID())
+	}
+}
+
+func TestRepositoryAuthorizeDoesNotCreateUnknownSecurableObject(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "unknown_object_reader",
+		Email:       "unknown@example.com",
+		DisplayName: "Unknown Reader",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	object := access.ItemObject(access.SecurableDashboard, "test", "missing")
+	decision, err := repo.Authorize(ctx, principal.ID, access.PrivilegeViewItem, object)
+	if err != nil {
+		t.Fatalf("authorize unknown object: %v", err)
+	}
+	if decision.Allowed || decision.Reason != access.ReasonUnknownObject {
+		t.Fatalf("decision = %#v, want denied unknown_object", decision)
+	}
+	var count int
+	if err := store.SQLDB().QueryRowContext(ctx, `SELECT COUNT(*) FROM securable_objects WHERE id = ?`, object.CanonicalID()).Scan(&count); err != nil {
+		t.Fatalf("count securable objects: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("authorize created %d securable object rows, want 0", count)
 	}
 }
 
@@ -202,13 +237,89 @@ func TestRepositoryExplainsEffectiveAccessAndAuthorizeAny(t *testing.T) {
 	for _, row := range effective {
 		if row.Privilege == access.PrivilegeViewItem {
 			found = true
-			if row.Reason != "grant" || row.GrantID == "" || row.GrantObjectID != dashboard.CanonicalID() {
+			if row.Reason != access.ReasonGrant || row.GrantID == "" || row.GrantObjectID != dashboard.CanonicalID() {
 				t.Fatalf("view explanation = %#v, want direct grant provenance", row)
 			}
 		}
 	}
 	if !found {
 		t.Fatalf("effective access = %#v, missing VIEW_ITEM", effective)
+	}
+}
+
+func TestRepositoryAuthorizeBatchMatchesIndividualAuthorize(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "batch_viewer", Email: "batch@example.com"})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	dashboard := access.ItemObject(access.SecurableDashboard, "test", "exec")
+	dataset := access.ItemObjectWithParent(access.SecurableDataset, "test", "sales/orders", access.ItemObject(access.SecurableSemanticModel, "test", "sales"))
+	for _, grant := range []access.GrantInput{
+		{Object: dashboard, SubjectType: access.SubjectPrincipal, SubjectID: principal.ID, Privilege: access.PrivilegeViewItem},
+		{Object: dataset, SubjectType: access.SubjectPrincipal, SubjectID: principal.ID, Privilege: access.PrivilegeQueryData},
+	} {
+		if _, err := repo.CreateGrant(ctx, grant); err != nil {
+			t.Fatalf("create grant: %v", err)
+		}
+	}
+	column := access.ItemObjectWithParent(access.SecurableColumn, "test", "sales/orders/net_revenue", dataset)
+	if _, err := repo.UpsertSecurableObject(ctx, column, ""); err != nil {
+		t.Fatalf("upsert column securable: %v", err)
+	}
+	checks := []access.AuthorizationCheck{
+		{Privilege: access.PrivilegeViewItem, Object: dashboard},
+		{Privilege: access.PrivilegeQueryData, Object: column},
+		{Privilege: access.PrivilegeManageGrants, Object: dashboard},
+	}
+	batch, err := repo.AuthorizeBatch(ctx, principal.ID, checks)
+	if err != nil {
+		t.Fatalf("authorize batch: %v", err)
+	}
+	if len(batch) != len(checks) {
+		t.Fatalf("batch decisions = %d, want %d", len(batch), len(checks))
+	}
+	for i, check := range checks {
+		individual, err := repo.Authorize(ctx, principal.ID, check.Privilege, check.Object)
+		if err != nil {
+			t.Fatalf("authorize individual %d: %v", i, err)
+		}
+		if batch[i] != individual {
+			t.Fatalf("decision %d = %#v, want %#v", i, batch[i], individual)
+		}
+	}
+}
+
+func TestRepositoryAccessMutationsClearRequestAuthorizationCache(t *testing.T) {
+	ctx := access.WithAuthorizationCache(context.Background())
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "cached_denial", Email: "cached@example.com"})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	object := access.ItemObject(access.SecurableDashboard, "test", "cache")
+	if _, err := repo.UpsertSecurableObject(ctx, object, ""); err != nil {
+		t.Fatalf("upsert securable object: %v", err)
+	}
+	denied, err := repo.Authorize(ctx, principal.ID, access.PrivilegeViewItem, object)
+	if err != nil {
+		t.Fatalf("authorize denied: %v", err)
+	}
+	if denied.Allowed || denied.Reason != access.ReasonNoGrant {
+		t.Fatalf("denied decision = %#v, want no_grant", denied)
+	}
+	if _, err := repo.CreateGrant(ctx, access.GrantInput{Object: object, SubjectType: access.SubjectPrincipal, SubjectID: principal.ID, Privilege: access.PrivilegeViewItem}); err != nil {
+		t.Fatalf("create grant: %v", err)
+	}
+	allowed, err := repo.Authorize(ctx, principal.ID, access.PrivilegeViewItem, object)
+	if err != nil {
+		t.Fatalf("authorize allowed: %v", err)
+	}
+	if !allowed.Allowed || allowed.Reason != access.ReasonGrant {
+		t.Fatalf("allowed decision = %#v, want grant after cache clear", allowed)
 	}
 }
 
@@ -350,7 +461,7 @@ func TestRepositoryObjectOwnershipGrantsFullControl(t *testing.T) {
 	if err != nil {
 		t.Fatalf("authorize owner: %v", err)
 	}
-	if !decision.Allowed || !decision.Owner || decision.Reason != "owner" {
+	if !decision.Allowed || !decision.Owner || decision.Reason != access.ReasonOwner {
 		t.Fatalf("owner decision = %#v", decision)
 	}
 }
@@ -1054,7 +1165,7 @@ func TestRepositoryFiltersAndPaginatesAuditEvents(t *testing.T) {
 	}
 }
 
-func openAccessRepo(t *testing.T, ctx context.Context) (*platform.Store, *Repository) {
+func openAccessRepo(t testing.TB, ctx context.Context) (*platform.Store, *Repository) {
 	t.Helper()
 	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
 	if err != nil {

@@ -209,7 +209,7 @@ func TestAuthSpecEffectiveAccessExplainsInheritedGrants(t *testing.T) {
 	}
 	for _, grant := range decoded.EffectiveGrants {
 		if grant.Privilege == string(access.PrivilegeQueryData) {
-			if grant.Reason != "grant" || !grant.Inherited || grant.GrantObjectID != "semantic_model:sales:sales" {
+			if grant.Reason != string(access.ReasonGrant) || !grant.Inherited || grant.GrantObjectID != "semantic_model:sales:sales" {
 				t.Fatalf("query grant provenance=%#v, want inherited semantic model grant", grant)
 			}
 			return

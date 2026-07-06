@@ -13,11 +13,12 @@ import (
 )
 
 type Repository struct {
-	q *platformdb.Queries
+	db *sql.DB
+	q  *platformdb.Queries
 }
 
 func NewRepository(sqlDB *sql.DB) *Repository {
-	return &Repository{q: platformdb.New(sqlDB)}
+	return &Repository{db: sqlDB, q: platformdb.New(sqlDB)}
 }
 
 func (r *Repository) Ensure(ctx context.Context, input workspace.EnsureInput) error {
@@ -29,11 +30,24 @@ func (r *Repository) Ensure(ctx context.Context, input workspace.EnsureInput) er
 	if title == "" {
 		title = id
 	}
-	return r.q.UpsertWorkspace(ctx, platformdb.UpsertWorkspaceParams{
+	if err := r.q.UpsertWorkspace(ctx, platformdb.UpsertWorkspaceParams{
 		ID:          id,
 		Title:       title,
 		Description: input.Description,
-	})
+	}); err != nil {
+		return err
+	}
+	_, err := r.db.ExecContext(ctx, `
+INSERT INTO securable_objects (id, object_type, workspace_id, parent_id, display_name)
+VALUES (?, 'workspace', ?, 'platform', ?)
+ON CONFLICT(id) DO UPDATE SET
+  object_type = excluded.object_type,
+  workspace_id = excluded.workspace_id,
+  parent_id = excluded.parent_id,
+  display_name = excluded.display_name,
+  updated_at = CURRENT_TIMESTAMP
+`, "workspace:"+id, id, title)
+	return err
 }
 
 func (r *Repository) List(ctx context.Context) ([]workspace.Summary, error) {

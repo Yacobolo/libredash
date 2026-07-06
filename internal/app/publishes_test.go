@@ -201,6 +201,9 @@ func TestDeploymentAPIRequiresAuthentication(t *testing.T) {
 func TestDeploymentAPIRejectsBrowserPostWithoutCSRF(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(context.Background(), workspace.EnsureInput{ID: "path-workspace", Title: "Path Workspace"}); err != nil {
+		t.Fatalf("ensure path workspace: %v", err)
+	}
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
@@ -357,6 +360,9 @@ func TestDeploymentAPIRejectsViewer(t *testing.T) {
 func TestDeploymentAPIV1CreateUsesPathWorkspaceAndRejectsMalformedJSON(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(context.Background(), workspace.EnsureInput{ID: "path-workspace", Title: "Path Workspace"}); err != nil {
+		t.Fatalf("ensure path workspace: %v", err)
+	}
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
@@ -390,6 +396,9 @@ func TestDeploymentAPIV1CreateUsesPathWorkspaceAndRejectsMalformedJSON(t *testin
 func TestDeploymentAPIV1CreateRejectsBodyWorkspaceID(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(context.Background(), workspace.EnsureInput{ID: "path-workspace", Title: "Path Workspace"}); err != nil {
+		t.Fatalf("ensure path workspace: %v", err)
+	}
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
@@ -499,6 +508,9 @@ func TestDeploymentAPIV1WrongWorkspaceDeploymentReturnsNotFound(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
 	ctx := context.Background()
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "other", Title: "Other"}); err != nil {
+		t.Fatalf("ensure other workspace: %v", err)
+	}
 	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
 	created, err := servingStateRepo.Create(ctx, servingstate.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
 	if err != nil {

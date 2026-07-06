@@ -288,7 +288,7 @@ type AuthorizationDecision struct {
 	Allowed       bool
 	Privilege     Privilege
 	Object        ObjectRef
-	Reason        string
+	Reason        AuthorizationReason
 	GrantID       string
 	GrantObjectID string
 	SubjectType   SubjectType
@@ -296,6 +296,25 @@ type AuthorizationDecision struct {
 	Inherited     bool
 	Owner         bool
 	Platform      bool
+}
+
+type AuthorizationReason string
+
+const (
+	ReasonMissingPrincipal  AuthorizationReason = "missing_principal"
+	ReasonMissingPrivilege  AuthorizationReason = "missing_privilege"
+	ReasonPrincipalDisabled AuthorizationReason = "principal_disabled"
+	ReasonUnknownObject     AuthorizationReason = "unknown_object"
+	ReasonOwner             AuthorizationReason = "owner"
+	ReasonPlatformAdmin     AuthorizationReason = "platform_admin"
+	ReasonGrant             AuthorizationReason = "grant"
+	ReasonNoGrant           AuthorizationReason = "no_grant"
+	ReasonMissingObject     AuthorizationReason = "missing_object"
+)
+
+type AuthorizationCheck struct {
+	Privilege Privilege
+	Object    ObjectRef
 }
 
 type SubjectType string
@@ -553,8 +572,10 @@ type Repository interface {
 	ListRoles(ctx context.Context) ([]Role, error)
 	Authorize(ctx context.Context, principalID string, privilege Privilege, object ObjectRef) (AuthorizationDecision, error)
 	AuthorizeAny(ctx context.Context, principalID string, privilege Privilege, objects []ObjectRef) (AuthorizationDecision, error)
+	AuthorizeBatch(ctx context.Context, principalID string, checks []AuthorizationCheck) ([]AuthorizationDecision, error)
 	EffectivePrivileges(ctx context.Context, principalID string, object ObjectRef) ([]Privilege, error)
 	EffectiveAccess(ctx context.Context, principalID string, object ObjectRef) ([]AuthorizationDecision, error)
+	UpsertSecurableObject(ctx context.Context, object ObjectRef, ownerPrincipalID string) (SecurableObject, error)
 	CreateGrant(ctx context.Context, input GrantInput) (Grant, error)
 	GetGrant(ctx context.Context, workspaceID, id string) (Grant, error)
 	DeleteGrant(ctx context.Context, workspaceID, id string) error

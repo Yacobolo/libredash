@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -159,6 +160,9 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.workspaceRepo = options.WorkspaceRepo
 	server.assetCatalog = options.AssetCatalog
 	server.accessRepo = options.AccessRepo
+	if server.accessRepo == nil && dataAccessRepo != nil {
+		server.accessRepo = dataAccessRepo
+	}
 	server.agent = options.Agent
 	server.auth = options.Auth
 	server.reloader = options.Reloader
@@ -178,6 +182,9 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	}
 	if options.Logger != nil {
 		server.logger = options.Logger
+	}
+	if server.accessRepo != nil && strings.TrimSpace(server.defaultWorkspaceID) != "" {
+		_, _ = server.accessRepo.UpsertSecurableObject(context.Background(), access.WorkspaceObject(server.defaultWorkspaceID), "")
 	}
 	if server.agent != nil {
 		server.agent.ConfigureDefaultModel(func(config agent.Config) agentcore.Model {

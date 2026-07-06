@@ -258,6 +258,7 @@ func (a *Auth) MiddlewareWithObjectResolver(privilege access.Privilege, objectRe
 		return next
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(access.WithAuthorizationCache(r.Context()))
 		principal, credential, ok := a.authenticate(r)
 		if !ok {
 			if wantsJSON(r) {

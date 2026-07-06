@@ -12,6 +12,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/platform"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
+	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
 
@@ -75,6 +76,9 @@ func TestDeploymentBackedDevServerSeedsPlatformAdminPrincipal(t *testing.T) {
 		t.Fatalf("open platform store: %v", err)
 	}
 	defer store.Close()
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "other", Title: "Other"}); err != nil {
+		t.Fatalf("ensure other workspace: %v", err)
+	}
 	repo := accesssqlite.NewRepository(store.SQLDB())
 	principal, err := repo.PrincipalByID(ctx, "dev")
 	if err != nil {
