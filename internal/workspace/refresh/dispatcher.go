@@ -17,15 +17,15 @@ type QueueRepository interface {
 	JobQueueStats(ctx context.Context) (materialize.JobQueueStats, error)
 }
 
-type LegacyExecutor interface {
-	ExecuteLegacyJob(ctx context.Context, job materialize.JobRecord) error
+type DirectExecutor interface {
+	ExecuteDirectJob(ctx context.Context, job materialize.JobRecord) error
 }
 
 type Dispatcher struct {
 	Runs           QueueRepository
 	Service        Service
 	Executor       *execution.Service
-	Legacy         LegacyExecutor
+	Direct         DirectExecutor
 	LeaseTimeout   time.Duration
 	Logger         *slog.Logger
 	Owner          string
@@ -84,12 +84,12 @@ func (d Dispatcher) Run(ctx context.Context) {
 func (d Dispatcher) executeClaimedJob(ctx context.Context, job materialize.JobRecord) error {
 	switch job.Kind {
 	case materialize.JobKindRefresh:
-		if d.Legacy == nil {
-			err := fmt.Errorf("legacy refresh executor is required")
+		if d.Direct == nil {
+			err := fmt.Errorf("direct refresh executor is required")
 			_, _ = d.Runs.MarkRunFailed(ctx, job.WorkspaceID, job.RunID, err.Error())
 			return err
 		}
-		return d.Legacy.ExecuteLegacyJob(ctx, job)
+		return d.Direct.ExecuteDirectJob(ctx, job)
 	case materialize.JobKindWorkspaceAssetRefresh:
 		return d.Service.ExecuteClaimedJob(ctx, job)
 	default:

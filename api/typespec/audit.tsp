@@ -11,6 +11,10 @@ model AuditEventResponse {
   action: string;
   targetType: string;
   targetId: string;
+  privilege?: string;
+  status?: string;
+  requestId?: string;
+  correlationId?: string;
   metadata: Record<string>;
   createdAt: utcDateTime;
 }
@@ -56,12 +60,12 @@ alias ListQueryEventsOK = OkJson<QueryEventListResponse>;
 @summary("List workspace audit events")
 @route("/workspaces/{workspace}/audit-events")
 @get
-@apigen.authz(#{ mode: "permission", permission: "audit:read" })
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_AUDIT" })
 op listAuditEvents(@path workspace: string, @query actor?: string, @query action?: string, @query targetType?: string, @query targetId?: string, @query from?: utcDateTime, @query to?: utcDateTime, @query limit?: int32, @query pageToken?: string): ListAuditEventsOK | CommonErrors;
 
 @tag("Audit")
 @summary("List workspace query audit events")
 @route("/workspaces/{workspace}/query-events")
 @get
-@apigen.authz(#{ mode: "permission", permission: "audit:read" })
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_AUDIT" })
 op listQueryEvents(@path workspace: string, @query principal?: string, @query surface?: string, @query operation?: string, @query kind?: string, @query modelId?: string, @query target?: string, @query status?: string, @query search?: string, @query from?: utcDateTime, @query to?: utcDateTime, @query limit?: int32, @query pageToken?: string): ListQueryEventsOK | CommonErrors;

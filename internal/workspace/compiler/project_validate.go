@@ -95,11 +95,14 @@ func validateWorkspaceAgentPolicies(workspaceProject *WorkspaceProject) error {
 
 func validateWorkspaceAccess(workspaceProject *WorkspaceProject) error {
 	validRoles := map[string]struct{}{
-		access.RoleOwner:    {},
-		access.RoleAdmin:    {},
-		access.RoleDeployer: {},
-		access.RoleEditor:   {},
-		access.RoleViewer:   {},
+		access.RoleOwner:         {},
+		access.RoleAdmin:         {},
+		access.RoleDeployer:      {},
+		access.RoleContributor:   {},
+		access.RoleEditor:        {},
+		access.RoleMember:        {},
+		access.RoleViewer:        {},
+		access.RolePlatformAdmin: {},
 	}
 	for name, group := range workspaceProject.AccessGroups {
 		for index, member := range group.Members {
@@ -129,7 +132,105 @@ func validateWorkspaceAccess(workspaceProject *WorkspaceProject) error {
 			return resourceError(path, "workspace_role_binding:"+workspaceProject.ID+"."+name, "spec.subject.kind", "WorkspaceRoleBinding %q.%q has unsupported subject kind %q", workspaceProject.ID, name, binding.Subject.Kind)
 		}
 	}
+	for name, grant := range workspaceProject.AccessGrants {
+		path := workspaceProject.AccessPaths["Grant:"+name]
+		if err := validateWorkspaceObjectRef(path, "grant:"+workspaceProject.ID+"."+name, "Grant", workspaceProject.ID, name, grant.Object); err != nil {
+			return err
+		}
+		if !validPrivilege(access.Privilege(grant.Privilege)) {
+			return resourceError(path, "grant:"+workspaceProject.ID+"."+name, "spec.privilege", "Grant %q.%q has unsupported privilege %q", workspaceProject.ID, name, grant.Privilege)
+		}
+		if err := validateWorkspaceAccessSubject(path, "grant:"+workspaceProject.ID+"."+name, "Grant", workspaceProject.ID, name, grant.Subject, workspaceProject.AccessGroups); err != nil {
+			return err
+		}
+	}
+	for name, policy := range workspaceProject.AccessDataPolicies {
+		path := workspaceProject.AccessPaths["DataPolicy:"+name]
+		if err := validateWorkspaceObjectRef(path, "data_policy:"+workspaceProject.ID+"."+name, "DataPolicy", workspaceProject.ID, name, policy.Object); err != nil {
+			return err
+		}
+		switch policy.PolicyType {
+		case "row_filter", "column_mask":
+		default:
+			return resourceError(path, "data_policy:"+workspaceProject.ID+"."+name, "spec.policyType", "DataPolicy %q.%q has unsupported policyType %q", workspaceProject.ID, name, policy.PolicyType)
+		}
+		if strings.TrimSpace(policy.ExpressionJSON) == "" {
+			return resourceError(path, "data_policy:"+workspaceProject.ID+"."+name, "spec.expression", "DataPolicy %q.%q requires expression", workspaceProject.ID, name)
+		}
+		if strings.TrimSpace(policy.Subject.Kind) != "" {
+			if err := validateWorkspaceAccessSubject(path, "data_policy:"+workspaceProject.ID+"."+name, "DataPolicy", workspaceProject.ID, name, policy.Subject, workspaceProject.AccessGroups); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
+}
+
+func validateWorkspaceAccessSubject(path, resourceID, kind, workspaceID, name string, subject workspace.WorkspaceRoleBindingSubject, groups map[string]workspace.WorkspaceGroup) error {
+	switch subject.Kind {
+	case string(access.SubjectGroup):
+		if subject.Group == "" {
+			return resourceError(path, resourceID, "spec.subject.group", "%s %q.%q group subject requires group", kind, workspaceID, name)
+		}
+		if _, ok := groups[subject.Group]; !ok {
+			return resourceError(path, resourceID, "spec.subject.group", "%s %q.%q references unknown WorkspaceGroup %q", kind, workspaceID, name, subject.Group)
+		}
+	case string(access.SubjectPrincipal):
+		if subject.PrincipalID == "" && subject.Email == "" {
+			return resourceError(path, resourceID, "spec.subject", "%s %q.%q principal subject requires principalId or email", kind, workspaceID, name)
+		}
+	case string(access.SubjectServicePrincipal):
+		if subject.PrincipalID == "" {
+			return resourceError(path, resourceID, "spec.subject.principalId", "%s %q.%q service_principal subject requires principalId", kind, workspaceID, name)
+		}
+	default:
+		return resourceError(path, resourceID, "spec.subject.kind", "%s %q.%q has unsupported subject kind %q", kind, workspaceID, name, subject.Kind)
+	}
+	return nil
+}
+
+func validateWorkspaceObjectRef(path, resourceID, kind, workspaceID, name string, object workspace.WorkspaceSecurableObjectRef) error {
+	switch access.SecurableType(object.Type) {
+	case access.SecurableWorkspace:
+		return nil
+	case access.SecurableDashboard,
+		access.SecurableSemanticModel,
+		access.SecurableSource,
+		access.SecurableModelTable,
+		access.SecurableAgentPolicy,
+		access.SecurableDataset,
+		access.SecurableTable,
+		access.SecurableColumn:
+		if object.ID == "" {
+			return resourceError(path, resourceID, "spec.object.id", "%s %q.%q object id is required for %q", kind, workspaceID, name, object.Type)
+		}
+		return nil
+	default:
+		return resourceError(path, resourceID, "spec.object.type", "%s %q.%q has unsupported object type %q", kind, workspaceID, name, object.Type)
+	}
+}
+
+func validPrivilege(privilege access.Privilege) bool {
+	switch privilege {
+	case access.PrivilegeUseWorkspace,
+		access.PrivilegeViewItem,
+		access.PrivilegeEditItem,
+		access.PrivilegeManageItem,
+		access.PrivilegeQueryData,
+		access.PrivilegePreviewData,
+		access.PrivilegeRefreshData,
+		access.PrivilegeDeploy,
+		access.PrivilegeActivatePublish,
+		access.PrivilegeUseAgent,
+		access.PrivilegeViewAgent,
+		access.PrivilegeManageGrants,
+		access.PrivilegeViewAudit,
+		access.PrivilegeManageWorkspace,
+		access.PrivilegeManagePlatform:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateProjectTableSources(workspaceID, tableName, path string, table semanticmodel.Table) error {

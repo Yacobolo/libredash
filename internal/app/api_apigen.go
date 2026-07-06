@@ -18,12 +18,12 @@ type apiGenAdapter struct {
 }
 
 func (a apiGenAdapter) HandleAPIGen(operationID string, w http.ResponseWriter, r *http.Request) {
-	permission, ok := apigenOperationPermissions[operationID]
+	privilege, ok := apigenOperationPrivileges[operationID]
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
-	a.server.protect(permission, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	a.server.protectWithObjects(privilege, apigenOperationObjectResolvers[operationID], http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		buffered := newAPIGenResponseBuffer(w)
 		if ok := apigenapi.DispatchAPIGenOperation(operationID, a, buffered, r); !ok {
 			http.NotFound(w, r)
@@ -107,8 +107,8 @@ func (a apiGenAdapter) GetCurrentPrincipal(w http.ResponseWriter, r *http.Reques
 	a.server.accessHTTPHandler().GetCurrentPrincipal(w, r)
 }
 
-func (a apiGenAdapter) ListCurrentPermissions(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListCurrentPermissionsParams) {
-	a.server.accessHTTPHandler().ListCurrentPermissions(w, r)
+func (a apiGenAdapter) ListCurrentEffectivePrivileges(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListCurrentEffectivePrivilegesParams) {
+	a.server.accessHTTPHandler().ListCurrentEffectivePrivileges(w, r)
 }
 
 func (a apiGenAdapter) ListCurrentAPITokens(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListCurrentAPITokensParams) {
@@ -319,8 +319,64 @@ func (a apiGenAdapter) UpdatePrincipal(w http.ResponseWriter, r *http.Request, _
 	a.server.accessHTTPHandler().UpdatePrincipal(w, r)
 }
 
+func (a apiGenAdapter) ListServicePrincipals(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListServicePrincipalsParams) {
+	a.server.accessHTTPHandler().ListServicePrincipals(w, r)
+}
+
+func (a apiGenAdapter) CreateServicePrincipal(w http.ResponseWriter, r *http.Request) {
+	a.server.accessHTTPHandler().CreateServicePrincipal(w, r)
+}
+
+func (a apiGenAdapter) UpdateServicePrincipal(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.accessHTTPHandler().UpdateServicePrincipal(w, r)
+}
+
+func (a apiGenAdapter) DeleteServicePrincipal(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.accessHTTPHandler().DeleteServicePrincipal(w, r)
+}
+
+func (a apiGenAdapter) CreateServicePrincipalSecret(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.accessHTTPHandler().CreateServicePrincipalSecret(w, r)
+}
+
+func (a apiGenAdapter) RevokeServicePrincipalSecret(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.accessHTTPHandler().RevokeServicePrincipalSecret(w, r)
+}
+
 func (a apiGenAdapter) ListWorkspaceRoles(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListWorkspaceRolesParams) {
 	a.server.accessHTTPHandler().ListWorkspaceRoles(w, r)
+}
+
+func (a apiGenAdapter) ListEffectivePrivileges(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListEffectivePrivilegesParams) {
+	a.server.accessHTTPHandler().ListEffectivePrivileges(w, r)
+}
+
+func (a apiGenAdapter) ListGrants(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListGrantsParams) {
+	a.server.accessHTTPHandler().ListGrants(w, r)
+}
+
+func (a apiGenAdapter) CreateGrant(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.accessHTTPHandler().CreateGrant(w, r)
+}
+
+func (a apiGenAdapter) DeleteGrant(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.accessHTTPHandler().DeleteGrant(w, r)
+}
+
+func (a apiGenAdapter) ListDataPolicies(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListDataPoliciesParams) {
+	a.server.accessHTTPHandler().ListDataPolicies(w, r)
+}
+
+func (a apiGenAdapter) CreateDataPolicy(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.accessHTTPHandler().CreateDataPolicy(w, r)
+}
+
+func (a apiGenAdapter) DeleteDataPolicy(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.accessHTTPHandler().DeleteDataPolicy(w, r)
+}
+
+func (a apiGenAdapter) TransferOwnership(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.accessHTTPHandler().TransferOwnership(w, r)
 }
 
 func (a apiGenAdapter) ListSemanticModels(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListSemanticModelsParams) {

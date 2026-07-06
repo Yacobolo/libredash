@@ -163,7 +163,8 @@ func (h *Handler) Activate(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
 		return
 	}
-	if _, err := h.servingStateByIDForRequestWorkspace(r, repo, servingstate.ID(servingStateID)); err != nil {
+	current, err := h.servingStateByIDForRequestWorkspace(r, repo, servingstate.ID(servingStateID))
+	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
@@ -184,7 +185,34 @@ func (h *Handler) Activate(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		writeJSONError(w, err, statusForActivationError(err))
 		return
 	}
+	if current.Status == servingstate.StatusInactive {
+		h.recordRollbackAudit(r, accessRepo, row)
+	}
 	writeJSON(w, stdhttp.StatusOK, publishDTO(row))
+}
+
+func (h *Handler) recordRollbackAudit(r *stdhttp.Request, repo access.Repository, row servingstate.State) {
+	if repo == nil {
+		return
+	}
+	principalID := ""
+	if h.options.CurrentPrincipal != nil {
+		if principal, ok := h.options.CurrentPrincipal(r); ok {
+			principalID = principal.ID
+		}
+	}
+	_ = repo.RecordAuditEvent(r.Context(), access.AuditEventInput{
+		WorkspaceID:   string(row.WorkspaceID),
+		PrincipalID:   principalID,
+		Action:        "publish.rolled_back",
+		TargetType:    "publish",
+		TargetID:      string(row.ID),
+		Privilege:     access.PrivilegeActivatePublish,
+		Status:        "success",
+		RequestID:     r.Header.Get("X-Request-Id"),
+		CorrelationID: r.Header.Get("X-Correlation-Id"),
+		MetadataJSON:  "{}",
+	})
 }
 
 func (h *Handler) List(w stdhttp.ResponseWriter, r *stdhttp.Request) {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 
@@ -11,6 +12,7 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	agentcore "github.com/Yacobolo/libredash/pkg/agent"
 )
@@ -49,8 +51,15 @@ func (s *Server) agentPolicyForScope(scope agentcap.Scope) (workspace.AgentPolic
 
 func (s *Server) agentVisualToolProvider() agenttools.VisualProvider {
 	return agenttools.VisualProvider{
-		Authorize: func(ctx context.Context, scope agenttools.Scope) (agentcore.ToolResult, bool) {
-			return s.authorizeAgentPermission(ctx, agentScopeFromTools(scope), access.PermissionAssetRead)
+		Authorize: func(ctx context.Context, scope agenttools.Scope, request agenttools.VisualAuthorizationRequest) (agentcore.ToolResult, bool) {
+			agentScope := agentScopeFromTools(scope)
+			model := access.ItemObjectWithParent(access.SecurableSemanticModel, agentScope.WorkspaceID, request.Model, access.WorkspaceObject(agentScope.WorkspaceID))
+			objects := []access.ObjectRef{
+				access.ItemObjectWithParent(access.SecurableDataset, agentScope.WorkspaceID, request.Model+"/"+request.Dataset, model),
+				model,
+				access.WorkspaceObject(agentScope.WorkspaceID),
+			}
+			return s.authorizeAgentPrivilege(ctx, agentScope, access.PrivilegeQueryData, objects, "agent_tool", request.ToolName)
 		},
 		SemanticModel: func(modelID string) (model *semanticmodel.Model, ok bool) {
 			if s.metrics == nil {
@@ -90,7 +99,7 @@ func agentToolsScope(scope agentcap.Scope) agenttools.Scope {
 		Credential: agenttools.CredentialScope{
 			WorkspaceID: scope.Credential.WorkspaceID,
 			Restricted:  scope.Credential.Restricted,
-			Permissions: append([]string{}, scope.Credential.Permissions...),
+			Privileges:  append([]string{}, scope.Credential.Privileges...),
 		},
 	}
 }
@@ -103,24 +112,24 @@ func agentScopeFromTools(scope agenttools.Scope) agentcap.Scope {
 		Credential: agentcap.CredentialScope{
 			WorkspaceID: scope.Credential.WorkspaceID,
 			Restricted:  scope.Credential.Restricted,
-			Permissions: append([]string{}, scope.Credential.Permissions...),
+			Privileges:  append([]string{}, scope.Credential.Privileges...),
 		},
 	}
 }
 
 func (s *Server) authorizeAPIGenAgentOperation(ctx context.Context, scope agentcap.Scope, operationID string) (agentcore.ToolResult, bool) {
-	permission := apigenOperationPermissions[operationID]
-	if permission == "" {
-		return agenttools.ToolError("forbidden", "operation has no LibreDash permission mapping"), false
+	privilege := apigenOperationPrivileges[operationID]
+	if privilege == "" {
+		return agenttools.ToolError("forbidden", "operation has no LibreDash privilege mapping"), false
 	}
-	return s.authorizeAgentPermission(ctx, scope, permission)
+	return s.authorizeAgentPrivilege(ctx, scope, privilege, []access.ObjectRef{access.WorkspaceObject(scope.WorkspaceID)}, "agent_tool", operationID)
 }
 
-func (s *Server) authorizeAgentPermission(ctx context.Context, scope agentcap.Scope, permission string) (agentcore.ToolResult, bool) {
+func (s *Server) authorizeAgentPrivilege(ctx context.Context, scope agentcap.Scope, privilege access.Privilege, objects []access.ObjectRef, targetType, targetID string) (agentcore.ToolResult, bool) {
 	if scope.PrincipalID == "" {
 		return agenttools.ToolError("unauthorized", "agent tool requires an authenticated principal"), false
 	}
-	if !agentCredentialAllows(scope, permission) {
+	if !agentCredentialAllowsPrivilege(scope, privilege) {
 		return agenttools.ToolError("forbidden", "credential is not allowed to call this tool"), false
 	}
 	if scope.DevAuthBypass {
@@ -133,17 +142,44 @@ func (s *Server) authorizeAgentPermission(ctx context.Context, scope agentcap.Sc
 	if repo == nil {
 		return agentcore.ToolResult{}, true
 	}
-	allowed, err := repo.HasPermission(ctx, scope.WorkspaceID, scope.PrincipalID, permission)
+	decision, err := repo.AuthorizeAny(ctx, scope.PrincipalID, privilege, objects)
 	if err != nil {
+		recordAgentToolAudit(ctx, repo, scope, privilege, targetType, targetID, "error", err)
 		return agenttools.ToolError("authorization_failed", err.Error()), false
 	}
-	if !allowed {
-		return agenttools.ToolError("forbidden", "principal does not have permission to call this tool"), false
+	if !decision.Allowed {
+		recordAgentToolAudit(ctx, repo, scope, privilege, targetType, targetID, "denied", nil)
+		return agenttools.ToolError("forbidden", "principal does not have privilege to call this tool"), false
 	}
+	recordAgentToolAudit(ctx, repo, scope, privilege, targetType, targetID, "success", nil)
 	return agentcore.ToolResult{}, true
 }
 
-func agentCredentialAllows(scope agentcap.Scope, permission string) bool {
+func recordAgentToolAudit(ctx context.Context, repo access.Repository, scope agentcap.Scope, privilege access.Privilege, targetType, targetID, status string, cause error) {
+	if repo == nil {
+		return
+	}
+	metadata := dataquery.MetadataFromContext(ctx)
+	payload := map[string]any{}
+	if cause != nil {
+		payload["error"] = cause.Error()
+	}
+	bytes, _ := json.Marshal(payload)
+	_ = repo.RecordAuditEvent(ctx, access.AuditEventInput{
+		WorkspaceID:   scope.WorkspaceID,
+		PrincipalID:   scope.PrincipalID,
+		Action:        "agent_tool.called",
+		TargetType:    targetType,
+		TargetID:      targetID,
+		Privilege:     privilege,
+		Status:        status,
+		RequestID:     metadata.RequestID,
+		CorrelationID: metadata.CorrelationID,
+		MetadataJSON:  string(bytes),
+	})
+}
+
+func agentCredentialAllowsPrivilege(scope agentcap.Scope, privilege access.Privilege) bool {
 	credential := scope.Credential
 	if credential.WorkspaceID != "" && credential.WorkspaceID != scope.WorkspaceID {
 		return false
@@ -151,8 +187,8 @@ func agentCredentialAllows(scope agentcap.Scope, permission string) bool {
 	if !credential.Restricted {
 		return true
 	}
-	for _, allowed := range credential.Permissions {
-		if allowed == permission {
+	for _, allowed := range credential.Privileges {
+		if allowed == string(privilege) {
 			return true
 		}
 	}

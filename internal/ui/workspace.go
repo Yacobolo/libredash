@@ -86,12 +86,20 @@ func WorkspaceAccessSignals(access WorkspaceAccessResponse, csrfToken string) wo
 }
 
 func workspaceAccessRouteBridge(workspaceID string, access WorkspaceAccessResponse, csrfToken string) ([]g.Node, map[string]any) {
+	return accessRouteBridge(workspaceID, "/workspaces/"+workspaceID+"/access/upsert", "/workspaces/"+workspaceID+"/access/remove", access, csrfToken)
+}
+
+func workspaceAssetAccessRouteBridge(workspaceID, assetID string, access WorkspaceAccessResponse, csrfToken string) ([]g.Node, map[string]any) {
+	return accessRouteBridge(workspaceID, "/workspaces/"+workspaceID+"/assets/"+url.PathEscape(assetID)+"/access/upsert", "/workspaces/"+workspaceID+"/assets/"+url.PathEscape(assetID)+"/access/remove", access, csrfToken)
+}
+
+func accessRouteBridge(_ string, upsertPath, removePath string, access WorkspaceAccessResponse, csrfToken string) ([]g.Node, map[string]any) {
 	if !access.CanManage {
 		return nil, nil
 	}
 	accessSignal := WorkspaceAccessSignals(access, csrfToken)
-	upsert := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + postActionWithCSRFSignal("/workspaces/"+workspaceID+"/access/upsert", "$workspaceAccess.csrfToken")
-	remove := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + postActionWithCSRFSignal("/workspaces/"+workspaceID+"/access/remove", "$workspaceAccess.csrfToken")
+	upsert := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + postActionWithCSRFSignal(upsertPath, "$workspaceAccess.csrfToken")
+	remove := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + postActionWithCSRFSignal(removePath, "$workspaceAccess.csrfToken")
 	return []g.Node{
 		g.Attr("workspaceaccess", jsonString(accessSignal)),
 		g.Attr("data-attr:workspaceaccess", "$workspaceAccess"),
@@ -446,6 +454,10 @@ func WorkspaceAssetPageWithRefresh(catalog dashboard.Catalog, workspace workspac
 }
 
 func WorkspaceAssetPageWithRefreshAndVersions(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, refresh AssetRefreshState, versions AssetVersionsState, chromeOptions ...ChromeOption) g.Node {
+	return WorkspaceAssetPageWithRefreshVersionsAndAccess(catalog, workspace, asset, assets, edges, activeSection, roleLabel, refresh, versions, WorkspaceAccessResponse{}, "", chromeOptions...)
+}
+
+func WorkspaceAssetPageWithRefreshVersionsAndAccess(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, refresh AssetRefreshState, versions AssetVersionsState, access WorkspaceAccessResponse, csrfToken string, chromeOptions ...ChromeOption) g.Node {
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 	page := workspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, refresh, versions)
@@ -454,6 +466,11 @@ func WorkspaceAssetPageWithRefreshAndVersions(catalog dashboard.Catalog, workspa
 		g.Attr("slot", "page"),
 		g.Attr("page", jsonString(page)),
 		g.Attr("data-attr:page", "$page"),
+	}
+	accessAttrs, accessSignals := workspaceAssetAccessRouteBridge(workspace.ID, asset.ID, access, csrfToken)
+	attrs = append(attrs, accessAttrs...)
+	for key, value := range accessSignals {
+		extraSignals[key] = value
 	}
 	if assetRefreshable(asset.Type) {
 		refreshPath := "/workspaces/" + workspace.ID + "/assets/" + asset.ID + "/refresh"
@@ -468,7 +485,7 @@ func WorkspaceAssetPageWithRefreshAndVersions(catalog dashboard.Catalog, workspa
 		extraHeadInit := ds.Init("@get('" + updatesURL + "', {openWhenHidden: true})")
 		return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extraSignals, activeSection, chromeOptions, extraHeadInit)
 	}
-	return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), nil, activeSection, chromeOptions)
+	return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extraSignals, activeSection, chromeOptions)
 }
 
 func ConnectionAssetPageWithVersions(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, asset workspaceview.AssetView, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeSection, roleLabel string, versions AssetVersionsState) g.Node {
@@ -553,33 +570,6 @@ func ConnectionSourceAssetPage(catalog dashboard.Catalog, workspace workspacevie
 		nil,
 		nil,
 		extraHead...,
-	)
-}
-
-func WorkspacePermissionsPage(catalog dashboard.Catalog, workspace workspaceview.WorkspaceView, bindings []workspaceview.RoleBindingView, roles []workspaceview.RoleView, csrfToken, roleLabel string) g.Node {
-	page := uisignals.WorkspacePageSignal{
-		Kind:        uisignals.RouteWorkspace,
-		Title:       workspace.Title,
-		Description: "Assign workspace roles. BI assets remain authored in Git.",
-		WorkspaceID: workspace.ID,
-	}
-	access := WorkspaceAccessResponse{
-		Workspace: workspace,
-		Roles:     roles,
-		Bindings:  bindings,
-		CanManage: true,
-	}
-	attrs := []g.Node{
-		g.Attr("slot", "page"),
-		g.Attr("page", jsonString(page)),
-		g.Attr("data-attr:page", "$page"),
-	}
-	accessAttrs, extraSignals := workspaceAccessRouteBridge(workspace.ID, access, csrfToken)
-	attrs = append(attrs, accessAttrs...)
-	return workspaceRouteDocument("Workspace permissions", catalog, "settings", roleLabel, page, uisignals.RouteWorkspace,
-		g.El("ld-workspace-page", attrs...),
-		extraSignals,
-		nil,
 	)
 }
 

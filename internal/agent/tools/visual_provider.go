@@ -20,7 +20,7 @@ const (
 	maxVisualRows       = 50
 )
 
-type VisualAuthorizeFunc func(ctx context.Context, scope Scope) (agentcore.ToolResult, bool)
+type VisualAuthorizeFunc func(ctx context.Context, scope Scope, request VisualAuthorizationRequest) (agentcore.ToolResult, bool)
 
 type VisualModelFunc func(modelID string) (*semanticmodel.Model, bool)
 
@@ -33,6 +33,14 @@ type VisualProvider struct {
 	SemanticModel VisualModelFunc
 	AggregateRows VisualAggregateRowsFunc
 	PreviewRows   VisualPreviewRowsFunc
+}
+
+type VisualAuthorizationRequest struct {
+	ToolName string
+	CallID   string
+	Kind     string
+	Model    string
+	Dataset  string
 }
 
 type agentVisualInput struct {
@@ -86,9 +94,6 @@ func (p VisualProvider) Run(ctx context.Context, scope Scope, call agentcore.Too
 	if p.Authorize == nil {
 		return apigenAgentToolError("authorization_failed", "agent visual tool authorizer is not configured")
 	}
-	if errResult, ok := p.Authorize(ctx, scope); !ok {
-		return errResult
-	}
 	input, err := decodeAgentVisualInput(call.Arguments)
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
@@ -103,6 +108,15 @@ func (p VisualProvider) Run(ctx context.Context, scope Scope, call agentcore.Too
 		RequestID:   call.ID,
 	}
 	ctx = dataquery.WithMetadata(ctx, metadata)
+	if errResult, ok := p.Authorize(ctx, scope, VisualAuthorizationRequest{
+		ToolName: agentVisualToolName,
+		CallID:   call.ID,
+		Kind:     input.Kind,
+		Model:    input.Model,
+		Dataset:  input.Dataset,
+	}); !ok {
+		return errResult
+	}
 	result, err := p.queryAgentVisual(ctx, input, agentVisualID(input.Kind, call.ID))
 	if err != nil {
 		return apigenAgentToolError("query_visual_failed", err.Error())

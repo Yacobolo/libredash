@@ -35,6 +35,7 @@ type Query struct {
 	Time          Time
 	Filters       []Filter
 	Sort          []Sort
+	ColumnMasks   []ColumnMask
 	Offset        int
 	Limit         int
 	BinCount      int
@@ -82,6 +83,11 @@ type FilterGroup struct {
 type Sort struct {
 	Field     string
 	Direction string
+}
+
+type ColumnMask struct {
+	Field string
+	Mask  string
 }
 
 type Column struct {

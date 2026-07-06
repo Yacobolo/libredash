@@ -249,8 +249,8 @@ func (m ReadModel) CanManageAccess(r *nethttp.Request, workspaceID string) bool 
 	if !ok {
 		return false
 	}
-	allowed, err := repo.HasPermission(r.Context(), workspaceID, principal.ID, access.PermissionRBACManage)
-	return err == nil && allowed
+	decision, err := repo.Authorize(r.Context(), principal.ID, access.PrivilegeManageGrants, access.WorkspaceObject(workspaceID))
+	return err == nil && decision.Allowed
 }
 
 func (m ReadModel) CanReadWorkspace(r *nethttp.Request, workspaceID string) bool {
@@ -265,8 +265,8 @@ func (m ReadModel) CanReadWorkspace(r *nethttp.Request, workspaceID string) bool
 	if !ok {
 		return false
 	}
-	allowed, err := repo.HasPermission(r.Context(), workspaceID, principal.ID, access.PermissionWorkspaceRead)
-	return err == nil && allowed
+	decision, err := repo.Authorize(r.Context(), principal.ID, access.PrivilegeUseWorkspace, access.WorkspaceObject(workspaceID))
+	return err == nil && decision.Allowed
 }
 
 func (m ReadModel) activeAssetCatalog(ctx context.Context, workspaceID, environment string) (workspace.AssetCatalog, bool, error) {
@@ -387,7 +387,18 @@ func roleBindingView(row access.RoleBinding) workspace.RoleBindingView {
 func roleViews(rows []access.Role) []workspace.RoleView {
 	roles := make([]workspace.RoleView, 0, len(rows))
 	for _, row := range rows {
-		roles = append(roles, workspace.RoleView{Name: row.Name, Permissions: row.Permissions})
+		roles = append(roles, workspace.RoleView{Name: row.Name, Privileges: privilegeStrings(row.Privileges)})
 	}
 	return roles
+}
+
+func privilegeStrings(values []access.Privilege) []string {
+	if values == nil {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
 }

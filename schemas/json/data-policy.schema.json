@@ -1,0 +1,144 @@
+{
+  "$defs": {
+    "#APIVersion": {
+      "const": "libredash.dev/v1"
+    },
+    "#AccessSubject": {
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "group": {
+          "$ref": "#/$defs/%23ResourceID"
+        },
+        "kind": {
+          "enum": [
+            "principal",
+            "group",
+            "service_principal"
+          ]
+        },
+        "principalId": {
+          "$ref": "#/$defs/%23ResourceID"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "#AnyObject": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "#Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "$ref": "#/$defs/%23ResourceID"
+        },
+        "owner": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "workspace": {
+          "$ref": "#/$defs/%23ResourceID"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "#ResourceID": {
+      "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$",
+      "type": "string"
+    },
+    "#SecurableObjectRef": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "workspace",
+            "dashboard",
+            "semantic_model",
+            "source",
+            "model_table",
+            "agent_policy",
+            "dataset",
+            "table",
+            "column"
+          ]
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "$ref": "#/$defs/%23APIVersion"
+    },
+    "kind": {
+      "const": "DataPolicy"
+    },
+    "metadata": {
+      "$ref": "#/$defs/%23Metadata"
+    },
+    "spec": {
+      "additionalProperties": false,
+      "properties": {
+        "expression": {
+          "$ref": "#/$defs/%23AnyObject"
+        },
+        "object": {
+          "$ref": "#/$defs/%23SecurableObjectRef"
+        },
+        "policyType": {
+          "enum": [
+            "row_filter",
+            "column_mask"
+          ]
+        },
+        "subject": {
+          "$ref": "#/$defs/%23AccessSubject"
+        }
+      },
+      "required": [
+        "expression",
+        "object",
+        "policyType"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "apiVersion",
+    "kind",
+    "metadata",
+    "spec"
+  ],
+  "type": "object"
+}

@@ -118,6 +118,7 @@ for (const viewport of [
           assetHasOverview: asset.shadowRoot.textContent?.includes('Overview') ?? false,
           assetHasRecordTable: Boolean(asset.shadowRoot.querySelector('ld-record-table')),
           assetHasSemanticGraph: Boolean(semanticGraph),
+          assetHasAccess: Boolean(asset.shadowRoot.querySelector('ld-workspace-access-control')),
           assetSemanticGraphBeforeRecordTable: Boolean(semanticGraph && firstRecordTable && semanticGraph.compareDocumentPosition(firstRecordTable) & Node.DOCUMENT_POSITION_FOLLOWING),
           assetHasDataModelHeading: Array.from(asset.shadowRoot.querySelectorAll('h2')).some((heading) => heading.textContent?.trim() === 'Data model'),
           assetGraphFlushLeft: semanticGraphSection ? Math.round(semanticGraphSection.getBoundingClientRect().left - assetSectionBody.getBoundingClientRect().left) : -1,
@@ -155,6 +156,7 @@ for (const viewport of [
         assetHasOverview: true,
         assetHasRecordTable: true,
         assetHasSemanticGraph: true,
+        assetHasAccess: true,
         assetSemanticGraphBeforeRecordTable: true,
         assetHasDataModelHeading: false,
         assetGraphFlushLeft: 0,
@@ -254,7 +256,7 @@ test('workspace asset search filters the current asset rows', async () => {
   }
 })
 
-test('workspace access modal normalizes Go-shaped access signals', async () => {
+test('workspace access drawer normalizes Go-shaped access signals', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
@@ -266,14 +268,17 @@ test('workspace access modal normalizes Go-shaped access signals', async () => {
       const accessControl = workspace.shadowRoot.querySelector('ld-workspace-access-control') as any
       accessControl.shadowRoot.querySelector('.trigger').click()
       await accessControl.updateComplete
-      const dialog = accessControl.shadowRoot.querySelector('[role="dialog"]')
-      const roleOptions = Array.from(accessControl.shadowRoot.querySelectorAll('.composer-role option')).map((option) => ({
+      const drawer = accessControl.shadowRoot.querySelector('ld-drawer') as any
+      await drawer.updateComplete
+      const dialog = drawer.shadowRoot.querySelector('[role="dialog"]')
+      const roleOptions = Array.from(accessControl.shadowRoot.querySelectorAll('.composer-grant-role option')).map((option) => ({
         value: (option as HTMLOptionElement).value,
         label: option.textContent?.trim(),
       }))
       const rowRole = accessControl.shadowRoot.querySelector('.row select') as HTMLSelectElement | null
       return {
         hasDialog: Boolean(dialog),
+        hasDrawer: Boolean(drawer),
         title: accessControl.shadowRoot.querySelector('.subtitle')?.textContent?.trim(),
         roleOptions,
         rowRoleValue: rowRole?.value,
@@ -283,12 +288,58 @@ test('workspace access modal normalizes Go-shaped access signals', async () => {
 
     expect(state).toEqual({
       hasDialog: true,
+      hasDrawer: true,
       title: 'LibreDash Workspace roles apply to every published asset in this workspace.',
       roleOptions: [
         { value: 'viewer', label: 'Viewer' },
         { value: 'workspace_admin', label: 'Workspace Admin' },
       ],
       rowRoleValue: 'viewer',
+      principal: 'analyst@example.com',
+    })
+  } finally {
+    await page.close()
+  }
+})
+
+test('asset access drawer renders object grants and privilege labels', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-workspace-asset-page'))
+    await page.locator('ld-workspace-asset-page').evaluate((element: any) => element.updateComplete)
+
+    const state = await page.evaluate(async () => {
+      const asset = document.querySelector('ld-workspace-asset-page') as any
+      const accessControl = asset.shadowRoot.querySelector('ld-workspace-access-control') as any
+      accessControl.shadowRoot.querySelector('.trigger').click()
+      await accessControl.updateComplete
+      const drawer = accessControl.shadowRoot.querySelector('ld-drawer') as any
+      await drawer.updateComplete
+      const roleOptions = Array.from(accessControl.shadowRoot.querySelectorAll('.composer-grant-role option')).map((option) => ({
+        value: (option as HTMLOptionElement).value,
+        label: option.textContent?.trim(),
+      }))
+      return {
+        hasDialog: Boolean(drawer.shadowRoot.querySelector('[role="dialog"]')),
+        subtitle: accessControl.shadowRoot.querySelector('.subtitle')?.textContent?.trim(),
+        sectionTitle: accessControl.shadowRoot.querySelector('.section-title')?.textContent?.trim(),
+        roleOptions,
+        rowRoleValue: (accessControl.shadowRoot.querySelector('.row select') as HTMLSelectElement | null)?.value,
+        principal: accessControl.shadowRoot.querySelector('.name')?.textContent?.trim(),
+      }
+    })
+
+    expect(state).toEqual({
+      hasDialog: true,
+      subtitle: 'Olist Commerce grants apply only to this asset.',
+      sectionTitle: 'Direct grants',
+      roleOptions: [
+        { value: 'VIEW_ITEM', label: 'VIEW ITEM' },
+        { value: 'QUERY_DATA', label: 'QUERY DATA' },
+        { value: 'MANAGE_GRANTS', label: 'MANAGE GRANTS' },
+      ],
+      rowRoleValue: 'VIEW_ITEM',
       principal: 'analyst@example.com',
     })
   } finally {
@@ -580,7 +631,29 @@ function testDocument(): string {
     canManage: true,
     status: { loading: false, error: '', message: '' },
     csrfToken: 'token',
-    command: { email: '', role: '', principalId: '' },
+    command: { email: '', role: '', principalId: '', bindingId: '', subjectType: '', subjectId: '' },
+    search: '',
+  }
+  const assetAccess = {
+    workspace: { ID: 'libredash', Title: 'LibreDash Workspace' },
+    objectType: 'semantic_model',
+    objectId: 'olist',
+    objectTitle: 'Olist Commerce',
+    mode: 'object',
+    roles: [{ Name: 'VIEW_ITEM' }, { Name: 'QUERY_DATA' }, { Name: 'MANAGE_GRANTS' }],
+    bindings: [{
+      ID: 'grant_1',
+      SubjectType: 'principal',
+      SubjectID: 'email_analyst',
+      PrincipalID: 'email_analyst',
+      Email: 'analyst@example.com',
+      DisplayName: '',
+      Role: 'VIEW_ITEM',
+    }],
+    canManage: true,
+    status: { loading: false, error: '', message: '' },
+    csrfToken: 'token',
+    command: { email: '', role: '', principalId: '', bindingId: '', subjectType: '', subjectId: '' },
     search: '',
   }
   const attr = (value: unknown) => escapeHTML(JSON.stringify(value))
@@ -597,7 +670,7 @@ function testDocument(): string {
       <body>
         <ld-workspace-page page="${attr(workspacePage)}" workspaceaccess="${attr(access)}"></ld-workspace-page>
         <ld-connections-page page="${attr(connectionsPage)}"></ld-connections-page>
-        <ld-workspace-asset-page page="${attr(assetPage)}"></ld-workspace-asset-page>
+        <ld-workspace-asset-page page="${attr(assetPage)}" workspaceaccess="${attr(assetAccess)}"></ld-workspace-asset-page>
         <script type="module" src="/workspace-page-under-test.js"></script>
       </body>
     </html>

@@ -47,7 +47,7 @@ func (s *Server) runRefreshJobDispatcher(ctx context.Context) {
 		Runs:         repo,
 		Service:      service,
 		Executor:     s.executionService(),
-		Legacy:       appLegacyRefreshExecutor{repo: repo, metrics: s.metrics, logger: s.logger},
+		Direct:       appDirectRefreshExecutor{repo: repo, metrics: s.metrics, logger: s.logger},
 		LeaseTimeout: s.jobLeaseTimeout,
 		Logger:       s.logger,
 		Owner:        fmt.Sprintf("libredash-%d", time.Now().UnixNano()),

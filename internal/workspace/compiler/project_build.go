@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -97,6 +98,83 @@ func projectWorkspaceRoleBinding(name string, spec workspaceRoleBindingSpec) wor
 	}
 }
 
+func projectWorkspaceGrant(name string, spec workspaceGrantSpec) workspace.WorkspaceGrant {
+	return workspace.WorkspaceGrant{
+		ID:   name,
+		Name: name,
+		Object: workspace.WorkspaceSecurableObjectRef{
+			Type: strings.TrimSpace(spec.Object.Type),
+			ID:   strings.TrimSpace(spec.Object.ID),
+		},
+		Subject: workspace.WorkspaceRoleBindingSubject{
+			Kind:        strings.TrimSpace(spec.Subject.Kind),
+			PrincipalID: strings.TrimSpace(spec.Subject.PrincipalID),
+			Email:       strings.TrimSpace(spec.Subject.Email),
+			DisplayName: strings.TrimSpace(spec.Subject.DisplayName),
+			Group:       strings.TrimSpace(spec.Subject.Group),
+		},
+		Privilege: strings.TrimSpace(spec.Privilege),
+	}
+}
+
+func projectWorkspaceDataPolicy(name string, spec workspaceDataPolicySpec) (workspace.WorkspaceDataPolicy, error) {
+	expressionJSON := "{}"
+	if spec.Expression.Kind != 0 {
+		var expression any
+		if err := spec.Expression.Decode(&expression); err != nil {
+			return workspace.WorkspaceDataPolicy{}, err
+		}
+		expression = normalizeYAMLValue(expression)
+		bytes, err := json.Marshal(expression)
+		if err != nil {
+			return workspace.WorkspaceDataPolicy{}, err
+		}
+		expressionJSON = string(bytes)
+	}
+	return workspace.WorkspaceDataPolicy{
+		ID:   name,
+		Name: name,
+		Object: workspace.WorkspaceSecurableObjectRef{
+			Type: strings.TrimSpace(spec.Object.Type),
+			ID:   strings.TrimSpace(spec.Object.ID),
+		},
+		Subject: workspace.WorkspaceRoleBindingSubject{
+			Kind:        strings.TrimSpace(spec.Subject.Kind),
+			PrincipalID: strings.TrimSpace(spec.Subject.PrincipalID),
+			Email:       strings.TrimSpace(spec.Subject.Email),
+			DisplayName: strings.TrimSpace(spec.Subject.DisplayName),
+			Group:       strings.TrimSpace(spec.Subject.Group),
+		},
+		PolicyType:     strings.TrimSpace(spec.PolicyType),
+		ExpressionJSON: expressionJSON,
+	}, nil
+}
+
+func normalizeYAMLValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		out := make(map[string]any, len(typed))
+		for key, item := range typed {
+			out[key] = normalizeYAMLValue(item)
+		}
+		return out
+	case map[any]any:
+		out := make(map[string]any, len(typed))
+		for key, item := range typed {
+			out[fmt.Sprint(key)] = normalizeYAMLValue(item)
+		}
+		return out
+	case []any:
+		out := make([]any, len(typed))
+		for i, item := range typed {
+			out[i] = normalizeYAMLValue(item)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
 func projectWorkspaceAgentPolicy(name string, spec workspaceAgentPolicySpec) workspace.AgentPolicy {
 	return workspace.AgentPolicy{
 		ID:      name,
@@ -154,6 +232,8 @@ func (workspaceProject *WorkspaceProject) definition(project Project) (*workspac
 		Access: workspace.AccessPolicy{
 			Groups:       copyWorkspaceGroups(workspaceProject.AccessGroups),
 			RoleBindings: copyWorkspaceRoleBindings(workspaceProject.AccessRoleBindings),
+			Grants:       copyWorkspaceGrants(workspaceProject.AccessGrants),
+			DataPolicies: copyWorkspaceDataPolicies(workspaceProject.AccessDataPolicies),
 		},
 		AgentPolicies: copyAgentPolicies(workspaceProject.AgentPolicies),
 		AgentPolicy:   effectiveAgentPolicy(workspaceProject.AgentPolicies),
@@ -429,6 +509,22 @@ func copyWorkspaceGroups(in map[string]workspace.WorkspaceGroup) map[string]work
 
 func copyWorkspaceRoleBindings(in map[string]workspace.WorkspaceRoleBinding) map[string]workspace.WorkspaceRoleBinding {
 	out := make(map[string]workspace.WorkspaceRoleBinding, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
+}
+
+func copyWorkspaceGrants(in map[string]workspace.WorkspaceGrant) map[string]workspace.WorkspaceGrant {
+	out := make(map[string]workspace.WorkspaceGrant, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
+}
+
+func copyWorkspaceDataPolicies(in map[string]workspace.WorkspaceDataPolicy) map[string]workspace.WorkspaceDataPolicy {
+	out := make(map[string]workspace.WorkspaceDataPolicy, len(in))
 	for key, value := range in {
 		out[key] = value
 	}

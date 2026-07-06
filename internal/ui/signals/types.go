@@ -980,11 +980,15 @@ type LoginPageSignal struct {
 }
 
 type WorkspaceAccessResponse struct {
-	Workspace workspaceview.WorkspaceView     `json:"workspace"`
-	Roles     []workspaceview.RoleView        `json:"roles"`
-	Bindings  []workspaceview.RoleBindingView `json:"bindings"`
-	CanManage bool                            `json:"canManage"`
-	Status    WorkspaceAccessStatus           `json:"status"`
+	Workspace   workspaceview.WorkspaceView     `json:"workspace"`
+	ObjectType  string                          `json:"objectType,omitempty"`
+	ObjectID    string                          `json:"objectId,omitempty"`
+	ObjectTitle string                          `json:"objectTitle,omitempty"`
+	Mode        string                          `json:"mode,omitempty"`
+	Roles       []workspaceview.RoleView        `json:"roles"`
+	Bindings    []workspaceview.RoleBindingView `json:"bindings"`
+	CanManage   bool                            `json:"canManage"`
+	Status      WorkspaceAccessStatus           `json:"status"`
 }
 
 type WorkspaceAccessSignal struct {
@@ -1003,7 +1007,11 @@ type WorkspaceAccessStatus struct {
 type WorkspaceAccessCommand struct {
 	Email       string `json:"email"`
 	Role        string `json:"role"`
+	Privilege   string `json:"privilege"`
 	PrincipalID string `json:"principalId"`
+	BindingID   string `json:"bindingId"`
+	SubjectType string `json:"subjectType"`
+	SubjectID   string `json:"subjectId"`
 }
 
 type ChatSignal struct {

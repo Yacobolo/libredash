@@ -26,11 +26,12 @@ type RuntimeConfig struct {
 }
 
 type ModelTableQuery struct {
-	Table   string
-	Columns []string
-	Sort    []semanticquery.Sort
-	Limit   int
-	Offset  int
+	Table       string
+	Columns     []string
+	Sort        []semanticquery.Sort
+	ColumnMasks []semanticquery.ColumnMask
+	Limit       int
+	Offset      int
 }
 
 type Runtime struct {
@@ -160,37 +161,57 @@ func (r *Runtime) ExecuteDataQuery(ctx context.Context, request dataquery.Query)
 	if r.modelID != "" && request.ModelID != "" && request.ModelID != r.modelID {
 		return dataquery.Result{}, fmt.Errorf("semantic model %q is not available in runtime for %q", request.ModelID, r.modelID)
 	}
+	var transform dataquery.ResultTransformer
+	if governor, ok := dataquery.GovernorFromContext(ctx); ok && !dataquery.GovernanceApplied(ctx) {
+		governed, nextTransform, err := governor.GovernDataQuery(ctx, request)
+		if err != nil {
+			return dataquery.Result{Status: dataquery.StatusError, ExecutionState: dataquery.ExecutionRejected, Error: err.Error()}, err
+		}
+		request = governed
+		transform = nextTransform
+		ctx = dataquery.WithGovernanceApplied(ctx)
+	}
 	if err := request.Validate(); err != nil {
 		return dataquery.Result{}, err
 	}
-	switch request.Kind {
-	case dataquery.KindSemanticAggregate:
-		return r.executeSemanticAggregate(ctx, request)
-	case dataquery.KindSemanticRows:
-		return r.executeSemanticRows(ctx, request)
-	case dataquery.KindModelTableRows:
-		return r.executeModelTableRows(ctx, request)
-	case dataquery.KindSourceRows:
-		return r.executeSourceRows(ctx, request)
-	case dataquery.KindSemanticHistogram:
-		return r.executeSemanticHistogram(ctx, request)
-	case dataquery.KindSemanticDistribution:
-		return r.executeSemanticDistribution(ctx, request)
-	default:
-		return dataquery.Result{}, fmt.Errorf("unsupported data query kind %q", request.Kind)
+	execute := func() (dataquery.Result, error) {
+		switch request.Kind {
+		case dataquery.KindSemanticAggregate:
+			return r.executeSemanticAggregate(ctx, request)
+		case dataquery.KindSemanticRows:
+			return r.executeSemanticRows(ctx, request)
+		case dataquery.KindModelTableRows:
+			return r.executeModelTableRows(ctx, request)
+		case dataquery.KindSourceRows:
+			return r.executeSourceRows(ctx, request)
+		case dataquery.KindSemanticHistogram:
+			return r.executeSemanticHistogram(ctx, request)
+		case dataquery.KindSemanticDistribution:
+			return r.executeSemanticDistribution(ctx, request)
+		default:
+			return dataquery.Result{}, fmt.Errorf("unsupported data query kind %q", request.Kind)
+		}
 	}
+	result, err := execute()
+	if transform != nil {
+		if transformErr := transform(&result, err); transformErr != nil {
+			return dataquery.Result{Status: dataquery.StatusError, ExecutionState: dataquery.ExecutionRejected, Error: transformErr.Error()}, transformErr
+		}
+	}
+	return result, err
 }
 
 func (r *Runtime) executeSemanticAggregate(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
 	semanticRequest := semanticquery.Request{
-		Table:      request.Target,
-		Dimensions: dataQueryFields(request.Fields),
-		Measures:   dataQueryFields(request.Measures),
-		Time:       semanticquery.Time{Field: request.Time.Field, Grain: request.Time.Grain, Alias: request.Time.Alias},
-		Filters:    dataQueryFilters(request.Filters),
-		Sort:       dataQuerySorts(request.Sort),
-		Limit:      request.Limit,
-		Offset:     request.Offset,
+		Table:       request.Target,
+		Dimensions:  dataQueryFields(request.Fields),
+		Measures:    dataQueryFields(request.Measures),
+		Time:        semanticquery.Time{Field: request.Time.Field, Grain: request.Time.Grain, Alias: request.Time.Alias},
+		Filters:     dataQueryFilters(request.Filters),
+		Sort:        dataQuerySorts(request.Sort),
+		ColumnMasks: dataQueryColumnMasks(request.ColumnMasks),
+		Limit:       request.Limit,
+		Offset:      request.Offset,
 	}
 	plan, err := semanticquery.NewPlanner(r.model).Plan(semanticRequest)
 	if err != nil {
@@ -217,13 +238,14 @@ func (r *Runtime) executeSemanticRows(ctx context.Context, request dataquery.Que
 		return dataquery.Result{TotalRows: total, TotalRowsKnown: true, SQL: countPlan.SQL}, nil
 	}
 	semanticRequest := semanticquery.RowRequest{
-		Table:      request.Target,
-		Dimensions: dataQueryFields(request.Fields),
-		Measures:   dataQueryFields(request.Measures),
-		Filters:    dataQueryFilters(request.Filters),
-		Sort:       dataQuerySorts(request.Sort),
-		Limit:      request.Limit,
-		Offset:     request.Offset,
+		Table:       request.Target,
+		Dimensions:  dataQueryFields(request.Fields),
+		Measures:    dataQueryFields(request.Measures),
+		Filters:     dataQueryFilters(request.Filters),
+		Sort:        dataQuerySorts(request.Sort),
+		ColumnMasks: dataQueryColumnMasks(request.ColumnMasks),
+		Limit:       request.Limit,
+		Offset:      request.Offset,
 	}
 	plan, err := planner.PlanRows(semanticRequest)
 	if err != nil {
@@ -251,11 +273,12 @@ func (r *Runtime) executeSemanticRows(ctx context.Context, request dataquery.Que
 
 func (r *Runtime) executeModelTableRows(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
 	plan, err := r.modelTableQueryPlan(ModelTableQuery{
-		Table:   request.Target,
-		Columns: dataquery.FieldNames(request.Fields),
-		Sort:    dataQuerySorts(request.Sort),
-		Limit:   request.Limit,
-		Offset:  request.Offset,
+		Table:       request.Target,
+		Columns:     dataquery.FieldNames(request.Fields),
+		Sort:        dataQuerySorts(request.Sort),
+		ColumnMasks: dataQueryColumnMasks(request.ColumnMasks),
+		Limit:       request.Limit,
+		Offset:      request.Offset,
 	})
 	if err != nil {
 		return dataquery.Result{}, err
@@ -296,7 +319,7 @@ func (r *Runtime) executeSourceRows(ctx context.Context, request dataquery.Query
 	if err != nil {
 		return dataquery.Result{}, err
 	}
-	plan, err := rawRelationPlan(relation, columns, request.Sort, request.Offset, request.Limit)
+	plan, err := rawRelationPlan(relation, columns, request.Sort, request.ColumnMasks, request.Offset, request.Limit)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
@@ -318,10 +341,11 @@ func (r *Runtime) executeSourceRows(ctx context.Context, request dataquery.Query
 
 func (r *Runtime) executeSemanticHistogram(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
 	rawRequest := semanticquery.RawValueRequest{
-		Table:      request.Target,
-		Dimensions: dataQueryFields(request.Fields),
-		Measure:    dataQueryFields([]dataquery.Field{request.Value})[0],
-		Filters:    dataQueryFilters(request.Filters),
+		Table:       request.Target,
+		Dimensions:  dataQueryFields(request.Fields),
+		Measure:     dataQueryFields([]dataquery.Field{request.Value})[0],
+		Filters:     dataQueryFilters(request.Filters),
+		ColumnMasks: dataQueryColumnMasks(request.ColumnMasks),
 	}
 	plan, err := semanticquery.NewPlanner(r.model).PlanRawValues(rawRequest)
 	if err != nil {
@@ -356,10 +380,11 @@ func (r *Runtime) executeSemanticHistogram(ctx context.Context, request dataquer
 
 func (r *Runtime) executeSemanticDistribution(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
 	rawRequest := semanticquery.RawValueRequest{
-		Table:      request.Target,
-		Dimensions: dataQueryFields(request.Fields),
-		Measure:    dataQueryFields([]dataquery.Field{request.Value})[0],
-		Filters:    dataQueryFilters(request.Filters),
+		Table:       request.Target,
+		Dimensions:  dataQueryFields(request.Fields),
+		Measure:     dataQueryFields([]dataquery.Field{request.Value})[0],
+		Filters:     dataQueryFilters(request.Filters),
+		ColumnMasks: dataQueryColumnMasks(request.ColumnMasks),
 	}
 	plan, err := semanticquery.NewPlanner(r.model).PlanRawValues(rawRequest)
 	if err != nil {
@@ -432,11 +457,25 @@ func (r *Runtime) modelTableQueryPlan(request ModelTableQuery) (semanticquery.Pl
 	}
 	var sql strings.Builder
 	sql.WriteString("SELECT ")
+	maskSet, err := rawColumnMaskMap(request.ColumnMasks)
+	if err != nil {
+		return semanticquery.Plan{}, err
+	}
 	for index, column := range columns {
 		if index > 0 {
 			sql.WriteString(", ")
 		}
-		sql.WriteString(quoteMaterializedIdentifier(column))
+		if mask, ok := maskSet[strings.ToLower(request.Table+"."+column)]; ok {
+			sql.WriteString(mask)
+			sql.WriteString(" AS ")
+			sql.WriteString(quoteMaterializedIdentifier(column))
+		} else if mask, ok := maskSet[strings.ToLower(column)]; ok {
+			sql.WriteString(mask)
+			sql.WriteString(" AS ")
+			sql.WriteString(quoteMaterializedIdentifier(column))
+		} else {
+			sql.WriteString(quoteMaterializedIdentifier(column))
+		}
 	}
 	sql.WriteString("\nFROM model.")
 	sql.WriteString(quotedTable)
@@ -549,7 +588,7 @@ func quotedModelTableName(tableName string) (string, error) {
 	return quoteMaterializedIdentifier(tableName), nil
 }
 
-func rawRelationPlan(relation string, columns []string, sort []dataquery.Sort, offset, limit int) (semanticquery.Plan, error) {
+func rawRelationPlan(relation string, columns []string, sort []dataquery.Sort, masks []dataquery.ColumnMask, offset, limit int) (semanticquery.Plan, error) {
 	columnSet := map[string]bool{}
 	for _, column := range columns {
 		if err := validateIdentifier(column); err != nil {
@@ -561,11 +600,21 @@ func rawRelationPlan(relation string, columns []string, sort []dataquery.Sort, o
 	sql.WriteString("WITH data AS (")
 	sql.WriteString(relation)
 	sql.WriteString(")\nSELECT ")
+	maskSet, err := rawColumnMaskMap(dataQueryColumnMasks(masks))
+	if err != nil {
+		return semanticquery.Plan{}, err
+	}
 	for index, column := range columns {
 		if index > 0 {
 			sql.WriteString(", ")
 		}
-		sql.WriteString(quoteMaterializedIdentifier(column))
+		if mask, ok := maskSet[strings.ToLower(column)]; ok {
+			sql.WriteString(mask)
+			sql.WriteString(" AS ")
+			sql.WriteString(quoteMaterializedIdentifier(column))
+		} else {
+			sql.WriteString(quoteMaterializedIdentifier(column))
+		}
 	}
 	sql.WriteString(" FROM data")
 	if len(sort) > 0 {
@@ -720,6 +769,43 @@ func dataQuerySorts(sort []dataquery.Sort) []semanticquery.Sort {
 		out = append(out, semanticquery.Sort{Field: item.Field, Direction: item.Direction})
 	}
 	return out
+}
+
+func dataQueryColumnMasks(masks []dataquery.ColumnMask) []semanticquery.ColumnMask {
+	out := make([]semanticquery.ColumnMask, 0, len(masks))
+	for _, mask := range masks {
+		out = append(out, semanticquery.ColumnMask{Field: mask.Field, Mask: mask.Mask})
+	}
+	return out
+}
+
+func rawColumnMaskMap(masks []semanticquery.ColumnMask) (map[string]string, error) {
+	out := map[string]string{}
+	for _, mask := range masks {
+		field := strings.ToLower(strings.TrimSpace(mask.Field))
+		if field == "" {
+			continue
+		}
+		expr, err := rawMaskSQLExpr(mask.Mask)
+		if err != nil {
+			return nil, err
+		}
+		out[field] = expr
+	}
+	return out, nil
+}
+
+func rawMaskSQLExpr(mask string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(mask)) {
+	case "", "null":
+		return "NULL", nil
+	case "redact", "redacted":
+		return "'REDACTED'", nil
+	case "zero":
+		return "0", nil
+	default:
+		return "", fmt.Errorf("unsupported column mask %q", mask)
+	}
 }
 
 func dataQueryRows(rows semanticquery.Rows) []dataquery.Row {

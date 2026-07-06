@@ -27,6 +27,13 @@ type Config struct {
 	AzureSecret      string `env:"LIBREDASH_AZURE_CLIENT_SECRET"`
 	AzureCallbackURL string `env:"LIBREDASH_AZURE_CALLBACK_URL"`
 	AzureTenant      string `env:"LIBREDASH_AZURE_TENANT"`
+	OIDCProviderID   string `env:"LIBREDASH_OIDC_PROVIDER_ID" envDefault:"oidc"`
+	OIDCIssuerURL    string `env:"LIBREDASH_OIDC_ISSUER_URL"`
+	OIDCClientID     string `env:"LIBREDASH_OIDC_CLIENT_ID"`
+	OIDCSecret       string `env:"LIBREDASH_OIDC_CLIENT_SECRET"`
+	OIDCCallbackURL  string `env:"LIBREDASH_OIDC_CALLBACK_URL"`
+	OIDCScopes       string `env:"LIBREDASH_OIDC_SCOPES"`
+	SCIMBearerToken  string `env:"LIBREDASH_SCIM_BEARER_TOKEN"`
 	CSRFKey          string `env:"LIBREDASH_CSRF_KEY"`
 	CookieSecureRaw  string `env:"LIBREDASH_COOKIE_SECURE"`
 	Target           string `env:"LIBREDASH_TARGET"`
@@ -107,6 +114,23 @@ func (c Config) AzureConfigured() bool {
 	return c.AzureClientID != "" && c.AzureSecret != "" && c.AzureCallbackURL != ""
 }
 
+func (c Config) OIDCConfigured() bool {
+	return c.OIDCIssuerURL != "" && c.OIDCClientID != "" && c.OIDCSecret != "" && c.OIDCCallbackURL != ""
+}
+
+func (c Config) OIDCScopesList() []string {
+	fields := strings.FieldsFunc(c.OIDCScopes, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\n' || r == '\t'
+	})
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if field = strings.TrimSpace(field); field != "" {
+			out = append(out, field)
+		}
+	}
+	return out
+}
+
 func (c Config) CookieSecure() (bool, error) {
 	value := strings.TrimSpace(c.CookieSecureRaw)
 	if value == "" {
@@ -123,8 +147,8 @@ func (c Config) ValidateProductionAuth() error {
 	if !c.Production {
 		return nil
 	}
-	if !c.AzureConfigured() && !c.DevAuthBypass && !c.APITokenOnlyAuth {
-		return fmt.Errorf("production serve requires Azure auth env vars, LIBREDASH_DEV_AUTH_BYPASS, or LIBREDASH_API_TOKEN_ONLY_AUTH")
+	if !c.OIDCConfigured() && !c.AzureConfigured() && !c.DevAuthBypass && !c.APITokenOnlyAuth {
+		return fmt.Errorf("production serve requires OIDC auth env vars, Azure auth env vars, LIBREDASH_DEV_AUTH_BYPASS, or LIBREDASH_API_TOKEN_ONLY_AUTH")
 	}
 	if !c.DevAuthBypass && len(c.CSRFKey) < 32 {
 		return fmt.Errorf("production serve requires LIBREDASH_CSRF_KEY with at least 32 characters")

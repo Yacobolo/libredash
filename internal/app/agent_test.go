@@ -182,7 +182,7 @@ func TestAdminAgentAPIRejectsEmptySystemPrompt(t *testing.T) {
 	}
 }
 
-func TestAdminAgentAPIRequiresRBACPermissions(t *testing.T) {
+func TestAdminAgentAPIRequiresGrantPrivileges(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
 	viewer := testPrincipal(t, ctx, store, "viewer-admin-agent@example.com", "Viewer", access.RoleViewer)

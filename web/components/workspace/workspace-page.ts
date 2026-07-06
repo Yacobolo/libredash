@@ -50,7 +50,7 @@ const emptyWorkspaceAccess: WorkspaceAccessSignal = {
   canManage: false,
   status: { loading: false, error: '', message: '' },
   csrfToken: '',
-  command: { email: '', role: '', principalId: '' },
+  command: { email: '', role: '', principalId: '', bindingId: '', subjectType: '', subjectId: '' },
   search: '',
 }
 
@@ -114,7 +114,7 @@ class LibreDashWorkspacePage extends LitElement {
 
   private renderAccessPage(page: WorkspacePageSignal) {
     return html`
-      <section class="page" aria-label="Workspace permissions">
+      <section class="page" aria-label="Workspace access">
         ${this.renderHeader('Workspace', page.title, page.description, this.renderAccessControl())}
       </section>
     `
@@ -181,6 +181,7 @@ class LibreDashConnectionsPage extends LitElement {
 
 class LibreDashWorkspaceAssetPage extends LitElement {
   @property({ converter: jsonAttribute<WorkspaceAssetPageSignal | null>(null) }) page: WorkspaceAssetPageSignal | null = null
+  @property({ attribute: 'workspaceaccess', converter: jsonAttribute<WorkspaceAccessSignal>(emptyWorkspaceAccess) }) workspaceAccess: WorkspaceAccessSignal = emptyWorkspaceAccess
 
   static get styles() {
     return workspaceStyles
@@ -208,6 +209,7 @@ class LibreDashWorkspaceAssetPage extends LitElement {
             </ol>
           </nav>
           <div class="actions">
+            ${this.renderAccessControl()}
             ${page.actions?.map((action) => this.renderAction(action, page))}
           </div>
         </header>
@@ -224,6 +226,16 @@ class LibreDashWorkspaceAssetPage extends LitElement {
           </div>
         </div>
       </section>
+    `
+  }
+
+  private renderAccessControl() {
+    if (!this.workspaceAccess?.canManage) return nothing
+    return html`
+      <ld-workspace-access-control
+        .access=${this.workspaceAccess}
+        search=${this.workspaceAccess.search ?? ''}
+      ></ld-workspace-access-control>
     `
   }
 

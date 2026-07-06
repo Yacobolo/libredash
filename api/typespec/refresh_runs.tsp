@@ -42,7 +42,7 @@ alias ListRefreshRunsOK = OkJson<RefreshRunListResponse>;
 @summary("List refresh runs")
 @route("/workspaces/{workspace}/refresh-runs")
 @get
-@apigen.authz(#{ mode: "permission", permission: "refresh:run" })
+@apigen.authz(#{ mode: "privilege", privilege: "REFRESH_DATA" })
 @extension("x-agent", #{ enabled: true, name: "list_refresh_runs", risk: "read", tags: #["refresh"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "modelId", "status", "createdAt"], cursorPath: "page.nextCursor", count: true } })
 op listRefreshRuns(@path workspace: string, @query limit?: int32, @query pageToken?: string): ListRefreshRunsOK | CommonErrors;
 
@@ -52,7 +52,7 @@ alias CreateRefreshRunAccepted = AcceptedJson<RefreshRunResponse>;
 @summary("Create a refresh run")
 @route("/workspaces/{workspace}/refresh-runs")
 @post
-@apigen.authz(#{ mode: "permission", permission: "refresh:run" })
+@apigen.authz(#{ mode: "privilege", privilege: "REFRESH_DATA" })
 op createRefreshRun(@path workspace: string, @body body: RefreshRunCreateRequest): CreateRefreshRunAccepted | CommonErrors;
 
 alias GetRefreshRunOK = OkJson<RefreshRunResponse>;
@@ -61,6 +61,6 @@ alias GetRefreshRunOK = OkJson<RefreshRunResponse>;
 @summary("Get a refresh run")
 @route("/workspaces/{workspace}/refresh-runs/{run}")
 @get
-@apigen.authz(#{ mode: "permission", permission: "refresh:run" })
+@apigen.authz(#{ mode: "privilege", privilege: "REFRESH_DATA" })
 @extension("x-agent", #{ enabled: true, name: "get_refresh_run", risk: "read", tags: #["refresh"], output: #{ rootFields: #["id", "modelId", "servingStateId", "targetType", "targetId", "status", "error", "createdAt", "startedAt", "finishedAt"] } })
 op getRefreshRun(@path workspace: string, @path run: string): GetRefreshRunOK | CommonErrors;

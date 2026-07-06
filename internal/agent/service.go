@@ -37,7 +37,7 @@ type Scope struct {
 
 type CredentialScope struct {
 	WorkspaceID string
-	Permissions []string
+	Privileges  []string
 	Restricted  bool
 }
 

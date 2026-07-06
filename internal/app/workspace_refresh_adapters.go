@@ -144,7 +144,7 @@ func (p appRefreshPublisher) PublishRefreshTarget(ctx context.Context, workspace
 	p.server.workspaceRefreshSupport().PublishWorkspaceAssetRefreshPatchesForTarget(ctx, workspaceID, targetType, targetID)
 }
 
-type appLegacyRefreshExecutor struct {
+type appDirectRefreshExecutor struct {
 	repo    *materializesqlite.SQLRunRepository
 	metrics QueryMetrics
 	logger  interface {
@@ -152,7 +152,7 @@ type appLegacyRefreshExecutor struct {
 	}
 }
 
-func (e appLegacyRefreshExecutor) ExecuteLegacyJob(ctx context.Context, job materialize.JobRecord) error {
+func (e appDirectRefreshExecutor) ExecuteDirectJob(ctx context.Context, job materialize.JobRecord) error {
 	orchestrator := materialize.NewGenericRefreshOrchestrator(e.repo, appRefreshRunner{metrics: e.metrics}, refreshModelLookup(e.metrics))
 	_, err := orchestrator.ExecuteRun(ctx, job.WorkspaceID, job.RunID, materialize.RefreshPublisher{})
 	if err != nil && e.logger != nil {

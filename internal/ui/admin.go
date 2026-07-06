@@ -18,8 +18,8 @@ type AdminData struct {
 	Workspace         workspaceview.WorkspaceView
 	CSRFToken         string
 	AuthConfigured    bool
-	RBACConfigured    bool
-	RBACStatusLabel   string
+	AccessConfigured  bool
+	AccessStatusLabel string
 	PrincipalCount    int
 	GroupCount        int
 	BindingCount      int
@@ -312,13 +312,13 @@ func adminPageSignal(active string, data AdminData) uisignals.AdminPageSignal {
 	default:
 		page.HeaderTitle = "General"
 		page.HeaderDetail = "Read-only workspace administration."
-		if !data.RBACConfigured {
-			page.Empty = data.RBACStatusLabel
+		if !data.AccessConfigured {
+			page.Empty = data.AccessStatusLabel
 		}
 		page.Metrics = []uisignals.AdminMetricSignal{
 			{Label: "Workspace", Value: data.Workspace.Title, Detail: data.Workspace.ID},
 			{Label: "Auth", Value: configuredLabel(data.AuthConfigured)},
-			{Label: "RBAC", Value: data.RBACStatusLabel},
+			{Label: "Access", Value: data.AccessStatusLabel},
 			{Label: "Principals", Value: fmt.Sprint(data.PrincipalCount)},
 			{Label: "Groups", Value: fmt.Sprint(data.GroupCount)},
 			{Label: "Role bindings", Value: fmt.Sprint(data.BindingCount)},

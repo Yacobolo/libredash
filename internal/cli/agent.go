@@ -107,7 +107,7 @@ func runAgentTools() error {
 	type row struct {
 		name         string
 		operationID  string
-		permission   string
+		privilege    string
 		risk         string
 		defaultLimit int
 	}
@@ -124,7 +124,7 @@ func runAgentTools() error {
 		rows = append(rows, row{
 			name:         name,
 			operationID:  contract.OperationID,
-			permission:   cliStringFromMap(authz, "permission"),
+			privilege:    cliStringFromMap(authz, "privilege"),
 			risk:         risk,
 			defaultLimit: cliIntFromMap(agentExtension, "defaultLimit"),
 		})
@@ -133,9 +133,9 @@ func runAgentTools() error {
 		return rows[i].name < rows[j].name
 	})
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tPERMISSION\tRISK\tDEFAULT_LIMIT\tOPERATION")
+	fmt.Fprintln(tw, "NAME\tPRIVILEGE\tRISK\tDEFAULT_LIMIT\tOPERATION")
 	for _, row := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n", row.name, row.permission, row.risk, row.defaultLimit, row.operationID)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n", row.name, row.privilege, row.risk, row.defaultLimit, row.operationID)
 	}
 	return tw.Flush()
 }

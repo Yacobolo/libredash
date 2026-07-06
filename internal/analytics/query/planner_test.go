@@ -171,6 +171,51 @@ func TestPlannerRowQueryWithRelatedDimension(t *testing.T) {
 	}
 }
 
+func TestPlannerMasksSelectedRowFieldInSQL(t *testing.T) {
+	plan, err := NewPlanner(testModel()).PlanRows(RowRequest{
+		Table:       "orders",
+		Dimensions:  []Field{{Field: "orders.order_id", Alias: "order_id"}},
+		Measures:    []Field{{Field: "revenue", Alias: "revenue"}},
+		ColumnMasks: []ColumnMask{{Field: "orders.order_id", Mask: "redact"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(plan.SQL, "'REDACTED' AS order_id") {
+		t.Fatalf("row plan SQL did not mask selected field:\n%s", plan.SQL)
+	}
+	if strings.Contains(plan.SQL, "t0.order_id AS order_id") {
+		t.Fatalf("row plan SQL leaked unmasked selected field:\n%s", plan.SQL)
+	}
+}
+
+func TestPlannerRejectsMaskedAggregateMeasureDependency(t *testing.T) {
+	_, err := NewPlanner(testModel()).Plan(Request{
+		Measures:    []Field{{Field: "revenue", Alias: "revenue"}},
+		ColumnMasks: []ColumnMask{{Field: "orders.revenue", Mask: "zero"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "depends on masked field") {
+		t.Fatalf("Plan() error = %v, want masked measure rejection", err)
+	}
+}
+
+func TestPlannerRejectsMaskedFieldInsideAggregateMeasureExpression(t *testing.T) {
+	model := testModel()
+	model.Measures["net_revenue"] = semanticmodel.MetricMeasure{
+		Label:      "Net revenue",
+		Table:      "orders",
+		Grain:      "order_id",
+		Expression: "SUM(orders.revenue - orders.discount)",
+	}
+	_, err := NewPlanner(model).Plan(Request{
+		Measures:    []Field{{Field: "net_revenue", Alias: "net_revenue"}},
+		ColumnMasks: []ColumnMask{{Field: "orders.discount", Mask: "zero"}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "depends on masked field") {
+		t.Fatalf("Plan() error = %v, want masked expression dependency rejection", err)
+	}
+}
+
 func TestPlannerRawValues(t *testing.T) {
 	plan, err := NewPlanner(testModel()).PlanRawValues(RawValueRequest{
 		Dimensions: []Field{{Field: "customers.state", Alias: "label"}},

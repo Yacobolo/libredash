@@ -61,16 +61,17 @@ type AgentRun struct {
 }
 
 type ApiToken struct {
-	ID              string         `json:"id"`
-	PrincipalID     string         `json:"principal_id"`
-	WorkspaceID     sql.NullString `json:"workspace_id"`
-	Name            string         `json:"name"`
-	TokenHash       string         `json:"token_hash"`
-	PermissionsJson string         `json:"permissions_json"`
-	ExpiresAt       sql.NullString `json:"expires_at"`
-	CreatedAt       string         `json:"created_at"`
-	LastUsedAt      sql.NullString `json:"last_used_at"`
-	RevokedAt       sql.NullString `json:"revoked_at"`
+	ID               string         `json:"id"`
+	PrincipalID      string         `json:"principal_id"`
+	WorkspaceID      sql.NullString `json:"workspace_id"`
+	Name             string         `json:"name"`
+	TokenFingerprint string         `json:"token_fingerprint"`
+	TokenVerifier    string         `json:"token_verifier"`
+	PrivilegesJson   string         `json:"privileges_json"`
+	ExpiresAt        sql.NullString `json:"expires_at"`
+	CreatedAt        string         `json:"created_at"`
+	LastUsedAt       sql.NullString `json:"last_used_at"`
+	RevokedAt        sql.NullString `json:"revoked_at"`
 }
 
 type Asset struct {
@@ -101,14 +102,30 @@ type AssetEdge struct {
 }
 
 type AuditEvent struct {
-	ID           string         `json:"id"`
-	WorkspaceID  sql.NullString `json:"workspace_id"`
-	PrincipalID  sql.NullString `json:"principal_id"`
-	Action       string         `json:"action"`
-	TargetType   string         `json:"target_type"`
-	TargetID     string         `json:"target_id"`
-	MetadataJson string         `json:"metadata_json"`
-	CreatedAt    string         `json:"created_at"`
+	ID            string         `json:"id"`
+	WorkspaceID   sql.NullString `json:"workspace_id"`
+	PrincipalID   sql.NullString `json:"principal_id"`
+	Action        string         `json:"action"`
+	TargetType    string         `json:"target_type"`
+	TargetID      string         `json:"target_id"`
+	Privilege     string         `json:"privilege"`
+	Status        string         `json:"status"`
+	RequestID     string         `json:"request_id"`
+	CorrelationID string         `json:"correlation_id"`
+	MetadataJson  string         `json:"metadata_json"`
+	CreatedAt     string         `json:"created_at"`
+}
+
+type DataPolicy struct {
+	ID             string `json:"id"`
+	WorkspaceID    string `json:"workspace_id"`
+	ObjectID       string `json:"object_id"`
+	SubjectType    string `json:"subject_type"`
+	SubjectID      string `json:"subject_id"`
+	PolicyType     string `json:"policy_type"`
+	ExpressionJson string `json:"expression_json"`
+	CreatedAt      string `json:"created_at"`
+	UpdatedAt      string `json:"updated_at"`
 }
 
 type ExternalIdentity struct {
@@ -120,6 +137,15 @@ type ExternalIdentity struct {
 	Email       string `json:"email"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
+}
+
+type Grant struct {
+	ID          string `json:"id"`
+	ObjectID    string `json:"object_id"`
+	SubjectType string `json:"subject_type"`
+	SubjectID   string `json:"subject_id"`
+	Privilege   string `json:"privilege"`
+	CreatedAt   string `json:"created_at"`
 }
 
 type Group struct {
@@ -146,11 +172,6 @@ type OauthState struct {
 	CreatedAt   string `json:"created_at"`
 }
 
-type Permission struct {
-	Name      string `json:"name"`
-	CreatedAt string `json:"created_at"`
-}
-
 type PlatformRoleBinding struct {
 	ID          string `json:"id"`
 	RoleID      string `json:"role_id"`
@@ -166,11 +187,13 @@ type PlatformSetting struct {
 }
 
 type Principal struct {
-	ID          string `json:"id"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
-	CreatedAt   string `json:"created_at"`
-	UpdatedAt   string `json:"updated_at"`
+	ID          string         `json:"id"`
+	Kind        string         `json:"kind"`
+	Email       string         `json:"email"`
+	DisplayName string         `json:"display_name"`
+	DisabledAt  sql.NullString `json:"disabled_at"`
+	CreatedAt   string         `json:"created_at"`
+	UpdatedAt   string         `json:"updated_at"`
 }
 
 type QueryEvent struct {
@@ -246,9 +269,9 @@ type RefreshJobRun struct {
 }
 
 type Role struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	PermissionsJson string `json:"permissions_json"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	PrivilegesJson string `json:"privileges_json"`
 }
 
 type RoleBinding struct {
@@ -260,10 +283,32 @@ type RoleBinding struct {
 	CreatedAt   string         `json:"created_at"`
 }
 
-type RolePermission struct {
-	RoleID         string `json:"role_id"`
-	PermissionName string `json:"permission_name"`
-	CreatedAt      string `json:"created_at"`
+type RoleGrantTemplate struct {
+	RoleName  string `json:"role_name"`
+	Privilege string `json:"privilege"`
+	CreatedAt string `json:"created_at"`
+}
+
+type SecurableObject struct {
+	ID               string `json:"id"`
+	ObjectType       string `json:"object_type"`
+	WorkspaceID      string `json:"workspace_id"`
+	ParentID         string `json:"parent_id"`
+	OwnerPrincipalID string `json:"owner_principal_id"`
+	DisplayName      string `json:"display_name"`
+	CreatedAt        string `json:"created_at"`
+	UpdatedAt        string `json:"updated_at"`
+}
+
+type ServicePrincipalSecret struct {
+	ID                 string         `json:"id"`
+	ServicePrincipalID string         `json:"service_principal_id"`
+	Name               string         `json:"name"`
+	SecretFingerprint  string         `json:"secret_fingerprint"`
+	SecretVerifier     string         `json:"secret_verifier"`
+	ExpiresAt          sql.NullString `json:"expires_at"`
+	CreatedAt          string         `json:"created_at"`
+	RevokedAt          sql.NullString `json:"revoked_at"`
 }
 
 type ServingState struct {
@@ -297,13 +342,14 @@ type ServingStateArtifact struct {
 }
 
 type Session struct {
-	ID          string         `json:"id"`
-	PrincipalID string         `json:"principal_id"`
-	TokenHash   string         `json:"token_hash"`
-	ExpiresAt   string         `json:"expires_at"`
-	CreatedAt   string         `json:"created_at"`
-	LastSeenAt  string         `json:"last_seen_at"`
-	RevokedAt   sql.NullString `json:"revoked_at"`
+	ID               string         `json:"id"`
+	PrincipalID      string         `json:"principal_id"`
+	TokenFingerprint string         `json:"token_fingerprint"`
+	TokenVerifier    string         `json:"token_verifier"`
+	ExpiresAt        string         `json:"expires_at"`
+	CreatedAt        string         `json:"created_at"`
+	LastSeenAt       string         `json:"last_seen_at"`
+	RevokedAt        sql.NullString `json:"revoked_at"`
 }
 
 type Workspace struct {

@@ -41,8 +41,8 @@ type AssetEdgeView struct {
 }
 
 type RoleView struct {
-	Name        string
-	Permissions []string
+	Name       string
+	Privileges []string
 }
 
 type RoleBindingView struct {

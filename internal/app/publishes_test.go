@@ -594,6 +594,54 @@ func TestDeploymentAPIValidatesAndActivatesBundle(t *testing.T) {
 	}
 }
 
+func TestDeploymentAPIAuditsRollbackWhenInactiveDeploymentIsActivated(t *testing.T) {
+	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
+	store := testStore(t)
+	ctx := context.Background()
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "sales", Title: "Sales"}); err != nil {
+		t.Fatalf("ensure sales workspace: %v", err)
+	}
+	artifactDir := t.TempDir()
+	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	first := saveBundledValidatedPublish(t, ctx, servingStateRepo, artifactDir, "sales")
+	if _, err := servingStateRepo.Activate(ctx, "sales", servingstate.DefaultEnvironment, first.ID); err != nil {
+		t.Fatalf("activate first deployment: %v", err)
+	}
+	second := saveBundledValidatedPublish(t, ctx, servingStateRepo, artifactDir, "sales")
+	if _, err := servingStateRepo.Activate(ctx, "sales", servingstate.DefaultEnvironment, second.ID); err != nil {
+		t.Fatalf("activate second deployment: %v", err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, `UPDATE serving_states SET status = ? WHERE id = ?`, servingstate.StatusInactive, first.ID); err != nil {
+		t.Fatalf("mark first deployment inactive: %v", err)
+	}
+	auth := testAuth(store, "sales", AuthConfig{DevBypass: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Reloader: &fakeReloader{}, ArtifactDir: artifactDir, DefaultWorkspaceID: "sales"})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/sales/publishes/"+string(first.ID)+"/activate", nil)
+	req.Header.Set("Authorization", "Bearer dev")
+	req.Header.Set("Accept", "application/json")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rollback activate status = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	events, err := accesssqlite.NewRepository(store.SQLDB()).ListAuditEvents(ctx, access.AuditEventFilter{
+		WorkspaceID: "sales",
+		Action:      "publish.rolled_back",
+		TargetID:    string(first.ID),
+	})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("rollback audit events = %d, want 1: %#v", len(events), events)
+	}
+	if events[0].Privilege != access.PrivilegeActivatePublish || events[0].Status != "success" {
+		t.Fatalf("rollback audit event = %#v, want activate privilege success", events[0])
+	}
+}
+
 func TestDeploymentActivationPrepareFailureLeavesDeploymentInactive(t *testing.T) {
 	t.Setenv("LIBREDASH_DEV_AUTH_BYPASS", "1")
 	store := testStore(t)
@@ -1433,7 +1481,7 @@ func graphAssetByTypeAndKey(t *testing.T, graph workspace.AssetGraph, typ worksp
 	return workspace.Asset{}
 }
 
-func TestWorkspacePermissionsRejectViewer(t *testing.T) {
+func TestWorkspacePermissionsRouteIsRemoved(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 	principal := testPrincipal(t, ctx, store, "viewer@example.com", "Viewer", "viewer")
@@ -1446,8 +1494,8 @@ func TestWorkspacePermissionsRejectViewer(t *testing.T) {
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", rec.Code, http.StatusForbidden)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
 	}
 }
 
@@ -1645,6 +1693,113 @@ func TestWorkspaceAccessCommandUpsertsAndPatchesSignals(t *testing.T) {
 	server.Routes().ServeHTTP(removedListRec, removedListReq)
 	if strings.Contains(removedListRec.Body.String(), `"email":"analyst@example.com"`) {
 		t.Fatalf("role binding remained after remove command:\n%s", removedListRec.Body.String())
+	}
+}
+
+func TestWorkspaceAssetAccessCommandCreatesAndRemovesGrant(t *testing.T) {
+	store := testStore(t)
+	seedActiveDeployment(t, store, "test")
+	ctx := context.Background()
+	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", "owner")
+	token := testAPIToken(t, ctx, store, owner.ID, "test")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+	repo := testAccessRepository(store)
+	group, err := repo.UpsertSCIMGroup(ctx, access.SCIMGroupInput{ID: "group_scim_sales", ExternalID: "sales", Name: "Sales Analysts"})
+	if err != nil {
+		t.Fatalf("seed group: %v", err)
+	}
+	servicePrincipal, err := repo.CreateServicePrincipal(ctx, access.ServicePrincipalInput{ID: "sp_ci", DisplayName: "CI Publisher"})
+	if err != nil {
+		t.Fatalf("seed service principal: %v", err)
+	}
+
+	signals := `{"workspaceAccess":{"command":{"email":"analyst@example.com","role":"VIEW_ITEM"}}}`
+	req := httptest.NewRequest(http.MethodPost, "/workspaces/test/assets/semantic_model:test.sales/access/upsert", bytes.NewBufferString(signals))
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("asset access upsert status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"event: datastar-patch-signals", "workspaceAccess", `"mode":"object"`, "analyst@example.com", "Access updated."} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("asset access upsert did not patch %q:\n%s", want, body)
+		}
+	}
+
+	groupSignals := `{"workspaceAccess":{"command":{"subjectType":"group","subjectId":"` + group.ID + `","privilege":"QUERY_DATA"}}}`
+	groupReq := httptest.NewRequest(http.MethodPost, "/workspaces/test/assets/semantic_model:test.sales/access/upsert", bytes.NewBufferString(groupSignals))
+	groupReq.Header.Set("Authorization", "Bearer "+token)
+	groupRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(groupRec, groupReq)
+	if groupRec.Code != http.StatusOK {
+		t.Fatalf("group asset access upsert status = %d body=%s", groupRec.Code, groupRec.Body.String())
+	}
+	if !strings.Contains(groupRec.Body.String(), "Sales Analysts") {
+		t.Fatalf("group access patch did not render group name:\n%s", groupRec.Body.String())
+	}
+
+	servicePrincipalSignals := `{"workspaceAccess":{"command":{"subjectType":"service_principal","subjectId":"` + servicePrincipal.ID + `","privilege":"DEPLOY"}}}`
+	servicePrincipalReq := httptest.NewRequest(http.MethodPost, "/workspaces/test/assets/semantic_model:test.sales/access/upsert", bytes.NewBufferString(servicePrincipalSignals))
+	servicePrincipalReq.Header.Set("Authorization", "Bearer "+token)
+	servicePrincipalRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(servicePrincipalRec, servicePrincipalReq)
+	if servicePrincipalRec.Code != http.StatusOK {
+		t.Fatalf("service principal asset access upsert status = %d body=%s", servicePrincipalRec.Code, servicePrincipalRec.Body.String())
+	}
+	if !strings.Contains(servicePrincipalRec.Body.String(), "CI Publisher") {
+		t.Fatalf("service principal access patch did not render display name:\n%s", servicePrincipalRec.Body.String())
+	}
+
+	grants, err := repo.ListGrants(ctx, access.ItemObject(access.SecurableSemanticModel, "test", "test.sales"))
+	if err != nil {
+		t.Fatalf("list grants: %v", err)
+	}
+	var grantID string
+	foundGroupGrant := false
+	foundServicePrincipalGrant := false
+	for _, grant := range grants {
+		if grant.SubjectID == access.PrincipalIDForEmail("analyst@example.com") && grant.Privilege == access.PrivilegeViewItem {
+			grantID = grant.ID
+		}
+		if grant.SubjectType == access.SubjectGroup && grant.SubjectID == group.ID && grant.Privilege == access.PrivilegeQueryData {
+			foundGroupGrant = true
+		}
+		if grant.SubjectType == access.SubjectServicePrincipal && grant.SubjectID == servicePrincipal.ID && grant.Privilege == access.PrivilegeDeploy {
+			foundServicePrincipalGrant = true
+		}
+	}
+	if grantID == "" {
+		t.Fatalf("asset grant missing after command: %#v", grants)
+	}
+	if !foundGroupGrant {
+		t.Fatalf("group asset grant missing after command: %#v", grants)
+	}
+	if !foundServicePrincipalGrant {
+		t.Fatalf("service principal asset grant missing after command: %#v", grants)
+	}
+
+	removeSignals := `{"workspaceAccess":{"command":{"bindingId":"` + grantID + `"}}}`
+	removeReq := httptest.NewRequest(http.MethodPost, "/workspaces/test/assets/semantic_model:test.sales/access/remove", bytes.NewBufferString(removeSignals))
+	removeReq.Header.Set("Authorization", "Bearer "+token)
+	removeRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(removeRec, removeReq)
+	if removeRec.Code != http.StatusOK {
+		t.Fatalf("asset access remove status = %d body=%s", removeRec.Code, removeRec.Body.String())
+	}
+	if !strings.Contains(removeRec.Body.String(), "Access removed.") {
+		t.Fatalf("asset access remove did not patch success:\n%s", removeRec.Body.String())
+	}
+	grants, err = repo.ListGrants(ctx, access.ItemObject(access.SecurableSemanticModel, "test", "test.sales"))
+	if err != nil {
+		t.Fatalf("list grants after remove: %v", err)
+	}
+	for _, grant := range grants {
+		if grant.ID == grantID {
+			t.Fatalf("asset grant remained after remove: %#v", grants)
+		}
 	}
 }
 
@@ -1945,6 +2100,56 @@ func zeroArtifact(servingStateID servingstate.ID, workspaceID string) servingsta
 		Path:           "artifact.tar.gz",
 		ManifestJSON:   "{}",
 	}
+}
+
+func saveBundledValidatedPublish(t *testing.T, ctx context.Context, repo *servingstatesqlite.Repository, artifactDir, workspaceID string) servingstate.State {
+	t.Helper()
+	created, err := repo.Create(ctx, servingstate.CreateInput{WorkspaceID: servingstate.WorkspaceID(workspaceID), CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create deployment: %v", err)
+	}
+	var bundle bytes.Buffer
+	manifest, digest, err := servingstatefs.PackProject(filepath.Join("..", "..", "dashboards", "libredash.yaml"), workspaceID, created.ID, &bundle)
+	if err != nil {
+		t.Fatalf("pack project: %v", err)
+	}
+	artifactPath := filepath.Join(artifactDir, digest+".tar.gz")
+	if err := os.WriteFile(artifactPath, bundle.Bytes(), 0o644); err != nil {
+		t.Fatalf("write artifact: %v", err)
+	}
+	manifestBytes, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatalf("marshal manifest: %v", err)
+	}
+	compiled, err := workspacecompiler.CompileProject(filepath.Join("..", "..", "dashboards", "libredash.yaml"), workspacecompiler.Options{})
+	if err != nil {
+		t.Fatalf("compile project: %v", err)
+	}
+	workspaceDef := compiled.Workspaces[workspaceID].Definition
+	if workspaceDef == nil {
+		t.Fatalf("compile project: missing %s workspace definition", workspaceID)
+	}
+	workspaceDef.SourceFiles = remapTestSourceFiles(workspaceDef.SourceFiles, "sales", workspaceID)
+	graph, err := workspacecompiler.ExtractLineage(workspace.WorkspaceID(workspaceID), workspace.ServingStateID(created.ID), workspaceDef)
+	if err != nil {
+		t.Fatalf("extract assets: %v", err)
+	}
+	artifact := servingstate.Artifact{
+		ID:             "artifact_" + string(created.ID),
+		ServingStateID: created.ID,
+		WorkspaceID:    servingstate.WorkspaceID(workspaceID),
+		Environment:    servingstate.DefaultEnvironment,
+		Digest:         digest,
+		Format:         servingstatefs.BundleFormat,
+		Path:           artifactPath,
+		ManifestJSON:   string(manifestBytes),
+		SizeBytes:      int64(bundle.Len()),
+	}
+	validated, err := repo.SaveValidated(ctx, created.ID, servingstate.Validation{Digest: digest, ManifestJSON: string(manifestBytes), Graph: graph}, artifact)
+	if err != nil {
+		t.Fatalf("validate deployment: %v", err)
+	}
+	return validated
 }
 
 func writeMinimalOlistFixture(t *testing.T, dir string) {

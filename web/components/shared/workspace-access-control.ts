@@ -1,7 +1,8 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { property, state } from 'lit/decorators.js'
-import { Mail, Search, Trash2, Users, X } from 'lucide'
+import { Mail, Search, Trash2, Users } from 'lucide'
 import { lucideIcon } from './lucide-icons'
+import './drawer'
 
 type Workspace = {
   id?: string
@@ -13,9 +14,13 @@ type Role = {
 }
 
 type Binding = {
+  id?: string
+  subjectType?: string
+  subjectId?: string
   principalId: string
   email: string
   displayName?: string
+  groupName?: string
   role: string
 }
 
@@ -27,6 +32,10 @@ type AccessStatus = {
 
 type WorkspaceAccess = {
   workspace?: Workspace
+  objectType?: string
+  objectId?: string
+  objectTitle?: string
+  mode?: string
   roles?: Role[]
   bindings?: Binding[]
   canManage?: boolean
@@ -44,7 +53,11 @@ type WorkspaceAccessInput = {
 type AccessCommand = {
   email?: string
   role?: string
+  privilege?: string
   principalId?: string
+  bindingId?: string
+  subjectType?: string
+  subjectId?: string
 }
 
 const emptyAccess: WorkspaceAccess = {
@@ -54,15 +67,6 @@ const emptyAccess: WorkspaceAccess = {
   status: {},
 }
 
-const focusableSelector = [
-  'a[href]:not([tabindex="-1"])',
-  'button:not([disabled]):not([tabindex="-1"])',
-  'input:not([disabled]):not([tabindex="-1"])',
-  'select:not([disabled]):not([tabindex="-1"])',
-  'textarea:not([disabled]):not([tabindex="-1"])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(', ')
-
 class WorkspaceAccessControl extends LitElement {
   @property({ attribute: false }) access: WorkspaceAccessInput | null = null
   @property({ attribute: 'access' }) accessAttribute = ''
@@ -70,6 +74,7 @@ class WorkspaceAccessControl extends LitElement {
 
   @state() private open = false
   @state() private email = ''
+  @state() private subjectType = 'principal'
   @state() private selectedRole = 'viewer'
   @state() private query = ''
 
@@ -129,41 +134,6 @@ class WorkspaceAccessControl extends LitElement {
       color: currentColor;
     }
 
-    .overlay {
-      position: fixed;
-      inset: 0;
-      z-index: calc(var(--z-index-inspector) - 1);
-      display: grid;
-      place-items: center;
-      background: var(--ld-modal-backdrop);
-      padding: var(--base-size-32) var(--base-size-16);
-    }
-
-    .dialog {
-      display: grid;
-      width: min(38rem, calc(100vw - var(--base-size-32)));
-      max-height: calc(100vh - var(--base-size-64));
-      grid-template-rows: auto minmax(0, 1fr);
-      overflow: hidden;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-large);
-      background: var(--ld-bg-panel);
-      box-shadow: var(--ld-shadow-floating-lg);
-    }
-
-    .header,
-    .footer {
-      border-bottom: var(--ld-border-muted);
-      padding: var(--base-size-16) var(--base-size-20);
-    }
-
-    .header {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: var(--base-size-16);
-    }
-
     .title {
       margin: 0;
       color: var(--ld-fg-default);
@@ -180,7 +150,6 @@ class WorkspaceAccessControl extends LitElement {
       line-height: var(--ld-line-height-snug);
     }
 
-    .close,
     .row-action {
       display: inline-flex;
       width: var(--ld-control-medium);
@@ -200,8 +169,6 @@ class WorkspaceAccessControl extends LitElement {
         border-color var(--ld-transition-fast);
     }
 
-    .close:hover,
-    .close:focus-visible,
     .row-action:hover,
     .row-action:focus-visible {
       border-color: var(--ld-line-muted);
@@ -210,12 +177,10 @@ class WorkspaceAccessControl extends LitElement {
       outline: 0;
     }
 
-    .body {
+    .drawer-body {
       display: grid;
       gap: var(--base-size-24);
       min-height: 0;
-      overflow: auto;
-      padding: var(--base-size-20);
     }
 
     .card {
@@ -477,16 +442,6 @@ class WorkspaceAccessControl extends LitElement {
     }
 
     @media (max-width: 44rem) {
-      .overlay {
-        align-items: end;
-        padding: var(--base-size-8);
-      }
-
-      .dialog {
-        width: 100%;
-        max-height: calc(100vh - var(--base-size-16));
-      }
-
       .composer,
       .row,
       .toolbar {
@@ -534,65 +489,62 @@ class WorkspaceAccessControl extends LitElement {
         ${usersIcon()}
         <span>Manage access</span>
       </button>
-      ${this.open ? this.renderModal(access) : nothing}
+      ${this.open ? this.renderDrawer(access) : nothing}
     `
   }
 
-  private renderModal(access: WorkspaceAccess) {
+  private renderDrawer(access: WorkspaceAccess) {
     const status = access.status ?? {}
     return html`
-      <div class="overlay" @click=${this.handleOverlayClick}>
-        <section
-          class="dialog"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="workspace-access-title"
-          @keydown=${this.handleKeyDown}
-        >
-          <header class="header">
-            <div>
-              <h2 class="title" id="workspace-access-title">Manage access</h2>
-              <p class="subtitle">${access.workspace?.title ?? 'Workspace'} roles apply to every published asset in this workspace.</p>
-            </div>
-            <button class="close" type="button" aria-label="Close workspace access" @click=${this.closeDialog}>
-              ${xIcon()}
-            </button>
-          </header>
-          <div class="body">
+      <ld-drawer open label="Manage access" @ld-drawer-close=${this.closeDialog}>
+        <h2 class="title" slot="title" id="workspace-access-title">Manage access</h2>
+        <p class="subtitle" slot="subtitle">${this.drawerSubtitle(access)}</p>
+        <div class="drawer-body">
             <section class="card" aria-label="Add workspace access">
               <div class="label">Add people by email</div>
               ${status.error ? html`<div class="status status-error" role="alert">${status.error}</div>` : nothing}
               ${status.message && !status.error ? html`<div class="status status-message" role="status">${status.message}</div>` : nothing}
               <form class="composer" @submit=${this.handleSubmit}>
                 <span class="field-shell composer-shell">
-                  ${mailIcon()}
-                  <input
-                    type="email"
-                    autocomplete="email"
-                    placeholder="Search by email..."
-                    aria-label="Email principal"
+                    ${mailIcon()}
+                    <select
+                      class="composer-role composer-subject-type"
+                      aria-label="Subject type"
+                      .value=${this.subjectType}
+                      ?disabled=${status.loading}
+                      @change=${(event: Event) => { this.subjectType = (event.currentTarget as HTMLSelectElement).value }}
+                    >
+                      <option value="principal">User</option>
+                      <option value="group">Group</option>
+                      <option value="service_principal">Service principal</option>
+                    </select>
+                    <input
+                      type=${this.subjectType === 'principal' ? 'email' : 'text'}
+                      autocomplete=${this.subjectType === 'principal' ? 'email' : 'off'}
+                      placeholder=${this.subjectType === 'principal' ? 'Search by email...' : 'Subject ID...'}
+                    aria-label=${this.subjectType === 'principal' ? 'Email principal' : 'Subject ID'}
                     .value=${this.email}
                     ?disabled=${status.loading}
-                    @input=${(event: Event) => { this.email = (event.currentTarget as HTMLInputElement).value }}
-                  >
-                  <select
-                    class="composer-role"
-                    aria-label="Role to assign"
-                    .value=${this.selectedRole}
-                    ?disabled=${status.loading}
-                    @change=${(event: Event) => { this.selectedRole = (event.currentTarget as HTMLSelectElement).value }}
+                      @input=${(event: Event) => { this.email = (event.currentTarget as HTMLInputElement).value }}
+                    >
+                    <select
+                      class="composer-role composer-grant-role"
+                      aria-label=${this.modeIsObject(access) ? 'Privilege to grant' : 'Role to assign'}
+                      .value=${this.selectedRole}
+                      ?disabled=${status.loading}
+                      @change=${(event: Event) => { this.selectedRole = (event.currentTarget as HTMLSelectElement).value }}
                   >
                     ${this.roles.map((role) => html`<option value=${role.name}>${roleLabel(role.name)}</option>`)}
                   </select>
                 </span>
                 <button class="submit" type="submit" ?disabled=${status.loading || !this.email.trim() || !this.selectedRole}>
-                  ${status.loading ? 'Saving' : 'Assign'}
+                  ${status.loading ? 'Saving' : this.modeIsObject(access) ? 'Grant' : 'Assign'}
                 </button>
               </form>
             </section>
             <section class="card" aria-label="Current workspace access">
               <div class="toolbar">
-                <h3 class="section-title">People with access</h3>
+                <h3 class="section-title">${this.modeIsObject(access) ? 'Direct grants' : 'People with access'}</h3>
                 <span class="field-shell search">
                   ${searchIcon()}
                   <input
@@ -606,8 +558,7 @@ class WorkspaceAccessControl extends LitElement {
               ${this.renderBindings(access)}
             </section>
           </div>
-        </section>
-      </div>
+      </ld-drawer>
     `
   }
 
@@ -628,7 +579,7 @@ class WorkspaceAccessControl extends LitElement {
               </span>
             </div>
             <select
-              aria-label=${`Role for ${displayLabel(binding)}`}
+              aria-label=${`${this.modeIsObject(access) ? 'Privilege' : 'Role'} for ${displayLabel(binding)}`}
               .value=${binding.role}
               ?disabled=${access.status?.loading}
               @change=${(event: Event) => this.updateBindingRole(binding, (event.currentTarget as HTMLSelectElement).value)}
@@ -672,11 +623,23 @@ class WorkspaceAccessControl extends LitElement {
     this.selectedRole = roles.find((role) => role.name === 'viewer')?.name ?? roles[0]?.name ?? ''
   }
 
+  private modeIsObject(access = this.resolvedAccess): boolean {
+    return access.mode === 'object'
+  }
+
+  private drawerSubtitle(access: WorkspaceAccess): string {
+    if (this.modeIsObject(access)) {
+      const title = access.objectTitle || access.objectId || 'This asset'
+      return `${title} grants apply only to this asset.`
+    }
+    return `${access.workspace?.title ?? 'Workspace'} roles apply to every published asset in this workspace.`
+  }
+
   private filteredBindings(bindings: Binding[]): Binding[] {
     const query = this.query.trim().toLowerCase()
     if (!query) return bindings
     return bindings.filter((binding) => {
-      return `${binding.email} ${binding.role}`.toLowerCase().includes(query)
+      return `${displayLabel(binding)} ${binding.email} ${binding.groupName ?? ''} ${binding.subjectId ?? ''} ${binding.subjectType ?? ''} ${binding.role}`.toLowerCase().includes(query)
     })
   }
 
@@ -696,8 +659,7 @@ class WorkspaceAccessControl extends LitElement {
     this.previousFocus = document.activeElement as HTMLElement | null
     this.open = true
     window.setTimeout(() => {
-      const first = this.focusableElements()[0]
-      first?.focus()
+      this.renderRoot.querySelector('ld-drawer')?.focusFirst()
     }, 0)
   }
 
@@ -713,43 +675,17 @@ class WorkspaceAccessControl extends LitElement {
     }, 0)
   }
 
-  private readonly handleOverlayClick = (event: Event): void => {
-    if (event.target === event.currentTarget) this.closeDialog()
-  }
-
-  private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      this.closeDialog()
-      return
-    }
-    if (event.key !== 'Tab') return
-    const focusable = this.focusableElements()
-    if (focusable.length === 0) return
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    if (event.shiftKey && this.shadowRoot?.activeElement === first) {
-      event.preventDefault()
-      last.focus()
-    } else if (!event.shiftKey && this.shadowRoot?.activeElement === last) {
-      event.preventDefault()
-      first.focus()
-    }
-  }
-
-  private focusableElements(): HTMLElement[] {
-    const dialog = this.renderRoot.querySelector<HTMLElement>('.dialog')
-    if (!dialog) return []
-    return Array.from(dialog.querySelectorAll<HTMLElement>(focusableSelector))
-  }
-
   private readonly handleSubmit = (event: Event): void => {
     event.preventDefault()
+    const subjectID = this.email.trim()
     const command: AccessCommand = {
-      email: this.email.trim(),
-      role: this.selectedRole,
+      email: this.subjectType === 'principal' ? subjectID : '',
+      role: this.modeIsObject() ? '' : this.selectedRole,
+      privilege: this.modeIsObject() ? this.selectedRole : '',
+      subjectType: this.subjectType,
+      subjectId: this.subjectType === 'principal' ? '' : subjectID,
     }
-    if (!command.email || !command.role) return
+    if (!subjectID || (!command.role && !command.privilege)) return
     this.dispatchEvent(new CustomEvent('ld-workspace-access-upsert', {
       bubbles: true,
       composed: true,
@@ -758,24 +694,31 @@ class WorkspaceAccessControl extends LitElement {
   }
 
   private updateBindingRole(binding: Binding, role: string): void {
-    if (!binding.email || !role || role === binding.role) return
+    if (!role || role === binding.role) return
     this.dispatchEvent(new CustomEvent('ld-workspace-access-upsert', {
       bubbles: true,
       composed: true,
       detail: {
         email: binding.email,
-        role,
+        role: this.modeIsObject() ? '' : role,
+        privilege: this.modeIsObject() ? role : '',
+        bindingId: binding.id,
+        subjectType: binding.subjectType || 'principal',
+        subjectId: binding.subjectId,
       },
     }))
   }
 
   private removeBinding(binding: Binding): void {
-    if (!binding.principalId) return
+    if (!binding.principalId && !binding.id) return
     this.dispatchEvent(new CustomEvent('ld-workspace-access-remove', {
       bubbles: true,
       composed: true,
       detail: {
         principalId: binding.principalId,
+        bindingId: binding.id,
+        subjectType: binding.subjectType,
+        subjectId: binding.subjectId,
       },
     }))
   }
@@ -785,6 +728,10 @@ function normalizeAccess(access: WorkspaceAccessInput): WorkspaceAccess {
   const raw = recordValue(access)
   return {
     workspace: normalizeWorkspace(access.workspace),
+    objectType: stringValue(raw.objectType ?? raw.ObjectType),
+    objectId: stringValue(raw.objectId ?? raw.ObjectID),
+    objectTitle: stringValue(raw.objectTitle ?? raw.ObjectTitle),
+    mode: stringValue(raw.mode ?? raw.Mode),
     roles: Array.isArray(access.roles) ? access.roles.map(normalizeRole).filter(isRole) : [],
     bindings: Array.isArray(access.bindings) ? access.bindings.map(normalizeBinding).filter(isBinding) : [],
     canManage: Boolean(access.canManage ?? raw.CanManage),
@@ -814,12 +761,17 @@ function normalizeBinding(binding: unknown): Binding | null {
   const raw = recordValue(binding)
   const email = stringValue(raw.email ?? raw.Email)
   const principalId = stringValue(raw.principalId ?? raw.PrincipalID)
+  const subjectId = stringValue(raw.subjectId ?? raw.SubjectID)
   const role = stringValue(raw.role ?? raw.Role)
-  if (!email && !principalId) return null
+  if (!email && !principalId && !subjectId) return null
   return {
+    id: stringValue(raw.id ?? raw.ID),
+    subjectType: stringValue(raw.subjectType ?? raw.SubjectType),
+    subjectId,
     principalId,
     email,
     displayName: stringValue(raw.displayName ?? raw.DisplayName),
+    groupName: stringValue(raw.groupName ?? raw.GroupName),
     role,
   }
 }
@@ -850,7 +802,7 @@ function stringValue(value: unknown): string {
 }
 
 function displayLabel(binding: Binding): string {
-  return binding.email || 'Principal'
+  return binding.displayName || binding.groupName || binding.email || binding.subjectId || 'Principal'
 }
 
 function principalInitial(binding: Binding): string {
@@ -864,10 +816,6 @@ function roleLabel(role: string): string {
 
 function usersIcon() {
   return html`<span class="icon" aria-hidden="true">${lucideIcon(Users, { size: 16 })}</span>`
-}
-
-function xIcon() {
-  return html`<span class="icon" aria-hidden="true">${lucideIcon(X, { size: 16 })}</span>`
 }
 
 function trashIcon() {

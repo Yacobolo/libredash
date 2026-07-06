@@ -4,15 +4,15 @@ using TypeSpec.OpenAPI;
 @route("/api/v1")
 namespace LibreDashAPI;
 
-model PermissionListResponse {
+model EffectivePrivilegesResponse {
   workspaceId: string;
-  permissions: string[];
+  privileges: string[];
 }
 
 model APITokenCreateRequest {
   name: string;
   workspaceId?: string;
-  permissions?: string[];
+  privileges?: string[];
   expiresAt?: utcDateTime;
 }
 
@@ -20,7 +20,7 @@ model APITokenResponse {
   id: string;
   name: string;
   workspaceId?: string;
-  permissions: string[];
+  privileges: string[];
   expiresAt?: utcDateTime;
   revokedAt?: utcDateTime;
   createdAt: utcDateTime;
@@ -55,7 +55,7 @@ alias GetCurrentPrincipalOK = OkJson<PrincipalResponse>;
 @summary("Get current principal")
 @route("/me")
 @get
-@apigen.authz(#{ mode: "permission", permission: "workspace:read" })
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
 op getCurrentPrincipal(): GetCurrentPrincipalOK | CommonErrors;
 
 alias ListCurrentAPITokensOK = OkJson<APITokenListResponse>;
@@ -64,7 +64,7 @@ alias ListCurrentAPITokensOK = OkJson<APITokenListResponse>;
 @summary("List current API tokens")
 @route("/me/api-tokens")
 @get
-@apigen.authz(#{ mode: "permission", permission: "token:manage" })
+@apigen.authz(#{ mode: "privilege", privilege: "MANAGE_GRANTS" })
 op listCurrentAPITokens(@query limit?: int32, @query pageToken?: string): ListCurrentAPITokensOK | CommonErrors;
 
 alias CreateCurrentAPITokenCreated = CreatedJson<APITokenCreateResponse>;
@@ -73,7 +73,7 @@ alias CreateCurrentAPITokenCreated = CreatedJson<APITokenCreateResponse>;
 @summary("Create current API token")
 @route("/me/api-tokens")
 @post
-@apigen.authz(#{ mode: "permission", permission: "token:manage" })
+@apigen.authz(#{ mode: "privilege", privilege: "MANAGE_GRANTS" })
 op createCurrentAPIToken(@body body: APITokenCreateRequest): CreateCurrentAPITokenCreated | CommonErrors;
 
 alias RevokeCurrentAPITokenOK = OkJson<StatusResponse>;
@@ -82,17 +82,17 @@ alias RevokeCurrentAPITokenOK = OkJson<StatusResponse>;
 @summary("Revoke current API token")
 @route("/me/api-tokens/{token}")
 @delete
-@apigen.authz(#{ mode: "permission", permission: "token:manage" })
+@apigen.authz(#{ mode: "privilege", privilege: "MANAGE_GRANTS" })
 op revokeCurrentAPIToken(@path token: string): RevokeCurrentAPITokenOK | CommonErrors;
 
-alias ListCurrentPermissionsOK = OkJson<PermissionListResponse>;
+alias ListCurrentEffectivePrivilegesOK = OkJson<EffectivePrivilegesResponse>;
 
 @tag("Current User")
-@summary("List current permissions")
-@route("/me/permissions")
+@summary("List current effective privileges")
+@route("/me/effective-privileges")
 @get
-@apigen.authz(#{ mode: "permission", permission: "workspace:read" })
-op listCurrentPermissions(@query workspace?: string): ListCurrentPermissionsOK | CommonErrors;
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
+op listCurrentEffectivePrivileges(@query workspace?: string): ListCurrentEffectivePrivilegesOK | CommonErrors;
 
 alias ListCurrentSessionsOK = OkJson<SessionListResponse>;
 
@@ -100,7 +100,7 @@ alias ListCurrentSessionsOK = OkJson<SessionListResponse>;
 @summary("List current sessions")
 @route("/me/sessions")
 @get
-@apigen.authz(#{ mode: "permission", permission: "workspace:read" })
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
 op listCurrentSessions(@query limit?: int32, @query pageToken?: string): ListCurrentSessionsOK | CommonErrors;
 
 alias RevokeCurrentSessionOK = OkJson<StatusResponse>;
@@ -109,5 +109,5 @@ alias RevokeCurrentSessionOK = OkJson<StatusResponse>;
 @summary("Revoke current session")
 @route("/me/sessions/{session}")
 @delete
-@apigen.authz(#{ mode: "permission", permission: "workspace:read" })
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
 op revokeCurrentSession(@path session: string): RevokeCurrentSessionOK | CommonErrors;

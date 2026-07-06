@@ -786,7 +786,7 @@ func TestAdminGeneralRendersWithoutStore(t *testing.T) {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"General", "RBAC store is not configured", "Platform"} {
+	for _, want := range []string{"General", "Access store is not configured", "Platform"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("admin general missing %q:\n%s", want, body)
 		}

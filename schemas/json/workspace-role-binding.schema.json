@@ -58,8 +58,11 @@
             "owner",
             "admin",
             "deployer",
+            "contributor",
             "editor",
-            "viewer"
+            "member",
+            "viewer",
+            "platform_admin"
           ]
         },
         "subject": {
@@ -77,7 +80,8 @@
             "kind": {
               "enum": [
                 "principal",
-                "group"
+                "group",
+                "service_principal"
               ]
             },
             "principalId": {

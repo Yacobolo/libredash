@@ -412,9 +412,20 @@ func agentCredentialScope(credential access.APICredential) agent.CredentialScope
 	token := credential.Token
 	return agent.CredentialScope{
 		WorkspaceID: token.WorkspaceID,
-		Permissions: append([]string(nil), token.Permissions...),
-		Restricted:  token.Permissions != nil,
+		Privileges:  privilegeStrings(token.Privileges),
+		Restricted:  token.Privileges != nil,
 	}
+}
+
+func privilegeStrings(values []access.Privilege) []string {
+	if values == nil {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
 }
 
 func agentConversationDTO(row agent.Conversation) api.AgentConversationResponse {

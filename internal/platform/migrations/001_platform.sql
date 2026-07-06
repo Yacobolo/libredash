@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS groups (
 CREATE TABLE IF NOT EXISTS roles (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
-  permissions_json TEXT NOT NULL
+  privileges_json TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS role_bindings (
@@ -110,7 +110,8 @@ CREATE TABLE IF NOT EXISTS role_bindings (
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
-  token_hash TEXT NOT NULL UNIQUE,
+  token_fingerprint TEXT NOT NULL UNIQUE,
+  token_verifier TEXT NOT NULL,
   expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -128,7 +129,8 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   id TEXT PRIMARY KEY,
   principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  token_hash TEXT NOT NULL UNIQUE,
+  token_fingerprint TEXT NOT NULL UNIQUE,
+  token_verifier TEXT NOT NULL,
   expires_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_used_at TEXT
@@ -176,4 +178,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS role_bindings_principal_unique_idx
 CREATE UNIQUE INDEX IF NOT EXISTS role_bindings_group_unique_idx
   ON role_bindings(workspace_id, role_id, group_id)
   WHERE group_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS sessions_token_hash_idx ON sessions(token_hash);

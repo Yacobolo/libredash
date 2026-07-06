@@ -3,17 +3,20 @@ package app
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/Yacobolo/libredash/internal/access"
+	oidcauth "github.com/Yacobolo/libredash/internal/access/oidc"
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/config"
-	"github.com/gorilla/sessions"
-	"github.com/markbates/goth/gothic"
 )
 
 func TestAuthRouteRateLimit(t *testing.T) {
@@ -64,7 +67,7 @@ func TestDeploymentAPIRateLimitPreservesAuth(t *testing.T) {
 	}
 }
 
-func TestDevBypassStillUsesRBACPermissions(t *testing.T) {
+func TestDevBypassStillUsesGrantPrivileges(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
 	repo := accesssqlite.NewRepository(store.SQLDB())
@@ -176,37 +179,263 @@ func TestRequestLoggerDoesNotLogSensitiveHeaders(t *testing.T) {
 	}
 }
 
-func TestNewAuthConfiguresGothCookieStore(t *testing.T) {
-	_ = testAuth(testStore(t), "test", AuthConfig{
+func TestAuthBeginCreatesOIDCStateCookieAndRedirect(t *testing.T) {
+	auth := testAuth(testStore(t), "test", AuthConfig{
 		DevBypass:    true,
 		CSRFKey:      "0123456789abcdef0123456789abcdef",
 		CookieSecure: true,
 	})
-	store, ok := gothic.Store.(*sessions.CookieStore)
-	if !ok {
-		t.Fatalf("gothic.Store = %T, want *sessions.CookieStore", gothic.Store)
+	auth.configured = true
+	auth.oidcOverride = map[string]oidcClient{"azureadv2": fakeOIDCClient{authURL: "https://issuer.example/authorize"}}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/azureadv2", nil)
+	rec := httptest.NewRecorder()
+	auth.Begin(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302", rec.Code)
 	}
-	if !store.Options.HttpOnly {
-		t.Fatal("goth cookie HttpOnly = false, want true")
+	location := rec.Header().Get("Location")
+	if !strings.HasPrefix(location, "https://issuer.example/authorize?") {
+		t.Fatalf("Location = %q", location)
 	}
-	if !store.Options.Secure {
-		t.Fatal("goth cookie Secure = false, want true")
+	parsed, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("parse redirect: %v", err)
 	}
-	if store.Options.SameSite != http.SameSiteLaxMode {
-		t.Fatalf("goth cookie SameSite = %v, want lax", store.Options.SameSite)
+	state := parsed.Query().Get("state")
+	nonce := parsed.Query().Get("nonce")
+	if state == "" || nonce == "" {
+		t.Fatalf("redirect missing state/nonce: %s", location)
 	}
-	if store.Options.MaxAge != 10*60 {
-		t.Fatalf("goth cookie MaxAge = %d, want 600", store.Options.MaxAge)
+	cookie := oidcStateCookieForTest(rec.Result().Cookies())
+	if cookie == nil {
+		t.Fatalf("%s cookie missing", oidcStateCookieName)
+	}
+	if cookie.HttpOnly != true || cookie.Secure != true || cookie.SameSite != http.SameSiteLaxMode || cookie.MaxAge != 10*60 {
+		t.Fatalf("state cookie options = %#v", cookie)
+	}
+	cookieState, cookieNonce, err := auth.decodeOIDCState(cookie.Value)
+	if err != nil {
+		t.Fatalf("decode state cookie: %v", err)
+	}
+	if cookieState != state || cookieNonce != nonce {
+		t.Fatalf("cookie state/nonce = %q/%q, redirect = %q/%q", cookieState, cookieNonce, state, nonce)
 	}
 }
 
 func TestProductionConfigFailsBeforeAuthStoreSetupWithoutCSRFKey(t *testing.T) {
-	before := gothic.Store
 	cfg := config.Config{Production: true, APITokenOnlyAuth: true}
 	if err := cfg.ValidateProductionAuth(); err == nil {
 		t.Fatal("expected production auth validation to fail")
 	}
-	if gothic.Store != before {
-		t.Fatal("gothic.Store changed before valid production auth config")
+}
+
+func TestAuthCallbackRejectsInvalidOIDCState(t *testing.T) {
+	auth := testAuth(testStore(t), "test", AuthConfig{
+		DevBypass: true,
+		CSRFKey:   "0123456789abcdef0123456789abcdef",
+	})
+	auth.configured = true
+	auth.oidcOverride = map[string]oidcClient{"azureadv2": fakeOIDCClient{}}
+	req := httptest.NewRequest(http.MethodGet, "/auth/azureadv2/callback?state=wrong&code=code", nil)
+	req.AddCookie(auth.oidcStateCookie("right", "nonce"))
+	rec := httptest.NewRecorder()
+
+	auth.Callback(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
 	}
+}
+
+func TestAuthCallbackCreatesSessionAndAuditEvents(t *testing.T) {
+	store := testStore(t)
+	auth := testAuth(store, "test", AuthConfig{
+		DevBypass: true,
+		CSRFKey:   "0123456789abcdef0123456789abcdef",
+	})
+	auth.configured = true
+	auth.oidcOverride = map[string]oidcClient{"azureadv2": fakeOIDCClient{claims: oidcauth.Claims{Issuer: "https://issuer.example", Subject: "subject-1", Email: "user@example.com", Name: "User Example"}}}
+	req := httptest.NewRequest(http.MethodGet, "/auth/azureadv2/callback?state=state&code=code", nil)
+	req.AddCookie(auth.oidcStateCookie("state", "nonce"))
+	rec := httptest.NewRecorder()
+
+	auth.Callback(rec, req)
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want 302 body=%s", rec.Code, rec.Body.String())
+	}
+	var sessionCookie *http.Cookie
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == "ld_session" && cookie.Value != "" {
+			sessionCookie = cookie
+		}
+	}
+	if sessionCookie == nil {
+		t.Fatal("session cookie missing")
+	}
+	principal, err := accesssqlite.NewRepository(store.SQLDB()).PrincipalForToken(context.Background(), sessionCookie.Value)
+	if err != nil {
+		t.Fatalf("resolve session: %v", err)
+	}
+	if principal.Email != "user@example.com" || principal.DisplayName != "User Example" {
+		t.Fatalf("principal = %#v", principal)
+	}
+	events, err := accesssqlite.NewRepository(store.SQLDB()).ListAuditEvents(context.Background(), access.AuditEventFilter{Action: "sign_in"})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(events) != 1 || events[0].PrincipalID != principal.ID {
+		t.Fatalf("sign_in events = %#v, principal %q", events, principal.ID)
+	}
+}
+
+func TestAuthCallbackUsesOIDCIssuerAndSubjectAsStableIdentity(t *testing.T) {
+	store := testStore(t)
+	auth := testAuth(store, "test", AuthConfig{
+		DevBypass: true,
+		CSRFKey:   "0123456789abcdef0123456789abcdef",
+	})
+	auth.configured = true
+	repo := accesssqlite.NewRepository(store.SQLDB())
+
+	auth.oidcOverride = map[string]oidcClient{"azureadv2": fakeOIDCClient{claims: oidcauth.Claims{Issuer: "https://issuer.example", Subject: "subject-1", Email: "first@example.com", Name: "First"}}}
+	req := httptest.NewRequest(http.MethodGet, "/auth/azureadv2/callback?state=state&code=code", nil)
+	req.AddCookie(auth.oidcStateCookie("state", "nonce"))
+	rec := httptest.NewRecorder()
+	auth.Callback(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("first callback status = %d, want 302 body=%s", rec.Code, rec.Body.String())
+	}
+	first := principalFromSessionCookie(t, repo, rec.Result().Cookies())
+
+	auth.oidcOverride = map[string]oidcClient{"azureadv2": fakeOIDCClient{claims: oidcauth.Claims{Issuer: "https://issuer.example", Subject: "subject-1", Email: "second@example.com", Name: "Second"}}}
+	req = httptest.NewRequest(http.MethodGet, "/auth/azureadv2/callback?state=state&code=code", nil)
+	req.AddCookie(auth.oidcStateCookie("state", "nonce"))
+	rec = httptest.NewRecorder()
+	auth.Callback(rec, req)
+	if rec.Code != http.StatusFound {
+		t.Fatalf("second callback status = %d, want 302 body=%s", rec.Code, rec.Body.String())
+	}
+	second := principalFromSessionCookie(t, repo, rec.Result().Cookies())
+
+	if second.ID != first.ID {
+		t.Fatalf("principal changed after email update: first=%q second=%q", first.ID, second.ID)
+	}
+	if second.Email != "second@example.com" || second.DisplayName != "Second" {
+		t.Fatalf("updated principal = %#v, want latest OIDC metadata", second)
+	}
+}
+
+func TestAuthAuditsDisabledPrincipalCredentialFailures(t *testing.T) {
+	store := testStore(t)
+	repo := accesssqlite.NewRepository(store.SQLDB())
+	ctx := context.Background()
+	user, err := repo.UpsertSCIMUser(ctx, access.SCIMUserInput{
+		ExternalID:  "disabled-auth-user",
+		UserName:    "disabled-auth@example.com",
+		Email:       "disabled-auth@example.com",
+		DisplayName: "Disabled Auth",
+		Active:      true,
+	})
+	if err != nil {
+		t.Fatalf("create SCIM user: %v", err)
+	}
+	sessionSecret, err := repo.CreateSession(ctx, user.Principal.ID, time.Hour)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	apiSecret, _, err := repo.CreateAPITokenWithMetadata(ctx, access.APITokenInput{PrincipalID: user.Principal.ID, Name: "disabled-auth-token"})
+	if err != nil {
+		t.Fatalf("create API token: %v", err)
+	}
+	if _, err := repo.DisableSCIMUser(ctx, user.Principal.ID); err != nil {
+		t.Fatalf("disable SCIM user: %v", err)
+	}
+	auth := NewAuth(repo, "test", AuthConfig{CSRFKey: "0123456789abcdef0123456789abcdef"})
+
+	apiReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test", nil)
+	apiReq.Header.Set("Authorization", "Bearer "+apiSecret)
+	apiReq.Header.Set("X-Request-ID", "disabled_api_req")
+	if _, _, ok := auth.authenticate(apiReq); ok {
+		t.Fatal("disabled API token authenticated")
+	}
+	sessionReq := httptest.NewRequest(http.MethodGet, "/workspaces/test", nil)
+	sessionReq.AddCookie(&http.Cookie{Name: "ld_session", Value: sessionSecret})
+	sessionReq.Header.Set("X-Request-ID", "disabled_session_req")
+	if _, _, ok := auth.authenticate(sessionReq); ok {
+		t.Fatal("disabled session authenticated")
+	}
+	if _, err := repo.CredentialForAPIToken(ctx, apiSecret); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("disabled api credential err = %v, want sql.ErrNoRows", err)
+	}
+
+	events, err := repo.ListAuditEvents(ctx, access.AuditEventFilter{Action: "credential.denied"})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("credential denied events = %d, want 2: %#v", len(events), events)
+	}
+	byRequest := map[string]access.AuditEvent{}
+	for _, event := range events {
+		byRequest[event.RequestID] = event
+	}
+	for requestID, targetType := range map[string]string{"disabled_api_req": "api_token", "disabled_session_req": "session"} {
+		event, ok := byRequest[requestID]
+		if !ok {
+			t.Fatalf("missing audit event for %s: %#v", requestID, events)
+		}
+		if event.PrincipalID != user.Principal.ID || event.Status != "denied" || event.TargetType != targetType || !strings.Contains(event.MetadataJSON, "principal_disabled") {
+			t.Fatalf("audit event for %s = %#v", requestID, event)
+		}
+	}
+}
+
+type fakeOIDCClient struct {
+	authURL string
+	claims  oidcauth.Claims
+}
+
+func (c fakeOIDCClient) AuthCodeURL(state, nonce string) string {
+	base := c.authURL
+	if base == "" {
+		base = "https://issuer.example/authorize"
+	}
+	values := url.Values{}
+	values.Set("state", state)
+	values.Set("nonce", nonce)
+	return base + "?" + values.Encode()
+}
+
+func (c fakeOIDCClient) Authenticate(_ context.Context, _ string, expectedNonce string) (oidcauth.Claims, error) {
+	if expectedNonce != "nonce" {
+		return oidcauth.Claims{}, errUnauthorized
+	}
+	return c.claims, nil
+}
+
+func oidcStateCookieForTest(cookies []*http.Cookie) *http.Cookie {
+	for _, cookie := range cookies {
+		if cookie.Name == oidcStateCookieName {
+			return cookie
+		}
+	}
+	return nil
+}
+
+func principalFromSessionCookie(t *testing.T, repo *accesssqlite.Repository, cookies []*http.Cookie) access.Principal {
+	t.Helper()
+	for _, cookie := range cookies {
+		if cookie.Name == "ld_session" && cookie.Value != "" {
+			principal, err := repo.PrincipalForToken(context.Background(), cookie.Value)
+			if err != nil {
+				t.Fatalf("resolve session: %v", err)
+			}
+			return principal
+		}
+	}
+	t.Fatal("session cookie missing")
+	return access.Principal{}
 }

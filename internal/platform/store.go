@@ -127,32 +127,37 @@ func (s *Store) seedDefaults(ctx context.Context) error {
 		return err
 	}
 	for _, role := range access.DefaultRoles() {
-		bytes, err := json.Marshal(role.Permissions)
+		bytes, err := json.Marshal(role.Privileges)
 		if err != nil {
 			return err
 		}
 		roleID := "role_" + role.Name
 		if err := s.q.UpsertRole(ctx, db.UpsertRoleParams{
-			ID:              roleID,
-			Name:            role.Name,
-			PermissionsJson: string(bytes),
+			ID:             roleID,
+			Name:           role.Name,
+			PrivilegesJson: string(bytes),
 		}); err != nil {
 			return err
 		}
-		if err := s.q.ClearRolePermissions(ctx, roleID); err != nil {
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM role_grant_templates WHERE role_name = ?`, role.Name); err != nil {
 			return err
 		}
-		for _, permission := range role.Permissions {
-			if err := s.q.UpsertPermission(ctx, permission); err != nil {
-				return err
-			}
-			if err := s.q.InsertRolePermission(ctx, db.InsertRolePermissionParams{
-				RoleID:         roleID,
-				PermissionName: permission,
-			}); err != nil {
+		for _, privilege := range role.Privileges {
+			if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO role_grant_templates (role_name, privilege)
+		VALUES (?, ?)
+	ON CONFLICT(role_name, privilege) DO NOTHING
+	`, role.Name, string(privilege)); err != nil {
 				return err
 			}
 		}
+	}
+	if _, err := s.db.ExecContext(ctx, `
+	INSERT INTO securable_objects (id, object_type, display_name)
+	VALUES ('platform', 'platform', 'Platform')
+	ON CONFLICT(id) DO UPDATE SET object_type = excluded.object_type, display_name = excluded.display_name, updated_at = CURRENT_TIMESTAMP
+	`); err != nil {
+		return err
 	}
 	return nil
 }

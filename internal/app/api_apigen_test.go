@@ -69,7 +69,7 @@ func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 
 	for _, path := range []string{
 		"/api/v1/me",
-		"/api/v1/me/permissions",
+		"/api/v1/me/effective-privileges",
 		"/api/v1/me/api-tokens",
 		"/api/v1/me/api-tokens/{token}",
 		"/api/v1/me/sessions",
@@ -132,6 +132,9 @@ func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 			t.Fatalf("generated OpenAPI should not include UI transport path %s", path)
 		}
 	}
+	if _, ok := paths["/api/v1/me/permissions"]; ok {
+		t.Fatal("generated OpenAPI still includes removed /api/v1/me/permissions path")
+	}
 }
 
 func TestAPIGenOperationAuthCoverage(t *testing.T) {
@@ -140,20 +143,87 @@ func TestAPIGenOperationAuthCoverage(t *testing.T) {
 		t.Fatal("no generated operation contracts")
 	}
 	for operationID, contract := range contracts {
-		if contract.AuthzMode != "permission" || !contract.Protected {
-			t.Fatalf("%s auth contract = mode %q protected %t, want permission/protected", operationID, contract.AuthzMode, contract.Protected)
+		if contract.AuthzMode != "privilege" || !contract.Protected {
+			t.Fatalf("%s auth contract = mode %q protected %t, want privilege/protected", operationID, contract.AuthzMode, contract.Protected)
 		}
-		if _, ok := apigenOperationPermissions[operationID]; !ok {
-			t.Fatalf("%s missing app permission mapping", operationID)
+		if _, ok := apigenOperationPrivileges[operationID]; !ok {
+			t.Fatalf("%s missing app privilege mapping", operationID)
 		}
 	}
-	for operationID := range apigenOperationPermissions {
+	for operationID := range apigenOperationPrivileges {
 		if _, ok := contracts[operationID]; !ok {
-			t.Fatalf("%s has app permission mapping but no generated contract", operationID)
+			t.Fatalf("%s has app privilege mapping but no generated contract", operationID)
 		}
 	}
-	if got := apigenOperationPermissions["uploadPublishArtifact"]; got != access.PermissionPublishCreate {
-		t.Fatalf("uploadPublishArtifact permission = %q, want %q", got, access.PermissionPublishCreate)
+	if got := apigenOperationPrivileges["uploadPublishArtifact"]; got != access.PrivilegeDeploy {
+		t.Fatalf("uploadPublishArtifact privilege = %q, want %q", got, access.PrivilegeDeploy)
+	}
+}
+
+func TestAPIGenOperationObjectResolverCoverage(t *testing.T) {
+	contracts := apigenapi.GetAPIGenOperationContracts()
+	objectScopedOperations := []string{
+		"getWorkspaceAsset",
+		"getWorkspaceAssetLineage",
+		"listWorkspaceAssetEdges",
+		"getDashboard",
+		"listDashboardComponents",
+		"getDashboardVisual",
+		"queryDashboardPage",
+		"queryDashboardVisualData",
+		"queryDashboardTable",
+		"queryDashboardTableData",
+		"listDashboardFilterOptions",
+		"getSemanticModel",
+		"listSemanticDatasets",
+		"getSemanticDataset",
+		"listSemanticFields",
+		"querySemanticDataset",
+		"previewSemanticDataset",
+		"explainSemanticQuery",
+		"explainSemanticPreview",
+		"getAgentConversation",
+		"updateAgentConversation",
+		"archiveAgentConversation",
+		"listAgentMessages",
+		"createAgentTurn",
+		"listAgentRuns",
+		"getAgentRun",
+		"listAgentEvents",
+	}
+	for _, operationID := range objectScopedOperations {
+		if _, ok := contracts[operationID]; !ok {
+			t.Fatalf("%s missing generated contract", operationID)
+		}
+		if _, ok := apigenOperationPrivileges[operationID]; !ok {
+			t.Fatalf("%s missing privilege mapping", operationID)
+		}
+		if apigenOperationObjectResolvers[operationID] == nil {
+			t.Fatalf("%s missing exact object resolver", operationID)
+		}
+	}
+	for operationID := range apigenOperationObjectResolvers {
+		if _, ok := contracts[operationID]; !ok {
+			t.Fatalf("%s has object resolver but no generated contract", operationID)
+		}
+		if _, ok := apigenOperationPrivileges[operationID]; !ok {
+			t.Fatalf("%s has object resolver but no privilege mapping", operationID)
+		}
+	}
+	for _, operationID := range []string{
+		"listWorkspaceAssets",
+		"listDashboards",
+		"listSemanticModels",
+		"createAgentConversation",
+		"listAgentConversations",
+		"createPublish",
+		"listPublishes",
+		"createRefreshRun",
+		"listRefreshRuns",
+	} {
+		if apigenOperationObjectResolvers[operationID] != nil {
+			t.Fatalf("%s should stay workspace-scoped and not use an exact object resolver", operationID)
+		}
 	}
 }
 
@@ -194,11 +264,11 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s missing generated x-authz extension: %#v", operationID, contract.Extensions["x-authz"])
 		}
-		if got := authz["mode"]; got != "permission" {
-			t.Fatalf("%s x-authz mode = %#v, want permission", operationID, got)
+		if got := authz["mode"]; got != "privilege" {
+			t.Fatalf("%s x-authz mode = %#v, want privilege", operationID, got)
 		}
-		if got := authz["permission"]; got != apigenOperationPermissions[operationID] {
-			t.Fatalf("%s x-authz permission = %#v, want %q", operationID, got, apigenOperationPermissions[operationID])
+		if got := authz["privilege"]; got != string(apigenOperationPrivileges[operationID]) {
+			t.Fatalf("%s x-authz privilege = %#v, want %q", operationID, got, apigenOperationPrivileges[operationID])
 		}
 		agentExtension, hasAgentExtension := contract.Extensions["x-agent"].(map[string]any)
 		if wantName, ok := agentTools[operationID]; ok {

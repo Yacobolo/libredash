@@ -78,8 +78,8 @@ type AssetLineageResponse struct {
 }
 
 type RoleResponse struct {
-	Name        string   `json:"name"`
-	Permissions []string `json:"permissions"`
+	Name       string   `json:"name"`
+	Privileges []string `json:"privileges"`
 }
 
 type RoleBindingResponse struct {

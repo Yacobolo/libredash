@@ -1032,11 +1032,19 @@ export interface SubSidebarSignal {
 export interface WorkspaceAccessCommand {
   email: string
   role: string
+  privilege: string
   principalId: string
+  bindingId: string
+  subjectType: string
+  subjectId: string
 }
 
 export interface WorkspaceAccessResponse {
   workspace: unknown
+  objectType?: string
+  objectId?: string
+  objectTitle?: string
+  mode?: string
   roles: unknown[]
   bindings: unknown[]
   canManage: boolean
@@ -1045,6 +1053,10 @@ export interface WorkspaceAccessResponse {
 
 export interface WorkspaceAccessSignal {
   workspace: unknown
+  objectType?: string
+  objectId?: string
+  objectTitle?: string
+  mode?: string
   roles: unknown[]
   bindings: unknown[]
   canManage: boolean

@@ -10,119 +10,300 @@ import (
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
-const (
-	PermissionWorkspaceRead   = "workspace:read"
-	PermissionAssetRead       = "asset:read"
-	PermissionPublishRead     = "publish:read"
-	PermissionPublishWrite    = "publish:write"
-	PermissionPublishActivate = "publish:activate"
-	PermissionRBACRead        = "rbac:read"
-	PermissionRBACWrite       = "rbac:write"
-	PermissionAgentUse        = "agent:use"
-	PermissionAgentRead       = "agent:read"
-	PermissionRefreshRun      = "refresh:run"
-	PermissionAuditRead       = "audit:read"
-	PermissionTokenManage     = "token:manage"
+type Privilege string
 
-	PermissionDashboardView   = PermissionWorkspaceRead
-	PermissionPublishCreate   = PermissionPublishWrite
-	PermissionPublishRollback = PermissionPublishActivate
-	PermissionRBACManage      = PermissionRBACWrite
+const (
+	PrivilegeUseWorkspace    Privilege = "USE_WORKSPACE"
+	PrivilegeViewItem        Privilege = "VIEW_ITEM"
+	PrivilegeEditItem        Privilege = "EDIT_ITEM"
+	PrivilegeManageItem      Privilege = "MANAGE_ITEM"
+	PrivilegeQueryData       Privilege = "QUERY_DATA"
+	PrivilegePreviewData     Privilege = "PREVIEW_DATA"
+	PrivilegeRefreshData     Privilege = "REFRESH_DATA"
+	PrivilegeDeploy          Privilege = "DEPLOY"
+	PrivilegeActivatePublish Privilege = "ACTIVATE_PUBLISH"
+	PrivilegeUseAgent        Privilege = "USE_AGENT"
+	PrivilegeViewAgent       Privilege = "VIEW_AGENT"
+	PrivilegeManageGrants    Privilege = "MANAGE_GRANTS"
+	PrivilegeViewAudit       Privilege = "VIEW_AUDIT"
+	PrivilegeManageWorkspace Privilege = "MANAGE_WORKSPACE"
+	PrivilegeManagePlatform  Privilege = "MANAGE_PLATFORM"
 )
 
 const (
-	RoleOwner    = "owner"
-	RoleAdmin    = "admin"
-	RoleDeployer = "deployer"
-	RoleEditor   = "editor"
-	RoleViewer   = "viewer"
+	RoleOwner         = "owner"
+	RoleAdmin         = "admin"
+	RoleDeployer      = "deployer"
+	RoleContributor   = "contributor"
+	RoleEditor        = "editor"
+	RoleMember        = "member"
+	RoleViewer        = "viewer"
+	RolePlatformAdmin = "platform_admin"
 )
 
 var defaultRoles = []Role{
 	{
 		Name: RoleOwner,
-		Permissions: []string{
-			PermissionWorkspaceRead,
-			PermissionAssetRead,
-			PermissionPublishRead,
-			PermissionPublishWrite,
-			PermissionPublishActivate,
-			PermissionRBACRead,
-			PermissionRBACWrite,
-			PermissionAgentUse,
-			PermissionAgentRead,
-			PermissionRefreshRun,
-			PermissionAuditRead,
-			PermissionTokenManage,
+		Privileges: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeManageItem,
+			PrivilegeQueryData,
+			PrivilegePreviewData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeActivatePublish,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
+			PrivilegeManageGrants,
+			PrivilegeViewAudit,
+			PrivilegeManageWorkspace,
 		},
 	},
 	{
 		Name: RoleAdmin,
-		Permissions: []string{
-			PermissionWorkspaceRead,
-			PermissionAssetRead,
-			PermissionPublishRead,
-			PermissionPublishWrite,
-			PermissionPublishActivate,
-			PermissionRBACRead,
-			PermissionRBACWrite,
-			PermissionAgentUse,
-			PermissionAgentRead,
-			PermissionRefreshRun,
-			PermissionAuditRead,
-			PermissionTokenManage,
+		Privileges: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeManageItem,
+			PrivilegeQueryData,
+			PrivilegePreviewData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeActivatePublish,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
+			PrivilegeManageGrants,
+			PrivilegeViewAudit,
+			PrivilegeManageWorkspace,
 		},
 	},
 	{
 		Name: RoleDeployer,
-		Permissions: []string{
-			PermissionWorkspaceRead,
-			PermissionAssetRead,
-			PermissionPublishRead,
-			PermissionPublishWrite,
-			PermissionPublishActivate,
-			PermissionRefreshRun,
+		Privileges: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeQueryData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeActivatePublish,
+		},
+	},
+	{
+		Name: RoleContributor,
+		Privileges: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeQueryData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
 		},
 	},
 	{
 		Name: RoleEditor,
-		Permissions: []string{
-			PermissionWorkspaceRead,
-			PermissionAssetRead,
-			PermissionAgentUse,
-			PermissionAgentRead,
-			PermissionRefreshRun,
+		Privileges: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeQueryData,
+			PrivilegeRefreshData,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
+		},
+	},
+	{
+		Name: RoleMember,
+		Privileges: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeManageItem,
+			PrivilegeQueryData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
 		},
 	},
 	{
 		Name: RoleViewer,
-		Permissions: []string{
-			PermissionWorkspaceRead,
-			PermissionAssetRead,
-			PermissionAgentUse,
-			PermissionAgentRead,
+		Privileges: []Privilege{
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeQueryData,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
+		},
+	},
+	{
+		Name: RolePlatformAdmin,
+		Privileges: []Privilege{
+			PrivilegeManagePlatform,
+			PrivilegeUseWorkspace,
+			PrivilegeViewItem,
+			PrivilegeEditItem,
+			PrivilegeManageItem,
+			PrivilegeQueryData,
+			PrivilegePreviewData,
+			PrivilegeRefreshData,
+			PrivilegeDeploy,
+			PrivilegeActivatePublish,
+			PrivilegeUseAgent,
+			PrivilegeViewAgent,
+			PrivilegeManageGrants,
+			PrivilegeViewAudit,
+			PrivilegeManageWorkspace,
 		},
 	},
 }
 
 type Principal struct {
 	ID          string
+	Kind        PrincipalKind
 	Email       string
 	DisplayName string
+	DisabledAt  string
 	CreatedAt   string
 	UpdatedAt   string
 }
 
 type Role struct {
-	Name        string
-	Permissions []string
+	Name       string
+	Privileges []Privilege
+}
+
+type PrincipalKind string
+
+const (
+	PrincipalKindUser             PrincipalKind = "user"
+	PrincipalKindGroup            PrincipalKind = "group"
+	PrincipalKindServicePrincipal PrincipalKind = "service_principal"
+)
+
+type SecurableType string
+
+const (
+	SecurablePlatform      SecurableType = "platform"
+	SecurableWorkspace     SecurableType = "workspace"
+	SecurableDashboard     SecurableType = "dashboard"
+	SecurableSemanticModel SecurableType = "semantic_model"
+	SecurableSource        SecurableType = "source"
+	SecurableModelTable    SecurableType = "model_table"
+	SecurableAgentPolicy   SecurableType = "agent_policy"
+	SecurableDataset       SecurableType = "dataset"
+	SecurableTable         SecurableType = "table"
+	SecurableColumn        SecurableType = "column"
+)
+
+type ObjectRef struct {
+	Type        SecurableType
+	WorkspaceID string
+	ObjectID    string
+	ParentID    string
+}
+
+func PlatformObject() ObjectRef {
+	return ObjectRef{Type: SecurablePlatform}
+}
+
+func WorkspaceObject(workspaceID string) ObjectRef {
+	return ObjectRef{Type: SecurableWorkspace, WorkspaceID: strings.TrimSpace(workspaceID)}
+}
+
+func ItemObject(typ SecurableType, workspaceID, objectID string) ObjectRef {
+	return ObjectRef{Type: typ, WorkspaceID: strings.TrimSpace(workspaceID), ObjectID: strings.TrimSpace(objectID)}
+}
+
+func ItemObjectWithParent(typ SecurableType, workspaceID, objectID string, parent ObjectRef) ObjectRef {
+	object := ItemObject(typ, workspaceID, objectID)
+	object.ParentID = parent.CanonicalID()
+	return object
+}
+
+func (r ObjectRef) CanonicalID() string {
+	switch r.Type {
+	case SecurablePlatform:
+		return "platform"
+	case SecurableWorkspace:
+		return "workspace:" + r.WorkspaceID
+	default:
+		return string(r.Type) + ":" + r.WorkspaceID + ":" + r.ObjectID
+	}
+}
+
+func (r ObjectRef) Parent() (ObjectRef, bool) {
+	switch r.Type {
+	case SecurablePlatform:
+		return ObjectRef{}, false
+	case SecurableWorkspace:
+		return PlatformObject(), true
+	default:
+		return WorkspaceObject(r.WorkspaceID), true
+	}
+}
+
+type SecurableObject struct {
+	ID               string
+	Type             SecurableType
+	WorkspaceID      string
+	ParentID         string
+	OwnerPrincipalID string
+	DisplayName      string
+	CreatedAt        string
+	UpdatedAt        string
+}
+
+type Grant struct {
+	ID          string
+	ObjectID    string
+	ObjectType  SecurableType
+	WorkspaceID string
+	SubjectType SubjectType
+	SubjectID   string
+	Privilege   Privilege
+	CreatedAt   string
+}
+
+type GrantView struct {
+	Grant
+	Inherited    bool
+	ParentID     string
+	ParentType   SecurableType
+	ParentObject string
+}
+
+type GrantInput struct {
+	Object      ObjectRef
+	SubjectType SubjectType
+	SubjectID   string
+	Privilege   Privilege
+}
+
+type AuthorizationDecision struct {
+	Allowed       bool
+	Privilege     Privilege
+	Object        ObjectRef
+	Reason        string
+	GrantID       string
+	GrantObjectID string
+	SubjectType   SubjectType
+	SubjectID     string
+	Inherited     bool
+	Owner         bool
+	Platform      bool
 }
 
 type SubjectType string
 
 const (
-	SubjectPrincipal SubjectType = "principal"
-	SubjectGroup     SubjectType = "group"
+	SubjectPrincipal        SubjectType = "principal"
+	SubjectGroup            SubjectType = "group"
+	SubjectServicePrincipal SubjectType = "service_principal"
 )
 
 type RoleBinding struct {
@@ -163,6 +344,7 @@ type PlatformRoleInput struct {
 
 type PrincipalInput struct {
 	ID          string
+	Kind        PrincipalKind
 	Email       string
 	DisplayName string
 }
@@ -170,6 +352,47 @@ type PrincipalInput struct {
 type PrincipalFilter struct {
 	Email string
 	Query string
+}
+
+type ServicePrincipalInput struct {
+	ID          string
+	DisplayName string
+}
+
+type ServicePrincipalSecretInput struct {
+	Name      string
+	ExpiresAt time.Time
+}
+
+type ServicePrincipalSecret struct {
+	ID                 string
+	ServicePrincipalID string
+	Name               string
+	Secret             string
+	ExpiresAt          string
+	CreatedAt          string
+	RevokedAt          string
+}
+
+type DataPolicy struct {
+	ID             string
+	WorkspaceID    string
+	ObjectID       string
+	SubjectType    SubjectType
+	SubjectID      string
+	PolicyType     string
+	ExpressionJSON string
+	CreatedAt      string
+	UpdatedAt      string
+}
+
+type DataPolicyInput struct {
+	ID             string
+	Object         ObjectRef
+	SubjectType    SubjectType
+	SubjectID      string
+	PolicyType     string
+	ExpressionJSON string
 }
 
 type ExternalIdentityInput struct {
@@ -206,11 +429,44 @@ type GroupMember struct {
 	CreatedAt   string
 }
 
+type SCIMUserInput struct {
+	ID          string
+	ExternalID  string
+	UserName    string
+	Email       string
+	DisplayName string
+	Active      bool
+}
+
+type SCIMUser struct {
+	Principal  Principal
+	ExternalID string
+}
+
+type SCIMUserFilter struct {
+	ID         string
+	ExternalID string
+	UserName   string
+}
+
+type SCIMGroupInput struct {
+	ID         string
+	ExternalID string
+	Name       string
+	MemberIDs  []string
+}
+
+type SCIMGroupFilter struct {
+	ID          string
+	ExternalID  string
+	DisplayName string
+}
+
 type APITokenInput struct {
 	PrincipalID string
 	WorkspaceID string
 	Name        string
-	Permissions []string
+	Privileges  []Privilege
 	ExpiresAt   time.Time
 }
 
@@ -219,7 +475,7 @@ type APIToken struct {
 	PrincipalID string
 	WorkspaceID string
 	Name        string
-	Permissions []string
+	Privileges  []Privilege
 	ExpiresAt   string
 	CreatedAt   string
 	LastUsedAt  string
@@ -241,12 +497,16 @@ type Session struct {
 }
 
 type AuditEventInput struct {
-	WorkspaceID  string
-	PrincipalID  string
-	Action       string
-	TargetType   string
-	TargetID     string
-	MetadataJSON string
+	WorkspaceID   string
+	PrincipalID   string
+	Action        string
+	TargetType    string
+	TargetID      string
+	Privilege     Privilege
+	Status        string
+	RequestID     string
+	CorrelationID string
+	MetadataJSON  string
 }
 
 type AuditEventFilter struct {
@@ -264,14 +524,18 @@ type AuditEventFilter struct {
 }
 
 type AuditEvent struct {
-	ID           string
-	WorkspaceID  string
-	PrincipalID  string
-	Action       string
-	TargetType   string
-	TargetID     string
-	MetadataJSON string
-	CreatedAt    string
+	ID            string
+	WorkspaceID   string
+	PrincipalID   string
+	Action        string
+	TargetType    string
+	TargetID      string
+	Privilege     Privilege
+	Status        string
+	RequestID     string
+	CorrelationID string
+	MetadataJSON  string
+	CreatedAt     string
 }
 
 type Repository interface {
@@ -287,17 +551,48 @@ type Repository interface {
 	DeleteRoleBinding(ctx context.Context, workspaceID, id string) error
 	ListRoleBindings(ctx context.Context, workspaceID string) ([]RoleBinding, error)
 	ListRoles(ctx context.Context) ([]Role, error)
-	HasPermission(ctx context.Context, workspaceID, principalID, permission string) (bool, error)
+	Authorize(ctx context.Context, principalID string, privilege Privilege, object ObjectRef) (AuthorizationDecision, error)
+	AuthorizeAny(ctx context.Context, principalID string, privilege Privilege, objects []ObjectRef) (AuthorizationDecision, error)
+	EffectivePrivileges(ctx context.Context, principalID string, object ObjectRef) ([]Privilege, error)
+	EffectiveAccess(ctx context.Context, principalID string, object ObjectRef) ([]AuthorizationDecision, error)
+	CreateGrant(ctx context.Context, input GrantInput) (Grant, error)
+	GetGrant(ctx context.Context, workspaceID, id string) (Grant, error)
+	DeleteGrant(ctx context.Context, workspaceID, id string) error
+	ListGrants(ctx context.Context, object ObjectRef) ([]Grant, error)
+	ListGrantsWithOptions(ctx context.Context, object ObjectRef, includeInherited bool) ([]GrantView, error)
+	SetObjectOwner(ctx context.Context, object ObjectRef, ownerPrincipalID string) (SecurableObject, error)
+	UpsertDataPolicy(ctx context.Context, input DataPolicyInput) (DataPolicy, error)
+	GetDataPolicy(ctx context.Context, workspaceID, id string) (DataPolicy, error)
+	ListDataPolicies(ctx context.Context, object ObjectRef) ([]DataPolicy, error)
+	ListDataPoliciesWithOptions(ctx context.Context, object ObjectRef, includeInherited bool) ([]DataPolicy, error)
+	ListEffectiveDataPolicies(ctx context.Context, principalID string, object ObjectRef, includeInherited bool) ([]DataPolicy, error)
+	DeleteDataPolicy(ctx context.Context, workspaceID, id string) error
+	CreateServicePrincipal(ctx context.Context, input ServicePrincipalInput) (Principal, error)
+	ListServicePrincipals(ctx context.Context) ([]Principal, error)
+	UpdateServicePrincipal(ctx context.Context, id string, input ServicePrincipalInput) (Principal, error)
+	DeleteServicePrincipal(ctx context.Context, id string) error
+	CreateServicePrincipalSecret(ctx context.Context, servicePrincipalID, name string) (string, ServicePrincipalSecret, error)
+	RevokeServicePrincipalSecret(ctx context.Context, servicePrincipalID, secretID string) error
+	PrincipalForServicePrincipalSecret(ctx context.Context, servicePrincipalID, secret string) (Principal, error)
 	BootstrapAdmin(ctx context.Context, workspaceID, email string) error
 	ResolveExternalPrincipal(ctx context.Context, input ExternalIdentityInput) (Principal, error)
+	UpsertSCIMUser(ctx context.Context, input SCIMUserInput) (SCIMUser, error)
+	ListSCIMUsers(ctx context.Context, filter SCIMUserFilter) ([]SCIMUser, error)
+	DisableSCIMUser(ctx context.Context, principalID string) (SCIMUser, error)
 	UpsertGroup(ctx context.Context, input GroupInput) (Group, error)
-	ListAllGroups(ctx context.Context) ([]Group, error)
 	ListGroups(ctx context.Context, workspaceID string) ([]Group, error)
+	ListAllGroups(ctx context.Context) ([]Group, error)
 	DeleteGroup(ctx context.Context, workspaceID, groupID string) error
 	AddGroupMember(ctx context.Context, workspaceID, groupID, principalID string) error
 	RemoveGroupMember(ctx context.Context, workspaceID, groupID, principalID string) error
 	ListGroupMembersByGroup(ctx context.Context, groupID string) ([]GroupMember, error)
 	ListGroupMembers(ctx context.Context, workspaceID, groupID string) ([]GroupMember, error)
+	UpsertSCIMGroup(ctx context.Context, input SCIMGroupInput) (Group, error)
+	ListSCIMGroups(ctx context.Context, filter SCIMGroupFilter) ([]Group, error)
+	DeleteSCIMGroup(ctx context.Context, groupID string) error
+	AddSCIMGroupMember(ctx context.Context, groupID, principalID string) error
+	RemoveSCIMGroupMember(ctx context.Context, groupID, principalID string) error
+	ListSCIMGroupMembers(ctx context.Context, groupID string) ([]GroupMember, error)
 	ListAllRoleBindings(ctx context.Context) ([]RoleBinding, error)
 	CreateSession(ctx context.Context, principalID string, ttl time.Duration) (string, error)
 	PrincipalForToken(ctx context.Context, token string) (Principal, error)
@@ -324,8 +619,8 @@ func DefaultRoles() []Role {
 	roles := make([]Role, len(defaultRoles))
 	for i, role := range defaultRoles {
 		roles[i] = Role{
-			Name:        role.Name,
-			Permissions: append([]string(nil), role.Permissions...),
+			Name:       role.Name,
+			Privileges: append([]Privilege(nil), role.Privileges...),
 		}
 	}
 	return roles

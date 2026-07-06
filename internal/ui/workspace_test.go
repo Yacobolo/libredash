@@ -950,6 +950,49 @@ func TestWorkspaceAccessControlRendersForManagers(t *testing.T) {
 	}
 }
 
+func TestWorkspaceAssetAccessControlRendersForManagers(t *testing.T) {
+	workspace, catalog, assets, _ := testWorkspaceAssetFixtures()
+	asset := testAssetByID(t, assets, "model")
+	access := testWorkspaceAccess(workspace, true)
+	access.Mode = "object"
+	access.ObjectType = "semantic_model"
+	access.ObjectID = "olist"
+	access.ObjectTitle = "Olist Commerce"
+	access.Roles = []workspaceview.RoleView{
+		{Name: "VIEW_ITEM"},
+		{Name: "QUERY_DATA"},
+		{Name: "MANAGE_GRANTS"},
+	}
+	access.Bindings = []workspaceview.RoleBindingView{
+		{ID: "grant_1", WorkspaceID: workspace.ID, SubjectType: "principal", SubjectID: "email_analyst", PrincipalID: "email_analyst", Email: "analyst@example.com", Role: "VIEW_ITEM"},
+	}
+
+	var out strings.Builder
+	err := WorkspaceAssetPageWithRefreshVersionsAndAccess(catalog, workspace, asset, assets, nil, "details", "Owner", AssetRefreshState{}, AssetVersionsState{}, access, "csrf").Render(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := html.UnescapeString(out.String())
+
+	for _, want := range []string{
+		`<ld-workspace-asset-page`,
+		`workspaceaccess=`,
+		`data-attr:workspaceaccess="$workspaceAccess"`,
+		`data-on:ld-workspace-access-upsert=`,
+		`/workspaces/libredash/assets/semantic_model:olist/access/upsert`,
+		`/workspaces/libredash/assets/semantic_model:olist/access/remove`,
+		`"mode":"object"`,
+		`"objectType":"semantic_model"`,
+		`"objectId":"olist"`,
+		`"objectTitle":"Olist Commerce"`,
+		`"Role":"VIEW_ITEM"`,
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("workspace asset access control did not render %q:\n%s", want, rendered)
+		}
+	}
+}
+
 func TestWorkspaceAccessControlDoesNotRenderForViewers(t *testing.T) {
 	workspace, catalog, assets, _ := testWorkspaceAssetFixtures()
 

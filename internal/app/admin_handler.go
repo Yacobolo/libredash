@@ -25,7 +25,7 @@ func (s *Server) adminHTTPHandler() adminhttp.Handler {
 			CurrentPrincipal:     s.currentAdminPrincipal,
 			DefaultWorkspaceID:   s.defaultWorkspaceID,
 			AuthConfigured:       s.auth != nil,
-			RBACConfigured:       s.store != nil,
+			AccessConfigured:     s.store != nil,
 		},
 		CurrentRoleLabel: s.currentAdminRoleLabel,
 		ChromeOption:     s.chatChromeOption,

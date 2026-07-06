@@ -3,10 +3,16 @@ package query
 import (
 	"fmt"
 	"strings"
+
+	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 )
 
 func (p *Planner) Plan(request Request) (Plan, error) {
 	view, err := p.queryView(request)
+	if err != nil {
+		return Plan{}, err
+	}
+	masks, err := columnMaskMap(request.ColumnMasks)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -34,6 +40,9 @@ func (p *Planner) Plan(request Request) (Plan, error) {
 		}
 		if resolved.Table != view.BaseTable {
 			return Plan{}, fmt.Errorf("measure %q is not owned by base table %q", field, view.BaseTable)
+		}
+		if masks.matchesMeasure(field, resolved) {
+			return Plan{}, fmt.Errorf("measure %q depends on masked field %q", field, resolved.Table+"."+resolved.Name)
 		}
 		fieldSet = append(fieldSet, resolved.Table+"."+resolved.Name)
 	}
@@ -65,8 +74,14 @@ func (p *Planner) Plan(request Request) (Plan, error) {
 		if err := addOutputColumn(columnSet, alias); err != nil {
 			return Plan{}, err
 		}
-		expr := dimensionExpr(dimension, aliases)
+		expr, err := maskedDimensionExpr(request.Time.Field, dimension, aliases, masks)
+		if err != nil {
+			return Plan{}, err
+		}
 		if request.Time.Grain != "" {
+			if masks.matchesDimension(request.Time.Field, dimension) {
+				return Plan{}, fmt.Errorf("time field %q cannot be masked and time-grained", request.Time.Field)
+			}
 			if !allowedTimeGrain(request.Time.Grain) {
 				return Plan{}, fmt.Errorf("unsupported time grain %q", request.Time.Grain)
 			}
@@ -86,7 +101,11 @@ func (p *Planner) Plan(request Request) (Plan, error) {
 		if err := addOutputColumn(columnSet, alias); err != nil {
 			return Plan{}, err
 		}
-		selects = append(selects, dimensionExpr(dimension, aliases)+" AS "+alias)
+		expr, err := maskedDimensionExpr(field, dimension, aliases, masks)
+		if err != nil {
+			return Plan{}, err
+		}
+		selects = append(selects, expr+" AS "+alias)
 		groupBy = append(groupBy, alias)
 		columns = append(columns, alias)
 	}
@@ -142,6 +161,10 @@ func (p *Planner) PlanRows(request RowRequest) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
+	masks, err := columnMaskMap(request.ColumnMasks)
+	if err != nil {
+		return Plan{}, err
+	}
 	fieldSet := []string{}
 	for _, dimension := range request.Dimensions {
 		field, _, err := view.ResolveDimensionRef(dimension.Field)
@@ -185,7 +208,11 @@ func (p *Planner) PlanRows(request RowRequest) (Plan, error) {
 		if err := addOutputColumn(columnSet, alias); err != nil {
 			return Plan{}, err
 		}
-		selects = append(selects, dimensionExpr(view.Dimensions[field], aliases)+" AS "+alias)
+		expr, err := maskedDimensionExpr(field, view.Dimensions[field], aliases, masks)
+		if err != nil {
+			return Plan{}, err
+		}
+		selects = append(selects, expr+" AS "+alias)
 		columns = append(columns, alias)
 	}
 	for _, item := range request.Measures {
@@ -197,7 +224,7 @@ func (p *Planner) PlanRows(request RowRequest) (Plan, error) {
 		if err := addOutputColumn(columnSet, alias); err != nil {
 			return Plan{}, err
 		}
-		expr, err := rawMeasureExpr(view.Measures[field], aliases)
+		expr, err := maskedRawMeasureExpr(field, view.Measures[field], aliases, masks)
 		if err != nil {
 			return Plan{}, err
 		}
@@ -229,6 +256,10 @@ func (p *Planner) PlanRawValues(request RawValueRequest) (Plan, error) {
 	if err != nil {
 		return Plan{}, err
 	}
+	masks, err := columnMaskMap(request.ColumnMasks)
+	if err != nil {
+		return Plan{}, err
+	}
 	fieldSet := []string{}
 	for _, dimension := range request.Dimensions {
 		field, _, err := view.ResolveDimensionRef(dimension.Field)
@@ -243,6 +274,9 @@ func (p *Planner) PlanRawValues(request RawValueRequest) (Plan, error) {
 	}
 	if measure.Table != view.BaseTable {
 		return Plan{}, fmt.Errorf("measure %q is not owned by base table %q", measureField, view.BaseTable)
+	}
+	if masks.matchesMeasure(measureField, measure) {
+		return Plan{}, fmt.Errorf("measure %q depends on masked field %q", measureField, measure.Table+"."+measure.Name)
 	}
 	fieldSet = append(fieldSet, measure.Table+"."+measure.Name)
 	filterFields, err := filterFieldSet(view, request.Filters)
@@ -271,7 +305,11 @@ func (p *Planner) PlanRawValues(request RawValueRequest) (Plan, error) {
 		if err := addOutputColumn(columnSet, alias); err != nil {
 			return Plan{}, err
 		}
-		selects = append(selects, dimensionExpr(view.Dimensions[field], aliases)+" AS "+alias)
+		expr, err := maskedDimensionExpr(field, view.Dimensions[field], aliases, masks)
+		if err != nil {
+			return Plan{}, err
+		}
+		selects = append(selects, expr+" AS "+alias)
 		columns = append(columns, alias)
 		dimensionFields = append(dimensionFields, field)
 	}
@@ -389,6 +427,85 @@ func (p *Planner) filterPart(view *queryView, aliases map[string]tableAlias, fil
 	field, _, _ := view.ResolveDimensionRef(filter.Field)
 	expr := dimensionExpr(view.Dimensions[field], aliases)
 	return filterSQL(expr, filter)
+}
+
+type columnMaskSet map[string]string
+
+func columnMaskMap(masks []ColumnMask) (columnMaskSet, error) {
+	out := columnMaskSet{}
+	for _, mask := range masks {
+		field := strings.ToLower(strings.TrimSpace(mask.Field))
+		if field == "" {
+			continue
+		}
+		normalizedMask := strings.ToLower(strings.TrimSpace(mask.Mask))
+		if normalizedMask == "" {
+			normalizedMask = "null"
+		}
+		if _, err := maskSQLExpr(normalizedMask); err != nil {
+			return nil, err
+		}
+		out[field] = normalizedMask
+	}
+	return out, nil
+}
+
+func (m columnMaskSet) matchesDimension(ref string, dimension semanticmodel.MetricDimension) bool {
+	if len(m) == 0 {
+		return false
+	}
+	if _, ok := m[strings.ToLower(strings.TrimSpace(ref))]; ok {
+		return true
+	}
+	return false
+}
+
+func (m columnMaskSet) matchesMeasure(ref string, measure ResolvedMeasure) bool {
+	if len(m) == 0 {
+		return false
+	}
+	for _, key := range []string{ref, measure.Field, measure.Table + "." + measure.Name} {
+		if _, ok := m[strings.ToLower(strings.TrimSpace(key))]; ok {
+			return true
+		}
+	}
+	for _, dependency := range semanticmodel.ExpressionFieldRefs(measure.SQLExpression()) {
+		if _, ok := m[strings.ToLower(strings.TrimSpace(dependency))]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func maskedDimensionExpr(ref string, dimension semanticmodel.MetricDimension, aliases map[string]tableAlias, masks columnMaskSet) (string, error) {
+	mask, ok := masks[strings.ToLower(strings.TrimSpace(ref))]
+	if !ok {
+		return dimensionExpr(dimension, aliases), nil
+	}
+	return maskSQLExpr(mask)
+}
+
+func maskedRawMeasureExpr(ref string, measure ResolvedMeasure, aliases map[string]tableAlias, masks columnMaskSet) (string, error) {
+	if mask, ok := masks[strings.ToLower(strings.TrimSpace(ref))]; ok {
+		return maskSQLExpr(mask)
+	}
+	if mask, ok := masks[strings.ToLower(strings.TrimSpace(measure.Table+"."+measure.Name))]; ok {
+		return maskSQLExpr(mask)
+	}
+	return rawMeasureExpr(measure, aliases)
+}
+
+func maskSQLExpr(mask string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(mask)) {
+	case "", "null":
+		return "NULL", nil
+	case "redact", "redacted":
+		return "'REDACTED'", nil
+	case "zero":
+		return "0", nil
+	default:
+		return "", fmt.Errorf("unsupported column mask %q", mask)
+	}
 }
 
 func filterFieldSet(view *queryView, filters []Filter) ([]string, error) {

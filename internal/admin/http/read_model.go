@@ -34,16 +34,16 @@ type ReadModel struct {
 	CurrentPrincipal     CurrentPrincipalProvider
 	DefaultWorkspaceID   string
 	AuthConfigured       bool
-	RBACConfigured       bool
+	AccessConfigured     bool
 }
 
 func (m ReadModel) Data(r *http.Request) (ui.AdminData, error) {
 	data := ui.AdminData{
-		Workspace:       workspace.WorkspaceView{ID: "platform", Title: "Platform"},
-		CSRFToken:       m.csrfToken(r),
-		AuthConfigured:  m.AuthConfigured,
-		RBACConfigured:  m.RBACConfigured,
-		RBACStatusLabel: "Configured",
+		Workspace:         workspace.WorkspaceView{ID: "platform", Title: "Platform"},
+		CSRFToken:         m.csrfToken(r),
+		AuthConfigured:    m.AuthConfigured,
+		AccessConfigured:  m.AccessConfigured,
+		AccessStatusLabel: "Configured",
 	}
 	var err error
 	data.Agent, err = m.agentData(r)
@@ -55,8 +55,8 @@ func (m ReadModel) Data(r *http.Request) (ui.AdminData, error) {
 		return data, err
 	}
 	if repo == nil {
-		data.RBACConfigured = false
-		data.RBACStatusLabel = "RBAC store is not configured"
+		data.AccessConfigured = false
+		data.AccessStatusLabel = "Access store is not configured"
 		data.RoleCount = len(defaultRoleViews())
 		data.Storage = m.StorageService.Data(r.Context())
 		return data, nil
@@ -128,11 +128,11 @@ func (m ReadModel) agentData(r *http.Request) (ui.AdminAgentData, error) {
 	if err != nil || repo == nil {
 		return data, err
 	}
-	allowed, err := repo.HasPermission(r.Context(), m.DefaultWorkspaceID, principal.ID, access.PermissionRBACWrite)
+	decision, err := repo.Authorize(r.Context(), principal.ID, access.PrivilegeManageGrants, access.WorkspaceObject(m.DefaultWorkspaceID))
 	if err != nil {
 		return data, err
 	}
-	data.CanWrite = allowed
+	data.CanWrite = decision.Allowed
 	return data, nil
 }
 
@@ -350,9 +350,20 @@ func defaultRoleViews() []workspace.RoleView {
 func roleViews(rows []access.Role) []workspace.RoleView {
 	roles := make([]workspace.RoleView, 0, len(rows))
 	for _, row := range rows {
-		roles = append(roles, workspace.RoleView{Name: row.Name, Permissions: row.Permissions})
+		roles = append(roles, workspace.RoleView{Name: row.Name, Privileges: privilegeStrings(row.Privileges)})
 	}
 	return roles
+}
+
+func privilegeStrings(values []access.Privilege) []string {
+	if values == nil {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
 }
 
 func roleBindingView(row access.RoleBinding) workspace.RoleBindingView {

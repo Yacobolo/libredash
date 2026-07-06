@@ -249,6 +249,47 @@ func TestAgentVisualToolReturnsChartPatchFromSemanticData(t *testing.T) {
 	}
 }
 
+func TestAgentVisualToolAuthorizesAgainstRequestedDataset(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	repo := testAccessRepository(store)
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "principal_agent_dataset", Email: "agent-dataset@example.com", DisplayName: "Agent Dataset"})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	if _, err := repo.CreateGrant(ctx, access.GrantInput{
+		Object:      access.ItemObject(access.SecurableSemanticModel, "test", "test"),
+		SubjectType: access.SubjectPrincipal,
+		SubjectID:   principal.ID,
+		Privilege:   access.PrivilegeQueryData,
+	}); err != nil {
+		t.Fatalf("grant semantic model query: %v", err)
+	}
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, DefaultWorkspaceID: "test"})
+	tool := agentVisualToolsForTest(server, agentcap.Scope{WorkspaceID: "test", PrincipalID: principal.ID})[0]
+
+	result, err := tool.Handler.Run(context.Background(), agentcore.ToolCall{
+		ID:   "call_dataset_auth",
+		Name: "query_visual",
+		Arguments: json.RawMessage(`{
+			"kind":"chart",
+			"model":"test",
+			"dataset":"orders",
+			"title":"Orders by status",
+			"type":"bar",
+			"dimensions":[{"field":"orders.status"}],
+			"measures":[{"field":"order_count"}],
+			"limit":10
+		}`),
+	})
+	if err != nil {
+		t.Fatalf("run query_visual: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("query_visual returned error for semantic-model grant: %#v", result.Content)
+	}
+}
+
 func TestAgentVisualToolReturnsTablePatchFromSemanticData(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
 	tool := agentVisualToolsForTest(server, agentcap.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true})[0]
@@ -1148,13 +1189,13 @@ func TestAPIGenAgentSemanticQueryToolInjectsBodyDefaultLimit(t *testing.T) {
 	}
 }
 
-func TestAPIGenAgentToolEnforcesCredentialPermissionAllowlistAndWorkspace(t *testing.T) {
+func TestAPIGenAgentToolEnforcesCredentialPrivilegeAllowlistAndWorkspace(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
 	principal := testPrincipal(t, ctx, store, "agent-token@example.com", "Agent Token", access.RoleOwner)
-	agentOnlyToken := access.APIToken{WorkspaceID: "test", Permissions: []string{access.PermissionAgentUse}}
-	assetToken := access.APIToken{WorkspaceID: "test", Permissions: []string{access.PermissionAgentUse, access.PermissionAssetRead}}
-	foreignToken := access.APIToken{WorkspaceID: "other", Permissions: []string{access.PermissionAssetRead}}
+	agentOnlyToken := access.APIToken{WorkspaceID: "test", Privileges: []access.Privilege{access.PrivilegeUseAgent}}
+	assetToken := access.APIToken{WorkspaceID: "test", Privileges: []access.Privilege{access.PrivilegeUseAgent, access.PrivilegeViewItem}}
+	foreignToken := access.APIToken{WorkspaceID: "other", Privileges: []access.Privilege{access.PrivilegeViewItem}}
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, AccessRepo: testAccessRepository(store), DefaultWorkspaceID: "test"})
 
 	run := func(token access.APIToken) agentcore.ToolResult {
@@ -1163,8 +1204,8 @@ func TestAPIGenAgentToolEnforcesCredentialPermissionAllowlistAndWorkspace(t *tes
 			PrincipalID: principal.ID,
 			Credential: agentcap.CredentialScope{
 				WorkspaceID: token.WorkspaceID,
-				Permissions: append([]string(nil), token.Permissions...),
-				Restricted:  token.Permissions != nil,
+				Privileges:  testPrivilegeStrings(token.Privileges),
+				Restricted:  token.Privileges != nil,
 			},
 		}
 		tools := agentAPIGenToolsForTest(server, scope)
@@ -1294,6 +1335,14 @@ func stringSliceHas(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func testPrivilegeStrings(values []access.Privilege) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, string(value))
+	}
+	return out
 }
 
 type manyEdgesMetrics struct {

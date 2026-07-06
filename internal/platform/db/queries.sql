@@ -254,9 +254,10 @@ ORDER BY
   d.id DESC;
 
 -- name: UpsertPrincipal :exec
-INSERT INTO principals (id, email, display_name, updated_at)
-VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+INSERT INTO principals (id, kind, email, display_name, updated_at)
+VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(id) DO UPDATE SET
+  kind = excluded.kind,
   email = excluded.email,
   display_name = excluded.display_name,
   updated_at = CURRENT_TIMESTAMP;
@@ -266,6 +267,40 @@ SELECT * FROM principals WHERE id = ?;
 
 -- name: GetPrincipalByEmail :one
 SELECT * FROM principals WHERE lower(email) = lower(?) AND email <> '' LIMIT 1;
+
+-- name: DisablePrincipal :exec
+UPDATE principals
+SET disabled_at = COALESCE(disabled_at, CURRENT_TIMESTAMP),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = ?;
+
+-- name: ListSCIMPrincipals :many
+SELECT p.*
+FROM principals p
+JOIN external_identities ei ON ei.principal_id = p.id
+WHERE p.kind = 'user'
+  AND ei.provider = 'scim'
+  AND (sqlc.arg(subject) = '' OR ei.subject = sqlc.arg(subject))
+  AND (
+    sqlc.arg(user_name) = ''
+    OR lower(p.email) = lower(sqlc.arg(user_name))
+    OR lower(ei.email) = lower(sqlc.arg(user_name))
+  )
+ORDER BY p.email, p.display_name, p.id;
+
+-- name: GetExternalIdentityByPrincipalProvider :one
+SELECT * FROM external_identities
+WHERE principal_id = ? AND provider = ?
+LIMIT 1;
+
+-- name: ListServicePrincipals :many
+SELECT * FROM principals
+WHERE kind = 'service_principal'
+ORDER BY display_name, id;
+
+-- name: DeleteServicePrincipal :exec
+DELETE FROM principals
+WHERE id = ? AND kind = 'service_principal';
 
 -- name: UpsertExternalIdentity :exec
 INSERT INTO external_identities (id, principal_id, provider, tenant_id, subject, email, updated_at)
@@ -280,30 +315,15 @@ SELECT * FROM external_identities
 WHERE provider = ? AND tenant_id = ? AND subject = ?;
 
 -- name: UpsertRole :exec
-INSERT INTO roles (id, name, permissions_json)
+INSERT INTO roles (id, name, privileges_json)
 VALUES (?, ?, ?)
-ON CONFLICT(name) DO UPDATE SET permissions_json = excluded.permissions_json;
-
--- name: UpsertPermission :exec
-INSERT INTO permissions (name)
-VALUES (?)
-ON CONFLICT(name) DO NOTHING;
-
--- name: ClearRolePermissions :exec
-DELETE FROM role_permissions WHERE role_id = ?;
-
--- name: InsertRolePermission :exec
-INSERT OR IGNORE INTO role_permissions (role_id, permission_name)
-VALUES (?, ?);
+ON CONFLICT(name) DO UPDATE SET privileges_json = excluded.privileges_json;
 
 -- name: GetRoleByName :one
 SELECT * FROM roles WHERE name = ?;
 
 -- name: ListRoles :many
 SELECT * FROM roles ORDER BY name;
-
--- name: ListPermissions :many
-SELECT * FROM permissions ORDER BY name;
 
 -- name: UpsertGroup :exec
 INSERT INTO groups (id, workspace_id, provider, external_id, name)
@@ -322,11 +342,28 @@ WHERE workspace_id = ? AND provider = ? AND external_id = ?;
 -- name: ListGroupsByWorkspace :many
 SELECT * FROM groups
 WHERE workspace_id = ?
+   OR (workspace_id = '' AND provider = 'scim')
+ORDER BY name, id;
+
+-- name: GetSCIMGroup :one
+SELECT * FROM groups
+WHERE provider = 'scim' AND id = ?;
+
+-- name: ListSCIMGroups :many
+SELECT * FROM groups
+WHERE workspace_id = ''
+  AND provider = 'scim'
+  AND (sqlc.arg(external_id) = '' OR external_id = sqlc.arg(external_id))
+  AND (sqlc.arg(display_name) = '' OR lower(name) = lower(sqlc.arg(display_name)))
 ORDER BY name, id;
 
 -- name: DeleteGroup :exec
 DELETE FROM groups
 WHERE workspace_id = ? AND id = ?;
+
+-- name: DeleteSCIMGroup :exec
+DELETE FROM groups
+WHERE workspace_id = '' AND provider = 'scim' AND id = ?;
 
 -- name: InsertGroupMember :exec
 INSERT OR IGNORE INTO group_members (workspace_id, group_id, principal_id)
@@ -349,6 +386,27 @@ JOIN principals p ON p.id = gm.principal_id
 WHERE gm.workspace_id = ? AND gm.group_id = ?
 ORDER BY p.email, p.display_name, gm.principal_id;
 
+-- name: ListSCIMGroupMembers :many
+SELECT
+  gm.group_id,
+  gm.workspace_id,
+  gm.principal_id,
+  p.email,
+  p.display_name,
+  gm.created_at
+FROM group_members gm
+JOIN principals p ON p.id = gm.principal_id
+WHERE gm.workspace_id = '' AND gm.group_id = ?
+ORDER BY p.email, p.display_name, gm.principal_id;
+
+-- name: DeleteSCIMGroupMembers :exec
+DELETE FROM group_members
+WHERE workspace_id = '' AND group_id = ?;
+
+-- name: DeleteSCIMGroupMembersByPrincipal :exec
+DELETE FROM group_members
+WHERE workspace_id = '' AND principal_id = ?;
+
 -- name: InsertRoleBinding :exec
 INSERT OR IGNORE INTO role_bindings (id, workspace_id, role_id, principal_id, group_id)
 VALUES (?, ?, ?, ?, ?);
@@ -361,7 +419,11 @@ VALUES (?, ?, ?);
 SELECT
   rb.id,
   rb.workspace_id,
-  CASE WHEN NULLIF(rb.principal_id, '') IS NOT NULL THEN 'principal' ELSE 'group' END AS subject_type,
+  CASE
+    WHEN NULLIF(rb.principal_id, '') IS NOT NULL AND p.kind = 'service_principal' THEN 'service_principal'
+    WHEN NULLIF(rb.principal_id, '') IS NOT NULL THEN 'principal'
+    ELSE 'group'
+  END AS subject_type,
   COALESCE(NULLIF(rb.principal_id, ''), rb.group_id, '') AS subject_id,
   rb.principal_id,
   rb.group_id,
@@ -389,7 +451,11 @@ WHERE workspace_id = ? AND id = ?;
 SELECT
   rb.id,
   rb.workspace_id,
-  CASE WHEN NULLIF(rb.principal_id, '') IS NOT NULL THEN 'principal' ELSE 'group' END AS subject_type,
+  CASE
+    WHEN NULLIF(rb.principal_id, '') IS NOT NULL AND p.kind = 'service_principal' THEN 'service_principal'
+    WHEN NULLIF(rb.principal_id, '') IS NOT NULL THEN 'principal'
+    ELSE 'group'
+  END AS subject_type,
   COALESCE(NULLIF(rb.principal_id, ''), rb.group_id, '') AS subject_id,
   rb.principal_id,
   rb.group_id,
@@ -409,41 +475,25 @@ ORDER BY subject_type, p.email, g.name, r.name;
 DELETE FROM role_bindings
 WHERE workspace_id = ? AND principal_id = ?;
 
--- name: ListPrincipalRolePermissions :many
-SELECT DISTINCT permission_name
-FROM (
-  SELECT rp.permission_name
-  FROM role_bindings rb
-  JOIN role_permissions rp ON rp.role_id = rb.role_id
-  LEFT JOIN group_members gm
-    ON gm.workspace_id = rb.workspace_id
-   AND gm.group_id = rb.group_id
-  WHERE rb.workspace_id = ?
-    AND (
-      rb.principal_id = ?
-      OR gm.principal_id = ?
-    )
-  UNION
-  SELECT rp.permission_name
-  FROM platform_role_bindings prb
-  JOIN role_permissions rp ON rp.role_id = prb.role_id
-  WHERE prb.principal_id = ?
-)
-ORDER BY permission_name;
-
 -- name: CreateSession :exec
-INSERT INTO sessions (id, principal_id, token_hash, expires_at)
-VALUES (?, ?, ?, ?);
+INSERT INTO sessions (id, principal_id, token_fingerprint, token_verifier, expires_at)
+VALUES (?, ?, ?, ?, ?);
 
--- name: GetSessionByTokenHash :one
+-- name: GetSessionByTokenFingerprint :one
 SELECT * FROM sessions
-WHERE token_hash = ? AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL;
+WHERE token_fingerprint = ? AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL;
+
+-- name: GetSessionByTokenFingerprintForAudit :one
+SELECT * FROM sessions
+WHERE token_fingerprint = ?
+ORDER BY created_at DESC
+LIMIT 1;
 
 -- name: TouchSession :exec
 UPDATE sessions SET last_seen_at = CURRENT_TIMESTAMP WHERE id = ?;
 
--- name: DeleteSessionByTokenHash :exec
-DELETE FROM sessions WHERE token_hash = ?;
+-- name: DeleteSessionByTokenFingerprint :exec
+DELETE FROM sessions WHERE token_fingerprint = ?;
 
 -- name: ListSessionsByPrincipal :many
 SELECT * FROM sessions
@@ -461,15 +511,26 @@ SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
 WHERE principal_id = ? AND id = ?
 RETURNING *;
 
--- name: CreateAPIToken :exec
-INSERT INTO api_tokens (id, principal_id, workspace_id, name, token_hash, permissions_json, expires_at)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+-- name: RevokeSessionsByPrincipal :exec
+UPDATE sessions
+SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+WHERE principal_id = ? AND revoked_at IS NULL;
 
--- name: GetAPITokenByHash :one
+-- name: CreateAPIToken :exec
+INSERT INTO api_tokens (id, principal_id, workspace_id, name, token_fingerprint, token_verifier, privileges_json, expires_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: GetAPITokenByFingerprint :one
 SELECT * FROM api_tokens
-WHERE token_hash = ?
+WHERE token_fingerprint = ?
   AND revoked_at IS NULL
   AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP);
+
+-- name: GetAPITokenByFingerprintForAudit :one
+SELECT * FROM api_tokens
+WHERE token_fingerprint = ?
+ORDER BY created_at DESC
+LIMIT 1;
 
 -- name: TouchAPIToken :exec
 UPDATE api_tokens SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?;
@@ -490,9 +551,33 @@ SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
 WHERE principal_id = ? AND id = ?
 RETURNING *;
 
+-- name: RevokeAPITokensByPrincipal :exec
+UPDATE api_tokens
+SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+WHERE principal_id = ? AND revoked_at IS NULL;
+
+-- name: CreateServicePrincipalSecret :exec
+INSERT INTO service_principal_secrets (id, service_principal_id, name, secret_fingerprint, secret_verifier, expires_at)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: GetServicePrincipalSecretByFingerprint :one
+SELECT s.*
+FROM service_principal_secrets s
+JOIN principals p ON p.id = s.service_principal_id
+WHERE p.kind = 'service_principal'
+  AND s.service_principal_id = ?
+  AND s.secret_fingerprint = ?
+  AND s.revoked_at IS NULL
+  AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP);
+
+-- name: RevokeServicePrincipalSecret :exec
+UPDATE service_principal_secrets
+SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
+WHERE service_principal_id = ? AND id = ?;
+
 -- name: InsertAuditEvent :exec
-INSERT INTO audit_events (id, workspace_id, principal_id, action, target_type, target_id, metadata_json)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT INTO audit_events (id, workspace_id, principal_id, action, target_type, target_id, privilege, status, request_id, correlation_id, metadata_json)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: ListAuditEvents :many
 SELECT * FROM audit_events
@@ -514,13 +599,15 @@ RETURNING *;
 
 -- name: ListAgentConversations :many
 SELECT * FROM agent_conversations
-WHERE principal_id = sqlc.arg(principal_id)
+WHERE workspace_id = sqlc.arg(workspace_id)
+  AND principal_id = sqlc.arg(principal_id)
   AND status = 'active'
 ORDER BY updated_at DESC, created_at DESC;
 
 -- name: GetAgentConversation :one
 SELECT * FROM agent_conversations
 WHERE id = sqlc.arg(id)
+  AND workspace_id = sqlc.arg(workspace_id)
   AND principal_id = sqlc.arg(principal_id);
 
 -- name: ArchiveAgentConversation :one
@@ -529,6 +616,7 @@ SET status = 'archived',
     archived_at = CURRENT_TIMESTAMP,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg(id)
+  AND workspace_id = sqlc.arg(workspace_id)
   AND principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
@@ -537,6 +625,7 @@ UPDATE agent_conversations
 SET transcript_json = sqlc.arg(transcript_json),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg(id)
+  AND workspace_id = sqlc.arg(workspace_id)
   AND principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
@@ -545,6 +634,7 @@ UPDATE agent_conversations
 SET title = sqlc.arg(title),
     updated_at = CURRENT_TIMESTAMP
 WHERE id = sqlc.arg(id)
+  AND workspace_id = sqlc.arg(workspace_id)
   AND principal_id = sqlc.arg(principal_id)
   AND status = 'active'
   AND title = 'New conversation'
@@ -565,6 +655,7 @@ SELECT
   sqlc.arg(is_error)
 FROM agent_conversations c
 WHERE c.id = sqlc.arg(conversation_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
@@ -573,6 +664,7 @@ SELECT m.*
 FROM agent_messages m
 JOIN agent_conversations c ON c.id = m.conversation_id
 WHERE c.id = sqlc.arg(conversation_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 ORDER BY m.seq;
 
@@ -586,6 +678,7 @@ SELECT
   sqlc.arg(metadata_json)
 FROM agent_conversations c
 WHERE c.id = sqlc.arg(conversation_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
@@ -594,6 +687,7 @@ SELECT r.*
 FROM agent_runs r
 JOIN agent_conversations c ON c.id = r.conversation_id
 WHERE c.id = sqlc.arg(conversation_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 ORDER BY r.started_at DESC;
 
@@ -612,6 +706,7 @@ WHERE agent_runs.id = sqlc.arg(id)
     SELECT agent_conversations.id
     FROM agent_conversations
     WHERE agent_conversations.id = sqlc.arg(conversation_id)
+      AND workspace_id = sqlc.arg(workspace_id)
       AND principal_id = sqlc.arg(principal_id)
   )
 RETURNING *;
@@ -628,6 +723,7 @@ SELECT
 FROM agent_runs r
 JOIN agent_conversations c ON c.id = r.conversation_id
 WHERE r.id = sqlc.arg(run_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 RETURNING *;
 
@@ -637,6 +733,7 @@ FROM agent_events e
 JOIN agent_runs r ON r.id = e.run_id
 JOIN agent_conversations c ON c.id = r.conversation_id
 WHERE r.id = sqlc.arg(run_id)
+  AND c.workspace_id = sqlc.arg(workspace_id)
   AND c.principal_id = sqlc.arg(principal_id)
 ORDER BY e.seq;
 

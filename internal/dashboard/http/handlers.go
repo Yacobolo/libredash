@@ -4,8 +4,10 @@ import (
 	"context"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	nethttp "net/http"
+	"strings"
 	"time"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	lddatastar "github.com/Yacobolo/libredash/internal/dashboard/datastar"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
@@ -37,6 +39,17 @@ type Handler struct {
 	CurrentPrincipalID  func(r *nethttp.Request) string
 	CSRFToken           func(r *nethttp.Request) string
 	ChromeDecorators    func(r *nethttp.Request) []reportui.ChromeDecorator
+}
+
+func DashboardObjectRefs(r *nethttp.Request, workspaceID string) []access.ObjectRef {
+	objects := []access.ObjectRef{}
+	if dashboardID := strings.TrimSpace(chi.URLParam(r, "dashboard")); dashboardID != "" {
+		objects = append(objects, access.ItemObjectWithParent(access.SecurableDashboard, workspaceID, dashboardID, access.WorkspaceObject(workspaceID)))
+	}
+	if strings.TrimSpace(workspaceID) != "" {
+		objects = append(objects, access.WorkspaceObject(workspaceID))
+	}
+	return objects
 }
 
 func (h Handler) Dashboard(w nethttp.ResponseWriter, r *nethttp.Request) {

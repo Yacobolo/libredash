@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/platform"
 )
 
-func TestAPITokenWorkspaceAndPermissionAllowlistAreEnforced(t *testing.T) {
+func TestAPITokenWorkspaceAndPrivilegeAllowlistAreEnforced(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 	owner := testPrincipal(t, ctx, store, "token-owner@example.com", "Token Owner", access.RoleOwner)
@@ -20,18 +21,18 @@ func TestAPITokenWorkspaceAndPermissionAllowlistAreEnforced(t *testing.T) {
 		PrincipalID: owner.ID,
 		WorkspaceID: "test",
 		Name:        "workspace-read-only",
-		Permissions: []string{access.PermissionWorkspaceRead},
+		Privileges:  []access.Privilege{access.PrivilegeUseWorkspace},
 	})
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	deploymentsReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes", nil)
-	deploymentsReq.Header.Set("Authorization", "Bearer "+token)
-	deploymentsReq.Header.Set("Accept", "application/json")
-	deploymentsRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(deploymentsRec, deploymentsReq)
-	if deploymentsRec.Code != http.StatusForbidden {
-		t.Fatalf("deployment list status = %d, want %d body=%s", deploymentsRec.Code, http.StatusForbidden, deploymentsRec.Body.String())
+	publishesReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes", nil)
+	publishesReq.Header.Set("Authorization", "Bearer "+token)
+	publishesReq.Header.Set("Accept", "application/json")
+	publishesRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(publishesRec, publishesReq)
+	if publishesRec.Code != http.StatusForbidden {
+		t.Fatalf("publish list status = %d, want %d body=%s", publishesRec.Code, http.StatusForbidden, publishesRec.Body.String())
 	}
 
 	foreignWorkspaceReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/other/assets", nil)
@@ -43,34 +44,37 @@ func TestAPITokenWorkspaceAndPermissionAllowlistAreEnforced(t *testing.T) {
 		t.Fatalf("foreign workspace status = %d, want %d body=%s", foreignWorkspaceRec.Code, http.StatusForbidden, foreignWorkspaceRec.Body.String())
 	}
 
-	permissionsReq := httptest.NewRequest(http.MethodGet, "/api/v1/me/permissions?workspace=test", nil)
-	permissionsReq.Header.Set("Authorization", "Bearer "+token)
-	permissionsReq.Header.Set("Accept", "application/json")
-	permissionsRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(permissionsRec, permissionsReq)
-	if permissionsRec.Code != http.StatusOK {
-		t.Fatalf("permissions status = %d, want %d body=%s", permissionsRec.Code, http.StatusOK, permissionsRec.Body.String())
+	privilegesReq := httptest.NewRequest(http.MethodGet, "/api/v1/me/effective-privileges?workspace=test", nil)
+	privilegesReq.Header.Set("Authorization", "Bearer "+token)
+	privilegesReq.Header.Set("Accept", "application/json")
+	privilegesRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(privilegesRec, privilegesReq)
+	if privilegesRec.Code != http.StatusOK {
+		t.Fatalf("privileges status = %d, want %d body=%s", privilegesRec.Code, http.StatusOK, privilegesRec.Body.String())
 	}
-	var permissionsBody struct {
-		Permissions []string `json:"permissions"`
+	var privilegesBody struct {
+		Privileges []string `json:"privileges"`
 	}
-	if err := json.Unmarshal(permissionsRec.Body.Bytes(), &permissionsBody); err != nil {
-		t.Fatalf("decode permissions: %v", err)
+	if err := json.Unmarshal(privilegesRec.Body.Bytes(), &privilegesBody); err != nil {
+		t.Fatalf("decode privileges: %v", err)
 	}
-	if !hasString(permissionsBody.Permissions, access.PermissionWorkspaceRead) {
-		t.Fatalf("permissions = %#v, want workspace read", permissionsBody.Permissions)
+	if !hasString(privilegesBody.Privileges, string(access.PrivilegeUseWorkspace)) {
+		t.Fatalf("privileges = %#v, want workspace read", privilegesBody.Privileges)
 	}
-	if hasString(permissionsBody.Permissions, access.PermissionPublishRead) {
-		t.Fatalf("permissions = %#v, token allowlist leaked deployment read", permissionsBody.Permissions)
+	if hasString(privilegesBody.Privileges, string(access.PrivilegeViewItem)) {
+		t.Fatalf("privileges = %#v, token allowlist leaked publish read", privilegesBody.Privileges)
+	}
+	if strings.Contains(privilegesRec.Body.String(), "permissions") {
+		t.Fatalf("effective privileges response still uses permissions vocabulary: %s", privilegesRec.Body.String())
 	}
 
 	emptyAllowlistToken, _ := testScopedAPIToken(t, ctx, store, access.APITokenInput{
 		PrincipalID: owner.ID,
 		WorkspaceID: "test",
 		Name:        "empty-allowlist",
-		Permissions: []string{},
+		Privileges:  []access.Privilege{},
 	})
-	emptyAllowlistReq := httptest.NewRequest(http.MethodGet, "/api/v1/me/permissions?workspace=test", nil)
+	emptyAllowlistReq := httptest.NewRequest(http.MethodGet, "/api/v1/me/effective-privileges?workspace=test", nil)
 	emptyAllowlistReq.Header.Set("Authorization", "Bearer "+emptyAllowlistToken)
 	emptyAllowlistReq.Header.Set("Accept", "application/json")
 	emptyAllowlistRec := httptest.NewRecorder()
@@ -89,9 +93,9 @@ func TestCurrentAPITokenRevocationIsScopedToAuthenticatedPrincipal(t *testing.T)
 		PrincipalID: owner.ID,
 		WorkspaceID: "test",
 		Name:        "auth",
-		Permissions: []string{access.PermissionTokenManage},
+		Privileges:  []access.Privilege{access.PrivilegeManageGrants},
 	})
-	_, ownerToken := testScopedAPIToken(t, ctx, store, access.APITokenInput{PrincipalID: owner.ID, Name: "owned"})
+	ownerSecret, ownerToken := testScopedAPIToken(t, ctx, store, access.APITokenInput{PrincipalID: owner.ID, Name: "owned"})
 	foreignSecret, foreignToken := testScopedAPIToken(t, ctx, store, access.APITokenInput{PrincipalID: foreign.ID, Name: "foreign"})
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
@@ -118,6 +122,73 @@ func TestCurrentAPITokenRevocationIsScopedToAuthenticatedPrincipal(t *testing.T)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("revoke owned api token status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
 	}
+	revokedReq := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+	revokedReq.Header.Set("Authorization", "Bearer "+ownerSecret)
+	revokedReq.Header.Set("Accept", "application/json")
+	revokedRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(revokedRec, revokedReq)
+	if revokedRec.Code != http.StatusUnauthorized {
+		t.Fatalf("revoked api token status = %d, want %d body=%s", revokedRec.Code, http.StatusUnauthorized, revokedRec.Body.String())
+	}
+}
+
+func TestCurrentAPITokenCreateAndRevokeRecordsAudit(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	repo := testAccessRepository(store)
+	owner := testPlatformPrincipal(t, ctx, store, "token-audit-owner@example.com", "Token Audit Owner", access.RoleAdmin)
+	authSecret, _ := testScopedAPIToken(t, ctx, store, access.APITokenInput{
+		PrincipalID: owner.ID,
+		WorkspaceID: "test",
+		Name:        "auth",
+		Privileges:  []access.Privilege{access.PrivilegeManageGrants},
+	})
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/me/api-tokens", strings.NewReader(`{"name":"audited-api-token","workspaceId":"test","privileges":["USE_WORKSPACE"]}`))
+	createReq.Header.Set("Authorization", "Bearer "+authSecret)
+	createReq.Header.Set("Accept", "application/json")
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create api token status = %d, want %d body=%s", createRec.Code, http.StatusCreated, createRec.Body.String())
+	}
+	var created struct {
+		APIToken struct {
+			ID string `json:"id"`
+		} `json:"apiToken"`
+	}
+	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode created api token: %v body=%s", err, createRec.Body.String())
+	}
+	if created.APIToken.ID == "" {
+		t.Fatalf("created api token missing id: %s", createRec.Body.String())
+	}
+	createdEvents, err := repo.ListAuditEvents(ctx, access.AuditEventFilter{WorkspaceID: "test", Action: "api_token.created"})
+	if err != nil {
+		t.Fatalf("list create audit events: %v", err)
+	}
+	if len(createdEvents) != 1 || createdEvents[0].TargetID != created.APIToken.ID || createdEvents[0].PrincipalID != owner.ID {
+		t.Fatalf("api_token.created audit = %#v, want target %q actor %q", createdEvents, created.APIToken.ID, owner.ID)
+	}
+
+	revokeReq := httptest.NewRequest(http.MethodDelete, "/api/v1/me/api-tokens/"+created.APIToken.ID, nil)
+	revokeReq.Header.Set("Authorization", "Bearer "+authSecret)
+	revokeReq.Header.Set("Accept", "application/json")
+	revokeRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(revokeRec, revokeReq)
+	if revokeRec.Code != http.StatusOK {
+		t.Fatalf("revoke api token status = %d, want %d body=%s", revokeRec.Code, http.StatusOK, revokeRec.Body.String())
+	}
+	revokedEvents, err := repo.ListAuditEvents(ctx, access.AuditEventFilter{WorkspaceID: "test", Action: "api_token.revoked"})
+	if err != nil {
+		t.Fatalf("list revoke audit events: %v", err)
+	}
+	if len(revokedEvents) != 1 || revokedEvents[0].TargetID != created.APIToken.ID || revokedEvents[0].PrincipalID != owner.ID {
+		t.Fatalf("api_token.revoked audit = %#v, want target %q actor %q", revokedEvents, created.APIToken.ID, owner.ID)
+	}
 }
 
 func TestCurrentSessionRevocationIsScopedToAuthenticatedPrincipal(t *testing.T) {
@@ -130,7 +201,7 @@ func TestCurrentSessionRevocationIsScopedToAuthenticatedPrincipal(t *testing.T) 
 		PrincipalID: owner.ID,
 		WorkspaceID: "test",
 		Name:        "auth",
-		Permissions: []string{access.PermissionWorkspaceRead},
+		Privileges:  []access.Privilege{access.PrivilegeUseWorkspace},
 	})
 	ownerSessionSecret, err := repo.CreateSession(ctx, owner.ID, time.Hour)
 	if err != nil {

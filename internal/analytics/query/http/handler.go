@@ -9,9 +9,12 @@ import (
 	"io"
 	nethttp "net/http"
 	"sort"
+	"strings"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
+	queryauthz "github.com/Yacobolo/libredash/internal/analytics/query/authz"
 	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
@@ -31,6 +34,22 @@ type Handler struct {
 	Metrics             Metrics
 	MetricsForWorkspace func(workspaceID string) (Metrics, bool)
 	CurrentPrincipalID  func(r *nethttp.Request) string
+}
+
+func SemanticDatasetObjectRefs(r *nethttp.Request, workspaceID string) []access.ObjectRef {
+	objects := []access.ObjectRef{}
+	modelID := strings.TrimSpace(chi.URLParam(r, "model"))
+	if modelID != "" {
+		model := access.ItemObjectWithParent(access.SecurableSemanticModel, workspaceID, modelID, access.WorkspaceObject(workspaceID))
+		if datasetID := strings.TrimSpace(chi.URLParam(r, "dataset")); datasetID != "" {
+			objects = append(objects, access.ItemObjectWithParent(access.SecurableDataset, workspaceID, modelID+"/"+datasetID, model))
+		}
+		objects = append(objects, model)
+	}
+	if strings.TrimSpace(workspaceID) != "" {
+		objects = append(objects, access.WorkspaceObject(workspaceID))
+	}
+	return objects
 }
 
 func (h Handler) ListSemanticModels(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -136,7 +155,7 @@ func (h Handler) QuerySemanticDataset(w nethttp.ResponseWriter, r *nethttp.Reque
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "semantic_dataset", modelID+":"+datasetID))
 	rows, err := executeAggregateRows(ctx, metrics, modelID, request)
 	if err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
+		writeJSONError(w, err, statusForDataExecutionError(err))
 		return
 	}
 	writeJSON(w, nethttp.StatusOK, semanticQueryResponse(plan.Columns, rows, limit, request.Offset))
@@ -169,7 +188,7 @@ func (h Handler) PreviewSemanticDataset(w nethttp.ResponseWriter, r *nethttp.Req
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIPreview, "semantic_dataset", modelID+":"+datasetID))
 	rows, err := executePreviewRows(ctx, metrics, modelID, request)
 	if err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
+		writeJSONError(w, err, statusForDataExecutionError(err))
 		return
 	}
 	writeJSON(w, nethttp.StatusOK, semanticQueryResponse(plan.Columns, rows, limit, request.Offset))
@@ -619,6 +638,16 @@ func executePreviewRows(ctx context.Context, metrics Metrics, modelID string, re
 		Offset:   request.Offset,
 	})
 	return queryRowsFromDataResult(result.Rows), err
+}
+
+func statusForDataExecutionError(err error) int {
+	if err == nil {
+		return nethttp.StatusOK
+	}
+	if queryauthz.IsDenied(err) {
+		return nethttp.StatusForbidden
+	}
+	return nethttp.StatusBadRequest
 }
 
 func queryFieldsToDataFields(fields []reportdef.QueryField) []dataquery.Field {

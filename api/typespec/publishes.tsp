@@ -35,7 +35,7 @@ model PublishListResponse {
 @summary("List publishes")
 @route("/workspaces/{workspace}/publishes")
 @get
-@apigen.authz(#{ mode: "permission", permission: "publish:read" })
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["publishes", "list"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
 @extension("x-agent", #{ enabled: true, name: "list_publishes", risk: "read", tags: #["publish"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "environment", "status", "createdAt"], cursorPath: "page.nextCursor", count: true } })
 op listPublishes(@path workspace: string, @query environment?: string, @query limit?: int32, @query pageToken?: string): OkJson<PublishListResponse> | CommonErrors;
@@ -44,14 +44,14 @@ op listPublishes(@path workspace: string, @query environment?: string, @query li
 @summary("Create a publish")
 @route("/workspaces/{workspace}/publishes")
 @post
-@apigen.authz(#{ mode: "permission", permission: "publish:write" })
+@apigen.authz(#{ mode: "privilege", privilege: "DEPLOY" })
 op createPublish(@path workspace: string, @body body?: PublishCreateRequest): CreatedJson<PublishResponse> | CommonErrors;
 
 @tag("Publishes")
 @summary("Get a publish")
 @route("/workspaces/{workspace}/publishes/{publish}")
 @get
-@apigen.authz(#{ mode: "permission", permission: "publish:read" })
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @extension("x-agent", #{ enabled: true, name: "get_publish", risk: "read", tags: #["publish"], output: #{ rootFields: #["id", "environment", "status", "createdAt", "activatedAt", "error"] } })
 op getPublish(@path workspace: string, @path publish: string, @query environment?: string): OkJson<PublishResponse> | CommonErrors;
 
@@ -59,14 +59,14 @@ op getPublish(@path workspace: string, @path publish: string, @query environment
 @summary("Activate a publish")
 @route("/workspaces/{workspace}/publishes/{publish}/activate")
 @post
-@apigen.authz(#{ mode: "permission", permission: "publish:activate" })
+@apigen.authz(#{ mode: "privilege", privilege: "ACTIVATE_PUBLISH" })
 op activatePublish(@path workspace: string, @path publish: string, @query environment?: string): OkJson<PublishResponse> | CommonErrors;
 
 @tag("Publishes")
 @summary("Upload a publish artifact")
 @route("/workspaces/{workspace}/publishes/{publish}/artifact")
 @put
-@apigen.authz(#{ mode: "permission", permission: "publish:write" })
+@apigen.authz(#{ mode: "privilege", privilege: "DEPLOY" })
 @apigen.manual
 op uploadPublishArtifact(
   @path workspace: string,
@@ -79,5 +79,5 @@ op uploadPublishArtifact(
 @summary("Validate a publish")
 @route("/workspaces/{workspace}/publishes/{publish}/validate")
 @post
-@apigen.authz(#{ mode: "permission", permission: "publish:write" })
+@apigen.authz(#{ mode: "privilege", privilege: "DEPLOY" })
 op validatePublish(@path workspace: string, @path publish: string, @query environment?: string): OkJson<PublishResponse> | CommonErrors;

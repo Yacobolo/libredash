@@ -139,6 +139,24 @@ type workspaceRoleBindingSubjectSpec struct {
 	Group       string `yaml:"group"`
 }
 
+type workspaceSecurableObjectSpec struct {
+	Type string `yaml:"type"`
+	ID   string `yaml:"id"`
+}
+
+type workspaceGrantSpec struct {
+	Object    workspaceSecurableObjectSpec    `yaml:"object"`
+	Subject   workspaceRoleBindingSubjectSpec `yaml:"subject"`
+	Privilege string                          `yaml:"privilege"`
+}
+
+type workspaceDataPolicySpec struct {
+	Object     workspaceSecurableObjectSpec    `yaml:"object"`
+	Subject    workspaceRoleBindingSubjectSpec `yaml:"subject"`
+	PolicyType string                          `yaml:"policyType"`
+	Expression yaml.Node                       `yaml:"expression"`
+}
+
 type workspaceAgentPolicySpec struct {
 	Enabled      bool                          `yaml:"enabled"`
 	Tools        workspaceAgentPolicyToolsSpec `yaml:"tools"`

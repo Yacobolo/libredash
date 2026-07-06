@@ -97,8 +97,10 @@ CREATE TABLE IF NOT EXISTS asset_edges (
 
 CREATE TABLE IF NOT EXISTS principals (
   id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL DEFAULT 'user',
   email TEXT NOT NULL DEFAULT '',
   display_name TEXT NOT NULL DEFAULT '',
+  disabled_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -117,7 +119,7 @@ CREATE TABLE IF NOT EXISTS external_identities (
 
 CREATE TABLE IF NOT EXISTS groups (
   id TEXT PRIMARY KEY,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL DEFAULT '',
   provider TEXT NOT NULL DEFAULT '',
   external_id TEXT NOT NULL DEFAULT '',
   name TEXT NOT NULL,
@@ -127,28 +129,16 @@ CREATE TABLE IF NOT EXISTS groups (
 
 CREATE TABLE IF NOT EXISTS group_members (
   group_id TEXT NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL DEFAULT '',
   principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY(group_id, principal_id)
 );
 
-CREATE TABLE IF NOT EXISTS permissions (
-  name TEXT PRIMARY KEY,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE IF NOT EXISTS roles (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
-  permissions_json TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS role_permissions (
-  role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-  permission_name TEXT NOT NULL REFERENCES permissions(name) ON DELETE CASCADE,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY(role_id, permission_name)
+  privileges_json TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS role_bindings (
@@ -170,7 +160,8 @@ CREATE TABLE IF NOT EXISTS platform_role_bindings (
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
-  token_hash TEXT NOT NULL UNIQUE,
+  token_fingerprint TEXT NOT NULL UNIQUE,
+  token_verifier TEXT NOT NULL,
   expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -190,12 +181,70 @@ CREATE TABLE IF NOT EXISTS api_tokens (
   principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
   workspace_id TEXT REFERENCES workspaces(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
-  token_hash TEXT NOT NULL UNIQUE,
-  permissions_json TEXT NOT NULL DEFAULT '[]',
+  token_fingerprint TEXT NOT NULL UNIQUE,
+  token_verifier TEXT NOT NULL,
+  privileges_json TEXT NOT NULL DEFAULT '[]',
   expires_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_used_at TEXT,
   revoked_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS service_principal_secrets (
+  id TEXT PRIMARY KEY,
+  service_principal_id TEXT NOT NULL REFERENCES principals(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  secret_fingerprint TEXT NOT NULL,
+  secret_verifier TEXT NOT NULL,
+  expires_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  revoked_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS securable_objects (
+  id TEXT PRIMARY KEY,
+  object_type TEXT NOT NULL,
+  workspace_id TEXT NOT NULL DEFAULT '',
+  parent_id TEXT NOT NULL DEFAULT '',
+  owner_principal_id TEXT NOT NULL DEFAULT '',
+  display_name TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS securable_objects_workspace_idx
+  ON securable_objects(workspace_id, object_type);
+
+CREATE TABLE IF NOT EXISTS grants (
+  id TEXT PRIMARY KEY,
+  object_id TEXT NOT NULL REFERENCES securable_objects(id) ON DELETE CASCADE,
+  subject_type TEXT NOT NULL,
+  subject_id TEXT NOT NULL,
+  privilege TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(object_id, subject_type, subject_id, privilege)
+);
+
+CREATE INDEX IF NOT EXISTS grants_subject_idx
+  ON grants(subject_type, subject_id, privilege);
+
+CREATE TABLE IF NOT EXISTS role_grant_templates (
+  role_name TEXT NOT NULL,
+  privilege TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(role_name, privilege)
+);
+
+CREATE TABLE IF NOT EXISTS data_policies (
+  id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL DEFAULT '',
+  object_id TEXT NOT NULL REFERENCES securable_objects(id) ON DELETE CASCADE,
+  subject_type TEXT NOT NULL DEFAULT '',
+  subject_id TEXT NOT NULL DEFAULT '',
+  policy_type TEXT NOT NULL,
+  expression_json TEXT NOT NULL DEFAULT '{}',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS refresh_jobs (
@@ -251,6 +300,10 @@ CREATE TABLE IF NOT EXISTS audit_events (
   action TEXT NOT NULL,
   target_type TEXT NOT NULL DEFAULT '',
   target_id TEXT NOT NULL DEFAULT '',
+  privilege TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT '',
+  request_id TEXT NOT NULL DEFAULT '',
+  correlation_id TEXT NOT NULL DEFAULT '',
   metadata_json TEXT NOT NULL DEFAULT '{}',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -351,8 +404,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS role_bindings_group_unique_idx
   WHERE group_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS platform_role_bindings_principal_unique_idx
   ON platform_role_bindings(role_id, principal_id);
-CREATE INDEX IF NOT EXISTS sessions_token_hash_idx ON sessions(token_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_token_fingerprint_unique_idx
+  ON sessions(token_fingerprint)
+  WHERE token_fingerprint IS NOT NULL AND token_fingerprint <> '';
 CREATE INDEX IF NOT EXISTS api_tokens_principal_idx ON api_tokens(principal_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS api_tokens_token_fingerprint_unique_idx
+  ON api_tokens(token_fingerprint)
+  WHERE token_fingerprint IS NOT NULL AND token_fingerprint <> '';
+CREATE INDEX IF NOT EXISTS service_principal_secrets_principal_idx ON service_principal_secrets(service_principal_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS service_principal_secrets_fingerprint_unique_idx
+  ON service_principal_secrets(service_principal_id, secret_fingerprint)
+  WHERE secret_fingerprint IS NOT NULL AND secret_fingerprint <> '';
 CREATE INDEX IF NOT EXISTS audit_events_workspace_created_idx ON audit_events(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS query_events_workspace_created_idx ON query_events(workspace_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS query_events_principal_created_idx ON query_events(principal_id, created_at DESC);

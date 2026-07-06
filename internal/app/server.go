@@ -14,15 +14,13 @@ import (
 	"github.com/Yacobolo/libredash/internal/agent"
 	agentopenai "github.com/Yacobolo/libredash/internal/agent/openai"
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
-	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
-	"github.com/Yacobolo/libredash/internal/dashboard"
+	queryauthz "github.com/Yacobolo/libredash/internal/analytics/query/authz"
 	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
-	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
-	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/execution"
 	"github.com/Yacobolo/libredash/internal/platform"
 	queryauditsqlite "github.com/Yacobolo/libredash/internal/queryaudit/sqlite"
+	"github.com/Yacobolo/libredash/internal/queryruntime"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -31,29 +29,8 @@ import (
 	"github.com/gorilla/csrf"
 )
 
-type QueryMetrics interface {
-	Catalog() dashboard.Catalog
-	DefaultDashboardID() string
-	ModelIDForDashboard(dashboardID string) string
-	Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool)
-	SemanticModel(modelID string) (*semanticmodel.Model, bool)
-	DefaultFilters(dashboardID string) dashboard.Filters
-	NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
-	QueryDashboard(ctx context.Context, dashboardID string, filters dashboard.Filters) (dashboard.Patch, error)
-	QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error)
-	QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
-	QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
-	ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error)
-	QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error)
-	PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
-	RefreshMaterializations(ctx context.Context, modelID string) error
-	DataDir() string
-	Pages(dashboardID string) []dashboard.Page
-}
-
-type workspaceMetrics interface {
-	MetricsForWorkspace(workspaceID string) (QueryMetrics, bool)
-}
+type QueryMetrics = queryruntime.Metrics
+type workspaceMetrics = queryruntime.WorkspaceMetrics
 
 type multiWorkspaceMetrics struct {
 	defaultID  string
@@ -104,6 +81,7 @@ type Server struct {
 	duckLakeDataPath    string
 	defaultWorkspaceID  string
 	defaultEnvironment  string
+	scimBearerToken     string
 	rateLimits          RateLimitConfig
 	securityHeaders     SecurityHeadersConfig
 	requestLogging      bool
@@ -134,6 +112,7 @@ type Options struct {
 	DuckLakeDataPath    string
 	DefaultWorkspaceID  string
 	DefaultEnvironment  string
+	SCIMBearerToken     string
 	RateLimits          RateLimitConfig
 	SecurityHeaders     SecurityHeadersConfig
 	RequestLogging      bool
@@ -149,6 +128,22 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	}
 	if metrics != nil {
 		metrics = executionMetrics{QueryMetrics: metrics, executor: executor, defaultWorkspaceID: options.DefaultWorkspaceID}
+	}
+	dataAccessRepo := options.AccessRepo
+	if dataAccessRepo == nil && options.Auth != nil && options.Store != nil {
+		dataAccessRepo = accesssqlite.NewRepository(options.Store.SQLDB())
+	}
+	if metrics != nil && dataAccessRepo != nil && options.Auth != nil {
+		metrics = queryauthz.New(metrics, queryauthz.Options{
+			Repo:               dataAccessRepo,
+			DefaultWorkspaceID: options.DefaultWorkspaceID,
+			PrincipalFromContext: func(ctx context.Context) (queryauthz.Principal, bool) {
+				principal, ok := principalFromContext(ctx)
+				return queryauthz.Principal{ID: principal.ID, DevBypass: principal.DevBypass}, ok
+			},
+			CredentialFromContext: apiCredentialFromContext,
+			TokenAllows:           apiTokenAllows,
+		})
 	}
 	if metrics != nil && options.Store != nil {
 		metrics = queryAuditMetrics{
@@ -173,6 +168,7 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.duckLakeDataPath = options.DuckLakeDataPath
 	server.defaultWorkspaceID = options.DefaultWorkspaceID
 	server.defaultEnvironment = string(servingstate.NormalizeEnvironment(servingstate.Environment(options.DefaultEnvironment)))
+	server.scimBearerToken = options.SCIMBearerToken
 	server.rateLimits = options.RateLimits
 	server.securityHeaders = options.SecurityHeaders
 	server.requestLogging = options.RequestLogging
@@ -258,6 +254,11 @@ func principalFromContext(ctx context.Context) (Principal, bool) {
 	return principal, ok
 }
 
+func apiCredentialFromContext(ctx context.Context) (access.APICredential, bool) {
+	credential, ok := ctx.Value(apiCredentialContextKey{}).(access.APICredential)
+	return credential, ok
+}
+
 func localDeveloperPrincipal() Principal {
 	return Principal{ID: "dev", Email: "dev@localhost", DisplayName: "Local Developer", DevBypass: true}
 }
@@ -271,7 +272,7 @@ func SeedLocalDeveloperPlatformAdmin(ctx context.Context, repo access.Repository
 		PrincipalID: principal.ID,
 		Email:       principal.Email,
 		DisplayName: principal.DisplayName,
-		Role:        access.RoleAdmin,
+		Role:        access.RolePlatformAdmin,
 	})
 	return err
 }

@@ -72,34 +72,42 @@ type Sort struct {
 	Direction string
 }
 
+type ColumnMask struct {
+	Field string
+	Mask  string
+}
+
 type Request struct {
-	Table      string
-	Dimensions []Field
-	Measures   []Field
-	Time       Time
-	Filters    []Filter
-	Sort       []Sort
-	Limit      int
-	Offset     int
+	Table       string
+	Dimensions  []Field
+	Measures    []Field
+	Time        Time
+	Filters     []Filter
+	Sort        []Sort
+	ColumnMasks []ColumnMask
+	Limit       int
+	Offset      int
 }
 
 type RowRequest struct {
-	Table      string
-	Dimensions []Field
-	Measures   []Field
-	Filters    []Filter
-	Sort       []Sort
-	Limit      int
-	Offset     int
+	Table       string
+	Dimensions  []Field
+	Measures    []Field
+	Filters     []Filter
+	Sort        []Sort
+	ColumnMasks []ColumnMask
+	Limit       int
+	Offset      int
 }
 
 type RawValueRequest struct {
-	Table      string
-	Dimensions []Field
-	Measure    Field
-	Filters    []Filter
-	Sort       []Sort
-	Limit      int
+	Table       string
+	Dimensions  []Field
+	Measure     Field
+	Filters     []Filter
+	Sort        []Sort
+	ColumnMasks []ColumnMask
+	Limit       int
 }
 
 type CountRequest struct {

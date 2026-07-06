@@ -3711,20 +3711,36 @@
     "WorkspaceAccessCommand": {
       "additionalProperties": false,
       "properties": {
+        "bindingId": {
+          "type": "string"
+        },
         "email": {
           "type": "string"
         },
         "principalId": {
           "type": "string"
         },
+        "privilege": {
+          "type": "string"
+        },
         "role": {
+          "type": "string"
+        },
+        "subjectId": {
+          "type": "string"
+        },
+        "subjectType": {
           "type": "string"
         }
       },
       "required": [
+        "bindingId",
         "email",
         "principalId",
-        "role"
+        "privilege",
+        "role",
+        "subjectId",
+        "subjectType"
       ],
       "type": "object"
     },
@@ -3737,6 +3753,18 @@
         },
         "canManage": {
           "type": "boolean"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "objectId": {
+          "type": "string"
+        },
+        "objectTitle": {
+          "type": "string"
+        },
+        "objectType": {
+          "type": "string"
         },
         "roles": {
           "items": {},
@@ -3770,6 +3798,18 @@
           "$ref": "#/$defs/WorkspaceAccessCommand"
         },
         "csrfToken": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "objectId": {
+          "type": "string"
+        },
+        "objectTitle": {
+          "type": "string"
+        },
+        "objectType": {
           "type": "string"
         },
         "roles": {

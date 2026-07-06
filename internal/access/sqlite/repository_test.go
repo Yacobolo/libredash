@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,7 +15,7 @@ import (
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
 
-func TestRepositoryChecksRBAC(t *testing.T) {
+func TestRepositoryChecksGrantPrivileges(t *testing.T) {
 	ctx := context.Background()
 	_, repo := openAccessRepo(t, ctx)
 
@@ -27,16 +28,16 @@ func TestRepositoryChecksRBAC(t *testing.T) {
 	if err != nil {
 		t.Fatalf("set principal role: %v", err)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionPublishActivate)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivatePublish)
 	if err != nil {
-		t.Fatalf("check permission: %v", err)
+		t.Fatalf("check privilege: %v", err)
 	}
 	if !allowed {
-		t.Fatal("owner missing deployment activation permission")
+		t.Fatal("owner missing deployment activation privilege")
 	}
 }
 
-func TestRepositoryChecksPlatformRolePermissions(t *testing.T) {
+func TestRepositoryChecksPlatformRolePrivileges(t *testing.T) {
 	ctx := context.Background()
 	_, repo := openAccessRepo(t, ctx)
 
@@ -50,12 +51,12 @@ func TestRepositoryChecksPlatformRolePermissions(t *testing.T) {
 		t.Fatalf("set platform role: %v", err)
 	}
 	for _, workspaceID := range []string{"test", "other"} {
-		allowed, err := repo.HasPermission(ctx, workspaceID, principal.ID, access.PermissionTokenManage)
+		allowed, err := testAuthorize(ctx, repo, workspaceID, principal.ID, access.PrivilegeManageGrants)
 		if err != nil {
-			t.Fatalf("check permission for %s: %v", workspaceID, err)
+			t.Fatalf("check privilege for %s: %v", workspaceID, err)
 		}
 		if !allowed {
-			t.Fatalf("platform admin missing token manage permission for workspace %s", workspaceID)
+			t.Fatalf("platform admin missing token manage privilege for workspace %s", workspaceID)
 		}
 	}
 
@@ -63,16 +64,16 @@ func TestRepositoryChecksPlatformRolePermissions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upsert limited principal: %v", err)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", limited.ID, access.PermissionTokenManage)
+	allowed, err := testAuthorize(ctx, repo, "test", limited.ID, access.PrivilegeManageGrants)
 	if err != nil {
-		t.Fatalf("check limited permission: %v", err)
+		t.Fatalf("check limited privilege: %v", err)
 	}
 	if allowed {
-		t.Fatal("principal without platform or workspace role unexpectedly has permission")
+		t.Fatal("principal without platform or workspace role unexpectedly has privilege")
 	}
 }
 
-func TestRepositoryChecksGroupRolePermissions(t *testing.T) {
+func TestRepositoryChecksGroupRolePrivileges(t *testing.T) {
 	ctx := context.Background()
 	_, repo := openAccessRepo(t, ctx)
 
@@ -109,22 +110,272 @@ func TestRepositoryChecksGroupRolePermissions(t *testing.T) {
 		t.Fatalf("binding subject = %q/%q, want group/%q", binding.SubjectType, binding.SubjectID, group.ID)
 	}
 
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionPublishActivate)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivatePublish)
 	if err != nil {
-		t.Fatalf("check permission: %v", err)
+		t.Fatalf("check privilege: %v", err)
 	}
 	if !allowed {
-		t.Fatal("group member missing deployment activation permission")
+		t.Fatal("group member missing deployment activation privilege")
 	}
 	if err := repo.RemoveGroupMember(ctx, "test", group.ID, principal.ID); err != nil {
 		t.Fatalf("remove group member: %v", err)
 	}
-	allowed, err = repo.HasPermission(ctx, "test", principal.ID, access.PermissionPublishActivate)
+	allowed, err = testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivatePublish)
 	if err != nil {
-		t.Fatalf("check permission after remove: %v", err)
+		t.Fatalf("check privilege after remove: %v", err)
 	}
 	if allowed {
-		t.Fatal("removed group member still has deployment activation permission")
+		t.Fatal("removed group member still has deployment activation privilege")
+	}
+}
+
+func TestRepositoryResolvesDBBackedObjectInheritance(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "dataset_reader",
+		Email:       "dataset@example.com",
+		DisplayName: "Dataset Reader",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	semanticModel := access.ItemObject(access.SecurableSemanticModel, "test", "sales")
+	dataset := access.ItemObjectWithParent(access.SecurableDataset, "test", "sales/orders", semanticModel)
+	column := access.ItemObjectWithParent(access.SecurableColumn, "test", "sales/orders/net_revenue", dataset)
+	if _, err := repo.CreateGrant(ctx, access.GrantInput{
+		Object:      dataset,
+		SubjectType: access.SubjectPrincipal,
+		SubjectID:   principal.ID,
+		Privilege:   access.PrivilegeQueryData,
+	}); err != nil {
+		t.Fatalf("create dataset grant: %v", err)
+	}
+
+	decision, err := repo.Authorize(ctx, principal.ID, access.PrivilegeQueryData, column)
+	if err != nil {
+		t.Fatalf("authorize column: %v", err)
+	}
+	if !decision.Allowed || !decision.Inherited || decision.Reason != "grant" {
+		t.Fatalf("decision = %#v, want inherited dataset grant", decision)
+	}
+	if decision.GrantObjectID != dataset.CanonicalID() {
+		t.Fatalf("grant object = %q, want %q", decision.GrantObjectID, dataset.CanonicalID())
+	}
+}
+
+func TestRepositoryExplainsEffectiveAccessAndAuthorizeAny(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "viewer", Email: "viewer@example.com"})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	dashboard := access.ItemObject(access.SecurableDashboard, "test", "exec")
+	if _, err := repo.CreateGrant(ctx, access.GrantInput{
+		Object:      dashboard,
+		SubjectType: access.SubjectPrincipal,
+		SubjectID:   principal.ID,
+		Privilege:   access.PrivilegeViewItem,
+	}); err != nil {
+		t.Fatalf("create dashboard grant: %v", err)
+	}
+
+	decision, err := repo.AuthorizeAny(ctx, principal.ID, access.PrivilegeViewItem, []access.ObjectRef{
+		access.ItemObject(access.SecurableSemanticModel, "test", "sales"),
+		dashboard,
+	})
+	if err != nil {
+		t.Fatalf("authorize any: %v", err)
+	}
+	if !decision.Allowed || decision.Object.CanonicalID() != dashboard.CanonicalID() {
+		t.Fatalf("decision = %#v, want dashboard grant", decision)
+	}
+
+	effective, err := repo.EffectiveAccess(ctx, principal.ID, dashboard)
+	if err != nil {
+		t.Fatalf("effective access: %v", err)
+	}
+	var found bool
+	for _, row := range effective {
+		if row.Privilege == access.PrivilegeViewItem {
+			found = true
+			if row.Reason != "grant" || row.GrantID == "" || row.GrantObjectID != dashboard.CanonicalID() {
+				t.Fatalf("view explanation = %#v, want direct grant provenance", row)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("effective access = %#v, missing VIEW_ITEM", effective)
+	}
+}
+
+func TestRepositorySupportsServicePrincipalSecrets(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	sp, err := repo.CreateServicePrincipal(ctx, access.ServicePrincipalInput{
+		ID:          "sp_deployer",
+		DisplayName: "Deploy Bot",
+	})
+	if err != nil {
+		t.Fatalf("create service principal: %v", err)
+	}
+	if sp.Kind != access.PrincipalKindServicePrincipal {
+		t.Fatalf("kind = %q, want service_principal", sp.Kind)
+	}
+	secret, row, err := repo.CreateServicePrincipalSecret(ctx, sp.ID, "ci")
+	if err != nil {
+		t.Fatalf("create secret: %v", err)
+	}
+	if secret == "" || row.Secret != "" {
+		t.Fatalf("secret row = %#v, raw secret %q should be returned once and never exposed in metadata", row, secret)
+	}
+	resolved, err := repo.PrincipalForServicePrincipalSecret(ctx, sp.ID, secret)
+	if err != nil {
+		t.Fatalf("resolve secret: %v", err)
+	}
+	if resolved.ID != sp.ID || resolved.Kind != access.PrincipalKindServicePrincipal {
+		t.Fatalf("resolved = %#v, want service principal", resolved)
+	}
+	if err := repo.RevokeServicePrincipalSecret(ctx, sp.ID, row.ID); err != nil {
+		t.Fatalf("revoke secret: %v", err)
+	}
+	if _, err := repo.PrincipalForServicePrincipalSecret(ctx, sp.ID, secret); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("resolve revoked secret error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestRepositoryStoresDataPoliciesBySecurableObject(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	object := access.ItemObjectWithParent(
+		access.SecurableDataset,
+		"test",
+		"sales/orders",
+		access.ItemObject(access.SecurableSemanticModel, "test", "sales"),
+	)
+	policy, err := repo.UpsertDataPolicy(ctx, access.DataPolicyInput{
+		ID:             "policy_region",
+		Object:         object,
+		PolicyType:     "row_filter",
+		ExpressionJSON: `{"field":"region","op":"=","value":"EMEA"}`,
+	})
+	if err != nil {
+		t.Fatalf("upsert data policy: %v", err)
+	}
+	if policy.ObjectID != object.CanonicalID() {
+		t.Fatalf("object id = %q, want %q", policy.ObjectID, object.CanonicalID())
+	}
+	policies, err := repo.ListDataPolicies(ctx, object)
+	if err != nil {
+		t.Fatalf("list data policies: %v", err)
+	}
+	if len(policies) != 1 || policies[0].ID != "policy_region" || policies[0].PolicyType != "row_filter" {
+		t.Fatalf("policies = %#v, want row filter policy", policies)
+	}
+	if err := repo.DeleteDataPolicy(ctx, "test", "policy_region"); err != nil {
+		t.Fatalf("delete data policy: %v", err)
+	}
+	policies, err = repo.ListDataPolicies(ctx, object)
+	if err != nil {
+		t.Fatalf("list after delete: %v", err)
+	}
+	if len(policies) != 0 {
+		t.Fatalf("policies after delete = %#v, want empty", policies)
+	}
+}
+
+func TestRepositoryFiltersDataPoliciesBySubject(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	alice, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "principal_policy_alice", Email: "alice@example.com", DisplayName: "Alice"})
+	if err != nil {
+		t.Fatalf("upsert alice: %v", err)
+	}
+	bob, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "principal_policy_bob", Email: "bob@example.com", DisplayName: "Bob"})
+	if err != nil {
+		t.Fatalf("upsert bob: %v", err)
+	}
+	group, err := repo.UpsertGroup(ctx, access.GroupInput{ID: "group_policy", WorkspaceID: "test", Provider: "local", ExternalID: "analysts", Name: "Analysts"})
+	if err != nil {
+		t.Fatalf("upsert group: %v", err)
+	}
+	if err := repo.AddGroupMember(ctx, "test", group.ID, bob.ID); err != nil {
+		t.Fatalf("add group member: %v", err)
+	}
+	object := access.ItemObjectWithParent(access.SecurableDataset, "test", "sales/orders", access.ItemObject(access.SecurableSemanticModel, "test", "sales"))
+	for _, input := range []access.DataPolicyInput{
+		{ID: "policy_global", Object: object, PolicyType: "row_filter", ExpressionJSON: `{"field":"region","value":"global"}`},
+		{ID: "policy_alice", Object: object, PolicyType: "row_filter", ExpressionJSON: `{"field":"region","value":"alice"}`, SubjectType: access.SubjectPrincipal, SubjectID: alice.ID},
+		{ID: "policy_group", Object: object, PolicyType: "row_filter", ExpressionJSON: `{"field":"region","value":"group"}`, SubjectType: access.SubjectGroup, SubjectID: group.ID},
+	} {
+		if _, err := repo.UpsertDataPolicy(ctx, input); err != nil {
+			t.Fatalf("upsert %s: %v", input.ID, err)
+		}
+	}
+	alicePolicies, err := repo.ListEffectiveDataPolicies(ctx, alice.ID, object, true)
+	if err != nil {
+		t.Fatalf("list alice policies: %v", err)
+	}
+	if got := policyIDs(alicePolicies); !equalStringSets(got, []string{"policy_global", "policy_alice"}) {
+		t.Fatalf("alice policies = %#v", got)
+	}
+	bobPolicies, err := repo.ListEffectiveDataPolicies(ctx, bob.ID, object, true)
+	if err != nil {
+		t.Fatalf("list bob policies: %v", err)
+	}
+	if got := policyIDs(bobPolicies); !equalStringSets(got, []string{"policy_global", "policy_group"}) {
+		t.Fatalf("bob policies = %#v", got)
+	}
+}
+
+func TestRepositoryObjectOwnershipGrantsFullControl(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	owner, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "principal_object_owner", Email: "owner@example.com", DisplayName: "Owner"})
+	if err != nil {
+		t.Fatalf("upsert owner: %v", err)
+	}
+	object := access.ItemObject(access.SecurableDashboard, "test", "executive")
+	if _, err := repo.SetObjectOwner(ctx, object, owner.ID); err != nil {
+		t.Fatalf("set object owner: %v", err)
+	}
+	decision, err := repo.Authorize(ctx, owner.ID, access.PrivilegeManageGrants, object)
+	if err != nil {
+		t.Fatalf("authorize owner: %v", err)
+	}
+	if !decision.Allowed || !decision.Owner || decision.Reason != "owner" {
+		t.Fatalf("owner decision = %#v", decision)
+	}
+}
+
+func TestRepositoryAPITokensExpireByDefault(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "principal_default_token_expiry", Email: "token@example.com", DisplayName: "Token"})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	_, token, err := repo.CreateAPITokenWithMetadata(ctx, access.APITokenInput{PrincipalID: principal.ID, Name: "default-expiry"})
+	if err != nil {
+		t.Fatalf("create api token: %v", err)
+	}
+	if token.ExpiresAt == "" {
+		t.Fatal("token expires_at is empty, want default expiry")
+	}
+	expiresAt, err := time.Parse(time.RFC3339, token.ExpiresAt)
+	if err != nil {
+		t.Fatalf("parse expires_at %q: %v", token.ExpiresAt, err)
+	}
+	if !expiresAt.After(time.Now()) {
+		t.Fatalf("expires_at = %s, want future default", token.ExpiresAt)
 	}
 }
 
@@ -295,12 +546,12 @@ func TestRepositoryResolveExternalPrincipalAttachesBootstrappedEmail(t *testing.
 	if principal.ID != access.PrincipalIDForEmail("owner@example.com") {
 		t.Fatalf("principal id = %q, want bootstrapped email principal", principal.ID)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionPublishActivate)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivatePublish)
 	if err != nil {
-		t.Fatalf("check permission: %v", err)
+		t.Fatalf("check privilege: %v", err)
 	}
 	if !allowed {
-		t.Fatal("attached Azure identity did not inherit owner permissions")
+		t.Fatal("attached Azure identity did not inherit owner privileges")
 	}
 
 	again, err := repo.ResolveExternalPrincipal(ctx, access.ExternalIdentityInput{
@@ -355,12 +606,12 @@ func TestRepositoryResolveExternalPrincipalWithoutEmailCreatesUnprivilegedPrinci
 	if err != nil {
 		t.Fatalf("resolve external principal: %v", err)
 	}
-	allowed, err := repo.HasPermission(ctx, "test", principal.ID, access.PermissionPublishActivate)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivatePublish)
 	if err != nil {
-		t.Fatalf("check permission: %v", err)
+		t.Fatalf("check privilege: %v", err)
 	}
 	if allowed {
-		t.Fatal("new external principal unexpectedly has deployment activation permission")
+		t.Fatal("new external principal unexpectedly has deployment activation privilege")
 	}
 }
 
@@ -400,6 +651,69 @@ func TestRepositorySessionsAndAPITokensResolvePrincipals(t *testing.T) {
 	if apiPrincipal.ID != principal.ID {
 		t.Fatalf("api token principal = %q, want %q", apiPrincipal.ID, principal.ID)
 	}
+}
+
+func TestRepositoryStoresNewCredentialsWithFingerprintsAndVerifiers(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openAccessRepo(t, ctx)
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "principal_hardened_credentials",
+		Email:       "hardened@example.com",
+		DisplayName: "Hardened",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+
+	sessionSecret, err := repo.CreateSession(ctx, principal.ID, time.Hour)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	assertStoredSecret(t, store.SQLDB(), sessionSecret, `
+		SELECT token_fingerprint, token_verifier
+		FROM sessions
+		WHERE principal_id = ?
+	`, principal.ID)
+	if _, err := repo.PrincipalForToken(ctx, sessionSecret+"wrong"); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("wrong session secret err = %v, want sql.ErrNoRows", err)
+	}
+
+	apiSecret, apiToken, err := repo.CreateAPITokenWithMetadata(ctx, access.APITokenInput{
+		PrincipalID: principal.ID,
+		Name:        "hardened",
+	})
+	if err != nil {
+		t.Fatalf("create api token: %v", err)
+	}
+	assertStoredSecret(t, store.SQLDB(), apiSecret, `
+		SELECT token_fingerprint, token_verifier
+		FROM api_tokens
+		WHERE id = ?
+	`, apiToken.ID)
+	badVerifier, err := newSecretVerifier("different-secret")
+	if err != nil {
+		t.Fatalf("new bad verifier: %v", err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, `UPDATE api_tokens SET token_verifier = ? WHERE id = ?`, badVerifier, apiToken.ID); err != nil {
+		t.Fatalf("tamper api token verifier: %v", err)
+	}
+	if _, err := repo.CredentialForAPIToken(ctx, apiSecret); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("tampered api token err = %v, want sql.ErrNoRows", err)
+	}
+
+	sp, err := repo.CreateServicePrincipal(ctx, access.ServicePrincipalInput{ID: "sp_hardened", DisplayName: "Hardened Bot"})
+	if err != nil {
+		t.Fatalf("create service principal: %v", err)
+	}
+	spSecret, spSecretRow, err := repo.CreateServicePrincipalSecret(ctx, sp.ID, "ci")
+	if err != nil {
+		t.Fatalf("create service principal secret: %v", err)
+	}
+	assertStoredSecret(t, store.SQLDB(), spSecret, `
+		SELECT secret_fingerprint, secret_verifier
+		FROM service_principal_secrets
+		WHERE id = ?
+	`, spSecretRow.ID)
 }
 
 func TestRepositoryListsAndRevokesSessionsByID(t *testing.T) {
@@ -458,7 +772,7 @@ func TestRepositoryListsAndRevokesAPITokens(t *testing.T) {
 		PrincipalID: principal.ID,
 		WorkspaceID: "test",
 		Name:        "production",
-		Permissions: []string{access.PermissionDashboardView},
+		Privileges:  []access.Privilege{access.PrivilegeViewItem},
 		ExpiresAt:   expiresAt,
 	})
 	if err != nil {
@@ -478,8 +792,8 @@ func TestRepositoryListsAndRevokesAPITokens(t *testing.T) {
 	if token.WorkspaceID != "test" || token.ExpiresAt == "" || token.RevokedAt != "" {
 		t.Fatalf("token metadata = workspace %q expires %q revoked %q", token.WorkspaceID, token.ExpiresAt, token.RevokedAt)
 	}
-	if len(token.Permissions) != 1 || token.Permissions[0] != access.PermissionDashboardView {
-		t.Fatalf("token permissions = %#v, want dashboard view", token.Permissions)
+	if len(token.Privileges) != 1 || token.Privileges[0] != access.PrivilegeViewItem {
+		t.Fatalf("token privileges = %#v, want dashboard view", token.Privileges)
 	}
 	if _, err := repo.PrincipalForAPIToken(ctx, secret); err != nil {
 		t.Fatalf("principal for api token: %v", err)
@@ -514,7 +828,7 @@ func TestRepositoryAPITokenCredentialIncludesTokenMetadata(t *testing.T) {
 		PrincipalID: principal.ID,
 		WorkspaceID: "test",
 		Name:        "scoped",
-		Permissions: []string{access.PermissionWorkspaceRead, access.PermissionTokenManage},
+		Privileges:  []access.Privilege{access.PrivilegeUseWorkspace, access.PrivilegeManageGrants},
 	})
 	if err != nil {
 		t.Fatalf("create api token: %v", err)
@@ -530,8 +844,8 @@ func TestRepositoryAPITokenCredentialIncludesTokenMetadata(t *testing.T) {
 	if credential.Token.ID != created.ID || credential.Token.WorkspaceID != "test" {
 		t.Fatalf("credential token metadata = id %q workspace %q, want %q/test", credential.Token.ID, credential.Token.WorkspaceID, created.ID)
 	}
-	if len(credential.Token.Permissions) != 2 || credential.Token.Permissions[0] != access.PermissionWorkspaceRead || credential.Token.Permissions[1] != access.PermissionTokenManage {
-		t.Fatalf("credential token permissions = %#v", credential.Token.Permissions)
+	if len(credential.Token.Privileges) != 2 || credential.Token.Privileges[0] != access.PrivilegeUseWorkspace || credential.Token.Privileges[1] != access.PrivilegeManageGrants {
+		t.Fatalf("credential token privileges = %#v", credential.Token.Privileges)
 	}
 }
 
@@ -751,4 +1065,52 @@ func openAccessRepo(t *testing.T, ctx context.Context) (*platform.Store, *Reposi
 		t.Fatalf("ensure workspace: %v", err)
 	}
 	return store, NewRepository(store.SQLDB())
+}
+
+func testAuthorize(ctx context.Context, repo *Repository, workspaceID, principalID string, privilege access.Privilege) (bool, error) {
+	decision, err := repo.Authorize(ctx, principalID, privilege, access.WorkspaceObject(workspaceID))
+	return decision.Allowed, err
+}
+
+func policyIDs(policies []access.DataPolicy) []string {
+	out := make([]string, 0, len(policies))
+	for _, policy := range policies {
+		out = append(out, policy.ID)
+	}
+	return out
+}
+
+func equalStringSets(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	counts := map[string]int{}
+	for _, value := range got {
+		counts[value]++
+	}
+	for _, value := range want {
+		counts[value]--
+		if counts[value] < 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func assertStoredSecret(t *testing.T, db *sql.DB, rawSecret, query, id string) {
+	t.Helper()
+	var fingerprint, verifier string
+	if err := db.QueryRowContext(context.Background(), query, id).Scan(&fingerprint, &verifier); err != nil {
+		t.Fatalf("query stored secret: %v", err)
+	}
+	wantFingerprint := secretFingerprint(rawSecret)
+	if fingerprint != wantFingerprint {
+		t.Fatalf("fingerprint = %q, want %q", fingerprint, wantFingerprint)
+	}
+	if strings.Contains(fingerprint, rawSecret) {
+		t.Fatalf("fingerprint %q exposes raw secret", fingerprint)
+	}
+	if !verifySecret(rawSecret, verifier) {
+		t.Fatalf("verifier does not accept raw secret")
+	}
 }

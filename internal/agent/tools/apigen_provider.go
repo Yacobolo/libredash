@@ -44,7 +44,7 @@ type Scope struct {
 type CredentialScope struct {
 	WorkspaceID string
 	Restricted  bool
-	Permissions []string
+	Privileges  []string
 }
 
 type APIGenAuthorizeFunc func(ctx context.Context, scope Scope, operationID string) (agentcore.ToolResult, bool)

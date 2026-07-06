@@ -92,14 +92,52 @@ package contracts
 	kind!:       "WorkspaceRoleBinding"
 	metadata!:   #Metadata
 	spec!: close({
-		role!: "owner" | "admin" | "deployer" | "editor" | "viewer"
+		role!: "owner" | "admin" | "deployer" | "contributor" | "editor" | "member" | "viewer" | "platform_admin"
 		subject!: close({
-			kind!:        "principal" | "group"
+			kind!:        "principal" | "group" | "service_principal"
 			principalId?: #ResourceID
 			email?:       string
 			displayName?: string
 			group?:       #ResourceID
 		})
+	})
+})
+
+#SecurableObjectRef: close({
+	type!: "workspace" | "dashboard" | "semantic_model" | "source" | "model_table" | "agent_policy" | "dataset" | "table" | "column"
+	id?:   string
+})
+
+#Privilege: "USE_WORKSPACE" | "VIEW_ITEM" | "EDIT_ITEM" | "MANAGE_ITEM" | "QUERY_DATA" | "PREVIEW_DATA" | "REFRESH_DATA" | "DEPLOY" | "ACTIVATE_PUBLISH" | "USE_AGENT" | "VIEW_AGENT" | "MANAGE_GRANTS" | "VIEW_AUDIT" | "MANAGE_WORKSPACE" | "MANAGE_PLATFORM"
+
+#AccessSubject: close({
+	kind!:        "principal" | "group" | "service_principal"
+	principalId?: #ResourceID
+	email?:       string
+	displayName?: string
+	group?:       #ResourceID
+})
+
+#GrantResource: close({
+	apiVersion!: #APIVersion
+	kind!:       "Grant"
+	metadata!:   #Metadata
+	spec!: close({
+		object!:    #SecurableObjectRef
+		subject!:   #AccessSubject
+		privilege!: #Privilege
+	})
+})
+
+#DataPolicyResource: close({
+	apiVersion!: #APIVersion
+	kind!:       "DataPolicy"
+	metadata!:   #Metadata
+	spec!: close({
+		object!:     #SecurableObjectRef
+		subject?:    #AccessSubject
+		policyType!: "row_filter" | "column_mask"
+		expression!: #AnyObject
 	})
 })
 
