@@ -17,13 +17,13 @@ import (
 
 func (s *Server) Routes() http.Handler {
 	mux := chi.NewRouter()
-	mux.Use(allowedHosts(s.allowedHosts))
 	if s.requestLogging {
 		mux.Use(requestLogger(s.logger))
 	}
 	mux.Use(s.telemetry.middleware)
 	mux.Use(panicRecovery(s.logger))
 	mux.Use(securityHeaders(s.securityHeaders))
+	mux.Use(allowedHosts(s.allowedHosts))
 	mux.Use(requestBodyLimit(s.requestBodyLimit))
 	mux.Get("/favicon.ico", favicon)
 	mux.Get("/healthz", s.healthz)

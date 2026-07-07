@@ -99,6 +99,61 @@ func TestAllowedHostsRejectsUnexpectedHost(t *testing.T) {
 	}
 }
 
+func TestAllowedHostRejectionsKeepProductionMiddlewareCoverage(t *testing.T) {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	server := NewWithOptions(fakeMetrics{}, Options{
+		AllowedHosts:    []string{"app.example.com"},
+		RequestLogging:  true,
+		Logger:          logger,
+		SecurityHeaders: SecurityHeaders(true),
+	})
+	handler := server.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Host = "evil.example.com"
+	req.RemoteAddr = "203.0.113.10:12345"
+	req.Header.Set("Authorization", "Bearer secret-token")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMisdirectedRequest {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusMisdirectedRequest, rec.Body.String())
+	}
+	headers := rec.Result().Header
+	for name, want := range map[string]string{
+		"X-Content-Type-Options":    "nosniff",
+		"Referrer-Policy":           "strict-origin-when-cross-origin",
+		"Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+	} {
+		if got := headers.Get(name); got != want {
+			t.Fatalf("%s = %q, want %q", name, got, want)
+		}
+	}
+
+	logged := buf.String()
+	for _, want := range []string{"method=GET", "path=/healthz", "status=421"} {
+		if !strings.Contains(logged, want) {
+			t.Fatalf("log %q missing %q", logged, want)
+		}
+	}
+	if strings.Contains(logged, "secret-token") || strings.Contains(logged, "Authorization") {
+		t.Fatalf("log %q leaked sensitive authorization data", logged)
+	}
+
+	metricsReq := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsReq.Host = "app.example.com"
+	metricsReq.RemoteAddr = "203.0.113.10:12345"
+	metricsRec := httptest.NewRecorder()
+	handler.ServeHTTP(metricsRec, metricsReq)
+	if metricsRec.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d, want %d body=%s", metricsRec.Code, http.StatusOK, metricsRec.Body.String())
+	}
+	if body := metricsRec.Body.String(); !strings.Contains(body, `status="421"`) {
+		t.Fatalf("metrics output missing host rejection status:\n%s", body)
+	}
+}
+
 func TestRequestBodyLimitRejectsOversizedContentLength(t *testing.T) {
 	called := false
 	handler := requestBodyLimit(RequestBodyLimitConfig{Enabled: true, MaxBytes: 4})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
