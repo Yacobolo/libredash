@@ -37,6 +37,20 @@ func TestSCIMRoutesRequireBearerAndServeMetadata(t *testing.T) {
 			t.Fatalf("%s status = %d, want %d body=%s", path, rec.Code, http.StatusOK, rec.Body.String())
 		}
 	}
+
+	for _, header := range []string{
+		"bearer " + testSCIMToken,
+		"BEARER " + testSCIMToken,
+		"Bearer   " + testSCIMToken + "  ",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/scim/v2/ServiceProviderConfig", nil)
+		req.Header.Set("Authorization", header)
+		rec := httptest.NewRecorder()
+		server.Routes().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("SCIM status with Authorization %q = %d, want %d body=%s", header, rec.Code, http.StatusOK, rec.Body.String())
+		}
+	}
 }
 
 func TestSCIMRoutesUseAPIRateLimit(t *testing.T) {

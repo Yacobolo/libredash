@@ -83,9 +83,7 @@ func (s *Server) metricsHandler() http.Handler {
 		return handler
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		value := strings.TrimSpace(r.Header.Get("Authorization"))
-		provided, ok := strings.CutPrefix(value, "Bearer ")
-		if !ok || !secret.Equal(provided, token) {
+		if provided := bearerToken(r); !secret.Equal(provided, token) {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="libredash-metrics"`)
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return

@@ -89,9 +89,7 @@ func NewHandler(options Options) (http.Handler, error) {
 
 func bearerMiddleware(expected string, repo Repository, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		header := strings.TrimSpace(r.Header.Get("Authorization"))
-		token, ok := strings.CutPrefix(header, "Bearer ")
-		if !ok || !secret.Equal(strings.TrimSpace(token), expected) {
+		if !secret.Equal(bearerToken(r), expected) {
 			recordAudit(r.Context(), repo, r, "scim.auth", "scim", "scim", "denied", errors.New("invalid scim bearer token"))
 			w.Header().Set("Content-Type", "application/scim+json")
 			w.WriteHeader(http.StatusUnauthorized)
@@ -100,6 +98,14 @@ func bearerMiddleware(expected string, repo Repository, next http.Handler) http.
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func bearerToken(r *http.Request) string {
+	fields := strings.Fields(r.Header.Get("Authorization"))
+	if len(fields) != 2 || !strings.EqualFold(fields[0], "Bearer") {
+		return ""
+	}
+	return fields[1]
 }
 
 type userHandler struct {

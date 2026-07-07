@@ -252,6 +252,20 @@ func TestMetricsRouteRequiresConfiguredBearerToken(t *testing.T) {
 	if body := rec.Body.String(); !strings.Contains(body, "libredash_http_requests_total") {
 		t.Fatalf("metrics output missing LibreDash metrics:\n%s", body)
 	}
+
+	for _, header := range []string{
+		"bearer 0123456789abcdef0123456789abcdef",
+		"BEARER 0123456789abcdef0123456789abcdef",
+		"Bearer   0123456789abcdef0123456789abcdef  ",
+	} {
+		req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		req.Header.Set("Authorization", header)
+		rec = httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("metrics status with Authorization %q = %d, want %d body=%s", header, rec.Code, http.StatusOK, rec.Body.String())
+		}
+	}
 }
 
 func TestMetricsRouteUsesAuthRateLimit(t *testing.T) {
