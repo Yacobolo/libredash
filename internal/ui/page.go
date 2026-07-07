@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/staticasset"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 	g "maragu.dev/gomponents"
@@ -21,7 +22,7 @@ func patchAction(path string) string {
 }
 
 func staticAsset(path string) string {
-	return path + "?v=dev"
+	return staticasset.URL(path)
 }
 
 const appRootClass = "min-h-svh bg-app text-fg-default"
@@ -281,7 +282,7 @@ func recordTableBadgeValue(value, tone string) any {
 }
 
 func loginBackgroundLoaderScript() g.Node {
-	return h.Script(g.Raw(`(()=>{const schedule=(task)=>{const run=()=>{"requestIdleCallback"in window?requestIdleCallback(task,{timeout:1600}):setTimeout(task,600)};document.readyState==="complete"?run():window.addEventListener("load",run,{once:true})};setTimeout(()=>schedule(()=>{const el=document.querySelector("[data-login-background]");if(!el)return;const state=el.dataset.backgroundState;if(state==="loading"||state==="loaded")return;const src=el.dataset.moduleSrc;if(!src)return;el.dataset.backgroundState="loading";import(src).then(()=>{el.dataset.backgroundState="loaded"}).catch((error)=>{el.dataset.backgroundState="error";console.error("LibreDash login background failed to load",error)})}),900)})();`))
+	return h.Script(h.Type("module"), h.Src(staticAsset("/static/login-background-loader.js")))
 }
 
 func displayLabel(label, fallback string) string {

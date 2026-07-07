@@ -5,10 +5,14 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/go-chi/httprate"
 )
+
+const DefaultMaxRequestBodyBytes int64 = 128 << 20
 
 type RateLimitConfig struct {
 	Enabled       bool
@@ -26,10 +30,19 @@ type SecurityHeadersConfig struct {
 	HSTS    bool
 }
 
+type RequestBodyLimitConfig struct {
+	Enabled  bool
+	MaxBytes int64
+}
+
+func DefaultRequestBodyLimitConfig() RequestBodyLimitConfig {
+	return RequestBodyLimitConfig{Enabled: true, MaxBytes: DefaultMaxRequestBodyBytes}
+}
+
 func ProductionRateLimitConfig() RateLimitConfig {
 	return RateLimitConfig{
 		Enabled:       true,
-		UseRealIP:     true,
+		UseRealIP:     false,
 		AuthLimit:     20,
 		AuthWindow:    time.Minute,
 		APILimit:      120,
@@ -41,6 +54,100 @@ func ProductionRateLimitConfig() RateLimitConfig {
 
 func SecurityHeaders(hsts bool) SecurityHeadersConfig {
 	return SecurityHeadersConfig{Enabled: true, HSTS: hsts}
+}
+
+func allowedHosts(hosts []string) func(http.Handler) http.Handler {
+	allowed := compileAllowedHosts(hosts)
+	return func(next http.Handler) http.Handler {
+		if len(allowed.exact) == 0 && len(allowed.wildcards) == 0 {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !allowed.matches(r.Host, r.RemoteAddr) {
+				http.Error(w, http.StatusText(http.StatusMisdirectedRequest), http.StatusMisdirectedRequest)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+type allowedHostSet struct {
+	exact     map[string]struct{}
+	wildcards []string
+}
+
+func compileAllowedHosts(hosts []string) allowedHostSet {
+	set := allowedHostSet{exact: map[string]struct{}{}}
+	for _, raw := range hosts {
+		host := normalizeRequestHost(raw)
+		if host == "" {
+			continue
+		}
+		if strings.HasPrefix(host, "*.") {
+			suffix := strings.TrimPrefix(host, "*.")
+			if suffix != "" {
+				set.wildcards = append(set.wildcards, suffix)
+			}
+			continue
+		}
+		set.exact[host] = struct{}{}
+	}
+	return set
+}
+
+func (s allowedHostSet) matches(raw, remoteAddr string) bool {
+	host := normalizeRequestHost(raw)
+	if host == "" {
+		return false
+	}
+	if _, ok := s.exact[host]; ok {
+		return true
+	}
+	for _, suffix := range s.wildcards {
+		if strings.HasSuffix(host, "."+suffix) && len(host) > len(suffix)+1 {
+			return true
+		}
+	}
+	if isLoopbackHost(host) && isLoopbackRemote(remoteAddr) {
+		return true
+	}
+	return false
+}
+
+func normalizeRequestHost(raw string) string {
+	host := strings.ToLower(strings.TrimSpace(raw))
+	host = strings.TrimSuffix(host, ".")
+	if host == "" {
+		return ""
+	}
+	if strings.HasPrefix(host, "[") {
+		if parsed, _, err := net.SplitHostPort(host); err == nil {
+			host = parsed
+		}
+		return strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
+	}
+	if parsed, _, err := net.SplitHostPort(host); err == nil {
+		host = parsed
+	}
+	return host
+}
+
+func isLoopbackHost(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func isLoopbackRemote(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(strings.TrimSpace(remoteAddr))
+	if err != nil {
+		host = strings.TrimSpace(remoteAddr)
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func (c RateLimitConfig) authMiddleware() func(http.Handler) http.Handler {
@@ -66,6 +173,46 @@ func (c RateLimitConfig) middleware(limit int, window time.Duration) func(http.H
 	return httprate.Limit(limit, window, httprate.WithKeyFuncs(keyFunc, httprate.KeyByEndpoint))
 }
 
+func requestBodyLimit(config RequestBodyLimitConfig) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		if !config.Enabled || config.MaxBytes <= 0 {
+			return next
+		}
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil && r.Body != http.NoBody {
+				if r.ContentLength > config.MaxBytes {
+					http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+					return
+				}
+				r.Body = http.MaxBytesReader(w, r.Body, config.MaxBytes)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func panicRecovery(logger *slog.Logger) func(http.Handler) http.Handler {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if recovered := recover(); recovered != nil {
+					logger.ErrorContext(r.Context(), "http handler panic",
+						"method", r.Method,
+						"path", r.URL.Path,
+						"panic", recovered,
+						"stack", string(debug.Stack()),
+					)
+					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				}
+			}()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func passthrough(next http.Handler) http.Handler {
 	return next
 }
@@ -81,6 +228,20 @@ func securityHeaders(config SecurityHeadersConfig) func(http.Handler) http.Handl
 			header.Set("Referrer-Policy", "strict-origin-when-cross-origin")
 			header.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 			header.Set("X-Frame-Options", "SAMEORIGIN")
+			header.Set("Content-Security-Policy", strings.Join([]string{
+				"default-src 'self'",
+				"base-uri 'self'",
+				"object-src 'none'",
+				"frame-ancestors 'self'",
+				"form-action 'self'",
+				"script-src 'self' 'unsafe-eval'",
+				"style-src 'self' 'unsafe-inline'",
+				"img-src 'self' data: blob:",
+				"font-src 'self' data:",
+				"connect-src 'self'",
+				"worker-src 'self' blob:",
+				"manifest-src 'self'",
+			}, "; "))
 			if config.HSTS {
 				header.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 			}
@@ -102,8 +263,11 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 				"method", r.Method,
 				"path", r.URL.Path,
 				"status", rec.status,
+				"bytes", rec.bytes,
 				"duration", time.Since(start).String(),
 				"remote", r.RemoteAddr,
+				"request_id", firstNonEmpty(r.Header.Get("X-Request-Id"), r.Header.Get("X-Request-ID")),
+				"correlation_id", firstNonEmpty(r.Header.Get("X-Correlation-Id"), r.Header.Get("X-Correlation-ID"), r.Header.Get("X-Request-Id"), r.Header.Get("X-Request-ID")),
 			)
 		})
 	}
@@ -112,6 +276,7 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
+	bytes  int
 }
 
 func (r *statusRecorder) WriteHeader(status int) {
@@ -123,7 +288,9 @@ func (r *statusRecorder) Write(bytes []byte) (int, error) {
 	if r.status == 0 {
 		r.status = http.StatusOK
 	}
-	return r.ResponseWriter.Write(bytes)
+	written, err := r.ResponseWriter.Write(bytes)
+	r.bytes += written
+	return written, err
 }
 
 func (r *statusRecorder) Flush() {

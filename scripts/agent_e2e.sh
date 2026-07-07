@@ -45,6 +45,7 @@ export LIBREDASH_ADDR="127.0.0.1:$PORT"
 export LIBREDASH_PRODUCTION=true
 export LIBREDASH_API_TOKEN_ONLY_AUTH=true
 export LIBREDASH_CSRF_KEY="agent-e2e-csrf-key-agent-e2e-csrf-key"
+export LIBREDASH_METRICS_BEARER_TOKEN="agent-e2e-metrics-token-agent-e2e"
 export LIBREDASH_AGENT_API_KEY="$DEEPSEEK_KEY"
 export LIBREDASH_AGENT_BASE_URL="https://api.deepseek.com"
 export LIBREDASH_AGENT_MODEL="deepseek-v4-flash"

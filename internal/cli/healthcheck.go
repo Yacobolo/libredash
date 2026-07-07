@@ -1,0 +1,110 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+)
+
+const defaultHealthcheckURL = "http://127.0.0.1:8080/readyz"
+
+func healthcheckCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "healthcheck",
+		Short: "Check the local LibreDash readiness endpoint",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runHealthcheck(ctx, opts, cmd.OutOrStdout())
+		},
+	}
+	timeout := opts.healthcheckTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	cmd.Flags().StringVar(&opts.healthcheckURL, "url", opts.healthcheckURL, "readiness URL to check")
+	cmd.Flags().DurationVar(&opts.healthcheckTimeout, "timeout", timeout, "healthcheck HTTP timeout")
+	return cmd
+}
+
+func runHealthcheck(ctx context.Context, opts *rootOptions, out io.Writer) error {
+	url := healthcheckURL(opts)
+	timeout := opts.healthcheckTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	client := http.Client{Timeout: timeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("readiness endpoint returned status %d", resp.StatusCode)
+	}
+	fmt.Fprintln(out, "ready")
+	return nil
+}
+
+func healthcheckURL(opts *rootOptions) string {
+	if opts != nil {
+		if url := strings.TrimSpace(opts.healthcheckURL); url != "" {
+			return url
+		}
+	}
+	if url := strings.TrimSpace(os.Getenv("LIBREDASH_HEALTHCHECK_URL")); url != "" {
+		return url
+	}
+	if url := healthcheckURLForListenAddr(firstNonEmptyEnv("LIBREDASH_ADDR", "ADDR", "PORT")); url != "" {
+		return url
+	}
+	return defaultHealthcheckURL
+}
+
+func healthcheckURLForListenAddr(addr string) string {
+	host, port := healthcheckListenHostPort(addr)
+	if strings.TrimSpace(port) == "" {
+		return ""
+	}
+	host = strings.TrimSpace(host)
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		host = "127.0.0.1"
+	}
+	return "http://" + net.JoinHostPort(host, port) + "/readyz"
+}
+
+func healthcheckListenHostPort(addr string) (string, string) {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return "", ""
+	}
+	if strings.HasPrefix(addr, ":") {
+		return "", strings.TrimPrefix(addr, ":")
+	}
+	if !strings.Contains(addr, ":") {
+		return "", addr
+	}
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", ""
+	}
+	return host, port
+}
+
+func firstNonEmptyEnv(names ...string) string {
+	for _, name := range names {
+		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+			return value
+		}
+	}
+	return ""
+}

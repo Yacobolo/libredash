@@ -9,10 +9,13 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	agentapp "github.com/Yacobolo/libredash/internal/agent"
 	agentcore "github.com/Yacobolo/libredash/pkg/agent"
 )
+
+const DefaultHTTPTimeout = 5 * time.Minute
 
 type OpenAIModel struct {
 	config agentapp.Config
@@ -21,7 +24,7 @@ type OpenAIModel struct {
 
 func NewModel(config agentapp.Config, client *http.Client) *OpenAIModel {
 	if client == nil {
-		client = http.DefaultClient
+		client = &http.Client{Timeout: DefaultHTTPTimeout}
 	}
 	return &OpenAIModel{config: config, client: client}
 }

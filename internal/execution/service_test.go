@@ -67,6 +67,27 @@ func TestServiceRecordsReadTelemetry(t *testing.T) {
 	}
 }
 
+func TestServiceAppliesReadExecutionTimeout(t *testing.T) {
+	service := New(Config{
+		MaxRunningReads:      1,
+		MaxQueuedReads:       1,
+		ReadQueueWait:        time.Second,
+		ReadExecutionTimeout: 10 * time.Millisecond,
+		MaxRunningJobs:       1,
+		MaxQueuedJobs:        1,
+	})
+	result, err := service.SubmitRead(context.Background(), dataquery.Query{}, func(ctx context.Context) (dataquery.Result, error) {
+		<-ctx.Done()
+		return dataquery.Result{}, ctx.Err()
+	})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("read error = %v, want deadline exceeded", err)
+	}
+	if result.ExecutionState != dataquery.ExecutionTimeout {
+		t.Fatalf("execution state = %q, want timeout", result.ExecutionState)
+	}
+}
+
 func TestServiceCanceledQueuedReadDoesNotExecute(t *testing.T) {
 	service := New(Config{MaxRunningReads: 1, MaxQueuedReads: 1, ReadQueueWait: time.Second, MaxRunningJobs: 1, MaxQueuedJobs: 1})
 	firstStarted := make(chan struct{})

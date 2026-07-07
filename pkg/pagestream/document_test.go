@@ -31,7 +31,7 @@ func TestRenderPageIncludesLiteralUpdatesInitMainAttrsAndBody(t *testing.T) {
 		`data-color-mode="auto"`,
 		`<main id="root" class="app-shell"`,
 		`/updates?route=test`,
-		datastarScriptSrc,
+		`/static/vendor/datastar-1.0.2.js?v=dev`,
 		`data-init="@get(&#39;/updates?route=test&#39;, {openWhenHidden: true})"`,
 		`<div id="content">Hello</div>`,
 	} {
@@ -42,7 +42,7 @@ func TestRenderPageIncludesLiteralUpdatesInitMainAttrsAndBody(t *testing.T) {
 	if strings.Contains(html, "data-signals=") || strings.Contains(html, "updatesUrl") {
 		t.Fatalf("rendered document included initial signals:\n%s", html)
 	}
-	if strings.Index(html, datastarScriptSrc) > strings.Index(html, "/static/route.js?v=dev") {
+	if strings.Index(html, "/static/vendor/datastar-1.0.2.js?v=dev") > strings.Index(html, "/static/route.js?v=dev") {
 		t.Fatalf("rendered document loaded Datastar after route modules:\n%s", html)
 	}
 }

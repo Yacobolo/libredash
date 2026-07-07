@@ -2,10 +2,15 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
 
 	oidcauth "github.com/Yacobolo/libredash/internal/access/oidc"
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
@@ -25,18 +30,21 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const defaultHTTPServerShutdownTimeout = 15 * time.Second
+
 func serveCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the LibreDash HTTP server",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.environment = serveEnvironmentFlagValue(cmd.Flags().Changed("environment"), opts.environment)
 			return runServe(ctx, opts)
 		},
 	}
 	cfg := config.MustLoad()
 	cmd.Flags().StringVar(&opts.addr, "addr", cfg.ListenAddr(), "listen address")
 	cmd.Flags().StringVar(&opts.dataDir, "data-dir", cfg.DataDir, "dashboard source data directory")
-	cmd.Flags().StringVar(&opts.environment, "environment", string(servingstate.DefaultEnvironment), "serving environment")
+	cmd.Flags().StringVar(&opts.environment, "environment", "", "serving environment; defaults to prod in production and dev otherwise")
 	cmd.Flags().BoolVar(&opts.production, "production", cfg.Production, "serve active serving state from the platform DB")
 	return cmd
 }
@@ -46,6 +54,8 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	if err != nil {
 		return err
 	}
+	production := serveProductionMode(cfg, *opts)
+	cfg.Production = production
 	addr := opts.addr
 	if addr == "" {
 		addr = cfg.ListenAddr()
@@ -54,19 +64,100 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	if dataDir == "" {
 		dataDir = cfg.DataDir
 	}
-	if opts.production {
+	if production {
 		if err := cfg.ValidateProductionAuth(); err != nil {
 			return err
 		}
 	}
-	server, cleanup, err := servingStateBackedServer(ctx, cfg, dataDir, opts.production, servingstate.NormalizeEnvironment(servingstate.Environment(opts.environment)))
+	environment := serveEnvironment(production, opts.environment)
+	server, cleanup, err := servingStateBackedServer(ctx, cfg, dataDir, production, environment)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
-	server.StartBackgroundJobs(ctx)
-	slog.Info("LibreDash listening", "url", "http://localhost"+addr)
-	return http.ListenAndServe(addr, server.Routes())
+	serveCtx, stopServe := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stopServe()
+	server.StartBackgroundJobs(serveCtx)
+	slog.Info("LibreDash listening", "url", listenURL(addr), "environment", environment)
+	err = runHTTPServer(serveCtx, productionHTTPServer(addr, server.Routes()))
+	stopServe()
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultHTTPServerShutdownTimeout)
+	defer cancel()
+	if stopErr := server.StopBackgroundJobs(shutdownCtx); err == nil && stopErr != nil {
+		err = stopErr
+	}
+	return err
+}
+
+func serveProductionMode(cfg config.Config, opts rootOptions) bool {
+	return opts.production || cfg.Production
+}
+
+func serveEnvironment(production bool, value string) servingstate.Environment {
+	if strings.TrimSpace(value) != "" {
+		return servingstate.NormalizeEnvironment(servingstate.Environment(value))
+	}
+	if production {
+		return servingstate.Environment("prod")
+	}
+	return servingstate.DefaultEnvironment
+}
+
+func serveEnvironmentFlagValue(changed bool, value string) string {
+	if !changed {
+		return ""
+	}
+	return value
+}
+
+func listenURL(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		addr = ":8080"
+	}
+	if strings.HasPrefix(addr, ":") {
+		return "http://localhost" + addr
+	}
+	return "http://" + addr
+}
+
+func productionHTTPServer(addr string, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      5 * time.Minute,
+		IdleTimeout:       2 * time.Minute,
+		MaxHeaderBytes:    1 << 20,
+	}
+}
+
+func runHTTPServer(ctx context.Context, server *http.Server) error {
+	if server == nil {
+		return errors.New("http server is required")
+	}
+	signalCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	errCh := make(chan error, 1)
+	go func() {
+		err := server.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
+		}
+		errCh <- err
+	}()
+	select {
+	case err := <-errCh:
+		return err
+	case <-signalCtx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), defaultHTTPServerShutdownTimeout)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			return err
+		}
+		return <-errCh
+	}
 }
 
 func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir string, production bool, environment servingstate.Environment) (*app.Server, func(), error) {
@@ -74,12 +165,25 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, dir := range []string{cfg.ArtifactDir(), cfg.DuckDBDirPath(), cfg.RuntimeDir(), cfg.DuckLakeDataDir()} {
+	var allowedHosts []string
+	if production {
+		allowedHosts, err = cfg.ProductionAllowedHosts()
+	} else {
+		allowedHosts, err = cfg.AllowedHostList()
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	duckLakeCatalogPath := cfg.DuckLakeCatalogPath()
+	for _, dir := range []string{cfg.ArtifactDir(), cfg.DuckDBDirPath(), cfg.RuntimeDir(), cfg.DuckLakeDataDir(), filepath.Dir(duckLakeCatalogPath)} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return nil, nil, err
 		}
 	}
-	if err := analyticsducklake.MigrateSQLiteCatalogDataPath(ctx, cfg.DBPath(), cfg.DuckLakeDataDir()); err != nil {
+	if err := analyticsducklake.MigrateSharedSQLiteCatalog(ctx, cfg.DBPath(), duckLakeCatalogPath, cfg.DuckLakeDataDir()); err != nil {
+		return nil, nil, err
+	}
+	if err := analyticsducklake.MigrateSQLiteCatalogDataPath(ctx, duckLakeCatalogPath, cfg.DuckLakeDataDir()); err != nil {
 		return nil, nil, err
 	}
 	if err := removeLegacyDuckLakeArtifacts(cfg.DuckDBDirPath()); err != nil {
@@ -105,7 +209,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 	}
 	if _, err := storagemaintenance.Run(ctx, servingStateRepo, storagemaintenance.Options{
 		RootDir:     cfg.HomeDir,
-		CatalogPath: cfg.DBPath(),
+		CatalogPath: duckLakeCatalogPath,
 		DataPath:    cfg.DuckLakeDataDir(),
 		DryRun:      false,
 	}); err != nil {
@@ -136,7 +240,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 				}
 				if _, err := storagemaintenance.Run(context.Background(), servingStateRepo, storagemaintenance.Options{
 					RootDir:                      cfg.HomeDir,
-					CatalogPath:                  cfg.DBPath(),
+					CatalogPath:                  duckLakeCatalogPath,
 					DataPath:                     cfg.DuckLakeDataDir(),
 					AdditionalProtectedSnapshots: protected,
 					DryRun:                       false,
@@ -149,7 +253,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 			dataDir:          dataDir,
 			duckDBDir:        cfg.DuckDBDirPath(),
 			runtimeDir:       cfg.RuntimeDir(),
-			catalogPath:      cfg.DBPath(),
+			catalogPath:      duckLakeCatalogPath,
 			duckLakeDataPath: cfg.DuckLakeDataDir(),
 		},
 	})
@@ -195,6 +299,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 	auth := app.NewAuth(accessRepo, "", authConfig)
 	rateLimits := app.ProductionRateLimitConfig()
 	rateLimits.Enabled = production && cfg.RateLimitingEnabled()
+	rateLimits.UseRealIP = cfg.RateLimitingUsesRealIP()
 	server := app.NewWithOptions(runtimeMetrics, app.Options{
 		Store:               store,
 		ServingStateRepo:    servingStateRepo,
@@ -206,7 +311,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 		Reloader:            registry,
 		ArtifactDir:         cfg.ArtifactDir(),
 		DuckDBDir:           cfg.DuckDBDirPath(),
-		DuckLakeCatalogPath: cfg.DBPath(),
+		DuckLakeCatalogPath: duckLakeCatalogPath,
 		DuckLakeDataPath:    cfg.DuckLakeDataDir(),
 		DefaultEnvironment:  string(environment),
 		RateLimits:          rateLimits,
@@ -214,6 +319,8 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 		RequestLogging:      production && cfg.RequestLoggingEnabled(),
 		Logger:              slog.Default(),
 		SCIMBearerToken:     cfg.SCIMBearerToken,
+		MetricsBearerToken:  cfg.MetricsBearerToken,
+		AllowedHosts:        allowedHosts,
 	})
 	return server, cleanupWithRegistry, nil
 }

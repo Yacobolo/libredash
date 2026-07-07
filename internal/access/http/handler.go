@@ -490,18 +490,31 @@ func (h Handler) DeleteServicePrincipal(w stdhttp.ResponseWriter, r *stdhttp.Req
 func (h Handler) CreateServicePrincipalSecret(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	principal, _ := h.currentPrincipal(r)
 	var input struct {
-		Name string `json:"name"`
+		Name      string `json:"name"`
+		ExpiresAt string `json:"expiresAt"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 		writeJSONError(w, err, stdhttp.StatusBadRequest)
 		return
+	}
+	var expiresAt time.Time
+	if strings.TrimSpace(input.ExpiresAt) != "" {
+		parsed, err := time.Parse(time.RFC3339, input.ExpiresAt)
+		if err != nil {
+			writeJSONError(w, err, stdhttp.StatusBadRequest)
+			return
+		}
+		expiresAt = parsed
 	}
 	repo, err := h.repository()
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
 		return
 	}
-	rawSecret, row, err := repo.CreateServicePrincipalSecret(r.Context(), chi.URLParam(r, "servicePrincipal"), input.Name)
+	rawSecret, row, err := repo.CreateServicePrincipalSecret(r.Context(), chi.URLParam(r, "servicePrincipal"), access.ServicePrincipalSecretInput{
+		Name:      input.Name,
+		ExpiresAt: expiresAt,
+	})
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusBadRequest)
 		return
@@ -1292,6 +1305,7 @@ func servicePrincipalSecretDTO(row access.ServicePrincipalSecret, rawSecret stri
 		"id":                 row.ID,
 		"servicePrincipalId": row.ServicePrincipalID,
 		"name":               row.Name,
+		"expiresAt":          emptyToNil(row.ExpiresAt),
 		"createdAt":          emptyToNil(row.CreatedAt),
 		"revokedAt":          emptyToNil(row.RevokedAt),
 	}

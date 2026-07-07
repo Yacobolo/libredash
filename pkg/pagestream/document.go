@@ -5,13 +5,14 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/Yacobolo/libredash/internal/staticasset"
 	g "maragu.dev/gomponents"
 	dsattr "maragu.dev/gomponents-datastar"
 	c "maragu.dev/gomponents/components"
 	h "maragu.dev/gomponents/html"
 )
 
-const datastarScriptSrc = "/static/vendor/datastar-1.0.2.js?v=dev"
+const datastarScriptPath = "/static/vendor/datastar-1.0.2.js"
 
 type PageSpec struct {
 	Title      string
@@ -78,7 +79,7 @@ func renderDocument(spec documentSpec) g.Node {
 }
 
 func datastarScript() g.Node {
-	return h.Script(h.Type("module"), h.Src(datastarScriptSrc))
+	return h.Script(h.Type("module"), h.Src(staticasset.URL(datastarScriptPath)))
 }
 
 func initExpression(expressions ...string) string {

@@ -1,11 +1,16 @@
 package platform
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"database/sql"
+	"io"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/access"
@@ -57,6 +62,506 @@ func TestStoreMigratesAndSeedsRoles(t *testing.T) {
 		if roles[i] != want[i] {
 			t.Fatalf("roles = %#v, want %#v", roles, want)
 		}
+	}
+}
+
+func TestStoreOpenMakesDatabasePrivate(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "libredash.db")
+	if err := os.WriteFile(dbPath, nil, 0o644); err != nil {
+		t.Fatalf("seed world-readable db file: %v", err)
+	}
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+	assertFileMode(t, dbPath, 0o600)
+	assertExistingSQLiteSidecarsPrivate(t, dbPath)
+}
+
+func TestStoreBackupCreatesReadableSQLiteCopy(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := Open(ctx, filepath.Join(dir, "libredash.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+
+	backupPath := filepath.Join(dir, "backups", "libredash.backup.db")
+	if err := store.Backup(ctx, backupPath); err != nil {
+		t.Fatalf("backup store: %v", err)
+	}
+	if info, err := os.Stat(backupPath); err != nil {
+		t.Fatalf("backup file missing: %v", err)
+	} else if info.Size() == 0 {
+		t.Fatal("backup file is empty")
+	}
+	backup, err := sql.Open("sqlite", backupPath+"?_pragma=foreign_keys(1)")
+	if err != nil {
+		t.Fatalf("open backup: %v", err)
+	}
+	defer backup.Close()
+	var roleCount int
+	if err := backup.QueryRowContext(ctx, `SELECT count(*) FROM roles`).Scan(&roleCount); err != nil {
+		t.Fatalf("query backup roles: %v", err)
+	}
+	if roleCount == 0 {
+		t.Fatal("backup roles = 0, want seeded roles")
+	}
+}
+
+func TestStoreBackupCreatesPrivateDatabaseCopy(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := Open(ctx, filepath.Join(dir, "libredash.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+
+	restoreUmask := setUmask(t, 0)
+	backupPath := filepath.Join(dir, "backups", "libredash.backup.db")
+	if err := store.Backup(ctx, backupPath); err != nil {
+		restoreUmask()
+		t.Fatalf("backup store: %v", err)
+	}
+	restoreUmask()
+	assertFileMode(t, backupPath, 0o600)
+}
+
+func TestStoreBackupRefusesOverwrite(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := Open(ctx, filepath.Join(dir, "libredash.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer store.Close()
+	backupPath := filepath.Join(dir, "libredash.backup.db")
+	if err := os.WriteFile(backupPath, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("write existing backup: %v", err)
+	}
+	if err := store.Backup(ctx, backupPath); err == nil {
+		t.Fatal("expected backup overwrite to fail")
+	}
+}
+
+func TestRestoreReplacesPlatformDatabaseAndBacksUpCurrent(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	currentPath := filepath.Join(dir, "current", "libredash.db")
+	current, err := Open(ctx, currentPath)
+	if err != nil {
+		t.Fatalf("open current store: %v", err)
+	}
+	if err := current.UpsertSetting(ctx, "restore-test", "current"); err != nil {
+		t.Fatalf("seed current setting: %v", err)
+	}
+	if err := current.Close(); err != nil {
+		t.Fatalf("close current store: %v", err)
+	}
+
+	backupSource, err := Open(ctx, filepath.Join(dir, "source", "libredash.db"))
+	if err != nil {
+		t.Fatalf("open backup source: %v", err)
+	}
+	if err := backupSource.UpsertSetting(ctx, "restore-test", "restored"); err != nil {
+		t.Fatalf("seed backup setting: %v", err)
+	}
+	backupPath := filepath.Join(dir, "backups", "libredash.restore.db")
+	if err := backupSource.Backup(ctx, backupPath); err != nil {
+		t.Fatalf("backup source: %v", err)
+	}
+	if err := backupSource.Close(); err != nil {
+		t.Fatalf("close backup source: %v", err)
+	}
+
+	currentBackupPath := filepath.Join(dir, "backups", "libredash.before-restore.db")
+	if err := Restore(ctx, currentPath, backupPath, currentBackupPath); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+
+	restored, err := Open(ctx, currentPath)
+	if err != nil {
+		t.Fatalf("open restored store: %v", err)
+	}
+	value, err := restored.GetSetting(ctx, "restore-test")
+	if err != nil {
+		t.Fatalf("read restored setting: %v", err)
+	}
+	if value != "restored" {
+		t.Fatalf("restored setting = %q, want restored", value)
+	}
+	if err := restored.Close(); err != nil {
+		t.Fatalf("close restored store: %v", err)
+	}
+
+	before, err := Open(ctx, currentBackupPath)
+	if err != nil {
+		t.Fatalf("open before-restore backup: %v", err)
+	}
+	value, err = before.GetSetting(ctx, "restore-test")
+	if err != nil {
+		t.Fatalf("read before-restore setting: %v", err)
+	}
+	if value != "current" {
+		t.Fatalf("before-restore setting = %q, want current", value)
+	}
+	if err := before.Close(); err != nil {
+		t.Fatalf("close before-restore backup: %v", err)
+	}
+}
+
+func TestRestoreRequiresCurrentBackupWhenTargetExists(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	currentPath := filepath.Join(dir, "libredash.db")
+	store, err := Open(ctx, currentPath)
+	if err != nil {
+		t.Fatalf("open current store: %v", err)
+	}
+	backupPath := filepath.Join(dir, "backup.db")
+	if err := store.Backup(ctx, backupPath); err != nil {
+		t.Fatalf("backup store: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close current store: %v", err)
+	}
+	err = Restore(ctx, currentPath, backupPath, "")
+	if err == nil || !strings.Contains(err.Error(), "current backup path is required") {
+		t.Fatalf("restore error = %v, want current backup path requirement", err)
+	}
+}
+
+func TestRestoreRejectsInvalidBackupWithoutChangingCurrent(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	currentPath := filepath.Join(dir, "libredash.db")
+	store, err := Open(ctx, currentPath)
+	if err != nil {
+		t.Fatalf("open current store: %v", err)
+	}
+	if err := store.UpsertSetting(ctx, "restore-test", "current"); err != nil {
+		t.Fatalf("seed current setting: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close current store: %v", err)
+	}
+	invalidBackup := filepath.Join(dir, "invalid.db")
+	if err := os.WriteFile(invalidBackup, []byte("not sqlite"), 0o644); err != nil {
+		t.Fatalf("write invalid backup: %v", err)
+	}
+	beforePath := filepath.Join(dir, "before.db")
+	if err := Restore(ctx, currentPath, invalidBackup, beforePath); err == nil {
+		t.Fatal("expected invalid backup restore to fail")
+	}
+	if _, err := os.Stat(beforePath); !os.IsNotExist(err) {
+		t.Fatalf("before backup exists after invalid restore: %v", err)
+	}
+	current, err := Open(ctx, currentPath)
+	if err != nil {
+		t.Fatalf("reopen current store: %v", err)
+	}
+	value, err := current.GetSetting(ctx, "restore-test")
+	if err != nil {
+		t.Fatalf("read current setting: %v", err)
+	}
+	if value != "current" {
+		t.Fatalf("current setting after invalid restore = %q, want current", value)
+	}
+	if err := current.Close(); err != nil {
+		t.Fatalf("close current store: %v", err)
+	}
+}
+
+func TestBackupInstanceArchivesDatabaseAndPersistentFiles(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	dbPath := filepath.Join(home, "libredash.db")
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := store.UpsertSetting(ctx, "instance-backup-test", "db-value"); err != nil {
+		t.Fatalf("seed setting: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close store: %v", err)
+	}
+	writeTestFile(t, filepath.Join(home, "artifacts", "dep_1.tar.gz"), "artifact")
+	writeTestFile(t, filepath.Join(home, "data", "ducklake-file.parquet"), "ducklake-data")
+	writeTestFile(t, filepath.Join(home, "runtime", "runtime-state"), "runtime")
+	writeTestFile(t, dbPath+"-wal", "stale wal sidecar")
+
+	backupPath := filepath.Join(dir, "backups", "libredash-instance.tar.gz")
+	if err := BackupInstance(ctx, InstanceBackupOptions{HomeDir: home, DBPath: dbPath, OutPath: backupPath}); err != nil {
+		t.Fatalf("backup instance: %v", err)
+	}
+
+	entries := readTarGzEntries(t, backupPath)
+	for _, want := range []string{
+		instanceBackupManifestName,
+		"libredash.db",
+		"artifacts/dep_1.tar.gz",
+		"data/ducklake-file.parquet",
+		"runtime/runtime-state",
+	} {
+		if _, ok := entries[want]; !ok {
+			t.Fatalf("instance backup missing %q; entries=%v", want, sortedKeys(entries))
+		}
+	}
+	if _, ok := entries["libredash.db-wal"]; ok {
+		t.Fatalf("instance backup included sqlite WAL sidecar; entries=%v", sortedKeys(entries))
+	}
+	backupDBPath := filepath.Join(dir, "backup.db")
+	if err := os.WriteFile(backupDBPath, entries["libredash.db"], 0o644); err != nil {
+		t.Fatalf("write backup db: %v", err)
+	}
+	backupDB, err := sql.Open("sqlite", backupDBPath+"?_pragma=query_only(1)")
+	if err != nil {
+		t.Fatalf("open backup db: %v", err)
+	}
+	defer backupDB.Close()
+	var value string
+	if err := backupDB.QueryRowContext(ctx, `SELECT value FROM platform_settings WHERE key = 'instance-backup-test'`).Scan(&value); err != nil {
+		t.Fatalf("read setting from backup db: %v", err)
+	}
+	if value != "db-value" {
+		t.Fatalf("backup db setting = %q, want db-value", value)
+	}
+}
+
+func TestBackupInstanceCreatesPrivateArchive(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	dbPath := filepath.Join(home, "libredash.db")
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close store: %v", err)
+	}
+
+	restoreUmask := setUmask(t, 0)
+	backupPath := filepath.Join(dir, "backups", "libredash-instance.tar.gz")
+	if err := BackupInstance(ctx, InstanceBackupOptions{HomeDir: home, DBPath: dbPath, OutPath: backupPath}); err != nil {
+		restoreUmask()
+		t.Fatalf("backup instance: %v", err)
+	}
+	restoreUmask()
+	assertFileMode(t, backupPath, 0o600)
+}
+
+func TestBackupInstanceRejectsUnsafeSymlink(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	dbPath := filepath.Join(home, "libredash.db")
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close store: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(home, "artifacts"), 0o755); err != nil {
+		t.Fatalf("mkdir artifacts: %v", err)
+	}
+	if err := os.Symlink(filepath.Join(dir, "outside"), filepath.Join(home, "artifacts", "outside")); err != nil {
+		t.Fatalf("create unsafe symlink: %v", err)
+	}
+
+	backupPath := filepath.Join(dir, "backups", "libredash-instance.tar.gz")
+	err = BackupInstance(ctx, InstanceBackupOptions{HomeDir: home, DBPath: dbPath, OutPath: backupPath})
+	if err == nil || !strings.Contains(err.Error(), "unsafe symlink") {
+		t.Fatalf("backup error = %v, want unsafe symlink", err)
+	}
+	if _, statErr := os.Stat(backupPath); !os.IsNotExist(statErr) {
+		t.Fatalf("backup path exists after unsafe symlink error: %v", statErr)
+	}
+}
+
+func TestBackupInstanceRejectsOutputInsideHomeDir(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	dbPath := filepath.Join(home, "libredash.db")
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close store: %v", err)
+	}
+	backupPath := filepath.Join(home, "backups", "libredash-instance.tar.gz")
+	err = BackupInstance(ctx, InstanceBackupOptions{HomeDir: home, DBPath: dbPath, OutPath: backupPath})
+	if err == nil || !strings.Contains(err.Error(), "backup output path must not be inside home dir") {
+		t.Fatalf("backup error = %v, want in-home output rejection", err)
+	}
+}
+
+func TestRestoreInstanceReplacesHomeAndBacksUpCurrent(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	currentHome := filepath.Join(dir, "current")
+	currentDBPath := filepath.Join(currentHome, "libredash.db")
+	current, err := Open(ctx, currentDBPath)
+	if err != nil {
+		t.Fatalf("open current store: %v", err)
+	}
+	if err := current.UpsertSetting(ctx, "instance-restore-test", "current"); err != nil {
+		t.Fatalf("seed current setting: %v", err)
+	}
+	if err := current.Close(); err != nil {
+		t.Fatalf("close current store: %v", err)
+	}
+	writeTestFile(t, filepath.Join(currentHome, "artifacts", "old.tar.gz"), "old artifact")
+
+	sourceHome := filepath.Join(dir, "source")
+	sourceDBPath := filepath.Join(sourceHome, "libredash.db")
+	source, err := Open(ctx, sourceDBPath)
+	if err != nil {
+		t.Fatalf("open source store: %v", err)
+	}
+	if err := source.UpsertSetting(ctx, "instance-restore-test", "restored"); err != nil {
+		t.Fatalf("seed source setting: %v", err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatalf("close source store: %v", err)
+	}
+	writeTestFile(t, filepath.Join(sourceHome, "artifacts", "new.tar.gz"), "new artifact")
+	writeTestFile(t, filepath.Join(sourceHome, "data", "ducklake-file.parquet"), "ducklake-data")
+	backupPath := filepath.Join(dir, "backups", "restore.tar.gz")
+	if err := BackupInstance(ctx, InstanceBackupOptions{HomeDir: sourceHome, DBPath: sourceDBPath, OutPath: backupPath}); err != nil {
+		t.Fatalf("backup source instance: %v", err)
+	}
+
+	beforePath := filepath.Join(dir, "backups", "before-restore.tar.gz")
+	if err := RestoreInstance(ctx, InstanceRestoreOptions{TargetHomeDir: currentHome, BackupPath: backupPath, CurrentBackupOut: beforePath}); err != nil {
+		t.Fatalf("restore instance: %v", err)
+	}
+
+	restored, err := Open(ctx, currentDBPath)
+	if err != nil {
+		t.Fatalf("open restored store: %v", err)
+	}
+	value, err := restored.GetSetting(ctx, "instance-restore-test")
+	if err != nil {
+		t.Fatalf("read restored setting: %v", err)
+	}
+	if value != "restored" {
+		t.Fatalf("restored setting = %q, want restored", value)
+	}
+	if err := restored.Close(); err != nil {
+		t.Fatalf("close restored store: %v", err)
+	}
+	if got := readTestFile(t, filepath.Join(currentHome, "artifacts", "new.tar.gz")); got != "new artifact" {
+		t.Fatalf("restored artifact = %q, want new artifact", got)
+	}
+	if _, err := os.Stat(filepath.Join(currentHome, "artifacts", "old.tar.gz")); !os.IsNotExist(err) {
+		t.Fatalf("old artifact survived restore: %v", err)
+	}
+	beforeEntries := readTarGzEntries(t, beforePath)
+	if got := string(beforeEntries["artifacts/old.tar.gz"]); got != "old artifact" {
+		t.Fatalf("before-restore artifact = %q, want old artifact", got)
+	}
+}
+
+func TestRestoreInstanceRequiresCurrentBackupWhenTargetHasState(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sourceHome := filepath.Join(dir, "source")
+	sourceDBPath := filepath.Join(sourceHome, "libredash.db")
+	source, err := Open(ctx, sourceDBPath)
+	if err != nil {
+		t.Fatalf("open source store: %v", err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatalf("close source store: %v", err)
+	}
+	backupPath := filepath.Join(dir, "backup.tar.gz")
+	if err := BackupInstance(ctx, InstanceBackupOptions{HomeDir: sourceHome, DBPath: sourceDBPath, OutPath: backupPath}); err != nil {
+		t.Fatalf("backup source: %v", err)
+	}
+	targetHome := filepath.Join(dir, "target")
+	target, err := Open(ctx, filepath.Join(targetHome, "libredash.db"))
+	if err != nil {
+		t.Fatalf("open target store: %v", err)
+	}
+	if err := target.Close(); err != nil {
+		t.Fatalf("close target store: %v", err)
+	}
+	err = RestoreInstance(ctx, InstanceRestoreOptions{TargetHomeDir: targetHome, BackupPath: backupPath})
+	if err == nil || !strings.Contains(err.Error(), "current instance backup path is required") {
+		t.Fatalf("restore error = %v, want current backup path requirement", err)
+	}
+}
+
+func TestRestoreInstanceSanitizesArchivePermissions(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sourceDBPath := filepath.Join(dir, "source", instanceBackupDBName)
+	source, err := Open(ctx, sourceDBPath)
+	if err != nil {
+		t.Fatalf("open source store: %v", err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatalf("close source store: %v", err)
+	}
+	backupPath := filepath.Join(dir, "backup.tar.gz")
+	writeInstanceBackupArchive(t, backupPath, []testTarEntry{
+		{name: instanceBackupManifestName, mode: 0o777, body: []byte(`{"version":1,"kind":"libredash-instance","dbPath":"libredash.db"}` + "\n")},
+		{name: instanceBackupDBName, mode: 0o777, body: readTestBytes(t, sourceDBPath)},
+		{name: "artifacts", mode: 0o777, dir: true},
+		{name: "artifacts/publish.tar.gz", mode: 0o777, body: []byte("artifact")},
+	})
+
+	targetHome := filepath.Join(dir, "target")
+	if err := RestoreInstance(ctx, InstanceRestoreOptions{TargetHomeDir: targetHome, BackupPath: backupPath}); err != nil {
+		t.Fatalf("restore instance: %v", err)
+	}
+
+	fileModeWants := map[string]os.FileMode{
+		filepath.Join(targetHome, instanceBackupManifestName):    0o644,
+		filepath.Join(targetHome, instanceBackupDBName):          0o600,
+		filepath.Join(targetHome, "artifacts", "publish.tar.gz"): 0o644,
+	}
+	for path, want := range fileModeWants {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat restored file %s: %v", path, err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Fatalf("restored file mode for %s = %#o, want %#o", path, got, want)
+		}
+	}
+	info, err := os.Stat(filepath.Join(targetHome, "artifacts"))
+	if err != nil {
+		t.Fatalf("stat restored artifacts dir: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o755 {
+		t.Fatalf("restored dir mode = %#o, want 0755", got)
+	}
+}
+
+func TestStorePingReportsOpenState(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	if err := store.Ping(ctx); err != nil {
+		t.Fatalf("ping open store: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close store: %v", err)
+	}
+	if err := store.Ping(ctx); err == nil {
+		t.Fatal("expected closed store ping to fail")
 	}
 }
 
@@ -154,4 +659,156 @@ func duckLakeExtensionUnavailable(err error) bool {
 			strings.Contains(text, "failed to download") ||
 			strings.Contains(text, "failed to install") ||
 			strings.Contains(text, "not be loaded"))
+}
+
+func writeTestFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
+func assertFileMode(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %s: %v", path, err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Fatalf("mode for %s = %#o, want %#o", path, got, want)
+	}
+}
+
+func assertExistingSQLiteSidecarsPrivate(t *testing.T, dbPath string) {
+	t.Helper()
+	for _, suffix := range []string{"-wal", "-shm"} {
+		path := dbPath + suffix
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			continue
+		} else if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		assertFileMode(t, path, 0o600)
+	}
+}
+
+func setUmask(t *testing.T, mask int) func() {
+	t.Helper()
+	old := syscall.Umask(mask)
+	return func() {
+		syscall.Umask(old)
+	}
+}
+
+func readTestFile(t *testing.T, path string) string {
+	t.Helper()
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return string(bytes)
+}
+
+func readTestBytes(t *testing.T, path string) []byte {
+	t.Helper()
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return bytes
+}
+
+type testTarEntry struct {
+	name string
+	mode int64
+	body []byte
+	dir  bool
+}
+
+func writeInstanceBackupArchive(t *testing.T, archivePath string, entries []testTarEntry) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(archivePath), 0o755); err != nil {
+		t.Fatalf("mkdir archive dir: %v", err)
+	}
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("create archive: %v", err)
+	}
+	gzw := gzip.NewWriter(file)
+	tw := tar.NewWriter(gzw)
+	for _, entry := range entries {
+		header := &tar.Header{
+			Name: entry.name,
+			Mode: entry.mode,
+		}
+		if entry.dir {
+			header.Typeflag = tar.TypeDir
+		} else {
+			header.Typeflag = tar.TypeReg
+			header.Size = int64(len(entry.body))
+		}
+		if err := tw.WriteHeader(header); err != nil {
+			t.Fatalf("write tar header %s: %v", entry.name, err)
+		}
+		if !entry.dir {
+			if _, err := tw.Write(entry.body); err != nil {
+				t.Fatalf("write tar body %s: %v", entry.name, err)
+			}
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar: %v", err)
+	}
+	if err := gzw.Close(); err != nil {
+		t.Fatalf("close gzip: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close archive: %v", err)
+	}
+}
+
+func readTarGzEntries(t *testing.T, path string) map[string][]byte {
+	t.Helper()
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open archive: %v", err)
+	}
+	defer file.Close()
+	gzr, err := gzip.NewReader(file)
+	if err != nil {
+		t.Fatalf("open gzip: %v", err)
+	}
+	defer gzr.Close()
+	tr := tar.NewReader(gzr)
+	entries := map[string][]byte{}
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("read tar: %v", err)
+		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+			continue
+		}
+		bytes, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatalf("read tar entry %s: %v", header.Name, err)
+		}
+		entries[header.Name] = bytes
+	}
+	return entries
+}
+
+func sortedKeys[T any](values map[string]T) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }

@@ -249,12 +249,55 @@ Production mode serves the active deployed BI-as-code bundle from `.libredash` b
 export LIBREDASH_PRODUCTION=1
 export LIBREDASH_LOCAL_AUTH=1 # or configure OIDC/Azure below
 export LIBREDASH_CSRF_KEY=<32+ byte secret>
+export LIBREDASH_ALLOWED_HOSTS=localhost
+export LIBREDASH_METRICS_BEARER_TOKEN=<32+ byte secret>
+export LIBREDASH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
 libredash serve --production
 libredash admin bootstrap
-libredash deploy --project dashboards/libredash.yaml --target http://localhost:8080 --token <token> --environment prod --auto-approve
+libredash publish --project dashboards/libredash.yaml --target http://localhost:8080 --token <token> --environment prod --auto-approve
 ```
 
 Use `--workspace <id>` for a targeted deployment.
+Create consistent instance backups with `libredash admin backup --out /backup/libredash-$(date +%Y%m%d%H%M%S).tar.gz`.
+The archive includes the control-plane SQLite database, DuckLake catalog, deployed artifacts, DuckLake files, and other `LIBREDASH_HOME` state. Restore while the server is stopped; the command validates the archive and requires a backup path for the current instance before replacement:
+
+```sh
+libredash admin restore \
+  --from /backup/libredash-20260706120000.tar.gz \
+  --current-out /backup/libredash-before-restore-$(date +%Y%m%d%H%M%S).tar.gz \
+  --confirm
+```
+
+`--database-only` is available for low-level SQLite maintenance, but it is not a full production recovery backup because artifacts and DuckLake data files live outside the database.
+Full instance backup/restore is intentionally self-contained: keep `LIBREDASH_DUCKLAKE_CATALOG_PATH` inside `LIBREDASH_HOME` so the global DuckLake catalog is captured with the rest of the instance state.
+
+Run operational history pruning from a scheduler after backups. It is a dry-run by default; pass `--apply` to delete rows older than the configured windows:
+
+```sh
+libredash admin maintenance \
+  --audit-days 365 \
+  --query-days 90 \
+  --archived-agent-days 180 \
+  --auth-state-days 30
+
+libredash admin maintenance --apply
+```
+
+Build and run the production container with persistent control-plane storage mounted at `/var/lib/libredash`:
+
+```sh
+docker build -t libredash .
+docker run --rm -p 8080:8080 \
+  -v libredash-data:/var/lib/libredash \
+  -e LIBREDASH_API_TOKEN_ONLY_AUTH=1 \
+  -e LIBREDASH_CSRF_KEY=<32+ byte secret> \
+  -e LIBREDASH_ALLOWED_HOSTS=localhost \
+  -e LIBREDASH_METRICS_BEARER_TOKEN=<32+ byte secret> \
+  -e LIBREDASH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com \
+  libredash
+```
+
+The image runs as a non-root user, serves generated browser assets from `/app/static`, and keeps SQLite, DuckLake, artifacts, runtime files, and backups outside the image layer under `LIBREDASH_HOME`.
 
 Useful env vars:
 
@@ -262,13 +305,29 @@ Useful env vars:
 LIBREDASH_HOME=/var/lib/libredash
 LIBREDASH_DATA_DIR=/path/to/data
 LIBREDASH_LOCAL_AUTH=1
+LIBREDASH_DUCKLAKE_CATALOG_PATH=/var/lib/libredash/ducklake/catalog.sqlite
+LIBREDASH_ASSET_VERSION= # optional override; defaults to the generated build hash in production
 LIBREDASH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
 LIBREDASH_AZURE_CLIENT_ID=...
 LIBREDASH_AZURE_CLIENT_SECRET=...
 LIBREDASH_AZURE_CALLBACK_URL=https://your-host/auth/azureadv2/callback
 LIBREDASH_AZURE_TENANT=...
+LIBREDASH_OIDC_PROVIDER_ID=oidc
+LIBREDASH_OIDC_ISSUER_URL=https://issuer.example.com
+LIBREDASH_OIDC_CLIENT_ID=...
+LIBREDASH_OIDC_CLIENT_SECRET=...
+LIBREDASH_OIDC_CALLBACK_URL=https://your-host/auth/oidc/callback
+LIBREDASH_OIDC_SCOPES="openid profile email"
 LIBREDASH_CSRF_KEY=<32+ byte secret>
-LIBREDASH_COOKIE_SECURE=true
+LIBREDASH_ALLOWED_HOSTS=libredash.example.com # comma/space separated; required for API-token-only production
+LIBREDASH_METRICS_BEARER_TOKEN=<32+ byte secret>
+LIBREDASH_COOKIE_SECURE=true # required for production OIDC/Azure browser auth
+LIBREDASH_TRUST_PROXY_HEADERS=false # true only behind a trusted header-overwriting proxy
+LIBREDASH_SCIM_BEARER_TOKEN=<optional 32+ byte secret>
+LIBREDASH_EXEC_MAX_RUNNING_READS=4
+LIBREDASH_EXEC_MAX_QUEUED_READS=64
+LIBREDASH_EXEC_READ_QUEUE_TIMEOUT=30s
+LIBREDASH_EXEC_READ_TIMEOUT=2m
 ```
 
 Local auth is admin-managed: users with grant-management access can create local
@@ -284,7 +343,9 @@ infisical run --env=prod -- libredash serve --production
 
 Use `.env.example` as the list of required/common variables; do not commit real `.env` files.
 
-Production serve enables structured request logs, security headers, rate limits, and OAuth state cookies derived from `LIBREDASH_CSRF_KEY`.
+Production serve keeps the control-plane SQLite database and DuckLake catalog in separate files under `LIBREDASH_HOME`. It enables structured request logs, security headers, allowed-host validation, rate limits, a 128 MiB request body limit, bounded interactive query execution, and OAuth state cookies derived from `LIBREDASH_CSRF_KEY`.
+`LIBREDASH_ALLOWED_HOSTS` accepts exact hosts and `*.example.com` wildcards. Browser auth deployments also allow the hosts from configured OIDC/Azure callback URLs; API-token-only production must set the allowlist explicitly.
+Operational probes are exposed at `/healthz` and `/readyz`; Prometheus-compatible HTTP metrics are exposed at `/metrics`. Production requires `LIBREDASH_METRICS_BEARER_TOKEN`, and metrics scrapes must send `Authorization: Bearer <token>`.
 
 ## Test
 

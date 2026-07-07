@@ -481,7 +481,7 @@ VALUES (?, ?, ?, ?, ?);
 
 -- name: GetSessionByTokenFingerprint :one
 SELECT * FROM sessions
-WHERE token_fingerprint = ? AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL;
+WHERE token_fingerprint = ? AND datetime(expires_at) > CURRENT_TIMESTAMP AND revoked_at IS NULL;
 
 -- name: GetSessionByTokenFingerprintForAudit :one
 SELECT * FROM sessions
@@ -524,7 +524,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 SELECT * FROM api_tokens
 WHERE token_fingerprint = ?
   AND revoked_at IS NULL
-  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP);
+  AND (expires_at IS NULL OR datetime(expires_at) > CURRENT_TIMESTAMP);
 
 -- name: GetAPITokenByFingerprintForAudit :one
 SELECT * FROM api_tokens
@@ -568,7 +568,7 @@ WHERE p.kind = 'service_principal'
   AND s.service_principal_id = ?
   AND s.secret_fingerprint = ?
   AND s.revoked_at IS NULL
-  AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP);
+  AND (s.expires_at IS NULL OR datetime(s.expires_at) > CURRENT_TIMESTAMP);
 
 -- name: RevokeServicePrincipalSecret :exec
 UPDATE service_principal_secrets

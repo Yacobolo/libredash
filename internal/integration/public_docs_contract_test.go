@@ -53,6 +53,26 @@ func TestPublicDocsAndScriptsDoNotAdvertiseRemovedCaCSurfaces(t *testing.T) {
 	}
 }
 
+func TestEnvExampleDoesNotEnablePlaceholderIdentityProviders(t *testing.T) {
+	envExample := readRepoFile(t, filepath.Join("..", ".."), ".env.example")
+	for _, name := range []string{
+		"LIBREDASH_AZURE_CLIENT_ID",
+		"LIBREDASH_AZURE_CLIENT_SECRET",
+		"LIBREDASH_AZURE_CALLBACK_URL",
+		"LIBREDASH_AZURE_TENANT",
+		"LIBREDASH_OIDC_PROVIDER_ID",
+		"LIBREDASH_OIDC_ISSUER_URL",
+		"LIBREDASH_OIDC_CLIENT_ID",
+		"LIBREDASH_OIDC_CLIENT_SECRET",
+		"LIBREDASH_OIDC_CALLBACK_URL",
+		"LIBREDASH_OIDC_SCOPES",
+	} {
+		if regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(name) + `=`).MatchString(envExample) {
+			t.Fatalf(".env.example enables optional provider variable %s by default", name)
+		}
+	}
+}
+
 func readRepoFile(t *testing.T, root, name string) string {
 	t.Helper()
 	body, err := os.ReadFile(filepath.Join(root, name))

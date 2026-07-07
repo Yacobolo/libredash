@@ -81,6 +81,9 @@ func loadClientConfig() (clientConfig, error) {
 	if err != nil {
 		return clientConfig{}, err
 	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		return clientConfig{}, err
+	}
 	var config clientConfig
 	if err := json.Unmarshal(bytes, &config); err != nil {
 		return clientConfig{}, err

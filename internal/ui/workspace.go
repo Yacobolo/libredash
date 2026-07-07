@@ -744,12 +744,12 @@ func workspaceRouteUpdatesURL(routeKind uisignals.RouteKind, catalog dashboard.C
 	case uisignals.WorkspacePageSignal:
 		return updatesURL(routeKind, "workspace", firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID), "environment", typed.Environment, "type", typed.AssetList.ActiveType, "q", typed.AssetList.Query)
 	case uisignals.ConnectionsPageSignal:
-		return updatesURL(routeKind, "workspace", firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID), "environment", typed.Environment, "type", typed.AssetList.ActiveType, "q", typed.AssetList.Query)
+		return updatesURL(routeKind, "environment", typed.Environment, "type", typed.AssetList.ActiveType, "q", typed.AssetList.Query)
 	case uisignals.WorkspaceAssetPageSignal:
-		pairs := []string{"workspace", firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID), "environment", typed.Environment, "asset", typed.AssetID, "section", typed.ActiveSection}
 		if routeKind == uisignals.RouteConnectionAsset {
-			pairs = append(pairs, "assetWorkspace", extras.AssetWorkspaceID)
+			return updatesURL(routeKind, "environment", typed.Environment, "asset", typed.AssetID, "section", typed.ActiveSection, "assetWorkspace", extras.AssetWorkspaceID)
 		}
+		pairs := []string{"workspace", firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID), "environment", typed.Environment, "asset", typed.AssetID, "section", typed.ActiveSection}
 		return updatesURL(routeKind, pairs...)
 	default:
 		return updatesURL(routeKind)

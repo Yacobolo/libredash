@@ -2,7 +2,6 @@ package scimprov
 
 import (
 	"context"
-	"crypto/subtle"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -13,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/libredash/internal/secret"
 	scimpkg "github.com/elimity-com/scim"
 	scimerrors "github.com/elimity-com/scim/errors"
 	"github.com/elimity-com/scim/optional"
@@ -90,8 +90,8 @@ func NewHandler(options Options) (http.Handler, error) {
 func bearerMiddleware(expected string, repo Repository, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := strings.TrimSpace(r.Header.Get("Authorization"))
-		token := strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
-		if header == token || subtle.ConstantTimeCompare([]byte(token), []byte(expected)) != 1 {
+		token, ok := strings.CutPrefix(header, "Bearer ")
+		if !ok || !secret.Equal(strings.TrimSpace(token), expected) {
 			recordAudit(r.Context(), repo, r, "scim.auth", "scim", "scim", "denied", errors.New("invalid scim bearer token"))
 			w.Header().Set("Content-Type", "application/scim+json")
 			w.WriteHeader(http.StatusUnauthorized)

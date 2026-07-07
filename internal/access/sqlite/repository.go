@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -24,7 +25,12 @@ type Repository struct {
 	q  *platformdb.Queries
 }
 
-const defaultAPITokenTTL = 90 * 24 * time.Hour
+const (
+	defaultAPITokenTTL               = 90 * 24 * time.Hour
+	defaultServicePrincipalSecretTTL = 180 * 24 * time.Hour
+)
+
+var secretRandomReader io.Reader = rand.Reader
 
 func NewRepository(sqlDB *sql.DB) *Repository {
 	return &Repository{db: sqlDB, q: platformdb.New(sqlDB)}
@@ -84,7 +90,11 @@ func (r *Repository) principalDisabled(ctx context.Context, principalID string) 
 func (r *Repository) UpsertPrincipal(ctx context.Context, input access.PrincipalInput) (access.Principal, error) {
 	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(input.ID) == "" {
-		input.ID = newID("principal")
+		id, err := newID("principal")
+		if err != nil {
+			return access.Principal{}, err
+		}
+		input.ID = id
 	}
 	if input.Kind == "" {
 		input.Kind = access.PrincipalKindUser
@@ -112,7 +122,11 @@ func (r *Repository) CreateLocalUser(ctx context.Context, input access.LocalUser
 	}
 	password := strings.TrimSpace(input.Password)
 	if password == "" {
-		password = newTemporaryPassword()
+		generated, err := newTemporaryPassword()
+		if err != nil {
+			return access.LocalPasswordReset{}, err
+		}
+		password = generated
 	}
 	verifier, err := newSecretVerifier(password)
 	if err != nil {
@@ -166,7 +180,10 @@ func (r *Repository) ResetLocalPassword(ctx context.Context, principalID string)
 	if principal.Kind != access.PrincipalKindUser {
 		return access.LocalPasswordReset{}, fmt.Errorf("local passwords are only supported for user principals")
 	}
-	password := newTemporaryPassword()
+	password, err := newTemporaryPassword()
+	if err != nil {
+		return access.LocalPasswordReset{}, err
+	}
 	verifier, err := newSecretVerifier(password)
 	if err != nil {
 		return access.LocalPasswordReset{}, err
@@ -354,8 +371,12 @@ func (r *Repository) SetPlatformRole(ctx context.Context, input access.PlatformR
 	if err != nil {
 		return access.Principal{}, err
 	}
+	bindingID, err := newID("platformrolebinding")
+	if err != nil {
+		return access.Principal{}, err
+	}
 	if err := r.q.InsertPlatformRoleBinding(ctx, platformdb.InsertPlatformRoleBindingParams{
-		ID:          newID("platformrolebinding"),
+		ID:          bindingID,
 		RoleID:      role.ID,
 		PrincipalID: principal.ID,
 	}); err != nil {
@@ -392,7 +413,11 @@ func (r *Repository) RemovePrincipalRoles(ctx context.Context, workspaceID, prin
 func (r *Repository) CreateRoleBinding(ctx context.Context, input access.RoleBindingInput) (access.RoleBinding, error) {
 	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(input.ID) == "" {
-		input.ID = newID("rolebinding")
+		id, err := newID("rolebinding")
+		if err != nil {
+			return access.RoleBinding{}, err
+		}
+		input.ID = id
 	}
 	if strings.TrimSpace(input.WorkspaceID) == "" {
 		return access.RoleBinding{}, fmt.Errorf("workspace id is required")
@@ -726,7 +751,10 @@ WHERE id = ?
 
 func (r *Repository) CreateGrant(ctx context.Context, input access.GrantInput) (access.Grant, error) {
 	access.ClearAuthorizationCache(ctx)
-	id := newID("grant")
+	id, err := newID("grant")
+	if err != nil {
+		return access.Grant{}, err
+	}
 	if err := r.upsertGrantWithID(ctx, id, input); err != nil {
 		return access.Grant{}, err
 	}
@@ -780,7 +808,11 @@ WHERE id = ?
 func (r *Repository) UpsertDataPolicy(ctx context.Context, input access.DataPolicyInput) (access.DataPolicy, error) {
 	access.ClearAuthorizationCache(ctx)
 	if strings.TrimSpace(input.ID) == "" {
-		input.ID = newID("datapolicy")
+		id, err := newID("datapolicy")
+		if err != nil {
+			return access.DataPolicy{}, err
+		}
+		input.ID = id
 	}
 	if strings.TrimSpace(input.PolicyType) == "" {
 		return access.DataPolicy{}, fmt.Errorf("data policy type is required")
@@ -1516,7 +1548,11 @@ func (r *Repository) UpsertGroup(ctx context.Context, input access.GroupInput) (
 		return access.Group{}, fmt.Errorf("group name is required")
 	}
 	if strings.TrimSpace(input.ID) == "" {
-		input.ID = newID("group")
+		id, err := newID("group")
+		if err != nil {
+			return access.Group{}, err
+		}
+		input.ID = id
 	}
 	if strings.TrimSpace(input.Provider) == "" && strings.TrimSpace(input.ExternalID) == "" {
 		input.Provider = "local"
@@ -1983,15 +2019,22 @@ func (r *Repository) policyPrincipal(ctx context.Context, id, email, displayName
 }
 
 func (r *Repository) CreateSession(ctx context.Context, principalID string, ttl time.Duration) (string, error) {
-	token := newSecret()
+	token, err := newSecret()
+	if err != nil {
+		return "", err
+	}
 	fingerprint := secretFingerprint(token)
 	verifier, err := newSecretVerifier(token)
 	if err != nil {
 		return "", err
 	}
+	id, err := newID("session")
+	if err != nil {
+		return "", err
+	}
 	expires := time.Now().Add(ttl).UTC().Format(time.RFC3339)
 	return token, r.q.CreateSession(ctx, platformdb.CreateSessionParams{
-		ID:               newID("session"),
+		ID:               id,
 		PrincipalID:      principalID,
 		TokenFingerprint: fingerprint,
 		TokenVerifier:    verifier,
@@ -2106,14 +2149,23 @@ func (r *Repository) CreateAPITokenWithMetadata(ctx context.Context, input acces
 	if strings.TrimSpace(input.Name) == "" {
 		return "", access.APIToken{}, fmt.Errorf("token name is required")
 	}
-	token := newSecret()
-	id := newID("token")
+	token, err := newSecret()
+	if err != nil {
+		return "", access.APIToken{}, err
+	}
+	id, err := newID("token")
+	if err != nil {
+		return "", access.APIToken{}, err
+	}
 	privilegesJSON, err := json.Marshal(input.Privileges)
 	if err != nil {
 		return "", access.APIToken{}, err
 	}
 	if input.ExpiresAt.IsZero() {
 		input.ExpiresAt = time.Now().Add(defaultAPITokenTTL)
+	}
+	if !input.ExpiresAt.After(time.Now()) {
+		return "", access.APIToken{}, fmt.Errorf("api token expiry must be in the future")
 	}
 	expiresAt := sql.NullString{}
 	if !input.ExpiresAt.IsZero() {
@@ -2250,7 +2302,11 @@ func (r *Repository) CreateServicePrincipal(ctx context.Context, input access.Se
 	access.ClearAuthorizationCache(ctx)
 	id := strings.TrimSpace(input.ID)
 	if id == "" {
-		id = newID("sp")
+		generatedID, err := newID("sp")
+		if err != nil {
+			return access.Principal{}, err
+		}
+		id = generatedID
 	}
 	displayName := strings.TrimSpace(input.DisplayName)
 	if displayName == "" {
@@ -2304,7 +2360,7 @@ func (r *Repository) DeleteServicePrincipal(ctx context.Context, id string) erro
 	return r.q.DeleteServicePrincipal(ctx, id)
 }
 
-func (r *Repository) CreateServicePrincipalSecret(ctx context.Context, servicePrincipalID, name string) (string, access.ServicePrincipalSecret, error) {
+func (r *Repository) CreateServicePrincipalSecret(ctx context.Context, servicePrincipalID string, input access.ServicePrincipalSecretInput) (string, access.ServicePrincipalSecret, error) {
 	servicePrincipalID = strings.TrimSpace(servicePrincipalID)
 	if servicePrincipalID == "" {
 		return "", access.ServicePrincipalSecret{}, fmt.Errorf("service principal id is required")
@@ -2316,20 +2372,36 @@ func (r *Repository) CreateServicePrincipalSecret(ctx context.Context, servicePr
 	if access.PrincipalKind(principal.Kind) != access.PrincipalKindServicePrincipal {
 		return "", access.ServicePrincipalSecret{}, fmt.Errorf("principal %q is not a service principal", servicePrincipalID)
 	}
-	name = strings.TrimSpace(name)
+	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		name = "default"
 	}
-	secret := newSecret()
+	expiresAt := input.ExpiresAt
+	if expiresAt.IsZero() {
+		expiresAt = time.Now().Add(defaultServicePrincipalSecretTTL)
+	}
+	if !expiresAt.After(time.Now()) {
+		return "", access.ServicePrincipalSecret{}, fmt.Errorf("service principal secret expiry must be in the future")
+	}
+	expiresAtValue := sql.NullString{String: expiresAt.UTC().Format(time.RFC3339), Valid: true}
+	secret, err := newSecret()
+	if err != nil {
+		return "", access.ServicePrincipalSecret{}, err
+	}
 	fingerprint := secretFingerprint(secret)
 	verifier, err := newSecretVerifier(secret)
 	if err != nil {
 		return "", access.ServicePrincipalSecret{}, err
 	}
+	id, err := newID("spsecret")
+	if err != nil {
+		return "", access.ServicePrincipalSecret{}, err
+	}
 	row := access.ServicePrincipalSecret{
-		ID:                 newID("spsecret"),
+		ID:                 id,
 		ServicePrincipalID: servicePrincipalID,
 		Name:               name,
+		ExpiresAt:          expiresAtValue.String,
 	}
 	if err := r.q.CreateServicePrincipalSecret(ctx, platformdb.CreateServicePrincipalSecretParams{
 		ID:                 row.ID,
@@ -2337,6 +2409,7 @@ func (r *Repository) CreateServicePrincipalSecret(ctx context.Context, servicePr
 		Name:               row.Name,
 		SecretFingerprint:  fingerprint,
 		SecretVerifier:     verifier,
+		ExpiresAt:          expiresAtValue,
 	}); err != nil {
 		return "", access.ServicePrincipalSecret{}, err
 	}
@@ -2392,8 +2465,12 @@ func (r *Repository) RecordAuditEvent(ctx context.Context, input access.AuditEve
 	if strings.TrimSpace(input.MetadataJSON) == "" {
 		input.MetadataJSON = "{}"
 	}
+	id, err := newID("audit")
+	if err != nil {
+		return err
+	}
 	return r.q.InsertAuditEvent(ctx, platformdb.InsertAuditEventParams{
-		ID:            newID("audit"),
+		ID:            id,
 		WorkspaceID:   sql.NullString{String: input.WorkspaceID, Valid: strings.TrimSpace(input.WorkspaceID) != ""},
 		PrincipalID:   sql.NullString{String: input.PrincipalID, Valid: strings.TrimSpace(input.PrincipalID) != ""},
 		Action:        input.Action,
@@ -2667,21 +2744,28 @@ func sortedWorkspaceDataPolicyNames(values map[string]workspace.WorkspaceDataPol
 	return keys
 }
 
-func newID(prefix string) string {
-	return prefix + "_" + newSecret()[:24]
-}
-
-func newSecret() string {
-	var b [32]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		sum := sha256.Sum256([]byte(time.Now().Format(time.RFC3339Nano)))
-		return hex.EncodeToString(sum[:])
+func newID(prefix string) (string, error) {
+	secret, err := newSecret()
+	if err != nil {
+		return "", err
 	}
-	return hex.EncodeToString(b[:])
+	return prefix + "_" + secret[:24], nil
 }
 
-func newTemporaryPassword() string {
-	return newSecret()[:24]
+func newSecret() (string, error) {
+	var b [32]byte
+	if _, err := io.ReadFull(secretRandomReader, b[:]); err != nil {
+		return "", fmt.Errorf("read secure random bytes: %w", err)
+	}
+	return hex.EncodeToString(b[:]), nil
+}
+
+func newTemporaryPassword() (string, error) {
+	secret, err := newSecret()
+	if err != nil {
+		return "", err
+	}
+	return secret[:24], nil
 }
 
 func stableID(value string) string {

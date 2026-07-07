@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 
 	_ "github.com/duckdb/duckdb-go/v2"
@@ -156,6 +157,96 @@ func TestOpenMigratesSQLiteCatalogDataPath(t *testing.T) {
 	if got := duckLakeMetadataDataPath(t, ctx, catalogPath); got != duckLakeMetadataPath(newDataPath) {
 		t.Fatalf("metadata data_path = %q, want %q", got, duckLakeMetadataPath(newDataPath))
 	}
+}
+
+func TestMigrateSharedSQLiteCatalogCopiesDuckLakeMetadata(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sharedCatalogPath := filepath.Join(dir, "libredash.db")
+	oldDataPath := filepath.Join(dir, "old-data")
+	targetCatalogPath := filepath.Join(dir, "ducklake", "catalog.sqlite")
+	targetDataPath := filepath.Join(dir, "data")
+
+	control, err := sql.Open("sqlite", sharedCatalogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := control.ExecContext(ctx, `CREATE TABLE control_plane_state (id TEXT PRIMARY KEY, value TEXT)`); err != nil {
+		t.Fatalf("create control table: %v", err)
+	}
+	if err := control.Close(); err != nil {
+		t.Fatalf("close control db: %v", err)
+	}
+
+	writer, err := Open(ctx, Config{RootDir: filepath.Join(dir, "duckdb", "dev"), CatalogPath: sharedCatalogPath, DataPath: oldDataPath})
+	if extensionUnavailable(err) {
+		t.Skipf("ducklake extension unavailable: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("open shared writer: %v", err)
+	}
+	snapshotID, err := writer.Commit(ctx, "dep_1", nil, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "CREATE SCHEMA IF NOT EXISTS model"); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, "CREATE OR REPLACE TABLE model.orders AS SELECT 42 AS id")
+		return err
+	})
+	if err != nil {
+		t.Fatalf("commit shared snapshot: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close shared writer: %v", err)
+	}
+
+	if err := MigrateSharedSQLiteCatalog(ctx, sharedCatalogPath, targetCatalogPath, targetDataPath); err != nil {
+		t.Fatalf("migrate shared catalog: %v", err)
+	}
+	if _, err := os.Stat(targetCatalogPath); err != nil {
+		t.Fatalf("target catalog missing: %v", err)
+	}
+	reader, err := OpenSnapshot(ctx, Config{RootDir: dir, CatalogPath: targetCatalogPath, DataPath: targetDataPath, SnapshotID: snapshotID})
+	if err != nil {
+		t.Fatalf("open migrated dedicated snapshot: %v", err)
+	}
+	defer reader.Close()
+	var id int
+	if err := reader.SQLDB().QueryRowContext(ctx, "SELECT id FROM model.orders").Scan(&id); err != nil {
+		t.Fatalf("query migrated dedicated snapshot: %v", err)
+	}
+	if id != 42 {
+		t.Fatalf("id = %d, want 42", id)
+	}
+}
+
+func TestMigrateSharedSQLiteCatalogCreatesPrivateCatalog(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sharedCatalogPath := filepath.Join(dir, "libredash.db")
+	targetCatalogPath := filepath.Join(dir, "ducklake", "catalog.sqlite")
+	targetDataPath := filepath.Join(dir, "data")
+
+	control, err := sql.Open("sqlite", sharedCatalogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := control.ExecContext(ctx, `CREATE TABLE ducklake_metadata ("key" TEXT, value TEXT, scope TEXT)`); err != nil {
+		t.Fatalf("create ducklake metadata: %v", err)
+	}
+	if _, err := control.ExecContext(ctx, `INSERT INTO ducklake_metadata ("key", value, scope) VALUES ('data_path', ?, NULL)`, duckLakeMetadataPath(targetDataPath)); err != nil {
+		t.Fatalf("seed ducklake metadata: %v", err)
+	}
+	if err := control.Close(); err != nil {
+		t.Fatalf("close control db: %v", err)
+	}
+
+	restoreUmask := setUmask(t, 0)
+	if err := MigrateSharedSQLiteCatalog(ctx, sharedCatalogPath, targetCatalogPath, targetDataPath); err != nil {
+		restoreUmask()
+		t.Fatalf("migrate shared catalog: %v", err)
+	}
+	restoreUmask()
+	assertFileMode(t, targetCatalogPath, 0o600)
 }
 
 func TestOpenSnapshotRejectsMissingSnapshot(t *testing.T) {
@@ -311,5 +402,24 @@ func TestMaintenanceDryRunsUseDuckLakeMetadata(t *testing.T) {
 	}
 	if len(snapshots) == 0 {
 		t.Fatal("dry-run maintenance removed snapshots")
+	}
+}
+
+func assertFileMode(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %s: %v", path, err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Fatalf("mode for %s = %#o, want %#o", path, got, want)
+	}
+}
+
+func setUmask(t *testing.T, mask int) func() {
+	t.Helper()
+	old := syscall.Umask(mask)
+	return func() {
+		syscall.Umask(old)
 	}
 }

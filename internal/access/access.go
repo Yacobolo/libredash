@@ -618,7 +618,7 @@ type Repository interface {
 	ListServicePrincipals(ctx context.Context) ([]Principal, error)
 	UpdateServicePrincipal(ctx context.Context, id string, input ServicePrincipalInput) (Principal, error)
 	DeleteServicePrincipal(ctx context.Context, id string) error
-	CreateServicePrincipalSecret(ctx context.Context, servicePrincipalID, name string) (string, ServicePrincipalSecret, error)
+	CreateServicePrincipalSecret(ctx context.Context, servicePrincipalID string, input ServicePrincipalSecretInput) (string, ServicePrincipalSecret, error)
 	RevokeServicePrincipalSecret(ctx context.Context, servicePrincipalID, secretID string) error
 	PrincipalForServicePrincipalSecret(ctx context.Context, servicePrincipalID, secret string) (Principal, error)
 	BootstrapAdmin(ctx context.Context, workspaceID, email string) error

@@ -26,8 +26,11 @@ func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 	unauthReq := httptest.NewRequest(http.MethodGet, "/chat", nil)
 	unauthRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(unauthRec, unauthReq)
-	if unauthRec.Code != http.StatusFound {
-		t.Fatalf("unauth status = %d, want redirect", unauthRec.Code)
+	if unauthRec.Code != http.StatusUnauthorized {
+		t.Fatalf("unauth status = %d, want %d", unauthRec.Code, http.StatusUnauthorized)
+	}
+	if got := unauthRec.Header().Get("WWW-Authenticate"); !strings.Contains(got, "Bearer") {
+		t.Fatalf("unauth WWW-Authenticate = %q, want Bearer challenge", got)
 	}
 
 	ctx := context.Background()

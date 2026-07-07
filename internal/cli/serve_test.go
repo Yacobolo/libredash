@@ -2,9 +2,12 @@ package cli
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
@@ -15,6 +18,74 @@ import (
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
+
+func TestServeProductionModeHonorsConfigEnv(t *testing.T) {
+	cfg := config.Config{Production: true}
+	if !serveProductionMode(cfg, rootOptions{}) {
+		t.Fatal("serve production mode ignored config production setting")
+	}
+}
+
+func TestServeEnvironmentDefaultsToProductionEnvironment(t *testing.T) {
+	if got := serveEnvironment(true, ""); got != servingstate.Environment("prod") {
+		t.Fatalf("production serve environment = %q, want prod", got)
+	}
+	if got := serveEnvironment(false, ""); got != servingstate.DefaultEnvironment {
+		t.Fatalf("development serve environment = %q, want %q", got, servingstate.DefaultEnvironment)
+	}
+	if got := serveEnvironment(true, "dev"); got != servingstate.DefaultEnvironment {
+		t.Fatalf("explicit production serve environment = %q, want dev", got)
+	}
+}
+
+func TestServeEnvironmentFlagValueIgnoresSharedCommandDefaults(t *testing.T) {
+	if got := serveEnvironmentFlagValue(false, "dev"); got != "" {
+		t.Fatalf("unchanged serve environment flag value = %q, want empty", got)
+	}
+	if got := serveEnvironmentFlagValue(true, "dev"); got != "dev" {
+		t.Fatalf("changed serve environment flag value = %q, want dev", got)
+	}
+}
+
+func TestListenURLHandlesQualifiedAddr(t *testing.T) {
+	for _, tt := range []struct {
+		addr string
+		want string
+	}{
+		{addr: ":8080", want: "http://localhost:8080"},
+		{addr: "127.0.0.1:18080", want: "http://127.0.0.1:18080"},
+		{addr: "0.0.0.0:8080", want: "http://0.0.0.0:8080"},
+	} {
+		if got := listenURL(tt.addr); got != tt.want {
+			t.Fatalf("listenURL(%q) = %q, want %q", tt.addr, got, tt.want)
+		}
+	}
+}
+
+func TestProductionHTTPServerHasTimeouts(t *testing.T) {
+	server := productionHTTPServer(":0", http.NewServeMux())
+	if server.ReadHeaderTimeout <= 0 {
+		t.Fatal("ReadHeaderTimeout is not configured")
+	}
+	if server.ReadTimeout <= 0 {
+		t.Fatal("ReadTimeout is not configured")
+	}
+	if server.WriteTimeout <= 0 {
+		t.Fatal("WriteTimeout is not configured")
+	}
+	if server.IdleTimeout <= 0 {
+		t.Fatal("IdleTimeout is not configured")
+	}
+	if server.Shutdown(context.Background()) != nil {
+		t.Fatal("empty server shutdown should be a no-op")
+	}
+}
+
+func TestDefaultHTTPServerShutdownTimeout(t *testing.T) {
+	if defaultHTTPServerShutdownTimeout < 5*time.Second {
+		t.Fatalf("shutdown timeout = %s, want at least 5s", defaultHTTPServerShutdownTimeout)
+	}
+}
 
 func TestDeploymentBackedDevServerAlwaysOpensPlatformStore(t *testing.T) {
 	home := t.TempDir()
@@ -32,6 +103,47 @@ func TestDeploymentBackedDevServerAlwaysOpensPlatformStore(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "data")); err != nil {
 		t.Fatalf("DuckLake data directory was not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "ducklake")); err != nil {
+		t.Fatalf("DuckLake catalog directory was not created: %v", err)
+	}
+}
+
+func TestProductionServerAllowsCallbackHostAndRejectsOthers(t *testing.T) {
+	home := t.TempDir()
+	server, cleanup, err := servingStateBackedServer(context.Background(), config.Config{
+		HomeDir:            home,
+		Production:         true,
+		OIDCIssuerURL:      "https://issuer.example",
+		OIDCClientID:       "client-id",
+		OIDCSecret:         "client-secret",
+		OIDCCallbackURL:    "https://app.example.com/auth/oidc/callback",
+		CSRFKey:            "0123456789abcdef0123456789abcdef",
+		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
+	}, "", true, servingstate.Environment("prod"))
+	if err != nil {
+		t.Fatalf("production server: %v", err)
+	}
+	defer cleanup()
+	handler := server.Routes()
+
+	for _, tc := range []struct {
+		name string
+		host string
+		want int
+	}{
+		{name: "callback host", host: "app.example.com", want: http.StatusOK},
+		{name: "unexpected host", host: "evil.example.com", want: http.StatusMisdirectedRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+			req.Host = tc.host
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("status = %d, want %d body=%s", rec.Code, tc.want, rec.Body.String())
+			}
+		})
 	}
 }
 

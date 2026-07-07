@@ -114,12 +114,24 @@ func NewManagerWithFactory(options ManagerOptions) *Manager {
 }
 
 func (m *Manager) Reload(ctx context.Context) error {
+	return m.ReloadBeforePrepare(ctx, nil)
+}
+
+func (m *Manager) ReloadBeforePrepare(ctx context.Context, beforePrepare func() error) error {
 	current, artifact, err := m.repo.ActiveArtifact(ctx, m.workspaceID, m.environment)
 	if err != nil {
 		if errors.Is(err, servingstate.ErrNotFound) {
 			return m.Close()
 		}
 		return err
+	}
+	if !m.needsPrepare(current, artifact) {
+		return nil
+	}
+	if beforePrepare != nil && current.DuckLakeSnapshotID == 0 {
+		if err := beforePrepare(); err != nil {
+			return err
+		}
 	}
 	prepared, err := m.prepare(ctx, current, artifact)
 	if err != nil {
@@ -132,6 +144,15 @@ func (m *Manager) Reload(ctx context.Context) error {
 		}
 	}
 	return m.CommitPrepared(prepared)
+}
+
+func (m *Manager) needsPrepare(current servingstate.State, artifact servingstate.Artifact) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.current == nil ||
+		m.activeServingStateID != current.ID ||
+		m.activeDigest != artifact.Digest ||
+		m.activeSnapshotID != current.DuckLakeSnapshotID
 }
 
 func (m *Manager) PrepareServingState(ctx context.Context, servingStateID string) (servingstate.PreparedRuntime, error) {

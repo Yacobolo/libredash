@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -412,15 +414,15 @@ func TestManagerCloseClearsActiveRuntime(t *testing.T) {
 func TestRegistryReloadLoadsConfiguredEnvironmentForEachWorkspace(t *testing.T) {
 	repo := newFakeRegistryRepo()
 	repo.active["sales/prod"] = registryDeploymentArtifact{
-		deployment: servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated},
+		deployment: servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated, DuckLakeSnapshotID: 9},
 		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"},
 	}
 	repo.active["operations/prod"] = registryDeploymentArtifact{
-		deployment: servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusValidated},
+		deployment: servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusValidated, DuckLakeSnapshotID: 7},
 		artifact:   servingstate.Artifact{ServingStateID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
 	}
 	repo.active["sales/dev"] = registryDeploymentArtifact{
-		deployment: servingstate.State{ID: "dep_sales_dev", WorkspaceID: "sales", Environment: "dev", Status: servingstate.StatusValidated},
+		deployment: servingstate.State{ID: "dep_sales_dev", WorkspaceID: "sales", Environment: "dev", Status: servingstate.StatusValidated, DuckLakeSnapshotID: 3},
 		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_dev", WorkspaceID: "sales", Environment: "dev", Digest: "sales-dev"},
 	}
 	factory := &recordingRegistryFactory{}
@@ -501,6 +503,167 @@ func TestRegistryRejectsPreparedDeploymentFromDifferentEnvironment(t *testing.T)
 
 	if _, err := registry.PrepareServingState(context.Background(), "dep_ops_dev"); err == nil {
 		t.Fatal("prepare error = nil, want environment mismatch")
+	}
+}
+
+func TestRegistrySerializesRuntimePrepareAcrossWorkspaces(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.deployments["dep_ops_prod"] = servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_ops_prod"] = servingstate.Artifact{ServingStateID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"}
+	repo.deployments["dep_sales_prod"] = servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_prod"] = servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"}
+	factory := &overlapDetectingRegistryFactory{}
+	registry := NewRegistryWithFactory(RegistryOptions{
+		Repo:         repo,
+		WorkspaceIDs: []servingstate.WorkspaceID{"operations", "sales"},
+		Environment:  "prod",
+		DataDir:      "/data",
+		Factory:      factory,
+	})
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	errs := make(chan error, 2)
+	for _, id := range []string{"dep_ops_prod", "dep_sales_prod"} {
+		wg.Add(1)
+		go func(servingStateID string) {
+			defer wg.Done()
+			<-start
+			prepared, err := registry.PrepareServingState(context.Background(), servingStateID)
+			if err != nil {
+				errs <- err
+				return
+			}
+			errs <- prepared.Close()
+		}(id)
+	}
+	close(start)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("prepare: %v", err)
+		}
+	}
+	if factory.overlapped.Load() {
+		t.Fatal("runtime prepares overlapped across workspaces")
+	}
+}
+
+func TestRegistryPrepareServingStateClosesLoadedRuntimesBeforePrepare(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.active["operations/prod"] = registryDeploymentArtifact{
+		deployment: servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusActive, DuckLakeSnapshotID: 7},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
+	}
+	repo.active["sales/prod"] = registryDeploymentArtifact{
+		deployment: servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusActive, DuckLakeSnapshotID: 9},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"},
+	}
+	repo.deployments["dep_visuals_prod"] = servingstate.State{ID: "dep_visuals_prod", WorkspaceID: "visuals", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_visuals_prod"] = servingstate.Artifact{ServingStateID: "dep_visuals_prod", WorkspaceID: "visuals", Environment: "prod", Digest: "visuals-prod"}
+	factory := &recordingRegistryFactory{}
+	registry := NewRegistryWithFactory(RegistryOptions{
+		Repo:         repo,
+		WorkspaceIDs: []servingstate.WorkspaceID{"operations", "sales"},
+		Environment:  "prod",
+		DataDir:      "/data",
+		Factory:      factory,
+	})
+	if err := registry.Reload(context.Background()); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if len(factory.runtimes) != 2 || factory.runtimes[0].closed || factory.runtimes[1].closed {
+		t.Fatalf("loaded runtimes = %#v, want two open runtimes", factory.runtimes)
+	}
+
+	prepared, err := registry.PrepareServingState(context.Background(), "dep_visuals_prod")
+	if err != nil {
+		t.Fatalf("prepare visuals: %v", err)
+	}
+	defer prepared.Close()
+	if !factory.runtimes[0].closed || !factory.runtimes[1].closed {
+		t.Fatalf("previous active runtimes were not closed before prepare: %#v", factory.runtimes)
+	}
+	if len(factory.runtimes) != 3 || factory.runtimes[2].closed {
+		t.Fatalf("prepared runtime = %#v, want new open runtime", factory.runtimes)
+	}
+}
+
+func TestRegistryAcquireForWorkspaceClosesLoadedRuntimesBeforeLazyPrepare(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.active["operations/prod"] = registryDeploymentArtifact{
+		deployment: servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusActive, DuckLakeSnapshotID: 7},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
+	}
+	repo.active["sales/prod"] = registryDeploymentArtifact{
+		deployment: servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusActive, DuckLakeSnapshotID: 9},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"},
+	}
+	factory := &recordingRegistryFactory{}
+	registry := NewRegistryWithFactory(RegistryOptions{
+		Repo:         repo,
+		WorkspaceIDs: []servingstate.WorkspaceID{"operations", "sales", "visuals"},
+		Environment:  "prod",
+		DataDir:      "/data",
+		Factory:      factory,
+	})
+	if err := registry.Reload(context.Background()); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if len(factory.runtimes) != 2 || factory.runtimes[0].closed || factory.runtimes[1].closed {
+		t.Fatalf("loaded runtimes = %#v, want two open runtimes", factory.runtimes)
+	}
+	repo.active["visuals/prod"] = registryDeploymentArtifact{
+		deployment: servingstate.State{ID: "dep_visuals_prod", WorkspaceID: "visuals", Environment: "prod", Status: servingstate.StatusActive},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_visuals_prod", WorkspaceID: "visuals", Environment: "prod", Digest: "visuals-prod"},
+	}
+
+	lease, err := registry.AcquireForWorkspace(context.Background(), "visuals")
+	if err != nil {
+		t.Fatalf("acquire visuals: %v", err)
+	}
+	defer lease.Release()
+	if !factory.runtimes[0].closed || !factory.runtimes[1].closed {
+		t.Fatalf("previous active runtimes were not closed before lazy prepare: %#v", factory.runtimes)
+	}
+	if len(factory.runtimes) != 3 || factory.runtimes[2].closed {
+		t.Fatalf("prepared runtime = %#v, want new open runtime", factory.runtimes)
+	}
+}
+
+func TestRegistryAcquireForWorkspaceKeepsLoadedRuntimesOpenOnNoChangeReload(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.active["operations/prod"] = registryDeploymentArtifact{
+		deployment: servingstate.State{ID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Status: servingstate.StatusActive, DuckLakeSnapshotID: 7},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_ops_prod", WorkspaceID: "operations", Environment: "prod", Digest: "ops-prod"},
+	}
+	repo.active["sales/prod"] = registryDeploymentArtifact{
+		deployment: servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusActive, DuckLakeSnapshotID: 9},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"},
+	}
+	factory := &recordingRegistryFactory{}
+	registry := NewRegistryWithFactory(RegistryOptions{
+		Repo:         repo,
+		WorkspaceIDs: []servingstate.WorkspaceID{"operations", "sales"},
+		Environment:  "prod",
+		DataDir:      "/data",
+		Factory:      factory,
+	})
+	if err := registry.Reload(context.Background()); err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+
+	lease, err := registry.AcquireForWorkspace(context.Background(), "sales")
+	if err != nil {
+		t.Fatalf("acquire sales: %v", err)
+	}
+	lease.Release()
+	if len(factory.runtimes) != 2 {
+		t.Fatalf("runtime count = %d, want no new prepare", len(factory.runtimes))
+	}
+	if factory.runtimes[0].closed || factory.runtimes[1].closed {
+		t.Fatalf("no-change reload closed runtimes: %#v", factory.runtimes)
 	}
 }
 
@@ -714,6 +877,21 @@ type recordingRuntime struct {
 func (r *recordingRuntime) Close() error {
 	r.closed = true
 	return nil
+}
+
+type overlapDetectingRegistryFactory struct {
+	active     atomic.Int32
+	overlapped atomic.Bool
+}
+
+func (f *overlapDetectingRegistryFactory) Prepare(context.Context, RuntimeInput) (Runtime, error) {
+	active := f.active.Add(1)
+	if active > 1 {
+		f.overlapped.Store(true)
+	}
+	time.Sleep(25 * time.Millisecond)
+	f.active.Add(-1)
+	return &recordingRuntime{}, nil
 }
 
 func equalStrings(got, want []string) bool {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,7 @@ import (
 	oidcauth "github.com/Yacobolo/libredash/internal/access/oidc"
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/config"
+	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
 func TestAuthRouteRateLimit(t *testing.T) {
@@ -37,6 +39,326 @@ func TestAuthRouteRateLimit(t *testing.T) {
 			t.Fatalf("second auth status = %d, want %d", rec.Code, http.StatusTooManyRequests)
 		}
 	}
+}
+
+func TestPanicRecoveryWritesInternalServerError(t *testing.T) {
+	handler := panicRecovery(slog.Default())(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("boom")
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/panic", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if strings.Contains(rec.Body.String(), "boom") {
+		t.Fatalf("panic detail leaked in response body: %q", rec.Body.String())
+	}
+}
+
+func TestProductionRateLimitConfigDoesNotTrustProxyHeadersByDefault(t *testing.T) {
+	if ProductionRateLimitConfig().UseRealIP {
+		t.Fatal("production rate limit config trusts proxy headers by default")
+	}
+}
+
+func TestAllowedHostsRejectsUnexpectedHost(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{
+		AllowedHosts: []string{"app.example.com", "*.trusted.example.com"},
+	})
+	handler := server.Routes()
+
+	for _, tc := range []struct {
+		name       string
+		host       string
+		remoteAddr string
+		want       int
+	}{
+		{name: "exact", host: "app.example.com", want: http.StatusOK},
+		{name: "exact with port", host: "app.example.com:443", want: http.StatusOK},
+		{name: "wildcard subdomain", host: "team.trusted.example.com", want: http.StatusOK},
+		{name: "local healthcheck", host: "127.0.0.1", remoteAddr: "127.0.0.1:12345", want: http.StatusOK},
+		{name: "spoofed loopback host", host: "127.0.0.1", remoteAddr: "203.0.113.10:12345", want: http.StatusMisdirectedRequest},
+		{name: "wildcard apex", host: "trusted.example.com", want: http.StatusMisdirectedRequest},
+		{name: "unexpected", host: "evil.example.com", want: http.StatusMisdirectedRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+			req.Host = tc.host
+			if tc.remoteAddr != "" {
+				req.RemoteAddr = tc.remoteAddr
+			}
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("status = %d, want %d body=%s", rec.Code, tc.want, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestRequestBodyLimitRejectsOversizedContentLength(t *testing.T) {
+	called := false
+	handler := requestBodyLimit(RequestBodyLimitConfig{Enabled: true, MaxBytes: 4})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("body"))
+	req.ContentLength = 5
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
+	}
+	if called {
+		t.Fatal("next handler was called for oversized request")
+	}
+}
+
+func TestRequestBodyLimitStopsStreamedOversizedBody(t *testing.T) {
+	handler := requestBodyLimit(RequestBodyLimitConfig{Enabled: true, MaxBytes: 4})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, err := io.ReadAll(r.Body)
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+			return
+		}
+		if err != nil {
+			t.Fatalf("read body: %v", err)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("12345"))
+	req.ContentLength = -1
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusRequestEntityTooLarge)
+	}
+}
+
+func TestHealthRoutesAreUnauthenticated(t *testing.T) {
+	store := testStore(t)
+	server := NewWithOptions(fakeMetrics{}, Options{
+		Store: store,
+		Auth:  testAuth(store, "test", AuthConfig{APITokenOnly: true}),
+	})
+	handler := server.Routes()
+
+	for _, path := range []string{"/healthz", "/readyz"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want %d body=%s", path, rec.Code, http.StatusOK, rec.Body.String())
+		}
+		if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "application/json") {
+			t.Fatalf("%s Content-Type = %q, want application/json", path, got)
+		}
+	}
+}
+
+func TestAPITokenOnlyAuthChallengesInsteadOfOIDCRedirect(t *testing.T) {
+	store := testStore(t)
+	server := NewWithOptions(fakeMetrics{}, Options{
+		Store:              store,
+		Auth:               testAuth(store, "test", AuthConfig{APITokenOnly: true}),
+		DefaultWorkspaceID: "test",
+	})
+	req := httptest.NewRequest(http.MethodGet, "/chat", nil)
+	rec := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "" {
+		t.Fatalf("Location = %q, want no OIDC redirect", got)
+	}
+	if got := rec.Header().Get("WWW-Authenticate"); !strings.Contains(got, "Bearer") {
+		t.Fatalf("WWW-Authenticate = %q, want Bearer challenge", got)
+	}
+}
+
+func TestMetricsRouteExportsHTTPMetrics(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t)})
+	handler := server.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("health status = %d, want 200", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d, want 200 body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"libredash_http_requests_total",
+		`method="GET"`,
+		`route="/healthz"`,
+		`status="200"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metrics output missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestMetricsRouteRequiresConfiguredBearerToken(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{
+		Store:              testStore(t),
+		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
+	})
+	handler := server.Routes()
+
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("metrics status without token = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+	if got := rec.Header().Get("WWW-Authenticate"); !strings.Contains(got, "Bearer") {
+		t.Fatalf("WWW-Authenticate = %q, want Bearer challenge", got)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer wrong")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("metrics status with wrong token = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	req.Header.Set("Authorization", "Bearer 0123456789abcdef0123456789abcdef")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("metrics status with valid token = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "libredash_http_requests_total") {
+		t.Fatalf("metrics output missing LibreDash metrics:\n%s", body)
+	}
+}
+
+func TestMetricsRouteUsesAuthRateLimit(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{
+		Store:              testStore(t),
+		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
+		RateLimits:         RateLimitConfig{Enabled: true, AuthLimit: 1, AuthWindow: time.Minute},
+	})
+	handler := server.Routes()
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+		req.RemoteAddr = "192.0.2.30:1234"
+		req.Header.Set("Authorization", "Bearer wrong")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if i == 0 && rec.Code != http.StatusUnauthorized {
+			t.Fatalf("first metrics status = %d, want %d body=%s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+		}
+		if i == 1 && rec.Code != http.StatusTooManyRequests {
+			t.Fatalf("second metrics status = %d, want %d body=%s", rec.Code, http.StatusTooManyRequests, rec.Body.String())
+		}
+	}
+}
+
+func TestReadinessFailsWithoutPlatformStore(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{})
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("readyz status = %d, want %d body=%s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+}
+
+func TestReadinessChecksActiveWorkspaceRuntime(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{
+		Store: testStore(t),
+		WorkspaceRepo: activeMetadataWorkspaceRepo{summaries: []workspace.Summary{{
+			ID:                   "test-workspace",
+			ActiveServingStateID: "deploy_1",
+		}}},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("readyz status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `"workspaceRuntime:test-workspace":"ok"`) {
+		t.Fatalf("readyz body missing active workspace runtime check:\n%s", body)
+	}
+}
+
+func TestReadinessFailsWhenActiveWorkspaceRuntimeIsMissing(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{
+		Store: testStore(t),
+		WorkspaceRepo: activeMetadataWorkspaceRepo{summaries: []workspace.Summary{{
+			ID:                   "missing",
+			ActiveServingStateID: "deploy_1",
+		}}},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("readyz status = %d, want %d body=%s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+	if body := rec.Body.String(); !strings.Contains(body, `"workspaceRuntime:missing"`) || !strings.Contains(body, `catalog workspace`) {
+		t.Fatalf("readyz body missing runtime failure:\n%s", body)
+	}
+}
+
+type activeMetadataWorkspaceRepo struct {
+	summaries []workspace.Summary
+	err       error
+}
+
+func (r activeMetadataWorkspaceRepo) Ensure(context.Context, workspace.EnsureInput) error {
+	return nil
+}
+
+func (r activeMetadataWorkspaceRepo) List(context.Context) ([]workspace.Summary, error) {
+	return r.summaries, r.err
+}
+
+func (r activeMetadataWorkspaceRepo) ListWithActiveMetadata(context.Context, string) ([]workspace.Summary, error) {
+	return r.summaries, r.err
+}
+
+func (r activeMetadataWorkspaceRepo) ByID(_ context.Context, id workspace.WorkspaceID) (workspace.Summary, error) {
+	for _, summary := range r.summaries {
+		if summary.ID == id {
+			return summary, r.err
+		}
+	}
+	return workspace.Summary{ID: id}, r.err
+}
+
+func (r activeMetadataWorkspaceRepo) ActiveServingStateGraph(context.Context, workspace.WorkspaceID, string) (workspace.AssetGraph, bool, error) {
+	return workspace.AssetGraph{}, false, r.err
+}
+
+func (r activeMetadataWorkspaceRepo) AssetVersions(context.Context, workspace.WorkspaceID, string, workspace.AssetID) ([]workspace.AssetVersion, error) {
+	return nil, r.err
 }
 
 func TestDeploymentAPIRateLimitPreservesAuth(t *testing.T) {
@@ -138,6 +460,23 @@ func TestSecurityHeaders(t *testing.T) {
 			t.Fatalf("%s = %q, want %q", name, got, want)
 		}
 	}
+	csp := headers.Get("Content-Security-Policy")
+	for _, want := range []string{
+		"default-src 'self'",
+		"object-src 'none'",
+		"frame-ancestors 'self'",
+		"script-src 'self' 'unsafe-eval'",
+		"style-src 'self' 'unsafe-inline'",
+		"connect-src 'self'",
+		"worker-src 'self' blob:",
+	} {
+		if !strings.Contains(csp, want) {
+			t.Fatalf("Content-Security-Policy missing %q: %q", want, csp)
+		}
+	}
+	if strings.Contains(csp, "cdn.jsdelivr.net") {
+		t.Fatalf("Content-Security-Policy allows CDN scripts: %q", csp)
+	}
 }
 
 func TestSecurityHeadersOmitHSTSWhenDisabled(t *testing.T) {
@@ -162,12 +501,14 @@ func TestRequestLoggerDoesNotLogSensitiveHeaders(t *testing.T) {
 	})
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "Bearer secret-token")
+	req.Header.Set("X-Request-ID", "req_123")
+	req.Header.Set("X-Correlation-ID", "corr_456")
 	req.AddCookie(&http.Cookie{Name: "ld_session", Value: "secret-session"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 
 	logged := buf.String()
-	for _, want := range []string{"method=GET", "path=/", "status=200", "duration="} {
+	for _, want := range []string{"method=GET", "path=/", "status=200", "duration=", "bytes=", "request_id=req_123", "correlation_id=corr_456"} {
 		if !strings.Contains(logged, want) {
 			t.Fatalf("log %q missing %q", logged, want)
 		}
@@ -221,6 +562,32 @@ func TestAuthBeginCreatesOIDCStateCookieAndRedirect(t *testing.T) {
 	}
 	if cookieState != state || cookieNonce != nonce {
 		t.Fatalf("cookie state/nonce = %q/%q, redirect = %q/%q", cookieState, cookieNonce, state, nonce)
+	}
+}
+
+func TestAuthBeginFailsClosedWhenRandomnessUnavailable(t *testing.T) {
+	restore := setAuthRandomReaderForTest(errReader{})
+	defer restore()
+	auth := testAuth(testStore(t), "test", AuthConfig{
+		DevBypass:    true,
+		CSRFKey:      "0123456789abcdef0123456789abcdef",
+		CookieSecure: true,
+	})
+	auth.configured = true
+	auth.oidcOverride = map[string]oidcClient{"azureadv2": fakeOIDCClient{authURL: "https://issuer.example/authorize"}}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/azureadv2", nil)
+	rec := httptest.NewRecorder()
+	auth.Begin(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
+	}
+	if got := rec.Header().Get("Location"); got != "" {
+		t.Fatalf("Location = %q, want no redirect", got)
+	}
+	if cookie := oidcStateCookieForTest(rec.Result().Cookies()); cookie != nil {
+		t.Fatalf("unexpected state cookie: %#v", cookie)
 	}
 }
 
@@ -514,6 +881,75 @@ func TestAuthAuditsDisabledPrincipalCredentialFailures(t *testing.T) {
 	}
 }
 
+func TestInvalidBearerDoesNotFallBackToSession(t *testing.T) {
+	store := testStore(t)
+	repo := accesssqlite.NewRepository(store.SQLDB())
+	ctx := context.Background()
+	principal, err := repo.SetPlatformRole(ctx, access.PlatformRoleInput{
+		Email:       "owner@example.com",
+		DisplayName: "Owner",
+		Role:        access.RolePlatformAdmin,
+	})
+	if err != nil {
+		t.Fatalf("create principal: %v", err)
+	}
+	sessionSecret, err := repo.CreateSession(ctx, principal.ID, time.Hour)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	auth := NewAuth(repo, "test", AuthConfig{CSRFKey: "0123456789abcdef0123456789abcdef"})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test", nil)
+	req.Header.Set("Authorization", "Bearer invalid-token")
+	req.AddCookie(&http.Cookie{Name: "ld_session", Value: sessionSecret})
+	if _, _, ok := auth.authenticate(req); ok {
+		t.Fatal("invalid bearer authenticated by falling back to the session cookie")
+	}
+}
+
+func TestCSRFBearerBypassDoesNotApplyWhenSessionCookiePresent(t *testing.T) {
+	store := testStore(t)
+	repo := accesssqlite.NewRepository(store.SQLDB())
+	ctx := context.Background()
+	principal, err := repo.SetPlatformRole(ctx, access.PlatformRoleInput{
+		Email:       "owner@example.com",
+		DisplayName: "Owner",
+		Role:        access.RolePlatformAdmin,
+	})
+	if err != nil {
+		t.Fatalf("create principal: %v", err)
+	}
+	sessionSecret, err := repo.CreateSession(ctx, principal.ID, time.Hour)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	apiSecret, _, err := repo.CreateAPITokenWithMetadata(ctx, access.APITokenInput{PrincipalID: principal.ID, Name: "cli"})
+	if err != nil {
+		t.Fatalf("create api token: %v", err)
+	}
+	auth := NewAuth(repo, "test", AuthConfig{CSRFKey: "0123456789abcdef0123456789abcdef"})
+	handler := auth.CSRFMiddleware(auth.Middleware("", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})))
+
+	sessionReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/mutate", nil)
+	sessionReq.Header.Set("Authorization", "Bearer invalid-token")
+	sessionReq.AddCookie(&http.Cookie{Name: "ld_session", Value: sessionSecret})
+	sessionRec := httptest.NewRecorder()
+	handler.ServeHTTP(sessionRec, sessionReq)
+	if sessionRec.Code != http.StatusForbidden {
+		t.Fatalf("session+invalid bearer POST without CSRF status = %d, want %d", sessionRec.Code, http.StatusForbidden)
+	}
+
+	apiReq := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/test/mutate", nil)
+	apiReq.Header.Set("Authorization", "Bearer "+apiSecret)
+	apiRec := httptest.NewRecorder()
+	handler.ServeHTTP(apiRec, apiReq)
+	if apiRec.Code != http.StatusNoContent {
+		t.Fatalf("api bearer POST without CSRF status = %d, want %d body=%s", apiRec.Code, http.StatusNoContent, apiRec.Body.String())
+	}
+}
+
 type fakeOIDCClient struct {
 	authURL string
 	claims  oidcauth.Claims
@@ -559,4 +995,10 @@ func principalFromSessionCookie(t *testing.T, repo *accesssqlite.Repository, coo
 	}
 	t.Fatal("session cookie missing")
 	return access.Principal{}
+}
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
 }

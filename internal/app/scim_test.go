@@ -39,6 +39,30 @@ func TestSCIMRoutesRequireBearerAndServeMetadata(t *testing.T) {
 	}
 }
 
+func TestSCIMRoutesUseAPIRateLimit(t *testing.T) {
+	store := testStore(t)
+	server := NewWithOptions(fakeMetrics{}, Options{
+		Store:              store,
+		DefaultWorkspaceID: "test",
+		SCIMBearerToken:    testSCIMToken,
+		RateLimits:         RateLimitConfig{Enabled: true, APILimit: 1, APIWindow: time.Minute},
+	})
+	handler := server.Routes()
+
+	for i := 0; i < 2; i++ {
+		req := scimRequest(http.MethodGet, "/scim/v2/ServiceProviderConfig", nil)
+		req.RemoteAddr = "192.0.2.10:1234"
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if i == 0 && rec.Code != http.StatusOK {
+			t.Fatalf("first SCIM status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		if i == 1 && rec.Code != http.StatusTooManyRequests {
+			t.Fatalf("second SCIM status = %d, want %d body=%s", rec.Code, http.StatusTooManyRequests, rec.Body.String())
+		}
+	}
+}
+
 func TestSCIMUserAndGroupProvisioningDriveGrantAccess(t *testing.T) {
 	store := testStore(t)
 	repo := testAccessRepository(store)

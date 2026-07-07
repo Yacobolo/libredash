@@ -18,6 +18,7 @@ import (
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
+	securejoin "github.com/cyphar/filepath-securejoin"
 )
 
 type Manifest struct {
@@ -539,9 +540,9 @@ func ExtractArtifact(path, dest string) error {
 		if err != nil {
 			return err
 		}
-		target := filepath.Join(dest, rel)
-		if !strings.HasPrefix(target, filepath.Clean(dest)+string(os.PathSeparator)) && filepath.Clean(target) != filepath.Clean(dest) {
-			return fmt.Errorf("bundle path %q escapes destination", header.Name)
+		target, err := secureBundleTarget(dest, rel)
+		if err != nil {
+			return err
 		}
 		switch header.Typeflag {
 		case tar.TypeReg, tar.TypeRegA:
@@ -563,6 +564,18 @@ func ExtractArtifact(path, dest string) error {
 			return fmt.Errorf("unsupported bundle entry %q", header.Name)
 		}
 	}
+}
+
+func secureBundleTarget(dest, rel string) (string, error) {
+	target, err := securejoin.SecureJoin(dest, rel)
+	if err != nil {
+		return "", fmt.Errorf("secure bundle path %q: %w", rel, err)
+	}
+	lexicalTarget := filepath.Join(filepath.Clean(dest), filepath.FromSlash(rel))
+	if filepath.Clean(target) != filepath.Clean(lexicalTarget) {
+		return "", fmt.Errorf("bundle path %q resolves through a symlink", rel)
+	}
+	return target, nil
 }
 
 func readManifest(root string) (Manifest, error) {
@@ -625,7 +638,15 @@ func validateManifestFiles(root string, manifest Manifest) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("invalid catalog path: %w", err)
 	}
+	compiledRel, err := safeBundlePath(manifest.CompiledPath)
+	if err != nil {
+		return "", fmt.Errorf("invalid compiled path: %w", err)
+	}
 	seen := map[string]struct{}{}
+	allowed := map[string]struct{}{
+		"manifest.json": {},
+		compiledRel:     {},
+	}
 	hasCatalog := false
 	for _, file := range manifest.Files {
 		rel, err := safeBundlePath(file.Path)
@@ -636,6 +657,7 @@ func validateManifestFiles(root string, manifest Manifest) (string, error) {
 			return "", fmt.Errorf("duplicate manifest file path %q", rel)
 		}
 		seen[rel] = struct{}{}
+		allowed[rel] = struct{}{}
 		if rel == catalogRel {
 			hasCatalog = true
 		}
@@ -652,7 +674,30 @@ func validateManifestFiles(root string, manifest Manifest) (string, error) {
 	if !hasCatalog {
 		return "", fmt.Errorf("catalog path %q is not listed in manifest files", manifest.CatalogPath)
 	}
+	if err := validateNoUnlistedBundleFiles(root, allowed); err != nil {
+		return "", err
+	}
 	return catalogRel, nil
+}
+
+func validateNoUnlistedBundleFiles(root string, allowed map[string]struct{}) error {
+	return filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if _, ok := allowed[rel]; !ok {
+			return fmt.Errorf("bundle file %q is not listed in manifest", rel)
+		}
+		return nil
+	})
 }
 
 func fileDigest(path string) (string, error) {

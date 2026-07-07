@@ -30,6 +30,9 @@ func (r *Repository) RecordQueryEvent(ctx context.Context, input queryaudit.Even
 	if strings.TrimSpace(input.QueryJSON) == "" {
 		input.QueryJSON = "{}"
 	}
+	input.SQL = queryaudit.RedactSensitiveText(input.SQL)
+	input.PlanText = queryaudit.RedactSensitiveText(input.PlanText)
+	input.QueryJSON = queryaudit.RedactSensitiveText(input.QueryJSON)
 	return r.q.InsertQueryEvent(ctx, db.InsertQueryEventParams{
 		ID:             newID("queryevent"),
 		WorkspaceID:    input.WorkspaceID,

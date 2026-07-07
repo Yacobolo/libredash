@@ -15,11 +15,12 @@ var (
 )
 
 type Config struct {
-	MaxRunningReads int
-	MaxQueuedReads  int
-	ReadQueueWait   time.Duration
-	MaxRunningJobs  int
-	MaxQueuedJobs   int
+	MaxRunningReads      int
+	MaxQueuedReads       int
+	ReadQueueWait        time.Duration
+	ReadExecutionTimeout time.Duration
+	MaxRunningJobs       int
+	MaxQueuedJobs        int
 }
 
 type JobRef struct {
@@ -29,11 +30,12 @@ type JobRef struct {
 }
 
 type Service struct {
-	reads    chan struct{}
-	waiting  chan struct{}
-	jobs     chan struct{}
-	jobWait  chan struct{}
-	readWait time.Duration
+	reads                chan struct{}
+	waiting              chan struct{}
+	jobs                 chan struct{}
+	jobWait              chan struct{}
+	readWait             time.Duration
+	readExecutionTimeout time.Duration
 }
 
 type Stats struct {
@@ -46,21 +48,23 @@ type Stats struct {
 func New(config Config) *Service {
 	config = config.withDefaults()
 	return &Service{
-		reads:    make(chan struct{}, config.MaxRunningReads),
-		waiting:  make(chan struct{}, config.MaxQueuedReads),
-		jobs:     make(chan struct{}, config.MaxRunningJobs),
-		jobWait:  make(chan struct{}, config.MaxQueuedJobs),
-		readWait: config.ReadQueueWait,
+		reads:                make(chan struct{}, config.MaxRunningReads),
+		waiting:              make(chan struct{}, config.MaxQueuedReads),
+		jobs:                 make(chan struct{}, config.MaxRunningJobs),
+		jobWait:              make(chan struct{}, config.MaxQueuedJobs),
+		readWait:             config.ReadQueueWait,
+		readExecutionTimeout: config.ReadExecutionTimeout,
 	}
 }
 
 func DefaultConfig() Config {
 	return Config{
-		MaxRunningReads: 4,
-		MaxQueuedReads:  64,
-		ReadQueueWait:   30 * time.Second,
-		MaxRunningJobs:  1,
-		MaxQueuedJobs:   64,
+		MaxRunningReads:      4,
+		MaxQueuedReads:       64,
+		ReadQueueWait:        30 * time.Second,
+		ReadExecutionTimeout: 2 * time.Minute,
+		MaxRunningJobs:       1,
+		MaxQueuedJobs:        64,
 	}
 }
 
@@ -76,6 +80,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.ReadQueueWait <= 0 {
 		c.ReadQueueWait = defaults.ReadQueueWait
+	}
+	if c.ReadExecutionTimeout <= 0 {
+		c.ReadExecutionTimeout = defaults.ReadExecutionTimeout
 	}
 	if c.MaxRunningJobs <= 0 {
 		c.MaxRunningJobs = defaults.MaxRunningJobs
@@ -104,7 +111,13 @@ func (s *Service) SubmitRead(ctx context.Context, query dataquery.Query, execute
 	}
 	defer release()
 	started := time.Now()
-	result, err := execute(ctx)
+	execCtx := ctx
+	var cancel context.CancelFunc
+	if s.readExecutionTimeout > 0 {
+		execCtx, cancel = context.WithTimeout(ctx, s.readExecutionTimeout)
+		defer cancel()
+	}
+	result, err := execute(execCtx)
 	if result.QueueWaitMS == 0 {
 		result.QueueWaitMS = durationMillis(queueWait)
 	}
@@ -115,7 +128,7 @@ func (s *Service) SubmitRead(ctx context.Context, query dataquery.Query, execute
 		if err == nil {
 			result.ExecutionState = dataquery.ExecutionSucceeded
 		} else {
-			result.ExecutionState = executionStateForError(ctx, err, dataquery.ExecutionFailed)
+			result.ExecutionState = executionStateForError(execCtx, err, dataquery.ExecutionFailed)
 		}
 	}
 	return result, err

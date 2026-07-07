@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -443,12 +444,19 @@ func TestRepositorySupportsServicePrincipalSecrets(t *testing.T) {
 	if sp.Kind != access.PrincipalKindServicePrincipal {
 		t.Fatalf("kind = %q, want service_principal", sp.Kind)
 	}
-	secret, row, err := repo.CreateServicePrincipalSecret(ctx, sp.ID, "ci")
+	secret, row, err := repo.CreateServicePrincipalSecret(ctx, sp.ID, access.ServicePrincipalSecretInput{Name: "ci"})
 	if err != nil {
 		t.Fatalf("create secret: %v", err)
 	}
 	if secret == "" || row.Secret != "" {
 		t.Fatalf("secret row = %#v, raw secret %q should be returned once and never exposed in metadata", row, secret)
+	}
+	expiresAt, err := time.Parse(time.RFC3339, row.ExpiresAt)
+	if err != nil {
+		t.Fatalf("parse expires_at %q: %v", row.ExpiresAt, err)
+	}
+	if !expiresAt.After(time.Now()) {
+		t.Fatalf("expires_at = %s, want future default", row.ExpiresAt)
 	}
 	resolved, err := repo.PrincipalForServicePrincipalSecret(ctx, sp.ID, secret)
 	if err != nil {
@@ -462,6 +470,37 @@ func TestRepositorySupportsServicePrincipalSecrets(t *testing.T) {
 	}
 	if _, err := repo.PrincipalForServicePrincipalSecret(ctx, sp.ID, secret); !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("resolve revoked secret error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestRepositoryRejectsExpiredServicePrincipalSecrets(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openAccessRepo(t, ctx)
+
+	sp, err := repo.CreateServicePrincipal(ctx, access.ServicePrincipalInput{
+		ID:          "sp_expired_secret",
+		DisplayName: "Expired Secret",
+	})
+	if err != nil {
+		t.Fatalf("create service principal: %v", err)
+	}
+	_, _, err = repo.CreateServicePrincipalSecret(ctx, sp.ID, access.ServicePrincipalSecretInput{
+		Name:      "expired",
+		ExpiresAt: time.Now().Add(-time.Hour),
+	})
+	if err == nil {
+		t.Fatal("create expired service principal secret error = nil")
+	}
+
+	secret, row, err := repo.CreateServicePrincipalSecret(ctx, sp.ID, access.ServicePrincipalSecretInput{Name: "ci"})
+	if err != nil {
+		t.Fatalf("create service principal secret: %v", err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, `UPDATE service_principal_secrets SET expires_at = ? WHERE id = ?`, time.Now().Add(-time.Hour).UTC().Format(time.RFC3339), row.ID); err != nil {
+		t.Fatalf("expire service principal secret: %v", err)
+	}
+	if _, err := repo.PrincipalForServicePrincipalSecret(ctx, sp.ID, secret); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("resolve expired secret error = %v, want sql.ErrNoRows", err)
 	}
 }
 
@@ -593,6 +632,24 @@ func TestRepositoryAPITokensExpireByDefault(t *testing.T) {
 	}
 	if !expiresAt.After(time.Now()) {
 		t.Fatalf("expires_at = %s, want future default", token.ExpiresAt)
+	}
+}
+
+func TestRepositoryRejectsExpiredAPITokenCreate(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "principal_reject_expired_token", Email: "expired-token@example.com", DisplayName: "Expired Token"})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	_, _, err = repo.CreateAPITokenWithMetadata(ctx, access.APITokenInput{
+		PrincipalID: principal.ID,
+		Name:        "expired-token",
+		ExpiresAt:   time.Now().Add(-time.Hour),
+	})
+	if err == nil {
+		t.Fatal("create expired api token error = nil")
 	}
 }
 
@@ -870,6 +927,52 @@ func TestRepositorySessionsAndAPITokensResolvePrincipals(t *testing.T) {
 	}
 }
 
+func TestRepositoryRejectsExpiredSessionsAndAPITokens(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openAccessRepo(t, ctx)
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "principal_expired_credentials",
+		Email:       "expired@example.com",
+		DisplayName: "Expired",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+
+	sessionSecret, err := repo.CreateSession(ctx, principal.ID, time.Hour)
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	sessions, err := repo.ListSessions(ctx, principal.ID)
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("sessions len = %d, want 1", len(sessions))
+	}
+	expiredAt := time.Now().Add(-time.Hour).UTC().Format(time.RFC3339)
+	if _, err := store.SQLDB().ExecContext(ctx, `UPDATE sessions SET expires_at = ? WHERE id = ?`, expiredAt, sessions[0].ID); err != nil {
+		t.Fatalf("expire session: %v", err)
+	}
+	if _, err := repo.PrincipalForToken(ctx, sessionSecret); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expired session err = %v, want sql.ErrNoRows", err)
+	}
+
+	apiSecret, apiToken, err := repo.CreateAPITokenWithMetadata(ctx, access.APITokenInput{
+		PrincipalID: principal.ID,
+		Name:        "expired-api-token",
+	})
+	if err != nil {
+		t.Fatalf("create api token: %v", err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, `UPDATE api_tokens SET expires_at = ? WHERE id = ?`, expiredAt, apiToken.ID); err != nil {
+		t.Fatalf("expire api token: %v", err)
+	}
+	if _, err := repo.PrincipalForAPIToken(ctx, apiSecret); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("expired api token err = %v, want sql.ErrNoRows", err)
+	}
+}
+
 func TestRepositoryStoresNewCredentialsWithFingerprintsAndVerifiers(t *testing.T) {
 	ctx := context.Background()
 	store, repo := openAccessRepo(t, ctx)
@@ -922,7 +1025,7 @@ func TestRepositoryStoresNewCredentialsWithFingerprintsAndVerifiers(t *testing.T
 	if err != nil {
 		t.Fatalf("create service principal: %v", err)
 	}
-	spSecret, spSecretRow, err := repo.CreateServicePrincipalSecret(ctx, sp.ID, "ci")
+	spSecret, spSecretRow, err := repo.CreateServicePrincipalSecret(ctx, sp.ID, access.ServicePrincipalSecretInput{Name: "ci"})
 	if err != nil {
 		t.Fatalf("create service principal secret: %v", err)
 	}
@@ -931,6 +1034,39 @@ func TestRepositoryStoresNewCredentialsWithFingerprintsAndVerifiers(t *testing.T
 		FROM service_principal_secrets
 		WHERE id = ?
 	`, spSecretRow.ID)
+}
+
+func TestRepositoryCredentialCreationFailsWithoutSecureRandomness(t *testing.T) {
+	restore := setSecretRandomReaderForTest(errReader{})
+	defer restore()
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "principal_no_random",
+		Email:       "norandom@example.com",
+		DisplayName: "No Random",
+	})
+	if err != nil {
+		t.Fatalf("upsert principal: %v", err)
+	}
+	sp, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{
+		ID:          "sp_no_random",
+		Kind:        access.PrincipalKindServicePrincipal,
+		DisplayName: "No Random Bot",
+	})
+	if err != nil {
+		t.Fatalf("upsert service principal: %v", err)
+	}
+
+	if _, err := repo.CreateSession(ctx, principal.ID, time.Hour); err == nil {
+		t.Fatal("CreateSession error = nil, want secure randomness error")
+	}
+	if _, _, err := repo.CreateAPITokenWithMetadata(ctx, access.APITokenInput{PrincipalID: principal.ID, Name: "cli"}); err == nil {
+		t.Fatal("CreateAPITokenWithMetadata error = nil, want secure randomness error")
+	}
+	if _, _, err := repo.CreateServicePrincipalSecret(ctx, sp.ID, access.ServicePrincipalSecretInput{Name: "ci"}); err == nil {
+		t.Fatal("CreateServicePrincipalSecret error = nil, want secure randomness error")
+	}
 }
 
 func TestRepositoryListsAndRevokesSessionsByID(t *testing.T) {
@@ -1329,5 +1465,19 @@ func assertStoredSecret(t *testing.T, db *sql.DB, rawSecret, query, id string) {
 	}
 	if !verifySecret(rawSecret, verifier) {
 		t.Fatalf("verifier does not accept raw secret")
+	}
+}
+
+type errReader struct{}
+
+func (errReader) Read([]byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func setSecretRandomReaderForTest(reader io.Reader) func() {
+	previous := secretRandomReader
+	secretRandomReader = reader
+	return func() {
+		secretRandomReader = previous
 	}
 }

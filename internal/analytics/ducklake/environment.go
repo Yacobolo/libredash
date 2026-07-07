@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
@@ -18,6 +19,9 @@ import (
 )
 
 const catalogAlias = "lake"
+const catalogFileMode = 0o600
+
+var catalogWriteLocks sync.Map
 
 type Config struct {
 	RootDir     string
@@ -70,6 +74,9 @@ func open(ctx context.Context, config Config, snapshot bool) (*Environment, erro
 	if err := os.MkdirAll(layout.RootDir, 0o755); err != nil {
 		return nil, err
 	}
+	if err := os.MkdirAll(filepath.Dir(layout.CatalogPath), 0o755); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(layout.DataPath, 0o755); err != nil {
 		return nil, err
 	}
@@ -84,6 +91,10 @@ func open(ctx context.Context, config Config, snapshot bool) (*Environment, erro
 	db.SetMaxIdleConns(1)
 	env := &Environment{db: db, layout: layout}
 	if err := env.initialize(ctx, snapshot, config.SnapshotID); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := secureSQLiteCatalogFiles(layout.CatalogPath); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -112,6 +123,8 @@ func MigrateSQLiteCatalogDataPath(ctx context.Context, catalogPath, targetDataPa
 	if strings.TrimSpace(catalogPath) == "" || strings.TrimSpace(targetDataPath) == "" {
 		return nil
 	}
+	unlock := lockCatalogWrites(catalogPath)
+	defer unlock()
 	if _, err := os.Stat(catalogPath); err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -132,17 +145,79 @@ func MigrateSQLiteCatalogDataPath(ctx context.Context, catalogPath, targetDataPa
 		return err
 	}
 	if sameFilesystemPath(stored, targetDataPath) {
-		return nil
+		return secureSQLiteCatalogFiles(catalogPath)
 	}
 	if err := migrateLocalDataDir(stored, targetDataPath); err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, `UPDATE ducklake_metadata SET value = ? WHERE "key" = 'data_path' AND scope IS NULL`, duckLakeMetadataPath(targetDataPath))
-	return err
+	if _, err = db.ExecContext(ctx, `UPDATE ducklake_metadata SET value = ? WHERE "key" = 'data_path' AND scope IS NULL`, duckLakeMetadataPath(targetDataPath)); err != nil {
+		return err
+	}
+	return secureSQLiteCatalogFiles(catalogPath)
+}
+
+func MigrateSharedSQLiteCatalog(ctx context.Context, sharedCatalogPath, targetCatalogPath, targetDataPath string) error {
+	sharedCatalogPath = strings.TrimSpace(sharedCatalogPath)
+	targetCatalogPath = strings.TrimSpace(targetCatalogPath)
+	if sharedCatalogPath == "" || targetCatalogPath == "" || sameFilesystemPath(sharedCatalogPath, targetCatalogPath) {
+		return nil
+	}
+	if _, err := os.Stat(targetCatalogPath); err == nil {
+		return nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if _, err := os.Stat(sharedCatalogPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	unlock := lockCatalogWrites(sharedCatalogPath)
+	defer unlock()
+	db, err := sql.Open("sqlite", sqliteFileDSN(sharedCatalogPath))
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	var hasDuckLakeMetadata int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ducklake_metadata'`).Scan(&hasDuckLakeMetadata); err != nil {
+		return fmt.Errorf("inspect shared DuckLake catalog: %w", err)
+	}
+	if hasDuckLakeMetadata == 0 {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(targetCatalogPath), 0o755); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx, `VACUUM main INTO '`+sqliteString(targetCatalogPath)+`'`); err != nil {
+		return fmt.Errorf("migrate shared DuckLake catalog: %w", err)
+	}
+	if err := secureSQLiteCatalogFiles(targetCatalogPath); err != nil {
+		return fmt.Errorf("secure migrated DuckLake catalog: %w", err)
+	}
+	return MigrateSQLiteCatalogDataPath(ctx, targetCatalogPath, targetDataPath)
 }
 
 func sqliteFileDSN(path string) string {
 	return "file:" + filepath.ToSlash(path) + "?_pragma=busy_timeout(5000)"
+}
+
+func sqliteString(value string) string {
+	return strings.ReplaceAll(value, "'", "''")
+}
+
+func secureSQLiteCatalogFiles(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	for _, candidate := range []string{path, path + "-wal", path + "-shm"} {
+		if err := os.Chmod(candidate, catalogFileMode); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
 }
 
 func sameFilesystemPath(left, right string) bool {
@@ -312,6 +387,8 @@ func (e *Environment) Commit(ctx context.Context, servingStateID string, extra m
 	if fn == nil {
 		return 0, fmt.Errorf("commit function is required")
 	}
+	unlock := lockCatalogWrites(e.layout.CatalogPath)
+	defer unlock()
 	tx, err := e.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, err
@@ -372,18 +449,40 @@ func (e *Environment) ExpireSnapshots(ctx context.Context, versions []int64, dry
 	if len(versions) == 0 {
 		return nil
 	}
+	unlock := lockCatalogWrites(e.layout.CatalogPath)
+	defer unlock()
 	_, err := e.db.ExecContext(ctx, fmt.Sprintf("CALL ducklake_expire_snapshots(%s, versions => %s, dry_run => %t)", sqlStringLiteral(catalogAlias), snapshotListLiteral(versions), dryRun))
 	return err
 }
 
 func (e *Environment) CleanupOldFiles(ctx context.Context, dryRun bool) error {
+	unlock := lockCatalogWrites(e.layout.CatalogPath)
+	defer unlock()
 	_, err := e.db.ExecContext(ctx, fmt.Sprintf("CALL ducklake_cleanup_old_files(%s, dry_run => %t)", sqlStringLiteral(catalogAlias), dryRun))
 	return err
 }
 
 func (e *Environment) DeleteOrphanedFiles(ctx context.Context, dryRun bool) error {
+	unlock := lockCatalogWrites(e.layout.CatalogPath)
+	defer unlock()
 	_, err := e.db.ExecContext(ctx, fmt.Sprintf("CALL ducklake_delete_orphaned_files(%s, dry_run => %t)", sqlStringLiteral(catalogAlias), dryRun))
 	return err
+}
+
+func lockCatalogWrites(catalogPath string) func() {
+	key := catalogLockKey(catalogPath)
+	value, _ := catalogWriteLocks.LoadOrStore(key, &sync.Mutex{})
+	mu := value.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
+func catalogLockKey(catalogPath string) string {
+	clean := filepath.Clean(strings.TrimSpace(catalogPath))
+	if abs, err := filepath.Abs(clean); err == nil {
+		return abs
+	}
+	return clean
 }
 
 func setCommitMessage(ctx context.Context, tx *sql.Tx, servingStateID string, extra map[string]string) error {

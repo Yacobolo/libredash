@@ -10,17 +10,25 @@ import (
 	"github.com/Yacobolo/libredash/internal/access/scimprov"
 	agenthttp "github.com/Yacobolo/libredash/internal/agent/http"
 	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
+	"github.com/Yacobolo/libredash/internal/staticasset"
 	workspacehttp "github.com/Yacobolo/libredash/internal/workspace/http"
 	"github.com/go-chi/chi/v5"
 )
 
 func (s *Server) Routes() http.Handler {
 	mux := chi.NewRouter()
+	mux.Use(allowedHosts(s.allowedHosts))
 	if s.requestLogging {
 		mux.Use(requestLogger(s.logger))
 	}
+	mux.Use(s.telemetry.middleware)
+	mux.Use(panicRecovery(s.logger))
 	mux.Use(securityHeaders(s.securityHeaders))
+	mux.Use(requestBodyLimit(s.requestBodyLimit))
 	mux.Get("/favicon.ico", favicon)
+	mux.Get("/healthz", s.healthz)
+	mux.Get("/readyz", s.readyz)
+	mux.With(s.rateLimits.authMiddleware()).Handle("/metrics", s.metricsHandler())
 	mux.With(s.csrf).Get("/login", s.login)
 	mux.Group(func(r chi.Router) {
 		r.Use(s.csrf)
@@ -87,7 +95,8 @@ func (s *Server) Routes() http.Handler {
 		if strings.TrimSpace(s.scimBearerToken) != "" {
 			if repo, err := s.accessRepository(); err == nil && repo != nil {
 				if handler, err := scimprov.NewHandler(scimprov.Options{Repository: repo, BearerToken: s.scimBearerToken}); err == nil {
-					mux.Handle("/scim/*", http.StripPrefix("/scim", handler))
+					scimHandler := s.rateLimits.apiMiddleware()(http.StripPrefix("/scim", handler))
+					mux.Handle("/scim/*", scimHandler)
 				}
 			}
 		}
@@ -108,7 +117,7 @@ func (s *Server) Routes() http.Handler {
 			s.registerAPIGenRoutes(r)
 		})
 	}
-	mux.Handle("/static/*", noCache(http.StripPrefix("/static/", http.FileServer(http.Dir("static")))))
+	mux.Handle("/static/*", staticAssetCache(http.StripPrefix("/static/", http.FileServer(http.Dir("static")))))
 
 	return mux
 }
@@ -182,9 +191,14 @@ func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
 	s.auth.Logout(w, r)
 }
 
-func noCache(next http.Handler) http.Handler {
+func staticAssetCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "no-store")
+		version := staticasset.Version()
+		if version != "dev" && r.URL.Query().Get("v") == version {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		next.ServeHTTP(w, r)
 	})
 }

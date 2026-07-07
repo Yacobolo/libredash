@@ -630,7 +630,7 @@ const getAPITokenByFingerprint = `-- name: GetAPITokenByFingerprint :one
 SELECT id, principal_id, workspace_id, name, token_fingerprint, token_verifier, privileges_json, expires_at, created_at, last_used_at, revoked_at FROM api_tokens
 WHERE token_fingerprint = ?
   AND revoked_at IS NULL
-  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+  AND (expires_at IS NULL OR datetime(expires_at) > CURRENT_TIMESTAMP)
 `
 
 func (q *Queries) GetAPITokenByFingerprint(ctx context.Context, tokenFingerprint string) (ApiToken, error) {
@@ -1044,7 +1044,7 @@ WHERE p.kind = 'service_principal'
   AND s.service_principal_id = ?
   AND s.secret_fingerprint = ?
   AND s.revoked_at IS NULL
-  AND (s.expires_at IS NULL OR s.expires_at > CURRENT_TIMESTAMP)
+  AND (s.expires_at IS NULL OR datetime(s.expires_at) > CURRENT_TIMESTAMP)
 `
 
 type GetServicePrincipalSecretByFingerprintParams struct {
@@ -1095,7 +1095,7 @@ func (q *Queries) GetServingState(ctx context.Context, id string) (ServingState,
 
 const getSessionByTokenFingerprint = `-- name: GetSessionByTokenFingerprint :one
 SELECT id, principal_id, token_fingerprint, token_verifier, expires_at, created_at, last_seen_at, revoked_at FROM sessions
-WHERE token_fingerprint = ? AND expires_at > CURRENT_TIMESTAMP AND revoked_at IS NULL
+WHERE token_fingerprint = ? AND datetime(expires_at) > CURRENT_TIMESTAMP AND revoked_at IS NULL
 `
 
 func (q *Queries) GetSessionByTokenFingerprint(ctx context.Context, tokenFingerprint string) (Session, error) {

@@ -7,6 +7,7 @@ import (
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/staticasset"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 
@@ -52,7 +53,7 @@ func postAction(path string) string {
 }
 
 func staticAsset(path string) string {
-	return path + "?v=dev"
+	return staticasset.URL(path)
 }
 
 const (

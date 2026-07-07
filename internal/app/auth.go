@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -41,6 +43,8 @@ type oidcClient interface {
 	AuthCodeURL(state, nonce string) string
 	Authenticate(ctx context.Context, code, expectedNonce string) (oidcauth.Claims, error)
 }
+
+var authRandomReader io.Reader = rand.Reader
 
 type sessionManager interface {
 	CreateSession(ctx context.Context, principalID string, ttl time.Duration) (string, error)
@@ -175,8 +179,16 @@ func (a *Auth) Begin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
-	state := randomAuthValue()
-	nonce := randomAuthValue()
+	state, err := randomAuthValue()
+	if err != nil {
+		http.Error(w, "secure randomness unavailable", http.StatusInternalServerError)
+		return
+	}
+	nonce, err := randomAuthValue()
+	if err != nil {
+		http.Error(w, "secure randomness unavailable", http.StatusInternalServerError)
+		return
+	}
 	http.SetCookie(w, a.oidcStateCookie(state, nonce))
 	http.Redirect(w, r, client.AuthCodeURL(state, nonce), http.StatusFound)
 }
@@ -350,6 +362,10 @@ func (a *Auth) MiddlewareWithObjectResolver(privilege access.Privilege, objectRe
 		r = r.WithContext(access.WithAuthorizationCache(r.Context()))
 		principal, credential, ok := a.authenticate(r)
 		if !ok {
+			if a.apiTokenOnly {
+				writeBearerChallenge(w, r)
+				return
+			}
 			if wantsJSON(r) {
 				writeJSONError(w, errUnauthorized, http.StatusUnauthorized)
 				return
@@ -440,6 +456,15 @@ func (a *Auth) mustChangeLocalPassword(r *http.Request, principalID string) bool
 	return err == nil && credential.MustChangePassword
 }
 
+func writeBearerChallenge(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("WWW-Authenticate", `Bearer realm="libredash"`)
+	if wantsJSON(r) {
+		writeJSONError(w, errUnauthorized, http.StatusUnauthorized)
+		return
+	}
+	http.Error(w, "API bearer token required", http.StatusUnauthorized)
+}
+
 func writeAuthError(w http.ResponseWriter, r *http.Request, err error, status int) {
 	if wantsJSON(r) {
 		writeJSONError(w, err, status)
@@ -489,7 +514,7 @@ func (a *Auth) CSRFMiddleware(next http.Handler) http.Handler {
 	}
 	protected := a.csrf(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if bearerToken(r) != "" {
+		if bearerToken(r) != "" && !hasSessionCookie(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -511,6 +536,7 @@ func (a *Auth) authenticate(r *http.Request) (Principal, *access.APICredential, 
 			return Principal{ID: principal.ID, Email: principal.Email, DisplayName: principal.DisplayName}, &credential, true
 		}
 		a.auditDisabledCredentialFailure(r, "api_token", token)
+		return Principal{}, nil, false
 	}
 	if a.apiTokenOnly {
 		return Principal{}, nil, false
@@ -525,6 +551,11 @@ func (a *Auth) authenticate(r *http.Request) (Principal, *access.APICredential, 
 		return Principal{}, nil, false
 	}
 	return Principal{ID: principal.ID, Email: principal.Email, DisplayName: principal.DisplayName}, nil, true
+}
+
+func hasSessionCookie(r *http.Request) bool {
+	cookie, err := r.Cookie("ld_session")
+	return err == nil && strings.TrimSpace(cookie.Value) != ""
 }
 
 func (a *Auth) auditDisabledCredentialFailure(r *http.Request, credentialType, secret string) {
@@ -667,11 +698,18 @@ func derivedSecret(secret, purpose string) []byte {
 	return sum[:]
 }
 
-func randomAuthValue() string {
+func randomAuthValue() (string, error) {
 	var b [32]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		sum := sha256.Sum256([]byte(time.Now().Format(time.RFC3339Nano)))
-		return hex.EncodeToString(sum[:])
+	if _, err := io.ReadFull(authRandomReader, b[:]); err != nil {
+		return "", fmt.Errorf("read secure random bytes: %w", err)
 	}
-	return hex.EncodeToString(b[:])
+	return hex.EncodeToString(b[:]), nil
+}
+
+func setAuthRandomReaderForTest(reader io.Reader) func() {
+	previous := authRandomReader
+	authRandomReader = reader
+	return func() {
+		authRandomReader = previous
+	}
 }

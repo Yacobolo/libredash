@@ -255,7 +255,7 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
     return html`
       <ld-topology-background
         data-login-background
-        data-module-src=${page?.backgroundModuleSrc ?? '/static/topology-background.js?v=dev'}
+        data-module-src=${page?.backgroundModuleSrc ?? '/static/topology-background.js'}
       ></ld-topology-background>
       <div class="scrim" aria-hidden="true"></div>
       <button

@@ -3,32 +3,44 @@ package cli
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 )
 
 type rootOptions struct {
-	addr         string
-	dataDir      string
-	production   bool
-	workspaceID  string
-	environment  string
-	target       string
-	token        string
-	catalog      string
-	conversation string
-	jsonOutput   bool
-	pageID       string
-	count        int
-	filtersJSON  string
-	bodyJSON     string
-	schemaFormat string
-	schemaOut    string
-	limit        int
-	pageToken    string
-	searchTypes  []string
-	autoApprove  bool
-	apply        bool
+	addr               string
+	dataDir            string
+	production         bool
+	workspaceID        string
+	environment        string
+	target             string
+	token              string
+	catalog            string
+	conversation       string
+	jsonOutput         bool
+	pageID             string
+	count              int
+	filtersJSON        string
+	bodyJSON           string
+	schemaFormat       string
+	schemaOut          string
+	backupOut          string
+	restoreFrom        string
+	restoreBefore      string
+	confirmRestore     bool
+	databaseOnly       bool
+	auditDays          int
+	queryDays          int
+	archivedAgentDays  int
+	authStateDays      int
+	limit              int
+	pageToken          string
+	searchTypes        []string
+	autoApprove        bool
+	apply              bool
+	healthcheckURL     string
+	healthcheckTimeout time.Duration
 }
 
 func Execute(ctx context.Context) error {
@@ -37,6 +49,7 @@ func Execute(ctx context.Context) error {
 		Use:   "libredash",
 		Short: "LibreDash BI-as-code server and publish CLI",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.environment = ""
 			return runServe(ctx, opts)
 		},
 	}
@@ -55,6 +68,7 @@ func Execute(ctx context.Context) error {
 	root.AddCommand(loginCommand(opts))
 	root.AddCommand(publishesCommand(ctx, opts))
 	root.AddCommand(adminCommand(ctx, opts))
+	root.AddCommand(healthcheckCommand(ctx, opts))
 	return root.ExecuteContext(ctx)
 }
 

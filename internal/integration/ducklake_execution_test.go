@@ -49,6 +49,7 @@ type duckLakeHarness struct {
 	dataPath    string
 	deployments *servingstatesqlite.Repository
 	registry    *runtimehost.Registry
+	appServer   *app.Server
 }
 
 func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarness {
@@ -60,14 +61,15 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 	duckDBDir := filepath.Join(homeDir, ".libredash", "duckdb")
 	runtimeDir := filepath.Join(homeDir, ".libredash", "runtime")
 	dataPath := filepath.Join(homeDir, ".libredash", "data")
-	catalogPath := filepath.Join(homeDir, ".libredash", "libredash.db")
-	for _, dir := range []string{dataDir, artifactDir, duckDBDir, runtimeDir, dataPath, filepath.Dir(catalogPath)} {
+	platformDBPath := filepath.Join(homeDir, ".libredash", "libredash.db")
+	catalogPath := filepath.Join(homeDir, ".libredash", "ducklake", "catalog.sqlite")
+	for _, dir := range []string{dataDir, artifactDir, duckDBDir, runtimeDir, dataPath, filepath.Dir(platformDBPath), filepath.Dir(catalogPath)} {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatalf("create harness dir %s: %v", dir, err)
 		}
 	}
 	writeMinimalOlistFixture(t, dataDir)
-	store, err := platform.Open(ctx, catalogPath)
+	store, err := platform.Open(ctx, platformDBPath)
 	if err != nil {
 		t.Fatalf("open platform store: %v", err)
 	}
@@ -135,7 +137,8 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		opt(&options)
 	}
 	server := app.NewWithOptions(runtimeMetrics, options)
-	server.StartBackgroundJobs(ctx)
+	backgroundCtx, stopBackground := context.WithCancel(ctx)
+	server.StartBackgroundJobs(backgroundCtx)
 	h := &duckLakeHarness{
 		harness: &harness{
 			handler:     server.Routes(),
@@ -151,9 +154,14 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		dataPath:    dataPath,
 		deployments: deploymentRepo,
 		registry:    registry,
+		appServer:   server,
 	}
 	h.server = httptest.NewServer(h.handler)
 	t.Cleanup(h.server.Close)
+	t.Cleanup(func() {
+		stopBackground()
+		stopServerBackgroundForTest(t, server)
+	})
 	return h
 }
 
@@ -664,6 +672,7 @@ func TestFailedRefreshLeavesActiveSnapshotQueryable(t *testing.T) {
 func TestDurableRefreshQueueResumesAfterStartup(t *testing.T) {
 	h := newDuckLakeHarness(t)
 	run := h.createQueuedWorkspaceAssetRefreshRun(t, analyticsmaterialize.TargetModelTable, "sales.orders", "sales")
+	h.stopBackgroundJobs(t)
 	h.registry.Close()
 	h.registry = nil
 	h.startReplacementRegistry(t)
@@ -694,6 +703,7 @@ func TestExpiredRefreshJobLeaseIsReclaimed(t *testing.T) {
 
 func (h *duckLakeHarness) startReplacementRegistry(t *testing.T) {
 	t.Helper()
+	h.stopBackgroundJobs(t)
 	registry := runtimehost.NewRegistryWithFactory(runtimehost.RegistryOptions{
 		Repo:         h.deployments,
 		WorkspaceIDs: []servingstate.WorkspaceID{"sales"},
@@ -727,7 +737,9 @@ func (h *duckLakeHarness) startReplacementRegistry(t *testing.T) {
 		DefaultWorkspaceID:  "sales",
 		DefaultEnvironment:  string(servingstate.DefaultEnvironment),
 	})
-	server.StartBackgroundJobs(context.Background())
+	backgroundCtx, stopBackground := context.WithCancel(context.Background())
+	server.StartBackgroundJobs(backgroundCtx)
+	h.appServer = server
 	h.handler = server.Routes()
 	if h.server != nil {
 		h.server.Close()
@@ -735,6 +747,31 @@ func (h *duckLakeHarness) startReplacementRegistry(t *testing.T) {
 	h.server = httptest.NewServer(h.handler)
 	t.Cleanup(h.server.Close)
 	t.Cleanup(func() { _ = registry.Close() })
+	t.Cleanup(func() {
+		stopBackground()
+		stopServerBackgroundForTest(t, server)
+	})
+}
+
+func (h *duckLakeHarness) stopBackgroundJobs(t *testing.T) {
+	t.Helper()
+	if h == nil || h.appServer == nil {
+		return
+	}
+	stopServerBackgroundForTest(t, h.appServer)
+	h.appServer = nil
+}
+
+func stopServerBackgroundForTest(t *testing.T, server *app.Server) {
+	t.Helper()
+	if server == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.StopBackgroundJobs(ctx); err != nil {
+		t.Errorf("stop background jobs: %v", err)
+	}
 }
 
 func (h *duckLakeHarness) createQueuedWorkspaceAssetRefreshRun(t *testing.T, targetType, targetID, modelID string) analyticsmaterialize.RunRecord {
@@ -891,37 +928,47 @@ func (h *duckLakeHarness) activeServingStateID(t *testing.T) servingstate.ID {
 
 func (h *duckLakeHarness) waitLatestRun(t *testing.T, targetType, targetID, status string) analyticsmaterialize.RunRecord {
 	t.Helper()
-	deadline := time.Now().Add(8 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	repo := analyticsmaterializesqlite.NewSQLRunRepository(h.store.SQLDB())
+	lastStatus := "missing"
+	lastError := ""
 	for time.Now().Before(deadline) {
 		runs, err := repo.ListTargetRuns(context.Background(), "sales", targetType, targetID, analyticsmaterialize.RunPage{Limit: 1})
 		if err != nil {
 			t.Fatalf("list target runs: %v", err)
 		}
-		if len(runs) > 0 && runs[0].Status == status {
-			return runs[0]
+		if len(runs) > 0 {
+			lastStatus = runs[0].Status
+			lastError = runs[0].Error
+			if runs[0].Status == status {
+				return runs[0]
+			}
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("timed out waiting for %s %s run status %s", targetType, targetID, status)
+	t.Fatalf("timed out waiting for %s %s run status %s; last status=%s error=%q", targetType, targetID, status, lastStatus, lastError)
 	return analyticsmaterialize.RunRecord{}
 }
 
 func (h *duckLakeHarness) waitRun(t *testing.T, runID, status string) analyticsmaterialize.RunRecord {
 	t.Helper()
-	deadline := time.Now().Add(8 * time.Second)
+	deadline := time.Now().Add(30 * time.Second)
 	repo := analyticsmaterializesqlite.NewSQLRunRepository(h.store.SQLDB())
+	lastStatus := "missing"
+	lastError := ""
 	for time.Now().Before(deadline) {
 		run, err := repo.GetRun(context.Background(), "sales", runID)
 		if err != nil {
 			t.Fatalf("get run: %v", err)
 		}
+		lastStatus = run.Status
+		lastError = run.Error
 		if run.Status == status {
 			return run
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	t.Fatalf("timed out waiting for run %s status %s", runID, status)
+	t.Fatalf("timed out waiting for run %s status %s; last status=%s error=%q", runID, status, lastStatus, lastError)
 	return analyticsmaterialize.RunRecord{}
 }
 

@@ -347,6 +347,115 @@ func TestRemovedLegacyAgentPackagesAreNotImported(t *testing.T) {
 	}
 }
 
+func TestSecretComparisonsGoThroughSecretPackage(t *testing.T) {
+	for _, file := range productionGoFiles(t) {
+		if file.pkgDir == "internal/secret" {
+			continue
+		}
+		for _, imported := range file.imports {
+			if imported == "crypto/subtle" {
+				t.Fatalf("%s imports crypto/subtle directly; use internal/secret for fixed-size secret comparisons", file.path)
+			}
+		}
+	}
+}
+
+func TestProductionContainerContractExists(t *testing.T) {
+	root := repoRoot(t)
+	dockerfile, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+	text := string(dockerfile)
+	for _, want := range []string{
+		"FROM node:24-bookworm AS node",
+		"FROM golang:1.25-bookworm AS sourcegen",
+		"COPY --from=node /usr/local/bin/node /usr/local/bin/node",
+		"COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
+		"ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm",
+		"go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3",
+		"go run ./internal/tools/uisignalsgen",
+		"FROM oven/bun:1.3.7 AS web",
+		"COPY --from=sourcegen /src/web/generated ./web/generated",
+		"RUN bun run build",
+		"FROM golang:1.25-bookworm AS build",
+		"COPY --from=sourcegen /src/internal/api/gen ./internal/api/gen",
+		"CGO_ENABLED=1 go build",
+		"FROM debian:bookworm-slim AS runtime",
+		"USER libredash",
+		"WORKDIR /app",
+		"COPY --from=web /src/static ./static",
+		"LIBREDASH_HOME=/var/lib/libredash",
+		"LIBREDASH_PRODUCTION=1",
+		"HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD [\"libredash\", \"healthcheck\"]",
+		"CMD [\"serve\", \"--production\"]",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Dockerfile missing production container contract fragment %q", want)
+		}
+	}
+
+	ignored, err := os.ReadFile(filepath.Join(root, ".dockerignore"))
+	if err != nil {
+		t.Fatalf("read .dockerignore: %v", err)
+	}
+	ignoreText := string(ignored)
+	for _, want := range []string{".data", ".libredash", "node_modules", "api/gen", "internal/api/gen", "static/chunks"} {
+		if !strings.Contains(ignoreText, want) {
+			t.Fatalf(".dockerignore missing generated or runtime path %q", want)
+		}
+	}
+}
+
+func TestProductionUIDoesNotDependOnCDNScripts(t *testing.T) {
+	root := repoRoot(t)
+	forbiddenHosts := []string{"cdn.jsdelivr.net", "unpkg.com", "esm.sh", "skypack.dev"}
+
+	for _, dir := range []string{"internal/ui", "internal/dashboard/ui", "internal/app"} {
+		err := filepath.WalkDir(filepath.Join(root, filepath.FromSlash(dir)), func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if entry.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			text := string(body)
+			for _, forbidden := range forbiddenHosts {
+				if strings.Contains(text, forbidden) {
+					rel, _ := filepath.Rel(root, path)
+					t.Fatalf("%s references external script host %q; production UI assets must be served from /static", filepath.ToSlash(rel), forbidden)
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	staticFiles, err := filepath.Glob(filepath.Join(root, "static", "*.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range staticFiles {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(body)
+		for _, forbidden := range forbiddenHosts {
+			if strings.Contains(text, forbidden) {
+				rel, _ := filepath.Rel(root, path)
+				t.Fatalf("%s references external asset host %q; production bundles must be self-contained", filepath.ToSlash(rel), forbidden)
+			}
+		}
+	}
+}
+
 func isSQLDBAllowedFile(file goFile) bool {
 	if file.pkgDir == "internal/app" {
 		switch file.path {

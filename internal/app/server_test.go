@@ -54,6 +54,27 @@ type namedWorkspaceMetrics struct {
 	title       string
 }
 
+func TestExecutionConfigFromEnvIncludesReadExecutionTimeout(t *testing.T) {
+	t.Setenv("LIBREDASH_EXEC_MAX_RUNNING_READS", "7")
+	t.Setenv("LIBREDASH_EXEC_MAX_QUEUED_READS", "9")
+	t.Setenv("LIBREDASH_EXEC_READ_QUEUE_TIMEOUT", "11s")
+	t.Setenv("LIBREDASH_EXEC_READ_TIMEOUT", "13s")
+
+	config := executionConfigFromEnv()
+	if config.MaxRunningReads != 7 {
+		t.Fatalf("MaxRunningReads = %d, want 7", config.MaxRunningReads)
+	}
+	if config.MaxQueuedReads != 9 {
+		t.Fatalf("MaxQueuedReads = %d, want 9", config.MaxQueuedReads)
+	}
+	if config.ReadQueueWait != 11*time.Second {
+		t.Fatalf("ReadQueueWait = %s, want 11s", config.ReadQueueWait)
+	}
+	if config.ReadExecutionTimeout != 13*time.Second {
+		t.Fatalf("ReadExecutionTimeout = %s, want 13s", config.ReadExecutionTimeout)
+	}
+}
+
 func (m namedWorkspaceMetrics) Catalog() dashboard.Catalog {
 	return dashboard.Catalog{
 		Workspace: dashboard.CatalogWorkspace{ID: m.workspaceID, Title: m.workspaceID},
@@ -456,7 +477,7 @@ func TestPageRouteSeedsOperationsPageFiltersFromURL(t *testing.T) {
 	}
 }
 
-func TestHTMLRoutesIncludeDatastarInspector(t *testing.T) {
+func TestHTMLRoutesIncludeSelfHostedDatastarRuntime(t *testing.T) {
 	for _, path := range []string{
 		"/login",
 		"/",
@@ -471,20 +492,95 @@ func TestHTMLRoutesIncludeDatastarInspector(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 			}
-			assertDatastarInspector(t, rec.Body.String())
+			assertDatastarRuntime(t, rec.Body.String())
 		})
 	}
 }
 
-func assertDatastarInspector(t *testing.T, body string) {
+func TestHTMLRoutesHonorConfiguredStaticAssetVersion(t *testing.T) {
+	t.Setenv("LIBREDASH_ASSET_VERSION", "prod-build-123")
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `/static/app-shell.js?v=prod-build-123`) {
+		t.Fatalf("home route missing configured static asset version:\n%s", body)
+	}
+	if strings.Contains(body, `?v=dev`) {
+		t.Fatalf("home route leaked development static asset version:\n%s", body)
+	}
+}
+
+func TestStaticAssetsCacheOnlyCurrentVersionedURLs(t *testing.T) {
+	t.Chdir("../..")
+	t.Setenv("LIBREDASH_PRODUCTION", "")
+	t.Setenv("LIBREDASH_ASSET_VERSION", "prod-build-123")
+	handler := New(fakeMetrics{}).Routes()
+
+	for _, tc := range []struct {
+		name string
+		path string
+		want string
+	}{
+		{
+			name: "current version",
+			path: "/static/login-background-loader.js?v=prod-build-123",
+			want: "public, max-age=31536000, immutable",
+		},
+		{
+			name: "stale version",
+			path: "/static/login-background-loader.js?v=old-build",
+			want: "no-store",
+		},
+		{
+			name: "unversioned",
+			path: "/static/login-background-loader.js",
+			want: "no-store",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+			}
+			if got := rec.Header().Get("Cache-Control"); got != tc.want {
+				t.Fatalf("Cache-Control = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	t.Setenv("LIBREDASH_ASSET_VERSION", "")
+	req := httptest.NewRequest(http.MethodGet, "/static/login-background-loader.js?v=dev", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("dev version status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("dev version Cache-Control = %q, want no-store", got)
+	}
+}
+
+func assertDatastarRuntime(t *testing.T, body string) {
 	t.Helper()
 	for _, want := range []string{
+		`/static/vendor/datastar-1.0.2.js?v=dev`,
 		`/static/datastar-inspector.js`,
 		`<datastar-inspector`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("page missing Datastar inspector marker %q:\n%s", want, body)
 		}
+	}
+	if strings.Contains(body, "cdn.jsdelivr.net") {
+		t.Fatalf("page references CDN-hosted Datastar runtime:\n%s", body)
 	}
 }
 
@@ -595,8 +691,11 @@ func TestLoginRouteRendersAzureADLogin(t *testing.T) {
 	if strings.Contains(body, `data-init__delay`) || strings.Contains(body, `libredash-login-background-init`) {
 		t.Fatalf("login page still uses Datastar for lazy background init:\n%s", body)
 	}
-	if !strings.Contains(body, `setTimeout`) || !strings.Contains(body, `requestIdleCallback`) {
-		t.Fatalf("login page did not include lazy background loader:\n%s", body)
+	if !strings.Contains(body, `/static/login-background-loader.js`) {
+		t.Fatalf("login page did not load the CSP-compatible background loader asset:\n%s", body)
+	}
+	if strings.Contains(body, `requestIdleCallback`) {
+		t.Fatalf("login page rendered background loader inline instead of from static asset:\n%s", body)
 	}
 	if !strings.Contains(body, `/static/topology-background.js`) {
 		t.Fatalf("login page did not include lazy topology background asset:\n%s", body)
@@ -673,7 +772,6 @@ func TestLegacyRoutesReturnNotFound(t *testing.T) {
 		"/model",
 		"/models",
 		"/models/test",
-		"/metrics",
 		"/metrics/orders",
 		"/metrics/orders/measures",
 		"/metrics/orders/dimensions",
@@ -833,6 +931,25 @@ func (m *localDevStyleModelTableMetrics) RefreshTables(_ context.Context, modelI
 		m.done <- append([]string{modelID}, tableNames...)
 	}
 	return nil
+}
+
+type blockingModelTableMetrics struct {
+	localDevStyleModelTableMetrics
+	started  chan struct{}
+	canceled chan struct{}
+}
+
+func (m *blockingModelTableMetrics) RefreshTables(ctx context.Context, _ string, _ []string) error {
+	select {
+	case m.started <- struct{}{}:
+	default:
+	}
+	<-ctx.Done()
+	select {
+	case m.canceled <- struct{}{}:
+	default:
+	}
+	return ctx.Err()
 }
 
 func (m *dependentModelTableMetrics) WorkspaceAssets(workspaceID, servingStateID string) ([]workspace.Asset, []workspace.AssetEdge, bool) {
@@ -1439,6 +1556,42 @@ func TestServerStartupDispatchesQueuedRefreshJobs(t *testing.T) {
 	}
 	if stored.Status != materialize.RunStatusSucceeded {
 		t.Fatalf("run status = %q, want succeeded", stored.Status)
+	}
+}
+
+func TestStopBackgroundJobsCancelsRunningRefreshDispatcher(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	metrics := &blockingModelTableMetrics{
+		started:  make(chan struct{}, 1),
+		canceled: make(chan struct{}, 1),
+	}
+	server := NewWithOptions(metrics, Options{Store: store, DefaultWorkspaceID: "test"})
+	repo := materializesqlite.NewSQLRunRepository(store.SQLDB())
+	if _, err := repo.CreateRun(ctx, materialize.RunInput{
+		WorkspaceID: "test",
+		ModelID:     "olist",
+		TargetType:  materialize.TargetModelTable,
+		TargetID:    "olist.orders",
+	}); err != nil {
+		t.Fatalf("create queued run: %v", err)
+	}
+
+	server.StartBackgroundJobs(ctx)
+	select {
+	case <-metrics.started:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for refresh dispatcher to start")
+	}
+	stopCtx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := server.StopBackgroundJobs(stopCtx); err != nil {
+		t.Fatalf("stop background jobs: %v", err)
+	}
+	select {
+	case <-metrics.canceled:
+	default:
+		t.Fatal("refresh dispatcher did not cancel running refresh before stop returned")
 	}
 }
 

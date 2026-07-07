@@ -92,6 +92,17 @@ func NewDynamicRuntimeMetrics(defaultWorkspaceID, dataDir string, factory func(w
 	}
 }
 
+func (m *dynamicRuntimeMetrics) RuntimeReady(ctx context.Context, workspaceID string) error {
+	metrics, ok := m.MetricsForWorkspace(workspaceID)
+	if !ok || metrics == nil {
+		return fmt.Errorf("runtime for workspace %q is not configured", workspaceID)
+	}
+	if readiness, ok := metrics.(workspaceRuntimeReadiness); ok {
+		return readiness.RuntimeReady(ctx, workspaceID)
+	}
+	return metricsMetadataReady(metrics, workspaceID)
+}
+
 func (m *dynamicRuntimeMetrics) MetricsForWorkspace(workspaceID string) (QueryMetrics, bool) {
 	if workspaceID == "" || m.factory == nil {
 		return nil, false
@@ -373,6 +384,38 @@ func (m runtimeMetrics) AgentPolicy() workspace.AgentPolicy {
 		return workspace.DefaultAgentPolicy()
 	}
 	return provider.AgentPolicy()
+}
+
+func (m runtimeMetrics) RuntimeReady(ctx context.Context, workspaceID string) error {
+	activeRuntime, release, err := m.active(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	catalogPort, ok := activeRuntime.(catalogRuntime)
+	if !ok {
+		return fmt.Errorf("active runtime does not provide catalog metadata")
+	}
+	catalog := catalogPort.Catalog()
+	if workspaceID != "" && catalog.Workspace.ID != "" && catalog.Workspace.ID != workspaceID {
+		return fmt.Errorf("catalog workspace = %q, want %q", catalog.Workspace.ID, workspaceID)
+	}
+	if len(catalog.Models) == 0 && len(catalog.Dashboards) == 0 {
+		return fmt.Errorf("runtime catalog is empty")
+	}
+	if len(catalog.Dashboards) == 0 {
+		return nil
+	}
+	defaultDashboardID := catalogPort.DefaultDashboardID()
+	if defaultDashboardID == "" {
+		return fmt.Errorf("default dashboard is not configured")
+	}
+	reportPort, ok := activeRuntime.(reportRuntime)
+	if !ok {
+		return fmt.Errorf("active runtime does not provide report metadata")
+	}
+	report, model, ok := reportPort.Report(defaultDashboardID)
+	return reportMetadataReady(catalogPort, defaultDashboardID, report, model, ok)
 }
 
 func (m runtimeMetrics) active(ctx context.Context) (runtimehost.Runtime, func(), error) {

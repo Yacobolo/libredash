@@ -20,6 +20,7 @@ type RegistryOptions struct {
 
 type Registry struct {
 	mu          sync.RWMutex
+	prepareMu   sync.Mutex
 	repo        ServingStateRepository
 	environment servingstate.Environment
 	dataDir     string
@@ -64,7 +65,10 @@ func NewRegistryWithFactory(options RegistryOptions) *Registry {
 func (r *Registry) Reload(ctx context.Context) error {
 	for _, workspaceID := range r.workspaceIDs() {
 		manager := r.managerForWorkspace(workspaceID)
-		if err := manager.Reload(ctx); err != nil {
+		r.prepareMu.Lock()
+		err := manager.ReloadBeforePrepare(ctx, r.closePreparedRuntimes)
+		r.prepareMu.Unlock()
+		if err != nil {
 			return err
 		}
 	}
@@ -80,7 +84,13 @@ func (r *Registry) PrepareServingState(ctx context.Context, servingStateID strin
 		return nil, fmt.Errorf("serving state %s environment = %q, want %q", servingStateID, current.Environment, r.environment)
 	}
 	manager := r.managerForWorkspace(current.WorkspaceID)
+	r.prepareMu.Lock()
+	if err := r.closePreparedRuntimes(); err != nil {
+		r.prepareMu.Unlock()
+		return nil, err
+	}
 	prepared, err := manager.PrepareServingState(ctx, servingStateID)
+	r.prepareMu.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +135,10 @@ func (r *Registry) AcquireForWorkspace(ctx context.Context, workspaceID servings
 	if manager == nil {
 		return nil, fmt.Errorf("no active LibreDash serving state")
 	}
-	if err := manager.Reload(ctx); err != nil {
+	r.prepareMu.Lock()
+	err := manager.ReloadBeforePrepare(ctx, r.closePreparedRuntimes)
+	r.prepareMu.Unlock()
+	if err != nil {
 		return nil, err
 	}
 	return manager.Acquire()
@@ -193,4 +206,20 @@ func (r *Registry) workspaceIDs() []servingstate.WorkspaceID {
 	r.mu.RUnlock()
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	return ids
+}
+
+func (r *Registry) closePreparedRuntimes() error {
+	r.mu.RLock()
+	managers := make([]*Manager, 0, len(r.managers))
+	for _, manager := range r.managers {
+		managers = append(managers, manager)
+	}
+	r.mu.RUnlock()
+	var first error
+	for _, manager := range managers {
+		if err := manager.Close(); err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
 }

@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/platform"
@@ -77,6 +78,52 @@ func TestRepositoryRecordsAndFiltersQueryEvents(t *testing.T) {
 	}
 	if _, err := repo.ListQueryEventFilterOptions(ctx, "sql", "", 10); err == nil {
 		t.Fatal("expected unsupported filter option field error")
+	}
+}
+
+func TestRepositoryRedactsSecretsBeforePersistingQueryEvents(t *testing.T) {
+	ctx := context.Background()
+	store, err := platform.Open(ctx, t.TempDir()+"/libredash.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	repo := NewRepository(store.SQLDB())
+	input := queryaudit.EventInput{
+		WorkspaceID: "sales",
+		PrincipalID: "p1",
+		Surface:     "api",
+		Operation:   "api_query",
+		QueryKind:   "semantic_rows",
+		ModelID:     "sales",
+		Target:      "orders",
+		Status:      "success",
+		SQL:          "SELECT * FROM quack_query('postgres://user:secret-pass@example.com/db', 'select 1', token => 'secret-token', PASSWORD 'secret-password')",
+		PlanText:     "CREATE SECRET prod (TYPE s3, KEY_ID 'public-ish', SECRET 'super-secret', CLIENT_SECRET 'client-secret')",
+		QueryJSON:    `{"target":"orders","options":{"api_key":"secret-api-key","note":"keep-me"}}`,
+	}
+	if err := repo.RecordQueryEvent(ctx, input); err != nil {
+		t.Fatal(err)
+	}
+
+	events, err := repo.ListQueryEvents(ctx, queryaudit.Filter{WorkspaceID: "sales"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events = %d, want 1", len(events))
+	}
+	stored := events[0].SQL + "\n" + events[0].PlanText + "\n" + events[0].QueryJSON
+	for _, leaked := range []string{"secret-pass", "secret-token", "secret-password", "super-secret", "client-secret", "secret-api-key"} {
+		if strings.Contains(stored, leaked) {
+			t.Fatalf("stored query audit leaked %q:\n%s", leaked, stored)
+		}
+	}
+	for _, want := range []string{"[REDACTED]", "keep-me"} {
+		if !strings.Contains(stored, want) {
+			t.Fatalf("stored query audit missing %q:\n%s", want, stored)
+		}
 	}
 }
 

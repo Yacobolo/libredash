@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	stdhttp "net/http"
-	"os"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/api"
@@ -112,25 +111,15 @@ func (h *Handler) UploadArtifact(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	if err := os.MkdirAll(h.options.ArtifactDir, 0o755); err != nil {
-		writeJSONError(w, err, stdhttp.StatusInternalServerError)
-		return
-	}
 	artifactStore := servingstatefs.NewArtifactStore(h.options.ArtifactDir)
-	path := artifactStore.UploadPath(row.ID)
-	out, err := os.Create(path)
-	if err != nil {
-		writeJSONError(w, err, stdhttp.StatusInternalServerError)
-		return
-	}
-	size, copyErr := io.Copy(out, stdhttp.MaxBytesReader(w, r.Body, 128<<20))
-	closeErr := out.Close()
+	size, copyErr := artifactStore.SaveUpload(r.Context(), row.ID, stdhttp.MaxBytesReader(w, r.Body, servingstatefs.MaxUploadBytes))
 	if copyErr != nil {
-		writeJSONError(w, copyErr, stdhttp.StatusBadRequest)
-		return
-	}
-	if closeErr != nil {
-		writeJSONError(w, closeErr, stdhttp.StatusInternalServerError)
+		var maxBytesErr *stdhttp.MaxBytesError
+		if errors.As(copyErr, &maxBytesErr) {
+			writeJSONError(w, copyErr, stdhttp.StatusRequestEntityTooLarge)
+			return
+		}
+		writeJSONError(w, copyErr, stdhttp.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, stdhttp.StatusOK, map[string]any{"publishId": row.ID, "sizeBytes": size})

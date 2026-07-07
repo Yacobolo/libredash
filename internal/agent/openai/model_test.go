@@ -11,6 +11,19 @@ import (
 	agentcore "github.com/Yacobolo/libredash/pkg/agent"
 )
 
+func TestNewModelUsesBoundedDefaultHTTPClient(t *testing.T) {
+	model := NewModel(agentapp.Config{APIKey: "test-key", BaseURL: "https://api.example.com", Model: "test-model"}, nil)
+	if model.client == nil {
+		t.Fatal("default HTTP client is nil")
+	}
+	if model.client == http.DefaultClient {
+		t.Fatal("default HTTP client should not use the unbounded process-global client")
+	}
+	if model.client.Timeout != DefaultHTTPTimeout {
+		t.Fatalf("default HTTP timeout = %s, want %s", model.client.Timeout, DefaultHTTPTimeout)
+	}
+}
+
 func TestOpenAIModelConvertsChatCompletionPayloads(t *testing.T) {
 	var got openAIChatRequest
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

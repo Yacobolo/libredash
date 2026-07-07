@@ -1,7 +1,9 @@
 package filesystem
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -57,6 +59,37 @@ func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	}
 	if compiled.Validation.GraphHash == "" || compiled.Validation.GraphHash != graphHash(compiled.Graph) {
 		t.Fatalf("compiled validation graph hash = %q, want %q", compiled.Validation.GraphHash, graphHash(compiled.Graph))
+	}
+}
+
+func TestExtractArtifactRejectsSymlinkEscape(t *testing.T) {
+	artifactPath := writeTestBundle(t, map[string]string{"link/escape.txt": "owned"})
+	dest := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(dest, "link")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	err := ExtractArtifact(artifactPath, dest)
+
+	if err == nil {
+		t.Fatal("ExtractArtifact() error = nil, want symlink escape rejection")
+	}
+	if _, statErr := os.Stat(filepath.Join(outside, "escape.txt")); !os.IsNotExist(statErr) {
+		t.Fatalf("outside file stat err = %v, want not exist", statErr)
+	}
+}
+
+func TestValidateArtifactRejectsUnlistedBundleFile(t *testing.T) {
+	path := packedProjectArtifact(t, "sales", "dev", "dep_extra")
+	addUnlistedArtifactFileForTest(t, path, "unexpected/extra.yaml", "owned")
+
+	_, err := ValidateArtifact(path, servingstate.WorkspaceID("sales"), servingstate.ID("dep_extra"))
+	if err == nil {
+		t.Fatal("ValidateArtifact() error = nil, want unlisted file rejection")
+	}
+	if !strings.Contains(err.Error(), "not listed in manifest") {
+		t.Fatalf("ValidateArtifact() error = %v, want unlisted manifest file error", err)
 	}
 }
 
@@ -218,6 +251,39 @@ func mutateArtifactForTest(t *testing.T, path string, mutate func(*CompiledWorks
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(root, "manifest.json"), manifestBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".libredash-test-artifact-*.tar.gz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmpPath := tmp.Name()
+	if err := writeExtractedRoot(root, tmp); err != nil {
+		tmp.Close()
+		os.Remove(tmpPath)
+		t.Fatal(err)
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpPath)
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath)
+		t.Fatal(err)
+	}
+}
+
+func addUnlistedArtifactFileForTest(t *testing.T, path, name, content string) {
+	t.Helper()
+	root := t.TempDir()
+	if err := ExtractArtifact(path, root); err != nil {
+		t.Fatalf("ExtractArtifact() error = %v", err)
+	}
+	target := filepath.Join(root, filepath.FromSlash(name))
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	tmp, err := os.CreateTemp(filepath.Dir(path), ".libredash-test-artifact-*.tar.gz")
@@ -463,4 +529,33 @@ func writeBundleProjectFixture(t *testing.T, files map[string]string) string {
 		}
 	}
 	return filepath.Join(dir, ProjectFile)
+}
+
+func writeTestBundle(t *testing.T, files map[string]string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("create test bundle: %v", err)
+	}
+	gz := gzip.NewWriter(file)
+	tw := tar.NewWriter(gz)
+	for name, content := range files {
+		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(content)), Typeflag: tar.TypeReg}); err != nil {
+			t.Fatalf("write tar header: %v", err)
+		}
+		if _, err := tw.Write([]byte(content)); err != nil {
+			t.Fatalf("write tar content: %v", err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatalf("close tar writer: %v", err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatalf("close gzip writer: %v", err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatalf("close test bundle: %v", err)
+	}
+	return path
 }

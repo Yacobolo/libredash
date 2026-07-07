@@ -13,14 +13,38 @@ func (s *Server) dispatchQueuedRefreshJobs(ctx context.Context) {
 	if s == nil || s.store == nil || s.metrics == nil {
 		return
 	}
+	var ok bool
+	ctx, ok = s.refreshDispatchContext(ctx)
+	if !ok {
+		return
+	}
 	s.jobDispatchMu.Lock()
 	if s.jobDispatching {
 		s.jobDispatchMu.Unlock()
 		return
 	}
 	s.jobDispatching = true
+	s.jobDispatchWG.Add(1)
 	s.jobDispatchMu.Unlock()
-	go s.runRefreshJobDispatcher(ctx)
+	go func() {
+		defer s.jobDispatchWG.Done()
+		s.runRefreshJobDispatcher(ctx)
+	}()
+}
+
+func (s *Server) refreshDispatchContext(fallback context.Context) (context.Context, bool) {
+	s.backgroundMu.Lock()
+	defer s.backgroundMu.Unlock()
+	if s.backgroundStopping {
+		return nil, false
+	}
+	if s.backgroundCtx != nil {
+		return s.backgroundCtx, true
+	}
+	if fallback == nil {
+		fallback = context.Background()
+	}
+	return fallback, true
 }
 
 func (s *Server) runRefreshJobDispatcher(ctx context.Context) {

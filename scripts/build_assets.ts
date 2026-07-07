@@ -68,6 +68,8 @@ for (const build of builds) {
   await runBuild(build)
 }
 await Bun.write('static/monaco-editor-css.css', Bun.file('static/admin-page.css'))
+await hardenProductionJavaScriptBundles()
+await writeStaticAssetVersion()
 
 async function runBuild(build: AssetBuild): Promise<void> {
   await cleanPaths(build.clean)
@@ -94,4 +96,41 @@ async function removePath(path: string): Promise<void> {
   if (!removed && !path.includes('*')) {
     await Bun.$`rm -rf ${path}`.quiet()
   }
+}
+
+async function hardenProductionJavaScriptBundles(): Promise<void> {
+  const forbiddenHosts = ['cdn.jsdelivr.net', 'unpkg.com', 'esm.sh', 'skypack.dev']
+  const files = new Bun.Glob('static/**/*.js')
+
+  for await (const path of files.scan({ cwd: '.', dot: true, onlyFiles: true })) {
+    let text = await Bun.file(path).text()
+    const hardened = text.replaceAll('https://cdn.jsdelivr.net/npm/p5@', '/static/vendor/p5-translations/')
+    if (hardened !== text) {
+      await Bun.write(path, hardened)
+      text = hardened
+    }
+
+    for (const host of forbiddenHosts) {
+      if (text.includes(host)) {
+        throw new Error(`${path} references external asset host ${host}; production bundles must be self-contained`)
+      }
+    }
+  }
+}
+
+async function writeStaticAssetVersion(): Promise<void> {
+  const paths: string[] = []
+  for (const pattern of ['static/**/*.css', 'static/**/*.js']) {
+    const glob = new Bun.Glob(pattern)
+    for await (const path of glob.scan({ cwd: '.', dot: true, onlyFiles: true })) {
+      paths.push(path)
+    }
+  }
+  paths.sort()
+  const hasher = new Bun.CryptoHasher('sha256')
+  for (const path of paths) {
+    hasher.update(path)
+    hasher.update(new Uint8Array(await Bun.file(path).arrayBuffer()))
+  }
+  await Bun.write('static/asset-version.txt', hasher.digest('hex').slice(0, 16) + '\n')
 }

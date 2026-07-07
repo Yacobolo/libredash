@@ -83,19 +83,35 @@ type Server struct {
 	defaultWorkspaceID  string
 	defaultEnvironment  string
 	scimBearerToken     string
+	metricsBearerToken  string
+	allowedHosts        []string
 	rateLimits          RateLimitConfig
 	securityHeaders     SecurityHeadersConfig
+	requestBodyLimit    RequestBodyLimitConfig
 	requestLogging      bool
+	telemetry           *httpTelemetry
 	logger              *slog.Logger
 	jobLeaseTimeout     time.Duration
 	jobDispatchMu       sync.Mutex
 	jobDispatching      bool
+	jobDispatchWG       sync.WaitGroup
+	backgroundMu        sync.Mutex
+	backgroundCtx       context.Context
+	backgroundCancel    context.CancelFunc
+	backgroundStopping  bool
 	chatTitleMu         sync.Mutex
 	pendingChatTitles   map[string]struct{}
 }
 
 func New(metrics QueryMetrics) *Server {
-	return &Server{metrics: metrics, broker: pagestream.NewBroker(), logger: slog.Default(), pendingChatTitles: map[string]struct{}{}}
+	return &Server{
+		metrics:           metrics,
+		broker:            pagestream.NewBroker(),
+		requestBodyLimit:  DefaultRequestBodyLimitConfig(),
+		telemetry:         newHTTPTelemetry(),
+		logger:            slog.Default(),
+		pendingChatTitles: map[string]struct{}{},
+	}
 }
 
 type Options struct {
@@ -114,8 +130,11 @@ type Options struct {
 	DefaultWorkspaceID  string
 	DefaultEnvironment  string
 	SCIMBearerToken     string
+	MetricsBearerToken  string
+	AllowedHosts        []string
 	RateLimits          RateLimitConfig
 	SecurityHeaders     SecurityHeadersConfig
+	RequestBodyLimit    RequestBodyLimitConfig
 	RequestLogging      bool
 	Logger              *slog.Logger
 	Executor            *execution.Service
@@ -173,8 +192,14 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.defaultWorkspaceID = options.DefaultWorkspaceID
 	server.defaultEnvironment = string(servingstate.NormalizeEnvironment(servingstate.Environment(options.DefaultEnvironment)))
 	server.scimBearerToken = options.SCIMBearerToken
+	server.metricsBearerToken = options.MetricsBearerToken
+	server.allowedHosts = append([]string(nil), options.AllowedHosts...)
 	server.rateLimits = options.RateLimits
 	server.securityHeaders = options.SecurityHeaders
+	server.requestBodyLimit = options.RequestBodyLimit
+	if !server.requestBodyLimit.Enabled && server.requestBodyLimit.MaxBytes == 0 {
+		server.requestBodyLimit = DefaultRequestBodyLimitConfig()
+	}
 	server.requestLogging = options.RequestLogging
 	server.jobLeaseTimeout = options.JobLeaseTimeout
 	if server.jobLeaseTimeout <= 0 {
@@ -199,17 +224,66 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 }
 
 func (s *Server) StartBackgroundJobs(ctx context.Context) {
-	s.dispatchQueuedRefreshJobs(ctx)
+	if s == nil {
+		return
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.backgroundMu.Lock()
+	if s.backgroundCancel == nil {
+		s.backgroundCtx, s.backgroundCancel = context.WithCancel(ctx)
+		s.backgroundStopping = false
+	}
+	backgroundCtx := s.backgroundCtx
+	s.backgroundMu.Unlock()
+	s.dispatchQueuedRefreshJobs(backgroundCtx)
+}
+
+func (s *Server) StopBackgroundJobs(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.backgroundMu.Lock()
+	cancel := s.backgroundCancel
+	if cancel == nil {
+		s.backgroundMu.Unlock()
+		return nil
+	}
+	s.backgroundStopping = true
+	cancel()
+	s.backgroundMu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		s.jobDispatchWG.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		s.backgroundMu.Lock()
+		s.backgroundCtx = nil
+		s.backgroundCancel = nil
+		s.backgroundStopping = false
+		s.backgroundMu.Unlock()
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func executionConfigFromEnv() execution.Config {
 	defaults := execution.DefaultConfig()
 	return execution.Config{
-		MaxRunningReads: intEnv("LIBREDASH_EXEC_MAX_RUNNING_READS", defaults.MaxRunningReads),
-		MaxQueuedReads:  intEnv("LIBREDASH_EXEC_MAX_QUEUED_READS", defaults.MaxQueuedReads),
-		ReadQueueWait:   durationEnv("LIBREDASH_EXEC_READ_QUEUE_TIMEOUT", defaults.ReadQueueWait),
-		MaxRunningJobs:  intEnv("LIBREDASH_EXEC_MAX_RUNNING_WRITES", defaults.MaxRunningJobs),
-		MaxQueuedJobs:   intEnv("LIBREDASH_EXEC_MAX_QUEUED_WRITES", defaults.MaxQueuedJobs),
+		MaxRunningReads:      intEnv("LIBREDASH_EXEC_MAX_RUNNING_READS", defaults.MaxRunningReads),
+		MaxQueuedReads:       intEnv("LIBREDASH_EXEC_MAX_QUEUED_READS", defaults.MaxQueuedReads),
+		ReadQueueWait:        durationEnv("LIBREDASH_EXEC_READ_QUEUE_TIMEOUT", defaults.ReadQueueWait),
+		ReadExecutionTimeout: durationEnv("LIBREDASH_EXEC_READ_TIMEOUT", defaults.ReadExecutionTimeout),
+		MaxRunningJobs:       intEnv("LIBREDASH_EXEC_MAX_RUNNING_WRITES", defaults.MaxRunningJobs),
+		MaxQueuedJobs:        intEnv("LIBREDASH_EXEC_MAX_QUEUED_WRITES", defaults.MaxQueuedJobs),
 	}
 }
 

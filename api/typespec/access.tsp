@@ -48,6 +48,7 @@ model ServicePrincipalListResponse {
 
 model ServicePrincipalSecretCreateRequest {
   name: string;
+  expiresAt?: utcDateTime;
 }
 
 model ServicePrincipalSecretResponse {
@@ -55,6 +56,7 @@ model ServicePrincipalSecretResponse {
   servicePrincipalId: string;
   name: string;
   secret?: string;
+  expiresAt?: utcDateTime;
   createdAt?: utcDateTime;
   revokedAt?: utcDateTime;
 }

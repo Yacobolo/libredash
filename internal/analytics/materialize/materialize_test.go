@@ -517,6 +517,59 @@ func TestWorkspaceRuntimeQueriesPinnedDuckLakeSnapshots(t *testing.T) {
 	}
 }
 
+func TestWorkspaceRuntimeCanCommitWhilePinnedSnapshotIsOpen(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "data")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	catalogPath := filepath.Join(dir, "libredash.db")
+	store, err := platform.Open(ctx, catalogPath)
+	if err != nil {
+		t.Fatalf("open platform store: %v", err)
+	}
+	defer store.Close()
+	config := analyticsduckdb.WorkspaceRuntimeConfig{
+		Models:           map[string]*semanticmodel.Model{"sales": simpleOrdersModel(t)},
+		DataDir:          dataDir,
+		DBDir:            filepath.Join(dir, "duckdb", "dev"),
+		CatalogPath:      catalogPath,
+		DuckLakeDataPath: filepath.Join(dir, ".libredash", "data"),
+	}
+
+	writeOrdersCSV(t, dataDir, 10, 15)
+	writer, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshotID := writer.DuckLakeSnapshotID()
+	if err := writer.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
+
+	config.SnapshotID = snapshotID
+	reader, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, config)
+	if err != nil {
+		t.Fatalf("open pinned snapshot: %v", err)
+	}
+	defer reader.Close()
+
+	writeOrdersCSV(t, dataDir, 100, 150)
+	config.SnapshotID = 0
+	nextWriter, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, config)
+	if err != nil {
+		t.Fatalf("open writer with pinned snapshot active: %v", err)
+	}
+	defer nextWriter.Close()
+	if got := queryRevenue(t, ctx, nextWriter); got != 250 {
+		t.Fatalf("next snapshot revenue = %v, want 250", got)
+	}
+	if got := queryRevenue(t, ctx, reader); got != 25 {
+		t.Fatalf("pinned snapshot revenue = %v, want 25", got)
+	}
+}
+
 func TestWorkspaceRuntimeWritesDuckLakeDataUnderConfiguredInstanceStore(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
