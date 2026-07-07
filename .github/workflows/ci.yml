@@ -15,10 +15,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Test and package
+  prepare:
+    name: Prepare generated assets
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -40,19 +40,204 @@ jobs:
           go install github.com/go-task/task/v3/cmd/task@v3.50.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
+      - name: Install JavaScript dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate checked build inputs
+        run: task generate
+
+      - name: Build browser assets
+        run: task build
+
+      - name: Upload generated assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: generated-assets
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            api/gen/
+            internal/api/gen/
+            internal/cli/gen/
+            schemas/json/
+            schemas/signals/
+            web/generated/
+            static/
+
+  go-tests:
+    name: Go tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    needs: prepare
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download generated assets
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-assets
+          path: .
+
+      - name: Run Go tests
+        run: go test ./...
+
+  frontend-tests:
+    name: Frontend tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    needs: prepare
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.7
+
+      - name: Install JavaScript dependencies
+        run: bun install --frozen-lockfile
+
       - name: Install browser dependencies
+        run: bunx playwright install --with-deps chromium
+
+      - name: Download generated assets
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-assets
+          path: .
+
+      - name: Run frontend tests
+        run: |
+          bun run test:primer-primitives
+          bun run test:primer-alignment
+          bun run test:theme
+          bun run test:datastar-lit
+          bun run test:app-shell
+          bun run test:table-selection
+          bun run test:record-table
+          bun run test:visual-modal
+          bun run test:catalog-page
+          bun run test:dashboard-page
+          bun run test:chat-composer
+          bun run test:chat-page
+          bun run test:chat-thread
+          bun run test:code-block
+          bun run test:workspace-page
+          bun run test:data-explorer
+          bun run test:windowed-table
+          bun run test:filter-menu
+          bun run test:admin-page
+          bun run test:code-editor
+          bun run test:markdown-view
+          bun run test:login-page
+          bun run test:asset-lineage
+          bun run test:semantic-model-graph
+
+  ui-route-qa:
+    name: UI route QA
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: prepare
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.7
+
+      - name: Install Task
+        run: |
+          go install github.com/go-task/task/v3/cmd/task@v3.50.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install JavaScript and browser dependencies
         run: |
           bun install --frozen-lockfile
           bunx playwright install --with-deps chromium
 
-      - name: Run CI suite
-        run: task ci
+      - name: Download generated assets
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-assets
+          path: .
+
+      - name: Run UI route QA
+        run: task qa:ui-framework
+
+  node-audit:
+    name: JavaScript dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: prepare
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.7
+
+      - name: Install JavaScript dependencies
+        run: bun install --frozen-lockfile
 
       - name: Run JavaScript dependency audit
-        run: task node:audit
+        run: bun audit
+
+  go-vuln:
+    name: Go vulnerability scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: prepare
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Download generated assets
+        uses: actions/download-artifact@v4
+        with:
+          name: generated-assets
+          path: .
 
       - name: Run Go vulnerability scan
-        run: task vuln
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.5.0 ./...
+
+  production-image:
+    name: Production image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    needs: prepare
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
 
       - name: Build production image
         run: docker build --pull --tag libredash:ci .
