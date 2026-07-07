@@ -604,6 +604,55 @@ func TestStaticAssetsCacheOnlyCurrentVersionedURLs(t *testing.T) {
 	}
 }
 
+func TestStaticAssetCacheHeaderClasses(t *testing.T) {
+	t.Setenv("LIBREDASH_PRODUCTION", "")
+	t.Setenv("LIBREDASH_ASSET_VERSION", "prod-build-123")
+	handler := staticAssetCache(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	for _, tc := range []struct {
+		name string
+		path string
+		want string
+	}{
+		{
+			name: "current versioned asset",
+			path: "/static/app.css?v=prod-build-123",
+			want: "public, max-age=31536000, immutable",
+		},
+		{
+			name: "hashed chunk asset",
+			path: "/static/chunks/shared-app-shell-sv895r5c.js",
+			want: "public, max-age=31536000, immutable",
+		},
+		{
+			name: "font asset",
+			path: "/static/files/inter-latin-wght-normal.woff2",
+			want: "public, max-age=86400",
+		},
+		{
+			name: "unversioned entrypoint",
+			path: "/static/app-shell.js",
+			want: "no-store",
+		},
+		{
+			name: "stale versioned asset",
+			path: "/static/app.css?v=old-build",
+			want: "no-store",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if got := rec.Header().Get("Cache-Control"); got != tc.want {
+				t.Fatalf("Cache-Control = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func assertDevDatastarRuntime(t *testing.T, body string) {
 	t.Helper()
 	for _, want := range []string{
