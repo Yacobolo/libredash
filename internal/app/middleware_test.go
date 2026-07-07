@@ -685,6 +685,34 @@ func TestAuthCallbackRejectsInvalidOIDCState(t *testing.T) {
 	}
 }
 
+func TestAuthCallbackRejectsExpiredOIDCStateCookie(t *testing.T) {
+	issuedAt := time.Date(2026, 7, 7, 8, 0, 0, 0, time.UTC)
+	restore := setAuthNowForTest(issuedAt)
+	auth := testAuth(testStore(t), "test", AuthConfig{
+		DevBypass: true,
+		CSRFKey:   "0123456789abcdef0123456789abcdef",
+	})
+	auth.configured = true
+	auth.oidcOverride = map[string]oidcClient{"azureadv2": fakeOIDCClient{}}
+	cookie := auth.oidcStateCookie("state", "nonce")
+	restore()
+	restore = setAuthNowForTest(issuedAt.Add(11 * time.Minute))
+	defer restore()
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/azureadv2/callback?state=state&code=code", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+
+	auth.Callback(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+	if location := rec.Header().Get("Location"); location != "" {
+		t.Fatalf("expired state redirected unexpectedly: %q", location)
+	}
+}
+
 func TestAuthCallbackCreatesSessionAndAuditEvents(t *testing.T) {
 	store := testStore(t)
 	auth := testAuth(store, "test", AuthConfig{

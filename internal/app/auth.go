@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +27,8 @@ type apiCredentialContextKey struct{}
 
 const csrfCookieName = "ld_csrf"
 const oidcStateCookieName = "ld_oidc_state"
+const oidcStateMaxAge = 10 * time.Minute
+const oidcStateClockSkew = time.Minute
 
 var (
 	errUnauthorized = errors.New("unauthorized")
@@ -45,6 +48,7 @@ type oidcClient interface {
 }
 
 var authRandomReader io.Reader = rand.Reader
+var authNow = time.Now
 
 type sessionManager interface {
 	CreateSession(ctx context.Context, principalID string, ttl time.Duration) (string, error)
@@ -657,7 +661,7 @@ func (a *Auth) oidcStateCookie(state, nonce string) *http.Cookie {
 		Name:     oidcStateCookieName,
 		Value:    a.encodeOIDCState(state, nonce),
 		Path:     "/",
-		MaxAge:   10 * 60,
+		MaxAge:   int(oidcStateMaxAge / time.Second),
 		HttpOnly: true,
 		Secure:   a.cookieSecure,
 		SameSite: http.SameSiteLaxMode,
@@ -674,18 +678,35 @@ func (a *Auth) consumeOIDCState(w http.ResponseWriter, r *http.Request) (string,
 }
 
 func (a *Auth) encodeOIDCState(state, nonce string) string {
-	message := state + "|" + nonce
+	return a.encodeOIDCStateAt(state, nonce, authNow())
+}
+
+func (a *Auth) encodeOIDCStateAt(state, nonce string, issuedAt time.Time) string {
+	issuedUnix := strconv.FormatInt(issuedAt.UTC().Unix(), 10)
+	message := state + "|" + nonce + "|" + issuedUnix
 	mac := hmac.New(sha256.New, a.stateKey)
 	mac.Write([]byte(message))
-	return state + "." + nonce + "." + hex.EncodeToString(mac.Sum(nil))
+	return state + "." + nonce + "." + issuedUnix + "." + hex.EncodeToString(mac.Sum(nil))
 }
 
 func (a *Auth) decodeOIDCState(value string) (string, string, error) {
 	parts := strings.Split(value, ".")
-	if len(parts) != 3 {
+	if len(parts) != 4 {
 		return "", "", errors.New("invalid oidc state cookie")
 	}
-	expected := a.encodeOIDCState(parts[0], parts[1])
+	issuedUnix, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil {
+		return "", "", errors.New("invalid oidc state cookie timestamp")
+	}
+	issuedAt := time.Unix(issuedUnix, 0).UTC()
+	now := authNow().UTC()
+	if issuedAt.After(now.Add(oidcStateClockSkew)) {
+		return "", "", errors.New("oidc state cookie is not yet valid")
+	}
+	if !issuedAt.Add(oidcStateMaxAge).After(now) {
+		return "", "", errors.New("oidc state cookie expired")
+	}
+	expected := a.encodeOIDCStateAt(parts[0], parts[1], issuedAt)
 	if !hmac.Equal([]byte(value), []byte(expected)) {
 		return "", "", errors.New("invalid oidc state cookie signature")
 	}
@@ -711,5 +732,13 @@ func setAuthRandomReaderForTest(reader io.Reader) func() {
 	authRandomReader = reader
 	return func() {
 		authRandomReader = previous
+	}
+}
+
+func setAuthNowForTest(now time.Time) func() {
+	previous := authNow
+	authNow = func() time.Time { return now }
+	return func() {
+		authNow = previous
 	}
 }
