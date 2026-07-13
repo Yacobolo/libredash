@@ -78,8 +78,21 @@ jobs:
         run: |
           url="$(terraform output -raw url)"
           server_ip="$(terraform output -raw server_ipv4)"
-          curl -fsS "$url/healthz"
-          curl -fsS "$url/readyz"
+          public_ready=false
+          for _ in $(seq 1 60); do
+            if curl -fsS --connect-timeout 5 --max-time 10 "$url/healthz" >/dev/null 2>&1 && \
+              curl -fsS --connect-timeout 5 --max-time 10 "$url/readyz" >/dev/null 2>&1; then
+              public_ready=true
+              break
+            fi
+            sleep 5
+          done
+          if [[ "$public_ready" != "true" ]]; then
+            echo "Public HTTPS did not become ready" >&2
+            ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl status' || true
+            ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl logs caddy' || true
+            exit 1
+          fi
           curl -fsS -L "$url/" >/dev/null
           ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl status'
 

@@ -115,6 +115,20 @@ func TestEphemeralDeploymentWorkflowAlwaysDestroysInfrastructure(t *testing.T) {
 	}
 }
 
+func TestEphemeralDeploymentWaitsForPublicHTTPS(t *testing.T) {
+	workflow := readFile(t, filepath.Join("..", "..", ".github", "workflows", "hetzner-deploy.yml"))
+
+	for _, fragment := range []string{
+		"public_ready=false",
+		"for _ in $(seq 1 60)",
+		"--connect-timeout 5",
+		"Public HTTPS did not become ready",
+		"libredashctl logs caddy",
+	} {
+		requireContains(t, workflow, fragment)
+	}
+}
+
 func TestOperationsScriptSyntaxAndCommands(t *testing.T) {
 	script := filepath.Join("files", "libredashctl")
 	contents := readFile(t, script)
