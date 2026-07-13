@@ -46,10 +46,16 @@ func runtimeSignal(kind uisignals.RouteKind) uisignals.RouteRuntimeSignal {
 }
 
 func inspectorScript() g.Node {
+	if staticasset.Production() {
+		return nil
+	}
 	return h.Script(h.Type("module"), h.Src(staticAsset("/static/datastar-inspector.js")))
 }
 
 func inspectorElement() g.Node {
+	if staticasset.Production() {
+		return nil
+	}
 	return g.El("datastar-inspector")
 }
 
@@ -106,7 +112,7 @@ func LoginPage(options ...LoginPageOptions) g.Node {
 		MainAttrs:  []g.Node{h.Class(appRootClass)},
 		UpdatesURL: loginUpdatesURL,
 		Body: []g.Node{
-			g.El("ld-login-page"),
+			g.El("ld-login-page", g.Attr("background-module-src", staticAsset("/static/topology-background.js"))),
 			inspectorElement(),
 		},
 	})

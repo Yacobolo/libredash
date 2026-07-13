@@ -1,0 +1,111 @@
+name: Ephemeral Hetzner deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Immutable LibreDash image reference
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ephemeral-hetzner-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy, recover, and destroy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: hetzner-deployment
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_VAR_hcloud_token: ${{ secrets.HCLOUD_TOKEN }}
+      TF_VAR_name: libredash-ci-${{ github.run_id }}
+      TF_VAR_admin_email: ci-${{ github.run_id }}@libredash.local
+      TF_VAR_libredash_image: ${{ inputs.image_digest }}
+      TF_VAR_ssh_allowed_cidrs: '["203.0.113.10/32"]'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Restrict SSH to this runner
+        run: |
+          ssh-keygen -q -t ed25519 -N '' -f "$RUNNER_TEMP/libredash-ci"
+          runner_ip="$(curl -4fsS https://api.ipify.org)"
+          [[ "$runner_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "TF_VAR_ssh_public_key_path=$RUNNER_TEMP/libredash-ci.pub" >> "$GITHUB_ENV"
+          echo "TF_VAR_ssh_allowed_cidrs=[\"$runner_ip/32\"]" >> "$GITHUB_ENV"
+
+      - name: Initialize Terraform
+        working-directory: deploy/hetzner
+        run: terraform init -input=false
+
+      - name: Validate deployment
+        working-directory: deploy/hetzner
+        run: |
+          terraform validate
+          terraform test
+
+      - name: Apply ephemeral deployment
+        working-directory: deploy/hetzner
+        run: terraform apply -input=false -auto-approve
+
+      - name: Wait for provisioning
+        working-directory: deploy/hetzner
+        run: |
+          server_ip="$(terraform output -raw server_ipv4)"
+          for _ in $(seq 1 90); do
+            if ssh -i "$RUNNER_TEMP/libredash-ci" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 root@"$server_ip" 'cloud-init status --wait'; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+
+      - name: Verify public and container health
+        working-directory: deploy/hetzner
+        run: |
+          url="$(terraform output -raw url)"
+          server_ip="$(terraform output -raw server_ipv4)"
+          curl -fsS "$url/healthz"
+          curl -fsS "$url/readyz"
+          curl -fsS -L "$url/" >/dev/null
+          ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl status'
+
+      - name: Consume first-login credentials
+        working-directory: deploy/hetzner
+        run: |
+          server_ip="$(terraform output -raw server_ipv4)"
+          credentials="$(ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl first-login')"
+          jq -e '.principal.email and .temporaryPassword and .publishToken and .publishTokenExpiresAt' <<<"$credentials" >/dev/null
+          if ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl first-login'; then
+            echo "first-login credentials were retrievable more than once" >&2
+            exit 1
+          fi
+
+      - name: Verify backup and restore
+        working-directory: deploy/hetzner
+        run: |
+          server_ip="$(terraform output -raw server_ipv4)"
+          archive="$(ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl backup')"
+          ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" "libredashctl restore '$archive'"
+          ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl status'
+
+      - name: Destroy ephemeral deployment
+        if: always()
+        working-directory: deploy/hetzner
+        run: |
+          if [[ -d .terraform ]]; then
+            terraform destroy -input=false -auto-approve
+          fi

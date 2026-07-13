@@ -5,9 +5,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/Yacobolo/libredash/internal/configspec"
 )
 
-const versionEnv = "LIBREDASH_ASSET_VERSION"
+const versionEnv = configspec.EnvLIBREDASH_ASSET_VERSION
 const generatedVersionPath = "static/asset-version.txt"
 
 func URL(path string) string {
@@ -19,7 +21,7 @@ func Version() string {
 	if version := strings.TrimSpace(os.Getenv(versionEnv)); version != "" {
 		return version
 	}
-	if isProduction() {
+	if Production() {
 		if bytes, err := os.ReadFile(generatedVersionPath); err == nil {
 			if version := strings.TrimSpace(string(bytes)); version != "" {
 				return version
@@ -29,8 +31,8 @@ func Version() string {
 	return "dev"
 }
 
-func isProduction() bool {
-	value := strings.TrimSpace(os.Getenv("LIBREDASH_PRODUCTION"))
+func Production() bool {
+	value := strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_PRODUCTION))
 	if value == "" {
 		return false
 	}

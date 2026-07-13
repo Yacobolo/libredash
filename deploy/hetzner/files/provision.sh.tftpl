@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Terraform replaces these placeholders with JSON-quoted shell strings.
+# shellcheck disable=SC2154
+DOMAIN=${domain}
+# shellcheck disable=SC2154
+ADMIN_EMAIL=${admin_email}
+# shellcheck disable=SC2154
+LIBREDASH_IMAGE=${libredash_image}
+# shellcheck disable=SC2154
+CADDY_IMAGE=${caddy_image}
+
+install -d -m 0700 /etc/libredash /var/lib/libredash /var/backups/libredash
+install -d -m 0700 /opt/libredash
+
+umask 077
+cat >/etc/libredash/deployment.env <<ENV
+LIBREDASH_IMAGE=$LIBREDASH_IMAGE
+CADDY_IMAGE=$CADDY_IMAGE
+CADDY_DOMAIN=$DOMAIN
+APP_MEMORY_LIMIT=3g
+ENV
+
+if [[ ! -s /etc/libredash/libredash.env ]]; then
+  csrf_key="$(openssl rand -hex 32)"
+  cat >/etc/libredash/libredash.env <<ENV
+LIBREDASH_PRODUCTION=1
+LIBREDASH_ADDR=:8080
+LIBREDASH_HOME=/var/lib/libredash
+LIBREDASH_LOCAL_AUTH=1
+LIBREDASH_COOKIE_SECURE=true
+LIBREDASH_TRUST_PROXY_HEADERS=true
+LIBREDASH_ALLOWED_HOSTS=$DOMAIN
+LIBREDASH_BOOTSTRAP_ADMIN_EMAIL=$ADMIN_EMAIL
+LIBREDASH_CSRF_KEY=$csrf_key
+LIBREDASH_METRICS_BEARER_TOKEN=$(openssl rand -hex 32)
+ENV
+fi
+
+systemctl enable --now docker
+docker pull "$LIBREDASH_IMAGE"
+docker pull "$CADDY_IMAGE"
+
+docker run --rm \
+  --env-file /etc/libredash/libredash.env \
+  "$LIBREDASH_IMAGE" config validate --production
+
+app_uid="$(docker run --rm --entrypoint sh "$LIBREDASH_IMAGE" -c 'id -u libredash')"
+app_gid="$(docker run --rm --entrypoint sh "$LIBREDASH_IMAGE" -c 'id -g libredash')"
+chown -R "$app_uid:$app_gid" /var/lib/libredash
+cat >>/etc/libredash/deployment.env <<ENV
+LIBREDASH_UID=$app_uid
+LIBREDASH_GID=$app_gid
+ENV
+
+docker compose \
+  --project-directory /opt/libredash \
+  --env-file /etc/libredash/deployment.env \
+  -f /opt/libredash/compose.yaml \
+  config --quiet
+
+/usr/local/sbin/libredashctl start
+
+if [[ ! -e /etc/libredash/admin-initialized ]]; then
+  token="$(docker exec libredash libredash admin bootstrap)"
+  revoke_bootstrap() {
+    docker exec libredash libredash admin bootstrap >/dev/null 2>&1 || true
+  }
+  trap revoke_bootstrap EXIT
+
+  publish_expires_at="$(date -u -d '24 hours' +%Y-%m-%dT%H:%M:%SZ)"
+  publish_payload="$(jq -nc --arg expires "$publish_expires_at" '{
+    name:"initial-publisher",
+    expiresAt:$expires,
+    privileges:["USE_WORKSPACE","VIEW_ITEM","QUERY_DATA","REFRESH_DATA","DEPLOY","ACTIVATE_PUBLISH"]
+  }')"
+  publish_response="$(curl -fsS \
+    -X POST \
+    -H "Host: $DOMAIN" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    --data "$publish_payload" \
+    http://127.0.0.1:8080/api/v1/me/api-tokens)"
+
+  principal_payload="$(jq -nc --arg email "$ADMIN_EMAIL" '{email:$email, displayName:$email}')"
+  principal_response="$(curl -fsS \
+    -X POST \
+    -H "Host: $DOMAIN" \
+    -H "Authorization: Bearer $token" \
+    -H "Content-Type: application/json" \
+    --data "$principal_payload" \
+    http://127.0.0.1:8080/api/v1/principals)"
+
+  jq -n \
+    --argjson principal "$principal_response" \
+    --argjson publisher "$publish_response" \
+    '$principal + {
+      publishToken: $publisher.token,
+      publishTokenExpiresAt: $publisher.apiToken.expiresAt
+    }' >/etc/libredash/initial-local-user.json
+
+  revoke_bootstrap
+  trap - EXIT
+  touch /etc/libredash/admin-initialized
+fi
+
+systemctl daemon-reload
+systemctl enable --now libredash-backup.timer

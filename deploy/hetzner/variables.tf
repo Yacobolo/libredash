@@ -1,0 +1,93 @@
+variable "hcloud_token" {
+  description = "Hetzner Cloud API token. Prefer HCLOUD_TOKEN or TF_VAR_hcloud_token from your shell instead of a tfvars file."
+  type        = string
+  sensitive   = true
+  nullable    = true
+  default     = null
+}
+
+variable "name" {
+  description = "Name prefix for Hetzner resources."
+  type        = string
+  default     = "libredash"
+}
+
+variable "server_type" {
+  description = "Hetzner server type. cpx22 is the supported baseline for a small LibreDash instance."
+  type        = string
+  default     = "cpx22"
+}
+
+variable "location" {
+  description = "Hetzner location for the server and reserved primary IPv4."
+  type        = string
+  default     = "fsn1"
+}
+
+variable "image" {
+  description = "Base operating-system image."
+  type        = string
+  default     = "ubuntu-24.04"
+}
+
+variable "ssh_allowed_cidrs" {
+  description = "Explicit CIDR ranges allowed to reach SSH. Use the operator's public address with a /32 suffix."
+  type        = list(string)
+
+  validation {
+    condition = length(var.ssh_allowed_cidrs) > 0 && alltrue([
+      for cidr in var.ssh_allowed_cidrs :
+      can(cidrhost(cidr, 0)) && cidr != "0.0.0.0/0" && cidr != "::/0"
+    ])
+    error_message = "ssh_allowed_cidrs must contain valid, restricted CIDRs; world-open SSH is not supported."
+  }
+}
+
+variable "ssh_key_ids" {
+  description = "Existing Hetzner SSH key names or IDs to attach to the server."
+  type        = list(string)
+  default     = []
+}
+
+variable "ssh_public_key_path" {
+  description = "Local SSH public key to upload as a Hetzner SSH key. Set to empty to disable."
+  type        = string
+  default     = "~/.ssh/id_ed25519.pub"
+}
+
+variable "domain" {
+  description = "Hostname for HTTPS. Leave empty to use a reserved-IP sslip.io hostname."
+  type        = string
+  default     = ""
+}
+
+variable "admin_email" {
+  description = "Initial platform admin and local-login email."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[^@[:space:]]+@[^@[:space:]]+$", var.admin_email))
+    error_message = "admin_email must be a valid email address."
+  }
+}
+
+variable "libredash_image" {
+  description = "Public LibreDash OCI image pinned to an immutable sha256 digest."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}$", var.libredash_image))
+    error_message = "libredash_image must be an immutable OCI reference ending in @sha256:<64 lowercase hex characters>."
+  }
+}
+
+variable "caddy_image" {
+  description = "Caddy OCI image pinned to an immutable sha256 digest."
+  type        = string
+  default     = "caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d"
+
+  validation {
+    condition     = can(regex("^[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}$", var.caddy_image))
+    error_message = "caddy_image must be an immutable OCI reference ending in @sha256:<64 lowercase hex characters>."
+  }
+}

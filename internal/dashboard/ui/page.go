@@ -63,10 +63,16 @@ const (
 type ChromeDecorator func(*uisignals.ChromeSignal)
 
 func inspectorScript() g.Node {
+	if staticasset.Production() {
+		return nil
+	}
 	return h.Script(h.Type("module"), h.Src(staticAsset("/static/datastar-inspector.js")))
 }
 
 func inspectorElement() g.Node {
+	if staticasset.Production() {
+		return nil
+	}
 	return g.El("datastar-inspector")
 }
 

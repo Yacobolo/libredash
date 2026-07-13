@@ -19,7 +19,17 @@ beforeAll(async () => {
       response.end(testDocument())
       return
     }
-    const fileRoot = url.pathname.startsWith('/static/vendor/') ? projectRoot : root
+    if (url.pathname === '/loader-test') {
+      response.setHeader('content-type', 'text/html')
+      response.end(loaderTestDocument())
+      return
+    }
+    if (url.pathname === '/fake-topology-background.js') {
+      response.setHeader('content-type', 'text/javascript')
+      response.end(`window.__loginBackgroundModuleLoaded = true`)
+      return
+    }
+    const fileRoot = url.pathname.startsWith('/static/vendor/') || url.pathname === '/static/login-background-loader.js' ? projectRoot : root
     const file = normalize(join(fileRoot, url.pathname))
     if (!file.startsWith(fileRoot)) {
       response.writeHead(404)
@@ -77,7 +87,7 @@ test('login page composes route UI', async () => {
     expect(state).toEqual({
       title: 'LibreDash',
       hasBackground: true,
-      backgroundRegistered: true,
+      backgroundRegistered: false,
       moduleSrc: '/static/topology-background.js?v=dev',
       hasThemeToggle: true,
       visibleThemeIcon: 'system',
@@ -86,6 +96,34 @@ test('login page composes route UI', async () => {
       panelCenteredY: true,
       hostHeight: 820,
       provider: 'Sign in with Azure Active Directory',
+    })
+  } finally {
+    await page.close()
+  }
+})
+
+test('login background loader imports shadow DOM background module during idle time', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 820 } })
+  try {
+    await page.goto(`${baseURL}/loader-test`)
+    await page.waitForFunction(() => {
+      const host = document.querySelector('ld-login-page')
+      const background = host?.shadowRoot?.querySelector('[data-login-background]')
+      return Boolean((window as any).__loginBackgroundModuleLoaded && background?.getAttribute('data-background-state') === 'loaded')
+    })
+
+    const state = await page.evaluate(() => {
+      const host = document.querySelector('ld-login-page')
+      const background = host?.shadowRoot?.querySelector('[data-login-background]')
+      return {
+        moduleLoaded: (window as any).__loginBackgroundModuleLoaded === true,
+        backgroundState: background?.getAttribute('data-background-state'),
+      }
+    })
+
+    expect(state).toEqual({
+      moduleLoaded: true,
+      backgroundState: 'loaded',
     })
   } finally {
     await page.close()
@@ -148,6 +186,25 @@ function testDocument(): string {
         </main>
         <script type="module" src="/static/vendor/datastar-1.0.2.js?v=dev"></script>
         <script type="module" src="/login-page-under-test.js"></script>
+      </body>
+    </html>
+  `
+}
+
+function loaderTestDocument(): string {
+  return `
+    <!doctype html>
+    <html>
+      <body>
+        <ld-login-page></ld-login-page>
+        <script>
+          customElements.define('ld-login-page', class extends HTMLElement {
+            connectedCallback() {
+              this.attachShadow({ mode: 'open' }).innerHTML = '<div data-login-background data-module-src="/fake-topology-background.js"></div>'
+            }
+          })
+        </script>
+        <script type="module" src="/static/login-background-loader.js"></script>
       </body>
     </html>
   `

@@ -15,6 +15,7 @@ import (
 	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
+	"github.com/Yacobolo/libredash/internal/configspec"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 )
 
@@ -120,7 +121,7 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 	if err := os.MkdirAll(layout.RootDir, 0o755); err != nil {
 		return nil, err
 	}
-	if os.Getenv("LIBREDASH_DUCKDB_PATH") == "" {
+	if os.Getenv(configspec.EnvLIBREDASH_DUCKDB_PATH) == "" {
 		if err := removeStaleDuckDBDatabases(config.DBDir); err != nil {
 			return nil, err
 		}

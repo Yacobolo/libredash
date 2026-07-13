@@ -105,9 +105,31 @@ tasks:
   generate:
     desc: Generate all checked-out derived code needed for local development
     cmds:
+      - task: config:generate
       - task: api:generate
       - task: ui-signals:generate
       - task: schema:generate
+
+  config:generate:
+    desc: Generate runtime configuration, reference documentation, example environment, and schema
+    method: checksum
+    sources:
+      - Taskfile.yml
+      - internal/configspec/spec.go
+      - internal/tools/configgen/main.go
+    generates:
+      - internal/config/config_gen.go
+      - internal/configspec/names_gen.go
+      - docs/configuration.md
+      - .env.example
+      - schemas/config/environment.schema.json
+    cmds:
+      - go run ./internal/tools/configgen
+
+  config:check:
+    desc: Verify generated configuration artifacts are current
+    cmds:
+      - go run ./internal/tools/configgen --check
 
   api:generate:
     desc: Generate headless API contract artifacts and APIGen Go surfaces
@@ -203,6 +225,16 @@ tasks:
       - test
     cmds:
       - task: qa:ui-framework
+      - task: deploy:check
+
+  deploy:check:
+    desc: Validate the supported single-node deployment and lifecycle contracts
+    cmds:
+      - go test ./deploy/hetzner
+      - terraform fmt -check -recursive deploy/hetzner
+      - terraform -chdir=deploy/hetzner init -backend=false -input=false
+      - terraform -chdir=deploy/hetzner validate
+      - terraform -chdir=deploy/hetzner test
 
   node:audit:
     desc: Scan JavaScript dependencies for known vulnerabilities

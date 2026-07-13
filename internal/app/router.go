@@ -194,13 +194,26 @@ func (s *Server) authLogout(w http.ResponseWriter, r *http.Request) {
 func staticAssetCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		version := staticasset.Version()
-		if version != "dev" && r.URL.Query().Get("v") == version {
+		switch {
+		case version != "dev" && r.URL.Query().Get("v") == version:
 			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		} else {
+		case immutableStaticPath(r.URL.Path):
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		case fontStaticPath(r.URL.Path):
+			w.Header().Set("Cache-Control", "public, max-age=86400")
+		default:
 			w.Header().Set("Cache-Control", "no-store")
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func immutableStaticPath(path string) bool {
+	return strings.HasPrefix(path, "/static/chunks/")
+}
+
+func fontStaticPath(path string) bool {
+	return strings.HasPrefix(path, "/static/files/") && strings.HasSuffix(path, ".woff2")
 }
 
 func favicon(w http.ResponseWriter, _ *http.Request) {

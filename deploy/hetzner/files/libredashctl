@@ -1,0 +1,366 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONFIG_DIR="${LIBREDASHCTL_CONFIG_DIR:-/etc/libredash}"
+DEPLOY_DIR="${LIBREDASHCTL_DEPLOY_DIR:-/opt/libredash}"
+STATE_DIR="${LIBREDASHCTL_STATE_DIR:-/var/lib/libredash}"
+BACKUP_DIR="${LIBREDASHCTL_BACKUP_DIR:-/var/backups/libredash}"
+DOCKER_BIN="${LIBREDASHCTL_DOCKER_BIN:-docker}"
+COMPOSE_FILE="${LIBREDASHCTL_COMPOSE_FILE:-$DEPLOY_DIR/compose.yaml}"
+DEPLOYMENT_ENV="$CONFIG_DIR/deployment.env"
+APP_ENV="$CONFIG_DIR/libredash.env"
+PREVIOUS_IMAGE_FILE="$CONFIG_DIR/previous-image"
+LOCK_FILE="${LIBREDASHCTL_LOCK_FILE:-/run/lock/libredashctl.lock}"
+HEALTH_ATTEMPTS="${LIBREDASHCTL_HEALTH_ATTEMPTS:-120}"
+
+fail() {
+  printf 'libredashctl: %s\n' "$*" >&2
+  exit 1
+}
+
+require_file() {
+  [[ -s "$1" ]] || fail "required file is missing or empty: $1"
+}
+
+compose() {
+  require_file "$DEPLOYMENT_ENV"
+  "$DOCKER_BIN" compose \
+    --project-directory "$DEPLOY_DIR" \
+    --env-file "$DEPLOYMENT_ENV" \
+    -f "$COMPOSE_FILE" \
+    "$@"
+}
+
+env_value() {
+  local key="$1"
+  require_file "$DEPLOYMENT_ENV"
+  awk -F= -v key="$key" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$DEPLOYMENT_ENV"
+}
+
+set_deployment_image() {
+  local image="$1"
+  local uid="$2"
+  local gid="$3"
+  local tmp
+  tmp="$(mktemp "$CONFIG_DIR/.deployment.env.XXXXXX")"
+  awk -F= -v image="$image" -v uid="$uid" -v gid="$gid" '
+    BEGIN { found_image = 0; found_uid = 0; found_gid = 0 }
+    $1 == "LIBREDASH_IMAGE" { print "LIBREDASH_IMAGE=" image; found_image = 1; next }
+    $1 == "LIBREDASH_UID" { print "LIBREDASH_UID=" uid; found_uid = 1; next }
+    $1 == "LIBREDASH_GID" { print "LIBREDASH_GID=" gid; found_gid = 1; next }
+    { print }
+    END {
+      if (!found_image) print "LIBREDASH_IMAGE=" image
+      if (!found_uid) print "LIBREDASH_UID=" uid
+      if (!found_gid) print "LIBREDASH_GID=" gid
+    }
+  ' "$DEPLOYMENT_ENV" >"$tmp"
+  chmod 0600 "$tmp"
+  mv "$tmp" "$DEPLOYMENT_ENV"
+}
+
+require_digest() {
+  local image="$1"
+  if [[ ! "$image" =~ ^[A-Za-z0-9._:/-]+@sha256:[0-9a-f]{64}$ ]]; then
+    fail "image must be pinned by digest: registry/name@sha256:<64 lowercase hex characters>"
+  fi
+}
+
+wait_healthy() {
+  local attempt status
+  for ((attempt = 1; attempt <= HEALTH_ATTEMPTS; attempt++)); do
+    status="$($DOCKER_BIN inspect --format '{{.State.Health.Status}}' libredash 2>/dev/null || true)"
+    if [[ "$status" == "healthy" ]]; then
+      return 0
+    fi
+    if [[ "$status" == "unhealthy" ]]; then
+      break
+    fi
+    sleep 2
+  done
+  "$DOCKER_BIN" logs --tail=100 libredash >&2 2>/dev/null || true
+  return 1
+}
+
+start() {
+  compose up -d
+  wait_healthy || fail "LibreDash did not become healthy"
+}
+
+status() {
+  compose ps
+  "$DOCKER_BIN" exec libredash libredash healthcheck
+}
+
+logs() {
+  compose logs "${@:-libredash}"
+}
+
+first_login() {
+  local credentials="$CONFIG_DIR/initial-local-user.json"
+  require_file "$credentials"
+  local contents
+  contents="$(cat "$credentials")"
+  if command -v shred >/dev/null 2>&1; then
+    shred --remove "$credentials"
+  else
+    rm -f "$credentials"
+  fi
+  printf '%s\n' "$contents"
+}
+
+lock_operations() {
+  install -d -m 0755 "$(dirname "$LOCK_FILE")"
+  exec 9>"$LOCK_FILE"
+  flock -n 9 || fail "another LibreDash operation is already running"
+}
+
+container_running() {
+  [[ "$($DOCKER_BIN inspect --format '{{.State.Running}}' libredash 2>/dev/null || true)" == "true" ]]
+}
+
+restart_after_operation() {
+  local was_running="$1"
+  if [[ "$was_running" == "true" ]]; then
+    compose up -d --no-deps libredash >&2
+    wait_healthy || fail "LibreDash did not recover after the operation"
+  fi
+}
+
+prune_backups() {
+  local keep="${LIBREDASHCTL_BACKUP_RETENTION:-7}"
+  find "$BACKUP_DIR" -maxdepth 1 -type f -name 'libredash-*.tar.gz' -print \
+    | sort -r \
+    | awk -v keep="$keep" 'NR > keep' \
+    | while IFS= read -r archive; do
+        rm -f "$archive" "${archive}.sha256"
+      done
+}
+
+replicate_backup() {
+  local archive="$1"
+  local restic_env="$CONFIG_DIR/restic.env"
+  [[ -s "$restic_env" ]] || return 0
+  command -v restic >/dev/null 2>&1 || fail "restic.env is configured but restic is unavailable"
+
+  set -a
+  # shellcheck disable=SC1090
+  source "$restic_env"
+  set +a
+  if ! restic snapshots >/dev/null 2>&1; then
+    restic init
+  fi
+  restic backup "$archive" "${archive}.sha256" --tag libredash
+  restic forget --tag libredash --keep-daily 7 --keep-weekly 4 --keep-monthly 12 --prune
+}
+
+backup() {
+  lock_operations
+  require_file "$DEPLOYMENT_ENV"
+  [[ -d "$STATE_DIR" ]] || fail "state directory does not exist: $STATE_DIR"
+  install -d -m 0700 "$BACKUP_DIR"
+
+  local archive="${1:-$BACKUP_DIR/libredash-$(date -u +%Y%m%dT%H%M%SZ).tar.gz}"
+  local tmp="${archive}.partial"
+  local was_running=false
+  resume_after_backup() {
+    local should_restart="$was_running"
+    was_running=false
+    restart_after_operation "$should_restart"
+  }
+  if container_running; then
+    was_running=true
+    compose stop -t 120 libredash >&2
+    trap resume_after_backup EXIT
+    trap 'resume_after_backup; exit 130' INT TERM
+  fi
+
+  if ! tar --numeric-owner -C "$STATE_DIR" -czf "$tmp" .; then
+    rm -f "$tmp"
+    fail "backup archive creation failed"
+  fi
+  mv "$tmp" "$archive"
+  sha256sum "$archive" | awk '{print $1}' >"${archive}.sha256"
+  chmod 0600 "$archive" "${archive}.sha256"
+
+  resume_after_backup
+  trap - EXIT INT TERM
+  replicate_backup "$archive"
+  prune_backups
+  printf '%s\n' "$archive"
+}
+
+validate_archive_paths() {
+  local archive="$1"
+  local entry
+  while IFS= read -r entry; do
+    case "$entry" in
+      /* | ../* | */../* | */..)
+        fail "backup contains an unsafe path: $entry"
+        ;;
+    esac
+  done < <(tar -tzf "$archive")
+}
+
+rollback_restored_state() {
+  local previous="$1"
+  local staged="$2"
+  local was_running="$3"
+  if [[ -d "$previous" ]]; then
+    compose stop -t 30 libredash >/dev/null 2>&1 || true
+    rm -rf "$STATE_DIR"
+    mv "$previous" "$STATE_DIR"
+  fi
+  rm -rf "$staged"
+  restart_after_operation "$was_running" || true
+}
+
+restore() {
+  local archive="${1:-}"
+  [[ -n "$archive" ]] || fail "restore requires a backup archive"
+  [[ -f "$archive" ]] || fail "backup archive does not exist: $archive"
+  lock_operations
+
+  if [[ -f "${archive}.sha256" ]]; then
+    local expected actual
+    expected="$(tr -d '[:space:]' <"${archive}.sha256")"
+    actual="$(sha256sum "$archive" | awk '{print $1}')"
+    [[ "$actual" == "$expected" ]] || fail "backup checksum verification failed"
+  fi
+  validate_archive_paths "$archive"
+
+  local previous
+  previous="${STATE_DIR}.restore-$(date -u +%Y%m%dT%H%M%SZ)"
+  local staged="${STATE_DIR}.restore-staged"
+  local uid gid
+  uid="$(env_value LIBREDASH_UID)"
+  gid="$(env_value LIBREDASH_GID)"
+  [[ -n "$uid" && -n "$gid" ]] || fail "deployment UID/GID metadata is missing"
+
+  rm -rf "$staged"
+  install -d -m 0700 "$staged"
+  if ! tar --numeric-owner -C "$staged" -xzf "$archive"; then
+    rm -rf "$staged"
+    fail "backup extraction failed"
+  fi
+  if ! chown -R "$uid:$gid" "$staged"; then
+    rm -rf "$staged"
+    fail "restored state ownership could not be applied"
+  fi
+
+  local was_running=false
+  if container_running; then
+    was_running=true
+    compose stop -t 120 libredash
+  fi
+  trap 'rollback_restored_state "$previous" "$staged" "$was_running"' EXIT
+  trap 'rollback_restored_state "$previous" "$staged" "$was_running"; exit 130' INT TERM
+
+  mv "$STATE_DIR" "$previous"
+  if ! mv "$staged" "$STATE_DIR"; then
+    mv "$previous" "$STATE_DIR"
+    fail "staged restore could not replace the current state"
+  fi
+
+  if [[ "$was_running" == "true" ]]; then
+    compose up -d --no-deps libredash
+    if ! wait_healthy; then
+      fail "restored state failed health checks; the previous state was reinstated"
+    fi
+  fi
+  rm -rf "$previous"
+  trap - EXIT INT TERM
+  printf 'restored %s\n' "$archive"
+}
+
+upgrade() {
+  local image="${1:-}"
+  [[ -n "$image" ]] || fail "upgrade requires an image digest"
+  require_digest "$image"
+  require_file "$DEPLOYMENT_ENV"
+  require_file "$APP_ENV"
+  lock_operations
+
+  local current current_uid current_gid
+  current="$(env_value LIBREDASH_IMAGE)"
+  current_uid="$(env_value LIBREDASH_UID)"
+  current_gid="$(env_value LIBREDASH_GID)"
+  require_digest "$current"
+  [[ -n "$current_uid" && -n "$current_gid" ]] || fail "deployment UID/GID metadata is missing"
+  if [[ "$current" == "$image" ]]; then
+    printf 'already running %s\n' "$image"
+    return 0
+  fi
+
+  "$DOCKER_BIN" pull "$image"
+  "$DOCKER_BIN" run --rm --env-file "$APP_ENV" "$image" config validate --production
+
+  local uid gid
+  uid="$($DOCKER_BIN run --rm --entrypoint sh "$image" -c 'id -u libredash')"
+  gid="$($DOCKER_BIN run --rm --entrypoint sh "$image" -c 'id -g libredash')"
+
+  printf '%s\n' "$current" >"$PREVIOUS_IMAGE_FILE"
+  chmod 0600 "$PREVIOUS_IMAGE_FILE"
+
+  local upgrade_pending=true
+  restore_previous_image() {
+    [[ "$upgrade_pending" == "true" ]] || return 0
+    upgrade_pending=false
+    compose stop -t 30 libredash >/dev/null 2>&1 || true
+    chown -R "$current_uid:$current_gid" "$STATE_DIR" || true
+    set_deployment_image "$current" "$current_uid" "$current_gid"
+    compose up -d --no-deps libredash >&2
+    wait_healthy || true
+  }
+  trap restore_previous_image EXIT
+  trap 'restore_previous_image; exit 130' INT TERM
+
+  compose stop -t 120 libredash >&2
+  chown -R "$uid:$gid" "$STATE_DIR"
+  set_deployment_image "$image" "$uid" "$gid"
+
+  compose up -d --no-deps libredash >&2
+  if ! wait_healthy; then
+    fail "upgrade failed health checks; rolled back to $current"
+  fi
+  upgrade_pending=false
+  trap - EXIT INT TERM
+  printf 'upgraded to %s\n' "$image"
+}
+
+rollback() {
+  require_file "$PREVIOUS_IMAGE_FILE"
+  upgrade "$(tr -d '[:space:]' <"$PREVIOUS_IMAGE_FILE")"
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: libredashctl <command> [arguments]
+
+Commands:
+  first-login             Print and remove the initial temporary credentials
+  status                  Show containers and run the application healthcheck
+  logs [service]          Show Compose logs (default: libredash)
+  backup [archive]        Create a consistent state archive and checksum
+  restore <archive>       Restore an archive, rolling back on failed healthchecks
+  upgrade <image-digest>  Upgrade to an immutable image and roll back on failure
+  rollback                Switch back to the image used before the last upgrade
+USAGE
+}
+
+command="${1:-}"
+if [[ $# -gt 0 ]]; then
+  shift
+fi
+case "$command" in
+  start) start "$@" ;;
+  first-login) first_login "$@" ;;
+  status) status "$@" ;;
+  logs) logs "$@" ;;
+  backup) backup "$@" ;;
+  restore) restore "$@" ;;
+  upgrade) upgrade "$@" ;;
+  rollback) rollback "$@" ;;
+  -h | --help | help | "") usage ;;
+  *) usage >&2; fail "unknown command: $command" ;;
+esac

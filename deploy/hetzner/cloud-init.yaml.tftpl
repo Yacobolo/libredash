@@ -1,0 +1,48 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+package_reboot_if_required: true
+packages:
+  - ca-certificates
+  - curl
+  - docker.io
+  - docker-compose-v2
+  - jq
+  - openssl
+  - restic
+  - unattended-upgrades
+
+write_files:
+  - path: /opt/libredash/compose.yaml
+    owner: root:root
+    permissions: "0600"
+    encoding: b64
+    content: ${compose_b64}
+  - path: /etc/libredash/Caddyfile
+    owner: root:root
+    permissions: "0600"
+    encoding: b64
+    content: ${caddyfile_b64}
+  - path: /usr/local/sbin/libredashctl
+    owner: root:root
+    permissions: "0700"
+    encoding: b64
+    content: ${libredashctl_b64}
+  - path: /etc/systemd/system/libredash-backup.service
+    owner: root:root
+    permissions: "0644"
+    encoding: b64
+    content: ${backup_service_b64}
+  - path: /etc/systemd/system/libredash-backup.timer
+    owner: root:root
+    permissions: "0644"
+    encoding: b64
+    content: ${backup_timer_b64}
+  - path: /opt/libredash/provision.sh
+    owner: root:root
+    permissions: "0700"
+    encoding: b64
+    content: ${provision_b64}
+
+runcmd:
+  - [bash, /opt/libredash/provision.sh]

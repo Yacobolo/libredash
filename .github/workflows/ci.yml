@@ -22,16 +22,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.7
 
@@ -43,6 +43,9 @@ jobs:
       - name: Install JavaScript dependencies
         run: bun install --frozen-lockfile
 
+      - name: Check generated configuration
+        run: task config:check
+
       - name: Generate checked build inputs
         run: task generate
 
@@ -50,7 +53,7 @@ jobs:
         run: task build
 
       - name: Upload generated assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: generated-assets
           retention-days: 1
@@ -72,16 +75,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Download generated assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: generated-assets
           path: .
@@ -90,17 +93,53 @@ jobs:
         run: go test ./...
 
   frontend-tests:
-    name: Frontend tests
+    name: Frontend tests (${{ matrix.name }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 20
     needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: core
+            tests: |
+              bun run test:primer-primitives
+              bun run test:primer-alignment
+              bun run test:theme
+              bun run test:datastar-lit
+              bun run test:app-shell
+          - name: reports
+            tests: |
+              bun run test:table-selection
+              bun run test:record-table
+              bun run test:visual-modal
+              bun run test:catalog-page
+              bun run test:dashboard-page
+              bun run test:windowed-table
+              bun run test:filter-menu
+          - name: chat
+            tests: |
+              bun run test:chat-composer
+              bun run test:chat-page
+              bun run test:chat-thread
+              bun run test:code-block
+              bun run test:markdown-view
+          - name: workspace
+            tests: |
+              bun run test:workspace-page
+              bun run test:data-explorer
+              bun run test:admin-page
+              bun run test:code-editor
+              bun run test:login-page
+              bun run test:asset-lineage
+              bun run test:semantic-model-graph
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.7
 
@@ -111,37 +150,13 @@ jobs:
         run: bunx playwright install --with-deps chromium
 
       - name: Download generated assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: generated-assets
           path: .
 
       - name: Run frontend tests
-        run: |
-          bun run test:primer-primitives
-          bun run test:primer-alignment
-          bun run test:theme
-          bun run test:datastar-lit
-          bun run test:app-shell
-          bun run test:table-selection
-          bun run test:record-table
-          bun run test:visual-modal
-          bun run test:catalog-page
-          bun run test:dashboard-page
-          bun run test:chat-composer
-          bun run test:chat-page
-          bun run test:chat-thread
-          bun run test:code-block
-          bun run test:workspace-page
-          bun run test:data-explorer
-          bun run test:windowed-table
-          bun run test:filter-menu
-          bun run test:admin-page
-          bun run test:code-editor
-          bun run test:markdown-view
-          bun run test:login-page
-          bun run test:asset-lineage
-          bun run test:semantic-model-graph
+        run: ${{ matrix.tests }}
 
   ui-route-qa:
     name: UI route QA
@@ -151,16 +166,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.7
 
@@ -175,7 +190,7 @@ jobs:
           bunx playwright install --with-deps chromium
 
       - name: Download generated assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: generated-assets
           path: .
@@ -191,10 +206,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.7
 
@@ -212,16 +227,16 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
           cache: true
 
       - name: Download generated assets
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: generated-assets
           path: .
@@ -237,10 +252,107 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Build production image
         run: docker build --pull --tag libredash:ci .
 
       - name: Smoke test production image
         run: ./scripts/smoke_production_image.sh libredash:ci
+
+  deployment-contracts:
+    name: Deployment contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - name: Test deployment lifecycle
+        run: go test ./deploy/hetzner
+
+      - name: Lint workflow definitions
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+
+      - name: Lint deployment scripts
+        run: >-
+          docker run --rm -v "$PWD:/mnt:ro"
+          koalaman/shellcheck:stable@sha256:bb596a0d169b85ddd81d8b6d3a2ff6d5baf5fca10b97f575ebc647c3dff62b3d
+          deploy/hetzner/files/libredashctl
+          deploy/hetzner/files/provision.sh.tftpl
+
+      - name: Initialize Terraform providers
+        working-directory: deploy/hetzner
+        run: terraform init -backend=false -input=false
+
+      - name: Validate Terraform contracts
+        working-directory: deploy/hetzner
+        run: |
+          terraform fmt -check -recursive
+          terraform validate
+          terraform test
+
+  candidate-image:
+    name: Publish candidate image
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    needs: prepare
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish candidate
+        id: publish
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ghcr.io/yacobolo/libredash:candidate-${{ github.sha }}
+          build-args: |
+            BUILD_VERSION=candidate-${{ github.sha }}
+            BUILD_REVISION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          sbom: true
+          provenance: mode=max
+
+      - name: Attest candidate provenance
+        uses: actions/attest@f6bf1532d7d6793fce74eac584813a8eee607999 # v4
+        with:
+          subject-name: ghcr.io/yacobolo/libredash
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+
+      - name: Record immutable candidate reference
+        run: echo 'ghcr.io/yacobolo/libredash@${{ steps.publish.outputs.digest }}' >> "$GITHUB_STEP_SUMMARY"

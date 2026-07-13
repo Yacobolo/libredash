@@ -1,0 +1,11 @@
+[Unit]
+Description=Create daily LibreDash backups
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=2h
+Persistent=true
+Unit=libredash-backup.service
+
+[Install]
+WantedBy=timers.target

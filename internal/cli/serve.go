@@ -20,6 +20,7 @@ import (
 	materializesqlite "github.com/Yacobolo/libredash/internal/analytics/materialize/sqlite"
 	"github.com/Yacobolo/libredash/internal/app"
 	"github.com/Yacobolo/libredash/internal/config"
+	"github.com/Yacobolo/libredash/internal/execution"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
 	"github.com/Yacobolo/libredash/internal/securefs"
@@ -42,11 +43,10 @@ func serveCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 			return runServe(ctx, opts)
 		},
 	}
-	cfg := config.MustLoad()
-	cmd.Flags().StringVar(&opts.addr, "addr", cfg.ListenAddr(), "listen address")
-	cmd.Flags().StringVar(&opts.dataDir, "data-dir", cfg.DataDir, "dashboard source data directory")
+	cmd.Flags().StringVar(&opts.addr, "addr", "", "listen address; defaults to the configured address")
+	cmd.Flags().StringVar(&opts.dataDir, "data-dir", "", "dashboard source data directory; defaults to the configured data directory")
 	cmd.Flags().StringVar(&opts.environment, "environment", "", "serving environment; defaults to prod in production and dev otherwise")
-	cmd.Flags().BoolVar(&opts.production, "production", cfg.Production, "serve active serving state from the platform DB")
+	cmd.Flags().BoolVar(&opts.production, "production", false, "serve active serving state from the platform DB")
 	return cmd
 }
 
@@ -65,10 +65,8 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	if dataDir == "" {
 		dataDir = cfg.DataDir
 	}
-	if production {
-		if err := cfg.ValidateProductionAuth(); err != nil {
-			return err
-		}
+	if err := cfg.Validate(config.ProfileServe); err != nil {
+		return err
 	}
 	environment := serveEnvironment(production, opts.environment)
 	server, cleanup, err := servingStateBackedServer(ctx, cfg, dataDir, production, environment)
@@ -322,6 +320,8 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 		SCIMBearerToken:     cfg.SCIMBearerToken,
 		MetricsBearerToken:  cfg.MetricsBearerToken,
 		AllowedHosts:        allowedHosts,
+		Executor:            execution.New(cfg.ExecutionConfig()),
+		JobLeaseTimeout:     cfg.ExecJobLeaseTimeout,
 	})
 	return server, cleanupWithRegistry, nil
 }

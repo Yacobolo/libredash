@@ -11,6 +11,7 @@ import (
 	"time"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	"github.com/Yacobolo/libredash/internal/configspec"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -76,7 +77,7 @@ type modelRuntime struct {
 }
 
 func New(dataDir string, factory DataRuntimeFactory) (*Service, error) {
-	catalogPath := os.Getenv("LIBREDASH_CATALOG_PATH")
+	catalogPath := os.Getenv(configspec.EnvLIBREDASH_CATALOG_PATH)
 	if catalogPath == "" {
 		var err error
 		catalogPath, err = discoverCatalogPath()
@@ -85,7 +86,7 @@ func New(dataDir string, factory DataRuntimeFactory) (*Service, error) {
 		}
 	}
 	duckDBDir := dataDir
-	if path := os.Getenv("LIBREDASH_DUCKDB_DIR"); path != "" {
+	if path := os.Getenv(configspec.EnvLIBREDASH_DUCKDB_DIR); path != "" {
 		duckDBDir = path
 	}
 	services, err := NewFromProject(dataDir, catalogPath, duckDBDir, factory)

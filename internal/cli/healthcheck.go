@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Yacobolo/libredash/internal/configspec"
 	"github.com/spf13/cobra"
 )
 
@@ -61,10 +62,10 @@ func healthcheckURL(opts *rootOptions) string {
 			return url
 		}
 	}
-	if url := strings.TrimSpace(os.Getenv("LIBREDASH_HEALTHCHECK_URL")); url != "" {
+	if url := strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_HEALTHCHECK_URL)); url != "" {
 		return url
 	}
-	if url := healthcheckURLForListenAddr(firstNonEmptyEnv("LIBREDASH_ADDR", "ADDR", "PORT")); url != "" {
+	if url := healthcheckURLForListenAddr(firstNonEmptyEnv(configspec.EnvLIBREDASH_ADDR, configspec.EnvADDR, configspec.EnvPORT)); url != "" {
 		return url
 	}
 	return defaultHealthcheckURL

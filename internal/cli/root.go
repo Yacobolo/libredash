@@ -59,6 +59,7 @@ func Execute(ctx context.Context) error {
 	root.AddCommand(validateCommand(ctx, opts))
 	root.AddCommand(planCommand(ctx, opts))
 	root.AddCommand(schemaCommand(opts))
+	root.AddCommand(configCommand())
 	root.AddCommand(apiCommand(ctx, opts))
 	root.AddCommand(agentCommand(ctx, opts))
 	root.AddCommand(searchCommand(ctx, opts))

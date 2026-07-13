@@ -54,27 +54,6 @@ type namedWorkspaceMetrics struct {
 	title       string
 }
 
-func TestExecutionConfigFromEnvIncludesReadExecutionTimeout(t *testing.T) {
-	t.Setenv("LIBREDASH_EXEC_MAX_RUNNING_READS", "7")
-	t.Setenv("LIBREDASH_EXEC_MAX_QUEUED_READS", "9")
-	t.Setenv("LIBREDASH_EXEC_READ_QUEUE_TIMEOUT", "11s")
-	t.Setenv("LIBREDASH_EXEC_READ_TIMEOUT", "13s")
-
-	config := executionConfigFromEnv()
-	if config.MaxRunningReads != 7 {
-		t.Fatalf("MaxRunningReads = %d, want 7", config.MaxRunningReads)
-	}
-	if config.MaxQueuedReads != 9 {
-		t.Fatalf("MaxQueuedReads = %d, want 9", config.MaxQueuedReads)
-	}
-	if config.ReadQueueWait != 11*time.Second {
-		t.Fatalf("ReadQueueWait = %s, want 11s", config.ReadQueueWait)
-	}
-	if config.ReadExecutionTimeout != 13*time.Second {
-		t.Fatalf("ReadExecutionTimeout = %s, want 13s", config.ReadExecutionTimeout)
-	}
-}
-
 func (m namedWorkspaceMetrics) Catalog() dashboard.Catalog {
 	return dashboard.Catalog{
 		Workspace: dashboard.CatalogWorkspace{ID: m.workspaceID, Title: m.workspaceID},
@@ -477,7 +456,8 @@ func TestPageRouteSeedsOperationsPageFiltersFromURL(t *testing.T) {
 	}
 }
 
-func TestHTMLRoutesIncludeSelfHostedDatastarRuntime(t *testing.T) {
+func TestHTMLRoutesIncludeSelfHostedDatastarRuntimeAndDevInspector(t *testing.T) {
+	t.Setenv("LIBREDASH_PRODUCTION", "")
 	for _, path := range []string{
 		"/login",
 		"/",
@@ -492,7 +472,42 @@ func TestHTMLRoutesIncludeSelfHostedDatastarRuntime(t *testing.T) {
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
 			}
-			assertDatastarRuntime(t, rec.Body.String())
+			assertDevDatastarRuntime(t, rec.Body.String())
+		})
+	}
+}
+
+func TestHTMLRoutesOmitDatastarInspectorInProduction(t *testing.T) {
+	t.Setenv("LIBREDASH_PRODUCTION", "1")
+	for _, path := range []string{
+		"/login",
+		"/",
+		"/workspaces/test-workspace/dashboards/executive-sales/pages/overview",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			rec := httptest.NewRecorder()
+
+			New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+			body := rec.Body.String()
+			if !strings.Contains(body, `/static/vendor/datastar-1.0.2.js?v=`) {
+				t.Fatalf("page missing self-hosted Datastar runtime:\n%s", body)
+			}
+			for _, notWant := range []string{
+				`/static/datastar-inspector.js`,
+				`<datastar-inspector`,
+			} {
+				if strings.Contains(body, notWant) {
+					t.Fatalf("production page included dev inspector marker %q:\n%s", notWant, body)
+				}
+			}
+			if strings.Contains(body, "cdn.jsdelivr.net") {
+				t.Fatalf("page references CDN-hosted Datastar runtime:\n%s", body)
+			}
 		})
 	}
 }
@@ -568,7 +583,56 @@ func TestStaticAssetsCacheOnlyCurrentVersionedURLs(t *testing.T) {
 	}
 }
 
-func assertDatastarRuntime(t *testing.T, body string) {
+func TestStaticAssetCacheHeaderClasses(t *testing.T) {
+	t.Setenv("LIBREDASH_PRODUCTION", "")
+	t.Setenv("LIBREDASH_ASSET_VERSION", "prod-build-123")
+	handler := staticAssetCache(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+
+	for _, tc := range []struct {
+		name string
+		path string
+		want string
+	}{
+		{
+			name: "current versioned asset",
+			path: "/static/app.css?v=prod-build-123",
+			want: "public, max-age=31536000, immutable",
+		},
+		{
+			name: "hashed chunk asset",
+			path: "/static/chunks/shared-app-shell-sv895r5c.js",
+			want: "public, max-age=31536000, immutable",
+		},
+		{
+			name: "font asset",
+			path: "/static/files/inter-latin-wght-normal.woff2",
+			want: "public, max-age=86400",
+		},
+		{
+			name: "unversioned entrypoint",
+			path: "/static/app-shell.js",
+			want: "no-store",
+		},
+		{
+			name: "stale versioned asset",
+			path: "/static/app.css?v=old-build",
+			want: "no-store",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if got := rec.Header().Get("Cache-Control"); got != tc.want {
+				t.Fatalf("Cache-Control = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func assertDevDatastarRuntime(t *testing.T, body string) {
 	t.Helper()
 	for _, want := range []string{
 		`/static/vendor/datastar-1.0.2.js?v=dev`,
@@ -684,6 +748,9 @@ func TestLoginRouteRendersAzureADLogin(t *testing.T) {
 	body := renderedWithBootstrap(t, server, rec.Body.String(), "")
 	if !strings.Contains(body, `<ld-login-page`) {
 		t.Fatalf("login page did not mount login route root:\n%s", body)
+	}
+	if !strings.Contains(body, `background-module-src="/static/topology-background.js`) {
+		t.Fatalf("login page did not seed versioned background module src on route root:\n%s", body)
 	}
 	if !strings.Contains(body, `Sign in with Azure Active Directory`) {
 		t.Fatalf("login page did not seed Azure AD provider label:\n%s", body)
