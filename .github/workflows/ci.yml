@@ -53,7 +53,7 @@ jobs:
         run: task build
 
       - name: Upload generated assets
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: generated-assets
           retention-days: 1
@@ -84,7 +84,7 @@ jobs:
           cache: true
 
       - name: Download generated assets
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           name: generated-assets
           path: .
@@ -150,7 +150,7 @@ jobs:
         run: bunx playwright install --with-deps chromium
 
       - name: Download generated assets
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           name: generated-assets
           path: .
@@ -190,7 +190,7 @@ jobs:
           bunx playwright install --with-deps chromium
 
       - name: Download generated assets
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           name: generated-assets
           path: .
@@ -236,7 +236,7 @@ jobs:
           cache: true
 
       - name: Download generated assets
-        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
           name: generated-assets
           path: .
