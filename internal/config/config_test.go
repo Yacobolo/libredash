@@ -1,6 +1,117 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Yacobolo/libredash/internal/configspec"
+)
+
+func TestLoadRejectsMalformedExecutionConfiguration(t *testing.T) {
+	t.Setenv("LIBREDASH_EXEC_MAX_RUNNING_READS", "many")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() accepted malformed execution concurrency")
+	} else if !strings.Contains(err.Error(), "LIBREDASH_EXEC_MAX_RUNNING_READS") {
+		t.Fatalf("Load() error does not name the environment variable: %v", err)
+	}
+
+	t.Setenv("LIBREDASH_EXEC_MAX_RUNNING_READS", "4")
+	t.Setenv("LIBREDASH_EXEC_READ_TIMEOUT", "eventually")
+	if _, err := Load(); err == nil {
+		t.Fatal("Load() accepted malformed execution timeout")
+	}
+}
+
+func TestLoadRejectsMalformedTypedValues(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		value string
+	}{
+		{name: "LIBREDASH_PRODUCTION", value: "sometimes"},
+		{name: "LIBREDASH_EXEC_MAX_QUEUED_WRITES", value: "several"},
+		{name: "LIBREDASH_EXEC_JOB_LEASE_TIMEOUT", value: "later"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv(test.name, test.value)
+			if _, err := Load(); err == nil {
+				t.Fatalf("Load() accepted %s=%q", test.name, test.value)
+			}
+		})
+	}
+}
+
+func TestListenAddressAliasPrecedence(t *testing.T) {
+	t.Setenv("LIBREDASH_ADDR", "127.0.0.1:9001")
+	t.Setenv("ADDR", "127.0.0.1:9002")
+	t.Setenv("PORT", "9003")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.ListenAddr(); got != "127.0.0.1:9001" {
+		t.Fatalf("ListenAddr() = %q", got)
+	}
+	cfg.Addr = ""
+	if got := cfg.ListenAddr(); got != "127.0.0.1:9002" {
+		t.Fatalf("ADDR compatibility alias = %q", got)
+	}
+	cfg.AddrFallback = ""
+	if got := cfg.ListenAddr(); got != ":9003" {
+		t.Fatalf("PORT compatibility alias = %q", got)
+	}
+}
+
+func TestGeneratedEnvironmentExampleValidates(t *testing.T) {
+	for _, setting := range configspec.Settings() {
+		if setting.Runtime {
+			t.Setenv(setting.Name, "")
+		}
+	}
+	body, err := os.ReadFile(filepath.Join("..", "..", ".env.example"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		name, value, ok := strings.Cut(line, "=")
+		if !ok {
+			t.Fatalf("invalid environment example line %q", line)
+		}
+		t.Setenv(name, value)
+	}
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load generated environment example: %v", err)
+	}
+	if err := cfg.Validate(ProfileServe); err != nil {
+		t.Fatalf("validate generated environment example: %v", err)
+	}
+}
+
+func TestLoadIncludesExecutionConfiguration(t *testing.T) {
+	t.Setenv("LIBREDASH_EXEC_MAX_RUNNING_READS", "7")
+	t.Setenv("LIBREDASH_EXEC_MAX_QUEUED_READS", "9")
+	t.Setenv("LIBREDASH_EXEC_READ_QUEUE_TIMEOUT", "11s")
+	t.Setenv("LIBREDASH_EXEC_READ_TIMEOUT", "13s")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	execution := cfg.ExecutionConfig()
+	if execution.MaxRunningReads != 7 || execution.MaxQueuedReads != 9 {
+		t.Fatalf("execution concurrency = %#v", execution)
+	}
+	if execution.ReadQueueWait != 11*time.Second || execution.ReadExecutionTimeout != 13*time.Second {
+		t.Fatalf("execution timeouts = %#v", execution)
+	}
+}
 
 func TestDuckLakeCatalogPathDefaultsOutsidePlatformDB(t *testing.T) {
 	cfg := Config{HomeDir: "/var/lib/libredash"}

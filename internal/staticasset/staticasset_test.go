@@ -40,3 +40,15 @@ func TestVersionUsesGeneratedFileInProduction(t *testing.T) {
 		t.Fatalf("URL = %q, want generated version", got)
 	}
 }
+
+func TestProductionParsesBooleanEnv(t *testing.T) {
+	t.Setenv("LIBREDASH_PRODUCTION", "true")
+	if !Production() {
+		t.Fatal("Production() = false, want true")
+	}
+
+	t.Setenv("LIBREDASH_PRODUCTION", "not-bool")
+	if Production() {
+		t.Fatal("Production() = true for invalid boolean, want false")
+	}
+}

@@ -47,6 +47,7 @@ spec:
         source: distinct
         limit: 10
       field: ratings.rating_bucket
+      fact: ratings
     title:
       type: text
       label: Title
@@ -54,7 +55,7 @@ spec:
       operator_url_param: title_op
       default_operator: contains
       operators: [contains, equals, starts_with, not_contains]
-      field: movies.title
+      field: movie_title
   visuals:
     rating_count:
       kind: kpi

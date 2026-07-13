@@ -28,7 +28,7 @@ type chatTurnCommandComposerSignal struct {
 	Value string `json:"value"`
 }
 
-type ChatTurnEmitter func(ui.ChatSignal) error
+type ChatTurnEmitter func(ui.ChatViewState) error
 
 type ChatTurnExecution struct {
 	EmitInitialRunning bool
@@ -125,7 +125,7 @@ func (h *Handler) ChatUpdates(w nethttp.ResponseWriter, r *nethttp.Request) {
 	_ = updates.Forward(r.Context(), h.options.Broker, chatStreamID(scope, chatClientID(r)))
 }
 
-func (h *Handler) renderChat(w nethttp.ResponseWriter, r *nethttp.Request, view string, signal ui.ChatSignal) {
+func (h *Handler) renderChat(w nethttp.ResponseWriter, r *nethttp.Request, view string, signal ui.ChatViewState) {
 	_ = pagestream.EnsureClientID(w, r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(nethttp.StatusOK)
@@ -165,7 +165,7 @@ func (h *Handler) completeDraftChatTurn(service *agent.Service, scope agent.Scop
 		EmitInitialRunning: true,
 		GenerateTitle:      true,
 		ClientID:           clientID,
-		Emit: func(signal ui.ChatSignal) error {
+		Emit: func(signal ui.ChatViewState) error {
 			if h.options.Broker != nil {
 				h.options.Broker.Publish(chatStreamID(scope, clientID), chatSignalPatch(signal))
 			}
@@ -199,13 +199,13 @@ func (h *Handler) runChatTurn(w nethttp.ResponseWriter, r *nethttp.Request, serv
 	}
 	_, _ = h.options.ExecuteStartedChatTurn(r.Context(), service, scope, started, ChatTurnExecution{
 		LiveConversations: h.chatConversations(r.Context(), scope),
-		Emit: func(signal ui.ChatSignal) error {
+		Emit: func(signal ui.ChatViewState) error {
 			return updates.Patch(chatSignalPatch(signal))
 		},
 	})
 }
 
-func (h *Handler) chatBootstrapSignal(r *nethttp.Request, scope agent.Scope) (ui.ChatSignal, string) {
+func (h *Handler) chatBootstrapSignal(r *nethttp.Request, scope agent.Scope) (ui.ChatViewState, string) {
 	view := strings.TrimSpace(r.URL.Query().Get("view"))
 	if view == "" {
 		view = "list"
@@ -246,23 +246,23 @@ func (h *Handler) chatScope(r *nethttp.Request) agent.Scope {
 	return agent.Scope{WorkspaceID: h.chatDefaultWorkspaceID(), PrincipalID: principalID, DevAuthBypass: devBypass}
 }
 
-func (h *Handler) chatSignal(ctx context.Context, scope agent.Scope, activeID, statusErr string, running bool) ui.ChatSignal {
+func (h *Handler) chatSignal(ctx context.Context, scope agent.Scope, activeID, statusErr string, running bool) ui.ChatViewState {
 	if h.options.ChatSignal != nil {
 		return h.options.ChatSignal(ctx, scope, activeID, statusErr, running)
 	}
-	return ui.ChatSignal{}
+	return ui.ChatViewState{}
 }
 
-func (h *Handler) chatSignalWith(ctx context.Context, scope agent.Scope, activeID string, transcript []agent.ChatTranscriptItem, artifacts agent.ChatArtifactSignals, statusErr string, running bool) ui.ChatSignal {
+func (h *Handler) chatSignalWith(ctx context.Context, scope agent.Scope, activeID string, transcript []agent.ChatTranscriptItem, artifacts agent.ChatArtifactSignals, statusErr string, running bool) ui.ChatViewState {
 	if h.options.ChatSignalWith != nil {
 		return h.options.ChatSignalWith(ctx, scope, activeID, transcript, artifacts, statusErr, running)
 	}
-	return ui.ChatSignal{}
+	return ui.ChatViewState{}
 }
 
 func (h *Handler) chatConversations(ctx context.Context, scope agent.Scope) []ui.ChatConversationSummary {
 	signal := h.chatSignal(ctx, scope, "", "", false)
-	return signal.Conversations
+	return signal.Agent.Conversations
 }
 
 func (h *Handler) catalogForWorkspace(workspaceID string) dashboard.Catalog {
@@ -303,9 +303,9 @@ func chatTurnStatusError(err error) string {
 	return err.Error()
 }
 
-func chatSignalPatch(signal ui.ChatSignal) pagestream.SignalPatch {
+func chatSignalPatch(signal ui.ChatViewState) pagestream.SignalPatch {
 	return pagestream.SignalPatch{
-		"agent":   signal,
+		"agent":   signal.Agent,
 		"visuals": signal.Visuals,
 		"tables":  signal.Tables,
 	}

@@ -43,9 +43,12 @@ type AdminAgentData struct {
 }
 
 type AdminAgentTool struct {
-	Name        string
-	Description string
-	InputSchema map[string]any
+	Name         string
+	Description  string
+	Effect       string
+	Defaults     map[string]any
+	InputSchema  map[string]any
+	OutputSchema map[string]any
 }
 
 type AdminPrincipal struct {
@@ -211,7 +214,7 @@ func AdminBootstrapSignals(catalog dashboard.Catalog, active, roleLabel string, 
 		queryHistory := AdminQueryHistorySignalFromData(data.QueryHistory)
 		signals["adminQueryHistory"] = queryHistory
 		signals["adminQueryDetail"] = uisignals.AdminQueryDetailSignal{}
-		signals["adminQueryHistoryCommand"] = uisignals.AdminQueryHistoryCommand{Action: "load_more", Filters: queryHistory.Filters, PageToken: queryHistory.NextCursor, Limit: queryHistory.Limit}
+		signals["adminQueryHistoryCommand"] = uisignals.AdminQueryHistoryCommand{Action: "load_more", Filters: queryHistory.Filters, PageToken: uisignals.Optional(queryHistory.NextCursor), Limit: uisignals.Pointer(queryHistory.Limit)}
 	}
 	return signals
 }
@@ -227,72 +230,72 @@ func adminPageSignal(active string, data AdminData) uisignals.AdminPageSignal {
 	case "principals":
 		page.HeaderTitle = "Principals"
 		page.HeaderDetail = "Users and service principals known to LibreDash."
-		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Principals", Table: adminPrincipalsGrid(data.Principals)}}
+		page.Sections = uisignals.OptionalSlice([]uisignals.AdminContentSectionSignal{{Title: "Principals", Table: uisignals.Pointer(adminPrincipalsGrid(data.Principals))}})
 	case "principal-detail":
 		page.HeaderTitle = "Principals"
 		page.HeaderDetail = "Read-only principal access."
 		if data.SelectedPrincipal == nil {
-			page.Empty = "Principal not found."
+			page.Empty = uisignals.Pointer("Principal not found.")
 			return page
 		}
 		principal := *data.SelectedPrincipal
 		name := adminDisplayLabel(principal.DisplayName, principal.Email, principal.ID)
 		page.HeaderTitle = "Principals / " + name
 		page.HeaderDetail = "Read-only principal identity and group memberships."
-		page.Metrics = []uisignals.AdminMetricSignal{
+		page.Metrics = uisignals.OptionalSlice([]uisignals.AdminMetricSignal{
 			{Label: "Email", Value: principal.Email},
 			{Label: "Principal ID", Value: principal.ID},
 			{Label: "Direct roles", Value: strings.Join(principal.DirectRoles, ", ")},
 			{Label: "Group count", Value: fmt.Sprint(len(principal.Groups))},
 			{Label: "Created", Value: principal.CreatedAt},
 			{Label: "Updated", Value: principal.UpdatedAt},
-		}
-		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Groups", Table: adminPrincipalGroupsGrid(principal, data.Groups)}}
+		})
+		page.Sections = uisignals.OptionalSlice([]uisignals.AdminContentSectionSignal{{Title: "Groups", Table: uisignals.Pointer(adminPrincipalGroupsGrid(principal, data.Groups))}})
 	case "groups":
 		page.HeaderTitle = "Groups"
 		page.HeaderDetail = "Workspace groups and their read-only membership summaries."
-		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Groups", Table: adminGroupsGrid(data.Groups)}}
+		page.Sections = uisignals.OptionalSlice([]uisignals.AdminContentSectionSignal{{Title: "Groups", Table: uisignals.Pointer(adminGroupsGrid(data.Groups))}})
 	case "group-detail":
 		page.HeaderTitle = "Groups"
 		page.HeaderDetail = "Read-only group membership."
 		if data.SelectedGroup == nil {
-			page.Empty = "Group not found."
+			page.Empty = uisignals.Pointer("Group not found.")
 			return page
 		}
 		group := *data.SelectedGroup
 		name := adminDisplayLabel(group.Name, group.ExternalID, group.ID)
 		page.HeaderTitle = "Groups / " + name
 		page.HeaderDetail = "Read-only group membership and role assignments."
-		page.Metrics = []uisignals.AdminMetricSignal{
+		page.Metrics = uisignals.OptionalSlice([]uisignals.AdminMetricSignal{
 			{Label: "Provider", Value: group.Provider},
 			{Label: "External ID", Value: group.ExternalID},
 			{Label: "Group ID", Value: group.ID},
 			{Label: "Roles", Value: strings.Join(group.Roles, ", ")},
 			{Label: "Member count", Value: fmt.Sprint(len(group.Members))},
-		}
-		page.Sections = []uisignals.AdminContentSectionSignal{{Title: "Members", Table: adminGroupMembersGrid(group, data.Principals)}}
+		})
+		page.Sections = uisignals.OptionalSlice([]uisignals.AdminContentSectionSignal{{Title: "Members", Table: uisignals.Pointer(adminGroupMembersGrid(group, data.Principals))}})
 	case "agent":
 		page.HeaderTitle = "Agent"
 		page.HeaderDetail = "Platform agent prompt and read-only tool inventory."
-		page.Agent = adminAgentSignal(data.Agent)
-		page.Metrics = []uisignals.AdminMetricSignal{
+		page.Agent = uisignals.Pointer(adminAgentSignal(data.Agent))
+		page.Metrics = uisignals.OptionalSlice([]uisignals.AdminMetricSignal{
 			{Label: "Status", Value: configuredLabel(data.Agent.Enabled)},
 			{Label: "Model", Value: data.Agent.Model},
 			{Label: "Tools", Value: fmt.Sprint(len(data.Agent.Tools))},
-		}
+		})
 	case "storage":
 		page.HeaderTitle = "Storage"
 		page.HeaderDetail = "Read-only DuckLake catalog and table metadata."
-		page.Storage = AdminStorageSignalFromData(data.Storage, AdminStorageCommand{})
+		page.Storage = uisignals.Pointer(AdminStorageSignalFromData(data.Storage, AdminStorageCommand{}))
 		if data.Storage.Status != "" {
-			page.Empty = data.Storage.Status
+			page.Empty = uisignals.Pointer(data.Storage.Status)
 		}
-		page.Metrics = []uisignals.AdminMetricSignal{
+		page.Metrics = uisignals.OptionalSlice([]uisignals.AdminMetricSignal{
 			{Label: "Catalog path", Value: data.Storage.CatalogPath},
 			{Label: "Data path", Value: data.Storage.DataPath},
 			{Label: "Snapshots", Value: fmt.Sprint(data.Storage.SnapshotCount)},
 			{Label: "Tables", Value: fmt.Sprint(data.Storage.TableCount)},
-		}
+		})
 	case "queries":
 		page.HeaderTitle = "Query History"
 		page.HeaderDetail = "Product query audit across dashboards, API, agents, and Data Explorer."
@@ -300,17 +303,17 @@ func adminPageSignal(active string, data AdminData) uisignals.AdminPageSignal {
 		page.HeaderTitle = "General"
 		page.HeaderDetail = "Read-only workspace administration."
 		if !data.AccessConfigured {
-			page.Empty = data.AccessStatusLabel
+			page.Empty = uisignals.Optional(data.AccessStatusLabel)
 		}
-		page.Metrics = []uisignals.AdminMetricSignal{
-			{Label: "Workspace", Value: data.Workspace.Title, Detail: data.Workspace.ID},
+		page.Metrics = uisignals.OptionalSlice([]uisignals.AdminMetricSignal{
+			{Label: "Workspace", Value: data.Workspace.Title, Detail: uisignals.Optional(data.Workspace.ID)},
 			{Label: "Auth", Value: configuredLabel(data.AuthConfigured)},
 			{Label: "Access", Value: data.AccessStatusLabel},
 			{Label: "Principals", Value: fmt.Sprint(data.PrincipalCount)},
 			{Label: "Groups", Value: fmt.Sprint(data.GroupCount)},
 			{Label: "Role bindings", Value: fmt.Sprint(data.BindingCount)},
 			{Label: "Roles", Value: fmt.Sprint(data.RoleCount)},
-		}
+		})
 	}
 	return page
 }
@@ -322,42 +325,42 @@ func AdminQueryHistorySignalFromData(data AdminQueryHistoryData) uisignals.Admin
 	}
 	return uisignals.AdminQueryHistorySignal{
 		Table:            adminQueryEventsGrid(data.Events),
-		FilterMenus:      data.FilterMenus,
+		FilterMenus:      uisignals.OptionalSlice(data.FilterMenus),
 		Filters:          data.Filters,
 		NextCursor:       data.NextCursor,
 		LoadedCountLabel: queryHistoryCountLabel(len(data.Events)),
 		HasMore:          data.HasMore,
 		Loading:          false,
 		Error:            data.Error,
-		Limit:            limit,
+		Limit:            int64(limit),
 	}
 }
 
 func AdminQueryDetailSignalFromEvent(event AdminQueryEvent) uisignals.AdminQueryDetailSignal {
 	return uisignals.AdminQueryDetailSignal{
-		EventID:       event.ID,
+		EventID:       uisignals.Optional(event.ID),
 		Loading:       false,
-		Error:         event.Error,
-		Status:        event.Status,
-		StatusLabel:   queryEventStatusLabel(event.Status),
-		WorkspaceID:   event.WorkspaceID,
-		PrincipalID:   event.PrincipalID,
-		Surface:       event.Surface,
-		Operation:     event.Operation,
-		QueryKind:     event.QueryKind,
-		ModelID:       event.ModelID,
-		Target:        event.Target,
-		ObjectType:    event.ObjectType,
-		ObjectID:      event.ObjectID,
-		RequestID:     event.RequestID,
-		CorrelationID: event.CorrelationID,
+		Error:         uisignals.Optional(event.Error),
+		Status:        uisignals.Optional(event.Status),
+		StatusLabel:   uisignals.Optional(queryEventStatusLabel(event.Status)),
+		WorkspaceID:   uisignals.Optional(event.WorkspaceID),
+		PrincipalID:   uisignals.Optional(event.PrincipalID),
+		Surface:       uisignals.Optional(event.Surface),
+		Operation:     uisignals.Optional(event.Operation),
+		QueryKind:     uisignals.Optional(event.QueryKind),
+		ModelID:       uisignals.Optional(event.ModelID),
+		Target:        uisignals.Optional(event.Target),
+		ObjectType:    uisignals.Optional(event.ObjectType),
+		ObjectID:      uisignals.Optional(event.ObjectID),
+		RequestID:     uisignals.Optional(event.RequestID),
+		CorrelationID: uisignals.Optional(event.CorrelationID),
 		DurationMS:    event.DurationMS,
-		RowsReturned:  event.RowsReturned,
-		QueryError:    event.Error,
-		SQL:           event.SQL,
-		PlanText:      event.PlanText,
-		QueryJSON:     event.QueryJSON,
-		CreatedAt:     event.CreatedAt,
+		RowsReturned:  int64(event.RowsReturned),
+		QueryError:    uisignals.Optional(event.Error),
+		SQL:           uisignals.Optional(event.SQL),
+		PlanText:      uisignals.Optional(event.PlanText),
+		QueryJSON:     uisignals.Optional(event.QueryJSON),
+		CreatedAt:     uisignals.Optional(event.CreatedAt),
 	}
 }
 
@@ -403,7 +406,7 @@ func adminQueryEventSignals(events []AdminQueryEvent) []uisignals.AdminQueryEven
 			CorrelationID: event.CorrelationID,
 			Status:        event.Status,
 			DurationMS:    event.DurationMS,
-			RowsReturned:  event.RowsReturned,
+			RowsReturned:  int64(event.RowsReturned),
 			Error:         event.Error,
 			SQL:           event.SQL,
 			PlanText:      event.PlanText,
@@ -443,14 +446,17 @@ func adminAgentSignal(data AdminAgentData) uisignals.AdminAgentSignal {
 	tools := make([]uisignals.AdminAgentToolSignal, 0, len(data.Tools))
 	for _, tool := range data.Tools {
 		tools = append(tools, uisignals.AdminAgentToolSignal{
-			Name:        tool.Name,
-			Description: tool.Description,
-			InputSchema: tool.InputSchema,
+			Name:         tool.Name,
+			Description:  tool.Description,
+			Effect:       tool.Effect,
+			Defaults:     tool.Defaults,
+			InputSchema:  tool.InputSchema,
+			OutputSchema: tool.OutputSchema,
 		})
 	}
 	return uisignals.AdminAgentSignal{
 		Enabled:      data.Enabled,
-		Model:        data.Model,
+		Model:        uisignals.Optional(data.Model),
 		SystemPrompt: data.SystemPrompt,
 		CanWrite:     data.CanWrite,
 		UpdatePath:   data.UpdatePath,
@@ -473,16 +479,16 @@ func adminPrincipalsGrid(principals []AdminPrincipal) recordTable {
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "name_href", Width: "150px"},
-			{ID: "email", Header: "Email", Width: "190px"},
-			{ID: "roles", Header: "Direct roles", Kind: "tags", Width: "135px"},
-			{ID: "group_count", Header: "Group count", Kind: "number", Align: "right", Width: "120px"},
-			{ID: "id", Header: "Principal ID", Kind: "code", Width: "190px"},
-			{ID: "updated_at", Header: "Updated", Width: "150px"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("name_href"), Width: uisignals.Pointer("150px")},
+			{ID: "email", Header: "Email", Width: uisignals.Pointer("190px")},
+			{ID: "roles", Header: "Direct roles", Kind: uisignals.Pointer("tags"), Width: uisignals.Pointer("135px")},
+			{ID: "group_count", Header: "Group count", Kind: uisignals.Pointer("number"), Align: uisignals.Pointer("right"), Width: uisignals.Pointer("120px")},
+			{ID: "id", Header: "Principal ID", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("190px")},
+			{ID: "updated_at", Header: "Updated", Width: uisignals.Pointer("150px")},
 		},
 		Rows:     rows,
 		Empty:    "No principals found.",
-		MinWidth: "935px",
+		MinWidth: uisignals.Pointer("935px"),
 	}
 }
 
@@ -505,15 +511,15 @@ func adminPrincipalGroupsGrid(principal AdminPrincipal, groups []AdminGroup) rec
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "name_href", Width: "180px"},
-			{ID: "provider", Header: "Provider", Width: "120px"},
-			{ID: "external_id", Header: "External ID", Kind: "code", Width: "180px"},
-			{ID: "roles", Header: "Roles", Kind: "tags", Width: "160px"},
-			{ID: "member_count", Header: "Member count", Kind: "number", Align: "right", Width: "130px"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("name_href"), Width: uisignals.Pointer("180px")},
+			{ID: "provider", Header: "Provider", Width: uisignals.Pointer("120px")},
+			{ID: "external_id", Header: "External ID", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("180px")},
+			{ID: "roles", Header: "Roles", Kind: uisignals.Pointer("tags"), Width: uisignals.Pointer("160px")},
+			{ID: "member_count", Header: "Member count", Kind: uisignals.Pointer("number"), Align: uisignals.Pointer("right"), Width: uisignals.Pointer("130px")},
 		},
 		Rows:     rows,
 		Empty:    "No groups found.",
-		MinWidth: "800px",
+		MinWidth: uisignals.Pointer("800px"),
 	}
 }
 
@@ -532,16 +538,16 @@ func adminGroupsGrid(groups []AdminGroup) recordTable {
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "name_href", Width: "180px"},
-			{ID: "provider", Header: "Provider", Width: "120px"},
-			{ID: "external_id", Header: "External ID", Kind: "code", Width: "180px"},
-			{ID: "roles", Header: "Roles", Kind: "tags", Width: "180px"},
-			{ID: "member_count", Header: "Member count", Kind: "number", Align: "right", Width: "130px"},
-			{ID: "id", Header: "Group ID", Kind: "code", Width: "220px"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("name_href"), Width: uisignals.Pointer("180px")},
+			{ID: "provider", Header: "Provider", Width: uisignals.Pointer("120px")},
+			{ID: "external_id", Header: "External ID", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("180px")},
+			{ID: "roles", Header: "Roles", Kind: uisignals.Pointer("tags"), Width: uisignals.Pointer("180px")},
+			{ID: "member_count", Header: "Member count", Kind: uisignals.Pointer("number"), Align: uisignals.Pointer("right"), Width: uisignals.Pointer("130px")},
+			{ID: "id", Header: "Group ID", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("220px")},
 		},
 		Rows:     rows,
 		Empty:    "No groups found.",
-		MinWidth: "1010px",
+		MinWidth: uisignals.Pointer("1010px"),
 	}
 }
 
@@ -563,15 +569,15 @@ func adminGroupMembersGrid(group AdminGroup, principals []AdminPrincipal) record
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Width: "150px"},
-			{ID: "email", Header: "Email", Width: "190px"},
-			{ID: "id", Header: "Principal ID", Kind: "code", Width: "180px"},
-			{ID: "direct_roles", Header: "Direct roles", Kind: "tags", Width: "130px"},
-			{ID: "updated_at", Header: "Updated", Width: "150px"},
+			{ID: "name", Header: "Name", Width: uisignals.Pointer("150px")},
+			{ID: "email", Header: "Email", Width: uisignals.Pointer("190px")},
+			{ID: "id", Header: "Principal ID", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("180px")},
+			{ID: "direct_roles", Header: "Direct roles", Kind: uisignals.Pointer("tags"), Width: uisignals.Pointer("130px")},
+			{ID: "updated_at", Header: "Updated", Width: uisignals.Pointer("150px")},
 		},
 		Rows:     rows,
 		Empty:    "No members found.",
-		MinWidth: "840px",
+		MinWidth: uisignals.Pointer("840px"),
 	}
 }
 
@@ -606,31 +612,31 @@ func adminQueryEventsGrid(events []AdminQueryEvent) recordTable {
 	falseValue := false
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "query", Header: "Query", Kind: "query", Width: "560px", Toggleable: &falseValue},
-			{ID: "started_at", Header: "Started", Width: "150px"},
-			{ID: "duration_ms", Header: "Duration", Kind: "number", Align: "right", Width: "105px"},
-			{ID: "source", Header: "Source type", Width: "120px"},
-			{ID: "runtime", Header: "Runtime", Kind: "code", Width: "130px"},
-			{ID: "principal_id", Header: "User", Kind: "code", Width: "150px"},
-			{ID: "rows_returned", Header: "Rows", Kind: "number", Align: "right", Width: "90px"},
-			{ID: "operation", Header: "Operation", Kind: "code", Width: "145px"},
-			{ID: "kind", Header: "Kind", Kind: "code", Width: "170px"},
-			{ID: "model", Header: "Model", Kind: "code", Width: "130px"},
-			{ID: "target", Header: "Target", Kind: "code", Width: "150px"},
-			{ID: "object", Header: "Object", Kind: "code", Width: "220px"},
-			{ID: "request_id", Header: "Request ID", Kind: "code", Width: "170px"},
-			{ID: "correlation_id", Header: "Correlation ID", Kind: "code", Width: "170px"},
-			{ID: "error", Header: "Error", Kind: "code", Width: "220px"},
+			{ID: "query", Header: "Query", Kind: uisignals.Pointer("query"), Width: uisignals.Pointer("560px"), Toggleable: &falseValue},
+			{ID: "started_at", Header: "Started", Width: uisignals.Pointer("150px")},
+			{ID: "duration_ms", Header: "Duration", Kind: uisignals.Pointer("number"), Align: uisignals.Pointer("right"), Width: uisignals.Pointer("105px")},
+			{ID: "source", Header: "Source type", Width: uisignals.Pointer("120px")},
+			{ID: "runtime", Header: "Runtime", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("130px")},
+			{ID: "principal_id", Header: "User", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("150px")},
+			{ID: "rows_returned", Header: "Rows", Kind: uisignals.Pointer("number"), Align: uisignals.Pointer("right"), Width: uisignals.Pointer("90px")},
+			{ID: "operation", Header: "Operation", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("145px")},
+			{ID: "kind", Header: "Kind", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("170px")},
+			{ID: "model", Header: "Model", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("130px")},
+			{ID: "target", Header: "Target", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("150px")},
+			{ID: "object", Header: "Object", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("220px")},
+			{ID: "request_id", Header: "Request ID", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("170px")},
+			{ID: "correlation_id", Header: "Correlation ID", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("170px")},
+			{ID: "error", Header: "Error", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("220px")},
 		},
 		Rows:      rows,
 		Empty:     "No query events match these filters.",
-		MinWidth:  "1305px",
-		Density:   "tight",
-		RowAction: "detail",
+		MinWidth:  uisignals.Pointer("1305px"),
+		Density:   uisignals.Pointer("tight"),
+		RowAction: uisignals.Pointer("detail"),
 		ColumnSelector: &uisignals.RecordTableColumnSelector{
 			Enabled:        true,
-			Label:          "Columns",
-			DefaultColumns: []string{"started_at", "duration_ms", "source", "runtime", "principal_id", "rows_returned"},
+			Label:          uisignals.Pointer("Columns"),
+			DefaultColumns: uisignals.Pointer([]string{"started_at", "duration_ms", "source", "runtime", "principal_id", "rows_returned"}),
 		},
 	}
 }
@@ -793,10 +799,10 @@ func AdminStorageSignalFromData(data AdminStorageData, command AdminStorageComma
 			DataSizeLabel:      data.DataSizeLabel,
 			TotalSizeLabel:     data.TotalSizeLabel,
 			TotalDataSizeLabel: data.TotalDataSizeLabel,
-			DatabaseCount:      data.DatabaseCount,
-			TableCount:         data.TableCount,
-			SnapshotCount:      data.SnapshotCount,
-			DataFileCount:      data.DataFileCount,
+			DatabaseCount:      int64(data.DatabaseCount),
+			TableCount:         int64(data.TableCount),
+			SnapshotCount:      int64(data.SnapshotCount),
+			DataFileCount:      int64(data.DataFileCount),
 		},
 		Status:        data.Status,
 		Warnings:      data.Warnings,
@@ -815,7 +821,7 @@ func AdminStorageTableSignalFromTable(table AdminStorageTable) AdminStorageTable
 			ID:                  column.ID,
 			Name:                column.Name,
 			Type:                column.Type,
-			Ordinal:             column.Ordinal,
+			Ordinal:             int64(column.Ordinal),
 			Nullable:            column.Nullable,
 			Default:             column.Default,
 			InitialDefault:      column.InitialDefault,
@@ -873,14 +879,14 @@ func AdminStorageTableSignalFromTable(table AdminStorageTable) AdminStorageTable
 		EndSnapshot:   table.EndSnapshot,
 		RowCount:      table.RowCount,
 		RowCountLabel: table.RowCountLabel,
-		ColumnCount:   table.ColumnCount,
-		FileCount:     table.FileCount,
+		ColumnCount:   int64(table.ColumnCount),
+		FileCount:     int64(table.FileCount),
 		SizeBytes:     table.SizeBytes,
 		SizeLabel:     table.SizeLabel,
-		Columns:       columns,
-		Files:         files,
-		History:       history,
-		ServingStates: adminStorageServingStateSignals(table.ServingStates),
+		Columns:       uisignals.OptionalSlice(columns),
+		Files:         uisignals.OptionalSlice(files),
+		History:       uisignals.OptionalSlice(history),
+		ServingStates: uisignals.OptionalSlice(adminStorageServingStateSignals(table.ServingStates)),
 	}
 }
 
@@ -896,7 +902,7 @@ func adminStorageSnapshotSignals(snapshots []AdminStorageSnapshot) []AdminStorag
 			Changes:           snapshot.Changes,
 			ExtraInfo:         snapshot.ExtraInfo,
 			Protected:         snapshot.Protected,
-			ServingStateCount: snapshot.ServingStateCount,
+			ServingStateCount: int64(snapshot.ServingStateCount),
 		})
 	}
 	return out

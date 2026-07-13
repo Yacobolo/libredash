@@ -13,8 +13,6 @@ import (
 	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
 )
 
-type RouteKind string
-
 const (
 	RouteDashboard       RouteKind = "dashboard"
 	RouteCatalog         RouteKind = "catalog"
@@ -27,701 +25,6 @@ const (
 	RouteAdmin           RouteKind = "admin"
 	RouteLogin           RouteKind = "login"
 )
-
-type ChromeSignal struct {
-	Sidebar SidebarSignal `json:"sidebar"`
-}
-
-type SidebarSignal struct {
-	WorkspaceTitle string                `json:"workspaceTitle"`
-	Active         string                `json:"active"`
-	DashboardID    string                `json:"dashboardId,omitempty"`
-	DashboardTitle string                `json:"dashboardTitle"`
-	PageTitle      string                `json:"pageTitle"`
-	ModelID        string                `json:"modelId,omitempty"`
-	ModelTitle     string                `json:"modelTitle,omitempty"`
-	Compact        bool                  `json:"compact"`
-	UserRole       string                `json:"userRole,omitempty"`
-	PrimaryAction  *SidebarActionSignal  `json:"primaryAction,omitempty"`
-	History        *SidebarHistorySignal `json:"history,omitempty"`
-	Groups         []SidebarGroupSignal  `json:"groups"`
-}
-
-type SidebarActionSignal struct {
-	Label string `json:"label"`
-	Href  string `json:"href"`
-	Icon  string `json:"icon"`
-}
-
-type SidebarHistorySignal struct {
-	Label     string                     `json:"label"`
-	EmptyText string                     `json:"emptyText,omitempty"`
-	Items     []SidebarHistoryItemSignal `json:"items"`
-}
-
-type SidebarHistoryItemSignal struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Href    string `json:"href"`
-	Active  bool   `json:"active"`
-	Pending bool   `json:"pending,omitempty"`
-}
-
-type SidebarGroupSignal struct {
-	Label string              `json:"label"`
-	Items []SidebarItemSignal `json:"items"`
-}
-
-type SidebarItemSignal struct {
-	ID     string `json:"id"`
-	Label  string `json:"label"`
-	Href   string `json:"href"`
-	Icon   string `json:"icon"`
-	Meta   string `json:"meta,omitempty"`
-	Active bool   `json:"active,omitempty"`
-}
-
-type RouteRuntimeSignal struct {
-	ClientID    string    `json:"clientId,omitempty"`
-	WorkspaceID string    `json:"workspaceId,omitempty"`
-	DashboardID string    `json:"dashboardId,omitempty"`
-	PageID      string    `json:"pageId,omitempty"`
-	ModelID     string    `json:"modelId,omitempty"`
-	Kind        RouteKind `json:"kind"`
-}
-
-type StatusSignal = dashboard.Status
-
-type CatalogPageEnvelope struct {
-	Chrome  ChromeSignal       `json:"chrome"`
-	Page    CatalogPageSignal  `json:"page"`
-	Runtime RouteRuntimeSignal `json:"runtime"`
-	Status  StatusSignal       `json:"status"`
-}
-
-type CatalogPageSignal struct {
-	Kind        RouteKind                `json:"kind"`
-	Title       string                   `json:"title"`
-	Description string                   `json:"description"`
-	Dashboards  []CatalogDashboardSignal `json:"dashboards"`
-}
-
-type CatalogDashboardSignal struct {
-	ID            string   `json:"id"`
-	Title         string   `json:"title"`
-	Description   string   `json:"description,omitempty"`
-	SemanticModel string   `json:"semanticModel,omitempty"`
-	PageCount     int      `json:"pageCount"`
-	Tags          []string `json:"tags,omitempty"`
-	Href          string   `json:"href"`
-}
-
-type DashboardEnvelope struct {
-	Chrome             ChromeSignal                        `json:"chrome"`
-	Page               DashboardPageSignal                 `json:"page"`
-	Runtime            RouteRuntimeSignal                  `json:"runtime"`
-	FilterConfig       []reportdef.FilterConfig            `json:"filterConfig"`
-	Filters            dashboard.Filters                   `json:"filters"`
-	URLParams          map[string]any                      `json:"urlParams"`
-	URLParamShape      map[string]any                      `json:"urlParamShape"`
-	FilterOptions      map[string][]dashboard.FilterOption `json:"filterOptions"`
-	InteractionCommand dashboard.InteractionCommand        `json:"interactionCommand"`
-	TableCommand       dashboard.TableRequest              `json:"tableCommand"`
-	Tables             map[string]dashboard.Table          `json:"tables"`
-	Visuals            map[string]dashboard.Visual         `json:"visuals"`
-	Status             dashboard.Status                    `json:"status"`
-}
-
-type DashboardPageSignal struct {
-	Kind           RouteKind                  `json:"kind"`
-	Title          string                     `json:"title"`
-	Description    string                     `json:"description,omitempty"`
-	DashboardID    string                     `json:"dashboardId"`
-	DashboardTitle string                     `json:"dashboardTitle"`
-	PageID         string                     `json:"pageId"`
-	PageTitle      string                     `json:"pageTitle"`
-	HeaderDetail   string                     `json:"headerDetail"`
-	ModelID        string                     `json:"modelId"`
-	ModelTitle     string                     `json:"modelTitle"`
-	Canvas         dashboard.PageCanvas       `json:"canvas"`
-	Grid           dashboard.PageGrid         `json:"grid"`
-	Pages          []DashboardPageNavSignal   `json:"pages"`
-	Components     []DashboardComponentSignal `json:"components"`
-}
-
-type DashboardPageNavSignal struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Href   string `json:"href"`
-	Active bool   `json:"active"`
-}
-
-type DashboardComponentSignal struct {
-	ID          string                  `json:"id"`
-	Kind        string                  `json:"kind"`
-	Visual      string                  `json:"visual,omitempty"`
-	Table       string                  `json:"table,omitempty"`
-	Filter      string                  `json:"filter,omitempty"`
-	Description string                  `json:"description,omitempty"`
-	Placement   dashboard.PagePlacement `json:"placement"`
-	X           float64                 `json:"x"`
-	Y           float64                 `json:"y"`
-	Width       float64                 `json:"width"`
-	Height      float64                 `json:"height"`
-	Eyebrow     string                  `json:"eyebrow,omitempty"`
-	Title       string                  `json:"title,omitempty"`
-	Subtitle    string                  `json:"subtitle,omitempty"`
-	Badges      []string                `json:"badges,omitempty"`
-}
-
-type ChatEnvelope struct {
-	Chrome  ChromeSignal                `json:"chrome"`
-	Page    ChatPageSignal              `json:"page"`
-	Runtime RouteRuntimeSignal          `json:"runtime"`
-	Agent   ChatSignal                  `json:"agent"`
-	Visuals map[string]dashboard.Visual `json:"visuals"`
-	Tables  map[string]dashboard.Table  `json:"tables"`
-}
-
-type ChatPageSignal struct {
-	Kind        RouteKind `json:"kind"`
-	View        string    `json:"view"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-}
-
-type SubSidebarSignal struct {
-	Label       string                 `json:"label"`
-	RailLabel   string                 `json:"railLabel"`
-	AriaLabel   string                 `json:"ariaLabel"`
-	StorageKey  string                 `json:"storageKey"`
-	ActiveID    string                 `json:"activeId"`
-	EmptyText   string                 `json:"emptyText,omitempty"`
-	Disabled    bool                   `json:"disabled,omitempty"`
-	Collapsible bool                   `json:"collapsible"`
-	Numbered    bool                   `json:"numbered"`
-	Items       []SubSidebarItemSignal `json:"items"`
-}
-
-type SubSidebarItemSignal struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Href    string `json:"href"`
-	Active  bool   `json:"active"`
-	Pending bool   `json:"pending,omitempty"`
-}
-
-type WorkspacePageEnvelope struct {
-	Chrome          ChromeSignal          `json:"chrome"`
-	Page            WorkspacePageSignal   `json:"page"`
-	Runtime         RouteRuntimeSignal    `json:"runtime"`
-	WorkspaceAccess WorkspaceAccessSignal `json:"workspaceAccess,omitempty"`
-	Status          StatusSignal          `json:"status"`
-}
-
-type WorkspacePageSignal struct {
-	Kind        RouteKind                `json:"kind"`
-	Title       string                   `json:"title"`
-	Description string                   `json:"description,omitempty"`
-	WorkspaceID string                   `json:"workspaceId,omitempty"`
-	Environment string                   `json:"environment,omitempty"`
-	Cards       []WorkspaceCardSignal    `json:"cards,omitempty"`
-	AssetList   WorkspaceAssetListSignal `json:"assetList,omitempty"`
-}
-
-type WorkspaceAssetPageEnvelope struct {
-	Chrome  ChromeSignal             `json:"chrome"`
-	Page    WorkspaceAssetPageSignal `json:"page"`
-	Runtime RouteRuntimeSignal       `json:"runtime"`
-	Status  StatusSignal             `json:"status"`
-}
-
-type WorkspaceAssetPageSignal struct {
-	Kind          RouteKind                     `json:"kind"`
-	Title         string                        `json:"title"`
-	WorkspaceID   string                        `json:"workspaceId"`
-	Environment   string                        `json:"environment,omitempty"`
-	AssetID       string                        `json:"assetId"`
-	ActiveSection string                        `json:"activeSection"`
-	Asset         WorkspaceAssetSummarySignal   `json:"asset"`
-	Breadcrumbs   []WorkspaceBreadcrumbSignal   `json:"breadcrumbs"`
-	Actions       []WorkspaceActionSignal       `json:"actions,omitempty"`
-	Tabs          []WorkspaceTabSignal          `json:"tabs"`
-	Details       WorkspaceAssetDetailsSignal   `json:"details,omitempty"`
-	Lineage       WorkspaceAssetLineageSignal   `json:"lineage,omitempty"`
-	Refresh       WorkspaceAssetRefreshSignal   `json:"refresh,omitempty"`
-	Versions      *WorkspaceAssetVersionsSignal `json:"versions,omitempty"`
-}
-
-type ConnectionsPageEnvelope struct {
-	Chrome  ChromeSignal          `json:"chrome"`
-	Page    ConnectionsPageSignal `json:"page"`
-	Runtime RouteRuntimeSignal    `json:"runtime"`
-	Status  StatusSignal          `json:"status"`
-}
-
-type ConnectionsPageSignal struct {
-	Kind        RouteKind                `json:"kind"`
-	Title       string                   `json:"title"`
-	Description string                   `json:"description,omitempty"`
-	WorkspaceID string                   `json:"workspaceId,omitempty"`
-	Environment string                   `json:"environment,omitempty"`
-	AssetList   WorkspaceAssetListSignal `json:"assetList,omitempty"`
-}
-
-type DataExplorerPageEnvelope struct {
-	Chrome       ChromeSignal           `json:"chrome"`
-	Page         DataExplorerPageSignal `json:"page"`
-	DataExplorer DataExplorerSignal     `json:"dataExplorer"`
-	Runtime      RouteRuntimeSignal     `json:"runtime"`
-	Status       StatusSignal           `json:"status"`
-}
-
-type DataExplorerPageSignal struct {
-	Kind                RouteKind                     `json:"kind"`
-	Title               string                        `json:"title"`
-	Description         string                        `json:"description,omitempty"`
-	WorkspaceID         string                        `json:"workspaceId,omitempty"`
-	SelectedWorkspaceID string                        `json:"selectedWorkspaceId,omitempty"`
-	SelectedObject      string                        `json:"selectedObject,omitempty"`
-	Workspaces          []DataExplorerWorkspaceSignal `json:"workspaces"`
-	Tabs                []WorkspaceTabSignal          `json:"tabs"`
-}
-
-type DataExplorerWorkspaceSignal struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Href        string `json:"href"`
-	ObjectCount int    `json:"objectCount"`
-	Active      bool   `json:"active"`
-}
-
-type DataExplorerSignal struct {
-	Objects             []DataExplorerObjectSignal `json:"objects"`
-	SelectedWorkspaceID string                     `json:"selectedWorkspaceId,omitempty"`
-	SelectedKey         string                     `json:"selectedKey,omitempty"`
-	SelectedObject      *DataExplorerObjectSignal  `json:"selectedObject,omitempty"`
-	Preview             DataPreviewSignal          `json:"preview"`
-	Command             DataExplorerCommand        `json:"command"`
-	Warnings            []string                   `json:"warnings,omitempty"`
-}
-
-type DataExplorerObjectSignal struct {
-	Key            string                    `json:"key"`
-	WorkspaceID    string                    `json:"workspaceId"`
-	WorkspaceTitle string                    `json:"workspaceTitle,omitempty"`
-	AssetID        string                    `json:"assetId,omitempty"`
-	Layer          string                    `json:"layer"`
-	ModelID        string                    `json:"modelId,omitempty"`
-	Table          string                    `json:"table,omitempty"`
-	Source         string                    `json:"source,omitempty"`
-	Title          string                    `json:"title"`
-	Description    string                    `json:"description,omitempty"`
-	DetailHref     string                    `json:"detailHref,omitempty"`
-	ColumnCount    int                       `json:"columnCount"`
-	RowCountLabel  string                    `json:"rowCountLabel,omitempty"`
-	Columns        []DataPreviewColumnSignal `json:"columns,omitempty"`
-}
-
-type DataPreviewSignal struct {
-	Columns       []DataPreviewColumnSignal         `json:"columns"`
-	TotalRows     int                               `json:"totalRows"`
-	AvailableRows int                               `json:"availableRows"`
-	ChunkSize     int                               `json:"chunkSize"`
-	RowHeight     int                               `json:"rowHeight"`
-	ResetVersion  int                               `json:"resetVersion"`
-	Blocks        map[string]DataPreviewBlockSignal `json:"blocks"`
-	LoadingBlock  string                            `json:"loadingBlock,omitempty"`
-	TotalRowLabel string                            `json:"totalRowLabel,omitempty"`
-	Sort          DataPreviewSortSignal             `json:"sort"`
-	SQL           string                            `json:"sql,omitempty"`
-	Error         string                            `json:"error,omitempty"`
-}
-
-type DataPreviewBlockSignal struct {
-	Start        int                   `json:"start"`
-	RequestSeq   int                   `json:"requestSeq"`
-	ResetVersion int                   `json:"resetVersion"`
-	Sort         DataPreviewSortSignal `json:"sort"`
-	Rows         []map[string]any      `json:"rows"`
-}
-
-type DataPreviewColumnSignal struct {
-	Key   string `json:"key"`
-	Label string `json:"label"`
-	Type  string `json:"type,omitempty"`
-}
-
-type DataPreviewSortSignal struct {
-	Column    string `json:"column,omitempty"`
-	Direction string `json:"direction,omitempty"`
-}
-
-type DataExplorerCommand struct {
-	WorkspaceID    string                `json:"workspaceId,omitempty"`
-	ObjectKey      string                `json:"objectKey,omitempty"`
-	Offset         int                   `json:"offset"`
-	Limit          int                   `json:"limit"`
-	Block          string                `json:"block,omitempty"`
-	Start          int                   `json:"start"`
-	Count          int                   `json:"count"`
-	RequestSeq     int                   `json:"requestSeq"`
-	ResetVersion   int                   `json:"resetVersion"`
-	Sort           DataPreviewSortSignal `json:"sort"`
-	VisibleColumns []string              `json:"visibleColumns,omitempty"`
-	ColumnWidths   map[string]float64    `json:"columnWidths,omitempty"`
-}
-
-type WorkspaceCardSignal struct {
-	ID           string `json:"id"`
-	Title        string `json:"title"`
-	Description  string `json:"description"`
-	Href         string `json:"href"`
-	ServingLabel string `json:"servingLabel"`
-}
-
-type WorkspaceAssetListSignal struct {
-	WorkspaceID string                        `json:"workspaceId,omitempty"`
-	Query       string                        `json:"query,omitempty"`
-	ActiveType  string                        `json:"activeType,omitempty"`
-	SearchHref  string                        `json:"searchHref"`
-	Tabs        []WorkspaceTabSignal          `json:"tabs"`
-	Assets      []WorkspaceAssetSummarySignal `json:"assets"`
-	Empty       string                        `json:"empty"`
-}
-
-type WorkspaceAssetSummarySignal struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description,omitempty"`
-	Type        string `json:"type"`
-	TypeLabel   string `json:"typeLabel"`
-	Key         string `json:"key"`
-	ParentTitle string `json:"parentTitle,omitempty"`
-	ParentHref  string `json:"parentHref,omitempty"`
-	DetailHref  string `json:"detailHref"`
-	OpenHref    string `json:"openHref"`
-}
-
-type WorkspaceTabSignal struct {
-	ID     string `json:"id"`
-	Label  string `json:"label"`
-	Href   string `json:"href"`
-	Active bool   `json:"active"`
-	Count  int    `json:"count,omitempty"`
-}
-
-type WorkspaceBreadcrumbSignal struct {
-	Label   string `json:"label"`
-	Href    string `json:"href,omitempty"`
-	Current bool   `json:"current,omitempty"`
-}
-
-type WorkspaceActionSignal struct {
-	Label    string `json:"label"`
-	Href     string `json:"href,omitempty"`
-	Icon     string `json:"icon,omitempty"`
-	Command  string `json:"command,omitempty"`
-	Disabled bool   `json:"disabled,omitempty"`
-}
-
-type WorkspaceAssetDetailsSignal struct {
-	Overview           []DefinitionFactSignal         `json:"overview"`
-	Sections           []WorkspaceDetailSectionSignal `json:"sections"`
-	SemanticModelGraph *SemanticModelGraphSignal      `json:"semanticModelGraph,omitempty"`
-}
-
-type WorkspaceDetailSectionSignal struct {
-	Title string                 `json:"title"`
-	Facts []DefinitionFactSignal `json:"facts,omitempty"`
-	Table RecordTableSignal      `json:"table,omitempty"`
-	Code  string                 `json:"code,omitempty"`
-	Lang  string                 `json:"lang,omitempty"`
-}
-
-type DefinitionFactSignal struct {
-	Label string `json:"label"`
-	Value string `json:"value"`
-	Code  bool   `json:"code,omitempty"`
-	Wide  bool   `json:"wide,omitempty"`
-}
-
-type SemanticModelGraphSignal struct {
-	Facts []string                       `json:"facts,omitempty"`
-	Nodes []SemanticModelGraphNodeSignal `json:"nodes"`
-	Edges []SemanticModelGraphEdgeSignal `json:"edges"`
-}
-
-type SemanticModelGraphNodeSignal struct {
-	ID          string                          `json:"id"`
-	Title       string                          `json:"title"`
-	Description string                          `json:"description,omitempty"`
-	PrimaryKey  string                          `json:"primaryKey,omitempty"`
-	Badges      []string                        `json:"badges,omitempty"`
-	Fields      []SemanticModelGraphFieldSignal `json:"fields"`
-}
-
-type SemanticModelGraphFieldSignal struct {
-	Name          string   `json:"name"`
-	Label         string   `json:"label,omitempty"`
-	Type          string   `json:"type,omitempty"`
-	PrimaryKey    bool     `json:"primaryKey,omitempty"`
-	Join          bool     `json:"join,omitempty"`
-	Relationships []string `json:"relationships,omitempty"`
-}
-
-type SemanticModelGraphEdgeSignal struct {
-	ID          string `json:"id"`
-	Source      string `json:"source"`
-	Target      string `json:"target"`
-	SourceField string `json:"sourceField"`
-	TargetField string `json:"targetField"`
-	Cardinality string `json:"cardinality"`
-	Label       string `json:"label"`
-}
-
-type WorkspaceAssetLineageSignal struct {
-	Count       int                     `json:"count"`
-	Graph       AssetLineageGraphSignal `json:"graph"`
-	UsesTable   RecordTableSignal       `json:"usesTable"`
-	UsedByTable RecordTableSignal       `json:"usedByTable"`
-}
-
-type WorkspaceAssetRefreshSignal struct {
-	Status         string             `json:"status"`
-	Running        bool               `json:"running"`
-	LastSuccessful string             `json:"lastSuccessful"`
-	RunsTable      *RecordTableSignal `json:"runsTable,omitempty"`
-}
-
-type WorkspaceAssetVersionsSignal struct {
-	CurrentContentHash string            `json:"currentContentHash"`
-	Table              RecordTableSignal `json:"table"`
-}
-
-type AssetLineageGraphSignal struct {
-	Nodes []AssetLineageNodeSignal `json:"nodes"`
-	Edges []AssetLineageEdgeSignal `json:"edges"`
-}
-
-type AssetLineageNodeSignal struct {
-	ID                string `json:"id"`
-	Label             string `json:"label"`
-	Kind              string `json:"kind"`
-	Meta              string `json:"meta,omitempty"`
-	Href              string `json:"href,omitempty"`
-	Side              string `json:"side"`
-	Rank              int    `json:"rank"`
-	Selected          bool   `json:"selected,omitempty"`
-	VisibleUpstream   int    `json:"visibleUpstreamCount,omitempty"`
-	VisibleDownstream int    `json:"visibleDownstreamCount,omitempty"`
-	UsesCount         int    `json:"usesCount,omitempty"`
-	UsedByCount       int    `json:"usedByCount,omitempty"`
-	ContainedCount    int    `json:"containedCount,omitempty"`
-	ContainedSummary  string `json:"containedSummary,omitempty"`
-}
-
-type AssetLineageEdgeSignal struct {
-	ID     string `json:"id"`
-	Source string `json:"source"`
-	Target string `json:"target"`
-	Label  string `json:"label,omitempty"`
-	Kind   string `json:"kind"`
-}
-
-type RecordTableSignal struct {
-	Columns        []RecordTableColumnSignal  `json:"columns"`
-	Rows           []map[string]any           `json:"rows"`
-	Empty          string                     `json:"empty"`
-	MinWidth       string                     `json:"minWidth,omitempty"`
-	ColumnSelector *RecordTableColumnSelector `json:"columnSelector,omitempty"`
-	Density        string                     `json:"density,omitempty"`
-	RowAction      string                     `json:"rowAction,omitempty"`
-}
-
-type RecordTableColumnSignal struct {
-	ID         string `json:"id"`
-	Header     string `json:"header"`
-	Kind       string `json:"kind,omitempty"`
-	Align      string `json:"align,omitempty"`
-	HrefKey    string `json:"hrefKey,omitempty"`
-	Width      string `json:"width,omitempty"`
-	Toggleable *bool  `json:"toggleable,omitempty"`
-}
-
-type RecordTableColumnSelector struct {
-	Enabled        bool     `json:"enabled"`
-	StorageKey     string   `json:"storageKey,omitempty"`
-	Label          string   `json:"label,omitempty"`
-	DefaultColumns []string `json:"defaultColumns,omitempty"`
-}
-
-type RecordTableBadgeSignal struct {
-	Label string `json:"label"`
-	Tone  string `json:"tone,omitempty"`
-}
-
-type AdminPageEnvelope struct {
-	Chrome  ChromeSignal       `json:"chrome"`
-	Page    AdminPageSignal    `json:"page"`
-	Runtime RouteRuntimeSignal `json:"runtime"`
-	Status  StatusSignal       `json:"status"`
-}
-
-type AdminPageSignal struct {
-	Kind         RouteKind                   `json:"kind"`
-	Title        string                      `json:"title"`
-	Active       string                      `json:"active"`
-	Sidebar      SubSidebarSignal            `json:"sidebar"`
-	HeaderTitle  string                      `json:"headerTitle"`
-	HeaderDetail string                      `json:"headerDetail"`
-	Empty        string                      `json:"empty,omitempty"`
-	Metrics      []AdminMetricSignal         `json:"metrics,omitempty"`
-	Sections     []AdminContentSectionSignal `json:"sections,omitempty"`
-	Agent        AdminAgentSignal            `json:"agent,omitempty"`
-	Storage      AdminStorageSignal          `json:"storage,omitempty"`
-}
-
-type AdminQueryHistorySignal struct {
-	Table            RecordTableSignal        `json:"table"`
-	FilterMenus      []FilterMenuSignal       `json:"filterMenus,omitempty"`
-	Filters          AdminQueryHistoryFilters `json:"filters"`
-	NextCursor       string                   `json:"nextCursor"`
-	LoadedCountLabel string                   `json:"loadedCountLabel"`
-	HasMore          bool                     `json:"hasMore"`
-	Loading          bool                     `json:"loading"`
-	Error            string                   `json:"error"`
-	Limit            int                      `json:"limit"`
-}
-
-type AdminQueryHistoryFilters struct {
-	Workspaces []string `json:"workspaces,omitempty"`
-	Principals []string `json:"principals,omitempty"`
-	Surfaces   []string `json:"surfaces,omitempty"`
-	Kinds      []string `json:"kinds,omitempty"`
-	Statuses   []string `json:"statuses,omitempty"`
-	Target     string   `json:"target,omitempty"`
-	Search     string   `json:"search,omitempty"`
-	From       string   `json:"from,omitempty"`
-	To         string   `json:"to,omitempty"`
-}
-
-type AdminQueryHistoryCommand struct {
-	Action     string                   `json:"action"`
-	Filters    AdminQueryHistoryFilters `json:"filters"`
-	FilterMenu FilterMenuCommand        `json:"filterMenu,omitempty"`
-	PageToken  string                   `json:"pageToken,omitempty"`
-	Limit      int                      `json:"limit,omitempty"`
-	EventID    string                   `json:"eventId,omitempty"`
-}
-
-type FilterMenuSignal struct {
-	ID           string                   `json:"id"`
-	Label        string                   `json:"label"`
-	SummaryLabel string                   `json:"summaryLabel,omitempty"`
-	Mode         string                   `json:"mode,omitempty"`
-	Search       string                   `json:"search,omitempty"`
-	Selected     []string                 `json:"selected,omitempty"`
-	Options      []FilterMenuOptionSignal `json:"options,omitempty"`
-	Loading      bool                     `json:"loading"`
-	Error        string                   `json:"error,omitempty"`
-	Placeholder  string                   `json:"placeholder,omitempty"`
-	EmptyLabel   string                   `json:"emptyLabel,omitempty"`
-}
-
-type FilterMenuOptionSignal struct {
-	Value       string `json:"value"`
-	Label       string `json:"label"`
-	Description string `json:"description,omitempty"`
-	Icon        string `json:"icon,omitempty"`
-	CountLabel  string `json:"countLabel,omitempty"`
-	Selected    bool   `json:"selected"`
-	Disabled    bool   `json:"disabled"`
-}
-
-type FilterMenuCommand struct {
-	MenuID   string   `json:"menuId,omitempty"`
-	Action   string   `json:"action,omitempty"`
-	Search   string   `json:"search,omitempty"`
-	Value    string   `json:"value,omitempty"`
-	Selected []string `json:"selected,omitempty"`
-}
-
-type AdminQueryDetailSignal struct {
-	EventID       string `json:"eventId,omitempty"`
-	Loading       bool   `json:"loading"`
-	Error         string `json:"error,omitempty"`
-	Status        string `json:"status,omitempty"`
-	StatusLabel   string `json:"statusLabel,omitempty"`
-	WorkspaceID   string `json:"workspaceId,omitempty"`
-	PrincipalID   string `json:"principalId,omitempty"`
-	Surface       string `json:"surface,omitempty"`
-	Operation     string `json:"operation,omitempty"`
-	QueryKind     string `json:"queryKind,omitempty"`
-	ModelID       string `json:"modelId,omitempty"`
-	Target        string `json:"target,omitempty"`
-	ObjectType    string `json:"objectType,omitempty"`
-	ObjectID      string `json:"objectId,omitempty"`
-	RequestID     string `json:"requestId,omitempty"`
-	CorrelationID string `json:"correlationId,omitempty"`
-	DurationMS    int64  `json:"durationMs"`
-	RowsReturned  int    `json:"rowsReturned"`
-	QueryError    string `json:"queryError,omitempty"`
-	SQL           string `json:"sql,omitempty"`
-	PlanText      string `json:"planText,omitempty"`
-	QueryJSON     string `json:"queryJson,omitempty"`
-	CreatedAt     string `json:"createdAt,omitempty"`
-}
-
-type AdminAgentSignal struct {
-	Enabled      bool                   `json:"enabled"`
-	Model        string                 `json:"model,omitempty"`
-	SystemPrompt string                 `json:"systemPrompt"`
-	CanWrite     bool                   `json:"canWrite"`
-	UpdatePath   string                 `json:"updatePath"`
-	Tools        []AdminAgentToolSignal `json:"tools"`
-}
-
-type AdminAgentToolSignal struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	InputSchema map[string]any `json:"inputSchema"`
-}
-
-type AdminMetricSignal struct {
-	Label  string `json:"label"`
-	Value  string `json:"value"`
-	Detail string `json:"detail,omitempty"`
-}
-
-type AdminContentSectionSignal struct {
-	Title string                 `json:"title"`
-	Facts []DefinitionFactSignal `json:"facts,omitempty"`
-	Table RecordTableSignal      `json:"table,omitempty"`
-}
-
-type AdminQueryEventSignal struct {
-	ID            string `json:"id"`
-	WorkspaceID   string `json:"workspaceId"`
-	PrincipalID   string `json:"principalId"`
-	Surface       string `json:"surface"`
-	Operation     string `json:"operation"`
-	QueryKind     string `json:"queryKind"`
-	ModelID       string `json:"modelId"`
-	Target        string `json:"target"`
-	ObjectType    string `json:"objectType"`
-	ObjectID      string `json:"objectId"`
-	RequestID     string `json:"requestId"`
-	CorrelationID string `json:"correlationId"`
-	Status        string `json:"status"`
-	DurationMS    int64  `json:"durationMs"`
-	RowsReturned  int    `json:"rowsReturned"`
-	Error         string `json:"error"`
-	SQL           string `json:"sql"`
-	PlanText      string `json:"planText"`
-	QueryJSON     string `json:"queryJson"`
-	CreatedAt     string `json:"createdAt"`
-}
 
 type AdminStorageData struct {
 	CatalogPath        string
@@ -846,143 +149,6 @@ type AdminStorageServingState struct {
 	ActivatedAt    string
 }
 
-type AdminStorageSignal struct {
-	Summary       AdminStorageSummary              `json:"summary"`
-	Status        string                           `json:"status"`
-	Warnings      []string                         `json:"warnings"`
-	Tables        []AdminStorageTableSignal        `json:"tables"`
-	Snapshots     []AdminStorageSnapshotSignal     `json:"snapshots"`
-	ServingStates []AdminStorageServingStateSignal `json:"servingStates"`
-	SelectedKey   string                           `json:"selectedKey"`
-	SelectedTable *AdminStorageTableSignal         `json:"selectedTable"`
-}
-
-type AdminStorageSummary struct {
-	CatalogPath        string `json:"catalogPath"`
-	DataPath           string `json:"dataPath"`
-	CatalogSizeLabel   string `json:"catalogSizeLabel"`
-	DataSizeLabel      string `json:"dataSizeLabel"`
-	TotalSizeLabel     string `json:"totalSizeLabel"`
-	TotalDataSizeLabel string `json:"totalDataSizeLabel"`
-	DatabaseCount      int    `json:"databaseCount"`
-	TableCount         int    `json:"tableCount"`
-	SnapshotCount      int    `json:"snapshotCount"`
-	DataFileCount      int    `json:"dataFileCount"`
-}
-
-type AdminStorageTableSignal struct {
-	Key           string                           `json:"key"`
-	DatabaseID    string                           `json:"databaseId"`
-	DatabaseName  string                           `json:"databaseName"`
-	DatabasePath  string                           `json:"databasePath"`
-	ModelID       string                           `json:"modelId"`
-	ModelName     string                           `json:"modelName"`
-	Schema        string                           `json:"schema"`
-	Name          string                           `json:"name"`
-	Type          string                           `json:"type"`
-	TableID       int64                            `json:"tableId"`
-	TableUUID     string                           `json:"tableUuid"`
-	DuckLakePath  string                           `json:"duckLakePath"`
-	BeginSnapshot int64                            `json:"beginSnapshot"`
-	EndSnapshot   int64                            `json:"endSnapshot"`
-	RowCount      int64                            `json:"rowCount"`
-	RowCountLabel string                           `json:"rowCountLabel"`
-	ColumnCount   int                              `json:"columnCount"`
-	FileCount     int                              `json:"fileCount"`
-	SizeBytes     int64                            `json:"sizeBytes"`
-	SizeLabel     string                           `json:"sizeLabel"`
-	Columns       []AdminStorageColumnSignal       `json:"columns,omitempty"`
-	Files         []AdminStorageFileSignal         `json:"files,omitempty"`
-	History       []AdminStorageTableHistorySignal `json:"history,omitempty"`
-	ServingStates []AdminStorageServingStateSignal `json:"servingStates,omitempty"`
-}
-
-type AdminStorageColumnSignal struct {
-	ID                  int64  `json:"id"`
-	Name                string `json:"name"`
-	Type                string `json:"type"`
-	Ordinal             int    `json:"ordinal"`
-	Nullable            string `json:"nullable"`
-	Default             string `json:"default"`
-	InitialDefault      string `json:"initialDefault"`
-	DefaultValueType    string `json:"defaultValueType"`
-	DefaultValueDialect string `json:"defaultValueDialect"`
-	BeginSnapshot       int64  `json:"beginSnapshot"`
-	ContainsNull        string `json:"containsNull"`
-	ContainsNaN         string `json:"containsNan"`
-	MinValue            string `json:"minValue"`
-	MaxValue            string `json:"maxValue"`
-	ExtraStats          string `json:"extraStats"`
-}
-
-type AdminStorageFileSignal struct {
-	ID               int64  `json:"id"`
-	Path             string `json:"path"`
-	Format           string `json:"format"`
-	RecordCount      int64  `json:"recordCount"`
-	RecordCountLabel string `json:"recordCountLabel"`
-	SizeBytes        int64  `json:"sizeBytes"`
-	SizeLabel        string `json:"sizeLabel"`
-	BeginSnapshot    int64  `json:"beginSnapshot"`
-	EndSnapshot      int64  `json:"endSnapshot"`
-}
-
-type AdminStorageTableHistorySignal struct {
-	SnapshotID    int64  `json:"snapshotId"`
-	Time          string `json:"time"`
-	SchemaVersion int64  `json:"schemaVersion"`
-	Source        string `json:"source"`
-	Changes       string `json:"changes"`
-	Author        string `json:"author"`
-	Message       string `json:"message"`
-	ExtraInfo     string `json:"extraInfo"`
-}
-
-type AdminStorageSnapshotSignal struct {
-	ID                int64  `json:"id"`
-	Time              string `json:"time"`
-	SchemaVersion     int64  `json:"schemaVersion"`
-	Author            string `json:"author"`
-	Message           string `json:"message"`
-	Changes           string `json:"changes"`
-	ExtraInfo         string `json:"extraInfo"`
-	Protected         bool   `json:"protected"`
-	ServingStateCount int    `json:"servingStateCount"`
-}
-
-type AdminStorageServingStateSignal struct {
-	WorkspaceID    string `json:"workspaceId"`
-	Environment    string `json:"environment"`
-	ServingStateID string `json:"servingStateId"`
-	Status         string `json:"status"`
-	SnapshotID     int64  `json:"snapshotId"`
-	Digest         string `json:"digest"`
-	Active         bool   `json:"active"`
-	ActivatedAt    string `json:"activatedAt"`
-}
-
-type AdminStorageCommand struct {
-	DatabaseID string `json:"databaseId"`
-	Schema     string `json:"schema"`
-	Table      string `json:"table"`
-}
-
-type LoginPageEnvelope struct {
-	Page    LoginPageSignal    `json:"page"`
-	Runtime RouteRuntimeSignal `json:"runtime"`
-	Status  StatusSignal       `json:"status"`
-}
-
-type LoginPageSignal struct {
-	Kind                RouteKind `json:"kind"`
-	Title               string    `json:"title"`
-	ProviderLabel       string    `json:"providerLabel"`
-	LocalAuth           bool      `json:"localAuth"`
-	SSOAuth             bool      `json:"ssoAuth"`
-	MustChangePassword  bool      `json:"mustChangePassword"`
-	BackgroundModuleSrc string    `json:"backgroundModuleSrc"`
-}
-
 type WorkspaceAccessResponse struct {
 	Workspace   workspaceview.WorkspaceView     `json:"workspace"`
 	ObjectType  string                          `json:"objectType,omitempty"`
@@ -995,65 +161,10 @@ type WorkspaceAccessResponse struct {
 	Status      WorkspaceAccessStatus           `json:"status"`
 }
 
-type WorkspaceAccessSignal struct {
-	WorkspaceAccessResponse
-	Command WorkspaceAccessCommand `json:"command"`
-	Search  string                 `json:"search"`
-}
-
-type WorkspaceAccessStatus struct {
-	Loading bool   `json:"loading"`
-	Error   string `json:"error"`
-	Message string `json:"message"`
-}
-
-type WorkspaceAccessCommand struct {
-	Email       string `json:"email"`
-	Role        string `json:"role"`
-	Privilege   string `json:"privilege"`
-	PrincipalID string `json:"principalId"`
-	BindingID   string `json:"bindingId"`
-	SubjectType string `json:"subjectType"`
-	SubjectID   string `json:"subjectId"`
-}
-
-type ChatSignal struct {
-	Conversations        []ChatConversationSummary   `json:"conversations"`
-	ActiveConversationID string                      `json:"activeConversationId"`
-	Transcript           []ChatTranscriptItemSignal  `json:"transcript"`
-	Status               ChatStatus                  `json:"status"`
-	Composer             ComposerSignal              `json:"composer"`
-	Visuals              map[string]dashboard.Visual `json:"-"`
-	Tables               map[string]dashboard.Table  `json:"-"`
-}
-
-type ChatTranscriptItemSignal struct {
-	ID             string              `json:"id"`
-	Kind           string              `json:"kind"`
-	Text           string              `json:"text,omitempty"`
-	Markdown       string              `json:"markdown,omitempty"`
-	ToolCallID     string              `json:"toolCallId,omitempty"`
-	Name           string              `json:"name,omitempty"`
-	Title          string              `json:"title,omitempty"`
-	Status         string              `json:"status,omitempty"`
-	Summary        string              `json:"summary,omitempty"`
-	ResultSummary  string              `json:"resultSummary,omitempty"`
-	InputJSON      string              `json:"inputJson,omitempty"`
-	InputFormat    string              `json:"inputFormat,omitempty"`
-	ArgumentsJSON  string              `json:"argumentsJson,omitempty"`
-	ResultJSON     string              `json:"resultJson,omitempty"`
-	ResultFormat   string              `json:"resultFormat,omitempty"`
-	Artifact       *ChatArtifactSignal `json:"artifact,omitempty"`
-	Error          string              `json:"error,omitempty"`
-	ConversationID string              `json:"conversationId,omitempty"`
-	RunID          string              `json:"runId,omitempty"`
-	CreatedAt      string              `json:"createdAt,omitempty"`
-}
-
-type ChatArtifactSignal struct {
-	Kind    string `json:"kind"`
-	ID      string `json:"id"`
-	Summary string `json:"summary,omitempty"`
+type ChatViewState struct {
+	Agent   ChatSignal
+	Visuals map[string]DashboardVisual
+	Tables  map[string]DashboardTable
 }
 
 func ChatTranscriptItems(items []agent.ChatTranscriptItem) []ChatTranscriptItemSignal {
@@ -1068,58 +179,32 @@ func ChatTranscriptItem(item agent.ChatTranscriptItem) ChatTranscriptItemSignal 
 	out := ChatTranscriptItemSignal{
 		ID:             item.ID,
 		Kind:           item.Kind,
-		Text:           item.Text,
-		Markdown:       item.Markdown,
-		ToolCallID:     item.ToolCallID,
-		Name:           item.Name,
-		Title:          item.Title,
-		Status:         item.Status,
-		Summary:        item.Summary,
-		ResultSummary:  item.ResultSummary,
-		InputJSON:      item.InputJSON,
-		InputFormat:    item.InputFormat,
-		ArgumentsJSON:  item.ArgumentsJSON,
-		ResultJSON:     item.ResultJSON,
-		ResultFormat:   item.ResultFormat,
-		Error:          item.Error,
-		ConversationID: item.ConversationID,
-		RunID:          item.RunID,
-		CreatedAt:      item.CreatedAt,
+		Text:           optionalValue(item.Text),
+		Markdown:       optionalValue(item.Markdown),
+		ToolCallID:     optionalValue(item.ToolCallID),
+		Name:           optionalValue(item.Name),
+		Title:          optionalValue(item.Title),
+		Status:         optionalValue(item.Status),
+		Summary:        optionalValue(item.Summary),
+		ResultSummary:  optionalValue(item.ResultSummary),
+		InputJSON:      optionalValue(item.InputJSON),
+		InputFormat:    optionalValue(item.InputFormat),
+		ArgumentsJSON:  optionalValue(item.ArgumentsJSON),
+		ResultJSON:     optionalValue(item.ResultJSON),
+		ResultFormat:   optionalValue(item.ResultFormat),
+		Error:          optionalValue(item.Error),
+		ConversationID: optionalValue(item.ConversationID),
+		RunID:          optionalValue(item.RunID),
+		CreatedAt:      optionalValue(item.CreatedAt),
 	}
 	if item.Artifact != nil {
 		out.Artifact = &ChatArtifactSignal{
 			Kind:    item.Artifact.Kind,
 			ID:      item.Artifact.ID,
-			Summary: item.Artifact.Summary,
+			Summary: optionalValue(item.Artifact.Summary),
 		}
 	}
 	return out
-}
-
-type ChatConversationSummary struct {
-	ID              string `json:"id"`
-	WorkspaceID     string `json:"workspaceId"`
-	PrincipalID     string `json:"principalId"`
-	Title           string `json:"title"`
-	Status          string `json:"status"`
-	MessageCount    int    `json:"messageCount"`
-	LastMessageText string `json:"lastMessageText,omitempty"`
-	TitlePending    bool   `json:"titlePending,omitempty"`
-	CreatedAt       string `json:"createdAt"`
-	UpdatedAt       string `json:"updatedAt"`
-	ArchivedAt      string `json:"archivedAt,omitempty"`
-}
-
-type ChatStatus struct {
-	Enabled bool   `json:"enabled"`
-	Running bool   `json:"running"`
-	Error   string `json:"error,omitempty"`
-}
-
-type ComposerSignal struct {
-	Value       string `json:"value"`
-	Disabled    bool   `json:"disabled"`
-	Placeholder string `json:"placeholder"`
 }
 
 func DashboardInitialEnvelope(dataDir, clientID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {
@@ -1136,7 +221,7 @@ func DashboardInitialEnvelope(dataDir, clientID string, catalog dashboard.Catalo
 		Page: DashboardPageSignal{
 			Kind:           RouteDashboard,
 			Title:          report.Title,
-			Description:    report.Description,
+			Description:    optionalValue(report.Description),
 			DashboardID:    report.ID,
 			DashboardTitle: report.Title,
 			PageID:         activePage.ID,
@@ -1144,47 +229,47 @@ func DashboardInitialEnvelope(dataDir, clientID string, catalog dashboard.Catalo
 			HeaderDetail:   ReportPageHeaderDetail(pages, activePage),
 			ModelID:        modelID,
 			ModelTitle:     modelTitle,
-			Canvas:         activePage.Canvas,
-			Grid:           activePage.Grid,
+			Canvas:         DashboardPageCanvasFromDashboard(activePage.Canvas),
+			Grid:           DashboardPageGridFromDashboard(activePage.Grid),
 			Pages:          dashboardPageNav(catalog.Workspace.ID, report.ID, pages, activePage),
 			Components:     dashboardComponents(activePage),
 		},
 		Runtime: RouteRuntimeSignal{
 			Kind:        RouteDashboard,
-			ClientID:    clientID,
-			DashboardID: report.ID,
-			PageID:      activePage.ID,
-			ModelID:     modelID,
+			ClientID:    optionalValue(clientID),
+			DashboardID: optionalValue(report.ID),
+			PageID:      optionalValue(activePage.ID),
+			ModelID:     optionalValue(modelID),
 		},
-		FilterConfig:       report.FilterConfigForPage(activePage.ID),
-		Filters:            initialFilters,
+		FilterConfig:       ReportFilterConfigsFromReport(report.FilterConfigForPage(activePage.ID)),
+		Filters:            DashboardFiltersFromDashboard(initialFilters),
 		URLParams:          report.URLParamsFromFiltersForPage(activePage.ID, initialFilters),
 		URLParamShape:      report.URLParamShapeForPage(activePage.ID),
-		FilterOptions:      map[string][]dashboard.FilterOption{},
-		InteractionCommand: dashboard.InteractionCommand{Toggle: true, Mappings: []dashboard.InteractionCommandMapping{}},
-		TableCommand:       tableRequest,
-		Tables:             TableSignals(report, activePage, tableRequest),
-		Visuals:            VisualSignals(report, model, activePage),
-		Status: dashboard.Status{
+		FilterOptions:      map[string][]DashboardFilterOption{},
+		InteractionCommand: DashboardInteractionCommandFromDashboard(dashboard.InteractionCommand{Toggle: true, Mappings: []dashboard.InteractionCommandMapping{}}),
+		TableCommand:       DashboardTableRequestFromDashboard(tableRequest),
+		Tables:             DashboardTablesFromDashboard(TableSignals(report, activePage, tableRequest)),
+		Visuals:            DashboardVisualsFromDashboard(VisualSignals(report, model, activePage)),
+		Status: DashboardStatusFromDashboard(dashboard.Status{
 			Loading:       false,
 			Error:         "",
 			LastUpdated:   "",
 			DataDirectory: dataDir,
 			SetupRequired: false,
-		},
+		}),
 	}
 }
 
-func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, roleLabel, view string, agent ChatSignal) ChatEnvelope {
+func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, roleLabel, view string, state ChatViewState) ChatEnvelope {
 	chrome := ChromeSignal{Sidebar: SidebarConfigForChat(catalog, workspaceID, roleLabel, view)}
-	AttachChatSidebar(&chrome.Sidebar, agent)
+	AttachChatSidebar(&chrome.Sidebar, state.Agent)
 	return ChatEnvelope{
 		Chrome:  chrome,
-		Page:    ChatPage(workspaceID, view, agent),
+		Page:    ChatPage(workspaceID, view, state.Agent),
 		Runtime: RouteRuntimeSignal{Kind: RouteChat},
-		Agent:   agent,
-		Visuals: agent.Visuals,
-		Tables:  agent.Tables,
+		Agent:   state.Agent,
+		Visuals: state.Visuals,
+		Tables:  state.Tables,
 	}
 }
 
@@ -1207,7 +292,7 @@ func AttachChatSidebar(sidebar *SidebarSignal, agent ChatSignal) {
 	sidebar.PrimaryAction = &SidebarActionSignal{Label: "New chat", Href: chatPath("new"), Icon: "plus"}
 	sidebar.History = &SidebarHistorySignal{
 		Label:     "Chats",
-		EmptyText: "No chats yet.",
+		EmptyText: optionalValue("No chats yet."),
 		Items:     ChatHistoryItems(agent),
 	}
 }
@@ -1231,10 +316,26 @@ func ChatHistoryItems(agent ChatSignal) []SidebarHistoryItemSignal {
 }
 
 func WorkspaceAccessSignals(access WorkspaceAccessResponse) WorkspaceAccessSignal {
+	roles := make([]any, len(access.Roles))
+	for index := range access.Roles {
+		roles[index] = access.Roles[index]
+	}
+	bindings := make([]any, len(access.Bindings))
+	for index := range access.Bindings {
+		bindings[index] = access.Bindings[index]
+	}
 	return WorkspaceAccessSignal{
-		WorkspaceAccessResponse: access,
-		Command:                 WorkspaceAccessCommand{},
-		Search:                  "",
+		Workspace:   access.Workspace,
+		ObjectType:  optionalValue(access.ObjectType),
+		ObjectID:    optionalValue(access.ObjectID),
+		ObjectTitle: optionalValue(access.ObjectTitle),
+		Mode:        optionalValue(access.Mode),
+		Roles:       roles,
+		Bindings:    bindings,
+		CanManage:   access.CanManage,
+		Status:      access.Status,
+		Command:     WorkspaceAccessCommand{},
+		Search:      "",
 	}
 }
 
@@ -1267,13 +368,13 @@ func sidebarConfig(catalog dashboard.Catalog, active, dashboardID, workspaceTitl
 	return SidebarSignal{
 		WorkspaceTitle: workspaceTitle,
 		Active:         active,
-		DashboardID:    dashboardID,
+		DashboardID:    optionalValue(dashboardID),
 		DashboardTitle: dashboardTitle,
 		PageTitle:      pageTitle,
-		ModelID:        modelID,
-		ModelTitle:     modelTitle,
+		ModelID:        optionalValue(modelID),
+		ModelTitle:     optionalValue(modelTitle),
 		Compact:        compact,
-		UserRole:       roleLabel,
+		UserRole:       optionalValue(roleLabel),
 		Groups:         sidebarGroups(catalog, includeWorkspaceScoped),
 	}
 }
@@ -1377,23 +478,23 @@ func ValidateDashboardEnvelope(envelope DashboardEnvelope) error {
 	usedFilters := map[string]struct{}{}
 	for _, component := range envelope.Page.Components {
 		switch {
-		case component.Visual != "":
-			usedVisuals[component.Visual] = struct{}{}
-			if _, ok := envelope.Visuals[component.Visual]; !ok {
-				return fmt.Errorf("component %q references missing visual %q", component.ID, component.Visual)
+		case component.Visual != nil && *component.Visual != "":
+			usedVisuals[*component.Visual] = struct{}{}
+			if _, ok := envelope.Visuals[*component.Visual]; !ok {
+				return fmt.Errorf("component %q references missing visual %q", component.ID, *component.Visual)
 			}
-		case component.Table != "":
-			usedTables[component.Table] = struct{}{}
-			if _, ok := envelope.Tables[component.Table]; !ok {
-				return fmt.Errorf("component %q references missing table %q", component.ID, component.Table)
+		case component.Table != nil && *component.Table != "":
+			usedTables[*component.Table] = struct{}{}
+			if _, ok := envelope.Tables[*component.Table]; !ok {
+				return fmt.Errorf("component %q references missing table %q", component.ID, *component.Table)
 			}
-		case component.Filter != "":
-			usedFilters[component.Filter] = struct{}{}
-			if !filterConfigContains(envelope.FilterConfig, component.Filter) {
-				return fmt.Errorf("component %q references missing filter config %q", component.ID, component.Filter)
+		case component.Filter != nil && *component.Filter != "":
+			usedFilters[*component.Filter] = struct{}{}
+			if !filterConfigContains(envelope.FilterConfig, *component.Filter) {
+				return fmt.Errorf("component %q references missing filter config %q", component.ID, *component.Filter)
 			}
-			if _, ok := envelope.Filters.WithDefaults().Controls[component.Filter]; !ok {
-				return fmt.Errorf("component %q references missing filter control %q", component.ID, component.Filter)
+			if _, ok := envelope.Filters.Controls[*component.Filter]; !ok {
+				return fmt.Errorf("component %q references missing filter control %q", component.ID, *component.Filter)
 			}
 		}
 	}
@@ -1442,19 +543,19 @@ func dashboardComponents(page dashboard.Page) []DashboardComponentSignal {
 		components = append(components, DashboardComponentSignal{
 			ID:          visual.ID,
 			Kind:        visual.Kind,
-			Visual:      visual.Visual,
-			Table:       visual.Table,
-			Filter:      visual.Filter,
-			Description: visual.Description,
-			Placement:   visual.Placement,
+			Visual:      optionalValue(visual.Visual),
+			Table:       optionalValue(visual.Table),
+			Filter:      optionalValue(visual.Filter),
+			Description: optionalValue(visual.Description),
+			Placement:   DashboardPagePlacementFromDashboard(visual.Placement),
 			X:           visual.X,
 			Y:           visual.Y,
 			Width:       visual.Width,
 			Height:      visual.Height,
-			Eyebrow:     visual.Eyebrow,
-			Title:       visual.Title,
-			Subtitle:    visual.Subtitle,
-			Badges:      append([]string{}, visual.Badges...),
+			Eyebrow:     optionalValue(visual.Eyebrow),
+			Title:       optionalValue(visual.Title),
+			Subtitle:    optionalValue(visual.Subtitle),
+			Badges:      optionalSlice(visual.Badges),
 		})
 	}
 	return components
@@ -1465,12 +566,12 @@ func sidebarGroups(catalog dashboard.Catalog, includeWorkspaceScoped bool) []Sid
 		{
 			Label: "Navigation",
 			Items: []SidebarItemSignal{
-				{ID: "dashboards", Label: "Dashboards", Href: "/", Icon: "dashboard", Meta: "Reports"},
-				{ID: "chat", Label: "Chats", Href: chatPath(), Icon: "chat", Meta: "Agent interface"},
-				{ID: "workspaces", Label: "Workspaces", Href: "/workspaces", Icon: "catalog", Meta: "Published assets"},
-				{ID: "data", Label: "Data", Href: "/data", Icon: "cache", Meta: "Inspect rows"},
-				{ID: "connections", Label: "Connections", Href: "/connections", Icon: "data", Meta: "Data access"},
-				{ID: "admin", Label: "Admin", Href: "/admin", Icon: "settings", Meta: "Read-only administration"},
+				{ID: "dashboards", Label: "Dashboards", Href: "/", Icon: "dashboard", Meta: optionalValue("Reports")},
+				{ID: "chat", Label: "Chats", Href: chatPath(), Icon: "chat", Meta: optionalValue("Agent interface")},
+				{ID: "workspaces", Label: "Workspaces", Href: "/workspaces", Icon: "catalog", Meta: optionalValue("Published assets")},
+				{ID: "data", Label: "Data", Href: "/data", Icon: "cache", Meta: optionalValue("Inspect rows")},
+				{ID: "connections", Label: "Connections", Href: "/connections", Icon: "data", Meta: optionalValue("Data access")},
+				{ID: "admin", Label: "Admin", Href: "/admin", Icon: "settings", Meta: optionalValue("Read-only administration")},
 			},
 		},
 	}
@@ -1623,7 +724,7 @@ func formatReportPageNumber(index, pageCount int) string {
 	return pageNumber
 }
 
-func filterConfigContains(config []reportdef.FilterConfig, id string) bool {
+func filterConfigContains(config []ReportFilterConfig, id string) bool {
 	for _, item := range config {
 		if item.ID == id {
 			return true

@@ -43,7 +43,20 @@ alias ListRefreshRunsOK = OkJson<RefreshRunListResponse>;
 @route("/workspaces/{workspace}/refresh-runs")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "REFRESH_DATA" })
-@extension("x-agent", #{ enabled: true, name: "list_refresh_runs", risk: "read", tags: #["refresh"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "modelId", "status", "createdAt"], cursorPath: "page.nextCursor", count: true } })
+@apigen.tool(#{
+  name: "list_refresh_runs",
+  effect: "read",
+  tags: #["refresh"],
+  input: #{ fields: #[
+    #{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" },
+    #{ source: "query", name: "limit", default: 25 },
+  ] },
+  output: #{
+    mode: "project",
+    select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/modelId" }, #{ source: "/status" }, #{ source: "/createdAt" }] }],
+    cursor: #{ source: "/page/nextCursor" },
+  },
+})
 op listRefreshRuns(@path workspace: string, @query limit?: int32, @query pageToken?: string): ListRefreshRunsOK | CommonErrors;
 
 alias CreateRefreshRunAccepted = AcceptedJson<RefreshRunResponse>;
@@ -62,5 +75,11 @@ alias GetRefreshRunOK = OkJson<RefreshRunResponse>;
 @route("/workspaces/{workspace}/refresh-runs/{run}")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "REFRESH_DATA" })
-@extension("x-agent", #{ enabled: true, name: "get_refresh_run", risk: "read", tags: #["refresh"], output: #{ rootFields: #["id", "modelId", "servingStateId", "targetType", "targetId", "status", "error", "createdAt", "startedAt", "finishedAt"] } })
+@apigen.tool(#{
+  name: "get_refresh_run",
+  effect: "read",
+  tags: #["refresh"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/modelId" }, #{ source: "/servingStateId" }, #{ source: "/targetType" }, #{ source: "/targetId" }, #{ source: "/status" }, #{ source: "/error" }, #{ source: "/createdAt" }, #{ source: "/startedAt" }, #{ source: "/finishedAt" }] },
+})
 op getRefreshRun(@path workspace: string, @path run: string): GetRefreshRunOK | CommonErrors;

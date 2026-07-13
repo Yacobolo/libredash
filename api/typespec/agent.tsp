@@ -98,7 +98,10 @@ model AgentEventListResponse {
 model AdminAgentToolResponse {
   name: string;
   description: string;
-  inputSchema: Record<string>;
+  effect: string;
+  defaults: Record<unknown>;
+  inputSchema: Record<unknown>;
+  outputSchema: Record<unknown>;
 }
 
 model AdminAgentResponse {

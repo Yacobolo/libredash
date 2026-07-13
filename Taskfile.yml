@@ -105,9 +105,31 @@ tasks:
   generate:
     desc: Generate all checked-out derived code needed for local development
     cmds:
+      - task: config:generate
       - task: api:generate
-      - task: schema:generate
       - task: ui-signals:generate
+      - task: schema:generate
+
+  config:generate:
+    desc: Generate runtime configuration, reference documentation, example environment, and schema
+    method: checksum
+    sources:
+      - Taskfile.yml
+      - internal/configspec/spec.go
+      - internal/tools/configgen/main.go
+    generates:
+      - internal/config/config_gen.go
+      - internal/configspec/names_gen.go
+      - docs/configuration.md
+      - .env.example
+      - schemas/config/environment.schema.json
+    cmds:
+      - go run ./internal/tools/configgen
+
+  config:check:
+    desc: Verify generated configuration artifacts are current
+    cmds:
+      - go run ./internal/tools/configgen --check
 
   api:generate:
     desc: Generate headless API contract artifacts and APIGen Go surfaces
@@ -124,12 +146,15 @@ tasks:
       - internal/api/gen/server.apigen.gen.go
       - internal/cli/gen/apigen_registry.gen.go
     cmds:
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3 typespec-compile -manifest api/apigen.yaml -target libredash-v1
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3 all -manifest api/apigen.yaml -target libredash-v1
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 typespec-compile -manifest api/apigen.yaml -target libredash-v1
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 all -manifest api/apigen.yaml -target libredash-v1
       - go run ./internal/tools/apigenpostprocess
 
   schema:generate:
     desc: Generate JSON Schema artifacts for LibreDash YAML contracts
+    deps:
+      - api:generate
+      - ui-signals:generate
     method: checksum
     sources:
       - Taskfile.yml
@@ -146,17 +171,21 @@ tasks:
       - go run ./cmd/libredash schema export --format json-schema --out schemas/json
 
   ui-signals:generate:
-    desc: Generate UI signal schemas and TypeScript types
+    desc: Generate UI signal Go and TypeScript contracts from TypeSpec
     method: checksum
     sources:
       - Taskfile.yml
-      - internal/tools/uisignalsgen/**/*.go
-      - internal/ui/signals/**/*.go
+      - api/apigen.yaml
+      - api/signals/**/*.tsp
+      - internal/tools/uisignalspostprocess/**/*.go
     generates:
-      - schemas/signals/ui-signals.schema.json
+      - api/gen/ui-signals-ir.json
+      - internal/ui/signals/models.gen.go
       - web/generated/signals/index.ts
     cmds:
-      - go run ./internal/tools/uisignalsgen
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 typespec-compile -manifest api/apigen.yaml -target ui-signals
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 all -manifest api/apigen.yaml -target ui-signals
+      - go run ./internal/tools/uisignalspostprocess
 
   test:
     desc: Run tests
@@ -196,6 +225,16 @@ tasks:
       - test
     cmds:
       - task: qa:ui-framework
+      - task: deploy:check
+
+  deploy:check:
+    desc: Validate the supported single-node deployment and lifecycle contracts
+    cmds:
+      - go test ./deploy/hetzner
+      - terraform fmt -check -recursive deploy/hetzner
+      - terraform -chdir=deploy/hetzner init -backend=false -input=false
+      - terraform -chdir=deploy/hetzner validate
+      - terraform -chdir=deploy/hetzner test
 
   node:audit:
     desc: Scan JavaScript dependencies for known vulnerabilities

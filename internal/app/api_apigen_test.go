@@ -11,7 +11,7 @@ import (
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 )
 
-func TestAPIGenUsesTypeSpecV033(t *testing.T) {
+func TestAPIGenUsesTypeSpecV040(t *testing.T) {
 	root := projectRoot(t)
 	manifest, err := os.ReadFile(filepath.Join(root, "api", "apigen.yaml"))
 	if err != nil {
@@ -31,16 +31,24 @@ func TestAPIGenUsesTypeSpecV033(t *testing.T) {
 	}
 	taskText := string(taskfile)
 	for _, want := range []string{
-		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3 typespec-compile",
-		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3 all",
+		"- task: api:generate\n      - task: ui-signals:generate\n      - task: schema:generate",
+		"schema:generate:\n    desc: Generate JSON Schema artifacts for LibreDash YAML contracts\n    deps:\n      - api:generate\n      - ui-signals:generate",
+	} {
+		if !strings.Contains(taskText, want) {
+			t.Fatalf("Taskfile.yml does not enforce generated-model ordering %q", want)
+		}
+	}
+	for _, want := range []string{
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 typespec-compile",
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 all",
 	} {
 		if !strings.Contains(taskText, want) {
 			t.Fatalf("Taskfile.yml missing generation command %q", want)
 		}
 	}
-	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0", "apigen@v0.3.0", "apigen@v0.3.2"} {
+	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0", "apigen@v0.3.0", "apigen@v0.3.2", "apigen@v0.3.3"} {
 		if strings.Contains(taskText, forbidden) {
-			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.3.3 migration", forbidden)
+			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.4.0 migration", forbidden)
 		}
 	}
 
@@ -52,8 +60,127 @@ func TestAPIGenUsesTypeSpecV033(t *testing.T) {
 	if err := json.Unmarshal(ir, &irDoc); err != nil {
 		t.Fatalf("decode APIGen IR: %v", err)
 	}
-	if got := irDoc["schema_version"]; got != "v2" {
-		t.Fatalf("APIGen IR schema_version = %#v, want v2", got)
+	if got := irDoc["schema_version"]; got != "v3" {
+		t.Fatalf("APIGen IR schema_version = %#v, want v3", got)
+	}
+}
+
+func TestAPIGenOwnsUISignalContracts(t *testing.T) {
+	root := projectRoot(t)
+
+	manifest, err := os.ReadFile(filepath.Join(root, "api", "apigen.yaml"))
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	manifestText := string(manifest)
+	for _, want := range []string{
+		"name: ui-signals",
+		"kind: contracts",
+		"typespec_dir: signals",
+		"go_models_out: ../internal/ui/signals/models.gen.go",
+		"ts_out: ../web/generated/signals/index.ts",
+	} {
+		if !strings.Contains(manifestText, want) {
+			t.Fatalf("APIGen manifest missing UI signal contract setting %q", want)
+		}
+	}
+	if strings.Contains(manifestText, "json_schema_out: ../schemas/signals/ui-signals.schema.json") {
+		t.Fatal("APIGen manifest should not generate an unused UI signal JSON Schema")
+	}
+
+	taskfile, err := os.ReadFile(filepath.Join(root, "Taskfile.yml"))
+	if err != nil {
+		t.Fatalf("read Taskfile.yml: %v", err)
+	}
+	taskText := string(taskfile)
+	for _, want := range []string{
+		"typespec-compile -manifest api/apigen.yaml -target ui-signals",
+		"all -manifest api/apigen.yaml -target ui-signals",
+	} {
+		if !strings.Contains(taskText, want) {
+			t.Fatalf("Taskfile.yml missing UI signal generation command %q", want)
+		}
+	}
+	if strings.Contains(taskText, "go run ./internal/tools/uisignalsgen") {
+		t.Fatal("Taskfile.yml still uses the Go reflection UI signal generator")
+	}
+	if strings.Contains(taskText, "schemas/signals/ui-signals.schema.json") {
+		t.Fatal("Taskfile.yml should not track an unused UI signal JSON Schema")
+	}
+
+	gitignore, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(gitignore), "internal/ui/signals/models.gen.go") {
+		t.Fatal("generated Go UI signal models should be ignored build output")
+	}
+
+	workflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatalf("read CI workflow: %v", err)
+	}
+	workflowText := string(workflow)
+	if !strings.Contains(workflowText, "internal/ui/signals/models.gen.go") {
+		t.Fatal("CI generated-assets artifact does not include Go UI signal models")
+	}
+	if strings.Contains(workflowText, "schemas/signals/") {
+		t.Fatal("CI should not upload an unused UI signal JSON Schema")
+	}
+
+	typespec, err := os.ReadFile(filepath.Join(root, "api", "signals", "main.tsp"))
+	if err != nil {
+		t.Fatalf("read UI signal TypeSpec source: %v", err)
+	}
+	typespecText := string(typespec)
+	for _, want := range []string{"@apigen.`package`", "@apigen.contract", "@apigen.`metadata`"} {
+		if !strings.Contains(typespecText, want) {
+			t.Fatalf("UI signal TypeSpec source missing %q", want)
+		}
+	}
+
+	generatedGo, err := os.ReadFile(filepath.Join(root, "internal", "ui", "signals", "models.gen.go"))
+	if err != nil {
+		t.Fatalf("read generated Go UI signal models: %v", err)
+	}
+	if !strings.Contains(string(generatedGo), "Code generated by apigen data-contract Go emitter") {
+		t.Fatal("UI signal Go models were not generated by APIGen data contracts")
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "internal", "tools", "uisignalsgen")); !os.IsNotExist(err) {
+		t.Fatalf("legacy UI signal reflection generator still exists: %v", err)
+	}
+
+	ir, err := os.ReadFile(filepath.Join(root, "api", "gen", "ui-signals-ir.json"))
+	if err != nil {
+		t.Fatalf("read UI signal contract IR: %v", err)
+	}
+	var irDoc struct {
+		SchemaVersion string `json:"schema_version"`
+		Contracts     []struct {
+			Name       string         `json:"name"`
+			Kind       string         `json:"kind"`
+			Extensions map[string]any `json:"extensions"`
+		} `json:"contracts"`
+	}
+	if err := json.Unmarshal(ir, &irDoc); err != nil {
+		t.Fatalf("decode UI signal contract IR: %v", err)
+	}
+	if irDoc.SchemaVersion != "v3" {
+		t.Fatalf("UI signal IR schema_version = %q, want v3", irDoc.SchemaVersion)
+	}
+	if len(irDoc.Contracts) != 75 {
+		t.Fatalf("UI signal IR contracts = %d, want 75", len(irDoc.Contracts))
+	}
+	foundEnvelopeMetadata := false
+	for _, contract := range irDoc.Contracts {
+		if contract.Name == "DashboardEnvelope" && contract.Kind == "ui-envelope" && contract.Extensions["x-libredash-contract-role"] == "envelope" {
+			foundEnvelopeMetadata = true
+			break
+		}
+	}
+	if !foundEnvelopeMetadata {
+		t.Fatal("DashboardEnvelope contract metadata was not preserved in IR")
 	}
 }
 
@@ -235,6 +362,11 @@ func TestAPIGenOperationObjectResolverCoverage(t *testing.T) {
 
 func TestAPIGenOperationExtensions(t *testing.T) {
 	contracts := apigenapi.GetAPIGenOperationContracts()
+	toolContracts := apigenapi.GetAPIGenToolContracts()
+	toolsByOperation := make(map[string]string, len(toolContracts))
+	for name, tool := range toolContracts {
+		toolsByOperation[tool.OperationID] = name
+	}
 	agentTools := map[string]string{
 		"getPublish":                 "get_publish",
 		"getDashboard":               "describe_dashboard",
@@ -279,22 +411,15 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		if got := authz["privilege"]; got != string(apigenOperationPrivileges[operationID]) {
 			t.Fatalf("%s x-authz privilege = %#v, want %q", operationID, got, apigenOperationPrivileges[operationID])
 		}
-		agentExtension, hasAgentExtension := contract.Extensions["x-agent"].(map[string]any)
 		if wantName, ok := agentTools[operationID]; ok {
-			if !hasAgentExtension {
-				t.Fatalf("%s missing x-agent extension", operationID)
+			if got := toolsByOperation[operationID]; got != wantName {
+				t.Fatalf("%s generated tool name = %q, want %q", operationID, got, wantName)
 			}
-			if got := agentExtension["enabled"]; got != true {
-				t.Fatalf("%s x-agent enabled = %#v, want true", operationID, got)
-			}
-			if got := agentExtension["name"]; got != wantName {
-				t.Fatalf("%s x-agent name = %#v, want %q", operationID, got, wantName)
-			}
-			if got := agentExtension["risk"]; got != "read" {
-				t.Fatalf("%s x-agent risk = %#v, want read", operationID, got)
-			}
-		} else if hasAgentExtension {
-			t.Fatalf("%s should not have x-agent metadata", operationID)
+		} else if name := toolsByOperation[operationID]; name != "" {
+			t.Fatalf("%s should not have generated tool %q", operationID, name)
+		}
+		if _, hasLegacy := contract.Extensions["x-agent"]; hasLegacy {
+			t.Fatalf("%s retained legacy x-agent metadata", operationID)
 		}
 		if _, ok := contract.Extensions["x-libredash-dispatch"]; ok {
 			t.Fatalf("%s should not have raw-body dispatch extension", operationID)

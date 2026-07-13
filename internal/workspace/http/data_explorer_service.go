@@ -60,19 +60,19 @@ func (h Handler) globalDataExplorerStateWithCurrent(r *nethttp.Request, command 
 		objects = append(objects, workspaceObjects...)
 		warnings = append(warnings, objectWarnings...)
 	}
-	selected, selectionWarnings := selectGlobalDataExplorerObject(objects, command.WorkspaceID, command.ObjectKey)
+	selected, selectionWarnings := selectGlobalDataExplorerObject(objects, uisignals.ValueOrZero(command.WorkspaceID), uisignals.ValueOrZero(command.ObjectKey))
 	warnings = append(warnings, selectionWarnings...)
 	if selected != nil {
-		command.WorkspaceID = selected.WorkspaceID
-		command.ObjectKey = selected.Key
-		command.Sort = dataPreviewSortForColumns(selected.Columns, command.Sort)
+		command.WorkspaceID = uisignals.Optional(selected.WorkspaceID)
+		command.ObjectKey = uisignals.Optional(selected.Key)
+		command.Sort = dataPreviewSortForColumns(uisignals.ValueOrZero(selected.Columns), command.Sort)
 	}
 	explorer := uisignals.DataExplorerSignal{
 		Objects:             objects,
 		SelectedWorkspaceID: command.WorkspaceID,
 		SelectedKey:         command.ObjectKey,
 		Command:             command,
-		Warnings:            warnings,
+		Warnings:            uisignals.OptionalSlice(warnings),
 		Preview: uisignals.DataPreviewSignal{
 			Columns:       []uisignals.DataPreviewColumnSignal{},
 			TotalRows:     0,
@@ -80,7 +80,7 @@ func (h Handler) globalDataExplorerStateWithCurrent(r *nethttp.Request, command 
 			ChunkSize:     command.Count,
 			RowHeight:     dataExplorerRowHeight,
 			ResetVersion:  command.ResetVersion,
-			Blocks:        emptyDataPreviewBlocks(command.Count, command.Sort, command.ResetVersion),
+			Blocks:        emptyDataPreviewBlocks(int(command.Count), command.Sort, int(command.ResetVersion)),
 			Sort:          command.Sort,
 		},
 	}
@@ -90,17 +90,17 @@ func (h Handler) globalDataExplorerStateWithCurrent(r *nethttp.Request, command 
 		if metrics, ok := h.metricsForWorkspace(copy.WorkspaceID); ok && metrics != nil {
 			explorer.Preview = h.dataPreview(r.Context(), metrics, copy, command, current)
 		} else {
-			explorer.Preview.Error = fmt.Sprintf("workspace %q metrics are not configured", copy.WorkspaceID)
+			explorer.Preview.Error = uisignals.Pointer(fmt.Sprintf("workspace %q metrics are not configured", copy.WorkspaceID))
 		}
 	}
 	page := uisignals.DataExplorerPageSignal{
 		Kind:                uisignals.RouteData,
 		Title:               "Data Explorer",
-		Description:         "Inspect source rows, materialized model tables, and semantic row views.",
+		Description:         uisignals.Pointer("Inspect source rows, materialized model tables, and semantic row views."),
 		WorkspaceID:         command.WorkspaceID,
 		SelectedWorkspaceID: command.WorkspaceID,
 		SelectedObject:      command.ObjectKey,
-		Workspaces:          dataExplorerWorkspaceSignals(workspaces, objects, command.WorkspaceID),
+		Workspaces:          dataExplorerWorkspaceSignals(workspaces, objects, uisignals.ValueOrZero(command.WorkspaceID)),
 		Tabs: []uisignals.WorkspaceTabSignal{
 			{ID: "all", Label: "All", Href: "/data", Active: true},
 		},
@@ -124,17 +124,17 @@ func dataExplorerObjects(workspaceID, workspaceTitle string, metrics Metrics, as
 			out = append(out, uisignals.DataExplorerObjectSignal{
 				Key:            dataObjectKey("source", modelID+"."+asset.Key),
 				WorkspaceID:    workspaceID,
-				WorkspaceTitle: workspaceTitle,
-				AssetID:        asset.ID,
+				WorkspaceTitle: uisignals.Optional(workspaceTitle),
+				AssetID:        uisignals.Optional(asset.ID),
 				Layer:          "source",
-				ModelID:        modelID,
-				Source:         sourceKey,
+				ModelID:        uisignals.Optional(modelID),
+				Source:         uisignals.Optional(sourceKey),
 				Title:          asset.Title,
-				Description:    asset.Description,
-				DetailHref:     assetnav.CanonicalAssetSectionHref(workspaceID, asset, "details", edges),
-				ColumnCount:    len(columns),
-				RowCountLabel:  "Unknown",
-				Columns:        columns,
+				Description:    uisignals.Optional(asset.Description),
+				DetailHref:     uisignals.Optional(assetnav.CanonicalAssetSectionHref(workspaceID, asset, "details", edges)),
+				ColumnCount:    int64(len(columns)),
+				RowCountLabel:  uisignals.Pointer("Unknown"),
+				Columns:        uisignals.OptionalSlice(columns),
 			})
 		case string(workspace.AssetTypeModelTable):
 			model, _ := metrics.SemanticModel(modelID)
@@ -146,33 +146,33 @@ func dataExplorerObjects(workspaceID, workspaceTitle string, metrics Metrics, as
 			out = append(out, uisignals.DataExplorerObjectSignal{
 				Key:            dataObjectKey("model_table", asset.ID),
 				WorkspaceID:    workspaceID,
-				WorkspaceTitle: workspaceTitle,
-				AssetID:        asset.ID,
+				WorkspaceTitle: uisignals.Optional(workspaceTitle),
+				AssetID:        uisignals.Optional(asset.ID),
 				Layer:          "model_table",
-				ModelID:        modelID,
-				Table:          name,
+				ModelID:        uisignals.Optional(modelID),
+				Table:          uisignals.Optional(name),
 				Title:          asset.Title,
-				Description:    asset.Description,
-				DetailHref:     assetnav.CanonicalAssetSectionHref(workspaceID, asset, "details", edges),
-				ColumnCount:    len(columns),
-				RowCountLabel:  "Unknown",
-				Columns:        columns,
+				Description:    uisignals.Optional(asset.Description),
+				DetailHref:     uisignals.Optional(assetnav.CanonicalAssetSectionHref(workspaceID, asset, "details", edges)),
+				ColumnCount:    int64(len(columns)),
+				RowCountLabel:  uisignals.Pointer("Unknown"),
+				Columns:        uisignals.OptionalSlice(columns),
 			})
 			semanticColumns := dataColumnsFromTable(table, true)
 			out = append(out, uisignals.DataExplorerObjectSignal{
 				Key:            dataObjectKey("semantic_view", modelID+"."+name),
 				WorkspaceID:    workspaceID,
-				WorkspaceTitle: workspaceTitle,
-				AssetID:        asset.ID,
+				WorkspaceTitle: uisignals.Optional(workspaceTitle),
+				AssetID:        uisignals.Optional(asset.ID),
 				Layer:          "semantic_view",
-				ModelID:        modelID,
-				Table:          name,
+				ModelID:        uisignals.Optional(modelID),
+				Table:          uisignals.Optional(name),
 				Title:          asset.Title + " semantic view",
-				Description:    "Exposed row fields from the semantic model.",
-				DetailHref:     assetnav.CanonicalAssetSectionHref(workspaceID, asset, "details", edges),
-				ColumnCount:    len(semanticColumns),
-				RowCountLabel:  "Unknown",
-				Columns:        semanticColumns,
+				Description:    uisignals.Pointer("Exposed row fields from the semantic model."),
+				DetailHref:     uisignals.Optional(assetnav.CanonicalAssetSectionHref(workspaceID, asset, "details", edges)),
+				ColumnCount:    int64(len(semanticColumns)),
+				RowCountLabel:  uisignals.Pointer("Unknown"),
+				Columns:        uisignals.OptionalSlice(semanticColumns),
 			})
 		}
 	}
@@ -180,8 +180,8 @@ func dataExplorerObjects(workspaceID, workspaceTitle string, metrics Metrics, as
 		if out[i].Layer != out[j].Layer {
 			return dataLayerRank(out[i].Layer) < dataLayerRank(out[j].Layer)
 		}
-		if out[i].ModelID != out[j].ModelID {
-			return out[i].ModelID < out[j].ModelID
+		if uisignals.ValueOrZero(out[i].ModelID) != uisignals.ValueOrZero(out[j].ModelID) {
+			return uisignals.ValueOrZero(out[i].ModelID) < uisignals.ValueOrZero(out[j].ModelID)
 		}
 		return out[i].Title < out[j].Title
 	})
@@ -267,15 +267,15 @@ func dataExplorerObjectsFromMetrics(workspaceID, workspaceTitle string, metrics 
 			out = append(out, uisignals.DataExplorerObjectSignal{
 				Key:            dataObjectKey("source", assetID),
 				WorkspaceID:    workspaceID,
-				WorkspaceTitle: workspaceTitle,
-				AssetID:        assetID,
+				WorkspaceTitle: uisignals.Optional(workspaceTitle),
+				AssetID:        uisignals.Optional(assetID),
 				Layer:          "source",
-				ModelID:        modelSummary.ID,
-				Source:         name,
+				ModelID:        uisignals.Optional(modelSummary.ID),
+				Source:         uisignals.Optional(name),
 				Title:          firstNonEmpty(name, assetID),
-				ColumnCount:    len(columns),
-				RowCountLabel:  "Unknown",
-				Columns:        columns,
+				ColumnCount:    int64(len(columns)),
+				RowCountLabel:  uisignals.Pointer("Unknown"),
+				Columns:        uisignals.OptionalSlice(columns),
 			})
 		}
 		tableNames := make([]string, 0, len(model.Tables))
@@ -290,30 +290,30 @@ func dataExplorerObjectsFromMetrics(workspaceID, workspaceTitle string, metrics 
 			out = append(out, uisignals.DataExplorerObjectSignal{
 				Key:            dataObjectKey("model_table", assetID),
 				WorkspaceID:    workspaceID,
-				WorkspaceTitle: workspaceTitle,
-				AssetID:        assetID,
+				WorkspaceTitle: uisignals.Optional(workspaceTitle),
+				AssetID:        uisignals.Optional(assetID),
 				Layer:          "model_table",
-				ModelID:        modelSummary.ID,
-				Table:          name,
+				ModelID:        uisignals.Optional(modelSummary.ID),
+				Table:          uisignals.Optional(name),
 				Title:          name,
-				ColumnCount:    len(columns),
-				RowCountLabel:  "Unknown",
-				Columns:        columns,
+				ColumnCount:    int64(len(columns)),
+				RowCountLabel:  uisignals.Pointer("Unknown"),
+				Columns:        uisignals.OptionalSlice(columns),
 			})
 			semanticColumns := dataColumnsFromTable(table, true)
 			out = append(out, uisignals.DataExplorerObjectSignal{
 				Key:            dataObjectKey("semantic_view", modelSummary.ID+"."+name),
 				WorkspaceID:    workspaceID,
-				WorkspaceTitle: workspaceTitle,
-				AssetID:        assetID,
+				WorkspaceTitle: uisignals.Optional(workspaceTitle),
+				AssetID:        uisignals.Optional(assetID),
 				Layer:          "semantic_view",
-				ModelID:        modelSummary.ID,
-				Table:          name,
+				ModelID:        uisignals.Optional(modelSummary.ID),
+				Table:          uisignals.Optional(name),
 				Title:          name + " semantic view",
-				Description:    "Exposed row fields from the semantic model.",
-				ColumnCount:    len(semanticColumns),
-				RowCountLabel:  "Unknown",
-				Columns:        semanticColumns,
+				Description:    uisignals.Pointer("Exposed row fields from the semantic model."),
+				ColumnCount:    int64(len(semanticColumns)),
+				RowCountLabel:  uisignals.Pointer("Unknown"),
+				Columns:        uisignals.OptionalSlice(semanticColumns),
 			})
 		}
 	}
@@ -321,8 +321,8 @@ func dataExplorerObjectsFromMetrics(workspaceID, workspaceTitle string, metrics 
 		if out[i].Layer != out[j].Layer {
 			return dataLayerRank(out[i].Layer) < dataLayerRank(out[j].Layer)
 		}
-		if out[i].ModelID != out[j].ModelID {
-			return out[i].ModelID < out[j].ModelID
+		if uisignals.ValueOrZero(out[i].ModelID) != uisignals.ValueOrZero(out[j].ModelID) {
+			return uisignals.ValueOrZero(out[i].ModelID) < uisignals.ValueOrZero(out[j].ModelID)
 		}
 		return out[i].Title < out[j].Title
 	})
@@ -340,7 +340,7 @@ func dataExplorerWorkspaceSignals(workspaces []workspace.WorkspaceView, objects 
 			ID:          workspace.ID,
 			Title:       firstNonEmpty(workspace.Title, workspace.ID),
 			Href:        "/data?workspace=" + url.QueryEscape(workspace.ID),
-			ObjectCount: counts[workspace.ID],
+			ObjectCount: int64(counts[workspace.ID]),
 			Active:      workspace.ID == activeWorkspaceID,
 		})
 	}
@@ -382,10 +382,10 @@ func selectGlobalDataExplorerObject(objects []uisignals.DataExplorerObjectSignal
 }
 
 func dataExplorerObjectMatchesKey(object uisignals.DataExplorerObjectSignal, key string) bool {
-	if object.Key == key || object.AssetID == key {
+	if object.Key == key || uisignals.ValueOrZero(object.AssetID) == key {
 		return true
 	}
-	if object.Layer == "source" && dataObjectKey("source", object.AssetID) == key {
+	if object.Layer == "source" && dataObjectKey("source", uisignals.ValueOrZero(object.AssetID)) == key {
 		return true
 	}
 	return false
@@ -393,13 +393,13 @@ func dataExplorerObjectMatchesKey(object uisignals.DataExplorerObjectSignal, key
 
 func (h Handler) dataPreview(ctx context.Context, metrics Metrics, object uisignals.DataExplorerObjectSignal, command uisignals.DataExplorerCommand, current *uisignals.DataExplorerSignal) uisignals.DataPreviewSignal {
 	preview := uisignals.DataPreviewSignal{
-		Columns:       object.Columns,
+		Columns:       uisignals.ValueOrZero(object.Columns),
 		TotalRows:     0,
 		AvailableRows: 0,
 		ChunkSize:     command.Count,
 		RowHeight:     dataExplorerRowHeight,
 		ResetVersion:  command.ResetVersion,
-		Blocks:        emptyDataPreviewBlocks(command.Count, command.Sort, command.ResetVersion),
+		Blocks:        emptyDataPreviewBlocks(int(command.Count), command.Sort, int(command.ResetVersion)),
 		TotalRowLabel: object.RowCountLabel,
 		Sort:          command.Sort,
 	}
@@ -410,39 +410,39 @@ func (h Handler) dataPreview(ctx context.Context, metrics Metrics, object uisign
 	} else {
 		total, err := h.countDataPreview(ctx, metrics, object)
 		if err != nil {
-			preview.Error = err.Error()
+			preview.Error = uisignals.Pointer(err.Error())
 			return preview
 		}
-		preview.TotalRowLabel = total
-		preview.TotalRows = dataPreviewTotalRows(total)
+		preview.TotalRowLabel = uisignals.Optional(total)
+		preview.TotalRows = int64(dataPreviewTotalRows(total))
 		preview.AvailableRows = preview.TotalRows
 	}
-	if preview.TotalRows == 0 && preview.TotalRowLabel != "0" {
-		preview.TotalRows = command.Start + command.Count*len(dataExplorerBlockIDs)
+	if preview.TotalRows == 0 && uisignals.ValueOrZero(preview.TotalRowLabel) != "0" {
+		preview.TotalRows = command.Start + command.Count*int64(len(dataExplorerBlockIDs))
 		preview.AvailableRows = preview.TotalRows
 	}
-	blockStarts := []int{command.Start}
-	blockIDs := []string{command.Block}
-	if command.Block == "all" {
-		blockStarts = dataPreviewBlockStarts(command.Start, command.Count, preview.AvailableRows)
+	blockStarts := []int{int(command.Start)}
+	blockIDs := []string{uisignals.ValueOrZero(command.Block)}
+	if uisignals.ValueOrZero(command.Block) == "all" {
+		blockStarts = dataPreviewBlockStarts(int(command.Start), int(command.Count), int(preview.AvailableRows))
 		blockIDs = dataExplorerBlockIDs[:len(blockStarts)]
 	}
 	for index, blockID := range blockIDs {
 		start := blockStarts[index]
-		rows, sqlText, err := h.previewRows(ctx, metrics, object, command, start, command.Count)
+		rows, sqlText, err := h.previewRows(ctx, metrics, object, command, start, int(command.Count))
 		if sqlText != "" {
-			preview.SQL = sqlText
+			preview.SQL = uisignals.Optional(sqlText)
 		}
 		if err != nil {
-			preview.Error = err.Error()
+			preview.Error = uisignals.Pointer(err.Error())
 			return preview
 		}
 		if preview.AvailableRows == 0 && len(rows) > 0 {
-			preview.AvailableRows = start + len(rows)
+			preview.AvailableRows = int64(start + len(rows))
 			preview.TotalRows = preview.AvailableRows
 		}
 		preview.Blocks[blockID] = uisignals.DataPreviewBlockSignal{
-			Start:        start,
+			Start:        int64(start),
 			RequestSeq:   command.RequestSeq,
 			ResetVersion: command.ResetVersion,
 			Sort:         command.Sort,
@@ -459,13 +459,18 @@ func reusableDataPreviewTotals(current *uisignals.DataExplorerSignal, object uis
 	if current.SelectedObject.WorkspaceID != object.WorkspaceID || current.SelectedObject.Key != object.Key {
 		return uisignals.DataPreviewSignal{}, false
 	}
-	if current.Preview.ResetVersion != command.ResetVersion || current.Preview.ChunkSize != command.Count || current.Preview.Sort != command.Sort {
+	if current.Preview.ResetVersion != command.ResetVersion || current.Preview.ChunkSize != command.Count || !dataPreviewSortEqual(current.Preview.Sort, command.Sort) {
 		return uisignals.DataPreviewSignal{}, false
 	}
-	if current.Preview.TotalRows <= 0 && current.Preview.AvailableRows <= 0 && dataPreviewTotalRows(current.Preview.TotalRowLabel) <= 0 {
+	if current.Preview.TotalRows <= 0 && current.Preview.AvailableRows <= 0 && dataPreviewTotalRows(uisignals.ValueOrZero(current.Preview.TotalRowLabel)) <= 0 {
 		return uisignals.DataPreviewSignal{}, false
 	}
 	return current.Preview, true
+}
+
+func dataPreviewSortEqual(left, right uisignals.DataPreviewSortSignal) bool {
+	return uisignals.ValueOrZero(left.Column) == uisignals.ValueOrZero(right.Column) &&
+		uisignals.ValueOrZero(left.Direction) == uisignals.ValueOrZero(right.Direction)
 }
 
 func emptyDataPreviewBlocks(count int, sort uisignals.DataPreviewSortSignal, resetVersion int) map[string]uisignals.DataPreviewBlockSignal {
@@ -473,9 +478,9 @@ func emptyDataPreviewBlocks(count int, sort uisignals.DataPreviewSortSignal, res
 		count = dataExplorerDefaultLimit
 	}
 	return map[string]uisignals.DataPreviewBlockSignal{
-		"a": {Start: 0, ResetVersion: resetVersion, Sort: sort, Rows: []map[string]any{}},
-		"b": {Start: count, ResetVersion: resetVersion, Sort: sort, Rows: []map[string]any{}},
-		"c": {Start: count * 2, ResetVersion: resetVersion, Sort: sort, Rows: []map[string]any{}},
+		"a": {Start: 0, ResetVersion: int64(resetVersion), Sort: sort, Rows: []map[string]any{}},
+		"b": {Start: int64(count), ResetVersion: int64(resetVersion), Sort: sort, Rows: []map[string]any{}},
+		"c": {Start: int64(count * 2), ResetVersion: int64(resetVersion), Sort: sort, Rows: []map[string]any{}},
 	}
 }
 
@@ -513,7 +518,7 @@ func dataPreviewTotalRows(label string) int {
 }
 
 func dataPreviewCanceled(preview uisignals.DataPreviewSignal) bool {
-	message := strings.ToLower(preview.Error)
+	message := strings.ToLower(uisignals.ValueOrZero(preview.Error))
 	return strings.Contains(message, "context canceled") ||
 		strings.Contains(message, "context cancelled") ||
 		strings.Contains(message, "interrupt")
@@ -531,7 +536,7 @@ func (h Handler) countDataPreview(ctx context.Context, metrics Metrics, object u
 		}
 		return strconv.Itoa(result.TotalRows), nil
 	case "semantic_view":
-		return firstNonEmpty(object.RowCountLabel, "Unknown"), nil
+		return firstNonEmpty(uisignals.ValueOrZero(object.RowCountLabel), "Unknown"), nil
 	default:
 		return "Unknown", fmt.Errorf("unsupported data layer %q", object.Layer)
 	}
@@ -556,7 +561,7 @@ func dataPreviewColumnKeys(columns []uisignals.DataPreviewColumnSignal) []string
 }
 
 func dataPreviewQuery(object uisignals.DataExplorerObjectSignal, command uisignals.DataExplorerCommand, start, count int, includeTotal bool) dataquery.Query {
-	columns := dataPreviewColumnKeys(object.Columns)
+	columns := dataPreviewColumnKeys(uisignals.ValueOrZero(object.Columns))
 	sortSpec := dataPreviewSort(command.Sort)
 	metadata := dataquery.Metadata{
 		Surface:    dataquery.SurfaceDataExplorer,
@@ -570,25 +575,25 @@ func dataPreviewQuery(object uisignals.DataExplorerObjectSignal, command uisigna
 	}
 	switch object.Layer {
 	case "source":
-		return withMetadata(dataquery.SourceRows(object.ModelID, object.Source, columns, sortSpec, start, count, includeTotal))
+		return withMetadata(dataquery.SourceRows(uisignals.ValueOrZero(object.ModelID), uisignals.ValueOrZero(object.Source), columns, sortSpec, start, count, includeTotal))
 	case "model_table":
-		return withMetadata(dataquery.ModelTableRows(object.ModelID, object.Table, columns, sortSpec, start, count, includeTotal))
+		return withMetadata(dataquery.ModelTableRows(uisignals.ValueOrZero(object.ModelID), uisignals.ValueOrZero(object.Table), columns, sortSpec, start, count, includeTotal))
 	case "semantic_view":
 		fields := make([]dataquery.Field, 0, len(columns))
 		for _, column := range columns {
-			fields = append(fields, dataquery.Field{Field: object.Table + "." + column, Alias: column})
+			fields = append(fields, dataquery.Field{Field: uisignals.ValueOrZero(object.Table) + "." + column, Alias: column})
 		}
-		return withMetadata(dataquery.SemanticRows(object.ModelID, object.Table, fields, nil, nil, sortSpec, start, count, includeTotal))
+		return withMetadata(dataquery.SemanticRows(uisignals.ValueOrZero(object.ModelID), uisignals.ValueOrZero(object.Table), fields, nil, nil, sortSpec, start, count, includeTotal))
 	default:
-		return withMetadata(dataquery.Query{ModelID: object.ModelID, Kind: dataquery.Kind(object.Layer), Target: object.Table, Limit: count, Offset: start, IncludeTotal: includeTotal})
+		return withMetadata(dataquery.Query{ModelID: uisignals.ValueOrZero(object.ModelID), Kind: dataquery.Kind(object.Layer), Target: uisignals.ValueOrZero(object.Table), Limit: count, Offset: start, IncludeTotal: includeTotal})
 	}
 }
 
 func dataPreviewSort(sort uisignals.DataPreviewSortSignal) []dataquery.Sort {
-	if sort.Column == "" {
+	if uisignals.ValueOrZero(sort.Column) == "" {
 		return nil
 	}
-	return []dataquery.Sort{{Field: sort.Column, Direction: sort.Direction}}
+	return []dataquery.Sort{{Field: uisignals.ValueOrZero(sort.Column), Direction: uisignals.ValueOrZero(sort.Direction)}}
 }
 
 func dataRowsFromQuery(rows []dataquery.Row) []map[string]any {
@@ -604,10 +609,10 @@ func dataRowsFromQuery(rows []dataquery.Row) []map[string]any {
 }
 
 func dataPreviewSortForColumns(columns []uisignals.DataPreviewColumnSignal, sort uisignals.DataPreviewSortSignal) uisignals.DataPreviewSortSignal {
-	if sort.Column == "" || !dataColumnExists(columns, sort.Column) {
+	if uisignals.ValueOrZero(sort.Column) == "" || !dataColumnExists(columns, uisignals.ValueOrZero(sort.Column)) {
 		return uisignals.DataPreviewSortSignal{}
 	}
-	if sort.Direction != "asc" && sort.Direction != "desc" {
+	if uisignals.ValueOrZero(sort.Direction) != "asc" && uisignals.ValueOrZero(sort.Direction) != "desc" {
 		return uisignals.DataPreviewSortSignal{}
 	}
 	return sort
@@ -625,7 +630,7 @@ func dataColumnsFromSource(source semanticmodel.Source) []uisignals.DataPreviewC
 	out := make([]uisignals.DataPreviewColumnSignal, 0, len(names))
 	for _, name := range names {
 		field := source.Fields[name]
-		out = append(out, uisignals.DataPreviewColumnSignal{Key: name, Label: name, Type: field.Type})
+		out = append(out, uisignals.DataPreviewColumnSignal{Key: name, Label: name, Type: uisignals.Optional(field.Type)})
 	}
 	return out
 }
@@ -640,7 +645,7 @@ func dataColumnsFromTable(table semanticmodel.Table, semanticOnly bool) []uisign
 		out := make([]uisignals.DataPreviewColumnSignal, 0, len(names))
 		for _, name := range names {
 			dimension := table.Dimensions[name]
-			out = append(out, uisignals.DataPreviewColumnSignal{Key: name, Label: firstNonEmpty(dimension.Label, name), Type: dimension.Type})
+			out = append(out, uisignals.DataPreviewColumnSignal{Key: name, Label: firstNonEmpty(dimension.Label, name), Type: uisignals.Optional(dimension.Type)})
 		}
 		return out
 	}
@@ -655,7 +660,7 @@ func dataColumnsFromTable(table semanticmodel.Table, semanticOnly bool) []uisign
 	out := make([]uisignals.DataPreviewColumnSignal, 0, len(names))
 	for _, name := range names {
 		column := table.Columns[name]
-		out = append(out, uisignals.DataPreviewColumnSignal{Key: name, Label: firstNonEmpty(column.Name, name), Type: column.Type})
+		out = append(out, uisignals.DataPreviewColumnSignal{Key: name, Label: firstNonEmpty(column.Name, name), Type: uisignals.Optional(column.Type)})
 	}
 	return out
 }
@@ -667,7 +672,7 @@ func dataColumnsFromSchema(columns []semanticmodel.ColumnSchema) []uisignals.Dat
 		return sorted[i].Ordinal < sorted[j].Ordinal
 	})
 	for _, column := range sorted {
-		out = append(out, uisignals.DataPreviewColumnSignal{Key: column.Name, Label: column.Name, Type: column.PhysicalType})
+		out = append(out, uisignals.DataPreviewColumnSignal{Key: column.Name, Label: column.Name, Type: uisignals.Optional(column.PhysicalType)})
 	}
 	return out
 }

@@ -8,8 +8,8 @@ import (
 	h "maragu.dev/gomponents/html"
 )
 
-func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view string, signal ChatSignal) g.Node {
-	chatUpdatesURL := updatesURL(uisignals.RouteChat, "workspace", workspaceID, "view", view, "conversation", signal.ActiveConversationID)
+func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view string, state ChatViewState) g.Node {
+	chatUpdatesURL := updatesURL(uisignals.RouteChat, "workspace", workspaceID, "view", view, "conversation", state.Agent.ActiveConversationID)
 	chatBasePath := "/chat"
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash Chat",
@@ -41,9 +41,9 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 	})
 }
 
-func ChatBootstrapSignals(catalog dashboard.Catalog, workspaceID, roleLabel, view string, signal ChatSignal) map[string]any {
-	envelope := uisignals.ChatInitialEnvelope(catalog, workspaceID, roleLabel, view, signal)
-	envelope.Runtime = uisignals.RouteRuntimeSignal{Kind: uisignals.RouteChat, WorkspaceID: workspaceID}
+func ChatBootstrapSignals(catalog dashboard.Catalog, workspaceID, roleLabel, view string, state ChatViewState) map[string]any {
+	envelope := uisignals.ChatInitialEnvelope(catalog, workspaceID, roleLabel, view, state)
+	envelope.Runtime = uisignals.RouteRuntimeSignal{Kind: uisignals.RouteChat, WorkspaceID: uisignals.Optional(workspaceID)}
 	return map[string]any{
 		"chrome":  envelope.Chrome,
 		"page":    envelope.Page,

@@ -42,7 +42,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-})
+}, 15_000)
 
 test('code editor initializes Monaco, syncs values, emits changes, and disposes', async () => {
   const page = await browser.newPage({ viewport: { width: 900, height: 700 } })

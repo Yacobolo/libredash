@@ -1,0 +1,1503 @@
+{
+  "$id": "https://libredash.dev/schemas/config/environment.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "allOf": [
+    {
+      "description": "Production cannot bypass authentication.",
+      "if": {
+        "properties": {
+          "LIBREDASH_PRODUCTION": {
+            "enum": [
+              "1",
+              "t",
+              "T",
+              "true",
+              "TRUE",
+              "True"
+            ]
+          }
+        },
+        "required": [
+          "LIBREDASH_PRODUCTION"
+        ]
+      },
+      "then": {
+        "not": {
+          "properties": {
+            "LIBREDASH_DEV_AUTH_BYPASS": {
+              "enum": [
+                "1",
+                "t",
+                "T",
+                "true",
+                "TRUE",
+                "True"
+              ]
+            }
+          },
+          "required": [
+            "LIBREDASH_DEV_AUTH_BYPASS"
+          ]
+        }
+      },
+      "x-error-message": "production serve must not enable LIBREDASH_DEV_AUTH_BYPASS"
+    },
+    {
+      "description": "OIDC settings are all-or-none in production.",
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "LIBREDASH_PRODUCTION": {
+                "enum": [
+                  "1",
+                  "t",
+                  "T",
+                  "true",
+                  "TRUE",
+                  "True"
+                ]
+              }
+            },
+            "required": [
+              "LIBREDASH_PRODUCTION"
+            ]
+          },
+          {
+            "anyOf": [
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_ISSUER_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_ISSUER_URL"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CLIENT_ID": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CLIENT_ID"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CLIENT_SECRET": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CLIENT_SECRET"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CALLBACK_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CALLBACK_URL"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_SCOPES": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_SCOPES"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "allOf": [
+          {
+            "properties": {
+              "LIBREDASH_OIDC_ISSUER_URL": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_OIDC_ISSUER_URL"
+            ]
+          },
+          {
+            "properties": {
+              "LIBREDASH_OIDC_CLIENT_ID": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_OIDC_CLIENT_ID"
+            ]
+          },
+          {
+            "properties": {
+              "LIBREDASH_OIDC_CLIENT_SECRET": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_OIDC_CLIENT_SECRET"
+            ]
+          },
+          {
+            "properties": {
+              "LIBREDASH_OIDC_CALLBACK_URL": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_OIDC_CALLBACK_URL"
+            ]
+          }
+        ]
+      },
+      "x-error-message": "production OIDC auth requires LIBREDASH_OIDC_ISSUER_URL, LIBREDASH_OIDC_CLIENT_ID, LIBREDASH_OIDC_CLIENT_SECRET, and LIBREDASH_OIDC_CALLBACK_URL"
+    },
+    {
+      "description": "Azure settings are all-or-none in production.",
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "LIBREDASH_PRODUCTION": {
+                "enum": [
+                  "1",
+                  "t",
+                  "T",
+                  "true",
+                  "TRUE",
+                  "True"
+                ]
+              }
+            },
+            "required": [
+              "LIBREDASH_PRODUCTION"
+            ]
+          },
+          {
+            "anyOf": [
+              {
+                "properties": {
+                  "LIBREDASH_AZURE_CLIENT_ID": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_AZURE_CLIENT_ID"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_AZURE_CLIENT_SECRET": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_AZURE_CLIENT_SECRET"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_AZURE_CALLBACK_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_AZURE_CALLBACK_URL"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_AZURE_TENANT": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_AZURE_TENANT"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "allOf": [
+          {
+            "properties": {
+              "LIBREDASH_AZURE_CLIENT_ID": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_AZURE_CLIENT_ID"
+            ]
+          },
+          {
+            "properties": {
+              "LIBREDASH_AZURE_CLIENT_SECRET": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_AZURE_CLIENT_SECRET"
+            ]
+          },
+          {
+            "properties": {
+              "LIBREDASH_AZURE_CALLBACK_URL": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_AZURE_CALLBACK_URL"
+            ]
+          }
+        ]
+      },
+      "x-error-message": "production Azure auth requires LIBREDASH_AZURE_CLIENT_ID, LIBREDASH_AZURE_CLIENT_SECRET, and LIBREDASH_AZURE_CALLBACK_URL"
+    },
+    {
+      "description": "Production requires local, API-token-only, OIDC, or Azure authentication.",
+      "if": {
+        "properties": {
+          "LIBREDASH_PRODUCTION": {
+            "enum": [
+              "1",
+              "t",
+              "T",
+              "true",
+              "TRUE",
+              "True"
+            ]
+          }
+        },
+        "required": [
+          "LIBREDASH_PRODUCTION"
+        ]
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "LIBREDASH_LOCAL_AUTH": {
+                "enum": [
+                  "1",
+                  "t",
+                  "T",
+                  "true",
+                  "TRUE",
+                  "True"
+                ]
+              }
+            },
+            "required": [
+              "LIBREDASH_LOCAL_AUTH"
+            ]
+          },
+          {
+            "properties": {
+              "LIBREDASH_API_TOKEN_ONLY_AUTH": {
+                "enum": [
+                  "1",
+                  "t",
+                  "T",
+                  "true",
+                  "TRUE",
+                  "True"
+                ]
+              }
+            },
+            "required": [
+              "LIBREDASH_API_TOKEN_ONLY_AUTH"
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_ISSUER_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_ISSUER_URL"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CLIENT_ID": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CLIENT_ID"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CLIENT_SECRET": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CLIENT_SECRET"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CALLBACK_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CALLBACK_URL"
+                ]
+              }
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "properties": {
+                  "LIBREDASH_AZURE_CLIENT_ID": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_AZURE_CLIENT_ID"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_AZURE_CLIENT_SECRET": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_AZURE_CLIENT_SECRET"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_AZURE_CALLBACK_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_AZURE_CALLBACK_URL"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "x-error-message": "production serve requires OIDC auth env vars, Azure auth env vars, LIBREDASH_LOCAL_AUTH, or LIBREDASH_API_TOKEN_ONLY_AUTH"
+    },
+    {
+      "description": "Production requires a CSRF key with at least 32 characters.",
+      "if": {
+        "properties": {
+          "LIBREDASH_PRODUCTION": {
+            "enum": [
+              "1",
+              "t",
+              "T",
+              "true",
+              "TRUE",
+              "True"
+            ]
+          }
+        },
+        "required": [
+          "LIBREDASH_PRODUCTION"
+        ]
+      },
+      "then": {
+        "properties": {
+          "LIBREDASH_CSRF_KEY": {
+            "minLength": 32
+          }
+        },
+        "required": [
+          "LIBREDASH_CSRF_KEY"
+        ]
+      },
+      "x-error-message": "production serve requires LIBREDASH_CSRF_KEY with at least 32 characters"
+    },
+    {
+      "description": "Production requires a metrics bearer token with at least 32 characters.",
+      "if": {
+        "properties": {
+          "LIBREDASH_PRODUCTION": {
+            "enum": [
+              "1",
+              "t",
+              "T",
+              "true",
+              "TRUE",
+              "True"
+            ]
+          }
+        },
+        "required": [
+          "LIBREDASH_PRODUCTION"
+        ]
+      },
+      "then": {
+        "properties": {
+          "LIBREDASH_METRICS_BEARER_TOKEN": {
+            "minLength": 32
+          }
+        },
+        "required": [
+          "LIBREDASH_METRICS_BEARER_TOKEN"
+        ]
+      },
+      "x-error-message": "production metrics scraping requires LIBREDASH_METRICS_BEARER_TOKEN with at least 32 characters"
+    },
+    {
+      "description": "Production requires an explicit allowed host or a browser-auth callback host.",
+      "if": {
+        "properties": {
+          "LIBREDASH_PRODUCTION": {
+            "enum": [
+              "1",
+              "t",
+              "T",
+              "true",
+              "TRUE",
+              "True"
+            ]
+          }
+        },
+        "required": [
+          "LIBREDASH_PRODUCTION"
+        ]
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "LIBREDASH_ALLOWED_HOSTS": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_ALLOWED_HOSTS"
+            ]
+          },
+          {
+            "properties": {
+              "LIBREDASH_OIDC_CALLBACK_URL": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_OIDC_CALLBACK_URL"
+            ]
+          },
+          {
+            "properties": {
+              "LIBREDASH_AZURE_CALLBACK_URL": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_AZURE_CALLBACK_URL"
+            ]
+          }
+        ]
+      },
+      "x-error-message": "production serve requires LIBREDASH_ALLOWED_HOSTS or an OIDC/Azure callback URL host"
+    },
+    {
+      "description": "Production browser authentication requires secure cookies unless API-token-only mode is also enabled.",
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "LIBREDASH_PRODUCTION": {
+                "enum": [
+                  "1",
+                  "t",
+                  "T",
+                  "true",
+                  "TRUE",
+                  "True"
+                ]
+              }
+            },
+            "required": [
+              "LIBREDASH_PRODUCTION"
+            ]
+          },
+          {
+            "anyOf": [
+              {
+                "properties": {
+                  "LIBREDASH_LOCAL_AUTH": {
+                    "enum": [
+                      "1",
+                      "t",
+                      "T",
+                      "true",
+                      "TRUE",
+                      "True"
+                    ]
+                  }
+                },
+                "required": [
+                  "LIBREDASH_LOCAL_AUTH"
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "properties": {
+                      "LIBREDASH_OIDC_ISSUER_URL": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "LIBREDASH_OIDC_ISSUER_URL"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "LIBREDASH_OIDC_CLIENT_ID": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "LIBREDASH_OIDC_CLIENT_ID"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "LIBREDASH_OIDC_CLIENT_SECRET": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "LIBREDASH_OIDC_CLIENT_SECRET"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "LIBREDASH_OIDC_CALLBACK_URL": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "LIBREDASH_OIDC_CALLBACK_URL"
+                    ]
+                  }
+                ]
+              },
+              {
+                "allOf": [
+                  {
+                    "properties": {
+                      "LIBREDASH_AZURE_CLIENT_ID": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "LIBREDASH_AZURE_CLIENT_ID"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "LIBREDASH_AZURE_CLIENT_SECRET": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "LIBREDASH_AZURE_CLIENT_SECRET"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "LIBREDASH_AZURE_CALLBACK_URL": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "LIBREDASH_AZURE_CALLBACK_URL"
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "not": {
+              "properties": {
+                "LIBREDASH_API_TOKEN_ONLY_AUTH": {
+                  "enum": [
+                    "1",
+                    "t",
+                    "T",
+                    "true",
+                    "TRUE",
+                    "True"
+                  ]
+                }
+              },
+              "required": [
+                "LIBREDASH_API_TOKEN_ONLY_AUTH"
+              ]
+            }
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "LIBREDASH_COOKIE_SECURE": {
+            "enum": [
+              "1",
+              "t",
+              "T",
+              "true",
+              "TRUE",
+              "True"
+            ]
+          }
+        },
+        "required": [
+          "LIBREDASH_COOKIE_SECURE"
+        ]
+      },
+      "x-error-message": "production browser auth requires LIBREDASH_COOKIE_SECURE=true"
+    },
+    {
+      "description": "The production OIDC issuer must use HTTPS.",
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "LIBREDASH_PRODUCTION": {
+                "enum": [
+                  "1",
+                  "t",
+                  "T",
+                  "true",
+                  "TRUE",
+                  "True"
+                ]
+              }
+            },
+            "required": [
+              "LIBREDASH_PRODUCTION"
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_ISSUER_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_ISSUER_URL"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CLIENT_ID": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CLIENT_ID"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CLIENT_SECRET": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CLIENT_SECRET"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CALLBACK_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CALLBACK_URL"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "LIBREDASH_OIDC_ISSUER_URL": {
+            "pattern": "^https://[^/]+"
+          }
+        },
+        "required": [
+          "LIBREDASH_OIDC_ISSUER_URL"
+        ]
+      },
+      "x-error-message": "production serve requires LIBREDASH_OIDC_ISSUER_URL to be an https URL"
+    },
+    {
+      "description": "The production OIDC callback must use HTTPS.",
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "LIBREDASH_PRODUCTION": {
+                "enum": [
+                  "1",
+                  "t",
+                  "T",
+                  "true",
+                  "TRUE",
+                  "True"
+                ]
+              }
+            },
+            "required": [
+              "LIBREDASH_PRODUCTION"
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_ISSUER_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_ISSUER_URL"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CLIENT_ID": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CLIENT_ID"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CLIENT_SECRET": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CLIENT_SECRET"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CALLBACK_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CALLBACK_URL"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "LIBREDASH_OIDC_CALLBACK_URL": {
+            "pattern": "^https://[^/]+"
+          }
+        },
+        "required": [
+          "LIBREDASH_OIDC_CALLBACK_URL"
+        ]
+      },
+      "x-error-message": "production serve requires LIBREDASH_OIDC_CALLBACK_URL to be an https URL"
+    },
+    {
+      "description": "The OIDC provider identifier must be route-safe.",
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "LIBREDASH_PRODUCTION": {
+                "enum": [
+                  "1",
+                  "t",
+                  "T",
+                  "true",
+                  "TRUE",
+                  "True"
+                ]
+              }
+            },
+            "required": [
+              "LIBREDASH_PRODUCTION"
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_ISSUER_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_ISSUER_URL"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CLIENT_ID": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CLIENT_ID"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CLIENT_SECRET": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CLIENT_SECRET"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_OIDC_CALLBACK_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_OIDC_CALLBACK_URL"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "LIBREDASH_OIDC_PROVIDER_ID": {
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+          }
+        }
+      },
+      "x-error-message": "LIBREDASH_OIDC_PROVIDER_ID must be a route-safe slug containing only letters, numbers, dots, underscores, or dashes"
+    },
+    {
+      "description": "The production Azure callback must use HTTPS.",
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "LIBREDASH_PRODUCTION": {
+                "enum": [
+                  "1",
+                  "t",
+                  "T",
+                  "true",
+                  "TRUE",
+                  "True"
+                ]
+              }
+            },
+            "required": [
+              "LIBREDASH_PRODUCTION"
+            ]
+          },
+          {
+            "allOf": [
+              {
+                "properties": {
+                  "LIBREDASH_AZURE_CLIENT_ID": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_AZURE_CLIENT_ID"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_AZURE_CLIENT_SECRET": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_AZURE_CLIENT_SECRET"
+                ]
+              },
+              {
+                "properties": {
+                  "LIBREDASH_AZURE_CALLBACK_URL": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "LIBREDASH_AZURE_CALLBACK_URL"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "LIBREDASH_AZURE_CALLBACK_URL": {
+            "pattern": "^https://[^/]+"
+          }
+        },
+        "required": [
+          "LIBREDASH_AZURE_CALLBACK_URL"
+        ]
+      },
+      "x-error-message": "production serve requires LIBREDASH_AZURE_CALLBACK_URL to be an https URL"
+    },
+    {
+      "description": "A configured production SCIM token must contain at least 32 characters.",
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "LIBREDASH_PRODUCTION": {
+                "enum": [
+                  "1",
+                  "t",
+                  "T",
+                  "true",
+                  "TRUE",
+                  "True"
+                ]
+              }
+            },
+            "required": [
+              "LIBREDASH_PRODUCTION"
+            ]
+          },
+          {
+            "properties": {
+              "LIBREDASH_SCIM_BEARER_TOKEN": {
+                "minLength": 1
+              }
+            },
+            "required": [
+              "LIBREDASH_SCIM_BEARER_TOKEN"
+            ]
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "LIBREDASH_SCIM_BEARER_TOKEN": {
+            "minLength": 32
+          }
+        },
+        "required": [
+          "LIBREDASH_SCIM_BEARER_TOKEN"
+        ]
+      },
+      "x-error-message": "production SCIM provisioning requires LIBREDASH_SCIM_BEARER_TOKEN with at least 32 characters"
+    }
+  ],
+  "properties": {
+    "ADDR": {
+      "deprecated": true,
+      "description": "Compatibility listen-address alias used after LIBREDASH_ADDR.",
+      "type": "string",
+      "x-alias-for": "LIBREDASH_ADDR",
+      "x-lifecycle": "compatibility",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_ADDR": {
+      "description": "HTTP listen address.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve,healthcheck"
+    },
+    "LIBREDASH_AGENT_API_KEY": {
+      "description": "API key for the configured agent model provider.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_AGENT_BASE_URL": {
+      "default": "https://api.openai.com/v1",
+      "description": "OpenAI-compatible agent API base URL.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_AGENT_MODEL": {
+      "description": "Agent model identifier.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_ALLOWED_HOSTS": {
+      "description": "Comma- or whitespace-separated exact hosts and wildcard suffixes accepted in production.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_API_TOKEN": {
+      "description": "API token used by non-interactive CLI commands.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "supported",
+      "x-scope": "publish,api"
+    },
+    "LIBREDASH_API_TOKEN_ONLY_AUTH": {
+      "description": "Disable browser authentication and accept API tokens only.",
+      "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_ASSET_VERSION": {
+      "description": "Optional browser asset cache-busting version override.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_AZURE_CALLBACK_URL": {
+      "description": "HTTPS callback URL registered with Azure AD or Entra ID.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_AZURE_CLIENT_ID": {
+      "description": "Azure AD or Entra ID OAuth client identifier.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_AZURE_CLIENT_SECRET": {
+      "description": "Azure AD or Entra ID OAuth client secret.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_AZURE_TENANT": {
+      "description": "Optional Azure AD or Entra ID tenant identifier.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_BASE_URL": {
+      "default": "http://localhost:8195",
+      "description": "Base URL used by browser QA tooling.",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "ui-qa"
+    },
+    "LIBREDASH_BOOTSTRAP_ADMIN_EMAIL": {
+      "description": "Email assigned to the production bootstrap administrator.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "admin bootstrap"
+    },
+    "LIBREDASH_BOOTSTRAP_CACHE_DIR": {
+      "description": "Download cache directory used by dataset bootstrap tools.",
+      "type": "string",
+      "x-lifecycle": "tooling",
+      "x-scope": "bootstrap tools"
+    },
+    "LIBREDASH_BOOTSTRAP_FORCE": {
+      "default": "false",
+      "description": "Force dataset bootstrap tools to refresh existing files.",
+      "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
+      "type": "string",
+      "x-lifecycle": "tooling",
+      "x-scope": "bootstrap tools"
+    },
+    "LIBREDASH_BRIDGE_BENCH_ITERATIONS": {
+      "default": "120",
+      "description": "Measured Datastar bridge benchmark iterations.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "browser benchmark"
+    },
+    "LIBREDASH_BRIDGE_BENCH_WARMUP": {
+      "default": "20",
+      "description": "Warm-up Datastar bridge benchmark iterations.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "browser benchmark"
+    },
+    "LIBREDASH_CATALOG_PATH": {
+      "description": "Legacy dashboard catalog path override.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_CLI_CONFIG": {
+      "description": "Path to the local CLI target and token configuration file.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "client commands"
+    },
+    "LIBREDASH_COOKIE_SECURE": {
+      "description": "Secure-cookie override; defaults to true for production browser authentication.",
+      "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_CSRF_KEY": {
+      "description": "Key used for CSRF protection and OAuth state cookies; production requires at least 32 characters.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_DATA_DIR": {
+      "default": ".data/olist",
+      "description": "Directory containing source data files.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve,bootstrap tools"
+    },
+    "LIBREDASH_DEV_AUTH_BYPASS": {
+      "default": "false",
+      "description": "Bypass authentication in development; forbidden in production.",
+      "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_DEV_LOG_LINES": {
+      "default": "120",
+      "description": "Number of log lines shown by the managed development server.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "dev server"
+    },
+    "LIBREDASH_DEV_PORT_COUNT": {
+      "default": "100",
+      "description": "Number of ports scanned by the managed development server.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "dev server"
+    },
+    "LIBREDASH_DEV_PORT_START": {
+      "default": "8100",
+      "description": "First port scanned by the managed development server.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "dev server"
+    },
+    "LIBREDASH_DEV_PROJECT": {
+      "default": "dashboards/libredash.yaml",
+      "description": "Project published by the managed development server.",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "dev server"
+    },
+    "LIBREDASH_DEV_READY_ATTEMPTS": {
+      "default": "150",
+      "description": "Readiness attempts made by the managed development server.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "dev server"
+    },
+    "LIBREDASH_DEV_READY_INTERVAL": {
+      "default": "200ms",
+      "description": "Delay between managed development server readiness attempts.",
+      "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "dev server"
+    },
+    "LIBREDASH_DEV_RESTART": {
+      "default": "false",
+      "description": "Force the managed development server to restart.",
+      "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "dev server"
+    },
+    "LIBREDASH_DEV_SKIP_PUBLISH": {
+      "default": "false",
+      "description": "Skip automatic project publishing in the managed development server.",
+      "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "dev server"
+    },
+    "LIBREDASH_DEV_WORKTREE": {
+      "description": "Worktree path exported by the managed development server.",
+      "type": "string",
+      "x-lifecycle": "internal",
+      "x-scope": "dev server"
+    },
+    "LIBREDASH_DUCKDB_DIR": {
+      "description": "Directory containing workspace DuckDB runtime files.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_DUCKDB_PATH": {
+      "description": "Explicit legacy DuckDB database path override.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_DUCKLAKE_CATALOG_PATH": {
+      "description": "Path to the single global DuckLake catalog.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve,admin"
+    },
+    "LIBREDASH_EXEC_JOB_LEASE_TIMEOUT": {
+      "default": "2m",
+      "description": "Lease duration before an abandoned refresh job may be reclaimed.",
+      "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_EXEC_MAX_QUEUED_READS": {
+      "default": "64",
+      "description": "Maximum queued interactive read queries; negative disables queuing.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_EXEC_MAX_QUEUED_WRITES": {
+      "default": "64",
+      "description": "Maximum queued refresh jobs; negative disables queuing.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_EXEC_MAX_RUNNING_READS": {
+      "default": "4",
+      "description": "Maximum concurrently running interactive read queries.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_EXEC_MAX_RUNNING_WRITES": {
+      "default": "1",
+      "description": "Maximum concurrently running refresh jobs.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_EXEC_READ_QUEUE_TIMEOUT": {
+      "default": "30s",
+      "description": "Maximum time an interactive read may wait in the queue.",
+      "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_EXEC_READ_TIMEOUT": {
+      "default": "2m",
+      "description": "Maximum execution time for an interactive read query.",
+      "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_GID": {
+      "description": "Temporary container group identifier used during provisioning.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "internal",
+      "x-scope": "Hetzner provisioner"
+    },
+    "LIBREDASH_HEALTHCHECK_URL": {
+      "description": "Explicit readiness URL used by the healthcheck command.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "healthcheck"
+    },
+    "LIBREDASH_HOME": {
+      "default": ".libredash",
+      "description": "Instance state directory containing databases, artifacts, and runtime files.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve,admin,client"
+    },
+    "LIBREDASH_IMAGE": {
+      "description": "Immutable LibreDash OCI image reference consumed by deployment tooling.",
+      "type": "string",
+      "x-lifecycle": "tooling",
+      "x-scope": "Hetzner provisioner"
+    },
+    "LIBREDASH_LOCAL_AUTH": {
+      "description": "Enable administrator-managed local browser authentication.",
+      "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_METRICS_BEARER_TOKEN": {
+      "description": "Bearer token protecting the Prometheus metrics endpoint; production requires at least 32 characters.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_OIDC_CALLBACK_URL": {
+      "description": "HTTPS callback URL registered with the generic OIDC provider.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_OIDC_CLIENT_ID": {
+      "description": "Generic OIDC client identifier.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_OIDC_CLIENT_SECRET": {
+      "description": "Generic OIDC client secret.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_OIDC_ISSUER_URL": {
+      "description": "HTTPS issuer URL for the generic OIDC provider.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_OIDC_PROVIDER_ID": {
+      "default": "oidc",
+      "description": "Route-safe identifier for the generic OIDC provider.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_OIDC_SCOPES": {
+      "description": "Comma- or whitespace-separated additional OIDC scopes.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_PRODUCTION": {
+      "default": "false",
+      "description": "Enable production serving and validation behavior.",
+      "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve,admin"
+    },
+    "LIBREDASH_QUACK_TOKEN": {
+      "description": "Credential injected into the Quack connection declaration.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "external",
+      "x-scope": "Quack development profile"
+    },
+    "LIBREDASH_SCIM_BEARER_TOKEN": {
+      "description": "Bearer token enabling SCIM provisioning; production requires at least 32 characters when set.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_SMOKE_PORT": {
+      "default": "18080",
+      "description": "Host port used by the production image smoke test.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "internal",
+      "x-scope": "production image smoke test"
+    },
+    "LIBREDASH_TARGET": {
+      "description": "Default LibreDash API target URL.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "client commands"
+    },
+    "LIBREDASH_TOKEN_HASH_KEY": {
+      "description": "Optional dedicated key for deterministic API-token fingerprints; falls back to the CSRF key.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_TRUST_PROXY_HEADERS": {
+      "default": "false",
+      "description": "Trust client-address headers only when a trusted proxy overwrites them.",
+      "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_UID": {
+      "description": "Temporary container user identifier used during provisioning.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "internal",
+      "x-scope": "Hetzner provisioner"
+    },
+    "LIBREDASH_WAREHOUSE_DSN": {
+      "description": "Example externally supplied warehouse connection credential.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "external",
+      "x-scope": "example connection"
+    },
+    "PORT": {
+      "deprecated": true,
+      "description": "Compatibility port alias used after LIBREDASH_ADDR and ADDR.",
+      "type": "string",
+      "x-alias-for": "LIBREDASH_ADDR",
+      "x-lifecycle": "compatibility",
+      "x-scope": "serve,healthcheck"
+    }
+  },
+  "title": "LibreDash process-global environment",
+  "type": "object"
+}

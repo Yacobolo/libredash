@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Yacobolo/libredash/internal/configspec"
 	"github.com/alexedwards/argon2id"
 )
 
@@ -35,8 +36,8 @@ func verifySecret(secret, verifier string) bool {
 
 var tokenFingerprintKey = func() []byte {
 	source := firstNonEmpty(
-		strings.TrimSpace(os.Getenv("LIBREDASH_TOKEN_HASH_KEY")),
-		strings.TrimSpace(os.Getenv("LIBREDASH_CSRF_KEY")),
+		strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_TOKEN_HASH_KEY)),
+		strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_CSRF_KEY)),
 		"libredash-development-token-hash-key",
 	)
 	sum := sha256.Sum256([]byte("libredash-token-fingerprint:" + source))

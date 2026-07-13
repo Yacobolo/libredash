@@ -27,6 +27,14 @@ func TestServeProductionModeHonorsConfigEnv(t *testing.T) {
 	}
 }
 
+func TestServeCommandConstructionDoesNotParseEnvironment(t *testing.T) {
+	t.Setenv("LIBREDASH_EXEC_MAX_RUNNING_READS", "invalid")
+	cmd := serveCommand(context.Background(), &rootOptions{})
+	if cmd == nil {
+		t.Fatal("serveCommand() returned nil")
+	}
+}
+
 func TestServeEnvironmentDefaultsToProductionEnvironment(t *testing.T) {
 	if got := serveEnvironment(true, ""); got != servingstate.Environment("prod") {
 		t.Fatalf("production serve environment = %q, want prod", got)

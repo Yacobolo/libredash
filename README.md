@@ -42,6 +42,7 @@ go run ./cmd/libredash
 - Semantic model YAML follows `sources -> models -> semantic model`: sources are raw physical inputs, models are light DuckDB-backed preparation tables, and semantic models own tables, fields, relationships, and measures.
 - Dashboard YAML owns pages, filters, KPIs, visuals, tables, and interactions over semantic model fields and measures.
 - Lit route components consume typed Datastar-backed page signals; dashboard visuals bind to signal payloads such as `visuals.revenue`.
+- `api/signals/main.tsp` is the source of truth for UI signal payloads. APIGen generates the shared Go models and TypeScript types with `task ui-signals:generate`; handwritten adapters only translate internal dashboard domain values into those transport contracts.
 - The bundled `datastar-inspector` web component shows live Datastar signals in the browser.
 
 ## Source Model
@@ -236,7 +237,7 @@ For file and table paths, LibreDash infers `format` from clear extensions such a
 
 ## Deploy
 
-Development and production use the same deployment path. Start the dev server, then explicitly deploy the project to it:
+Start the development server, then explicitly deploy the project to it:
 
 ```sh
 task dev
@@ -244,6 +245,12 @@ task deploy:dev
 ```
 
 After YAML changes, run `task deploy:dev` again and refresh or navigate the UI. The server reads workspace assets, details, lineage, and versions from the active deployment records.
+
+For the supported small production topology, use the [Hetzner single-node
+guide](deploy/hetzner/README.md). It provisions pinned release images, HTTPS,
+generated secrets, restricted SSH, backups, and healthchecked upgrades with
+rollback using Terraform. The remaining examples in this section describe
+custom deployments.
 
 Production mode serves the active deployed BI-as-code bundle from `.libredash` by default:
 
@@ -301,36 +308,25 @@ docker run --rm -p 8080:8080 \
 
 The image runs as a non-root user, serves generated browser assets from `/app/static`, and keeps SQLite, DuckLake, artifacts, runtime files, and backups outside the image layer under `LIBREDASH_HOME`.
 
-Useful env vars:
+LibreDash uses one process-global environment contract. A minimal local-auth
+production configuration is:
 
 ```sh
+LIBREDASH_PRODUCTION=1
 LIBREDASH_HOME=/var/lib/libredash
 LIBREDASH_DATA_DIR=/path/to/data
 LIBREDASH_LOCAL_AUTH=1
-LIBREDASH_DUCKLAKE_CATALOG_PATH=/var/lib/libredash/ducklake/catalog.sqlite
-LIBREDASH_ASSET_VERSION= # optional override; defaults to the generated build hash in production
 LIBREDASH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
-LIBREDASH_AZURE_CLIENT_ID=...
-LIBREDASH_AZURE_CLIENT_SECRET=...
-LIBREDASH_AZURE_CALLBACK_URL=https://your-host/auth/azureadv2/callback
-LIBREDASH_AZURE_TENANT=...
-LIBREDASH_OIDC_PROVIDER_ID=oidc
-LIBREDASH_OIDC_ISSUER_URL=https://issuer.example.com
-LIBREDASH_OIDC_CLIENT_ID=...
-LIBREDASH_OIDC_CLIENT_SECRET=...
-LIBREDASH_OIDC_CALLBACK_URL=https://your-host/auth/oidc/callback
-LIBREDASH_OIDC_SCOPES="openid profile email"
 LIBREDASH_CSRF_KEY=<32+ byte secret>
-LIBREDASH_ALLOWED_HOSTS=libredash.example.com # comma/space separated; required for API-token-only production
+LIBREDASH_ALLOWED_HOSTS=libredash.example.com
 LIBREDASH_METRICS_BEARER_TOKEN=<32+ byte secret>
-LIBREDASH_COOKIE_SECURE=true # required for production OIDC/Azure browser auth
-LIBREDASH_TRUST_PROXY_HEADERS=false # true only behind a trusted header-overwriting proxy
-LIBREDASH_SCIM_BEARER_TOKEN=<optional 32+ byte secret>
-LIBREDASH_EXEC_MAX_RUNNING_READS=4
-LIBREDASH_EXEC_MAX_QUEUED_READS=64
-LIBREDASH_EXEC_READ_QUEUE_TIMEOUT=30s
-LIBREDASH_EXEC_READ_TIMEOUT=2m
+LIBREDASH_COOKIE_SECURE=true
 ```
+
+See the generated [configuration reference](docs/configuration.md) for every
+setting, default, lifecycle, and cross-setting production requirement. Run
+`libredash config validate` in the deployment environment before starting the
+server.
 
 Local auth is admin-managed: users with grant-management access can create local
 users from Admin / Principals and copy the one-time temporary password shown in
@@ -343,7 +339,7 @@ LibreDash reads production secrets from environment variables. Infisical is the 
 infisical run --env=prod -- libredash serve --production
 ```
 
-Use `.env.example` as the list of required/common variables; do not commit real `.env` files.
+Use the generated `.env.example` as a valid local-auth production baseline; do not commit real `.env` files.
 
 Production serve keeps the control-plane SQLite database and DuckLake catalog in separate files under `LIBREDASH_HOME`. It enables structured request logs, security headers, allowed-host validation, rate limits, a 128 MiB request body limit, bounded interactive query execution, and OAuth state cookies derived from `LIBREDASH_CSRF_KEY`.
 `LIBREDASH_ALLOWED_HOSTS` accepts exact hosts and `*.example.com` wildcards. Browser auth deployments also allow the hosts from configured OIDC/Azure callback URLs; API-token-only production must set the allowlist explicitly.

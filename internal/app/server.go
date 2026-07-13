@@ -4,8 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -144,7 +142,7 @@ type Options struct {
 func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	executor := options.Executor
 	if executor == nil {
-		executor = execution.New(executionConfigFromEnv())
+		executor = execution.New(execution.DefaultConfig())
 	}
 	if metrics != nil {
 		metrics = executionMetrics{QueryMetrics: metrics, executor: executor, defaultWorkspaceID: options.DefaultWorkspaceID}
@@ -203,7 +201,7 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server.requestLogging = options.RequestLogging
 	server.jobLeaseTimeout = options.JobLeaseTimeout
 	if server.jobLeaseTimeout <= 0 {
-		server.jobLeaseTimeout = durationEnv("LIBREDASH_EXEC_JOB_LEASE_TIMEOUT", 2*time.Minute)
+		server.jobLeaseTimeout = 2 * time.Minute
 	}
 	if options.Logger != nil {
 		server.logger = options.Logger
@@ -273,42 +271,6 @@ func (s *Server) StopBackgroundJobs(ctx context.Context) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-func executionConfigFromEnv() execution.Config {
-	defaults := execution.DefaultConfig()
-	return execution.Config{
-		MaxRunningReads:      intEnv("LIBREDASH_EXEC_MAX_RUNNING_READS", defaults.MaxRunningReads),
-		MaxQueuedReads:       intEnv("LIBREDASH_EXEC_MAX_QUEUED_READS", defaults.MaxQueuedReads),
-		ReadQueueWait:        durationEnv("LIBREDASH_EXEC_READ_QUEUE_TIMEOUT", defaults.ReadQueueWait),
-		ReadExecutionTimeout: durationEnv("LIBREDASH_EXEC_READ_TIMEOUT", defaults.ReadExecutionTimeout),
-		MaxRunningJobs:       intEnv("LIBREDASH_EXEC_MAX_RUNNING_WRITES", defaults.MaxRunningJobs),
-		MaxQueuedJobs:        intEnv("LIBREDASH_EXEC_MAX_QUEUED_WRITES", defaults.MaxQueuedJobs),
-	}
-}
-
-func intEnv(name string, fallback int) int {
-	value := os.Getenv(name)
-	if value == "" {
-		return fallback
-	}
-	parsed, err := strconv.Atoi(value)
-	if err != nil {
-		return fallback
-	}
-	return parsed
-}
-
-func durationEnv(name string, fallback time.Duration) time.Duration {
-	value := os.Getenv(name)
-	if value == "" {
-		return fallback
-	}
-	parsed, err := time.ParseDuration(value)
-	if err != nil {
-		return fallback
-	}
-	return parsed
 }
 
 func (s *Server) workspaceRepository() (workspace.Repository, error) {

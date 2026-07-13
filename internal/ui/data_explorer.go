@@ -12,7 +12,7 @@ func DataExplorerPage(catalog dashboard.Catalog, page uisignals.DataExplorerPage
 	catalog = catalogWithoutWorkspaceContext(catalog)
 	chrome := uisignals.ChromeSignal{Sidebar: uisignals.SidebarConfigForWorkspace(catalog, "data", roleLabel)}
 	applyChromeOptions(&chrome, chromeOptions)
-	explorerUpdatesURL := updatesURL(uisignals.RouteData, "workspace", explorer.Command.WorkspaceID, "object", explorer.Command.ObjectKey)
+	explorerUpdatesURL := updatesURL(uisignals.RouteData, "workspace", uisignals.ValueOrZero(explorer.Command.WorkspaceID), "object", uisignals.ValueOrZero(explorer.Command.ObjectKey))
 	_ = chrome
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: page.Title,

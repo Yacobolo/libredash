@@ -218,14 +218,18 @@ func TestAdminQueryHistoryCommandPublishesFilteredResetPatch(t *testing.T) {
 		if len(history.Table.Rows) != 1 || history.Table.Rows[0]["runtime"] != "sales" || history.Table.Rows[0]["target"] != "orders" {
 			t.Fatalf("filtered reset rows = %#v", history.Table.Rows)
 		}
-		if len(history.Filters.Workspaces) != 1 || history.Filters.Workspaces[0] != "sales" || len(history.Filters.Surfaces) != 1 || history.Filters.Surfaces[0] != "api" || len(history.Filters.Statuses) != 1 || history.Filters.Statuses[0] != "success" || history.Filters.Search != "orders" {
+		workspaces := uisignals.ValueOrZero(history.Filters.Workspaces)
+		surfaces := uisignals.ValueOrZero(history.Filters.Surfaces)
+		statuses := uisignals.ValueOrZero(history.Filters.Statuses)
+		if len(workspaces) != 1 || workspaces[0] != "sales" || len(surfaces) != 1 || surfaces[0] != "api" || len(statuses) != 1 || statuses[0] != "success" || uisignals.ValueOrZero(history.Filters.Search) != "orders" {
 			t.Fatalf("filters were not preserved: %#v", history.Filters)
 		}
-		if len(history.FilterMenus) == 0 || history.FilterMenus[0].SummaryLabel == "" {
+		filterMenus := uisignals.ValueOrZero(history.FilterMenus)
+		if len(filterMenus) == 0 || uisignals.ValueOrZero(filterMenus[0].SummaryLabel) == "" {
 			t.Fatalf("filter menus were not patched: %#v", history.FilterMenus)
 		}
 		command, ok := patch["adminQueryHistoryCommand"].(uisignals.AdminQueryHistoryCommand)
-		if !ok || command.PageToken != history.NextCursor || command.Action != "load_more" {
+		if !ok || uisignals.ValueOrZero(command.PageToken) != history.NextCursor || command.Action != "load_more" {
 			t.Fatalf("command patch = %#v", patch["adminQueryHistoryCommand"])
 		}
 	case <-time.After(time.Second):
@@ -273,8 +277,9 @@ func TestAdminQueryHistoryCommandSearchesFilterMenuOptions(t *testing.T) {
 		if !ok {
 			t.Fatalf("patch missing adminQueryHistory: %#v", patch)
 		}
-		workspaceMenu := queryHistoryMenuForTest(history.FilterMenus, "workspace")
-		if workspaceMenu.Search != "oper" || len(workspaceMenu.Options) != 1 || workspaceMenu.Options[0].Value != "operations" {
+		workspaceMenu := queryHistoryMenuForTest(uisignals.ValueOrZero(history.FilterMenus), "workspace")
+		workspaceOptions := uisignals.ValueOrZero(workspaceMenu.Options)
+		if uisignals.ValueOrZero(workspaceMenu.Search) != "oper" || len(workspaceOptions) != 1 || workspaceOptions[0].Value != "operations" {
 			t.Fatalf("workspace menu = %#v", workspaceMenu)
 		}
 		if len(history.Table.Rows) != 0 {
@@ -325,14 +330,16 @@ func TestAdminQueryHistoryCommandTogglesFilterAndResetsTable(t *testing.T) {
 		if !ok {
 			t.Fatalf("patch missing adminQueryHistory: %#v", patch)
 		}
-		if len(history.Filters.Surfaces) != 1 || history.Filters.Surfaces[0] != "agent" {
+		surfaces := uisignals.ValueOrZero(history.Filters.Surfaces)
+		if len(surfaces) != 1 || surfaces[0] != "agent" {
 			t.Fatalf("surface filter = %#v", history.Filters)
 		}
 		if len(history.Table.Rows) != 1 || history.Table.Rows[0]["target"] != "reviews" {
 			t.Fatalf("filtered table rows = %#v", history.Table.Rows)
 		}
-		surfaceMenu := queryHistoryMenuForTest(history.FilterMenus, "surface")
-		if surfaceMenu.SummaryLabel != "agent" || len(surfaceMenu.Selected) != 1 || surfaceMenu.Selected[0] != "agent" {
+		surfaceMenu := queryHistoryMenuForTest(uisignals.ValueOrZero(history.FilterMenus), "surface")
+		selected := uisignals.ValueOrZero(surfaceMenu.Selected)
+		if uisignals.ValueOrZero(surfaceMenu.SummaryLabel) != "agent" || len(selected) != 1 || selected[0] != "agent" {
 			t.Fatalf("surface menu = %#v", surfaceMenu)
 		}
 	case <-time.After(time.Second):
@@ -396,7 +403,7 @@ func TestAdminQueryHistoryCommandPublishesDetailPatch(t *testing.T) {
 		if !ok {
 			t.Fatalf("patch missing adminQueryDetail: %#v", patch)
 		}
-		if detail.EventID != events[0].ID || detail.WorkspaceID != "sales" || detail.SQL != "select * from orders" || detail.PlanText != "orders plan" || detail.QueryJSON == "" {
+		if uisignals.ValueOrZero(detail.EventID) != events[0].ID || uisignals.ValueOrZero(detail.WorkspaceID) != "sales" || uisignals.ValueOrZero(detail.SQL) != "select * from orders" || uisignals.ValueOrZero(detail.PlanText) != "orders plan" || uisignals.ValueOrZero(detail.QueryJSON) == "" {
 			t.Fatalf("detail patch = %#v", detail)
 		}
 		if _, ok := patch["adminQueryHistory"]; ok {
@@ -582,7 +589,7 @@ func TestAdminStorageSelectTablePublishesSelectedTablePatch(t *testing.T) {
 		if !ok {
 			t.Fatalf("selectedTable = %#v, want *ui.AdminStorageTableSignal", storage["selectedTable"])
 		}
-		if table.Name != "orders" || table.Schema != "model" || len(table.Columns) != 3 || len(table.Files) == 0 {
+		if table.Name != "orders" || table.Schema != "model" || len(uisignals.ValueOrZero(table.Columns)) != 3 || len(uisignals.ValueOrZero(table.Files)) == 0 {
 			t.Fatalf("selectedTable = %#v", table)
 		}
 	case <-time.After(time.Second):

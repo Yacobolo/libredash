@@ -266,8 +266,8 @@ func TestChatSignalConversationListUsesCallerContext(t *testing.T) {
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
 	signal := server.chatSignalWith(canceled, scope, "", nil, agent.ChatArtifactSignals{}, "", false)
-	if len(signal.Conversations) != 0 {
-		t.Fatalf("canceled context should prevent conversation loading, got %#v", signal.Conversations)
+	if len(signal.Agent.Conversations) != 0 {
+		t.Fatalf("canceled context should prevent conversation loading, got %#v", signal.Agent.Conversations)
 	}
 }
 
@@ -362,13 +362,13 @@ func TestChatConversationRouteLoadsArtifactSignalsOutsideTranscript(t *testing.T
 	if strings.Contains(body, `"visuals"`) || strings.Contains(body, `data-attr:visuals="$visuals"`) {
 		t.Fatalf("chat page should not embed artifact signals in HTML:\n%s", body)
 	}
-	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&workspace=test&view=conversation&conversation="+url.QueryEscape(conversation.ID), token, `"visuals":{"agent_chart_123":`, `"artifact":{"kind":"chart"`)
+	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&workspace=test&view=conversation&conversation="+url.QueryEscape(conversation.ID), token, `"visuals":{"agent_chart_123":`, `"artifact":{"id":"agent_chart_123","kind":"chart"`)
 	for _, want := range []string{
 		`"visuals":{"agent_chart_123":`,
 		`"title":"Orders"`,
 		`"data":[{"label":"delivered","value":42}]`,
 		`"tables":{}`,
-		`"artifact":{"kind":"chart","id":"agent_chart_123","summary":"Created chart."}`,
+		`"artifact":{"id":"agent_chart_123","kind":"chart","summary":"Created chart."}`,
 		`"resultJson":"{\n  \"ok\": true,\n  \"kind\": \"chart\"`,
 	} {
 		if !strings.Contains(updatesBody, want) {

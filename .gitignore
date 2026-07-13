@@ -10,6 +10,7 @@ bin/
 coverage.out
 api/gen/
 internal/api/gen/
+internal/ui/signals/models.gen.go
 internal/cli/gen/
 static/app.css
 static/asset-version.txt

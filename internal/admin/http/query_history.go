@@ -60,7 +60,7 @@ func (h Handler) queryHistoryCommand(w http.ResponseWriter, r *http.Request) {
 			detail := signals.AdminQueryDetail
 			detail.EventID = command.EventID
 			detail.Loading = false
-			detail.Error = errorText
+			detail.Error = uisignals.Optional(errorText)
 			h.publishQueryDetailPatch(clientID, detail)
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -74,12 +74,12 @@ func (h Handler) queryHistoryCommand(w http.ResponseWriter, r *http.Request) {
 	}
 	switch command.Action {
 	case "select_detail":
-		event, err := repo.GetQueryEvent(r.Context(), command.EventID)
+		event, err := repo.GetQueryEvent(r.Context(), uisignals.ValueOrZero(command.EventID))
 		if err != nil {
 			detail := signals.AdminQueryDetail
 			detail.EventID = command.EventID
 			detail.Loading = false
-			detail.Error = err.Error()
+			detail.Error = uisignals.Optional(err.Error())
 			h.publishQueryDetailPatch(clientID, detail)
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -95,16 +95,17 @@ func (h Handler) queryHistoryCommand(w http.ResponseWriter, r *http.Request) {
 		history := signals.AdminQueryHistory
 		history.Loading = false
 		history.Error = ""
-		history.FilterMenus = h.readModel().queryHistoryFilterMenus(r, repo, command.Filters, command.FilterMenu.MenuID, command.FilterMenu.Search)
+		filterMenu := uisignals.ValueOrZero(command.FilterMenu)
+		history.FilterMenus = uisignals.OptionalSlice(h.readModel().queryHistoryFilterMenus(r, repo, command.Filters, uisignals.ValueOrZero(filterMenu.MenuID), uisignals.ValueOrZero(filterMenu.Search)))
 		h.publishQueryHistoryPatch(clientID, history)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if command.Action == "filter_toggle" || command.Action == "filter_clear" {
-		command.Filters = applyFilterMenuCommand(command.Filters, command.FilterMenu)
-		command.PageToken = ""
+		command.Filters = applyFilterMenuCommand(command.Filters, uisignals.ValueOrZero(command.FilterMenu))
+		command.PageToken = nil
 	}
-	events, nextCursor, hasMore, err := queryHistoryPage(r, repo, command.Filters, command.PageToken, command.Limit)
+	events, nextCursor, hasMore, err := queryHistoryPage(r, repo, command.Filters, uisignals.ValueOrZero(command.PageToken), int(uisignals.ValueOrZero(command.Limit)))
 	history := signals.AdminQueryHistory
 	incomingCount := len(history.Table.Rows)
 	if command.Action == "load_more" {
@@ -114,14 +115,14 @@ func (h Handler) queryHistoryCommand(w http.ResponseWriter, r *http.Request) {
 		history.Table = ui.AdminQueryHistorySignalFromData(ui.AdminQueryHistoryData{Events: events}).Table
 		incomingCount = 0
 	}
-	history.FilterMenus = h.readModel().queryHistoryFilterMenus(r, repo, command.Filters, "", "")
+	history.FilterMenus = uisignals.OptionalSlice(h.readModel().queryHistoryFilterMenus(r, repo, command.Filters, "", ""))
 	history.Filters = command.Filters
 	history.NextCursor = nextCursor
 	history.HasMore = hasMore
 	history.LoadedCountLabel = queryHistoryLoadedCountLabel(incomingCount + len(events))
 	history.Loading = false
 	history.Error = ""
-	history.Limit = normalizeQueryHistoryLimit(command.Limit)
+	history.Limit = int64(normalizeQueryHistoryLimit(int(uisignals.ValueOrZero(command.Limit))))
 	if err != nil {
 		history.Loading = false
 		history.Error = err.Error()
@@ -139,8 +140,8 @@ func (h Handler) publishQueryHistoryPatch(clientID string, history uisignals.Adm
 		"adminQueryHistoryCommand": uisignals.AdminQueryHistoryCommand{
 			Action:    "load_more",
 			Filters:   history.Filters,
-			PageToken: history.NextCursor,
-			Limit:     history.Limit,
+			PageToken: uisignals.Optional(history.NextCursor),
+			Limit:     uisignals.Pointer(history.Limit),
 		},
 	})
 }
@@ -158,60 +159,61 @@ func normalizeQueryHistoryCommand(command uisignals.AdminQueryHistoryCommand) ui
 	case "load_more", "select_detail", "close_detail", "filter_search", "filter_toggle", "filter_clear":
 	default:
 		action = "reset"
-		command.PageToken = ""
+		command.PageToken = nil
 	}
 	command.Action = action
-	command.Limit = normalizeQueryHistoryLimit(command.Limit)
-	command.PageToken = strings.TrimSpace(command.PageToken)
-	command.EventID = strings.TrimSpace(command.EventID)
+	command.Limit = uisignals.Pointer(int64(normalizeQueryHistoryLimit(int(uisignals.ValueOrZero(command.Limit)))))
+	command.PageToken = uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(command.PageToken)))
+	command.EventID = uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(command.EventID)))
 	command.Filters = normalizeQueryHistoryFilters(command.Filters)
-	command.FilterMenu = normalizeFilterMenuCommand(command.FilterMenu)
+	filterMenu := normalizeFilterMenuCommand(uisignals.ValueOrZero(command.FilterMenu))
+	command.FilterMenu = &filterMenu
 	return command
 }
 
 func normalizeQueryHistoryFilters(filters uisignals.AdminQueryHistoryFilters) uisignals.AdminQueryHistoryFilters {
 	return uisignals.AdminQueryHistoryFilters{
-		Workspaces: cleanStringSlice(filters.Workspaces),
-		Principals: cleanStringSlice(filters.Principals),
-		Surfaces:   cleanStringSlice(filters.Surfaces),
-		Kinds:      cleanStringSlice(filters.Kinds),
-		Statuses:   cleanStringSlice(filters.Statuses),
-		Target:     strings.TrimSpace(filters.Target),
-		Search:     strings.TrimSpace(filters.Search),
-		From:       strings.TrimSpace(filters.From),
-		To:         strings.TrimSpace(filters.To),
+		Workspaces: uisignals.OptionalSlice(cleanStringSlice(uisignals.ValueOrZero(filters.Workspaces))),
+		Principals: uisignals.OptionalSlice(cleanStringSlice(uisignals.ValueOrZero(filters.Principals))),
+		Surfaces:   uisignals.OptionalSlice(cleanStringSlice(uisignals.ValueOrZero(filters.Surfaces))),
+		Kinds:      uisignals.OptionalSlice(cleanStringSlice(uisignals.ValueOrZero(filters.Kinds))),
+		Statuses:   uisignals.OptionalSlice(cleanStringSlice(uisignals.ValueOrZero(filters.Statuses))),
+		Target:     uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(filters.Target))),
+		Search:     uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(filters.Search))),
+		From:       uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(filters.From))),
+		To:         uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(filters.To))),
 	}
 }
 
 func normalizeFilterMenuCommand(command uisignals.FilterMenuCommand) uisignals.FilterMenuCommand {
 	return uisignals.FilterMenuCommand{
-		MenuID:   strings.TrimSpace(command.MenuID),
-		Action:   strings.TrimSpace(command.Action),
-		Search:   strings.TrimSpace(command.Search),
-		Value:    strings.TrimSpace(command.Value),
-		Selected: cleanStringSlice(command.Selected),
+		MenuID:   uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(command.MenuID))),
+		Action:   uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(command.Action))),
+		Search:   uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(command.Search))),
+		Value:    uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(command.Value))),
+		Selected: uisignals.OptionalSlice(cleanStringSlice(uisignals.ValueOrZero(command.Selected))),
 	}
 }
 
 func applyFilterMenuCommand(filters uisignals.AdminQueryHistoryFilters, command uisignals.FilterMenuCommand) uisignals.AdminQueryHistoryFilters {
-	if command.Action == "clear" {
+	if uisignals.ValueOrZero(command.Action) == "clear" {
 		command.Selected = nil
 	}
-	selected := cleanStringSlice(command.Selected)
-	if command.Action == "toggle" {
-		selected = toggleStringSelection(selected, command.Value)
+	selected := cleanStringSlice(uisignals.ValueOrZero(command.Selected))
+	if uisignals.ValueOrZero(command.Action) == "toggle" {
+		selected = toggleStringSelection(selected, uisignals.ValueOrZero(command.Value))
 	}
-	switch command.MenuID {
+	switch uisignals.ValueOrZero(command.MenuID) {
 	case "workspace":
-		filters.Workspaces = selected
+		filters.Workspaces = uisignals.OptionalSlice(selected)
 	case "principal":
-		filters.Principals = selected
+		filters.Principals = uisignals.OptionalSlice(selected)
 	case "surface":
-		filters.Surfaces = selected
+		filters.Surfaces = uisignals.OptionalSlice(selected)
 	case "kind":
-		filters.Kinds = selected
+		filters.Kinds = uisignals.OptionalSlice(selected)
 	case "status":
-		filters.Statuses = selected
+		filters.Statuses = uisignals.OptionalSlice(selected)
 	}
 	return normalizeQueryHistoryFilters(filters)
 }
@@ -274,11 +276,11 @@ func (m ReadModel) queryHistoryFilterMenus(r *http.Request, repo queryaudit.Repo
 		labels      map[string]string
 		icon        string
 	}{
-		{id: "workspace", label: "Workspace", placeholder: "Search workspaces", empty: "No workspaces found.", selected: filters.Workspaces, values: map[string]int{}, labels: map[string]string{}, icon: "workspace"},
-		{id: "principal", label: "User", placeholder: "Search users", empty: "No users found.", selected: filters.Principals, values: map[string]int{}, labels: map[string]string{}, icon: "user"},
-		{id: "surface", label: "Source type", placeholder: "Search source types", empty: "No source types found.", selected: filters.Surfaces, values: map[string]int{}, labels: map[string]string{}, icon: "source"},
-		{id: "kind", label: "Kind", placeholder: "Search kinds", empty: "No kinds found.", selected: filters.Kinds, values: map[string]int{}, labels: map[string]string{}, icon: "kind"},
-		{id: "status", label: "Status", placeholder: "Search statuses", empty: "No statuses found.", selected: filters.Statuses, values: map[string]int{}, labels: map[string]string{}, icon: "status"},
+		{id: "workspace", label: "Workspace", placeholder: "Search workspaces", empty: "No workspaces found.", selected: uisignals.ValueOrZero(filters.Workspaces), values: map[string]int{}, labels: map[string]string{}, icon: "workspace"},
+		{id: "principal", label: "User", placeholder: "Search users", empty: "No users found.", selected: uisignals.ValueOrZero(filters.Principals), values: map[string]int{}, labels: map[string]string{}, icon: "user"},
+		{id: "surface", label: "Source type", placeholder: "Search source types", empty: "No source types found.", selected: uisignals.ValueOrZero(filters.Surfaces), values: map[string]int{}, labels: map[string]string{}, icon: "source"},
+		{id: "kind", label: "Kind", placeholder: "Search kinds", empty: "No kinds found.", selected: uisignals.ValueOrZero(filters.Kinds), values: map[string]int{}, labels: map[string]string{}, icon: "kind"},
+		{id: "status", label: "Status", placeholder: "Search statuses", empty: "No statuses found.", selected: uisignals.ValueOrZero(filters.Statuses), values: map[string]int{}, labels: map[string]string{}, icon: "status"},
 	}
 	out := make([]uisignals.FilterMenuSignal, 0, len(menus))
 	for _, menu := range menus {
@@ -304,11 +306,11 @@ func (m ReadModel) queryHistoryFilterMenus(r *http.Request, repo queryaudit.Repo
 
 func queryHistoryFilterMenusWithError(filters uisignals.AdminQueryHistoryFilters, message string) []uisignals.FilterMenuSignal {
 	return []uisignals.FilterMenuSignal{
-		{ID: "workspace", Label: "Workspace", SummaryLabel: queryHistoryFilterSummary("Workspace", filters.Workspaces, nil), Mode: "multi", Selected: filters.Workspaces, Loading: false, Error: message, Placeholder: "Search workspaces", EmptyLabel: "No workspaces found."},
-		{ID: "principal", Label: "User", SummaryLabel: queryHistoryFilterSummary("User", filters.Principals, nil), Mode: "multi", Selected: filters.Principals, Loading: false, Error: message, Placeholder: "Search users", EmptyLabel: "No users found."},
-		{ID: "surface", Label: "Source type", SummaryLabel: queryHistoryFilterSummary("Source type", filters.Surfaces, nil), Mode: "multi", Selected: filters.Surfaces, Loading: false, Error: message, Placeholder: "Search source types", EmptyLabel: "No source types found."},
-		{ID: "kind", Label: "Kind", SummaryLabel: queryHistoryFilterSummary("Kind", filters.Kinds, nil), Mode: "multi", Selected: filters.Kinds, Loading: false, Error: message, Placeholder: "Search kinds", EmptyLabel: "No kinds found."},
-		{ID: "status", Label: "Status", SummaryLabel: queryHistoryFilterSummary("Status", filters.Statuses, nil), Mode: "multi", Selected: filters.Statuses, Loading: false, Error: message, Placeholder: "Search statuses", EmptyLabel: "No statuses found."},
+		queryHistoryFilterMenu("workspace", "Workspace", "Search workspaces", "No workspaces found.", "workspace", nil, nil, uisignals.ValueOrZero(filters.Workspaces), "", false, message),
+		queryHistoryFilterMenu("principal", "User", "Search users", "No users found.", "user", nil, nil, uisignals.ValueOrZero(filters.Principals), "", false, message),
+		queryHistoryFilterMenu("surface", "Source type", "Search source types", "No source types found.", "source", nil, nil, uisignals.ValueOrZero(filters.Surfaces), "", false, message),
+		queryHistoryFilterMenu("kind", "Kind", "Search kinds", "No kinds found.", "kind", nil, nil, uisignals.ValueOrZero(filters.Kinds), "", false, message),
+		queryHistoryFilterMenu("status", "Status", "Search statuses", "No statuses found.", "status", nil, nil, uisignals.ValueOrZero(filters.Statuses), "", false, message),
 	}
 }
 
@@ -318,15 +320,15 @@ func queryHistoryFilterMenu(id, label, placeholder, emptyLabel, icon string, val
 	return uisignals.FilterMenuSignal{
 		ID:           id,
 		Label:        label,
-		SummaryLabel: queryHistoryFilterSummary(label, selected, labels),
-		Mode:         "multi",
-		Search:       search,
-		Selected:     selected,
-		Options:      options,
+		SummaryLabel: uisignals.Optional(queryHistoryFilterSummary(label, selected, labels)),
+		Mode:         uisignals.Pointer("multi"),
+		Search:       uisignals.Optional(search),
+		Selected:     uisignals.OptionalSlice(selected),
+		Options:      uisignals.OptionalSlice(options),
 		Loading:      loading,
-		Error:        errorText,
-		Placeholder:  placeholder,
-		EmptyLabel:   emptyLabel,
+		Error:        uisignals.Optional(errorText),
+		Placeholder:  uisignals.Optional(placeholder),
+		EmptyLabel:   uisignals.Optional(emptyLabel),
 	}
 }
 
@@ -344,8 +346,8 @@ func queryHistoryFilterOptions(values map[string]int, labels map[string]string, 
 		options = append(options, uisignals.FilterMenuOptionSignal{
 			Value:      value,
 			Label:      label,
-			Icon:       icon,
-			CountLabel: strconv.Itoa(count),
+			Icon:       uisignals.Optional(icon),
+			CountLabel: uisignals.Optional(strconv.Itoa(count)),
 			Selected:   selectedSet[value],
 		})
 	}
@@ -360,7 +362,7 @@ func queryHistoryFilterOptions(values map[string]int, labels map[string]string, 
 		options = append(options, uisignals.FilterMenuOptionSignal{
 			Value:    value,
 			Label:    label,
-			Icon:     icon,
+			Icon:     uisignals.Optional(icon),
 			Selected: true,
 		})
 	}
@@ -424,15 +426,15 @@ func queryHistoryStreamID(clientID string) string {
 func queryHistoryPage(r *http.Request, repo queryaudit.Repository, filters uisignals.AdminQueryHistoryFilters, pageToken string, limit int) ([]ui.AdminQueryEvent, string, bool, error) {
 	limit = normalizeQueryHistoryLimit(limit)
 	rows, err := repo.ListQueryEvents(r.Context(), queryaudit.Filter{
-		WorkspaceIDs: cleanStringSlice(filters.Workspaces),
-		PrincipalIDs: cleanStringSlice(filters.Principals),
-		Surfaces:     cleanStringSlice(filters.Surfaces),
-		QueryKinds:   cleanStringSlice(filters.Kinds),
-		Target:       strings.TrimSpace(filters.Target),
-		Statuses:     cleanStringSlice(filters.Statuses),
-		Search:       strings.TrimSpace(filters.Search),
-		From:         strings.TrimSpace(filters.From),
-		To:           strings.TrimSpace(filters.To),
+		WorkspaceIDs: cleanStringSlice(uisignals.ValueOrZero(filters.Workspaces)),
+		PrincipalIDs: cleanStringSlice(uisignals.ValueOrZero(filters.Principals)),
+		Surfaces:     cleanStringSlice(uisignals.ValueOrZero(filters.Surfaces)),
+		QueryKinds:   cleanStringSlice(uisignals.ValueOrZero(filters.Kinds)),
+		Target:       strings.TrimSpace(uisignals.ValueOrZero(filters.Target)),
+		Statuses:     cleanStringSlice(uisignals.ValueOrZero(filters.Statuses)),
+		Search:       strings.TrimSpace(uisignals.ValueOrZero(filters.Search)),
+		From:         strings.TrimSpace(uisignals.ValueOrZero(filters.From)),
+		To:           strings.TrimSpace(uisignals.ValueOrZero(filters.To)),
 		PageToken:    strings.TrimSpace(pageToken),
 		Limit:        limit + 1,
 	})

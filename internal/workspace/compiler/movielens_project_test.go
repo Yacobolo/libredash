@@ -32,6 +32,18 @@ func TestMovieLensExperimentProjectCompiles(t *testing.T) {
 			}
 		}
 	}
+	movieRatings := workspaceProject.Definition.Models["movie_ratings"]
+	movieTitle, ok := movieRatings.Dimensions["movie_title"]
+	if !ok || len(movieTitle.Bindings) != 2 || movieTitle.Bindings["ratings"].Field != "movies.title" || movieTitle.Bindings["tags"].Field != "movies.title" {
+		t.Fatalf("movie_title dimension = %#v, want conformed ratings/tags bindings", movieTitle)
+	}
+	ratingsOverview := workspaceProject.Definition.Dashboards["ratings-overview"]
+	if filter := ratingsOverview.Filters["rating_bucket"]; filter.Dimension != "ratings.rating_bucket" || filter.Fact != "ratings" {
+		t.Fatalf("rating_bucket filter = %#v, want explicit ratings fact", filter)
+	}
+	if filter := ratingsOverview.Filters["title"]; filter.Dimension != "movie_title" || filter.Fact != "" {
+		t.Fatalf("title filter = %#v, want conformed movie_title", filter)
+	}
 	assertGraphAsset(t, workspaceProject.Workspace.Graph, "connection:movielens")
 	assertGraphAsset(t, workspaceProject.Workspace.Graph, "source:movielens.ratings")
 	assertGraphAsset(t, workspaceProject.Workspace.Graph, "source:movielens.movies")

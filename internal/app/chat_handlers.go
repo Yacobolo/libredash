@@ -17,19 +17,19 @@ func (s *Server) executeStartedChatTurn(ctx context.Context, service *agent.Serv
 	}
 	transcript := state.Transcript
 	streamArtifacts := state.Artifacts
-	emit := func(signal ui.ChatSignal) {
+	emit := func(signal ui.ChatViewState) {
 		if execution.Emit != nil {
 			_ = execution.Emit(signal)
 		}
 	}
-	liveSignal := func(statusErr string, running bool) ui.ChatSignal {
+	liveSignal := func(statusErr string, running bool) ui.ChatViewState {
 		conversations := execution.LiveConversations
 		if conversations == nil {
 			conversations = s.chatConversations(ctx, scope)
 		}
 		return chatSignalWithConversations(conversations, started.ConversationID, transcript, streamArtifacts, statusErr, running, true)
 	}
-	finalSignal := func(statusErr string, running bool) ui.ChatSignal {
+	finalSignal := func(statusErr string, running bool) ui.ChatViewState {
 		return s.chatSignalWith(ctx, scope, started.ConversationID, transcript, streamArtifacts, statusErr, running)
 	}
 	if execution.EmitInitialRunning {

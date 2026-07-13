@@ -116,7 +116,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	if !strings.Contains(showcaseSignals, `"tables":{}`) {
 		t.Fatalf("showcase bootstrap should include no tables:\n%s", showcaseSignals)
 	}
-	if !strings.Contains(showcaseSignals, `"filterConfig":[{"id":"state"`) {
+	if !strings.Contains(showcaseSignals, `"filterConfig":[{`) || !strings.Contains(showcaseSignals, `"id":"state"`) {
 		t.Fatalf("showcase bootstrap did not include active page filter config:\n%s", showcaseSignals)
 	}
 	if !strings.Contains(showcaseSignals, `"controls":{"state"`) {
@@ -137,10 +137,10 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 		t.Fatalf("tables bootstrap did not include table style and column display metadata:\n%s", tableSignals)
 	}
 	assertNoDashboardProductDOM(t, tables)
-	if !strings.Contains(showcaseSignals, `"interaction":{"kind":"point_selection","toggle":false,"mappings":[{"field":"orders.status","fact":"orders","value":"label"}]`) || strings.Contains(showcaseSignals, `"mode":"multi"`) {
+	if !strings.Contains(showcaseSignals, `"interaction":{"kind":"point_selection","mappings":[{"fact":"orders","field":"orders.status","value":"label"}],"targets":["orders"],"toggle":false}`) || strings.Contains(showcaseSignals, `"mode":"multi"`) {
 		t.Fatalf("showcase bootstrap did not include point selection without mode:\n%s", showcaseSignals)
 	}
-	if !strings.Contains(tableSignals, `"interaction":{"kind":"row_selection","toggle":false,"mappings":[{"field":"orders.order_id","fact":"orders","value":"order_id"}]`) || strings.Contains(tableSignals, `"mode":"multi"`) {
+	if !strings.Contains(tableSignals, `"interaction":{"kind":"row_selection","mappings":[{"fact":"orders","field":"orders.order_id","value":"order_id"}],"targets":["active_chart"],"toggle":false}`) || strings.Contains(tableSignals, `"mode":"multi"`) {
 		t.Fatalf("tables bootstrap did not include row selection without mode:\n%s", tableSignals)
 	}
 	if strings.Contains(tableSignals, `"off_page"`) {

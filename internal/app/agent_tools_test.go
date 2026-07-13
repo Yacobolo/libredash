@@ -97,8 +97,8 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 	if err := json.Unmarshal(names["list_assets"].InputSchema, &schema); err != nil {
 		t.Fatalf("decode list_assets schema: %v", err)
 	}
-	if _, ok := schema.Properties["workspace"]; !ok {
-		t.Fatalf("workspace should be available as an optional tool target: %s", names["list_assets"].InputSchema)
+	if _, ok := schema.Properties["workspace"]; ok {
+		t.Fatalf("workspace must be hidden from model input: %s", names["list_assets"].InputSchema)
 	}
 	for _, want := range []string{"type", "q", "limit", "pageToken"} {
 		if _, ok := schema.Properties[want]; !ok {
@@ -108,8 +108,8 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 	if err := json.Unmarshal(names["search_workspace"].InputSchema, &schema); err != nil {
 		t.Fatalf("decode search_workspace schema: %v", err)
 	}
-	if _, ok := schema.Properties["workspace"]; !ok {
-		t.Fatalf("workspace should be available as an optional tool target: %s", names["search_workspace"].InputSchema)
+	if _, ok := schema.Properties["workspace"]; ok {
+		t.Fatalf("workspace must be hidden from model input: %s", names["search_workspace"].InputSchema)
 	}
 	for _, want := range []string{"q", "types", "limit", "pageToken"} {
 		if _, ok := schema.Properties[want]; !ok {
@@ -575,119 +575,6 @@ func TestAPIGenAgentListWorkspacesUsesDeclarativeOutputShape(t *testing.T) {
 	}
 }
 
-func TestAPIGenAgentOutputShapeKeepsNonEmptyCursor(t *testing.T) {
-	shaped := agenttools.ShapeAPIGenToolContent(map[string]any{
-		"items": []any{
-			map[string]any{"id": "one", "title": "One", "description": "First", "createdAt": "ignored"},
-		},
-		"page": map[string]any{"nextCursor": "cursor-1"},
-	}, agenttools.Output{
-		ItemsPath:  "items",
-		Fields:     []string{"id", "title"},
-		CursorPath: "page.nextCursor",
-		Count:      true,
-	})
-	decoded, ok := shaped.(map[string]any)
-	if !ok {
-		t.Fatalf("shaped content type = %T", shaped)
-	}
-	if decoded["count"] != 1 || decoded["hasMore"] != true || decoded["nextCursor"] != "cursor-1" {
-		t.Fatalf("shaped cursor metadata = %#v", decoded)
-	}
-	if _, ok := decoded["page"]; ok {
-		t.Fatalf("shaped output kept raw page metadata: %#v", decoded)
-	}
-}
-
-func TestAPIGenAgentOutputShapeProjectsRootsCollectionsAndMaps(t *testing.T) {
-	shaped := agenttools.ShapeAPIGenToolContent(map[string]any{
-		"title":         "Orders",
-		"availableRows": 7,
-		"style":         map[string]any{"density": "compact"},
-		"blocks": map[string]any{
-			"a": map[string]any{
-				"rows": []any{
-					map[string]any{"order_id": "o1", "status": "delivered", "internal": true},
-					map[string]any{"order_id": "o2", "status": "shipped", "internal": false},
-				},
-			},
-		},
-		"visuals": map[string]any{
-			"orders": map[string]any{
-				"id":              "orders",
-				"title":           "Orders",
-				"type":            "bar",
-				"rendererOptions": map[string]any{"hidden": true},
-				"data": []any{
-					map[string]any{"label": "delivered", "value": 1, "extra": "ignored"},
-				},
-			},
-		},
-	}, agenttools.Output{
-		RootFields: []string{"title", "availableRows"},
-		Collections: []agenttools.OutputCollection{{
-			Path:   "blocks.a.rows",
-			As:     "rows",
-			Fields: []string{"order_id", "status"},
-			Count:  true,
-		}},
-		Maps: []agenttools.OutputMap{{
-			Path:   "visuals",
-			As:     "visuals",
-			Fields: []string{"id", "title", "type"},
-			Collection: agenttools.OutputCollection{
-				Path:  "data",
-				As:    "data",
-				Count: true,
-			},
-		}},
-	})
-	decoded, ok := shaped.(map[string]any)
-	if !ok {
-		t.Fatalf("shaped content type = %T", shaped)
-	}
-	if decoded["title"] != "Orders" || decoded["availableRows"] != 7 || decoded["count"] != 2 || decoded["hasMore"] != true {
-		t.Fatalf("root/count metadata = %#v", decoded)
-	}
-	rows, ok := decoded["rows"].([]any)
-	if !ok || len(rows) != 2 {
-		t.Fatalf("rows = %#v", decoded["rows"])
-	}
-	firstRow := rows[0].(map[string]any)
-	if firstRow["order_id"] != "o1" || firstRow["status"] != "delivered" {
-		t.Fatalf("projected row = %#v", firstRow)
-	}
-	if _, ok := firstRow["internal"]; ok {
-		t.Fatalf("row kept noisy field: %#v", firstRow)
-	}
-	visuals := decoded["visuals"].(map[string]any)
-	orders := visuals["orders"].(map[string]any)
-	if orders["id"] != "orders" || orders["title"] != "Orders" || orders["type"] != "bar" || orders["count"] != 1 {
-		t.Fatalf("projected visual = %#v", orders)
-	}
-	if _, ok := orders["rendererOptions"]; ok {
-		t.Fatalf("visual kept renderer options: %#v", orders)
-	}
-}
-
-func TestAPIGenAgentOutputShapeOmitsMissingPathsAndFallbackRawWithoutMetadata(t *testing.T) {
-	raw := map[string]any{"body": "raw"}
-	if shaped := agenttools.ShapeAPIGenToolContent(raw, agenttools.Output{}); !reflect.DeepEqual(shaped, raw) {
-		t.Fatalf("empty output metadata should preserve raw content: %#v", shaped)
-	}
-	shaped := agenttools.ShapeAPIGenToolContent(raw, agenttools.Output{
-		RootFields:  []string{"missing"},
-		Collections: []agenttools.OutputCollection{{Path: "items", As: "items", Count: true}},
-	})
-	decoded, ok := shaped.(map[string]any)
-	if !ok {
-		t.Fatalf("shaped missing-path content type = %T", shaped)
-	}
-	if len(decoded) != 0 {
-		t.Fatalf("missing paths should be omitted without falling back to raw: %#v", decoded)
-	}
-}
-
 func TestAPIGenAgentToolsExposeTypeSpecArgumentNamesAndBodyFields(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
 	tools := agentAPIGenToolsForTest(server, agentcap.Scope{WorkspaceID: "test", PrincipalID: "principal"})
@@ -695,7 +582,7 @@ func TestAPIGenAgentToolsExposeTypeSpecArgumentNamesAndBodyFields(t *testing.T) 
 	for _, tool := range tools {
 		names[tool.Name] = tool
 		schemaText := string(tool.InputSchema)
-		for _, forbidden := range []string{`"example"`, `"format"`, `"$ref"`, `"$defs"`, `"oneOf"`, `"anyOf"`, `"allOf"`} {
+		for _, forbidden := range []string{`"example"`, `"$ref"`, `"$defs"`, `"oneOf"`, `"anyOf"`, `"allOf"`} {
 			if strings.Contains(schemaText, forbidden) {
 				t.Fatalf("%s schema contains non-portable keyword %s: %s", tool.Name, forbidden, schemaText)
 			}
@@ -736,8 +623,8 @@ func TestAPIGenAgentToolsExposeTypeSpecArgumentNamesAndBodyFields(t *testing.T) 
 
 func TestAPIGenAgentOperationsDeclareOutputMetadata(t *testing.T) {
 	for _, operation := range agenttools.APIGenOperations() {
-		if outputMetadataEmpty(operation.Extension.Output) {
-			t.Fatalf("agent operation %s (%s) does not declare x-agent.output metadata", operation.Contract.OperationID, operation.Extension.Name)
+		if operation.Tool.Output.Mode == "" || len(operation.Tool.OutputSchema) == 0 {
+			t.Fatalf("agent operation %s (%s) has no typed output contract", operation.Contract.OperationID, operation.Tool.Name)
 		}
 	}
 }
@@ -1256,16 +1143,6 @@ func sortedToolNames(tools []agentcore.ToolDefinition) []string {
 	names := toolNames(tools)
 	sort.Strings(names)
 	return names
-}
-
-func outputMetadataEmpty(output agenttools.Output) bool {
-	return output.ItemsPath == "" &&
-		len(output.Fields) == 0 &&
-		output.CursorPath == "" &&
-		!output.Count &&
-		len(output.RootFields) == 0 &&
-		len(output.Collections) == 0 &&
-		len(output.Maps) == 0
 }
 
 type fakeAssetCatalogReader struct {

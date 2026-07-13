@@ -311,11 +311,11 @@ func TestGlobalDataExplorerSelectsDuplicateKeysByWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("globalDataExplorerState() error = %v", err)
 	}
-	if explorer.SelectedWorkspaceID != "ops" || explorer.Command.WorkspaceID != "ops" {
+	if uisignals.ValueOrZero(explorer.SelectedWorkspaceID) != "ops" || uisignals.ValueOrZero(explorer.Command.WorkspaceID) != "ops" {
 		t.Fatalf("selected workspace = %#v command=%#v", explorer.SelectedWorkspaceID, explorer.Command)
 	}
-	if explorer.SelectedKey != "model_table:model_table:olist.orders" || explorer.SelectedObject == nil || explorer.SelectedObject.WorkspaceID != "ops" {
-		t.Fatalf("selected object = %#v key=%q", explorer.SelectedObject, explorer.SelectedKey)
+	if uisignals.ValueOrZero(explorer.SelectedKey) != "model_table:model_table:olist.orders" || explorer.SelectedObject == nil || explorer.SelectedObject.WorkspaceID != "ops" {
+		t.Fatalf("selected object = %#v key=%q", explorer.SelectedObject, uisignals.ValueOrZero(explorer.SelectedKey))
 	}
 	if len(explorer.Objects) != 6 {
 		t.Fatalf("object count = %d, want both workspaces' three objects", len(explorer.Objects))
@@ -330,8 +330,8 @@ func TestGlobalDataExplorerFallsBackToRuntimeCatalogWithoutActiveAssetDeployment
 	if err != nil {
 		t.Fatalf("globalDataExplorerState() error = %v", err)
 	}
-	if page.SelectedWorkspaceID != "test-workspace" || explorer.SelectedWorkspaceID != "test-workspace" {
-		t.Fatalf("selected workspace page=%q explorer=%q", page.SelectedWorkspaceID, explorer.SelectedWorkspaceID)
+	if uisignals.ValueOrZero(page.SelectedWorkspaceID) != "test-workspace" || uisignals.ValueOrZero(explorer.SelectedWorkspaceID) != "test-workspace" {
+		t.Fatalf("selected workspace page=%q explorer=%q", uisignals.ValueOrZero(page.SelectedWorkspaceID), uisignals.ValueOrZero(explorer.SelectedWorkspaceID))
 	}
 	rendered := fmtSprint(explorer)
 	for _, want := range []string{"model_table:model_table:test.orders", "semantic_view:test.orders"} {
@@ -368,8 +368,8 @@ func TestDataExplorerPreviewsSourceModelTableAndSemanticRows(t *testing.T) {
 			if err != nil {
 				t.Fatalf("globalDataExplorerState() error = %v", err)
 			}
-			if explorer.Preview.Error != "" {
-				t.Fatalf("preview error = %q", explorer.Preview.Error)
+			if uisignals.ValueOrZero(explorer.Preview.Error) != "" {
+				t.Fatalf("preview error = %q", uisignals.ValueOrZero(explorer.Preview.Error))
 			}
 			if explorer.Preview.ChunkSize != dataExplorerDefaultLimit || explorer.Preview.RowHeight != dataExplorerRowHeight {
 				t.Fatalf("preview window defaults = chunk %d rowHeight %d", explorer.Preview.ChunkSize, explorer.Preview.RowHeight)
@@ -403,20 +403,20 @@ func TestDataExplorerSourceUsesOwningWorkspaceModelForImportedSourceKeys(t *test
 	if explorer.SelectedObject == nil {
 		t.Fatal("selected object is nil")
 	}
-	if explorer.SelectedObject.ModelID != "sales" || explorer.SelectedObject.Source != "olist.payments" {
+	if uisignals.ValueOrZero(explorer.SelectedObject.ModelID) != "sales" || uisignals.ValueOrZero(explorer.SelectedObject.Source) != "olist.payments" {
 		t.Fatalf("selected source resolved to model/source %#v", explorer.SelectedObject)
 	}
 	if explorer.SelectedObject.Key == "source:source:olist.payments" {
 		t.Fatalf("selected source kept legacy key: %#v", explorer.SelectedObject)
 	}
-	if explorer.SelectedKey != explorer.SelectedObject.Key || explorer.Command.ObjectKey != explorer.SelectedObject.Key {
-		t.Fatalf("command did not canonicalize selected key: selected=%q command=%q object=%q", explorer.SelectedKey, explorer.Command.ObjectKey, explorer.SelectedObject.Key)
+	if uisignals.ValueOrZero(explorer.SelectedKey) != explorer.SelectedObject.Key || uisignals.ValueOrZero(explorer.Command.ObjectKey) != explorer.SelectedObject.Key {
+		t.Fatalf("command did not canonicalize selected key: selected=%q command=%q object=%q", uisignals.ValueOrZero(explorer.SelectedKey), uisignals.ValueOrZero(explorer.Command.ObjectKey), explorer.SelectedObject.Key)
 	}
 	if explorer.SelectedObject.ColumnCount == 0 || len(explorer.Preview.Columns) == 0 {
 		t.Fatalf("source columns were not resolved: object=%#v preview=%#v", explorer.SelectedObject, explorer.Preview)
 	}
-	if explorer.Preview.Error != "" {
-		t.Fatalf("preview error = %q", explorer.Preview.Error)
+	if uisignals.ValueOrZero(explorer.Preview.Error) != "" {
+		t.Fatalf("preview error = %q", uisignals.ValueOrZero(explorer.Preview.Error))
 	}
 	if len(explorer.Preview.Blocks["a"].Rows) == 0 || fmt.Sprint(explorer.Preview.Blocks["a"].Rows[0]["status"]) != "delivered" {
 		t.Fatalf("source preview rows missing delivered row: %#v", explorer.Preview.Blocks)
@@ -441,11 +441,11 @@ func TestDataExplorerModelTablePreviewUsesRuntimeBackedModelTable(t *testing.T) 
 	if err != nil {
 		t.Fatalf("globalDataExplorerState() error = %v", err)
 	}
-	if explorer.SelectedObject == nil || explorer.SelectedObject.ModelID != "sales" || explorer.SelectedObject.Table != "orders" {
+	if explorer.SelectedObject == nil || uisignals.ValueOrZero(explorer.SelectedObject.ModelID) != "sales" || uisignals.ValueOrZero(explorer.SelectedObject.Table) != "orders" {
 		t.Fatalf("selected model table = %#v", explorer.SelectedObject)
 	}
-	if explorer.Preview.Error != "" {
-		t.Fatalf("preview error = %q", explorer.Preview.Error)
+	if uisignals.ValueOrZero(explorer.Preview.Error) != "" {
+		t.Fatalf("preview error = %q", uisignals.ValueOrZero(explorer.Preview.Error))
 	}
 	if len(explorer.Preview.Blocks["a"].Rows) == 0 || fmt.Sprint(explorer.Preview.Blocks["a"].Rows[0]["status"]) != "delivered" {
 		t.Fatalf("model table preview rows missing delivered row: %#v", explorer.Preview.Blocks)
@@ -482,11 +482,11 @@ func TestDataExplorerCommandPublishesPatch(t *testing.T) {
 		if !ok {
 			t.Fatalf("patch missing dataExplorer: %#v", patch)
 		}
-		if explorer.SelectedWorkspaceID != "test" || explorer.SelectedKey != "semantic_view:olist.orders" || explorer.Preview.Error != "" {
+		if uisignals.ValueOrZero(explorer.SelectedWorkspaceID) != "test" || uisignals.ValueOrZero(explorer.SelectedKey) != "semantic_view:olist.orders" || uisignals.ValueOrZero(explorer.Preview.Error) != "" {
 			t.Fatalf("unexpected explorer patch: %#v", explorer)
 		}
 		block := explorer.Preview.Blocks["b"]
-		if block.Start != 100 || block.RequestSeq != 7 || block.ResetVersion != 2 || block.Sort.Column != "status" || block.Sort.Direction != "asc" {
+		if block.Start != 100 || block.RequestSeq != 7 || block.ResetVersion != 2 || uisignals.ValueOrZero(block.Sort.Column) != "status" || uisignals.ValueOrZero(block.Sort.Direction) != "asc" {
 			t.Fatalf("unexpected preview block: %#v", block)
 		}
 	case <-time.After(time.Second):
@@ -503,13 +503,13 @@ func TestDataExplorerSemanticPreviewIgnoresInvalidSortColumn(t *testing.T) {
 
 	req := dataExplorerTestRequest(http.MethodGet, "/data?workspace=test&object=semantic_view:olist.orders", nil)
 	command := dataExplorerCommandFromQuery("test", "semantic_view:olist.orders")
-	command.Sort = uisignals.DataPreviewSortSignal{Column: "order_count", Direction: "desc"}
+	command.Sort = uisignals.DataPreviewSortSignal{Column: uisignals.Pointer("order_count"), Direction: uisignals.Pointer("desc")}
 	_, explorer, err := server.globalDataExplorerState(req, command)
 	if err != nil {
 		t.Fatalf("globalDataExplorerState() error = %v", err)
 	}
-	if explorer.Preview.Error != "" {
-		t.Fatalf("preview error = %q", explorer.Preview.Error)
+	if uisignals.ValueOrZero(explorer.Preview.Error) != "" {
+		t.Fatalf("preview error = %q", uisignals.ValueOrZero(explorer.Preview.Error))
 	}
 	if len(requests) == 0 {
 		t.Fatal("semantic preview was not requested")
@@ -530,13 +530,13 @@ func TestDataExplorerSemanticPreviewAcceptsExposedSortColumn(t *testing.T) {
 
 	req := dataExplorerTestRequest(http.MethodGet, "/data?workspace=test&object=semantic_view:olist.orders", nil)
 	command := dataExplorerCommandFromQuery("test", "semantic_view:olist.orders")
-	command.Sort = uisignals.DataPreviewSortSignal{Column: "status", Direction: "asc"}
+	command.Sort = uisignals.DataPreviewSortSignal{Column: uisignals.Pointer("status"), Direction: uisignals.Pointer("asc")}
 	_, explorer, err := server.globalDataExplorerState(req, command)
 	if err != nil {
 		t.Fatalf("globalDataExplorerState() error = %v", err)
 	}
-	if explorer.Preview.Error != "" {
-		t.Fatalf("preview error = %q", explorer.Preview.Error)
+	if uisignals.ValueOrZero(explorer.Preview.Error) != "" {
+		t.Fatalf("preview error = %q", uisignals.ValueOrZero(explorer.Preview.Error))
 	}
 	if len(requests) == 0 || len(requests[len(requests)-1].Sort) != 1 {
 		t.Fatalf("semantic preview did not receive valid sort: %#v", requests)
@@ -558,45 +558,45 @@ func TestDataExplorerCommandReusesPostedPreviewTotalsForScroll(t *testing.T) {
 		Key:         "semantic_view:olist.orders",
 		WorkspaceID: "test",
 		Layer:       "semantic_view",
-		ModelID:     "olist",
-		Table:       "orders",
+		ModelID:     uisignals.Pointer("olist"),
+		Table:       uisignals.Pointer("orders"),
 		Title:       "orders semantic view",
-		Columns: []uisignals.DataPreviewColumnSignal{
-			{Key: "order_id", Label: "Order ID", Type: "string"},
-			{Key: "status", Label: "Status", Type: "string"},
-		},
+		Columns: uisignals.OptionalSlice([]uisignals.DataPreviewColumnSignal{
+			{Key: "order_id", Label: "Order ID", Type: uisignals.Pointer("string")},
+			{Key: "status", Label: "Status", Type: uisignals.Pointer("string")},
+		}),
 	}
 	currentCommand := uisignals.DataExplorerCommand{
-		WorkspaceID:  "test",
-		ObjectKey:    object.Key,
-		Block:        "a",
+		WorkspaceID:  uisignals.Pointer("test"),
+		ObjectKey:    uisignals.Pointer(object.Key),
+		Block:        uisignals.Pointer("a"),
 		Start:        0,
 		Limit:        100,
 		Count:        100,
 		RequestSeq:   1,
 		ResetVersion: 3,
-		Sort:         uisignals.DataPreviewSortSignal{Column: "status", Direction: "asc"},
+		Sort:         uisignals.DataPreviewSortSignal{Column: uisignals.Pointer("status"), Direction: uisignals.Pointer("asc")},
 	}
 	currentExplorer := uisignals.DataExplorerSignal{
 		Objects:             []uisignals.DataExplorerObjectSignal{object},
-		SelectedWorkspaceID: "test",
-		SelectedKey:         object.Key,
+		SelectedWorkspaceID: uisignals.Pointer("test"),
+		SelectedKey:         uisignals.Pointer(object.Key),
 		SelectedObject:      &object,
 		Preview: uisignals.DataPreviewSignal{
-			Columns:       object.Columns,
+			Columns:       uisignals.ValueOrZero(object.Columns),
 			TotalRows:     250,
 			AvailableRows: 250,
 			ChunkSize:     100,
 			RowHeight:     dataExplorerRowHeight,
 			ResetVersion:  3,
 			Blocks:        emptyDataPreviewBlocks(100, currentCommand.Sort, 3),
-			TotalRowLabel: "250",
+			TotalRowLabel: uisignals.Pointer("250"),
 			Sort:          currentCommand.Sort,
 		},
 		Command: currentCommand,
 	}
 	nextCommand := currentCommand
-	nextCommand.Block = "b"
+	nextCommand.Block = uisignals.Pointer("b")
 	nextCommand.Start = 100
 	nextCommand.Offset = 100
 	nextCommand.RequestSeq = 2
@@ -622,10 +622,10 @@ func TestDataExplorerCommandReusesPostedPreviewTotalsForScroll(t *testing.T) {
 		if !ok {
 			t.Fatalf("patch missing dataExplorer: %#v", patch)
 		}
-		if explorer.Preview.Error != "" {
+		if uisignals.ValueOrZero(explorer.Preview.Error) != "" {
 			t.Fatalf("scroll command unexpectedly counted preview: %#v", explorer.Preview)
 		}
-		if explorer.Preview.TotalRows != 250 || explorer.Preview.AvailableRows != 250 || explorer.Preview.TotalRowLabel != "250" {
+		if explorer.Preview.TotalRows != 250 || explorer.Preview.AvailableRows != 250 || uisignals.ValueOrZero(explorer.Preview.TotalRowLabel) != "250" {
 			t.Fatalf("preview totals were not reused: %#v", explorer.Preview)
 		}
 		if block := explorer.Preview.Blocks["b"]; block.Start != 100 || block.RequestSeq != 2 {
@@ -673,22 +673,22 @@ func TestDataExplorerCommandColumnWidthsReuseCurrentPreview(t *testing.T) {
 		Key:         "semantic_view:olist.orders",
 		WorkspaceID: "test",
 		Layer:       "semantic_view",
-		ModelID:     "olist",
-		Table:       "orders",
+		ModelID:     uisignals.Pointer("olist"),
+		Table:       uisignals.Pointer("orders"),
 		Title:       "orders semantic view",
-		Columns: []uisignals.DataPreviewColumnSignal{
-			{Key: "order_id", Label: "Order ID", Type: "string"},
-			{Key: "status", Label: "Status", Type: "string"},
-		},
+		Columns: uisignals.OptionalSlice([]uisignals.DataPreviewColumnSignal{
+			{Key: "order_id", Label: "Order ID", Type: uisignals.Pointer("string")},
+			{Key: "status", Label: "Status", Type: uisignals.Pointer("string")},
+		}),
 	}
-	currentCommand := uisignals.DataExplorerCommand{WorkspaceID: "test", ObjectKey: object.Key, Block: "all", Limit: 100, Count: 100, Sort: uisignals.DataPreviewSortSignal{}, VisibleColumns: []string{}}
+	currentCommand := uisignals.DataExplorerCommand{WorkspaceID: uisignals.Pointer("test"), ObjectKey: uisignals.Pointer(object.Key), Block: uisignals.Pointer("all"), Limit: 100, Count: 100, Sort: uisignals.DataPreviewSortSignal{}, VisibleColumns: uisignals.Pointer([]string{})}
 	currentExplorer := uisignals.DataExplorerSignal{
 		Objects:             []uisignals.DataExplorerObjectSignal{object},
-		SelectedWorkspaceID: "test",
-		SelectedKey:         object.Key,
+		SelectedWorkspaceID: uisignals.Pointer("test"),
+		SelectedKey:         uisignals.Pointer(object.Key),
 		SelectedObject:      &object,
 		Preview: uisignals.DataPreviewSignal{
-			Columns:       object.Columns,
+			Columns:       uisignals.ValueOrZero(object.Columns),
 			TotalRows:     1,
 			AvailableRows: 1,
 			ChunkSize:     100,
@@ -696,12 +696,12 @@ func TestDataExplorerCommandColumnWidthsReuseCurrentPreview(t *testing.T) {
 			Blocks: map[string]uisignals.DataPreviewBlockSignal{
 				"a": {Start: 0, Rows: []map[string]any{{"order_id": "o1", "status": "delivered"}}},
 			},
-			TotalRowLabel: "1",
+			TotalRowLabel: uisignals.Pointer("1"),
 		},
 		Command: currentCommand,
 	}
 	nextCommand := currentCommand
-	nextCommand.ColumnWidths = map[string]float64{"order_id": 260}
+	nextCommand.ColumnWidths = uisignals.Pointer(map[string]float64{"order_id": 260})
 	bodyBytes, err := json.Marshal(map[string]any{
 		"dataExplorer":        currentExplorer,
 		"dataExplorerCommand": nextCommand,
@@ -724,10 +724,10 @@ func TestDataExplorerCommandColumnWidthsReuseCurrentPreview(t *testing.T) {
 		if !ok {
 			t.Fatalf("patch missing dataExplorer: %#v", patch)
 		}
-		if explorer.Preview.Error != "" {
+		if uisignals.ValueOrZero(explorer.Preview.Error) != "" {
 			t.Fatalf("resize-only command re-ran preview: %#v", explorer.Preview)
 		}
-		if got := explorer.Command.ColumnWidths["order_id"]; got != 260 {
+		if got := uisignals.ValueOrZero(explorer.Command.ColumnWidths)["order_id"]; got != 260 {
 			t.Fatalf("column width was not patched: %#v", explorer.Command.ColumnWidths)
 		}
 		if len(explorer.Preview.Blocks["a"].Rows) != 1 {
@@ -789,7 +789,7 @@ func TestDataExplorerBrowserCommandRequiresAndAcceptsCSRF(t *testing.T) {
 			t.Fatalf("patch missing dataExplorer: %#v", patch)
 		}
 		block := explorer.Preview.Blocks["b"]
-		if block.Start != 100 || block.RequestSeq != 7 || block.ResetVersion != 2 || block.Sort.Column != "status" || block.Sort.Direction != "asc" {
+		if block.Start != 100 || block.RequestSeq != 7 || block.ResetVersion != 2 || uisignals.ValueOrZero(block.Sort.Column) != "status" || uisignals.ValueOrZero(block.Sort.Direction) != "asc" {
 			t.Fatalf("unexpected preview block: %#v", block)
 		}
 	case <-time.After(time.Second):

@@ -13,6 +13,7 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/access"
 	agentconfig "github.com/Yacobolo/libredash/internal/agent/config"
+	"github.com/Yacobolo/libredash/internal/configspec"
 	"github.com/Yacobolo/libredash/internal/platform/db"
 	"github.com/Yacobolo/libredash/internal/securefs"
 	"github.com/pressly/goose/v3"
@@ -35,7 +36,7 @@ type Paths struct {
 }
 
 func DefaultPaths() Paths {
-	home := os.Getenv("LIBREDASH_HOME")
+	home := os.Getenv(configspec.EnvLIBREDASH_HOME)
 	if home == "" {
 		home = ".libredash"
 	}

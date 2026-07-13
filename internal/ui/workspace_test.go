@@ -38,9 +38,12 @@ func TestWorkspaceAssetDetailsRenderSharedShapeForSemanticModel(t *testing.T) {
 		"Model tables (1)",
 		"Measures (1)",
 		"Relationships (1)",
-		`"id":"name","header":"Name"`,
-		`"id":"primary_key","header":"Primary key"`,
-		`"id":"cardinality","header":"Cardinality"`,
+		`"header":"Name"`,
+		`"id":"name"`,
+		`"header":"Primary key"`,
+		`"id":"primary_key"`,
+		`"header":"Cardinality"`,
+		`"id":"cardinality"`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("semantic model details did not render %q:\n%s", want, rendered)
@@ -221,14 +224,15 @@ func TestSemanticModelDetailsSignalIncludesModelGraph(t *testing.T) {
 	if graph == nil {
 		t.Fatalf("semantic model details did not include graph: %#v", page.Details)
 	}
-	if len(graph.Facts) != 1 || graph.Facts[0] != "orders" {
-		t.Fatalf("graph facts = %v, want orders", graph.Facts)
+	facts := uisignals.ValueOrZero(graph.Facts)
+	if len(facts) != 1 || facts[0] != "orders" {
+		t.Fatalf("graph facts = %v, want orders", facts)
 	}
 	if len(graph.Nodes) != 2 {
 		t.Fatalf("graph nodes = %d, want 2: %#v", len(graph.Nodes), graph.Nodes)
 	}
 	orders := graphNodeByID(t, graph.Nodes, "orders")
-	if orders.Title != "orders" || orders.PrimaryKey != "order_id" {
+	if orders.Title != "orders" || uisignals.ValueOrZero(orders.PrimaryKey) != "order_id" {
 		t.Fatalf("orders node = %#v, want title orders and primary key order_id", orders)
 	}
 	assertGraphField(t, orders.Fields, "order_id", true, false, nil)
@@ -312,7 +316,8 @@ func TestWorkspaceAssetDetailsRenderDirectSourceModelTableWithoutSQL(t *testing.
 		"<ld-workspace-asset-page",
 		`"overview":[`,
 		"Fields (2)",
-		`"id":"physical_type","header":"Physical type"`,
+		`"header":"Physical type"`,
+		`"id":"physical_type"`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("direct source model table details did not render %q:\n%s", want, rendered)
@@ -346,7 +351,8 @@ func TestWorkspaceAssetDetailsRenderSourceSchema(t *testing.T) {
 		"<ld-workspace-asset-page",
 		`"overview":[`,
 		"Fields (2)",
-		`"id":"physical_type","header":"Physical type"`,
+		`"header":"Physical type"`,
+		`"id":"physical_type"`,
 	} {
 		if !strings.Contains(rendered, want) {
 			t.Fatalf("source details did not render %q:\n%s", want, rendered)
@@ -483,14 +489,14 @@ func TestAssetLineageDashboardDerivesMeasureConsumers(t *testing.T) {
 	assertLineageEdgeKinds(t, lineage.Graph, []string{"lineage_semantic_model_dashboard"})
 	assertLineageEdgesMoveLeftToRight(t, lineage.Graph)
 	node := assertLineageNode(t, lineage.Graph, "dashboard")
-	if node.VisibleUpstream != 1 || node.VisibleDownstream != 0 {
-		t.Fatalf("dashboard visible counts = upstream %d downstream %d, want 1/0: %#v", node.VisibleUpstream, node.VisibleDownstream, node)
+	if uisignals.ValueOrZero(node.VisibleUpstreamCount) != 1 || uisignals.ValueOrZero(node.VisibleDownstreamCount) != 0 {
+		t.Fatalf("dashboard visible counts = upstream %d downstream %d, want 1/0: %#v", uisignals.ValueOrZero(node.VisibleUpstreamCount), uisignals.ValueOrZero(node.VisibleDownstreamCount), node)
 	}
-	if node.UsesCount != 1 || node.UsedByCount != 0 {
-		t.Fatalf("dashboard full-fidelity counts = uses %d usedBy %d, want 1/0: %#v", node.UsesCount, node.UsedByCount, node)
+	if uisignals.ValueOrZero(node.UsesCount) != 1 || uisignals.ValueOrZero(node.UsedByCount) != 0 {
+		t.Fatalf("dashboard full-fidelity counts = uses %d usedBy %d, want 1/0: %#v", uisignals.ValueOrZero(node.UsesCount), uisignals.ValueOrZero(node.UsedByCount), node)
 	}
-	if node.ContainedCount != 4 || node.ContainedSummary != "1 filter, 1 page, 1 table, 1 visual" {
-		t.Fatalf("dashboard contained summary = %d %q, want 4 dashboard children: %#v", node.ContainedCount, node.ContainedSummary, node)
+	if uisignals.ValueOrZero(node.ContainedCount) != 4 || uisignals.ValueOrZero(node.ContainedSummary) != "1 filter, 1 page, 1 table, 1 visual" {
+		t.Fatalf("dashboard contained summary = %d %q, want 4 dashboard children: %#v", uisignals.ValueOrZero(node.ContainedCount), uisignals.ValueOrZero(node.ContainedSummary), node)
 	}
 	assertTableRelations(t, lineage.Uses, []string{"Powers dashboard"})
 	assertTableRelations(t, lineage.UsedBy, nil)
@@ -512,14 +518,14 @@ func TestAssetLineageSemanticModelDerivesMeasureDashboardPath(t *testing.T) {
 	assertLineageEdgeKinds(t, lineage.Graph, []string{"lineage_semantic_model_dashboard"})
 	assertLineageEdgesMoveLeftToRight(t, lineage.Graph)
 	node := assertLineageNode(t, lineage.Graph, "model")
-	if node.VisibleUpstream != 1 || node.VisibleDownstream != 1 {
-		t.Fatalf("semantic model visible counts = upstream %d downstream %d, want 1/1: %#v", node.VisibleUpstream, node.VisibleDownstream, node)
+	if uisignals.ValueOrZero(node.VisibleUpstreamCount) != 1 || uisignals.ValueOrZero(node.VisibleDownstreamCount) != 1 {
+		t.Fatalf("semantic model visible counts = upstream %d downstream %d, want 1/1: %#v", uisignals.ValueOrZero(node.VisibleUpstreamCount), uisignals.ValueOrZero(node.VisibleDownstreamCount), node)
 	}
-	if node.UsesCount != 0 || node.UsedByCount != 1 {
-		t.Fatalf("semantic model full-fidelity counts = uses %d usedBy %d, want 0/1: %#v", node.UsesCount, node.UsedByCount, node)
+	if uisignals.ValueOrZero(node.UsesCount) != 0 || uisignals.ValueOrZero(node.UsedByCount) != 1 {
+		t.Fatalf("semantic model full-fidelity counts = uses %d usedBy %d, want 0/1: %#v", uisignals.ValueOrZero(node.UsesCount), uisignals.ValueOrZero(node.UsedByCount), node)
 	}
-	if node.ContainedCount != 3 || node.ContainedSummary != "1 measure, 1 relationship, 1 semantic table" {
-		t.Fatalf("semantic model contained summary = %d %q, want 3 semantic children: %#v", node.ContainedCount, node.ContainedSummary, node)
+	if uisignals.ValueOrZero(node.ContainedCount) != 3 || uisignals.ValueOrZero(node.ContainedSummary) != "1 measure, 1 relationship, 1 semantic table" {
+		t.Fatalf("semantic model contained summary = %d %q, want 3 semantic children: %#v", uisignals.ValueOrZero(node.ContainedCount), uisignals.ValueOrZero(node.ContainedSummary), node)
 	}
 	assertTableRelations(t, lineage.Uses, []string{"Feeds semantic model"})
 	assertTableRelations(t, lineage.UsedBy, []string{"Powers dashboard"})
@@ -757,7 +763,7 @@ func TestConnectionsPageUsesConnectionAssetTabs(t *testing.T) {
 		`<ld-connections-page`,
 		`"searchHref":"/connections"`,
 		`"href":"/connections?type=connection"`,
-		`"href":"/connections?type=source","active":true`,
+		`"active":true,"href":"/connections?type=source"`,
 		`"/connections/connection:olist.olist/sources/source:olist.orders/details"`,
 		`"parentHref":"/connections/connection:olist.olist/details"`,
 		`"typeLabel":"Source"`,
@@ -1027,8 +1033,8 @@ var testAssetAliases = map[string]string{
 func detailSectionTable(t *testing.T, sections []uisignals.WorkspaceDetailSectionSignal, title string) recordTable {
 	t.Helper()
 	for _, section := range sections {
-		if detailSectionTitleMatches(section.Title, title) && len(section.Table.Columns) > 0 {
-			return section.Table
+		if detailSectionTitleMatches(section.Title, title) && section.Table != nil && len(section.Table.Columns) > 0 {
+			return *section.Table
 		}
 	}
 	t.Fatalf("detail sections missing grid %q: %#v", title, sections)
@@ -1052,7 +1058,7 @@ func assertGraphField(t *testing.T, fields []uisignals.SemanticModelGraphFieldSi
 		if field.Name != name {
 			continue
 		}
-		if field.PrimaryKey != primaryKey || field.Join != join || strings.Join(field.Relationships, ",") != strings.Join(relationships, ",") {
+		if uisignals.ValueOrZero(field.PrimaryKey) != primaryKey || uisignals.ValueOrZero(field.Join) != join || strings.Join(uisignals.ValueOrZero(field.Relationships), ",") != strings.Join(relationships, ",") {
 			t.Fatalf("graph field %q = %#v, want primaryKey=%t join=%t relationships=%v", name, field, primaryKey, join, relationships)
 		}
 		return
@@ -1186,7 +1192,7 @@ func assertLineageEdgesMoveLeftToRight(t *testing.T, graph assetLineageGraph) {
 	t.Helper()
 	ranks := map[string]int{}
 	for _, node := range graph.Nodes {
-		ranks[node.ID] = node.Rank
+		ranks[node.ID] = int(node.Rank)
 	}
 	for _, edge := range graph.Edges {
 		if ranks[edge.Source] >= ranks[edge.Target] {
@@ -1198,7 +1204,7 @@ func assertLineageEdgesMoveLeftToRight(t *testing.T, graph assetLineageGraph) {
 func assertLineageSelectedNode(t *testing.T, graph assetLineageGraph, wantKind string) {
 	t.Helper()
 	for _, node := range graph.Nodes {
-		if node.Selected {
+		if uisignals.ValueOrZero(node.Selected) {
 			if node.Kind != wantKind {
 				t.Fatalf("selected lineage node kind = %q, want %q: %#v", node.Kind, wantKind, graph.Nodes)
 			}

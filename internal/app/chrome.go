@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Server) chatChromeSignal(r *http.Request) ui.ChatSignal {
-	return s.chatSignalWith(r.Context(), s.chatChromeScope(r), "", nil, agent.ChatArtifactSignals{}, "", false)
+	return s.chatSignalWith(r.Context(), s.chatChromeScope(r), "", nil, agent.ChatArtifactSignals{}, "", false).Agent
 }
 
 func (s *Server) chatChromeOption(r *http.Request) ui.ChromeOption {

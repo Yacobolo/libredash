@@ -5,7 +5,7 @@ import type { AdminAgentToolSignal } from '../../generated/signals'
 import { lucideIcon } from '../shared/lucide-icons'
 
 type SchemaObject = Record<string, unknown>
-type SchemaTab = 'fields' | 'json'
+type SchemaTab = 'fields' | 'json' | 'output'
 
 type SchemaField = {
   path: string
@@ -387,16 +387,19 @@ class AgentTools extends LitElement {
           </div>
           ${tool.description ? html`<p class="detail-description">${tool.description}</p>` : nothing}
           <div class="detail-meta">
+            <span class="required-count">${tool.effect}</span>
             <span class="required-count">${tool.requiredCount} required</span>
             <span class="required-count">${tool.summary}</span>
+            ${tool.defaultsSummary ? html`<span class="required-count">Defaults: ${tool.defaultsSummary}</span>` : nothing}
           </div>
           <div class="tabs" role="tablist" aria-label="Tool schema view">
             ${this.renderTab('fields', 'Fields')}
             ${this.renderTab('json', 'JSON')}
+            ${this.renderTab('output', 'Output')}
           </div>
         </div>
         <div class="detail-body">
-          ${this.tab === 'json' ? this.renderJSON(tool) : this.renderFields(tool)}
+          ${this.tab === 'json' ? this.renderJSON(tool.inputSchema) : this.tab === 'output' ? this.renderJSON(tool.outputSchema) : this.renderFields(tool)}
         </div>
       </div>
     `
@@ -443,8 +446,8 @@ class AgentTools extends LitElement {
     `
   }
 
-  private renderJSON(tool: ToolView) {
-    return html`<pre class="json"><code>${JSON.stringify(tool.inputSchema, null, 2)}</code></pre>`
+  private renderJSON(schema: SchemaObject) {
+    return html`<pre class="json"><code>${JSON.stringify(schema, null, 2)}</code></pre>`
   }
 
   private updateQuery(event: Event): void {
@@ -472,7 +475,10 @@ class AgentTools extends LitElement {
 type ToolView = {
   name: string
   description: string
+  effect: string
+  defaultsSummary: string
   inputSchema: SchemaObject
+  outputSchema: SchemaObject
   parsed: ParsedSchema
   summary: string
   requiredCount: number
@@ -485,11 +491,14 @@ function toolView(tool: AdminAgentToolSignal): ToolView {
   return {
     name: tool.name,
     description: tool.description,
+    effect: tool.effect || 'read',
+    defaultsSummary: Object.entries(tool.defaults ?? {}).map(([name, value]) => `${name}=${String(value)}`).join(', '),
     inputSchema: tool.inputSchema ?? {},
+    outputSchema: tool.outputSchema ?? {},
     parsed,
     summary: inputSummary(parsed),
     requiredCount: parsed.kind === 'fields' ? parsed.fields.filter((field) => field.required).length : 0,
-    searchText: [tool.name, tool.description, ...fieldPaths].join(' ').toLowerCase(),
+    searchText: [tool.name, tool.description, tool.effect, ...fieldPaths].join(' ').toLowerCase(),
   }
 }
 

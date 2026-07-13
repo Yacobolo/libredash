@@ -45,7 +45,7 @@ func TestDashboardEnvelopeRejectsMissingReferencedPayload(t *testing.T) {
 func TestDashboardEnvelopeRejectsUnusedPayload(t *testing.T) {
 	report := testDashboardReport()
 	envelope := DashboardInitialEnvelope(".data", "client", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
-	envelope.Visuals["off_page_chart"] = dashboard.Visual{ID: "off_page_chart"}
+	envelope.Visuals["off_page_chart"] = DashboardVisual{ID: "off_page_chart"}
 
 	err := ValidateDashboardEnvelope(envelope)
 	if err == nil || !strings.Contains(err.Error(), `unused visual payload "off_page_chart"`) {
@@ -75,13 +75,13 @@ func TestInteractionSignalPreservesSelectionScope(t *testing.T) {
 }
 
 func TestChatInitialEnvelopeValidates(t *testing.T) {
-	envelope := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "list", ChatSignal{
+	envelope := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "list", testChatViewState(ChatSignal{
 		ActiveConversationID: "",
 		Conversations:        []ChatConversationSummary{},
 		Transcript:           nil,
 		Status:               ChatStatus{Enabled: true},
 		Composer:             ComposerSignal{Placeholder: "Ask"},
-	})
+	}))
 
 	if err := ValidateChatEnvelope(envelope); err != nil {
 		t.Fatalf("validate chat envelope: %v", err)
@@ -101,29 +101,29 @@ func TestChatInitialEnvelopeValidates(t *testing.T) {
 }
 
 func TestChatInitialEnvelopeOnlyListActivatesChatNav(t *testing.T) {
-	list := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "list", ChatSignal{
+	list := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "list", testChatViewState(ChatSignal{
 		ActiveConversationID: "",
 		Conversations:        []ChatConversationSummary{},
 		Transcript:           nil,
 		Status:               ChatStatus{Enabled: true},
 		Composer:             ComposerSignal{Placeholder: "Ask"},
-	})
+	}))
 	if list.Chrome.Sidebar.Active != "chat" {
 		t.Fatalf("list chat sidebar active = %q, want chat", list.Chrome.Sidebar.Active)
 	}
 
-	draft := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "new", ChatSignal{
+	draft := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "new", testChatViewState(ChatSignal{
 		ActiveConversationID: "",
 		Conversations:        []ChatConversationSummary{},
 		Transcript:           nil,
 		Status:               ChatStatus{Enabled: true},
 		Composer:             ComposerSignal{Placeholder: "Ask"},
-	})
+	}))
 	if draft.Chrome.Sidebar.Active != "" {
 		t.Fatalf("draft chat sidebar active = %q, want none", draft.Chrome.Sidebar.Active)
 	}
 
-	conversation := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "conversation", ChatSignal{
+	conversation := ChatInitialEnvelope(dashboard.Catalog{}, "test", "", "conversation", testChatViewState(ChatSignal{
 		ActiveConversationID: "agentconv_1",
 		Conversations: []ChatConversationSummary{{
 			ID:    "agentconv_1",
@@ -132,12 +132,20 @@ func TestChatInitialEnvelopeOnlyListActivatesChatNav(t *testing.T) {
 		Transcript: nil,
 		Status:     ChatStatus{Enabled: true},
 		Composer:   ComposerSignal{Placeholder: "Ask"},
-	})
+	}))
 	if conversation.Chrome.Sidebar.Active != "" {
 		t.Fatalf("conversation chat sidebar active = %q, want none", conversation.Chrome.Sidebar.Active)
 	}
 	if len(conversation.Chrome.Sidebar.History.Items) != 1 || !conversation.Chrome.Sidebar.History.Items[0].Active {
 		t.Fatalf("conversation history item not active: %#v", conversation.Chrome.Sidebar.History.Items)
+	}
+}
+
+func testChatViewState(signal ChatSignal) ChatViewState {
+	return ChatViewState{
+		Agent:   signal,
+		Visuals: map[string]DashboardVisual{},
+		Tables:  map[string]DashboardTable{},
 	}
 }
 

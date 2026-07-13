@@ -42,7 +42,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-})
+}, 15_000)
 
 test('code block highlights json and toon, and falls back plainly for text and unknown languages', async () => {
   const page = await browser.newPage({ viewport: { width: 900, height: 700 } })

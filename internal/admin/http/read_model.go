@@ -112,9 +112,12 @@ func (m ReadModel) agentData(r *http.Request) (ui.AdminAgentData, error) {
 	}
 	for _, tool := range details.Tools {
 		data.Tools = append(data.Tools, ui.AdminAgentTool{
-			Name:        tool.Name,
-			Description: tool.Description,
-			InputSchema: tool.InputSchema,
+			Name:         tool.Name,
+			Description:  tool.Description,
+			Effect:       tool.Effect,
+			Defaults:     tool.Defaults,
+			InputSchema:  tool.InputSchema,
+			OutputSchema: tool.OutputSchema,
 		})
 	}
 	if !m.AuthConfigured {

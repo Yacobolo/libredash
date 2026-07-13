@@ -46,10 +46,16 @@ func runtimeSignal(kind uisignals.RouteKind) uisignals.RouteRuntimeSignal {
 }
 
 func inspectorScript() g.Node {
+	if staticasset.Production() {
+		return nil
+	}
 	return h.Script(h.Type("module"), h.Src(staticAsset("/static/datastar-inspector.js")))
 }
 
 func inspectorElement() g.Node {
+	if staticasset.Production() {
+		return nil
+	}
 	return g.El("datastar-inspector")
 }
 
@@ -106,7 +112,7 @@ func LoginPage(options ...LoginPageOptions) g.Node {
 		MainAttrs:  []g.Node{h.Class(appRootClass)},
 		UpdatesURL: loginUpdatesURL,
 		Body: []g.Node{
-			g.El("ld-login-page"),
+			g.El("ld-login-page", g.Attr("background-module-src", staticAsset("/static/topology-background.js"))),
 			inspectorElement(),
 		},
 	})
@@ -154,10 +160,10 @@ func CatalogPageForCatalogs(catalogs []dashboard.Catalog, chromeOptions ...Chrom
 			dashboards = append(dashboards, uisignals.CatalogDashboardSignal{
 				ID:            catalog.Workspace.ID + "." + report.ID,
 				Title:         report.Title,
-				Description:   report.Description,
-				SemanticModel: report.SemanticModel,
-				PageCount:     report.PageCount,
-				Tags:          append([]string{}, report.Tags...),
+				Description:   uisignals.Optional(report.Description),
+				SemanticModel: uisignals.Optional(report.SemanticModel),
+				PageCount:     int64(report.PageCount),
+				Tags:          uisignals.OptionalSlice(report.Tags),
 				Href:          "/workspaces/" + catalog.Workspace.ID + "/dashboards/" + report.ID,
 			})
 		}
@@ -210,10 +216,10 @@ func CatalogBootstrapSignalsForCatalogs(catalogs []dashboard.Catalog, chromeOpti
 			dashboards = append(dashboards, uisignals.CatalogDashboardSignal{
 				ID:            catalog.Workspace.ID + "." + report.ID,
 				Title:         report.Title,
-				Description:   report.Description,
-				SemanticModel: report.SemanticModel,
-				PageCount:     report.PageCount,
-				Tags:          append([]string{}, report.Tags...),
+				Description:   uisignals.Optional(report.Description),
+				SemanticModel: uisignals.Optional(report.SemanticModel),
+				PageCount:     int64(report.PageCount),
+				Tags:          uisignals.OptionalSlice(report.Tags),
 				Href:          "/workspaces/" + catalog.Workspace.ID + "/dashboards/" + report.ID,
 			})
 		}
@@ -259,10 +265,10 @@ func catalogPageSignal(catalog dashboard.Catalog) uisignals.CatalogPageSignal {
 		dashboards = append(dashboards, uisignals.CatalogDashboardSignal{
 			ID:            report.ID,
 			Title:         report.Title,
-			Description:   report.Description,
-			SemanticModel: report.SemanticModel,
-			PageCount:     report.PageCount,
-			Tags:          report.Tags,
+			Description:   uisignals.Optional(report.Description),
+			SemanticModel: uisignals.Optional(report.SemanticModel),
+			PageCount:     int64(report.PageCount),
+			Tags:          uisignals.OptionalSlice(report.Tags),
 			Href:          "/workspaces/" + catalog.Workspace.ID + "/dashboards/" + report.ID,
 		})
 	}
@@ -278,7 +284,7 @@ func recordTableBadgeValue(value, tone string) any {
 	if strings.TrimSpace(value) == "" {
 		return ""
 	}
-	return recordTableBadge{Label: value, Tone: tone}
+	return recordTableBadge{Label: value, Tone: uisignals.Optional(tone)}
 }
 
 func loginBackgroundLoaderScript() g.Node {

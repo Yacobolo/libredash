@@ -4,7 +4,6 @@ import type { LoginPageSignal } from '../../generated/signals'
 import { DatastarLit } from '../shared/datastar-lit'
 import { checkSignalContract } from '../shared/signal-contract'
 import { lucideIcon } from '../shared/lucide-icons'
-import './topology-background'
 
 type ThemeMode = 'system' | 'light' | 'dark'
 
@@ -255,7 +254,7 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
     return html`
       <ld-topology-background
         data-login-background
-        data-module-src=${page?.backgroundModuleSrc ?? '/static/topology-background.js'}
+        data-module-src=${page?.backgroundModuleSrc ?? this.backgroundModuleSrc}
       ></ld-topology-background>
       <div class="scrim" aria-hidden="true"></div>
       <button
@@ -316,6 +315,10 @@ class LibreDashLoginPage extends DatastarLit(LitElement) {
     this.themeMode = mode
     this.requestUpdate()
     document.dispatchEvent(new CustomEvent('libredash-theme-change', { detail: { mode } }))
+  }
+
+  private get backgroundModuleSrc(): string {
+    return this.getAttribute('background-module-src')?.trim() || '/static/topology-background.js'
   }
 }
 

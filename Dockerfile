@@ -1,8 +1,8 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-FROM node:24-bookworm AS node
+FROM node:24-bookworm@sha256:392e1e23f34da768d8d1f4e502b64f200d3be3465934d4b7930f57d7e2fc1989 AS node
 
-FROM golang:1.25-bookworm AS sourcegen
+FROM golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4 AS sourcegen
 WORKDIR /src
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -17,13 +17,16 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3 typespec-compile -manifest api/apigen.yaml -target libredash-v1 && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3 all -manifest api/apigen.yaml -target libredash-v1 && \
+    go run ./internal/tools/configgen && \
+    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 typespec-compile -manifest api/apigen.yaml -target libredash-v1 && \
+    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 all -manifest api/apigen.yaml -target libredash-v1 && \
     go run ./internal/tools/apigenpostprocess && \
-    go run ./cmd/libredash schema export --format json-schema --out schemas/json && \
-    go run ./internal/tools/uisignalsgen
+    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 typespec-compile -manifest api/apigen.yaml -target ui-signals && \
+    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 all -manifest api/apigen.yaml -target ui-signals && \
+    go run ./internal/tools/uisignalspostprocess && \
+    go run ./cmd/libredash schema export --format json-schema --out schemas/json
 
-FROM oven/bun:1.3.7 AS web
+FROM oven/bun:1.3.7@sha256:6cd5f00020e48b77a253bc8249f6b6dd3d92b3c04c2607f1f5a6d7dbf0a6fca3 AS web
 WORKDIR /src
 
 COPY package.json bun.lock tsconfig.json ./
@@ -35,7 +38,7 @@ COPY --from=sourcegen /src/web/generated ./web/generated
 RUN bun install --frozen-lockfile --no-cache
 RUN bun run build
 
-FROM golang:1.25-bookworm AS build
+FROM golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4 AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
@@ -45,6 +48,7 @@ COPY . .
 COPY --from=sourcegen /src/api/gen ./api/gen
 COPY --from=sourcegen /src/internal/api/gen ./internal/api/gen
 COPY --from=sourcegen /src/internal/cli/gen ./internal/cli/gen
+COPY --from=sourcegen /src/internal/ui/signals/models.gen.go ./internal/ui/signals/models.gen.go
 COPY --from=sourcegen /src/schemas ./schemas
 COPY --from=sourcegen /src/web/generated ./web/generated
 COPY --from=web /src/static ./static
@@ -53,7 +57,17 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/libredash ./cmd/libredash
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS runtime
+
+ARG BUILD_VERSION=dev
+ARG BUILD_REVISION=unknown
+
+LABEL org.opencontainers.image.title="LibreDash" \
+      org.opencontainers.image.description="LibreDash business intelligence server" \
+      org.opencontainers.image.source="https://github.com/Yacobolo/libredash" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.version="$BUILD_VERSION" \
+      org.opencontainers.image.revision="$BUILD_REVISION"
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates libstdc++6 tzdata && \

@@ -289,7 +289,7 @@ model DashboardPageQueryResponse {
   filters: Record<string>;
   filterOptions?: Record<string>;
   status?: Record<string>;
-  visuals: Record<string>;
+  visuals: Record<DashboardVisualDataResponse>;
 }
 
 model DashboardVisualDatum {}
@@ -315,10 +315,24 @@ model DashboardVisualDataResponse {
   data: DashboardVisualDatum[];
 }
 
+model DashboardTableColumn {
+  key: string;
+  label: string;
+  role?: string;
+  format?: string;
+}
+
+model DashboardTableRow {}
+
+model DashboardTableBlock {
+  rows: DashboardTableRow[];
+}
+
 model DashboardTableQueryResponse {
   title: string;
+  columns: DashboardTableColumn[];
   availableRows: int32;
-  blocks: Record<string>;
+  blocks: Record<DashboardTableBlock>;
 }
 
 model DashboardFilterOptionResponse {
@@ -337,7 +351,11 @@ model DashboardFilterOptionListResponse {
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["dashboards", "list"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_dashboards", risk: "read", tags: #["dashboard", "catalog"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "title", "description", "pageCount"], cursorPath: "page.nextCursor", count: true } })
+@apigen.tool(#{
+  name: "list_dashboards", effect: "read", tags: #["dashboard", "catalog"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/description" }, #{ source: "/pageCount" }] }], cursor: #{ source: "/page/nextCursor" } },
+})
 op listDashboards(@path workspace: string, @query limit?: int32, @query pageToken?: string): OkJson<DashboardListResponse> | CommonErrors;
 
 @tag("BI")
@@ -346,7 +364,11 @@ op listDashboards(@path workspace: string, @query limit?: int32, @query pageToke
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["dashboards", "describe"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "describe_dashboard", risk: "read", tags: #["dashboard", "catalog"], output: #{ rootFields: #["id", "title", "description", "semantic_model", "model", "counts", "pages", "detail_tools"] } })
+@apigen.tool(#{
+  name: "describe_dashboard", effect: "read", tags: #["dashboard", "catalog"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/description" }, #{ source: "/semantic_model" }, #{ source: "/model" }, #{ source: "/counts" }, #{ source: "/pages" }, #{ source: "/detail_tools" }] },
+})
 op getDashboard(@path workspace: string, @path dashboard: string): OkJson<DashboardManifestResponse> | CommonErrors;
 
 @tag("BI")
@@ -355,7 +377,11 @@ op getDashboard(@path workspace: string, @path dashboard: string): OkJson<Dashbo
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["dashboards", "components"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_dashboard_components", risk: "read", tags: #["dashboard", "visual"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "kind", "ref", "title"], cursorPath: "page.nextCursor", count: true } })
+@apigen.tool(#{
+  name: "list_dashboard_components", effect: "read", tags: #["dashboard", "visual"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/kind" }, #{ source: "/ref" }, #{ source: "/title" }] }], cursor: #{ source: "/page/nextCursor" } },
+})
 op listDashboardComponents(@path workspace: string, @path dashboard: string, @path page: string, @query limit?: int32, @query pageToken?: string): OkJson<DashboardComponentListResponse> | CommonErrors;
 
 @tag("BI")
@@ -364,7 +390,11 @@ op listDashboardComponents(@path workspace: string, @path dashboard: string, @pa
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["dashboards", "visual"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "visual", displayName: "visual" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "describe_dashboard_visual", risk: "read", tags: #["dashboard", "visual"], output: #{ rootFields: #["id", "title", "description", "kind", "shape", "type", "query"] } })
+@apigen.tool(#{
+  name: "describe_dashboard_visual", effect: "read", tags: #["dashboard", "visual"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/description" }, #{ source: "/kind" }, #{ source: "/shape" }, #{ source: "/type" }, #{ source: "/query" }] },
+})
 op getDashboardVisual(@path workspace: string, @path dashboard: string, @path page: string, @path visual: string): OkJson<DashboardVisualDescribeResponse> | CommonErrors;
 
 @tag("BI")
@@ -373,7 +403,11 @@ op getDashboardVisual(@path workspace: string, @path dashboard: string, @path pa
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["semantic-models", "list"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_semantic_models", risk: "read", tags: #["semantic-model", "catalog"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "title", "description"], cursorPath: "page.nextCursor", count: true } })
+@apigen.tool(#{
+  name: "list_semantic_models", effect: "read", tags: #["semantic-model", "catalog"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/description" }] }], cursor: #{ source: "/page/nextCursor" } },
+})
 op listSemanticModels(@path workspace: string, @query limit?: int32, @query pageToken?: string): OkJson<SemanticModelListResponse> | CommonErrors;
 
 @tag("BI")
@@ -382,7 +416,11 @@ op listSemanticModels(@path workspace: string, @query limit?: int32, @query page
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["semantic-models", "describe"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "describe_model", risk: "read", tags: #["semantic-model", "catalog"], output: #{ rootFields: #["id", "title", "description", "dashboards", "counts", "tables"] } })
+@apigen.tool(#{
+  name: "describe_model", effect: "read", tags: #["semantic-model", "catalog"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/description" }, #{ source: "/dashboards" }, #{ source: "/counts" }, #{ source: "/tables" }] },
+})
 op getSemanticModel(@path workspace: string, @path("model") modelName: string): OkJson<SemanticModelDescriptionResponse> | CommonErrors;
 
 @tag("BI")
@@ -391,7 +429,11 @@ op getSemanticModel(@path workspace: string, @path("model") modelName: string): 
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["semantic-models", "model-fields"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_semantic_model_fields", risk: "read", tags: #["semantic-model", "field"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["kind", "id", "label", "description"], cursorPath: "page.nextCursor", count: true } })
+@apigen.tool(#{
+  name: "list_semantic_model_fields", effect: "read", tags: #["semantic-model", "field"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/kind" }, #{ source: "/id" }, #{ source: "/label" }, #{ source: "/description" }] }], cursor: #{ source: "/page/nextCursor" } },
+})
 op listSemanticModelFields(@path workspace: string, @path("model") modelName: string, @query limit?: int32, @query pageToken?: string): OkJson<SemanticFieldListResponse> | CommonErrors;
 
 @tag("BI")
@@ -400,7 +442,11 @@ op listSemanticModelFields(@path workspace: string, @path("model") modelName: st
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["semantic-models", "model-query"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "query_semantic_model", risk: "read", tags: #["semantic-model", "query"], defaultLimit: 25, output: #{ rootFields: #["columns"], collections: #[#{ path: "items", as: "items", count: true }], cursorPath: "page.nextCursor" } })
+@apigen.tool(#{
+  name: "query_semantic_model", effect: "read", tags: #["semantic-model", "query"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "body", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/columns" }, #{ source: "/items", countAs: "count" }], cursor: #{ source: "/page/nextCursor" } },
+})
 op querySemanticModel(@path workspace: string, @path("model") modelName: string, @body body?: SemanticQueryRequest): OkJson<SemanticQueryResponse> | CommonErrors;
 
 @tag("BI")
@@ -409,7 +455,11 @@ op querySemanticModel(@path workspace: string, @path("model") modelName: string,
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["semantic-models", "model-explain"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "explain_semantic_model_query", risk: "read", tags: #["semantic-model", "query"], output: #{ rootFields: #["mode", "facts", "stitchDimensions", "physicalDependencies", "relationshipPaths", "sql", "args", "columns", "warnings"] } })
+@apigen.tool(#{
+  name: "explain_semantic_model_query", effect: "read", tags: #["semantic-model", "query"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/mode" }, #{ source: "/facts" }, #{ source: "/stitchDimensions" }, #{ source: "/physicalDependencies" }, #{ source: "/relationshipPaths" }, #{ source: "/sql" }, #{ source: "/args" }, #{ source: "/columns" }, #{ source: "/warnings" }] },
+})
 op explainSemanticModelQuery(@path workspace: string, @path("model") modelName: string, @body body?: SemanticQueryRequest): OkJson<SemanticExplainResponse> | CommonErrors;
 
 @tag("BI")
@@ -418,7 +468,11 @@ op explainSemanticModelQuery(@path workspace: string, @path("model") modelName: 
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["semantic-models", "datasets"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_semantic_datasets", risk: "read", tags: #["semantic-model", "dataset"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "kind", "description"], cursorPath: "page.nextCursor", count: true } })
+@apigen.tool(#{
+  name: "list_semantic_datasets", effect: "read", tags: #["semantic-model", "dataset"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/kind" }, #{ source: "/description" }] }], cursor: #{ source: "/page/nextCursor" } },
+})
 op listSemanticDatasets(@path workspace: string, @path("model") modelName: string, @query limit?: int32, @query pageToken?: string): OkJson<SemanticDatasetListResponse> | CommonErrors;
 
 @tag("BI")
@@ -427,7 +481,11 @@ op listSemanticDatasets(@path workspace: string, @path("model") modelName: strin
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["semantic-models", "dataset"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }, #{ source: "path", name: "dataset", displayName: "dataset" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "describe_semantic_dataset", risk: "read", tags: #["semantic-model", "dataset"], output: #{ rootFields: #["id", "kind", "source", "sources", "description", "primaryKey", "grain", "fieldCount", "measureCount"] } })
+@apigen.tool(#{
+  name: "describe_semantic_dataset", effect: "read", tags: #["semantic-model", "dataset"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/kind" }, #{ source: "/source" }, #{ source: "/sources" }, #{ source: "/description" }, #{ source: "/primaryKey" }, #{ source: "/grain" }, #{ source: "/fieldCount" }, #{ source: "/measureCount" }] },
+})
 op getSemanticDataset(@path workspace: string, @path("model") modelName: string, @path dataset: string): OkJson<SemanticDatasetResponse> | CommonErrors;
 
 @tag("BI")
@@ -436,7 +494,11 @@ op getSemanticDataset(@path workspace: string, @path("model") modelName: string,
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["semantic-models", "fields"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }, #{ source: "path", name: "dataset", displayName: "dataset" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_semantic_fields", risk: "read", tags: #["semantic-model", "dataset", "field"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["kind", "id", "label", "description"], cursorPath: "page.nextCursor", count: true } })
+@apigen.tool(#{
+  name: "list_semantic_fields", effect: "read", tags: #["semantic-model", "dataset", "field"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/kind" }, #{ source: "/id" }, #{ source: "/label" }, #{ source: "/description" }] }], cursor: #{ source: "/page/nextCursor" } },
+})
 op listSemanticFields(@path workspace: string, @path("model") modelName: string, @path dataset: string, @query limit?: int32, @query pageToken?: string): OkJson<SemanticFieldListResponse> | CommonErrors;
 
 @tag("BI")
@@ -445,7 +507,11 @@ op listSemanticFields(@path workspace: string, @path("model") modelName: string,
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["semantic-models", "query"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }, #{ source: "path", name: "dataset", displayName: "dataset" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "query_semantic_dataset", risk: "read", tags: #["semantic-model", "dataset", "query"], defaultLimit: 25, output: #{ rootFields: #["columns"], collections: #[#{ path: "items", as: "items", count: true }], cursorPath: "page.nextCursor" } })
+@apigen.tool(#{
+  name: "query_semantic_dataset", effect: "read", tags: #["semantic-model", "dataset", "query"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "body", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/columns" }, #{ source: "/items", countAs: "count" }], cursor: #{ source: "/page/nextCursor" } },
+})
 op querySemanticDataset(@path workspace: string, @path("model") modelName: string, @path dataset: string, @body body?: SemanticQueryRequest): OkJson<SemanticQueryResponse> | CommonErrors;
 
 @tag("BI")
@@ -454,7 +520,11 @@ op querySemanticDataset(@path workspace: string, @path("model") modelName: strin
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "PREVIEW_DATA" })
 @apigen.cli(#{ command: #["semantic-models", "preview"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }, #{ source: "path", name: "dataset", displayName: "dataset" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "preview_semantic_dataset", risk: "read", tags: #["semantic-model", "dataset", "query"], defaultLimit: 25, output: #{ rootFields: #["columns"], collections: #[#{ path: "items", as: "items", count: true }], cursorPath: "page.nextCursor" } })
+@apigen.tool(#{
+  name: "preview_semantic_dataset", effect: "read", tags: #["semantic-model", "dataset", "query"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "body", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/columns" }, #{ source: "/items", countAs: "count" }], cursor: #{ source: "/page/nextCursor" } },
+})
 op previewSemanticDataset(@path workspace: string, @path("model") modelName: string, @path dataset: string, @body body?: SemanticPreviewRequest): OkJson<SemanticQueryResponse> | CommonErrors;
 
 @tag("BI")
@@ -463,7 +533,11 @@ op previewSemanticDataset(@path workspace: string, @path("model") modelName: str
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["semantic-models", "explain-query"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }, #{ source: "path", name: "dataset", displayName: "dataset" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "explain_semantic_query", risk: "read", tags: #["semantic-model", "dataset", "query"], output: #{ rootFields: #["mode", "sql", "args", "columns", "warnings"] } })
+@apigen.tool(#{
+  name: "explain_semantic_query", effect: "read", tags: #["semantic-model", "dataset", "query"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/mode" }, #{ source: "/sql" }, #{ source: "/args" }, #{ source: "/columns" }, #{ source: "/warnings" }] },
+})
 op explainSemanticQuery(@path workspace: string, @path("model") modelName: string, @path dataset: string, @body body?: SemanticQueryRequest): OkJson<SemanticExplainResponse> | CommonErrors;
 
 @tag("BI")
@@ -472,7 +546,11 @@ op explainSemanticQuery(@path workspace: string, @path("model") modelName: strin
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "PREVIEW_DATA" })
 @apigen.cli(#{ command: #["semantic-models", "explain-preview"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }, #{ source: "path", name: "dataset", displayName: "dataset" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "explain_semantic_preview", risk: "read", tags: #["semantic-model", "dataset", "query"], output: #{ rootFields: #["mode", "sql", "args", "columns", "warnings"] } })
+@apigen.tool(#{
+  name: "explain_semantic_preview", effect: "read", tags: #["semantic-model", "dataset", "query"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/mode" }, #{ source: "/sql" }, #{ source: "/args" }, #{ source: "/columns" }, #{ source: "/warnings" }] },
+})
 op explainSemanticPreview(@path workspace: string, @path("model") modelName: string, @path dataset: string, @body body?: SemanticPreviewRequest): OkJson<SemanticExplainResponse> | CommonErrors;
 
 @tag("BI")
@@ -481,7 +559,11 @@ op explainSemanticPreview(@path workspace: string, @path("model") modelName: str
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["dashboards", "query-page"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "query_dashboard_page", risk: "read", tags: #["dashboard", "query"], output: #{ maps: #[#{ path: "visuals", as: "visuals", fields: #["id", "title", "kind", "shape", "type", "unit", "format", "dimensions", "measure", "measures", "series"], collection: #{ path: "data", as: "data", count: true } }] } })
+@apigen.tool(#{
+  name: "query_dashboard_page", effect: "read", tags: #["dashboard", "query"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/visuals", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/kind" }, #{ source: "/shape" }, #{ source: "/type" }, #{ source: "/unit" }, #{ source: "/format" }, #{ source: "/dimensions" }, #{ source: "/measure" }, #{ source: "/measures" }, #{ source: "/series" }, #{ source: "/data", countAs: "count" }] }] },
+})
 op queryDashboardPage(@path workspace: string, @path dashboard: string, @path page: string, @body body?: DashboardPageQueryRequest): OkJson<DashboardPageQueryResponse> | CommonErrors;
 
 @tag("BI")
@@ -490,7 +572,11 @@ op queryDashboardPage(@path workspace: string, @path dashboard: string, @path pa
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["dashboards", "visual-data"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "visual", displayName: "visual" }], output: #{ mode: "collection" }, pagination: #{ itemsField: "data" } })
-@extension("x-agent", #{ enabled: true, name: "query_dashboard_visual_data", risk: "read", tags: #["dashboard", "visual", "query"], output: #{ rootFields: #["title", "type", "shape", "unit", "format", "dimensions", "measure", "measures", "series"], collections: #[#{ path: "data", as: "data", count: true }] } })
+@apigen.tool(#{
+  name: "query_dashboard_visual_data", effect: "read", tags: #["dashboard", "visual", "query"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/title" }, #{ source: "/type" }, #{ source: "/shape" }, #{ source: "/unit" }, #{ source: "/format" }, #{ source: "/dimensions" }, #{ source: "/measure" }, #{ source: "/measures" }, #{ source: "/series" }, #{ source: "/data", countAs: "count" }] },
+})
 op queryDashboardVisualData(@path workspace: string, @path dashboard: string, @path page: string, @path visual: string, @body body?: DashboardPageQueryRequest): OkJson<DashboardVisualDataResponse> | CommonErrors;
 
 @tag("BI")
@@ -499,7 +585,11 @@ op queryDashboardVisualData(@path workspace: string, @path dashboard: string, @p
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["dashboards", "query-table"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "table", displayName: "table" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "query_table", risk: "read", tags: #["dashboard", "query", "table"], output: #{ rootFields: #["title", "availableRows"], collections: #[#{ path: "columns", as: "columns", fields: #["key", "label", "role", "format"] }, #{ path: "blocks.a.rows", as: "rows", count: true }] } })
+@apigen.tool(#{
+  name: "query_table", effect: "read", tags: #["dashboard", "query", "table"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/title" }, #{ source: "/availableRows" }, #{ source: "/columns", select: #[#{ source: "/key" }, #{ source: "/label" }, #{ source: "/role" }, #{ source: "/format" }] }, #{ source: "/blocks/a/rows", target: "rows", countAs: "count" }] },
+})
 op queryDashboardTable(@path workspace: string, @path dashboard: string, @path table: string, @body body?: DashboardTableQueryRequest): OkJson<DashboardTableQueryResponse> | CommonErrors;
 
 @tag("BI")
@@ -508,7 +598,11 @@ op queryDashboardTable(@path workspace: string, @path dashboard: string, @path t
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["dashboards", "table-data"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "table", displayName: "table" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "query_dashboard_table_data", risk: "read", tags: #["dashboard", "query", "table"], output: #{ rootFields: #["title", "availableRows"], collections: #[#{ path: "columns", as: "columns", fields: #["key", "label", "role", "format"] }, #{ path: "blocks.a.rows", as: "rows", count: true }] } })
+@apigen.tool(#{
+  name: "query_dashboard_table_data", effect: "read", tags: #["dashboard", "query", "table"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/title" }, #{ source: "/availableRows" }, #{ source: "/columns", select: #[#{ source: "/key" }, #{ source: "/label" }, #{ source: "/role" }, #{ source: "/format" }] }, #{ source: "/blocks/a/rows", target: "rows", countAs: "count" }] },
+})
 op queryDashboardTableData(@path workspace: string, @path dashboard: string, @path page: string, @path table: string, @body body?: DashboardTableDataRequest): OkJson<DashboardTableQueryResponse> | CommonErrors;
 
 @tag("BI")
@@ -517,5 +611,9 @@ op queryDashboardTableData(@path workspace: string, @path dashboard: string, @pa
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["dashboards", "filter-options"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "filter", displayName: "filter" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_dashboard_filter_options", risk: "read", tags: #["dashboard", "filter"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["value", "label"], cursorPath: "page.nextCursor", count: true } })
+@apigen.tool(#{
+  name: "list_dashboard_filter_options", effect: "read", tags: #["dashboard", "filter"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/value" }, #{ source: "/label" }] }], cursor: #{ source: "/page/nextCursor" } },
+})
 op listDashboardFilterOptions(@path workspace: string, @path dashboard: string, @path page: string, @path filter: string, @query limit?: int32, @query pageToken?: string, @body body?: DashboardPageQueryRequest): OkJson<DashboardFilterOptionListResponse> | CommonErrors;

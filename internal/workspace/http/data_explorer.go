@@ -119,11 +119,11 @@ func dataExplorerStreamID(clientID string) string {
 
 func dataExplorerCommandFromQuery(workspaceID, object string) uisignals.DataExplorerCommand {
 	return normalizeDataExplorerCommand(uisignals.DataExplorerCommand{
-		WorkspaceID: strings.TrimSpace(workspaceID),
-		ObjectKey:   strings.TrimSpace(object),
+		WorkspaceID: uisignals.Optional(strings.TrimSpace(workspaceID)),
+		ObjectKey:   uisignals.Optional(strings.TrimSpace(object)),
 		Limit:       dataExplorerDefaultLimit,
 		Count:       dataExplorerDefaultLimit,
-		Block:       "all",
+		Block:       uisignals.Pointer("all"),
 	})
 }
 
@@ -132,8 +132,8 @@ func DataExplorerCommandFromQuery(workspaceID, object string) uisignals.DataExpl
 }
 
 func normalizeDataExplorerCommand(command uisignals.DataExplorerCommand) uisignals.DataExplorerCommand {
-	command.WorkspaceID = strings.TrimSpace(command.WorkspaceID)
-	command.ObjectKey = strings.TrimSpace(command.ObjectKey)
+	command.WorkspaceID = uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(command.WorkspaceID)))
+	command.ObjectKey = uisignals.Optional(strings.TrimSpace(uisignals.ValueOrZero(command.ObjectKey)))
 	if command.Limit <= 0 {
 		command.Limit = dataExplorerDefaultLimit
 	}
@@ -155,16 +155,22 @@ func normalizeDataExplorerCommand(command uisignals.DataExplorerCommand) uisigna
 	if command.Start == 0 && command.Offset > 0 {
 		command.Start = command.Offset
 	}
-	if command.Block != "a" && command.Block != "b" && command.Block != "c" && command.Block != "all" {
-		command.Block = "all"
+	block := uisignals.ValueOrZero(command.Block)
+	if block != "a" && block != "b" && block != "c" && block != "all" {
+		command.Block = uisignals.Pointer("all")
 	}
-	if command.Sort.Direction != "asc" && command.Sort.Direction != "desc" {
-		command.Sort.Direction = ""
+	direction := uisignals.ValueOrZero(command.Sort.Direction)
+	if direction != "asc" && direction != "desc" {
+		command.Sort.Direction = nil
 	}
-	if strings.TrimSpace(command.Sort.Column) == "" {
+	if strings.TrimSpace(uisignals.ValueOrZero(command.Sort.Column)) == "" {
 		command.Sort = uisignals.DataPreviewSortSignal{}
 	}
-	command.ColumnWidths = normalizeDataExplorerColumnWidths(command.ColumnWidths)
+	columnWidths := normalizeDataExplorerColumnWidths(uisignals.ValueOrZero(command.ColumnWidths))
+	command.ColumnWidths = nil
+	if len(columnWidths) > 0 {
+		command.ColumnWidths = &columnWidths
+	}
 	return command
 }
 
@@ -187,7 +193,7 @@ func normalizeDataExplorerColumnWidths(widths map[string]float64) map[string]flo
 }
 
 func dataExplorerResizeOnlyPatch(current uisignals.DataExplorerSignal, nextCommand uisignals.DataExplorerCommand) (uisignals.DataExplorerSignal, bool) {
-	if len(nextCommand.ColumnWidths) == 0 || current.SelectedObject == nil {
+	if len(uisignals.ValueOrZero(nextCommand.ColumnWidths)) == 0 || current.SelectedObject == nil {
 		return uisignals.DataExplorerSignal{}, false
 	}
 	next := normalizeDataExplorerCommand(nextCommand)
@@ -196,23 +202,24 @@ func dataExplorerResizeOnlyPatch(current uisignals.DataExplorerSignal, nextComma
 		return uisignals.DataExplorerSignal{}, false
 	}
 	current.Command = next
-	current.SelectedWorkspaceID = firstNonEmpty(current.SelectedWorkspaceID, next.WorkspaceID)
-	current.SelectedKey = firstNonEmpty(current.SelectedKey, next.ObjectKey)
+	current.SelectedWorkspaceID = uisignals.Optional(firstNonEmpty(uisignals.ValueOrZero(current.SelectedWorkspaceID), uisignals.ValueOrZero(next.WorkspaceID)))
+	current.SelectedKey = uisignals.Optional(firstNonEmpty(uisignals.ValueOrZero(current.SelectedKey), uisignals.ValueOrZero(next.ObjectKey)))
 	return current, true
 }
 
 func dataExplorerCommandsEqualExceptColumnWidths(left, right uisignals.DataExplorerCommand) bool {
-	return left.WorkspaceID == right.WorkspaceID &&
-		left.ObjectKey == right.ObjectKey &&
+	return uisignals.ValueOrZero(left.WorkspaceID) == uisignals.ValueOrZero(right.WorkspaceID) &&
+		uisignals.ValueOrZero(left.ObjectKey) == uisignals.ValueOrZero(right.ObjectKey) &&
 		left.Offset == right.Offset &&
 		left.Limit == right.Limit &&
-		left.Block == right.Block &&
+		uisignals.ValueOrZero(left.Block) == uisignals.ValueOrZero(right.Block) &&
 		left.Start == right.Start &&
 		left.Count == right.Count &&
 		left.RequestSeq == right.RequestSeq &&
 		left.ResetVersion == right.ResetVersion &&
-		left.Sort == right.Sort &&
-		stringSlicesEqual(left.VisibleColumns, right.VisibleColumns)
+		uisignals.ValueOrZero(left.Sort.Column) == uisignals.ValueOrZero(right.Sort.Column) &&
+		uisignals.ValueOrZero(left.Sort.Direction) == uisignals.ValueOrZero(right.Sort.Direction) &&
+		stringSlicesEqual(uisignals.ValueOrZero(left.VisibleColumns), uisignals.ValueOrZero(right.VisibleColumns))
 }
 
 func stringSlicesEqual(left, right []string) bool {

@@ -23,7 +23,7 @@ func WorkspacesPage(catalog dashboard.Catalog, workspaces []workspaceview.Worksp
 
 func WorkspacesPageForEnvironment(catalog dashboard.Catalog, workspaces []workspaceview.WorkspaceView, environment, roleLabel string, chromeOptions ...ChromeOption) g.Node {
 	page := workspaceCatalogPageSignal(workspaces)
-	page.Environment = environment
+	page.Environment = uisignals.Optional(environment)
 	catalog = catalogWithoutWorkspaceContext(catalog)
 	return workspaceRouteDocument("LibreDash Workspaces", catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspace,
 		g.El("ld-workspace-page",
@@ -40,7 +40,7 @@ func WorkspacesBootstrapSignals(catalog dashboard.Catalog, workspaces []workspac
 
 func WorkspacesBootstrapSignalsForEnvironment(catalog dashboard.Catalog, workspaces []workspaceview.WorkspaceView, environment, roleLabel string, chromeOptions ...ChromeOption) map[string]any {
 	page := workspaceCatalogPageSignal(workspaces)
-	page.Environment = environment
+	page.Environment = uisignals.Optional(environment)
 	catalog = catalogWithoutWorkspaceContext(catalog)
 	return workspaceRouteBootstrapSignals(catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspace, nil, chromeOptions)
 }
@@ -152,8 +152,8 @@ func workspaceCatalogPageSignal(workspaces []workspaceview.WorkspaceView) uisign
 	return uisignals.WorkspacePageSignal{
 		Kind:        uisignals.RouteWorkspace,
 		Title:       "Workspaces",
-		Description: "View published BI workspaces. Authoring lives in Git.",
-		Cards:       workspaceCardSignals(workspaces),
+		Description: uisignals.Pointer("View published BI workspaces. Authoring lives in Git."),
+		Cards:       uisignals.OptionalSlice(workspaceCardSignals(workspaces)),
 	}
 }
 
@@ -161,10 +161,10 @@ func workspacePageSignal(workspace workspaceview.WorkspaceView, assets []workspa
 	return uisignals.WorkspacePageSignal{
 		Kind:        uisignals.RouteWorkspace,
 		Title:       workspace.Title,
-		Description: workspace.Description,
-		WorkspaceID: workspace.ID,
-		Environment: environment,
-		AssetList: workspaceAssetListSignal(
+		Description: uisignals.Optional(workspace.Description),
+		WorkspaceID: uisignals.Optional(workspace.ID),
+		Environment: uisignals.Optional(environment),
+		AssetList: uisignals.Pointer(workspaceAssetListSignal(
 			workspace.ID,
 			assets,
 			edges,
@@ -173,7 +173,7 @@ func workspacePageSignal(workspace workspaceview.WorkspaceView, assets []workspa
 			workspaceAssetListTabs(workspace.ID, activeType, query),
 			"No assets match this view.",
 			"/workspaces/"+workspace.ID,
-		),
+		)),
 	}
 }
 
@@ -181,10 +181,10 @@ func connectionsPageSignal(workspaceID string, assets []workspaceview.AssetView,
 	return uisignals.ConnectionsPageSignal{
 		Kind:        uisignals.RouteConnections,
 		Title:       "Connections",
-		Description: "Connection-scoped data assets used by published semantic models.",
-		WorkspaceID: workspaceID,
-		Environment: environment,
-		AssetList: workspaceAssetListSignal(
+		Description: uisignals.Pointer("Connection-scoped data assets used by published semantic models."),
+		WorkspaceID: uisignals.Optional(workspaceID),
+		Environment: uisignals.Optional(environment),
+		AssetList: uisignals.Pointer(workspaceAssetListSignal(
 			workspaceID,
 			assets,
 			edges,
@@ -193,7 +193,7 @@ func connectionsPageSignal(workspaceID string, assets []workspaceview.AssetView,
 			connectionAssetListTabs(activeType, query),
 			"No connection assets match this view.",
 			"/connections",
-		),
+		)),
 	}
 }
 
@@ -223,9 +223,9 @@ func workspaceAssetListSignal(workspaceID string, assets []workspaceview.AssetVi
 		items = append(items, workspaceAssetSummarySignal(workspaceID, asset, assetIndex, edges))
 	}
 	return uisignals.WorkspaceAssetListSignal{
-		WorkspaceID: workspaceID,
-		Query:       query,
-		ActiveType:  activeType,
+		WorkspaceID: uisignals.Optional(workspaceID),
+		Query:       uisignals.Optional(query),
+		ActiveType:  uisignals.Optional(activeType),
 		SearchHref:  searchHref,
 		Tabs:        tabs,
 		Assets:      items,
@@ -314,12 +314,12 @@ func workspaceAssetSummarySignal(workspaceID string, asset workspaceview.AssetVi
 	return uisignals.WorkspaceAssetSummarySignal{
 		ID:          asset.ID,
 		Title:       assetTitle(asset),
-		Description: asset.Description,
+		Description: uisignals.Optional(asset.Description),
 		Type:        asset.Type,
 		TypeLabel:   assetTypeLabel(asset.Type),
 		Key:         asset.Key,
-		ParentTitle: parentTitle,
-		ParentHref:  parentHref,
+		ParentTitle: uisignals.Optional(parentTitle),
+		ParentHref:  uisignals.Optional(parentHref),
 		DetailHref:  detailHref,
 		OpenHref:    openHref,
 	}
@@ -337,22 +337,23 @@ func workspaceAssetPageSignalWithRefreshAndVersions(workspace workspaceview.Work
 	page := baseWorkspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, refresh, versions)
 	page.Kind = uisignals.RouteWorkspaceAsset
 	page.Breadcrumbs = []uisignals.WorkspaceBreadcrumbSignal{
-		{Label: "Workspaces", Href: "/workspaces"},
-		{Label: workspace.Title, Href: "/workspaces/" + workspace.ID},
-		{Label: assetTitle(asset), Current: true},
+		{Label: "Workspaces", Href: uisignals.Pointer("/workspaces")},
+		{Label: workspace.Title, Href: uisignals.Pointer("/workspaces/" + workspace.ID)},
+		{Label: assetTitle(asset), Current: uisignals.Pointer(true)},
 	}
-	page.Actions = []uisignals.WorkspaceActionSignal{{Label: "Back to workspace", Href: "/workspaces/" + workspace.ID, Icon: "back"}}
+	actions := []uisignals.WorkspaceActionSignal{{Label: "Back to workspace", Href: uisignals.Pointer("/workspaces/" + workspace.ID), Icon: uisignals.Pointer("back")}}
 	if assetRefreshable(asset.Type) {
-		page.Actions = append([]uisignals.WorkspaceActionSignal{{
+		actions = append([]uisignals.WorkspaceActionSignal{{
 			Label:    "Refresh materializations",
-			Icon:     "refresh",
-			Command:  "refresh-materializations",
-			Disabled: assetRefreshSignal(refresh).Running,
-		}}, page.Actions...)
+			Icon:     uisignals.Pointer("refresh"),
+			Command:  uisignals.Pointer("refresh-materializations"),
+			Disabled: uisignals.Optional(assetRefreshSignal(refresh).Running),
+		}}, actions...)
 	}
 	if asset.Href != "" {
-		page.Actions = append(page.Actions, uisignals.WorkspaceActionSignal{Label: "Open asset", Href: asset.Href, Icon: "open"})
+		actions = append(actions, uisignals.WorkspaceActionSignal{Label: "Open asset", Href: uisignals.Pointer(asset.Href), Icon: uisignals.Pointer("open")})
 	}
+	page.Actions = uisignals.OptionalSlice(actions)
 	page.Tabs = []uisignals.WorkspaceTabSignal{
 		{ID: "details", Label: "Details", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "details"), Active: activeSection == "details"},
 	}
@@ -363,9 +364,9 @@ func workspaceAssetPageSignalWithRefreshAndVersions(workspace workspaceview.Work
 		page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "refreshes", Label: "Refreshes", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "refreshes"), Active: activeSection == "refreshes"})
 	}
 	if assetHasVersions(versions) {
-		page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "versions", Label: "Versions", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "versions"), Active: activeSection == "versions", Count: len(versions.Versions)})
+		page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "versions", Label: "Versions", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "versions"), Active: activeSection == "versions", Count: uisignals.Pointer(int64(len(versions.Versions)))})
 	}
-	page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "lineage", Label: "Lineage", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "lineage"), Active: activeSection == "lineage", Count: lineage.Count})
+	page.Tabs = append(page.Tabs, uisignals.WorkspaceTabSignal{ID: "lineage", Label: "Lineage", Href: assetnav.WorkspaceAssetSectionHref(workspace.ID, asset.ID, "lineage"), Active: activeSection == "lineage", Count: uisignals.Pointer(int64(lineage.Count))})
 	return page
 }
 
@@ -381,13 +382,13 @@ func connectionAssetPageSignalWithVersions(workspace workspaceview.WorkspaceView
 	page := baseWorkspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, AssetRefreshState{}, versions)
 	page.Kind = uisignals.RouteConnectionAsset
 	page.Breadcrumbs = []uisignals.WorkspaceBreadcrumbSignal{
-		{Label: "Connections", Href: "/connections"},
-		{Label: assetTitle(asset), Current: true},
+		{Label: "Connections", Href: uisignals.Pointer("/connections")},
+		{Label: assetTitle(asset), Current: uisignals.Pointer(true)},
 	}
-	page.Actions = []uisignals.WorkspaceActionSignal{{Label: "Back to connections", Href: "/connections", Icon: "back"}}
+	page.Actions = uisignals.Pointer([]uisignals.WorkspaceActionSignal{{Label: "Back to connections", Href: uisignals.Pointer("/connections"), Icon: uisignals.Pointer("back")}})
 	page.Tabs = []uisignals.WorkspaceTabSignal{
 		{ID: "details", Label: "Details", Href: assetnav.ConnectionAssetSectionHref(asset.ID, "details"), Active: activeSection == "details"},
-		{ID: "lineage", Label: "Lineage", Href: assetnav.ConnectionAssetSectionHref(asset.ID, "lineage"), Active: activeSection == "lineage", Count: lineage.Count},
+		{ID: "lineage", Label: "Lineage", Href: assetnav.ConnectionAssetSectionHref(asset.ID, "lineage"), Active: activeSection == "lineage", Count: uisignals.Pointer(int64(lineage.Count))},
 	}
 	return page
 }
@@ -400,16 +401,16 @@ func connectionSourceAssetPageSignalWithVersions(workspace workspaceview.Workspa
 	page := baseWorkspaceAssetPageSignalWithRefreshAndVersions(workspace, source, assets, edges, activeSection, lineage, AssetRefreshState{}, versions)
 	page.Kind = uisignals.RouteConnectionAsset
 	page.Breadcrumbs = []uisignals.WorkspaceBreadcrumbSignal{
-		{Label: "Connections", Href: "/connections"},
-		{Label: assetTitle(connection), Href: assetnav.ConnectionAssetSectionHref(connection.ID, "details")},
-		{Label: "Sources", Href: "/connections?type=source"},
-		{Label: assetTitle(source), Current: true},
+		{Label: "Connections", Href: uisignals.Pointer("/connections")},
+		{Label: assetTitle(connection), Href: uisignals.Pointer(assetnav.ConnectionAssetSectionHref(connection.ID, "details"))},
+		{Label: "Sources", Href: uisignals.Pointer("/connections?type=source")},
+		{Label: assetTitle(source), Current: uisignals.Pointer(true)},
 	}
-	page.Actions = []uisignals.WorkspaceActionSignal{{Label: "Back to sources", Href: "/connections?type=source", Icon: "back"}}
+	page.Actions = uisignals.Pointer([]uisignals.WorkspaceActionSignal{{Label: "Back to sources", Href: uisignals.Pointer("/connections?type=source"), Icon: uisignals.Pointer("back")}})
 	page.Tabs = []uisignals.WorkspaceTabSignal{
 		{ID: "details", Label: "Details", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "details"), Active: activeSection == "details"},
 		{ID: "data", Label: "Data", Href: workspaceAssetDataHref(source.WorkspaceID, source.ID), Active: activeSection == "data"},
-		{ID: "lineage", Label: "Lineage", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "lineage"), Active: activeSection == "lineage", Count: lineage.Count},
+		{ID: "lineage", Label: "Lineage", Href: assetnav.ConnectionSourceAssetSectionHref(connection.ID, source.ID, "lineage"), Active: activeSection == "lineage", Count: uisignals.Pointer(int64(lineage.Count))},
 	}
 	return page
 }
@@ -432,18 +433,18 @@ func baseWorkspaceAssetPageSignalWithRefreshAndVersions(workspace workspaceview.
 		Asset:         workspaceAssetSummarySignal(workspace.ID, asset, assetsByID(assets), edges),
 	}
 	if assetRefreshable(asset.Type) {
-		page.Refresh = assetRefreshSignal(refresh)
+		page.Refresh = uisignals.Pointer(assetRefreshSignal(refresh))
 	}
 	if activeSection == "details" {
-		page.Details = workspaceAssetDetailsSignalWithRefresh(workspace, asset, assets, edges, refresh)
+		page.Details = uisignals.Pointer(workspaceAssetDetailsSignalWithRefresh(workspace, asset, assets, edges, refresh))
 	}
 	if activeSection == "lineage" {
-		page.Lineage = uisignals.WorkspaceAssetLineageSignal{
-			Count:       lineage.Count,
+		page.Lineage = uisignals.Pointer(uisignals.WorkspaceAssetLineageSignal{
+			Count:       int64(lineage.Count),
 			Graph:       lineage.Graph,
 			UsesTable:   lineage.Uses,
 			UsedByTable: lineage.UsedBy,
-		}
+		})
 	}
 	if activeSection == "refreshes" && assetRefreshable(asset.Type) {
 		runsTable := assetRefreshesTable(refresh)
@@ -466,10 +467,10 @@ func workspaceAssetDetailsSignalWithRefresh(workspace workspaceview.WorkspaceVie
 	for _, section := range model.Sections {
 		sections = append(sections, uisignals.WorkspaceDetailSectionSignal{
 			Title: section.Title,
-			Facts: definitionFactSignals(section.Facts),
-			Table: section.Table,
-			Code:  section.Code,
-			Lang:  section.Lang,
+			Facts: uisignals.OptionalSlice(definitionFactSignals(section.Facts)),
+			Table: uisignals.Pointer(section.Table),
+			Code:  uisignals.Optional(section.Code),
+			Lang:  uisignals.Optional(section.Lang),
 		})
 	}
 	return uisignals.WorkspaceAssetDetailsSignal{
@@ -485,7 +486,7 @@ func definitionFactSignals(facts []definitionFact) []uisignals.DefinitionFactSig
 		if strings.TrimSpace(fact.Value) == "" {
 			continue
 		}
-		out = append(out, uisignals.DefinitionFactSignal{Label: fact.Label, Value: fact.Value, Code: fact.Code, Wide: fact.Wide})
+		out = append(out, uisignals.DefinitionFactSignal{Label: fact.Label, Value: fact.Value, Code: uisignals.Optional(fact.Code), Wide: uisignals.Optional(fact.Wide)})
 	}
 	return out
 }
@@ -506,7 +507,7 @@ func WorkspaceAssetPageWithRefreshAndVersionsForEnvironment(catalog dashboard.Ca
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 	page := workspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, refresh, versions)
-	page.Environment = environment
+	page.Environment = uisignals.Optional(environment)
 	extras := workspaceDocumentExtras{}
 	attrs := []g.Node{
 		g.Attr("slot", "page"),
@@ -533,7 +534,7 @@ func WorkspaceAssetBootstrapSignalsForEnvironment(catalog dashboard.Catalog, wor
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 	page := workspaceAssetPageSignalWithRefreshAndVersions(workspace, asset, assets, edges, activeSection, lineage, refresh, versions)
-	page.Environment = environment
+	page.Environment = uisignals.Optional(environment)
 	return workspaceRouteBootstrapSignals(catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, nil, chromeOptions)
 }
 
@@ -545,7 +546,7 @@ func ConnectionAssetBootstrapSignalsForEnvironment(catalog dashboard.Catalog, wo
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 	page := connectionAssetPageSignalWithVersions(workspace, asset, assets, edges, activeSection, lineage, versions)
-	page.Environment = environment
+	page.Environment = uisignals.Optional(environment)
 	return workspaceRouteBootstrapSignals(catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset, nil, nil)
 }
 
@@ -557,7 +558,7 @@ func ConnectionSourceAssetBootstrapSignalsForEnvironment(catalog dashboard.Catal
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, source, assets, edges)
 	page := connectionSourceAssetPageSignalWithVersions(workspace, connection, source, assets, edges, activeSection, lineage, versions)
-	page.Environment = environment
+	page.Environment = uisignals.Optional(environment)
 	return workspaceRouteBootstrapSignals(catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset, nil, nil)
 }
 
@@ -569,7 +570,7 @@ func ConnectionAssetPageWithVersionsForEnvironment(catalog dashboard.Catalog, wo
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, asset, assets, edges)
 	page := connectionAssetPageSignalWithVersions(workspace, asset, assets, edges, activeSection, lineage, versions)
-	page.Environment = environment
+	page.Environment = uisignals.Optional(environment)
 	return workspaceAssetRouteDocument(asset, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset, g.El("ld-workspace-asset-page",
 		g.Attr("slot", "page"),
 	), workspaceDocumentExtras{}, activeSection, nil)
@@ -583,7 +584,7 @@ func ConnectionSourceAssetPageWithVersionsForEnvironment(catalog dashboard.Catal
 	activeSection = normalizeWorkspaceAssetSection(activeSection)
 	lineage := assetLineage(workspace.ID, source, assets, edges)
 	page := connectionSourceAssetPageSignalWithVersions(workspace, connection, source, assets, edges, activeSection, lineage, versions)
-	page.Environment = environment
+	page.Environment = uisignals.Optional(environment)
 	return workspaceAssetRouteDocument(source, catalog, "connections", roleLabel, page, uisignals.RouteConnectionAsset, g.El("ld-workspace-asset-page",
 		g.Attr("slot", "page"),
 	), workspaceDocumentExtras{}, activeSection, nil)
@@ -655,8 +656,8 @@ func WorkspacePermissionsPage(catalog dashboard.Catalog, workspace workspaceview
 	page := uisignals.WorkspacePageSignal{
 		Kind:        uisignals.RouteWorkspace,
 		Title:       workspace.Title,
-		Description: "Assign workspace roles. BI assets remain authored in Git.",
-		WorkspaceID: workspace.ID,
+		Description: uisignals.Pointer("Assign workspace roles. BI assets remain authored in Git."),
+		WorkspaceID: uisignals.Optional(workspace.ID),
 	}
 	access := WorkspaceAccessResponse{
 		Workspace: workspace,
@@ -730,11 +731,11 @@ func runtimeForPage(routeKind uisignals.RouteKind, catalog dashboard.Catalog, pa
 	runtime := runtimeSignal(routeKind)
 	switch typed := page.(type) {
 	case uisignals.WorkspacePageSignal:
-		runtime.WorkspaceID = firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID)
+		runtime.WorkspaceID = uisignals.Optional(firstNonEmpty(uisignals.ValueOrZero(typed.WorkspaceID), catalog.Workspace.ID))
 	case uisignals.ConnectionsPageSignal:
-		runtime.WorkspaceID = firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID)
+		runtime.WorkspaceID = uisignals.Optional(firstNonEmpty(uisignals.ValueOrZero(typed.WorkspaceID), catalog.Workspace.ID))
 	case uisignals.WorkspaceAssetPageSignal:
-		runtime.WorkspaceID = firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID)
+		runtime.WorkspaceID = uisignals.Optional(firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID))
 	}
 	return runtime
 }
@@ -742,14 +743,16 @@ func runtimeForPage(routeKind uisignals.RouteKind, catalog dashboard.Catalog, pa
 func workspaceRouteUpdatesURL(routeKind uisignals.RouteKind, catalog dashboard.Catalog, page any, extras workspaceDocumentExtras) string {
 	switch typed := page.(type) {
 	case uisignals.WorkspacePageSignal:
-		return updatesURL(routeKind, "workspace", firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID), "environment", typed.Environment, "type", typed.AssetList.ActiveType, "q", typed.AssetList.Query)
+		assetList := uisignals.ValueOrZero(typed.AssetList)
+		return updatesURL(routeKind, "workspace", firstNonEmpty(uisignals.ValueOrZero(typed.WorkspaceID), catalog.Workspace.ID), "environment", uisignals.ValueOrZero(typed.Environment), "type", uisignals.ValueOrZero(assetList.ActiveType), "q", uisignals.ValueOrZero(assetList.Query))
 	case uisignals.ConnectionsPageSignal:
-		return updatesURL(routeKind, "environment", typed.Environment, "type", typed.AssetList.ActiveType, "q", typed.AssetList.Query)
+		assetList := uisignals.ValueOrZero(typed.AssetList)
+		return updatesURL(routeKind, "environment", uisignals.ValueOrZero(typed.Environment), "type", uisignals.ValueOrZero(assetList.ActiveType), "q", uisignals.ValueOrZero(assetList.Query))
 	case uisignals.WorkspaceAssetPageSignal:
 		if routeKind == uisignals.RouteConnectionAsset {
-			return updatesURL(routeKind, "environment", typed.Environment, "asset", typed.AssetID, "section", typed.ActiveSection, "assetWorkspace", extras.AssetWorkspaceID)
+			return updatesURL(routeKind, "environment", uisignals.ValueOrZero(typed.Environment), "asset", typed.AssetID, "section", typed.ActiveSection, "assetWorkspace", extras.AssetWorkspaceID)
 		}
-		pairs := []string{"workspace", firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID), "environment", typed.Environment, "asset", typed.AssetID, "section", typed.ActiveSection}
+		pairs := []string{"workspace", firstNonEmpty(typed.WorkspaceID, catalog.Workspace.ID), "environment", uisignals.ValueOrZero(typed.Environment), "asset", typed.AssetID, "section", typed.ActiveSection}
 		return updatesURL(routeKind, pairs...)
 	default:
 		return updatesURL(routeKind)
@@ -878,7 +881,7 @@ func assetVersionsTable(state AssetVersionsState) recordTable {
 		rows = append(rows, map[string]any{
 			"version":      shortHash(version.ContentHash),
 			"published":    emptyDash(firstNonEmpty(version.ActivatedAt, version.CreatedAt)),
-			"status":       recordTableBadge{Label: status, Tone: versionStatusTone(status)},
+			"status":       recordTableBadge{Label: status, Tone: uisignals.Pointer(versionStatusTone(status))},
 			"config_hash":  shortHash(version.ContentHash),
 			"source_file":  emptyDash(version.SourceFile),
 			"published_by": emptyDash(version.CreatedBy),
@@ -886,16 +889,16 @@ func assetVersionsTable(state AssetVersionsState) recordTable {
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "version", Header: "Version", Kind: "code", Width: "150px"},
-			{ID: "published", Header: "Published", Width: "180px"},
-			{ID: "status", Header: "Status", Kind: "badge", Width: "120px"},
-			{ID: "config_hash", Header: "Config hash", Kind: "code", Width: "130px"},
-			{ID: "source_file", Header: "Source file", Kind: "code", Width: "220px"},
-			{ID: "published_by", Header: "Published by", Width: "150px"},
+			{ID: "version", Header: "Version", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("150px")},
+			{ID: "published", Header: "Published", Width: uisignals.Pointer("180px")},
+			{ID: "status", Header: "Status", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("120px")},
+			{ID: "config_hash", Header: "Config hash", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("130px")},
+			{ID: "source_file", Header: "Source file", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("220px")},
+			{ID: "published_by", Header: "Published by", Width: uisignals.Pointer("150px")},
 		},
 		Rows:     rows,
 		Empty:    "No config versions recorded for this asset yet.",
-		MinWidth: "850px",
+		MinWidth: uisignals.Pointer("850px"),
 	}
 }
 
@@ -946,17 +949,17 @@ func assetRefreshesTable(refresh AssetRefreshState) recordTable {
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "status", Header: "Status", Kind: "status", Width: "140px"},
-			{ID: "started", Header: "Started", Width: "180px"},
-			{ID: "duration", Header: "Duration", Width: "110px"},
-			{ID: "triggered_by", Header: "Triggered by", Width: "130px"},
-			{ID: "trigger", Header: "Trigger", Width: "130px"},
-			{ID: "run", Header: "Run ID", Kind: "code", Width: "160px"},
+			{ID: "status", Header: "Status", Kind: uisignals.Pointer("status"), Width: uisignals.Pointer("140px")},
+			{ID: "started", Header: "Started", Width: uisignals.Pointer("180px")},
+			{ID: "duration", Header: "Duration", Width: uisignals.Pointer("110px")},
+			{ID: "triggered_by", Header: "Triggered by", Width: uisignals.Pointer("130px")},
+			{ID: "trigger", Header: "Trigger", Width: uisignals.Pointer("130px")},
+			{ID: "run", Header: "Run ID", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("160px")},
 			{ID: "error", Header: "Error"},
 		},
 		Rows:     rows,
 		Empty:    "No refresh runs have been recorded for this asset.",
-		MinWidth: "1040px",
+		MinWidth: uisignals.Pointer("1040px"),
 	}
 }
 
@@ -978,7 +981,7 @@ func refreshStatusGridValue(status string) any {
 	if status == "" {
 		status = "not refreshed"
 	}
-	return recordTableBadge{Label: status, Tone: refreshStatusBadgeTone(status)}
+	return recordTableBadge{Label: status, Tone: uisignals.Pointer(refreshStatusBadgeTone(status))}
 }
 
 func refreshStatusBadgeTone(status string) string {
@@ -1080,8 +1083,8 @@ func assetLineage(workspaceID string, selected workspaceview.AssetView, assets [
 		}
 		if existing, ok := nodeIndex[asset.ID]; ok {
 			node := graph.Nodes[existing]
-			if !node.Selected && absInt(rank) < absInt(node.Rank) {
-				node.Rank = rank
+			if !uisignals.ValueOrZero(node.Selected) && absInt(rank) < absInt(int(node.Rank)) {
+				node.Rank = int64(rank)
 				node.Side = lineageSideForRank(rank)
 				graph.Nodes[existing] = node
 			}
@@ -1108,7 +1111,7 @@ func assetLineage(workspaceID string, selected workspaceview.AssetView, assets [
 			ID:     key,
 			Source: edge.FromAssetID,
 			Target: edge.ToAssetID,
-			Label:  labelFromKey(edge.Type),
+			Label:  uisignals.Optional(labelFromKey(edge.Type)),
 			Kind:   edge.Type,
 		})
 		seenEdges[key] = struct{}{}
@@ -1195,10 +1198,10 @@ func enrichAssetLineageGraph(graph assetLineageGraph, assets map[string]workspac
 	}
 	for _, edge := range graph.Edges {
 		if sourceIndex, ok := nodeIndex[edge.Source]; ok {
-			graph.Nodes[sourceIndex].VisibleDownstream++
+			graph.Nodes[sourceIndex].VisibleDownstreamCount = incrementOptionalInt64(graph.Nodes[sourceIndex].VisibleDownstreamCount)
 		}
 		if targetIndex, ok := nodeIndex[edge.Target]; ok {
-			graph.Nodes[targetIndex].VisibleUpstream++
+			graph.Nodes[targetIndex].VisibleUpstreamCount = incrementOptionalInt64(graph.Nodes[targetIndex].VisibleUpstreamCount)
 		}
 	}
 
@@ -1206,10 +1209,10 @@ func enrichAssetLineageGraph(graph assetLineageGraph, assets map[string]workspac
 	for _, edge := range edges {
 		if isLineageDependencyEdge(edge) {
 			if index, ok := nodeIndex[edge.FromAssetID]; ok {
-				graph.Nodes[index].UsesCount++
+				graph.Nodes[index].UsesCount = incrementOptionalInt64(graph.Nodes[index].UsesCount)
 			}
 			if index, ok := nodeIndex[edge.ToAssetID]; ok {
-				graph.Nodes[index].UsedByCount++
+				graph.Nodes[index].UsedByCount = incrementOptionalInt64(graph.Nodes[index].UsedByCount)
 			}
 			continue
 		}
@@ -1234,8 +1237,8 @@ func enrichAssetLineageGraph(graph assetLineageGraph, assets map[string]workspac
 		for _, value := range contains {
 			count += value
 		}
-		graph.Nodes[index].ContainedCount = count
-		graph.Nodes[index].ContainedSummary = lineageContainedSummary(contains)
+		graph.Nodes[index].ContainedCount = uisignals.Pointer(int64(count))
+		graph.Nodes[index].ContainedSummary = uisignals.Optional(lineageContainedSummary(contains))
 	}
 }
 
@@ -1252,6 +1255,11 @@ func lineageContainedSummary(counts map[string]int) string {
 		parts = append(parts, fmt.Sprintf("%d %s", counts[typ], pluralAssetTypeLabel(typ, counts[typ])))
 	}
 	return strings.Join(parts, ", ")
+}
+
+func incrementOptionalInt64(value *int64) *int64 {
+	next := uisignals.ValueOrZero(value) + 1
+	return &next
 }
 
 func pluralAssetTypeLabel(typ string, count int) string {
@@ -1341,7 +1349,7 @@ func collapsedAssetLineageGraph(workspaceID string, selected workspaceview.Asset
 			ID:     key,
 			Source: edge.source,
 			Target: edge.target,
-			Label:  edge.label,
+			Label:  uisignals.Optional(edge.label),
 			Kind:   edge.kind,
 		})
 	}
@@ -1423,7 +1431,7 @@ func lineageTablesFromGraph(workspaceID string, selected workspaceview.AssetView
 
 func lineageGraphTableRow(workspaceID string, edge assetLineageEdge, peer workspaceview.AssetView, edges []workspaceview.AssetEdgeView) map[string]any {
 	return map[string]any{
-		"relation":  firstNonEmpty(edge.Label, labelFromKey(edge.Kind)),
+		"relation":  firstNonEmpty(uisignals.ValueOrZero(edge.Label), labelFromKey(edge.Kind)),
 		"asset":     assetTitle(peer),
 		"assetHref": lineageAssetHref(workspaceID, peer, edges),
 		"type":      assetTypeLabel(peer.Type),
@@ -1434,14 +1442,14 @@ func lineageGraphTableRow(workspaceID string, edge assetLineageEdge, peer worksp
 func lineageTable(rows []map[string]any, empty string) recordTable {
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "relation", Header: "Relationship", Width: "190px"},
-			{ID: "asset", Header: "Asset", Kind: "link", HrefKey: "assetHref", Width: "260px"},
-			{ID: "type", Header: "Type", Width: "150px"},
-			{ID: "key", Header: "Key", Kind: "code"},
+			{ID: "relation", Header: "Relationship", Width: uisignals.Pointer("190px")},
+			{ID: "asset", Header: "Asset", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("assetHref"), Width: uisignals.Pointer("260px")},
+			{ID: "type", Header: "Type", Width: uisignals.Pointer("150px")},
+			{ID: "key", Header: "Key", Kind: uisignals.Pointer("code")},
 		},
 		Rows:     rows,
 		Empty:    empty,
-		MinWidth: "760px",
+		MinWidth: uisignals.Pointer("760px"),
 	}
 }
 
@@ -1450,11 +1458,11 @@ func lineageNode(workspaceID string, asset workspaceview.AssetView, rank int, se
 		ID:       asset.ID,
 		Label:    assetTitle(asset),
 		Kind:     asset.Type,
-		Meta:     asset.Key,
-		Href:     lineageAssetHref(workspaceID, asset, edges),
+		Meta:     uisignals.Optional(asset.Key),
+		Href:     uisignals.Optional(lineageAssetHref(workspaceID, asset, edges)),
 		Side:     lineageSideForRank(rank),
-		Rank:     rank,
-		Selected: selected,
+		Rank:     int64(rank),
+		Selected: uisignals.Optional(selected),
 	}
 }
 
@@ -1634,7 +1642,7 @@ func addContainsContext(selectedID string, graph *assetLineageGraph, nodeIndex m
 			if !ok {
 				continue
 			}
-			addNode(asset, graph.Nodes[fromIndex].Rank+1, false)
+			addNode(asset, int(graph.Nodes[fromIndex].Rank)+1, false)
 			addEdge(edge)
 			continue
 		}
@@ -1643,7 +1651,7 @@ func addContainsContext(selectedID string, graph *assetLineageGraph, nodeIndex m
 			if !ok {
 				continue
 			}
-			addNode(asset, graph.Nodes[toIndex].Rank-1, false)
+			addNode(asset, int(graph.Nodes[toIndex].Rank)-1, false)
 			addEdge(edge)
 		}
 	}
@@ -1858,14 +1866,14 @@ func semanticConnectionsGrid(workspaceID string, parent workspaceview.AssetView,
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "180px"},
-			{ID: "kind", Header: "Kind", Width: "120px"},
-			{ID: "credentials", Header: "Credentials", Kind: "badge", Width: "120px"},
-			{ID: "defaults", Header: "Defaults / options", Kind: "expression"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("nameHref"), Width: uisignals.Pointer("180px")},
+			{ID: "kind", Header: "Kind", Width: uisignals.Pointer("120px")},
+			{ID: "credentials", Header: "Credentials", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("120px")},
+			{ID: "defaults", Header: "Defaults / options", Kind: uisignals.Pointer("expression")},
 		},
 		Rows:     rows,
 		Empty:    "No connections are defined for this semantic model.",
-		MinWidth: "760px",
+		MinWidth: uisignals.Pointer("760px"),
 	}
 }
 
@@ -1885,14 +1893,14 @@ func semanticSourcesGrid(workspaceID string, parent workspaceview.AssetView, ass
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "180px"},
-			{ID: "connection", Header: "Connection", Kind: "code", Width: "150px"},
-			{ID: "format", Header: "Format", Kind: "badge", Width: "110px"},
-			{ID: "path", Header: "Path / object", Kind: "expression"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("nameHref"), Width: uisignals.Pointer("180px")},
+			{ID: "connection", Header: "Connection", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("150px")},
+			{ID: "format", Header: "Format", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("110px")},
+			{ID: "path", Header: "Path / object", Kind: uisignals.Pointer("expression")},
 		},
 		Rows:     rows,
 		Empty:    "No sources are defined for this semantic model.",
-		MinWidth: "820px",
+		MinWidth: uisignals.Pointer("820px"),
 	}
 }
 
@@ -1921,17 +1929,17 @@ func semanticModelTablesTable(workspaceID string, parent workspaceview.AssetView
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "180px"},
-			{ID: "primary_key", Header: "Primary key", Kind: "code", Width: "150px"},
-			{ID: "fields", Header: "Fields", Width: "100px"},
-			{ID: "measures", Header: "Measures", Width: "110px"},
-			{ID: "last_refreshed", Header: "Last refreshed", Width: "180px"},
-			{ID: "refresh_status", Header: "Refresh status", Kind: "status", Width: "130px"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("nameHref"), Width: uisignals.Pointer("180px")},
+			{ID: "primary_key", Header: "Primary key", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("150px")},
+			{ID: "fields", Header: "Fields", Width: uisignals.Pointer("100px")},
+			{ID: "measures", Header: "Measures", Width: uisignals.Pointer("110px")},
+			{ID: "last_refreshed", Header: "Last refreshed", Width: uisignals.Pointer("180px")},
+			{ID: "refresh_status", Header: "Refresh status", Kind: uisignals.Pointer("status"), Width: uisignals.Pointer("130px")},
 			{ID: "description", Header: "Description"},
 		},
 		Rows:     rows,
 		Empty:    "No model tables are defined for this semantic model.",
-		MinWidth: "1120px",
+		MinWidth: uisignals.Pointer("1120px"),
 	}
 }
 
@@ -1984,14 +1992,14 @@ func semanticModelGraphSignal(meta map[string]any) *uisignals.SemanticModelGraph
 		nodes = append(nodes, uisignals.SemanticModelGraphNodeSignal{
 			ID:          name,
 			Title:       name,
-			Description: metaString(table, "Description", "description"),
-			PrimaryKey:  metaString(table, "PrimaryKey", "primaryKey", "primary_key"),
-			Badges:      badges,
+			Description: uisignals.Optional(metaString(table, "Description", "description")),
+			PrimaryKey:  uisignals.Optional(metaString(table, "PrimaryKey", "primaryKey", "primary_key")),
+			Badges:      uisignals.OptionalSlice(badges),
 			Fields:      semanticModelGraphFields(table, joinFields[name]),
 		})
 	}
 	return &uisignals.SemanticModelGraphSignal{
-		Facts: facts,
+		Facts: uisignals.OptionalSlice(facts),
 		Nodes: nodes,
 		Edges: relationships,
 	}
@@ -2182,10 +2190,10 @@ func semanticModelGraphFields(table map[string]any, joins map[string][]string) [
 		}
 		out = append(out, uisignals.SemanticModelGraphFieldSignal{
 			Name:          name,
-			Label:         labelFromKey(name),
-			Join:          true,
-			Relationships: joins[name],
-			PrimaryKey:    name == primaryKey,
+			Label:         uisignals.Optional(labelFromKey(name)),
+			Join:          uisignals.Pointer(true),
+			Relationships: uisignals.OptionalSlice(joins[name]),
+			PrimaryKey:    uisignals.Optional(name == primaryKey),
 		})
 	}
 	return out
@@ -2194,11 +2202,11 @@ func semanticModelGraphFields(table map[string]any, joins map[string][]string) [
 func semanticModelGraphField(name string, field, column map[string]any, primaryKey string, relationships []string) uisignals.SemanticModelGraphFieldSignal {
 	return uisignals.SemanticModelGraphFieldSignal{
 		Name:          name,
-		Label:         firstNonEmpty(metaString(field, "Label", "label"), labelFromKey(name)),
-		Type:          firstNonEmpty(metaString(column, "PhysicalType", "physicalType"), metaString(column, "Type", "type")),
-		PrimaryKey:    metaBool(column, "PrimaryKey", "primaryKey") || name == primaryKey,
-		Join:          len(relationships) > 0,
-		Relationships: relationships,
+		Label:         uisignals.Optional(firstNonEmpty(metaString(field, "Label", "label"), labelFromKey(name))),
+		Type:          uisignals.Optional(firstNonEmpty(metaString(column, "PhysicalType", "physicalType"), metaString(column, "Type", "type"))),
+		PrimaryKey:    uisignals.Optional(metaBool(column, "PrimaryKey", "primaryKey") || name == primaryKey),
+		Join:          uisignals.Optional(len(relationships) > 0),
+		Relationships: uisignals.OptionalSlice(relationships),
 	}
 }
 
@@ -2324,16 +2332,16 @@ func modelTableFieldsGrid(workspaceID, modelKey, tableName string, fields, schem
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "170px"},
-			{ID: "label", Header: "Label", Width: "180px"},
-			{ID: "physical_type", Header: "Physical type", Kind: "badge", Width: "140px"},
-			{ID: "nullable", Header: "Nullable", Width: "100px"},
-			{ID: "key", Header: "Key", Width: "130px"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("nameHref"), Width: uisignals.Pointer("170px")},
+			{ID: "label", Header: "Label", Width: uisignals.Pointer("180px")},
+			{ID: "physical_type", Header: "Physical type", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("140px")},
+			{ID: "nullable", Header: "Nullable", Width: uisignals.Pointer("100px")},
+			{ID: "key", Header: "Key", Width: uisignals.Pointer("130px")},
 			{ID: "description", Header: "Description"},
 		},
 		Rows:     rows,
 		Empty:    "No schema is available for this model table.",
-		MinWidth: "900px",
+		MinWidth: uisignals.Pointer("900px"),
 	}
 }
 
@@ -2352,14 +2360,14 @@ func sourceFieldsGrid(fields, schema map[string]any) recordTable {
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "code", Width: "170px"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("170px")},
 			{ID: "description", Header: "Description"},
-			{ID: "physical_type", Header: "Physical type", Kind: "badge", Width: "140px"},
-			{ID: "nullable", Header: "Nullable", Width: "100px"},
+			{ID: "physical_type", Header: "Physical type", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("140px")},
+			{ID: "nullable", Header: "Nullable", Width: uisignals.Pointer("100px")},
 		},
 		Rows:     rows,
 		Empty:    "No schema is available for this source.",
-		MinWidth: "900px",
+		MinWidth: uisignals.Pointer("900px"),
 	}
 }
 
@@ -2406,16 +2414,16 @@ func semanticFieldsGrid(workspaceID string, parent workspaceview.AssetView, asse
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "170px"},
-			{ID: "table", Header: "Model table", Kind: "code", Width: "150px"},
-			{ID: "expression", Header: "Expression", Kind: "expression", Width: "260px"},
-			{ID: "type", Header: "Type", Kind: "badge", Width: "110px"},
-			{ID: "filter", Header: "Filter", Kind: "expression", Width: "220px"},
-			{ID: "order", Header: "Order", Kind: "expression", Width: "190px"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("nameHref"), Width: uisignals.Pointer("170px")},
+			{ID: "table", Header: "Model table", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("150px")},
+			{ID: "expression", Header: "Expression", Kind: uisignals.Pointer("expression"), Width: uisignals.Pointer("260px")},
+			{ID: "type", Header: "Type", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("110px")},
+			{ID: "filter", Header: "Filter", Kind: uisignals.Pointer("expression"), Width: uisignals.Pointer("220px")},
+			{ID: "order", Header: "Order", Kind: uisignals.Pointer("expression"), Width: uisignals.Pointer("190px")},
 		},
 		Rows:     rows,
 		Empty:    "No fields are defined for this semantic model.",
-		MinWidth: "1100px",
+		MinWidth: uisignals.Pointer("1100px"),
 	}
 }
 
@@ -2436,15 +2444,15 @@ func semanticMeasuresTable(workspaceID string, parent workspaceview.AssetView, a
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "160px"},
-			{ID: "table", Header: "Table", Kind: "code", Width: "140px"},
-			{ID: "expression", Header: "Expression", Kind: "expression"},
-			{ID: "grain", Header: "Grain", Kind: "badge", Width: "110px"},
-			{ID: "format", Header: "Format", Kind: "badge", Width: "100px"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("nameHref"), Width: uisignals.Pointer("160px")},
+			{ID: "table", Header: "Table", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("140px")},
+			{ID: "expression", Header: "Expression", Kind: uisignals.Pointer("expression")},
+			{ID: "grain", Header: "Grain", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("110px")},
+			{ID: "format", Header: "Format", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("100px")},
 		},
 		Rows:     rows,
 		Empty:    "No measures are defined for this semantic model.",
-		MinWidth: "900px",
+		MinWidth: uisignals.Pointer("900px"),
 	}
 }
 
@@ -2470,17 +2478,17 @@ func semanticRelationshipsTable(workspaceID string, parent workspaceview.AssetVi
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "id", Header: "ID", Kind: "link", HrefKey: "idHref", Width: "180px"},
-			{ID: "from_table", Header: "From table", Kind: "code", Width: "140px"},
-			{ID: "from_field", Header: "From field", Kind: "code", Width: "160px"},
-			{ID: "to_table", Header: "To table", Kind: "code", Width: "140px"},
-			{ID: "to_field", Header: "To field", Kind: "code", Width: "160px"},
-			{ID: "cardinality", Header: "Cardinality", Kind: "badge", Width: "140px"},
-			{ID: "active", Header: "Active", Kind: "badge", Width: "90px"},
+			{ID: "id", Header: "ID", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("idHref"), Width: uisignals.Pointer("180px")},
+			{ID: "from_table", Header: "From table", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("140px")},
+			{ID: "from_field", Header: "From field", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("160px")},
+			{ID: "to_table", Header: "To table", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("140px")},
+			{ID: "to_field", Header: "To field", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("160px")},
+			{ID: "cardinality", Header: "Cardinality", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("140px")},
+			{ID: "active", Header: "Active", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("90px")},
 		},
 		Rows:     rows,
 		Empty:    "No relationships are defined for this semantic model.",
-		MinWidth: "1010px",
+		MinWidth: uisignals.Pointer("1010px"),
 	}
 }
 
@@ -2524,14 +2532,14 @@ func dashboardPagesTable(parent workspaceview.AssetView, pages []workspaceview.A
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "page", Header: "Page", Kind: "link", HrefKey: "pageHref", Width: "220px"},
-			{ID: "key", Header: "Key", Kind: "code", Width: "190px"},
+			{ID: "page", Header: "Page", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("pageHref"), Width: uisignals.Pointer("220px")},
+			{ID: "key", Header: "Key", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("190px")},
 			{ID: "description", Header: "Description"},
-			{ID: "runtime", Header: "Runtime", Kind: "link", HrefKey: "runtimeHref", Width: "110px"},
+			{ID: "runtime", Header: "Runtime", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("runtimeHref"), Width: uisignals.Pointer("110px")},
 		},
 		Rows:     rows,
 		Empty:    "No pages are defined for this dashboard.",
-		MinWidth: "860px",
+		MinWidth: uisignals.Pointer("860px"),
 	}
 }
 
@@ -2549,14 +2557,14 @@ func dashboardFiltersTable(parent workspaceview.AssetView, filters []workspacevi
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "filter", Header: "Filter", Kind: "link", HrefKey: "filterHref", Width: "190px"},
-			{ID: "key", Header: "Key", Kind: "code", Width: "160px"},
-			{ID: "field", Header: "Field", Kind: "code", Width: "220px"},
-			{ID: "type", Header: "Type", Width: "120px"},
+			{ID: "filter", Header: "Filter", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("filterHref"), Width: uisignals.Pointer("190px")},
+			{ID: "key", Header: "Key", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("160px")},
+			{ID: "field", Header: "Field", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("220px")},
+			{ID: "type", Header: "Type", Width: uisignals.Pointer("120px")},
 		},
 		Rows:     rows,
 		Empty:    "No filters are defined for this dashboard.",
-		MinWidth: "820px",
+		MinWidth: uisignals.Pointer("820px"),
 	}
 }
 
@@ -2576,15 +2584,15 @@ func dashboardVisualsTable(parent workspaceview.AssetView, visuals []workspacevi
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "visual", Header: "Visual", Kind: "link", HrefKey: "visualHref", Width: "230px"},
-			{ID: "key", Header: "Key", Kind: "code", Width: "180px"},
-			{ID: "type", Header: "Type", Width: "120px"},
-			{ID: "measures", Header: "Measures", Kind: "expression", Width: "220px"},
-			{ID: "dimensions", Header: "Dimensions", Kind: "expression"},
+			{ID: "visual", Header: "Visual", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("visualHref"), Width: uisignals.Pointer("230px")},
+			{ID: "key", Header: "Key", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("180px")},
+			{ID: "type", Header: "Type", Width: uisignals.Pointer("120px")},
+			{ID: "measures", Header: "Measures", Kind: uisignals.Pointer("expression"), Width: uisignals.Pointer("220px")},
+			{ID: "dimensions", Header: "Dimensions", Kind: uisignals.Pointer("expression")},
 		},
 		Rows:     rows,
 		Empty:    "No visuals are defined for this dashboard.",
-		MinWidth: "1040px",
+		MinWidth: uisignals.Pointer("1040px"),
 	}
 }
 
@@ -2603,15 +2611,15 @@ func dashboardTablesTable(parent workspaceview.AssetView, tables []workspaceview
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "table", Header: "Table", Kind: "link", HrefKey: "tableHref", Width: "220px"},
-			{ID: "key", Header: "Key", Kind: "code", Width: "170px"},
-			{ID: "scopeTable", Header: "Table scope", Kind: "code", Width: "140px"},
-			{ID: "rows", Header: "Rows", Kind: "expression", Width: "280px"},
-			{ID: "measures", Header: "Measures", Kind: "expression"},
+			{ID: "table", Header: "Table", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("tableHref"), Width: uisignals.Pointer("220px")},
+			{ID: "key", Header: "Key", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("170px")},
+			{ID: "scopeTable", Header: "Table scope", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("140px")},
+			{ID: "rows", Header: "Rows", Kind: uisignals.Pointer("expression"), Width: uisignals.Pointer("280px")},
+			{ID: "measures", Header: "Measures", Kind: uisignals.Pointer("expression")},
 		},
 		Rows:     rows,
 		Empty:    "No tables are defined for this dashboard.",
-		MinWidth: "920px",
+		MinWidth: uisignals.Pointer("920px"),
 	}
 }
 
@@ -2706,14 +2714,14 @@ func childAssetGrid(workspaceID string, assets []workspaceview.AssetView, edges 
 	}
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "name", Header: "Name", Kind: "link", HrefKey: "nameHref", Width: "220px"},
-			{ID: "key", Header: "Key", Kind: "code", Width: "220px"},
-			{ID: "type", Header: "Type", Width: "150px"},
+			{ID: "name", Header: "Name", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("nameHref"), Width: uisignals.Pointer("220px")},
+			{ID: "key", Header: "Key", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("220px")},
+			{ID: "type", Header: "Type", Width: uisignals.Pointer("150px")},
 			{ID: "description", Header: "Description"},
 		},
 		Rows:     rows,
 		Empty:    empty,
-		MinWidth: "860px",
+		MinWidth: uisignals.Pointer("860px"),
 	}
 }
 
@@ -2725,10 +2733,10 @@ func childDependencyGrid(workspaceID, assetID string, assets []workspaceview.Ass
 			continue
 		}
 		peerID := edge.ToAssetID
-		direction := recordTableBadge{Label: "Outgoing", Tone: "accent"}
+		direction := recordTableBadge{Label: "Outgoing", Tone: uisignals.Pointer("accent")}
 		if edge.ToAssetID == assetID {
 			peerID = edge.FromAssetID
-			direction = recordTableBadge{Label: "Incoming", Tone: "muted"}
+			direction = recordTableBadge{Label: "Incoming", Tone: uisignals.Pointer("muted")}
 		}
 		peer, ok := byID[peerID]
 		if !ok {
@@ -2747,14 +2755,14 @@ func childDependencyGrid(workspaceID, assetID string, assets []workspaceview.Ass
 	})
 	return recordTable{
 		Columns: []recordTableColumn{
-			{ID: "direction", Header: "Direction", Kind: "badge", Width: "120px"},
-			{ID: "relation", Header: "Relationship", Width: "180px"},
-			{ID: "asset", Header: "Asset", Kind: "link", HrefKey: "assetHref", Width: "240px"},
-			{ID: "type", Header: "Type", Width: "140px"},
+			{ID: "direction", Header: "Direction", Kind: uisignals.Pointer("badge"), Width: uisignals.Pointer("120px")},
+			{ID: "relation", Header: "Relationship", Width: uisignals.Pointer("180px")},
+			{ID: "asset", Header: "Asset", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("assetHref"), Width: uisignals.Pointer("240px")},
+			{ID: "type", Header: "Type", Width: uisignals.Pointer("140px")},
 		},
 		Rows:     rows,
 		Empty:    "No direct dependencies for this asset.",
-		MinWidth: "720px",
+		MinWidth: uisignals.Pointer("720px"),
 	}
 }
 

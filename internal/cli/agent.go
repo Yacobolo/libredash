@@ -13,6 +13,7 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/api"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	apigenagenttool "github.com/Yacobolo/toolbelt/apigen/runtime/agenttool"
 	"github.com/spf13/cobra"
 )
 
@@ -105,39 +106,51 @@ func runAgentConversations(ctx context.Context, opts *rootOptions) error {
 
 func runAgentTools() error {
 	type row struct {
-		name         string
-		operationID  string
-		privilege    string
-		risk         string
-		defaultLimit int
+		name        string
+		operationID string
+		privilege   string
+		effect      string
+		defaults    string
+		inputSchema string
 	}
-	contracts := apigenapi.GetAPIGenOperationContracts()
-	rows := make([]row, 0, len(contracts))
-	for _, contract := range contracts {
-		agentExtension, ok := contract.Extensions["x-agent"].(map[string]any)
-		if !ok || !cliBoolFromMap(agentExtension, "enabled") {
+	operationContracts := apigenapi.GetAPIGenOperationContracts()
+	toolContracts := apigenapi.GetAPIGenToolContracts()
+	rows := make([]row, 0, len(toolContracts))
+	for _, tool := range toolContracts {
+		contract, ok := operationContracts[tool.OperationID]
+		if !ok {
 			continue
 		}
-		name := cliStringFromMap(agentExtension, "name")
-		risk := cliStringFromMap(agentExtension, "risk")
 		authz, _ := contract.Extensions["x-authz"].(map[string]any)
 		rows = append(rows, row{
-			name:         name,
-			operationID:  contract.OperationID,
-			privilege:    cliStringFromMap(authz, "privilege"),
-			risk:         risk,
-			defaultLimit: cliIntFromMap(agentExtension, "defaultLimit"),
+			name:        tool.Name,
+			operationID: contract.OperationID,
+			privilege:   cliStringFromMap(authz, "privilege"),
+			effect:      string(tool.Effect),
+			defaults:    cliAgentToolDefaults(tool.Bindings),
+			inputSchema: string(tool.InputSchema),
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool {
 		return rows[i].name < rows[j].name
 	})
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "NAME\tPRIVILEGE\tRISK\tDEFAULT_LIMIT\tOPERATION")
+	fmt.Fprintln(tw, "NAME\tPRIVILEGE\tEFFECT\tDEFAULTS\tINPUT_SCHEMA\tOPERATION")
 	for _, row := range rows {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%d\t%s\n", row.name, row.privilege, row.risk, row.defaultLimit, row.operationID)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", row.name, row.privilege, row.effect, row.defaults, row.inputSchema, row.operationID)
 	}
 	return tw.Flush()
+}
+
+func cliAgentToolDefaults(bindings []apigenagenttool.Binding) string {
+	defaults := map[string]any{}
+	for _, binding := range bindings {
+		if binding.Argument != "" && binding.Default != nil {
+			defaults[binding.Argument] = binding.Default
+		}
+	}
+	encoded, _ := json.Marshal(defaults)
+	return string(encoded)
 }
 
 func agentConversationEndpoint(target, workspaceID string, query url.Values) string {
@@ -155,27 +168,4 @@ func cliStringFromMap(values map[string]any, key string) string {
 		return value
 	}
 	return ""
-}
-
-func cliBoolFromMap(values map[string]any, key string) bool {
-	if value, ok := values[key].(bool); ok {
-		return value
-	}
-	return false
-}
-
-func cliIntFromMap(values map[string]any, key string) int {
-	switch value := values[key].(type) {
-	case int:
-		return value
-	case int64:
-		return int(value)
-	case float64:
-		return int(value)
-	case json.Number:
-		parsed, _ := value.Int64()
-		return int(parsed)
-	default:
-		return 0
-	}
 }

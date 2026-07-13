@@ -50,6 +50,16 @@ spec:
         tags:
           field: movies.release_decade
           path: [tags_movies]
+    movie_title:
+      label: Movie title
+      type: string
+      bindings:
+        ratings:
+          field: movies.title
+          path: [ratings_movies]
+        tags:
+          field: movies.title
+          path: [tags_movies]
   measures:
     rating_count:
       label: Ratings

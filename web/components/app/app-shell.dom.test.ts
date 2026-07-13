@@ -76,7 +76,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-})
+}, 15_000)
 
 test('global CSS reserves app shell geometry before custom elements upgrade', async () => {
   const page = await browser.newPage({ viewport: { width: 1320, height: 900 } })

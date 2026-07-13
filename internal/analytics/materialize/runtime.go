@@ -11,6 +11,7 @@ import (
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
+	"github.com/Yacobolo/libredash/internal/configspec"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 )
 
@@ -96,14 +97,14 @@ func NewRuntimeView(ctx context.Context, config RuntimeConfig) (*Runtime, error)
 }
 
 func DatabasePath(dbDir, modelID string) string {
-	if path := os.Getenv("LIBREDASH_DUCKDB_PATH"); path != "" {
+	if path := os.Getenv(configspec.EnvLIBREDASH_DUCKDB_PATH); path != "" {
 		return path
 	}
 	return filepath.Join(dbDir, "libredash-"+modelID+".duckdb")
 }
 
 func WorkspaceDatabasePath(dbDir string) string {
-	if path := os.Getenv("LIBREDASH_DUCKDB_PATH"); path != "" {
+	if path := os.Getenv(configspec.EnvLIBREDASH_DUCKDB_PATH); path != "" {
 		return path
 	}
 	return filepath.Join(dbDir, "libredash-workspace.duckdb")

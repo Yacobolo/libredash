@@ -166,7 +166,7 @@ func scopedQueryFilters(d *report.Dashboard, model *semanticmodel.Model, targetK
 		if err != nil || !applies {
 			continue
 		}
-		filters = append(filters, semanticquery.Filter{Field: filter.Dimension, Operator: "in"})
+		filters = append(filters, semanticquery.Filter{Field: filter.Dimension, Fact: filter.Fact, Operator: "in"})
 	}
 	return filters
 }

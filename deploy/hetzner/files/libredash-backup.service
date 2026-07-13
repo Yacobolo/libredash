@@ -1,0 +1,11 @@
+[Unit]
+Description=Create a consistent LibreDash backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/libredashctl backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

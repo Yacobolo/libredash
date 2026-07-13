@@ -9,3 +9,10 @@ targets:
     cli_out:
       dir: ../internal/cli/gen
       package: gen
+  - name: ui-signals
+    kind: contracts
+    typespec_dir: signals
+    ir_out: gen/ui-signals-ir.json
+    go_models_out: ../internal/ui/signals/models.gen.go
+    go_models_package: signals
+    ts_out: ../web/generated/signals/index.ts

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -9,52 +10,19 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Yacobolo/libredash/internal/configspec"
+	"github.com/Yacobolo/libredash/internal/execution"
 	"github.com/caarlos0/env/v11"
 )
 
-type Config struct {
-	HomeDir            string `env:"LIBREDASH_HOME" envDefault:".libredash"`
-	Addr               string `env:"LIBREDASH_ADDR"`
-	AddrFallback       string `env:"ADDR"`
-	Port               string `env:"PORT"`
-	DataDir            string `env:"LIBREDASH_DATA_DIR" envDefault:".data/olist"`
-	CatalogPath        string `env:"LIBREDASH_CATALOG_PATH"`
-	DuckDBPath         string `env:"LIBREDASH_DUCKDB_PATH"`
-	DuckDBDir          string `env:"LIBREDASH_DUCKDB_DIR"`
-	DuckLakeCatalog    string `env:"LIBREDASH_DUCKLAKE_CATALOG_PATH"`
-	Production         bool   `env:"LIBREDASH_PRODUCTION"`
-	DevAuthBypass      bool   `env:"LIBREDASH_DEV_AUTH_BYPASS"`
-	APITokenOnlyAuth   bool   `env:"LIBREDASH_API_TOKEN_ONLY_AUTH"`
-	LocalAuth          bool   `env:"LIBREDASH_LOCAL_AUTH"`
-	BootstrapEmail     string `env:"LIBREDASH_BOOTSTRAP_ADMIN_EMAIL"`
-	AzureClientID      string `env:"LIBREDASH_AZURE_CLIENT_ID"`
-	AzureSecret        string `env:"LIBREDASH_AZURE_CLIENT_SECRET"`
-	AzureCallbackURL   string `env:"LIBREDASH_AZURE_CALLBACK_URL"`
-	AzureTenant        string `env:"LIBREDASH_AZURE_TENANT"`
-	OIDCProviderID     string `env:"LIBREDASH_OIDC_PROVIDER_ID" envDefault:"oidc"`
-	OIDCIssuerURL      string `env:"LIBREDASH_OIDC_ISSUER_URL"`
-	OIDCClientID       string `env:"LIBREDASH_OIDC_CLIENT_ID"`
-	OIDCSecret         string `env:"LIBREDASH_OIDC_CLIENT_SECRET"`
-	OIDCCallbackURL    string `env:"LIBREDASH_OIDC_CALLBACK_URL"`
-	OIDCScopes         string `env:"LIBREDASH_OIDC_SCOPES"`
-	SCIMBearerToken    string `env:"LIBREDASH_SCIM_BEARER_TOKEN"`
-	MetricsBearerToken string `env:"LIBREDASH_METRICS_BEARER_TOKEN"`
-	CSRFKey            string `env:"LIBREDASH_CSRF_KEY"`
-	CookieSecureRaw    string `env:"LIBREDASH_COOKIE_SECURE"`
-	TrustProxyHeaders  bool   `env:"LIBREDASH_TRUST_PROXY_HEADERS"`
-	AllowedHosts       string `env:"LIBREDASH_ALLOWED_HOSTS"`
-	Target             string `env:"LIBREDASH_TARGET"`
-	APIToken           string `env:"LIBREDASH_API_TOKEN"`
-	CLIConfig          string `env:"LIBREDASH_CLI_CONFIG"`
-	AgentAPIKey        string `env:"LIBREDASH_AGENT_API_KEY"`
-	AgentBaseURL       string `env:"LIBREDASH_AGENT_BASE_URL" envDefault:"https://api.openai.com/v1"`
-	AgentModel         string `env:"LIBREDASH_AGENT_MODEL"`
-}
+type Profile string
+
+const ProfileServe Profile = "serve"
 
 func Load() (Config, error) {
 	var cfg Config
 	if err := env.Parse(&cfg); err != nil {
-		return Config{}, err
+		return Config{}, configurationError(err)
 	}
 	return cfg, nil
 }
@@ -199,93 +167,61 @@ func (c Config) CookieSecure() (bool, error) {
 	return parsed, nil
 }
 
-func (c Config) ValidateProductionAuth() error {
-	if !c.Production {
-		return nil
+func (c Config) Validate(profile Profile) error {
+	if profile != ProfileServe {
+		return fmt.Errorf("unsupported configuration profile %q", profile)
 	}
-	if c.DevAuthBypass {
-		return fmt.Errorf("production serve must not enable LIBREDASH_DEV_AUTH_BYPASS")
-	}
-	if c.OIDCPartiallyConfigured() && !c.OIDCConfigured() {
-		return fmt.Errorf("production OIDC auth requires LIBREDASH_OIDC_ISSUER_URL, LIBREDASH_OIDC_CLIENT_ID, LIBREDASH_OIDC_CLIENT_SECRET, and LIBREDASH_OIDC_CALLBACK_URL")
-	}
-	if c.AzurePartiallyConfigured() && !c.AzureConfigured() {
-		return fmt.Errorf("production Azure auth requires LIBREDASH_AZURE_CLIENT_ID, LIBREDASH_AZURE_CLIENT_SECRET, and LIBREDASH_AZURE_CALLBACK_URL")
-	}
-	if !c.OIDCConfigured() && !c.AzureConfigured() && !c.LocalAuth && !c.APITokenOnlyAuth {
-		return fmt.Errorf("production serve requires OIDC auth env vars, Azure auth env vars, LIBREDASH_LOCAL_AUTH, or LIBREDASH_API_TOKEN_ONLY_AUTH")
-	}
-	if len(c.CSRFKey) < 32 {
-		return fmt.Errorf("production serve requires LIBREDASH_CSRF_KEY with at least 32 characters")
-	}
-	if strings.TrimSpace(c.MetricsBearerToken) == "" {
-		return fmt.Errorf("production serve requires LIBREDASH_METRICS_BEARER_TOKEN")
-	}
-	allowedHosts, err := c.ProductionAllowedHosts()
-	if err != nil {
+	if _, err := c.AllowedHostList(); err != nil {
 		return err
-	}
-	if len(allowedHosts) == 0 {
-		return fmt.Errorf("production serve requires LIBREDASH_ALLOWED_HOSTS or an OIDC/Azure callback URL host")
 	}
 	cookieSecure, err := c.CookieSecure()
 	if err != nil {
 		return err
 	}
-	if !cookieSecure && !c.APITokenOnlyAuth && (c.OIDCConfigured() || c.AzureConfigured() || c.LocalAuth) {
-		return fmt.Errorf("production browser auth requires LIBREDASH_COOKIE_SECURE=true")
-	}
-	if c.OIDCConfigured() {
-		if err := validateOIDCProviderID(c.OIDCProviderID); err != nil {
-			return err
-		}
-		if err := requireHTTPSURL("LIBREDASH_OIDC_ISSUER_URL", c.OIDCIssuerURL); err != nil {
-			return err
-		}
-		if err := requireHTTPSURL("LIBREDASH_OIDC_CALLBACK_URL", c.OIDCCallbackURL); err != nil {
-			return err
-		}
-	}
-	if c.AzureConfigured() {
-		if err := requireHTTPSURL("LIBREDASH_AZURE_CALLBACK_URL", c.AzureCallbackURL); err != nil {
-			return err
-		}
-	}
-	if token := strings.TrimSpace(c.SCIMBearerToken); token != "" && len(token) < 32 {
-		return fmt.Errorf("production SCIM provisioning requires LIBREDASH_SCIM_BEARER_TOKEN with at least 32 characters")
-	}
-	if token := strings.TrimSpace(c.MetricsBearerToken); token != "" && len(token) < 32 {
-		return fmt.Errorf("production metrics scraping requires LIBREDASH_METRICS_BEARER_TOKEN with at least 32 characters")
-	}
-	return nil
+	values := c.catalogValues()
+	values[configspec.EnvLIBREDASH_COOKIE_SECURE] = cookieSecure
+	return configspec.Validate(values)
 }
 
-func validateOIDCProviderID(id string) error {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return nil
-	}
-	if len(id) > 64 {
-		return fmt.Errorf("LIBREDASH_OIDC_PROVIDER_ID must be at most 64 characters")
-	}
-	for index, char := range []byte(id) {
-		if (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') {
-			continue
-		}
-		if index > 0 && (char == '-' || char == '_' || char == '.') {
-			continue
-		}
-		return fmt.Errorf("LIBREDASH_OIDC_PROVIDER_ID must be a route-safe slug containing only letters, numbers, dots, underscores, or dashes")
-	}
-	return nil
+func (c Config) ValidateProductionAuth() error {
+	return c.Validate(ProfileServe)
 }
 
-func requireHTTPSURL(name, raw string) error {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || parsed.Scheme != "https" || parsed.Host == "" {
-		return fmt.Errorf("production serve requires %s to be an https URL", name)
+func (c Config) ExecutionConfig() execution.Config {
+	return execution.Config{
+		MaxRunningReads:      c.ExecMaxRunningReads,
+		MaxQueuedReads:       c.ExecMaxQueuedReads,
+		ReadQueueWait:        c.ExecReadQueueTimeout,
+		ReadExecutionTimeout: c.ExecReadTimeout,
+		MaxRunningJobs:       c.ExecMaxRunningWrites,
+		MaxQueuedJobs:        c.ExecMaxQueuedWrites,
 	}
-	return nil
+}
+
+func redactSecrets(err error) error {
+	message := err.Error()
+	for _, setting := range configspec.Settings() {
+		if !setting.Secret {
+			continue
+		}
+		if value := os.Getenv(setting.Name); len(value) >= 8 {
+			message = strings.ReplaceAll(message, value, "[REDACTED]")
+		}
+	}
+	return fmt.Errorf("%s", message)
+}
+
+func configurationError(err error) error {
+	var parseErr env.ParseError
+	if errors.As(err, &parseErr) {
+		for _, setting := range configspec.Settings() {
+			if setting.Runtime && setting.Field == parseErr.Name {
+				err = fmt.Errorf("%s must be a valid %s: %w", setting.Name, setting.Type, parseErr.Err)
+				break
+			}
+		}
+	}
+	return redactSecrets(err)
 }
 
 func parseAllowedHosts(raw string) ([]string, error) {
