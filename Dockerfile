@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
-FROM node:24-bookworm@sha256:392e1e23f34da768d8d1f4e502b64f200d3be3465934d4b7930f57d7e2fc1989 AS node
+FROM node:26-bookworm@sha256:e2cd0ff87e2597f66fab50710216e2a08ad2f09bae0ca78f6b31e8c5f1a811a0 AS node
 
-FROM golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4 AS sourcegen
+FROM golang:1.26-bookworm@sha256:18aedc16aa19b3fd7ded7245fc14b109e054d65d22ed53c355c899582bbb2113 AS sourcegen
 WORKDIR /src
 
 COPY --from=node /usr/local/bin/node /usr/local/bin/node
@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go run ./internal/tools/uisignalspostprocess && \
     go run ./cmd/libredash schema export --format json-schema --out schemas/json
 
-FROM oven/bun:1.3.7@sha256:6cd5f00020e48b77a253bc8249f6b6dd3d92b3c04c2607f1f5a6d7dbf0a6fca3 AS web
+FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS web
 WORKDIR /src
 
 COPY package.json bun.lock tsconfig.json ./
@@ -38,7 +38,7 @@ COPY --from=sourcegen /src/web/generated ./web/generated
 RUN bun install --frozen-lockfile --no-cache
 RUN bun run build
 
-FROM golang:1.25-bookworm@sha256:a9c020ee3d1508c7be5435c262434e3d3fc1d0e76a11afeb9ddae7d60bc86aa4 AS build
+FROM golang:1.26-bookworm@sha256:18aedc16aa19b3fd7ded7245fc14b109e054d65d22ed53c355c899582bbb2113 AS build
 WORKDIR /src
 
 COPY go.mod go.sum ./
