@@ -15,6 +15,7 @@
     "test:theme": "playwright install chromium && bun test static/theme.dom.test.ts",
     "test:datastar-lit": "bun test web/components/shared/datastar-lit.test.ts web/components/shared/signal-contract.test.ts",
     "test:app-shell": "playwright install chromium && bun scripts/build_test_assets.ts app-shell && bun test web/components/app/app-shell.dom.test.ts",
+    "test:table-selection": "bun test web/components/dashboard/table/selection.test.ts",
     "test:interaction-selection": "bun test web/components/dashboard/charts/interactions.test.ts web/components/dashboard/charts/echarts-graph-selection.test.ts web/components/dashboard/table/selection.test.ts web/components/dashboard/filters/filter-url.test.ts",
     "test:visual-modal": "playwright install chromium && bun scripts/build_test_assets.ts visual-modal && bun test web/components/dashboard/visual-modal-focus.test.ts web/components/dashboard/visual-modal.dom.test.ts",
     "test:catalog-page": "playwright install chromium && bun scripts/build_test_assets.ts catalog-page && bun test web/components/app/catalog-page.dom.test.ts",
