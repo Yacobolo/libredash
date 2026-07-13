@@ -373,7 +373,7 @@ func TestProductionContainerContractExists(t *testing.T) {
 		"COPY --from=node /usr/local/bin/node /usr/local/bin/node",
 		"COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
 		"ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm",
-		"go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3",
+		"go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0",
 		"go run ./internal/tools/uisignalsgen",
 		"FROM oven/bun:1.3.7 AS web",
 		"COPY --from=sourcegen /src/web/generated ./web/generated",

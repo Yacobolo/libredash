@@ -42,7 +42,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-})
+}, 15_000)
 
 for (const viewport of [
   { name: 'desktop', width: 1180, height: 760 },

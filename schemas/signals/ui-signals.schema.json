@@ -37,7 +37,14 @@
     "AdminAgentToolSignal": {
       "additionalProperties": false,
       "properties": {
+        "defaults": {
+          "additionalProperties": {},
+          "type": "object"
+        },
         "description": {
+          "type": "string"
+        },
+        "effect": {
           "type": "string"
         },
         "inputSchema": {
@@ -46,12 +53,19 @@
         },
         "name": {
           "type": "string"
+        },
+        "outputSchema": {
+          "additionalProperties": {},
+          "type": "object"
         }
       },
       "required": [
+        "defaults",
         "description",
+        "effect",
         "inputSchema",
-        "name"
+        "name",
+        "outputSchema"
       ],
       "type": "object"
     },

@@ -683,9 +683,12 @@ type AdminAgentSignal struct {
 }
 
 type AdminAgentToolSignal struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	InputSchema map[string]any `json:"inputSchema"`
+	Name         string         `json:"name"`
+	Description  string         `json:"description"`
+	Effect       string         `json:"effect"`
+	Defaults     map[string]any `json:"defaults"`
+	InputSchema  map[string]any `json:"inputSchema"`
+	OutputSchema map[string]any `json:"outputSchema"`
 }
 
 type AdminMetricSignal struct {

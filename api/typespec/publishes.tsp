@@ -37,7 +37,20 @@ model PublishListResponse {
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
 @apigen.cli(#{ command: #["publishes", "list"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
-@extension("x-agent", #{ enabled: true, name: "list_publishes", risk: "read", tags: #["publish"], defaultLimit: 25, output: #{ itemsPath: "items", fields: #["id", "environment", "status", "createdAt"], cursorPath: "page.nextCursor", count: true } })
+@apigen.tool(#{
+  name: "list_publishes",
+  effect: "read",
+  tags: #["publish"],
+  input: #{ fields: #[
+    #{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" },
+    #{ source: "query", name: "limit", default: 25 },
+  ] },
+  output: #{
+    mode: "project",
+    select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/environment" }, #{ source: "/status" }, #{ source: "/createdAt" }] }],
+    cursor: #{ source: "/page/nextCursor" },
+  },
+})
 op listPublishes(@path workspace: string, @query environment?: string, @query limit?: int32, @query pageToken?: string): OkJson<PublishListResponse> | CommonErrors;
 
 @tag("Publishes")
@@ -52,7 +65,13 @@ op createPublish(@path workspace: string, @body body?: PublishCreateRequest): Cr
 @route("/workspaces/{workspace}/publishes/{publish}")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
-@extension("x-agent", #{ enabled: true, name: "get_publish", risk: "read", tags: #["publish"], output: #{ rootFields: #["id", "environment", "status", "createdAt", "activatedAt", "error"] } })
+@apigen.tool(#{
+  name: "get_publish",
+  effect: "read",
+  tags: #["publish"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/environment" }, #{ source: "/status" }, #{ source: "/createdAt" }, #{ source: "/activatedAt" }, #{ source: "/error" }] },
+})
 op getPublish(@path workspace: string, @path publish: string, @query environment?: string): OkJson<PublishResponse> | CommonErrors;
 
 @tag("Publishes")

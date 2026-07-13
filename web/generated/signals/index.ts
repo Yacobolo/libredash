@@ -14,7 +14,10 @@ export interface AdminAgentSignal {
 export interface AdminAgentToolSignal {
   name: string
   description: string
+  effect: string
+  defaults: Record<string, unknown>
   inputSchema: Record<string, unknown>
+  outputSchema: Record<string, unknown>
 }
 
 export interface AdminContentSectionSignal {

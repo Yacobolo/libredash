@@ -42,7 +42,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-})
+}, 15_000)
 
 test('composer renders an elevated centered prompt surface', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })

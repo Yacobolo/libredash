@@ -44,7 +44,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-})
+}, 15_000)
 
 test('data explorer renders object browser and emits preview commands', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })

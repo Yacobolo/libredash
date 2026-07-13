@@ -124,8 +124,8 @@ tasks:
       - internal/api/gen/server.apigen.gen.go
       - internal/cli/gen/apigen_registry.gen.go
     cmds:
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3 typespec-compile -manifest api/apigen.yaml -target libredash-v1
-      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.3.3 all -manifest api/apigen.yaml -target libredash-v1
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 typespec-compile -manifest api/apigen.yaml -target libredash-v1
+      - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 all -manifest api/apigen.yaml -target libredash-v1
       - go run ./internal/tools/apigenpostprocess
 
   schema:generate:

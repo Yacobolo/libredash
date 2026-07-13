@@ -8,8 +8,8 @@ import (
 )
 
 func main() {
-	// APIGen v0.3.3 rejects unknown/object payload values but emits Record<string>
-	// as Go map[string]any. Relax only the asset payload OpenAPI schema to match Go.
+	// APIGen emits Record<string> as Go map[string]any while OpenAPI keeps string values.
+	// Relax only the asset payload OpenAPI schema to match Go.
 	if err := relaxOpenAPIYAML("api/gen/openapi.yaml"); err != nil {
 		fatal(err)
 	}

@@ -43,9 +43,12 @@ type AdminAgentData struct {
 }
 
 type AdminAgentTool struct {
-	Name        string
-	Description string
-	InputSchema map[string]any
+	Name         string
+	Description  string
+	Effect       string
+	Defaults     map[string]any
+	InputSchema  map[string]any
+	OutputSchema map[string]any
 }
 
 type AdminPrincipal struct {
@@ -443,9 +446,12 @@ func adminAgentSignal(data AdminAgentData) uisignals.AdminAgentSignal {
 	tools := make([]uisignals.AdminAgentToolSignal, 0, len(data.Tools))
 	for _, tool := range data.Tools {
 		tools = append(tools, uisignals.AdminAgentToolSignal{
-			Name:        tool.Name,
-			Description: tool.Description,
-			InputSchema: tool.InputSchema,
+			Name:         tool.Name,
+			Description:  tool.Description,
+			Effect:       tool.Effect,
+			Defaults:     tool.Defaults,
+			InputSchema:  tool.InputSchema,
+			OutputSchema: tool.OutputSchema,
 		})
 	}
 	return uisignals.AdminAgentSignal{

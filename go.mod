@@ -1,10 +1,10 @@
 module github.com/Yacobolo/libredash
 
-go 1.25.11
+go 1.25.12
 
 require (
 	cuelang.org/go v0.16.1
-	github.com/Yacobolo/toolbelt/apigen v0.3.3
+	github.com/Yacobolo/toolbelt/apigen v0.4.0
 	github.com/alexedwards/argon2id v1.0.0
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/coreos/go-oidc/v3 v3.19.0

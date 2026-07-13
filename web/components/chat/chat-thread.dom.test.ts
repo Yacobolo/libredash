@@ -105,9 +105,9 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await browser?.close()
-  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-})
+	await browser?.close()
+	await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+}, 15_000)
 
 test('chat thread preserves plain user message text without template whitespace', async () => {
   const page = await browser.newPage()

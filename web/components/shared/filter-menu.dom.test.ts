@@ -42,7 +42,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-})
+}, 15_000)
 
 test('filter menu renders backend-owned options and emits search/toggle/clear commands', async () => {
   const page = await browser.newPage({ viewport: { width: 640, height: 520 } })

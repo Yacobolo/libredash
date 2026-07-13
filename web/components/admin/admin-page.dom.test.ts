@@ -44,7 +44,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-})
+}, 15_000)
 
 for (const viewport of [
   { name: 'desktop', width: 1440, height: 820 },
@@ -1215,6 +1215,8 @@ test('admin agent tools catalog renders payload fields, JSON, empty, unsupported
       element.tools = [{
         name: 'query_visual',
         description: 'Query visual data.',
+        effect: 'read',
+        defaults: { mode: 'summary' },
         inputSchema: {
           type: 'object',
           required: ['dashboardId', 'mode'],
@@ -1267,6 +1269,13 @@ test('admin agent tools catalog renders payload fields, JSON, empty, unsupported
           },
           additionalProperties: false,
         },
+        outputSchema: {
+          type: 'object',
+          properties: {
+            rows: { type: 'array', items: { type: 'object' } },
+          },
+          additionalProperties: false,
+        },
       }, {
         name: 'no_input',
         description: 'No payload required.',
@@ -1293,6 +1302,11 @@ test('admin agent tools catalog renders payload fields, JSON, empty, unsupported
       await element.updateComplete
       const jsonText = root.querySelector('.json')?.textContent ?? ''
 
+      const outputButton = root.querySelector<HTMLButtonElement>('.tabs button:nth-child(3)')!
+      outputButton.click()
+      await element.updateComplete
+      const outputText = root.querySelector('.json')?.textContent ?? ''
+
       const noInputButton = Array.from(root.querySelectorAll<HTMLButtonElement>('.tool-button')).find((button) => button.textContent?.includes('no_input'))!
       noInputButton.click()
       await element.updateComplete
@@ -1318,6 +1332,7 @@ test('admin agent tools catalog renders payload fields, JSON, empty, unsupported
         firstRows,
         detailMeta,
         jsonText,
+        outputText,
         noInputText,
         unsupportedText,
         searchRows,
@@ -1331,7 +1346,7 @@ test('admin agent tools catalog renders payload fields, JSON, empty, unsupported
     expect(state.detailBodyOverflow).toBe('auto')
     expect(state.toolButtons).toEqual(['query_visual', 'no_input', 'unsupported_input'])
     expect(state.listText).not.toMatch(/Query visual data/)
-    expect(state.detailMeta).toEqual(['6 required', 'dashboardId, filters.dateRange.start, filters.dateRange.end +10'])
+    expect(state.detailMeta).toEqual(['read', '6 required', 'dashboardId, filters.dateRange.start, filters.dateRange.end +10', 'Defaults: mode=summary'])
     expect(state.firstRows).toContainEqual(['dashboardId', 'string', 'Yes', 'Dashboard identifier.'])
     expect(state.firstRows).toContainEqual(['filters.dateRange.start', 'string', 'Yes', 'Start date.'])
     expect(state.firstRows).toContainEqual(['filters.dateRange.end', 'string', 'No', 'End date.'])
@@ -1344,6 +1359,7 @@ test('admin agent tools catalog renders payload fields, JSON, empty, unsupported
     expect(state.firstRows).toContainEqual(['options', 'object<string, any>', 'No', 'Renderer options.'])
     expect(state.firstRows).toContainEqual(['rendererOptions', 'object<string, object>', 'No', 'Renderer-specific options.'])
     expect(state.jsonText).toMatch(/"dashboardId"/)
+    expect(state.outputText).toMatch(/"rows"/)
     expect(state.noInputText).toMatch(/No input/)
     expect(state.unsupportedText).toMatch(/Schema is only available as JSON/)
     expect(state.searchRows).toHaveLength(1)

@@ -13,6 +13,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/agent"
 	agentconfig "github.com/Yacobolo/libredash/internal/agent/config"
 	"github.com/Yacobolo/libredash/internal/api"
+	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/ui"
 	agentcore "github.com/Yacobolo/libredash/pkg/agent"
@@ -525,13 +526,27 @@ func pageAgentEvents(events []agent.Event, page agent.Page) []agent.Event {
 }
 
 func adminAgentToolDTOs(tools []agentcore.ToolDefinition) []api.AdminAgentToolResponse {
+	contracts := apigenapi.GetAPIGenToolContracts()
 	out := make([]api.AdminAgentToolResponse, 0, len(tools))
 	for _, tool := range tools {
-		out = append(out, api.AdminAgentToolResponse{
-			Name:        tool.Name,
-			Description: tool.Description,
-			InputSchema: jsonObject(string(tool.InputSchema)),
-		})
+		dto := api.AdminAgentToolResponse{
+			Name:         tool.Name,
+			Description:  tool.Description,
+			Effect:       "read",
+			Defaults:     map[string]any{},
+			InputSchema:  jsonObject(string(tool.InputSchema)),
+			OutputSchema: map[string]any{},
+		}
+		if contract, ok := contracts[tool.Name]; ok {
+			dto.Effect = string(contract.Effect)
+			dto.OutputSchema = jsonObject(string(contract.OutputSchema))
+			for _, binding := range contract.Bindings {
+				if binding.Argument != "" && binding.Default != nil {
+					dto.Defaults[binding.Argument] = binding.Default
+				}
+			}
+		}
+		out = append(out, dto)
 	}
 	return out
 }

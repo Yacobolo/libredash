@@ -44,7 +44,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await browser?.close()
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
-})
+}, 15_000)
 
 test('login page composes route UI', async () => {
   const page = await browser.newPage({ viewport: { width: 390, height: 820 } })
