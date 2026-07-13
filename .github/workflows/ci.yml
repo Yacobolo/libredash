@@ -59,6 +59,7 @@ jobs:
             api/gen/
             internal/api/gen/
             internal/cli/gen/
+            internal/ui/signals/models.gen.go
             schemas/json/
             schemas/signals/
             web/generated/

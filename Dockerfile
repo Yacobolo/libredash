@@ -47,6 +47,7 @@ COPY . .
 COPY --from=sourcegen /src/api/gen ./api/gen
 COPY --from=sourcegen /src/internal/api/gen ./internal/api/gen
 COPY --from=sourcegen /src/internal/cli/gen ./internal/cli/gen
+COPY --from=sourcegen /src/internal/ui/signals/models.gen.go ./internal/ui/signals/models.gen.go
 COPY --from=sourcegen /src/schemas ./schemas
 COPY --from=sourcegen /src/web/generated ./web/generated
 COPY --from=web /src/static ./static

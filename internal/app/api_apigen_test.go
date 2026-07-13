@@ -95,6 +95,22 @@ func TestAPIGenOwnsUISignalContracts(t *testing.T) {
 		t.Fatal("Taskfile.yml still uses the Go reflection UI signal generator")
 	}
 
+	gitignore, err := os.ReadFile(filepath.Join(root, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(gitignore), "internal/ui/signals/models.gen.go") {
+		t.Fatal("generated Go UI signal models should be ignored build output")
+	}
+
+	workflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))
+	if err != nil {
+		t.Fatalf("read CI workflow: %v", err)
+	}
+	if !strings.Contains(string(workflow), "internal/ui/signals/models.gen.go") {
+		t.Fatal("CI generated-assets artifact does not include Go UI signal models")
+	}
+
 	typespec, err := os.ReadFile(filepath.Join(root, "api", "signals", "main.tsp"))
 	if err != nil {
 		t.Fatalf("read UI signal TypeSpec source: %v", err)

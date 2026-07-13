@@ -383,6 +383,7 @@ func TestProductionContainerContractExists(t *testing.T) {
 		"RUN bun run build",
 		"FROM golang:1.25-bookworm AS build",
 		"COPY --from=sourcegen /src/internal/api/gen ./internal/api/gen",
+		"COPY --from=sourcegen /src/internal/ui/signals/models.gen.go ./internal/ui/signals/models.gen.go",
 		"CGO_ENABLED=1 go build",
 		"FROM debian:bookworm-slim AS runtime",
 		"USER libredash",
