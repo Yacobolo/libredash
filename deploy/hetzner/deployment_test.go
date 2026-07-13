@@ -104,6 +104,7 @@ func TestEphemeralDeploymentWorkflowAlwaysDestroysInfrastructure(t *testing.T) {
 		"terraform apply",
 		"libredashctl backup",
 		"libredashctl restore",
+		`.principal.email`,
 		"if: always()",
 		"terraform destroy",
 	} {
