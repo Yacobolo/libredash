@@ -12,6 +12,7 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/api"
+	manageddatabinding "github.com/Yacobolo/libredash/internal/manageddata/binding"
 	"github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/servingstate/activate"
 	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
@@ -41,6 +42,7 @@ type Principal struct {
 
 type Options struct {
 	Repository          func() (Repository, error)
+	BindingRepository   func() (manageddatabinding.Repository, error)
 	WorkspaceRepository func() (workspace.Repository, error)
 	AccessRepository    func() (access.Repository, error)
 	Runtime             RuntimeHost
@@ -136,7 +138,21 @@ func (h *Handler) Validate(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	service := validate.NewService(repo, servingstatefs.NewArtifactStore(h.options.ArtifactDir), servingstatefs.Validator{DataDir: h.dataDir()})
+	if h.options.BindingRepository == nil {
+		writeJSONError(w, fmt.Errorf("managed data binding repository is not configured"), stdhttp.StatusInternalServerError)
+		return
+	}
+	bindingRepository, err := h.options.BindingRepository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	binder, err := manageddatabinding.New(bindingRepository)
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	service := validate.NewService(repo, servingstatefs.NewArtifactStore(h.options.ArtifactDir), servingstatefs.Validator{DataDir: h.dataDir()}, binder)
 	row, err := service.Validate(r.Context(), servingstate.ID(servingStateID))
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusBadRequest)

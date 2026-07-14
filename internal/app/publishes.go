@@ -9,6 +9,8 @@ import (
 	"net/http"
 
 	"github.com/Yacobolo/libredash/internal/api"
+	manageddatabinding "github.com/Yacobolo/libredash/internal/manageddata/binding"
+	manageddatasqlite "github.com/Yacobolo/libredash/internal/manageddata/sqlite"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	servingstatehttp "github.com/Yacobolo/libredash/internal/servingstate/http"
 	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
@@ -28,6 +30,12 @@ func (s *Server) publishHTTPHandler() *servingstatehttp.Handler {
 	return servingstatehttp.NewHandler(servingstatehttp.Options{
 		Repository: func() (servingstatehttp.Repository, error) {
 			return s.servingStateRepository()
+		},
+		BindingRepository: func() (manageddatabinding.Repository, error) {
+			if s.store == nil {
+				return nil, fmt.Errorf("managed data binding repository is not configured")
+			}
+			return manageddatasqlite.NewRepository(s.store.SQLDB()), nil
 		},
 		WorkspaceRepository: s.workspaceRepository,
 		AccessRepository:    s.accessRepository,

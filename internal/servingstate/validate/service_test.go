@@ -3,6 +3,7 @@ package validate
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
@@ -53,10 +54,61 @@ func TestServiceMarksFailedWhenValidationFails(t *testing.T) {
 	}
 }
 
+func TestServiceRunsHookAfterArtifactValidationBeforePromotion(t *testing.T) {
+	events := []string{}
+	repo := &fakeRepo{
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "prod", Status: servingstate.StatusPending},
+		events:     &events,
+	}
+	artifacts := &fakeArtifacts{events: &events}
+	validator := &fakeValidator{
+		validation: servingstate.Validation{Digest: "digest", ManifestJSON: `{}`, RootDir: "/tmp/extracted"},
+		events:     &events,
+	}
+	hook := &fakeHook{events: &events}
+	service := NewService(repo, artifacts, validator, hook)
+
+	if _, err := service.Validate(t.Context(), "dep_1"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"validated", "hook", "promoted", "saved", "cleaned"}
+	if !reflect.DeepEqual(events, want) {
+		t.Fatalf("events = %#v, want %#v", events, want)
+	}
+	if hook.candidate.ID != "dep_1" || hook.candidate.Environment != "prod" || hook.validation.RootDir != "/tmp/extracted" {
+		t.Fatalf("hook candidate = %#v validation = %#v", hook.candidate, hook.validation)
+	}
+}
+
+func TestServiceMarksFailedAndDoesNotPromoteWhenHookFails(t *testing.T) {
+	hookErr := errors.New("managed data current revision is unavailable")
+	repo := &fakeRepo{
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "prod", Status: servingstate.StatusPending},
+	}
+	artifacts := &fakeArtifacts{}
+	validator := &fakeValidator{validation: servingstate.Validation{RootDir: "/tmp/extracted"}}
+	service := NewService(repo, artifacts, validator, &fakeHook{err: hookErr})
+
+	_, err := service.Validate(t.Context(), "dep_1")
+	if !errors.Is(err, hookErr) {
+		t.Fatalf("Validate() error = %v, want hook error", err)
+	}
+	if !repo.failed {
+		t.Fatal("publish was not marked failed")
+	}
+	if artifacts.promoteCalls != 0 || repo.saved {
+		t.Fatalf("promote calls = %d, saved = %v; want neither", artifacts.promoteCalls, repo.saved)
+	}
+	if !validator.cleaned {
+		t.Fatal("validator cleanup was not called")
+	}
+}
+
 type fakeRepo struct {
 	deployment servingstate.State
 	saved      bool
 	failed     bool
+	events     *[]string
 }
 
 func (r *fakeRepo) ByID(context.Context, servingstate.ID) (servingstate.State, error) {
@@ -69,6 +121,7 @@ func (r *fakeRepo) MarkFailed(context.Context, servingstate.ID, error) error {
 }
 
 func (r *fakeRepo) SaveValidated(_ context.Context, _ servingstate.ID, validation servingstate.Validation, artifact servingstate.Artifact) (servingstate.State, error) {
+	appendEvent(r.events, "saved")
 	r.saved = true
 	r.deployment.Status = servingstate.StatusValidated
 	r.deployment.Digest = validation.Digest
@@ -78,6 +131,8 @@ func (r *fakeRepo) SaveValidated(_ context.Context, _ servingstate.ID, validatio
 
 type fakeArtifacts struct {
 	promotedDigest string
+	promoteCalls   int
+	events         *[]string
 }
 
 func (a *fakeArtifacts) UploadPath(servingstate.ID) string {
@@ -85,6 +140,8 @@ func (a *fakeArtifacts) UploadPath(servingstate.ID) string {
 }
 
 func (a *fakeArtifacts) PromoteUploaded(_ context.Context, servingStateID servingstate.ID, digest, manifestJSON string) (servingstate.Artifact, error) {
+	a.promoteCalls++
+	appendEvent(a.events, "promoted")
 	a.promotedDigest = digest
 	return servingstate.Artifact{ID: "artifact_" + string(servingStateID), ServingStateID: servingStateID, Digest: digest, ManifestJSON: manifestJSON}, nil
 }
@@ -94,6 +151,7 @@ type fakeValidator struct {
 	err         error
 	cleaned     bool
 	environment servingstate.Environment
+	events      *[]string
 }
 
 func (v *fakeValidator) ValidateArtifact(_ string, _ servingstate.WorkspaceID, environment servingstate.Environment, _ servingstate.ID) (servingstate.Validation, error) {
@@ -101,10 +159,32 @@ func (v *fakeValidator) ValidateArtifact(_ string, _ servingstate.WorkspaceID, e
 	if v.err != nil {
 		return servingstate.Validation{}, v.err
 	}
+	appendEvent(v.events, "validated")
 	return v.validation, nil
 }
 
 func (v *fakeValidator) Cleanup(servingstate.Validation) error {
 	v.cleaned = true
+	appendEvent(v.events, "cleaned")
 	return nil
+}
+
+type fakeHook struct {
+	err        error
+	candidate  servingstate.State
+	validation servingstate.Validation
+	events     *[]string
+}
+
+func (h *fakeHook) AfterArtifactValidation(_ context.Context, candidate servingstate.State, validation servingstate.Validation) error {
+	h.candidate = candidate
+	h.validation = validation
+	appendEvent(h.events, "hook")
+	return h.err
+}
+
+func appendEvent(events *[]string, event string) {
+	if events != nil {
+		*events = append(*events, event)
+	}
 }
