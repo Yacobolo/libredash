@@ -413,6 +413,36 @@ func TestProductionContainerContractExists(t *testing.T) {
 	}
 }
 
+func TestDevelopmentServerTracksCompiledFallbackProcess(t *testing.T) {
+	root := repoRoot(t)
+	server, err := os.ReadFile(filepath.Join(root, "scripts", "dev-server.sh"))
+	if err != nil {
+		t.Fatalf("read development server script: %v", err)
+	}
+	serverText := string(server)
+	for _, want := range []string{
+		`go build -o "$TMP_DIR/libredash-dev" ./cmd/libredash`,
+		`"$TMP_DIR/libredash-dev" >> "$LOG_FILE" 2>&1 &`,
+	} {
+		if !strings.Contains(serverText, want) {
+			t.Fatalf("development server script missing tracked binary fragment %q", want)
+		}
+	}
+	if strings.Contains(serverText, `go run ./cmd/libredash >> "$LOG_FILE" 2>&1 &`) {
+		t.Fatal("development server must not track the go run wrapper as the server process")
+	}
+
+	qa, err := os.ReadFile(filepath.Join(root, "scripts", "qa_ui_framework.ts"))
+	if err != nil {
+		t.Fatalf("read UI framework QA script: %v", err)
+	}
+	qaText := string(qa)
+	if !strings.Contains(qaText, "const managedServerReadyAttempts = 1800") ||
+		!strings.Contains(qaText, "attempt < managedServerReadyAttempts") {
+		t.Fatal("UI framework QA must allow a cold Go build before checking server readiness")
+	}
+}
+
 func TestContinuousIntegrationWorkflowRunsProductionGates(t *testing.T) {
 	root := repoRoot(t)
 	workflow, err := os.ReadFile(filepath.Join(root, ".github", "workflows", "ci.yml"))

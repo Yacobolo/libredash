@@ -198,7 +198,7 @@ runner_name() {
   if command -v air >/dev/null 2>&1; then
     echo "air"
   else
-    echo "go run"
+    echo "binary"
   fi
 }
 
@@ -305,7 +305,7 @@ start() {
   if [[ "$runner" == "air" ]]; then
     echo "Runner: air"
   else
-    echo "Runner: go run (install air for hot reload)"
+    echo "Runner: local binary (install air for hot reload)"
   fi
   if [[ "${LIBREDASH_DEV_SKIP_PUBLISH:-}" == "1" ]]; then
     echo "Project publish disabled. Press Ctrl-C to stop."
@@ -322,7 +322,8 @@ start() {
   if [[ "$runner" == "air" ]]; then
     air -c .air.toml >> "$LOG_FILE" 2>&1 &
   else
-    go run ./cmd/libredash >> "$LOG_FILE" 2>&1 &
+    go build -o "$TMP_DIR/libredash-dev" ./cmd/libredash
+    "$TMP_DIR/libredash-dev" >> "$LOG_FILE" 2>&1 &
   fi
   local pid="$!"
   echo "$pid" > "$PID_FILE"

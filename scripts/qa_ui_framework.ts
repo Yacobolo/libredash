@@ -2,6 +2,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises'
 
 const portFile = '.tmp/dev-server.port'
 const qaHome = '.tmp/qa-ui-framework/home'
+const managedServerReadyAttempts = 1800
 let startedServer = false
 let cleanedUp = false
 let devTask: Bun.Subprocess | null = null
@@ -75,7 +76,7 @@ async function deployManagedProject(): Promise<void> {
 }
 
 async function waitForManagedServer(): Promise<string> {
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < managedServerReadyAttempts; attempt++) {
     const baseURL = await managedBaseURL()
     if (baseURL && await reachable(baseURL)) return baseURL
     if (devTaskExitCode !== null) {
