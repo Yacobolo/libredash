@@ -18,17 +18,23 @@ type dataPlanner interface {
 	Plan(context.Context, localplan.Request) (localplan.Result, error)
 }
 
-func dataCommand(ctx context.Context) *cobra.Command {
-	return dataCommandWithPlanner(ctx, localplan.NewService())
+func dataCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
+	return dataCommandWithOptions(ctx, localplan.NewService(), opts)
 }
 
 func dataCommandWithPlanner(ctx context.Context, planner dataPlanner) *cobra.Command {
+	return dataCommandWithOptions(ctx, planner, &rootOptions{})
+}
+
+func dataCommandWithOptions(ctx context.Context, planner dataPlanner, opts *rootOptions) *cobra.Command {
 	parent := &cobra.Command{
 		Use:          "data",
 		Short:        "Manage project-global data revisions",
 		SilenceUsage: true,
 	}
 	parent.AddCommand(dataPlanCommand(ctx, planner))
+	parent.AddCommand(dataSyncCommand(ctx, planner, opts))
+	parent.AddCommand(dataRevisionsCommand(ctx, opts))
 	return parent
 }
 
