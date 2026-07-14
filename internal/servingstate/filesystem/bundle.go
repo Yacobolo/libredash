@@ -48,6 +48,7 @@ type ValidateOptions struct {
 
 type CompiledWorkspaceArtifact struct {
 	Version        int                                    `json:"version"`
+	ProjectID      string                                 `json:"projectId,omitempty"`
 	WorkspaceID    string                                 `json:"workspaceId"`
 	WorkspaceTitle string                                 `json:"workspaceTitle"`
 	Environment    string                                 `json:"environment"`
@@ -112,6 +113,7 @@ func PackProjectAgainstGraphForEnvironment(projectPath, workspaceID string, envi
 	}
 	compiledArtifact := CompiledWorkspaceArtifact{
 		Version:        1,
+		ProjectID:      compiled.Project.Name,
 		WorkspaceID:    workspaceID,
 		WorkspaceTitle: compiledWorkspace.Workspace.Title,
 		Environment:    string(environment),

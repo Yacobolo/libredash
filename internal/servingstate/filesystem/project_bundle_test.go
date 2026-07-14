@@ -54,6 +54,9 @@ func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadCompiledWorkspaceArtifact() error = %v", err)
 	}
+	if compiled.ProjectID != "libredash-showcase" {
+		t.Fatalf("ProjectID = %q, want libredash-showcase", compiled.ProjectID)
+	}
 	if compiled.Validation.Status != "passed" || compiled.Validation.SchemaVersion != "libredash.dev/v1" {
 		t.Fatalf("compiled validation = %#v, want passed libredash.dev/v1", compiled.Validation)
 	}
