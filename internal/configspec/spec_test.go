@@ -98,7 +98,6 @@ func TestManagedDataStorageCatalogAndRelationships(t *testing.T) {
 		"LIBREDASH_MANAGED_DATA_UPLOAD_SESSION_TTL",
 		"LIBREDASH_MANAGED_DATA_GC_INTERVAL",
 		"LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES",
-		"LIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES",
 	} {
 		if _, ok := known[name]; !ok {
 			t.Fatalf("managed data setting %s is missing", name)
@@ -106,16 +105,15 @@ func TestManagedDataStorageCatalogAndRelationships(t *testing.T) {
 	}
 
 	valid := map[string]any{
-		"LIBREDASH_MANAGED_DATA_BACKEND":              "local",
-		"LIBREDASH_MANAGED_DATA_DIR":                  "/var/lib/libredash/managed-data",
-		"LIBREDASH_MANAGED_DATA_MAX_FILES":            100,
-		"LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES":       1024,
-		"LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES":   4096,
-		"LIBREDASH_MANAGED_DATA_UPLOAD_SESSION_TTL":   time.Hour,
-		"LIBREDASH_MANAGED_DATA_GC_INTERVAL":          time.Minute,
-		"LIBREDASH_MANAGED_DATA_GC_GRACE_PERIOD":      time.Hour,
-		"LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES":       2048,
-		"LIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES": 4096,
+		"LIBREDASH_MANAGED_DATA_BACKEND":            "local",
+		"LIBREDASH_MANAGED_DATA_DIR":                "/var/lib/libredash/managed-data",
+		"LIBREDASH_MANAGED_DATA_MAX_FILES":          100,
+		"LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES":     1024,
+		"LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES": 4096,
+		"LIBREDASH_MANAGED_DATA_UPLOAD_SESSION_TTL": time.Hour,
+		"LIBREDASH_MANAGED_DATA_GC_INTERVAL":        time.Minute,
+		"LIBREDASH_MANAGED_DATA_GC_GRACE_PERIOD":    time.Hour,
+		"LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES":     2048,
 	}
 	if err := Validate(valid); err != nil {
 		t.Fatalf("valid local managed data config: %v", err)
@@ -127,7 +125,6 @@ func TestManagedDataStorageCatalogAndRelationships(t *testing.T) {
 	}{
 		{name: "unknown backend", mutate: func(values map[string]any) { values["LIBREDASH_MANAGED_DATA_BACKEND"] = "database" }},
 		{name: "file exceeds revision", mutate: func(values map[string]any) { values["LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES"] = 8192 }},
-		{name: "gc target below reserve", mutate: func(values map[string]any) { values["LIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES"] = 1024 }},
 		{name: "zero session ttl", mutate: func(values map[string]any) { values["LIBREDASH_MANAGED_DATA_UPLOAD_SESSION_TTL"] = time.Duration(0) }},
 		{name: "s3 incomplete", mutate: func(values map[string]any) { values["LIBREDASH_MANAGED_DATA_BACKEND"] = "s3" }},
 		{name: "s3 missing runtime cache", mutate: func(values map[string]any) {

@@ -93,7 +93,7 @@ func TestLocalManagedDataStorageContracts(t *testing.T) {
 		}
 	}
 
-	if strings.Contains(provision, "LIBREDASH_MANAGED_DATA_S3_") {
+	if strings.Contains(provision, strings.ToUpper("libredash_managed_data_s3_")) {
 		t.Fatal("single-node provisioning must not configure an implicit S3 backend")
 	}
 }

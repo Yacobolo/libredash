@@ -1237,9 +1237,6 @@
           },
           {
             "x-runtime-positive": "LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES"
-          },
-          {
-            "x-runtime-positive": "LIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES"
           }
         ]
       },
@@ -1264,26 +1261,6 @@
         ]
       },
       "x-error-message": "LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES must be at least LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES"
-    },
-    {
-      "description": "The garbage-collection free-space target is at least the upload reserve.",
-      "if": {
-        "properties": {
-          "LIBREDASH_MANAGED_DATA_BACKEND": {
-            "minLength": 1
-          }
-        },
-        "required": [
-          "LIBREDASH_MANAGED_DATA_BACKEND"
-        ]
-      },
-      "then": {
-        "x-runtime-at-least": [
-          "LIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES",
-          "LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES"
-        ]
-      },
-      "x-error-message": "LIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES must be at least LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES"
     }
   ],
   "properties": {
@@ -1658,14 +1635,6 @@
       "default": "1h",
       "description": "Interval between managed-data garbage-collection passes.",
       "pattern": "^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$",
-      "type": "string",
-      "x-lifecycle": "supported",
-      "x-scope": "serve"
-    },
-    "LIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES": {
-      "default": "10737418240",
-      "description": "Free-space target retained after managed-data garbage collection.",
-      "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"

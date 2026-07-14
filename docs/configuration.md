@@ -113,7 +113,6 @@ Run `libredash config validate` to validate the active environment, or add `--pr
 | `LIBREDASH_MANAGED_DATA_DIR` | string / `.libredash/managed-data` | serve | supported | Private local root for managed-data objects, upload staging, and verified runtime views; S3 deployments use it as the runtime cache. |
 | `LIBREDASH_MANAGED_DATA_GC_GRACE_PERIOD` | duration / `24h` | serve | supported | Minimum age of unreferenced managed-data objects before garbage collection. |
 | `LIBREDASH_MANAGED_DATA_GC_INTERVAL` | duration / `1h` | serve | supported | Interval between managed-data garbage-collection passes. |
-| `LIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES` | integer64 / `10737418240` | serve | supported | Free-space target retained after managed-data garbage collection. |
 | `LIBREDASH_MANAGED_DATA_MAX_FILES` | integer / `10000` | serve | supported | Maximum number of files in one managed-data revision. |
 | `LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES` | integer64 / `1073741824` | serve | supported | Maximum size in bytes of one managed-data file. |
 | `LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES` | integer64 / `10737418240` | serve | supported | Maximum total size in bytes of one managed-data revision. |
@@ -186,4 +185,3 @@ Run `libredash config validate` to validate the active environment, or add `--pr
 - **managed-data-s3-credentials:** Managed-data S3 credentials are either omitted or configured as a complete key pair. Failure: `managed-data S3 credentials require both LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID and LIBREDASH_MANAGED_DATA_S3_SECRET_ACCESS_KEY; a session token also requires that pair`.
 - **managed-data-positive-limits:** Managed-data upload, session, garbage-collection, and free-space limits are positive. Failure: `managed-data limits, durations, and free-space thresholds must be positive`.
 - **managed-data-revision-limit:** The managed-data revision limit is at least the per-file limit. Failure: `LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES must be at least LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES`.
-- **managed-data-free-space-target:** The garbage-collection free-space target is at least the upload reserve. Failure: `LIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES must be at least LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES`.

@@ -83,8 +83,6 @@ type Config struct {
 	ManagedDataGCGracePeriod time.Duration `env:"LIBREDASH_MANAGED_DATA_GC_GRACE_PERIOD" envDefault:"24h"`
 	// ManagedDataGCInterval Interval between managed-data garbage-collection passes.
 	ManagedDataGCInterval time.Duration `env:"LIBREDASH_MANAGED_DATA_GC_INTERVAL" envDefault:"1h"`
-	// ManagedDataGCTargetFreeBytes Free-space target retained after managed-data garbage collection.
-	ManagedDataGCTargetFreeBytes int64 `env:"LIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES" envDefault:"10737418240"`
 	// ManagedDataMaxFiles Maximum number of files in one managed-data revision.
 	ManagedDataMaxFiles int `env:"LIBREDASH_MANAGED_DATA_MAX_FILES" envDefault:"10000"`
 	// ManagedDataMaxFileBytes Maximum size in bytes of one managed-data file.
@@ -178,7 +176,6 @@ func (c Config) catalogValues() map[string]any {
 		configspec.EnvLIBREDASH_MANAGED_DATA_DIR:                  c.ManagedDataDir,
 		configspec.EnvLIBREDASH_MANAGED_DATA_GC_GRACE_PERIOD:      c.ManagedDataGCGracePeriod,
 		configspec.EnvLIBREDASH_MANAGED_DATA_GC_INTERVAL:          c.ManagedDataGCInterval,
-		configspec.EnvLIBREDASH_MANAGED_DATA_GC_TARGET_FREE_BYTES: c.ManagedDataGCTargetFreeBytes,
 		configspec.EnvLIBREDASH_MANAGED_DATA_MAX_FILES:            c.ManagedDataMaxFiles,
 		configspec.EnvLIBREDASH_MANAGED_DATA_MAX_FILE_BYTES:       c.ManagedDataMaxFileBytes,
 		configspec.EnvLIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES:   c.ManagedDataMaxRevisionBytes,
