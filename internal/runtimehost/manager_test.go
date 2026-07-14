@@ -116,6 +116,30 @@ func TestManagerPassesManagedDataResolutionToRuntimeFactory(t *testing.T) {
 	}
 }
 
+func TestManagerReloadsWhenManagedDataRevisionChanges(t *testing.T) {
+	repo := &fakeRepo{
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "prod", Status: servingstate.StatusActive},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "prod", Digest: "digest"},
+	}
+	resolver := &fakeManagedDataResolver{resolution: ManagedDataResolution{RevisionID: "sha256:" + strings.Repeat("a", 64)}}
+	factory := &fakeFactory{}
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "prod", Factory: factory, ManagedData: resolver})
+
+	if err := manager.Reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	resolver.resolution = ManagedDataResolution{RevisionID: "sha256:" + strings.Repeat("b", 64)}
+	if err := manager.Reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if factory.prepareCalls != 2 {
+		t.Fatalf("factory calls = %d, want reload for managed-data revision change", factory.prepareCalls)
+	}
+	if got := factory.input.ManagedData.RevisionID; got != resolver.resolution.RevisionID {
+		t.Fatalf("prepared managed-data revision = %q, want %q", got, resolver.resolution.RevisionID)
+	}
+}
+
 func TestManagerKeepsOldRuntimeOpenUntilLeaseRelease(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
@@ -596,6 +620,28 @@ func TestRegistryPreparedSetDoesNotCommitWhenMetadataActivationFails(t *testing.
 	}
 }
 
+func TestRegistryPreparesExplicitManagedDataCandidateBeforeActivation(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.deployments["dep_sales_prod"] = servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_prod"] = servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"}
+	resolver := &fakeManagedDataResolver{resolution: ManagedDataResolution{RevisionID: "sha256:" + strings.Repeat("a", 64)}}
+	factory := &recordingRegistryFactory{}
+	registry := NewRegistryWithFactory(RegistryOptions{Repo: repo, WorkspaceIDs: []servingstate.WorkspaceID{"sales"}, Environment: "prod", Factory: factory, ManagedData: resolver})
+	candidate := ManagedDataResolution{RevisionID: "sha256:" + strings.Repeat("b", 64), Roots: map[string]string{"warehouse": "/cache/revision-b"}}
+
+	prepared, err := registry.PrepareServingStateCandidates(context.Background(), []ServingStateCandidate{{ServingStateID: "dep_sales_prod", ManagedData: candidate}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	if len(factory.managedData) != 1 || factory.managedData[0].RevisionID != candidate.RevisionID {
+		t.Fatalf("prepared managed data = %#v, want candidate revision", factory.managedData)
+	}
+	if got := factory.managedData[0].Roots["warehouse"]; got != "/cache/revision-b" {
+		t.Fatalf("prepared warehouse root = %q", got)
+	}
+}
+
 func TestRegistryServesActiveGenerationWhilePreparedSetIsBuilding(t *testing.T) {
 	repo := newFakeRegistryRepo()
 	repo.active["sales/prod"] = registryDeploymentArtifact{
@@ -1031,12 +1077,14 @@ func (r *fakeRegistryRepo) RecordDuckLakeSnapshot(_ context.Context, servingStat
 }
 
 type recordingRegistryFactory struct {
-	inputs   []string
-	runtimes []*recordingRuntime
+	inputs      []string
+	managedData []ManagedDataResolution
+	runtimes    []*recordingRuntime
 }
 
 func (f *recordingRegistryFactory) Prepare(_ context.Context, input RuntimeInput) (Runtime, error) {
 	f.inputs = append(f.inputs, fmt.Sprintf("%s/%s/%s", input.State.WorkspaceID, input.State.Environment, input.State.ID))
+	f.managedData = append(f.managedData, input.ManagedData)
 	runtime := &recordingRuntime{}
 	f.runtimes = append(f.runtimes, runtime)
 	return runtime, nil

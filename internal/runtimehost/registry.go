@@ -45,6 +45,13 @@ type PreparedSet struct {
 	committed bool
 }
 
+// ServingStateCandidate binds an unpublished runtime preparation to an
+// explicit managed-data resolution. The resolution is committed separately.
+type ServingStateCandidate struct {
+	ServingStateID string
+	ManagedData    ManagedDataResolution
+}
+
 func (p *PreparedSet) Close() error {
 	if p == nil {
 		return nil
@@ -124,19 +131,45 @@ func (r *Registry) PrepareServingState(ctx context.Context, servingStateID strin
 // PrepareServingStates prepares one candidate per workspace without exposing a
 // partial rollout. Preparation is serialized because DuckLake has one writer.
 func (r *Registry) PrepareServingStates(ctx context.Context, servingStateIDs []string) (*PreparedSet, error) {
-	type candidate struct {
-		state    servingstate.State
-		artifact servingstate.Artifact
-	}
-	candidates := make([]candidate, 0, len(servingStateIDs))
-	workspaces := make(map[servingstate.WorkspaceID]struct{}, len(servingStateIDs))
+	candidates := make([]servingStateCandidate, 0, len(servingStateIDs))
 	for _, servingStateID := range servingStateIDs {
-		current, err := r.repo.ByID(ctx, servingstate.ID(servingStateID))
+		candidates = append(candidates, servingStateCandidate{servingStateID: servingStateID})
+	}
+	return r.prepareServingStateCandidates(ctx, candidates)
+}
+
+// PrepareServingStateCandidates prepares runtime generations against data
+// that is not durable yet. CommitPreparedSet must persist the corresponding
+// bindings in its activation callback before exposing these runtimes.
+func (r *Registry) PrepareServingStateCandidates(ctx context.Context, inputs []ServingStateCandidate) (*PreparedSet, error) {
+	candidates := make([]servingStateCandidate, 0, len(inputs))
+	for _, input := range inputs {
+		resolution := input.ManagedData
+		candidates = append(candidates, servingStateCandidate{servingStateID: input.ServingStateID, managedData: &resolution})
+	}
+	return r.prepareServingStateCandidates(ctx, candidates)
+}
+
+type servingStateCandidate struct {
+	servingStateID string
+	managedData    *ManagedDataResolution
+}
+
+func (r *Registry) prepareServingStateCandidates(ctx context.Context, inputs []servingStateCandidate) (*PreparedSet, error) {
+	type candidate struct {
+		state       servingstate.State
+		artifact    servingstate.Artifact
+		managedData *ManagedDataResolution
+	}
+	candidates := make([]candidate, 0, len(inputs))
+	workspaces := make(map[servingstate.WorkspaceID]struct{}, len(inputs))
+	for _, input := range inputs {
+		current, err := r.repo.ByID(ctx, servingstate.ID(input.servingStateID))
 		if err != nil {
 			return nil, err
 		}
 		if servingstate.NormalizeEnvironment(current.Environment) != r.environment {
-			return nil, fmt.Errorf("serving state %s environment = %q, want %q", servingStateID, current.Environment, r.environment)
+			return nil, fmt.Errorf("serving state %s environment = %q, want %q", input.servingStateID, current.Environment, r.environment)
 		}
 		if _, duplicate := workspaces[current.WorkspaceID]; duplicate {
 			return nil, fmt.Errorf("multiple serving states supplied for workspace %s", current.WorkspaceID)
@@ -146,7 +179,7 @@ func (r *Registry) PrepareServingStates(ctx context.Context, servingStateIDs []s
 		if err != nil {
 			return nil, err
 		}
-		candidates = append(candidates, candidate{state: current, artifact: artifact})
+		candidates = append(candidates, candidate{state: current, artifact: artifact, managedData: input.managedData})
 	}
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].state.WorkspaceID < candidates[j].state.WorkspaceID })
 
@@ -155,7 +188,13 @@ func (r *Registry) PrepareServingStates(ctx context.Context, servingStateIDs []s
 	set := &PreparedSet{registry: r, items: make([]*RegistryPrepared, 0, len(candidates))}
 	for _, candidate := range candidates {
 		manager := r.managerForWorkspace(candidate.state.WorkspaceID)
-		prepared, err := manager.prepare(ctx, candidate.state, candidate.artifact)
+		var prepared *Prepared
+		var err error
+		if candidate.managedData == nil {
+			prepared, err = manager.prepare(ctx, candidate.state, candidate.artifact)
+		} else {
+			prepared, err = manager.prepareResolved(ctx, candidate.state, candidate.artifact, *candidate.managedData)
+		}
 		if err != nil {
 			_ = set.Close()
 			return nil, err
