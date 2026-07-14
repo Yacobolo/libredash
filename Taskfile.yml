@@ -215,6 +215,8 @@ tasks:
       - bun run test:code-editor
       - bun run test:markdown-view
       - bun run test:login-page
+      - bun run test:topology-background
+      - bun run test:production-assets
       - bun run test:asset-lineage
       - bun run test:semantic-model-graph
       - go test ./...
