@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
 )
 
@@ -190,6 +191,13 @@ func TestCommandRejectsMalformedDatastarBody(t *testing.T) {
 
 type canceledTableWindowMetrics struct {
 	integrationMetrics
+}
+
+func (m canceledTableWindowMetrics) ExecuteConsumersPage(_ context.Context, request consumer.Request, publish consumer.Publisher) error {
+	for _, target := range request.Targets {
+		publish(consumer.Result{Target: target, Err: context.Canceled})
+	}
+	return nil
 }
 
 func (m canceledTableWindowMetrics) QueryTable(_ context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {

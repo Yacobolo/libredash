@@ -158,6 +158,11 @@ func (d *Dashboard) validateContract() error {
 		if err := validateTableStyle(name, table.Style); err != nil {
 			return err
 		}
+		switch table.CardinalityOrDefault() {
+		case TableCardinalityBounded, TableCardinalityExact:
+		default:
+			return fmt.Errorf("table %q has unsupported cardinality %q", name, table.Cardinality)
+		}
 		for _, column := range table.Columns {
 			if err := validateTableColumn(name, column); err != nil {
 				return err

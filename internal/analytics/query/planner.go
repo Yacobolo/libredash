@@ -358,7 +358,9 @@ func measurePhysicalFields(measure ResolvedMeasure) []string {
 		fields = append(fields, measure.InputField)
 	}
 	if measure.InputExpr != "" {
-		if expression, err := semanticmodel.ParseExpression(measure.InputExpr); err == nil {
+		if measure.InputExpression != nil {
+			fields = append(fields, measure.InputExpression.References()...)
+		} else if expression, err := semanticmodel.ParseExpression(measure.InputExpr); err == nil {
 			fields = append(fields, expression.References()...)
 		}
 	}

@@ -754,25 +754,48 @@ type TableSort struct {
 }
 
 type Table struct {
-	Version        int                         `json:"version"`
-	Kind           string                      `json:"kind"`
-	Title          string                      `json:"title"`
-	Style          TableStyle                  `json:"style"`
-	Interaction    InteractionConfig           `json:"interaction"`
-	Selection      []InteractionSelectionEntry `json:"selection"`
-	Columns        []TableColumn               `json:"columns"`
-	TotalRows      int                         `json:"totalRows"`
-	TotalRowsKnown bool                        `json:"totalRowsKnown"`
-	AvailableRows  int                         `json:"availableRows"`
-	IsCapped       bool                        `json:"isCapped"`
-	RowCap         int                         `json:"rowCap"`
-	ChunkSize      int                         `json:"chunkSize"`
-	RowHeight      int                         `json:"rowHeight"`
-	ResetVersion   int                         `json:"resetVersion"`
-	Sort           TableSort                   `json:"sort"`
-	Blocks         map[string]TableBlock       `json:"blocks"`
-	LoadingBlock   string                      `json:"loadingBlock"`
-	Error          string                      `json:"error"`
+	Version       int                         `json:"version"`
+	Kind          string                      `json:"kind"`
+	Title         string                      `json:"title"`
+	Style         TableStyle                  `json:"style"`
+	Interaction   InteractionConfig           `json:"interaction"`
+	Selection     []InteractionSelectionEntry `json:"selection"`
+	Columns       []TableColumn               `json:"columns"`
+	Cardinality   TableCardinality            `json:"cardinality"`
+	AvailableRows int                         `json:"availableRows"`
+	IsCapped      bool                        `json:"isCapped"`
+	RowCap        int                         `json:"rowCap"`
+	ChunkSize     int                         `json:"chunkSize"`
+	RowHeight     int                         `json:"rowHeight"`
+	ResetVersion  int                         `json:"resetVersion"`
+	Sort          TableSort                   `json:"sort"`
+	Blocks        map[string]TableBlock       `json:"blocks"`
+	LoadingBlock  string                      `json:"loadingBlock"`
+	Error         string                      `json:"error"`
+}
+
+type TableCardinality struct {
+	Kind  string `json:"kind"`
+	Value int    `json:"value"`
+}
+
+const (
+	CardinalityUnknown    = "unknown"
+	CardinalityLowerBound = "lower_bound"
+	CardinalityEstimated  = "estimated"
+	CardinalityExact      = "exact"
+)
+
+func ExactCardinality(value int) TableCardinality {
+	return TableCardinality{Kind: CardinalityExact, Value: max(0, value)}
+}
+
+func LowerBoundCardinality(value int) TableCardinality {
+	return TableCardinality{Kind: CardinalityLowerBound, Value: max(0, value)}
+}
+
+func (c TableCardinality) ExactValue() (int, bool) {
+	return c.Value, c.Kind == CardinalityExact
 }
 
 type TableBlock struct {
@@ -833,7 +856,7 @@ func EmptyTable(request TableRequest, err error) Table {
 		Style:         TableStyle{}.WithDefaults(),
 		Selection:     []InteractionSelectionEntry{},
 		Columns:       OrdersTableColumns(),
-		TotalRows:     0,
+		Cardinality:   TableCardinality{Kind: CardinalityUnknown},
 		AvailableRows: 0,
 		IsCapped:      false,
 		RowCap:        TableInteractiveRowCap,

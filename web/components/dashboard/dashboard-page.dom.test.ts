@@ -411,7 +411,7 @@ function testDocument(): string {
       interaction: { kind: 'row_selection', toggle: false, mappings: [{ field: 'orders.order_id', value: 'order_id' }] },
       selection: [{ mappings: [{ field: 'orders.order_id', value: 'server-value', label: 'Server value' }] }],
       columns: [{ key: 'order_id', label: 'Order', width: 180 }],
-      totalRows: 1,
+		cardinality: { kind: 'exact', value: 1 },
       availableRows: 1,
       isCapped: false,
       rowCap: 1000,

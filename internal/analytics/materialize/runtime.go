@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -26,7 +27,9 @@ type RuntimeConfig struct {
 	// QueryCacheNamespace identifies the immutable serving snapshot and source
 	// digests backing this runtime. Mutable refreshes additionally advance the
 	// cache generation before any subsequent query can reuse results.
-	QueryCacheNamespace string
+	QueryCacheNamespace  string
+	QueryCacheMaxEntries int
+	QueryCacheMaxBytes   int64
 
 	Database Database
 	Sources  SourceRegistrar
@@ -45,6 +48,7 @@ type ModelTableQuery struct {
 type Runtime struct {
 	modelID     string
 	model       *semanticmodel.Model
+	planner     *semanticquery.Planner
 	dataDir     string
 	db          Database
 	sources     SourceRegistrar
@@ -93,16 +97,47 @@ func NewRuntimeView(ctx context.Context, config RuntimeConfig) (*Runtime, error)
 	if err := ValidateFilesWithResolver(config.Model, config.DataDir, resolver); err != nil {
 		return nil, err
 	}
+	planner, err := semanticquery.NewCompiledPlanner(config.Model)
+	if err != nil {
+		return nil, fmt.Errorf("compile semantic model: %w", err)
+	}
+	cacheEntries, cacheBytes := queryCacheLimits(config)
 	runtime := &Runtime{
 		modelID:    config.ModelID,
 		model:      config.Model,
+		planner:    planner,
 		dataDir:    config.DataDir,
 		db:         config.Database,
 		sources:    config.Sources,
-		queries:    semanticquery.NewService(semanticquery.NewPlanner(config.Model), config.Database),
-		queryCache: newQueryResultCache(256, config.QueryCacheNamespace),
+		queries:    semanticquery.NewService(planner, config.Database),
+		queryCache: newQueryResultCacheWithLimits(cacheEntries, cacheBytes, config.QueryCacheNamespace),
 	}
 	return runtime, nil
+}
+
+func (r *Runtime) queryPlanner() *semanticquery.Planner {
+	if r != nil && r.planner != nil {
+		return r.planner
+	}
+	return semanticquery.NewPlanner(r.model)
+}
+
+func queryCacheLimits(config RuntimeConfig) (int, int64) {
+	entries := config.QueryCacheMaxEntries
+	if entries <= 0 {
+		entries = 256
+		if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_QUERY_CACHE_MAX_ENTRIES))); err == nil && value > 0 {
+			entries = value
+		}
+	}
+	bytes := config.QueryCacheMaxBytes
+	if bytes <= 0 {
+		bytes = 64 << 20
+		if value, err := strconv.ParseInt(strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_QUERY_CACHE_MAX_BYTES)), 10, 64); err == nil && value > 0 {
+			bytes = value
+		}
+	}
+	return entries, bytes
 }
 
 func DatabasePath(dbDir, modelID string) string {
@@ -365,7 +400,7 @@ func (r *Runtime) ExecuteDataQueryBundle(ctx context.Context, requests []dataque
 		}}
 	}
 	planningStarted := time.Now()
-	bundle, err := semanticquery.NewPlanner(r.model).PlanBundle(semanticRequests)
+	bundle, err := r.queryPlanner().PlanBundle(semanticRequests)
 	planningMS := elapsedStageMS(planningStarted)
 	if err != nil {
 		return dataquery.BundleResult{}, &dataquery.BundleIncompatibleError{Err: err}
@@ -533,7 +568,7 @@ func (r *Runtime) executeSemanticAggregate(ctx context.Context, request dataquer
 		Offset:      request.Offset,
 	}
 	planningStarted := time.Now()
-	plan, err := semanticquery.NewPlanner(r.model).Plan(semanticRequest)
+	plan, err := r.queryPlanner().Plan(semanticRequest)
 	planningMS := elapsedStageMS(planningStarted)
 	if err != nil {
 		return dataquery.Result{}, err
@@ -549,7 +584,7 @@ func (r *Runtime) executeSemanticAggregate(ctx context.Context, request dataquer
 }
 
 func (r *Runtime) executeSemanticRows(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
-	planner := semanticquery.NewPlanner(r.model)
+	planner := r.queryPlanner()
 	if len(request.Fields) == 0 && len(request.Measures) == 0 && request.IncludeTotal {
 		if len(request.ColumnMasks) > 0 {
 			return dataquery.Result{}, fmt.Errorf("table count is unavailable because its authorization projection contains masked fields")
@@ -756,7 +791,7 @@ func (r *Runtime) executeSemanticHistogram(ctx context.Context, request dataquer
 		ColumnMasks: dataQueryColumnMasks(request.ColumnMasks),
 	}
 	planningStarted := time.Now()
-	plan, err := semanticquery.NewPlanner(r.model).PlanRawValues(rawRequest)
+	plan, err := r.queryPlanner().PlanRawValues(rawRequest)
 	planningMS := elapsedStageMS(planningStarted)
 	if err != nil {
 		return dataquery.Result{}, err
@@ -802,7 +837,7 @@ func (r *Runtime) executeSemanticDistribution(ctx context.Context, request dataq
 		ColumnMasks: dataQueryColumnMasks(request.ColumnMasks),
 	}
 	planningStarted := time.Now()
-	plan, err := semanticquery.NewPlanner(r.model).PlanRawValues(rawRequest)
+	plan, err := r.queryPlanner().PlanRawValues(rawRequest)
 	planningMS := elapsedStageMS(planningStarted)
 	if err != nil {
 		return dataquery.Result{}, err

@@ -643,6 +643,12 @@
     "#Table": {
       "additionalProperties": false,
       "properties": {
+        "cardinality": {
+          "enum": [
+            "bounded",
+            "exact"
+          ]
+        },
         "columns": {
           "items": {
             "$ref": "#/$defs/%23TableColumn"

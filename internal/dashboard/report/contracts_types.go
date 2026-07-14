@@ -351,6 +351,7 @@ func (s SelectionInteraction) IsZero() bool {
 
 type TableVisual struct {
 	Kind              string                                     `yaml:"kind"`
+	Cardinality       string                                     `yaml:"cardinality"`
 	Title             string                                     `yaml:"title"`
 	Description       string                                     `yaml:"description"`
 	Query             TableQuery                                 `yaml:"query"`
@@ -363,6 +364,18 @@ type TableVisual struct {
 	MeasureFormatting map[string][]dashboard.TableFormattingRule `yaml:"measure_formatting"`
 	DataColumns       []FieldRef                                 `yaml:"-"`
 	ColumnDims        []string                                   `yaml:"-"`
+}
+
+const (
+	TableCardinalityBounded = "bounded"
+	TableCardinalityExact   = "exact"
+)
+
+func (t TableVisual) CardinalityOrDefault() string {
+	if t.Cardinality == "" {
+		return TableCardinalityBounded
+	}
+	return t.Cardinality
 }
 
 type TableQuery struct {

@@ -439,6 +439,7 @@ package contracts
 
 #Table: close({
 	kind?:        "data_table" | "matrix_table" | "pivot_table"
+	cardinality?: "bounded" | "exact"
 	title!:       string
 	description?: string
 	query!:       #TableQuery

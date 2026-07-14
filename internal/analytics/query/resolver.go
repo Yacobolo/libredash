@@ -2,13 +2,15 @@ package query
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 )
 
 type Planner struct {
-	Model *semanticmodel.Model
+	Model    *semanticmodel.Model
+	Compiled *CompiledModel
 }
 
 type tableAlias struct {
@@ -25,7 +27,56 @@ type queryView struct {
 }
 
 func NewPlanner(model *semanticmodel.Model) *Planner {
-	return &Planner{Model: model}
+	planner, err := NewCompiledPlanner(model)
+	if err != nil {
+		return &Planner{Model: model}
+	}
+	return planner
+}
+
+func (p *Planner) metricExpression(name string, metric semanticmodel.Metric) (semanticmodel.Expression, error) {
+	if p.Compiled != nil {
+		if expression, ok := p.Compiled.MetricExpressions[name]; ok {
+			return expression, nil
+		}
+	}
+	return semanticmodel.ParseExpression(metric.Expression)
+}
+
+func (p *Planner) resolvedMeasure(name string, measure semanticmodel.MetricMeasure) ResolvedMeasure {
+	resolved := resolvedMeasureFromSemantic(measure)
+	if p.Compiled != nil {
+		if expression, ok := p.Compiled.MeasureInputExpressions[name]; ok {
+			resolved.InputExpression = &expression
+		}
+	}
+	return resolved
+}
+
+type AggregateAnalysis struct {
+	Facts          []string
+	AtomicMeasures []string
+	MultiFact      bool
+}
+
+// AnalyzeAggregate exposes the normalized semantic dependencies used by
+// higher-level physical optimizers without exposing the planner's mutable
+// resolution internals.
+func (p *Planner) AnalyzeAggregate(request Request) (AggregateAnalysis, error) {
+	resolved, err := p.resolveAggregate(request)
+	if err != nil {
+		return AggregateAnalysis{}, err
+	}
+	measures := make([]string, 0, len(resolved.Measures))
+	for name := range resolved.Measures {
+		measures = append(measures, name)
+	}
+	sort.Strings(measures)
+	return AggregateAnalysis{
+		Facts:          append([]string{}, resolved.Facts...),
+		AtomicMeasures: measures,
+		MultiFact:      resolved.MultiFact,
+	}, nil
 }
 
 func (p *Planner) queryView(request Request) (*queryView, error) {
@@ -68,7 +119,7 @@ func (p *Planner) semanticView(table string, dimensions []Field, measures []Fiel
 		if err != nil {
 			return nil, err
 		}
-		measure := resolvedMeasureFromSemantic(semanticMeasure)
+		measure := p.resolvedMeasure(item.Field, semanticMeasure)
 		if fact == "" {
 			fact = measure.Fact
 		}

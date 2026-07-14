@@ -94,14 +94,13 @@ test('refresh summaries can return all post-cursor generations for rapid cancell
   ])
 })
 
-test('interaction trace requires exactly one visual update, lazy table rows then count, and no excluded updates', () => {
+test('interaction trace accepts one bounded table window and no excluded updates', () => {
   expect(assertInteractionTrace({
     targets: ['visual:kpi', 'table:movies'],
     excludedTargets: ['visual:source'],
     targetUpdates: [
       { target: 'visual:kpi', order: 1 },
-      { target: 'table:movies', order: 2, tableStart: 0, tableRows: 50, totalRowsKnown: false },
-      { target: 'table:movies', order: 3, tableStart: 0, tableRows: 50, totalRows: 123, totalRowsKnown: true },
+	  { target: 'table:movies', order: 2, tableStart: 0, tableRows: 50, cardinalityKind: 'lower_bound', cardinalityValue: 50, chunkSize: 50 },
     ],
   })).toEqual([])
 
@@ -111,13 +110,12 @@ test('interaction trace requires exactly one visual update, lazy table rows then
     targetUpdates: [
       { target: 'visual:kpi', order: 1 },
       { target: 'visual:kpi', order: 2 },
-      { target: 'table:movies', order: 3, tableStart: 0, tableRows: 50, totalRows: 50, totalRowsKnown: true },
+	  { target: 'table:movies', order: 3, tableStart: 0, tableRows: 50, cardinalityKind: 'unknown', cardinalityValue: 0 },
       { target: 'visual:source', order: 4 },
     ],
   })).toEqual([
     'visual:kpi updated 2 times, want exactly 1',
-    'table:movies updated 1 times, want either one exact short-page patch or exactly 2 patches (rows then count)',
-    'table:movies did not publish rows before its exact count',
+	'table:movies did not publish one bounded window or rows followed by an exact count',
     'excluded target visual:source updated 1 time',
   ])
 
@@ -125,43 +123,41 @@ test('interaction trace requires exactly one visual update, lazy table rows then
     targets: ['table:movies'],
     excludedTargets: [],
     targetUpdates: [
-      { target: 'table:movies', order: 1, tableStart: 0, tableRows: 4, totalRows: 4, totalRowsKnown: true },
+	  { target: 'table:movies', order: 1, tableStart: 0, tableRows: 4, cardinalityKind: 'exact', cardinalityValue: 4, chunkSize: 50 },
     ],
   })).toEqual([])
 })
 
-test('interaction trace rejects malformed and out-of-order table delivery', () => {
+test('interaction trace accepts explicit exact mode and rejects malformed delivery', () => {
   expect(assertInteractionTrace({
     targets: ['table:movies'],
     excludedTargets: [],
     targetUpdates: [
-      { target: 'table:movies', order: 1, tableStart: 0, tableRows: 4, totalRows: 5, totalRowsKnown: true },
+	  { target: 'table:movies', order: 1, tableStart: 0, tableRows: 4, cardinalityKind: 'unknown', cardinalityValue: 0 },
     ],
   })).toEqual([
-    'table:movies updated 1 times, want either one exact short-page patch or exactly 2 patches (rows then count)',
-    'table:movies did not publish rows before its exact count',
+	'table:movies did not publish one bounded window or rows followed by an exact count',
   ])
 
   expect(assertInteractionTrace({
     targets: ['table:movies'],
     excludedTargets: [],
     targetUpdates: [
-      { target: 'table:movies', order: 2, tableStart: 0, tableRows: 50, totalRows: 123, totalRowsKnown: true },
-      { target: 'table:movies', order: 3, tableStart: 0, tableRows: 50, totalRowsKnown: false },
+	  { target: 'table:movies', order: 2, tableStart: 0, tableRows: 50, cardinalityKind: 'exact', cardinalityValue: 123 },
+	  { target: 'table:movies', order: 3, tableStart: 0, tableRows: 50, cardinalityKind: 'lower_bound', cardinalityValue: 50 },
     ],
   })).toEqual([
-    'table:movies did not publish rows before its exact count',
+	'table:movies did not publish one bounded window or rows followed by an exact count',
   ])
 
   expect(assertInteractionTrace({
     targets: ['table:movies'],
     excludedTargets: [],
     targetUpdates: [
-      { target: 'table:movies', order: 1, tableStart: 50, tableRows: 4, totalRows: 54, totalRowsKnown: true },
+	  { target: 'table:movies', order: 1, tableStart: 50, tableRows: 4, cardinalityKind: 'exact', cardinalityValue: 54 },
     ],
   })).toEqual([
-    'table:movies updated 1 times, want either one exact short-page patch or exactly 2 patches (rows then count)',
-    'table:movies did not publish rows before its exact count',
+	'table:movies did not publish one bounded window or rows followed by an exact count',
   ])
 })
 

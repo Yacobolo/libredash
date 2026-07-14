@@ -713,9 +713,13 @@ model DashboardTable {
   `sort`: DashboardTableSort;
   `style`: DashboardTableStyle;
   `title`: string;
-  `totalRows`: int64;
-  `totalRowsKnown`: boolean;
+  `cardinality`: DashboardTableCardinality;
   `version`: int64;
+}
+
+model DashboardTableCardinality {
+  `kind`: "unknown" | "lower_bound" | "estimated" | "exact";
+  `value`: int64;
 }
 
 model DashboardTableBlock {

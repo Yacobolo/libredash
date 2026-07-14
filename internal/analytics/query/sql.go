@@ -200,9 +200,15 @@ func rawMeasureExpr(model *semanticmodel.Model, measure ResolvedMeasure, aliases
 	if measure.InputExpr == "" {
 		return "", fmt.Errorf("measure %q has no raw input", measure.Name)
 	}
-	expression, err := semanticmodel.ParseExpression(measure.InputExpr)
-	if err != nil {
-		return "", err
+	var expression semanticmodel.Expression
+	if measure.InputExpression != nil {
+		expression = *measure.InputExpression
+	} else {
+		var err error
+		expression, err = semanticmodel.ParseExpression(measure.InputExpr)
+		if err != nil {
+			return "", err
+		}
 	}
 	return expression.SQL(func(ref string) (string, error) {
 		dimension, err := model.ResolveDimension(ref)

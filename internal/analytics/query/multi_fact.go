@@ -210,7 +210,7 @@ func (p *Planner) resolveAggregate(request Request) (aggregateResolution, error)
 		if err != nil {
 			return err
 		}
-		resolvedMeasure := resolvedMeasureFromSemantic(measure)
+		resolvedMeasure := p.resolvedMeasure(name, measure)
 		if masks.matchesMeasure(name, resolvedMeasure) {
 			return fmt.Errorf("measure %q depends on a masked field", name)
 		}
@@ -229,7 +229,7 @@ func (p *Planner) resolveAggregate(request Request) (aggregateResolution, error)
 			return fmt.Errorf("unknown metric %q", name)
 		}
 		visiting[name] = true
-		expression, err := semanticmodel.ParseExpression(metric.Expression)
+		expression, err := p.metricExpression(name, metric)
 		if err != nil {
 			return fmt.Errorf("metric %q: %w", name, err)
 		}

@@ -380,7 +380,7 @@ func (p VisualProvider) queryAgentTable(ctx context.Context, model *semanticmode
 		Interaction:   dashboard.InteractionConfig{},
 		Selection:     []dashboard.InteractionSelectionEntry{},
 		Columns:       columns,
-		TotalRows:     len(tableRows),
+		Cardinality:   dashboard.ExactCardinality(len(tableRows)),
 		AvailableRows: len(tableRows),
 		IsCapped:      false,
 		RowCap:        maxVisualRows,

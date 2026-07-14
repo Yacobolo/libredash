@@ -1,0 +1,287 @@
+package consumer
+
+import (
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+
+	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
+	"github.com/Yacobolo/libredash/internal/dataquery"
+)
+
+type Strategy string
+
+const (
+	StrategySeparate Strategy = "separate"
+	StrategyBatch    Strategy = "batch"
+	StrategyBundle   Strategy = "bundle"
+)
+
+type LogicalQuery struct {
+	Target Target
+	Query  dataquery.Query
+}
+
+type Job struct {
+	Strategy Strategy
+	Queries  []LogicalQuery
+}
+
+type Plan struct {
+	Jobs []Job
+}
+
+type Optimizer struct {
+	planner *semanticquery.Planner
+}
+
+func NewOptimizer(model *semanticmodel.Model) (*Optimizer, error) {
+	planner, err := semanticquery.NewCompiledPlanner(model)
+	if err != nil {
+		return nil, err
+	}
+	return &Optimizer{planner: planner}, nil
+}
+
+type analyzedQuery struct {
+	logical   LogicalQuery
+	index     int
+	scope     string
+	facts     string
+	scalar    bool
+	grouped   bool
+	additive  map[string]bool
+	atomic    map[string]bool
+	aggregate bool
+}
+
+// Optimize groups renderer-neutral semantic consumers by their normalized
+// governed query scope. Presentation shape and visual identifiers never
+// participate in physical compatibility decisions.
+func Optimize(model *semanticmodel.Model, queries []LogicalQuery) (Plan, error) {
+	optimizer, err := NewOptimizer(model)
+	if err != nil {
+		return Plan{}, err
+	}
+	return optimizer.Optimize(queries)
+}
+
+func (o *Optimizer) Optimize(queries []LogicalQuery) (Plan, error) {
+	planner := o.planner
+	if planner == nil || planner.Model == nil {
+		return Plan{}, fmt.Errorf("compiled semantic planner is required")
+	}
+	analyzed := make([]analyzedQuery, len(queries))
+	for index, logical := range queries {
+		item := analyzedQuery{logical: logical, index: index}
+		if logical.Query.Kind == dataquery.KindSemanticAggregate {
+			request := semanticRequest(logical.Query)
+			analysis, err := planner.AnalyzeAggregate(request)
+			if err != nil {
+				return Plan{}, fmt.Errorf("consumer %s:%s: %w", logical.Target.Kind, logical.Target.ID, err)
+			}
+			item.aggregate = true
+			item.scalar = len(logical.Query.Fields) == 0 && logical.Query.Time.Field == ""
+			item.grouped = !item.scalar
+			item.facts = strings.Join(analysis.Facts, ",")
+			item.atomic = stringSet(analysis.AtomicMeasures)
+			item.additive = map[string]bool{}
+			for _, member := range logical.Query.Measures {
+				dependencies, additive, err := planner.AdditiveMeasureDependencies(member.Field)
+				if err != nil {
+					return Plan{}, fmt.Errorf("consumer %s:%s: %w", logical.Target.Kind, logical.Target.ID, err)
+				}
+				if additive {
+					for _, dependency := range dependencies {
+						item.additive[dependency] = true
+					}
+				}
+			}
+		}
+		scope, err := physicalScopeKey(logical.Query)
+		if err != nil {
+			return Plan{}, fmt.Errorf("consumer %s:%s: %w", logical.Target.Kind, logical.Target.ID, err)
+		}
+		item.scope = scope
+		analyzed[index] = item
+	}
+
+	assigned := make([]bool, len(analyzed))
+	type plannedJob struct {
+		job   Job
+		index int
+	}
+	jobs := []plannedJob{}
+	for sourceIndex, source := range analyzed {
+		if assigned[sourceIndex] || !source.aggregate || !source.grouped {
+			continue
+		}
+		members := []int{sourceIndex}
+		for candidateIndex, candidate := range analyzed {
+			if candidateIndex == sourceIndex || assigned[candidateIndex] || !candidate.aggregate || candidate.scope != source.scope {
+				continue
+			}
+			if candidate.grouped && candidate.facts == source.facts || candidate.scalar && setContains(source.atomic, candidate.additive) && len(candidate.additive) > 0 {
+				members = append(members, candidateIndex)
+			}
+		}
+		if len(members) < 2 {
+			continue
+		}
+		job := Job{Strategy: StrategyBundle}
+		for _, member := range members {
+			assigned[member] = true
+			job.Queries = append(job.Queries, analyzed[member].logical)
+		}
+		jobs = append(jobs, plannedJob{job: job, index: sourceIndex})
+	}
+
+	// Scalar aggregates with the same governed scope can be combined into one
+	// model-scoped multi-member query even when their fact sets differ.
+	for index, source := range analyzed {
+		if assigned[index] || !source.aggregate || !source.scalar {
+			continue
+		}
+		members := []int{index}
+		for candidateIndex := index + 1; candidateIndex < len(analyzed); candidateIndex++ {
+			candidate := analyzed[candidateIndex]
+			if assigned[candidateIndex] || !candidate.aggregate || !candidate.scalar || candidate.scope != source.scope {
+				continue
+			}
+			members = append(members, candidateIndex)
+		}
+		if len(members) < 2 {
+			continue
+		}
+		job := Job{Strategy: StrategyBatch}
+		for _, member := range members {
+			assigned[member] = true
+			job.Queries = append(job.Queries, analyzed[member].logical)
+		}
+		jobs = append(jobs, plannedJob{job: job, index: index})
+	}
+
+	for index, source := range analyzed {
+		if assigned[index] || !source.aggregate {
+			continue
+		}
+		members := []int{index}
+		for candidateIndex := index + 1; candidateIndex < len(analyzed); candidateIndex++ {
+			candidate := analyzed[candidateIndex]
+			if assigned[candidateIndex] || !candidate.aggregate || candidate.scope != source.scope || candidate.facts != source.facts {
+				continue
+			}
+			members = append(members, candidateIndex)
+		}
+		strategy := StrategySeparate
+		if len(members) > 1 {
+			strategy = StrategyBundle
+		}
+		job := Job{Strategy: strategy}
+		for _, member := range members {
+			assigned[member] = true
+			job.Queries = append(job.Queries, analyzed[member].logical)
+		}
+		jobs = append(jobs, plannedJob{job: job, index: index})
+	}
+	for index, item := range analyzed {
+		if assigned[index] {
+			continue
+		}
+		assigned[index] = true
+		jobs = append(jobs, plannedJob{job: Job{Strategy: StrategySeparate, Queries: []LogicalQuery{item.logical}}, index: index})
+	}
+	sort.SliceStable(jobs, func(i, j int) bool {
+		left := consumerKindPriority(jobs[i].job.Queries[0].Target.Kind)
+		right := consumerKindPriority(jobs[j].job.Queries[0].Target.Kind)
+		if left != right {
+			return left < right
+		}
+		return jobs[i].index < jobs[j].index
+	})
+	plan := Plan{Jobs: make([]Job, len(jobs))}
+	for index := range jobs {
+		plan.Jobs[index] = jobs[index].job
+	}
+	return plan, nil
+}
+
+func physicalScopeKey(query dataquery.Query) (string, error) {
+	encoded, err := json.Marshal(struct {
+		ModelID     string                 `json:"modelId"`
+		Target      string                 `json:"target"`
+		Filters     []dataquery.Filter     `json:"filters"`
+		ColumnMasks []dataquery.ColumnMask `json:"columnMasks"`
+	}{ModelID: query.ModelID, Target: query.Target, Filters: query.Filters, ColumnMasks: query.ColumnMasks})
+	if err != nil {
+		return "", fmt.Errorf("encode governed query scope: %w", err)
+	}
+	return string(encoded), nil
+}
+
+func semanticRequest(query dataquery.Query) semanticquery.Request {
+	dimensions := make([]semanticquery.Field, len(query.Fields))
+	for index, field := range query.Fields {
+		dimensions[index] = semanticquery.Field{Field: field.Field, Alias: field.Alias}
+	}
+	measures := make([]semanticquery.Field, len(query.Measures))
+	for index, field := range query.Measures {
+		measures[index] = semanticquery.Field{Field: field.Field, Alias: field.Alias}
+	}
+	filters := make([]semanticquery.Filter, len(query.Filters))
+	for index, filter := range query.Filters {
+		filters[index] = semanticFilter(filter)
+	}
+	return semanticquery.Request{
+		Table:      query.Target,
+		Dimensions: dimensions,
+		Measures:   measures,
+		Time:       semanticquery.Time{Field: query.Time.Field, Grain: query.Time.Grain, Alias: query.Time.Alias},
+		Filters:    filters,
+		Limit:      query.Limit,
+		Offset:     query.Offset,
+	}
+}
+
+func semanticFilter(filter dataquery.Filter) semanticquery.Filter {
+	groups := make([]semanticquery.FilterGroup, len(filter.Groups))
+	for groupIndex, group := range filter.Groups {
+		groups[groupIndex].Filters = make([]semanticquery.Filter, len(group.Filters))
+		for filterIndex, child := range group.Filters {
+			groups[groupIndex].Filters[filterIndex] = semanticFilter(child)
+		}
+	}
+	return semanticquery.Filter{Field: filter.Field, Fact: filter.Fact, Operator: filter.Operator, Values: append([]any{}, filter.Values...), Groups: groups}
+}
+
+func stringSet(values []string) map[string]bool {
+	result := make(map[string]bool, len(values))
+	for _, value := range values {
+		result[value] = true
+	}
+	return result
+}
+
+func setContains(haystack, needles map[string]bool) bool {
+	for needle := range needles {
+		if !haystack[needle] {
+			return false
+		}
+	}
+	return true
+}
+
+func consumerKindPriority(kind Kind) int {
+	switch kind {
+	case KindVisual:
+		return 0
+	case KindFilterOptions:
+		return 1
+	case KindTable:
+		return 2
+	default:
+		return 3
+	}
+}

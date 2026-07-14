@@ -18,6 +18,7 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
@@ -38,6 +39,23 @@ func fieldRefs(fields ...string) []reportdef.FieldRef {
 
 type fakeMetrics struct{}
 
+func (fakeMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {
+	for _, target := range request.Targets {
+		switch target.Kind {
+		case consumer.KindVisual:
+			visual, err := fakeMetrics{}.QueryVisualPage(ctx, request.DashboardID, request.PageID, request.Filters, target.ID)
+			publish(consumer.Result{Target: target, Visual: visual, Err: err})
+		case consumer.KindFilterOptions:
+			options, err := fakeMetrics{}.QueryFilterOptionsPage(ctx, request.DashboardID, request.PageID, []string{target.ID})
+			publish(consumer.Result{Target: target, FilterOptions: options, Err: err})
+		case consumer.KindTable:
+			table, err := fakeMetrics{}.QueryTablePage(ctx, request.DashboardID, request.PageID, request.Filters, target.TableRequest)
+			publish(consumer.Result{Target: target, Table: table, Err: err})
+		}
+	}
+	return ctx.Err()
+}
+
 type canceledTableMetrics struct {
 	fakeMetrics
 }
@@ -45,6 +63,13 @@ type canceledTableMetrics struct {
 type recordingMetrics struct {
 	fakeMetrics
 	pageIDs chan string
+}
+
+func (m *recordingMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {
+	for range request.Targets {
+		m.pageIDs <- request.PageID
+	}
+	return m.fakeMetrics.ExecuteConsumersPage(ctx, request, publish)
 }
 
 type namedWorkspaceMetrics struct {
@@ -906,7 +931,7 @@ func (fakeMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashb
 		Columns: []dashboard.TableColumn{
 			{Key: "order_id", Label: "Order"},
 		},
-		TotalRows:     1,
+		Cardinality:   dashboard.ExactCardinality(1),
 		AvailableRows: 1,
 		IsCapped:      false,
 		RowCap:        dashboard.TableInteractiveRowCap,
@@ -935,6 +960,13 @@ func (canceledTableMetrics) QueryTablePage(_ context.Context, _ string, _ string
 	return dashboard.EmptyTable(request, context.Canceled), nil
 }
 
+func (canceledTableMetrics) ExecuteConsumersPage(_ context.Context, request consumer.Request, publish consumer.Publisher) error {
+	for _, target := range request.Targets {
+		publish(consumer.Result{Target: target, Err: context.Canceled})
+	}
+	return nil
+}
+
 func (fakeMetrics) RefreshMaterializations(_ context.Context, _ string) error {
 	return nil
 }
@@ -959,6 +991,10 @@ type dependentModelTableMetrics struct {
 type localDevStyleModelTableMetrics struct {
 	refreshed [][]string
 	done      chan []string
+}
+
+func (m *localDevStyleModelTableMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {
+	return fakeMetrics{}.ExecuteConsumersPage(ctx, request, publish)
 }
 
 func (m *localDevStyleModelTableMetrics) Catalog() dashboard.Catalog {

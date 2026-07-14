@@ -10,11 +10,16 @@ import (
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/go-chi/chi/v5"
 )
 
 type fakeMetrics struct{}
+
+func (fakeMetrics) ExecuteConsumersPage(_ context.Context, _ consumer.Request, _ consumer.Publisher) error {
+	return nil
+}
 
 func (fakeMetrics) Catalog() dashboard.Catalog {
 	return dashboard.Catalog{Workspace: dashboard.CatalogWorkspace{ID: "workspace", Title: "Workspace"}}

@@ -14,6 +14,7 @@ import (
 	materializeruntime "github.com/Yacobolo/libredash/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -314,7 +315,16 @@ c2,RJ
 
 	recorder.queries = nil
 	recorder.results = nil
-	options, err := metrics.QueryFilterOptionsPage(ctx, "fulfillment-operations", "overview", []string{"state", "status"})
+	options := map[string][]dashboard.FilterOption{}
+	err = metrics.ExecuteConsumersPage(ctx, consumer.Request{DashboardID: "fulfillment-operations", PageID: "overview", Targets: []consumer.Target{
+		{Kind: consumer.KindFilterOptions, ID: "state"},
+		{Kind: consumer.KindFilterOptions, ID: "status"},
+	}}, func(result consumer.Result) bool {
+		for id, values := range result.FilterOptions {
+			options[id] = values
+		}
+		return true
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +338,15 @@ c2,RJ
 	}
 	recorder.queries = nil
 	recorder.results = nil
-	visuals, err := metrics.QueryVisualsPage(ctx, "fulfillment-operations", "overview", dashboard.Filters{}, []string{"total_orders", "delivery_days", "review_score"})
+	visuals := map[string]dashboard.Visual{}
+	err = metrics.ExecuteConsumersPage(ctx, consumer.Request{DashboardID: "fulfillment-operations", PageID: "overview", Targets: []consumer.Target{
+		{Kind: consumer.KindVisual, ID: "total_orders"},
+		{Kind: consumer.KindVisual, ID: "delivery_days"},
+		{Kind: consumer.KindVisual, ID: "review_score"},
+	}}, func(result consumer.Result) bool {
+		visuals[result.Target.ID] = result.Visual
+		return true
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -437,11 +455,8 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	if table.Error != "" {
 		t.Fatalf("table error = %q", table.Error)
 	}
-	if table.TotalRows != rows {
-		t.Fatalf("total rows = %d, want %d", table.TotalRows, rows)
-	}
-	if !table.TotalRowsKnown {
-		t.Fatal("initial table total rows are not known")
+	if total := exactTableRows(t, table); total != rows {
+		t.Fatalf("total rows = %d, want %d", total, rows)
 	}
 	if table.AvailableRows != dashboard.TableInteractiveRowCap {
 		t.Fatalf("available rows = %d, want %d", table.AvailableRows, dashboard.TableInteractiveRowCap)
@@ -486,21 +501,21 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	if len(next.Blocks["b"].Rows) != dashboard.TableChunkSize {
 		t.Fatalf("next block rows = %d, want %d", len(next.Blocks["b"].Rows), dashboard.TableChunkSize)
 	}
-	if next.TotalRows != rows {
-		t.Fatalf("next block total rows = %d, want %d", next.TotalRows, rows)
+	if total := exactTableRows(t, next); total != rows {
+		t.Fatalf("next block total rows = %d, want %d", total, rows)
 	}
 	if len(recorder.queries) != 2 || recorder.queries[0].IncludeTotal || !recorder.queries[1].IncludeTotal {
 		t.Fatalf("next block queries = %#v, want independent rows and count", recorder.queries)
 	}
 
-	overshoot, err := metrics.QueryTableRowsPage(ctx, "executive-sales", "", dashboard.Filters{}, dashboard.TableRequest{
+	overshoot, err := metrics.queries.tables.queryTableRowsPage(ctx, "executive-sales", "", dashboard.Filters{}, dashboard.TableRequest{
 		Table: "orders_table", Block: "b", Start: rows + dashboard.TableChunkSize, Count: dashboard.TableChunkSize, RequestSeq: 11,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if overshoot.TotalRowsKnown {
-		t.Fatalf("overshoot total = %d known=true, must remain unknown", overshoot.TotalRows)
+	if _, exact := overshoot.Cardinality.ExactValue(); exact {
+		t.Fatalf("overshoot cardinality = %#v, must remain inexact", overshoot.Cardinality)
 	}
 }
 
@@ -821,8 +836,8 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if table.TotalRows != 2 {
-		t.Fatalf("table total rows = %d, want 2", table.TotalRows)
+	if total := exactTableRows(t, table); total != 2 {
+		t.Fatalf("table total rows = %d, want 2", total)
 	}
 	if len(table.Blocks["a"].Rows) != 1 {
 		t.Fatalf("table block rows = %d, want 1", len(table.Blocks["a"].Rows))
@@ -869,8 +884,8 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filteredTable.TotalRows != 1 {
-		t.Fatalf("targeted table total rows = %d, want 1", filteredTable.TotalRows)
+	if total := exactTableRows(t, filteredTable); total != 1 {
+		t.Fatalf("targeted table total rows = %d, want 1", total)
 	}
 	if filteredTable.AvailableRows != 1 {
 		t.Fatalf("targeted table available rows = %d, want 1", filteredTable.AvailableRows)
@@ -885,8 +900,8 @@ relogios_presentes,watches_gifts
 	if err != nil {
 		t.Fatal(err)
 	}
-	if andFilteredTable.TotalRows != 0 {
-		t.Fatalf("AND-filtered table total rows = %d, want 0", andFilteredTable.TotalRows)
+	if total := exactTableRows(t, andFilteredTable); total != 0 {
+		t.Fatalf("AND-filtered table total rows = %d, want 0", total)
 	}
 	if got := filteredTable.Blocks["a"].RequestSeq; got != 8 {
 		t.Fatalf("all block request seq = %d, want 8", got)
@@ -903,8 +918,8 @@ relogios_presentes,watches_gifts
 	if got := selectedEntryValue(selectedRowTable.Selection, "orders.order_id"); got != "o1" {
 		t.Fatalf("table selection entry = %q, want o1: %#v", got, selectedRowTable.Selection)
 	}
-	if selectedRowTable.TotalRows != table.TotalRows {
-		t.Fatalf("selected source table total rows = %d, want self selection not applied to source table total %d", selectedRowTable.TotalRows, table.TotalRows)
+	if selected, unfiltered := exactTableRows(t, selectedRowTable), exactTableRows(t, table); selected != unfiltered {
+		t.Fatalf("selected source table total rows = %d, want self selection not applied to source table total %d", selected, unfiltered)
 	}
 
 	uiOnlyRowSelection := dashboard.Filters{
@@ -919,8 +934,8 @@ relogios_presentes,watches_gifts
 	if got := selectedEntryValue(uiOnlyRowTable.Selection, dashboard.UIRowSelectionField); got != "o1" {
 		t.Fatalf("UI-only table selection entry = %q, want o1: %#v", got, uiOnlyRowTable.Selection)
 	}
-	if uiOnlyRowTable.TotalRows != table.TotalRows {
-		t.Fatalf("UI-only selected source table total rows = %d, want unfiltered total %d", uiOnlyRowTable.TotalRows, table.TotalRows)
+	if selected, unfiltered := exactTableRows(t, uiOnlyRowTable), exactTableRows(t, table); selected != unfiltered {
+		t.Fatalf("UI-only selected source table total rows = %d, want unfiltered total %d", selected, unfiltered)
 	}
 	uiOnlyRowPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", uiOnlyRowSelection)
 	if err != nil {
@@ -1289,6 +1304,15 @@ func compositeInteractionSelection(sourceKind, sourceID, interactionKind string,
 		InteractionKind: interactionKind,
 		Entries:         entries,
 	}
+}
+
+func exactTableRows(t *testing.T, table dashboard.Table) int {
+	t.Helper()
+	value, exact := table.Cardinality.ExactValue()
+	if !exact {
+		t.Fatalf("table cardinality = %#v, want exact", table.Cardinality)
+	}
+	return value
 }
 
 func categoryRevenue(data []dashboard.Datum, label string) float64 {

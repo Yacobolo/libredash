@@ -103,11 +103,18 @@ tasks:
       - bun scripts/qa_ui_framework.ts
 
   qa:movielens-performance:
-    desc: Benchmark progressive refresh feedback and settlement against a running MovieLens dev server
+    desc: Run the generic dashboard performance runner with the MovieLens scenario
     deps:
       - node:deps
     cmds:
       - bun run qa:movielens-performance
+
+  qa:dashboard-performance:
+    desc: Run a configured dashboard performance scenario against a running dev server
+    deps:
+      - node:deps
+    cmds:
+      - bun run qa:dashboard-performance
 
   generate:
     desc: Generate all checked-out derived code needed for local development

@@ -12,6 +12,7 @@ import (
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/configspec"
+	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -74,10 +75,11 @@ type Service struct {
 }
 
 type modelRuntime struct {
-	model   *semanticmodel.Model
-	data    DataRuntime
-	ready   bool
-	missing error
+	model     *semanticmodel.Model
+	optimizer *consumer.Optimizer
+	data      DataRuntime
+	ready     bool
+	missing   error
 }
 
 func New(dataDir string, factory DataRuntimeFactory) (*Service, error) {
@@ -173,7 +175,11 @@ func newFromDefinition(dataDir, duckDBDir string, factory DataRuntimeFactory, de
 	}
 
 	for modelID, model := range definition.Models {
-		service.runtimes[modelID] = &modelRuntime{model: model}
+		optimizer, err := consumer.NewOptimizer(model)
+		if err != nil {
+			return nil, fmt.Errorf("compile semantic model %q: %w", modelID, err)
+		}
+		service.runtimes[modelID] = &modelRuntime{model: model, optimizer: optimizer}
 	}
 	if workspaceFactory, ok := factory.(WorkspaceDataRuntimeFactory); ok {
 		dataRuntimes, err := workspaceFactory.OpenDashboardWorkspaceDataRuntimes(context.Background(), WorkspaceDataRuntimeConfig{

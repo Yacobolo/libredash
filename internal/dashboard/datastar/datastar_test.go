@@ -51,12 +51,13 @@ func TestRefreshCompletePreservesFatalError(t *testing.T) {
 }
 
 func TestTableMetadataUpdatesDataWithoutChangingComponentStatus(t *testing.T) {
-	table := dashboard.Table{Title: "Orders", TotalRows: 42, TotalRowsKnown: true}
+	table := dashboard.Table{Title: "Orders", Cardinality: dashboard.ExactCardinality(42)}
 	patch := RefreshEventPatch(dashboardstream.RefreshEvent{
 		Type: dashboardstream.RefreshEventTableMetadata, Target: "orders", Value: table,
 	}, ".data")
 	tables, ok := patch["tables"].(map[string]dashboard.Table)
-	if !ok || tables["orders"].TotalRows != 42 || !tables["orders"].TotalRowsKnown {
+	total, exact := tables["orders"].Cardinality.ExactValue()
+	if !ok || total != 42 || !exact {
 		t.Fatalf("metadata patch = %#v", patch)
 	}
 	if _, ok := patch["componentStatus"]; ok {

@@ -170,7 +170,7 @@ func DashboardTableFromDashboard(value dashboard.Table) DashboardTable {
 		Version: int64(value.Version), Kind: value.Kind, Title: value.Title,
 		Style:       DashboardTableStyle{Density: value.Style.Density, Zebra: zebra, Grid: value.Style.Grid},
 		Interaction: dashboardInteractionConfig(value.Interaction), Selection: dashboardInteractionSelectionEntries(value.Selection),
-		Columns: columns, TotalRows: int64(value.TotalRows), TotalRowsKnown: value.TotalRowsKnown, AvailableRows: int64(value.AvailableRows), IsCapped: value.IsCapped,
+		Columns: columns, Cardinality: DashboardTableCardinality{Kind: value.Cardinality.Kind, Value: int64(value.Cardinality.Value)}, AvailableRows: int64(value.AvailableRows), IsCapped: value.IsCapped,
 		RowCap: int64(value.RowCap), ChunkSize: int64(value.ChunkSize), RowHeight: int64(value.RowHeight), ResetVersion: int64(value.ResetVersion),
 		Sort: dashboardTableSort(value.Sort), Blocks: blocks, LoadingBlock: value.LoadingBlock, Error: value.Error,
 	}

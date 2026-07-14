@@ -9,6 +9,7 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
@@ -19,6 +20,7 @@ import (
 )
 
 type Metrics interface {
+	consumer.Executor
 	Catalog() dashboard.Catalog
 	DataDir() string
 	DefaultDashboardID() string

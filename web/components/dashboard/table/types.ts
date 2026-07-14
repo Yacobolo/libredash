@@ -9,6 +9,12 @@ export type {
 export type SortDirection = 'asc' | 'desc'
 export type BlockID = 'a' | 'b' | 'c'
 export type TableKind = 'data_table' | 'matrix_table' | 'pivot_table'
+export type TableCardinalityKind = 'unknown' | 'lower_bound' | 'estimated' | 'exact'
+
+export interface TableCardinality {
+  kind: TableCardinalityKind
+  value: number
+}
 
 export interface TableSort {
   key: string
@@ -70,8 +76,7 @@ export interface TableSignal {
   interaction: InteractionConfig
   selection?: InteractionSelectionEntry[]
   columns: TableColumn[]
-  totalRows: number
-  totalRowsKnown: boolean
+  cardinality: TableCardinality
   availableRows: number
   isCapped: boolean
   rowCap: number

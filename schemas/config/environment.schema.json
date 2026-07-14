@@ -1426,26 +1426,26 @@
     },
     "LIBREDASH_PERF_ENFORCE_THRESHOLDS": {
       "default": "false",
-      "description": "Fail MovieLens performance QA when phase latency or query-count thresholds are exceeded.",
+      "description": "Fail dashboard performance QA when phase latency or query-count thresholds are exceeded.",
       "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
       "type": "string",
       "x-lifecycle": "development",
-      "x-scope": "MovieLens performance QA"
+      "x-scope": "dashboard performance QA"
     },
     "LIBREDASH_PERF_ITERATIONS": {
       "default": "5",
-      "description": "Measured interaction iterations run by the MovieLens performance QA scenario.",
+      "description": "Measured interaction iterations run by the configured dashboard performance scenario.",
       "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "development",
-      "x-scope": "MovieLens performance QA"
+      "x-scope": "dashboard performance QA"
     },
     "LIBREDASH_PERF_LOG": {
       "default": ".tmp/dev-server.log",
-      "description": "Development server log consumed by the MovieLens performance QA scenario.",
+      "description": "Development server log consumed by dashboard performance QA.",
       "type": "string",
       "x-lifecycle": "development",
-      "x-scope": "MovieLens performance QA"
+      "x-scope": "dashboard performance QA"
     },
     "LIBREDASH_PERF_MAX_ALL_TARGET_P95_MS": {
       "default": "1000",
@@ -1453,7 +1453,7 @@
       "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "development",
-      "x-scope": "MovieLens performance QA"
+      "x-scope": "dashboard performance QA"
     },
     "LIBREDASH_PERF_MAX_CRITICAL_KPI_P95_MS": {
       "default": "1000",
@@ -1461,7 +1461,7 @@
       "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "development",
-      "x-scope": "MovieLens performance QA"
+      "x-scope": "dashboard performance QA"
     },
     "LIBREDASH_PERF_MAX_FIRST_TARGET_PAINT_P95_MS": {
       "default": "500",
@@ -1469,7 +1469,7 @@
       "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "development",
-      "x-scope": "MovieLens performance QA"
+      "x-scope": "dashboard performance QA"
     },
     "LIBREDASH_PERF_MAX_OPTIMISTIC_FEEDBACK_P95_MS": {
       "default": "16",
@@ -1477,7 +1477,7 @@
       "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "development",
-      "x-scope": "MovieLens performance QA"
+      "x-scope": "dashboard performance QA"
     },
     "LIBREDASH_PERF_MAX_QUERIES": {
       "default": "4",
@@ -1485,14 +1485,20 @@
       "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "development",
-      "x-scope": "MovieLens performance QA"
+      "x-scope": "dashboard performance QA"
     },
     "LIBREDASH_PERF_OUTPUT": {
-      "default": ".tmp/movielens-performance.json",
-      "description": "JSON output path written by the MovieLens performance QA scenario.",
+      "description": "Optional JSON output path; defaults to a suite-specific file under .tmp.",
       "type": "string",
       "x-lifecycle": "development",
-      "x-scope": "MovieLens performance QA"
+      "x-scope": "dashboard performance QA"
+    },
+    "LIBREDASH_PERF_SCENARIO": {
+      "default": "scripts/performance/movielens.json",
+      "description": "Path to a dashboard performance scenario manifest.",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "dashboard performance QA"
     },
     "LIBREDASH_PRODUCTION": {
       "default": "false",
@@ -1508,6 +1514,22 @@
       "writeOnly": true,
       "x-lifecycle": "external",
       "x-scope": "Quack development profile"
+    },
+    "LIBREDASH_QUERY_CACHE_MAX_BYTES": {
+      "default": "67108864",
+      "description": "Maximum retained bytes for governed interactive query results per semantic model runtime.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
+    },
+    "LIBREDASH_QUERY_CACHE_MAX_ENTRIES": {
+      "default": "256",
+      "description": "Maximum governed interactive query result entries retained per semantic model runtime.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve"
     },
     "LIBREDASH_SCIM_BEARER_TOKEN": {
       "description": "Bearer token enabling SCIM provisioning; production requires at least 32 characters when set.",

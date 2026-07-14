@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 )
@@ -38,10 +39,10 @@ func TestRuntimeMetricsDashboardRefreshLeasePinsOneRuntimeAcrossTargets(t *testi
 
 	err := metrics.WithDashboardRefreshLease(context.Background(), func(ctx context.Context) error {
 		provider.current = second
-		if _, err := metrics.QueryVisualPage(ctx, "dashboard", "page", dashboard.Filters{}, "one"); err != nil {
+		if err := metrics.ExecuteConsumersPage(ctx, consumer.Request{DashboardID: "dashboard", PageID: "page", Targets: []consumer.Target{{Kind: consumer.KindVisual, ID: "one"}}}, func(consumer.Result) bool { return true }); err != nil {
 			return err
 		}
-		if _, err := metrics.QueryVisualPage(ctx, "dashboard", "page", dashboard.Filters{}, "two"); err != nil {
+		if err := metrics.ExecuteConsumersPage(ctx, consumer.Request{DashboardID: "dashboard", PageID: "page", Targets: []consumer.Target{{Kind: consumer.KindVisual, ID: "two"}}}, func(consumer.Result) bool { return true }); err != nil {
 			return err
 		}
 		if provider.lease.released {
@@ -86,17 +87,12 @@ type targetLeaseRuntime struct {
 
 func (r *targetLeaseRuntime) Close() error { return nil }
 
-func (r *targetLeaseRuntime) QueryVisualPage(context.Context, string, string, dashboard.Filters, string) (dashboard.Visual, error) {
-	r.calls++
-	return dashboard.Visual{ID: r.id}, nil
-}
-
-func (r *targetLeaseRuntime) QueryVisualsPage(context.Context, string, string, dashboard.Filters, []string) (map[string]dashboard.Visual, error) {
-	return nil, nil
-}
-
-func (r *targetLeaseRuntime) QueryFilterOptionsPage(context.Context, string, string, []string) (map[string][]dashboard.FilterOption, error) {
-	return nil, nil
+func (r *targetLeaseRuntime) ExecuteConsumersPage(_ context.Context, request consumer.Request, publish consumer.Publisher) error {
+	for _, target := range request.Targets {
+		r.calls++
+		publish(consumer.Result{Target: target, Visual: dashboard.Visual{ID: r.id}})
+	}
+	return nil
 }
 
 type leaseRecordingProvider struct {

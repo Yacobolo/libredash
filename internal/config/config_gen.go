@@ -91,6 +91,10 @@ type Config struct {
 	OIDCScopes string `env:"LIBREDASH_OIDC_SCOPES"`
 	// Production Enable production serving and validation behavior.
 	Production bool `env:"LIBREDASH_PRODUCTION" envDefault:"false"`
+	// QueryCacheMaxBytes Maximum retained bytes for governed interactive query results per semantic model runtime.
+	QueryCacheMaxBytes int `env:"LIBREDASH_QUERY_CACHE_MAX_BYTES" envDefault:"67108864"`
+	// QueryCacheMaxEntries Maximum governed interactive query result entries retained per semantic model runtime.
+	QueryCacheMaxEntries int `env:"LIBREDASH_QUERY_CACHE_MAX_ENTRIES" envDefault:"256"`
 	// SCIMBearerToken Bearer token enabling SCIM provisioning; production requires at least 32 characters when set.
 	SCIMBearerToken string `env:"LIBREDASH_SCIM_BEARER_TOKEN"`
 	// Target Default LibreDash API target URL.
@@ -146,6 +150,8 @@ func (c Config) catalogValues() map[string]any {
 		configspec.EnvLIBREDASH_OIDC_PROVIDER_ID:        c.OIDCProviderID,
 		configspec.EnvLIBREDASH_OIDC_SCOPES:             c.OIDCScopes,
 		configspec.EnvLIBREDASH_PRODUCTION:              c.Production,
+		configspec.EnvLIBREDASH_QUERY_CACHE_MAX_BYTES:   c.QueryCacheMaxBytes,
+		configspec.EnvLIBREDASH_QUERY_CACHE_MAX_ENTRIES: c.QueryCacheMaxEntries,
 		configspec.EnvLIBREDASH_SCIM_BEARER_TOKEN:       c.SCIMBearerToken,
 		configspec.EnvLIBREDASH_TARGET:                  c.Target,
 		configspec.EnvLIBREDASH_TOKEN_HASH_KEY:          c.TokenHashKey,

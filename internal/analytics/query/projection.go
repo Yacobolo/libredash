@@ -78,6 +78,11 @@ func ProjectScalarFromGrouped(model *semanticmodel.Model, grouped, scalar Reques
 // AdditiveMeasureDependencies expands a measure/metric to atomic count/sum
 // members. The boolean is false for any non-additive dependency.
 func AdditiveMeasureDependencies(model *semanticmodel.Model, member string) ([]string, bool, error) {
+	return NewPlanner(model).AdditiveMeasureDependencies(member)
+}
+
+func (p *Planner) AdditiveMeasureDependencies(member string) ([]string, bool, error) {
+	model := p.Model
 	dependencies := map[string]struct{}{}
 	visiting := map[string]bool{}
 	var visit func(string) (bool, error)
@@ -97,9 +102,9 @@ func AdditiveMeasureDependencies(model *semanticmodel.Model, member string) ([]s
 			return false, fmt.Errorf("metric dependency cycle includes %q", name)
 		}
 		visiting[name] = true
-		expression, err := semanticmodel.ParseExpression(metric.Expression)
+		expression, err := p.metricExpression(name, metric)
 		if err != nil {
-			return false, fmt.Errorf("metric %q: %w", name, err)
+			return false, err
 		}
 		for _, ref := range expression.References() {
 			additive, err := visit(ref)

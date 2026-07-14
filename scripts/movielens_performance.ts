@@ -25,8 +25,9 @@ export type TargetUpdate = {
   batch?: number
   tableStart?: number
   tableRows?: number
-  totalRows?: number
-  totalRowsKnown?: boolean
+	cardinalityKind?: 'unknown' | 'lower_bound' | 'estimated' | 'exact'
+	cardinalityValue?: number
+	chunkSize?: number
 }
 
 export type InteractionTrace = Pick<Sample, 'targets' | 'excludedTargets' | 'targetUpdates'>
@@ -49,14 +50,15 @@ type RefreshSummary = {
 }
 
 const projectRoot = process.cwd()
-const outputPath = Bun.env.LIBREDASH_PERF_OUTPUT ?? join(projectRoot, '.tmp/movielens-performance.json')
 const logPath = Bun.env.LIBREDASH_PERF_LOG ?? join(projectRoot, '.tmp/dev-server.log')
 const iterations = positiveInteger(Bun.env.LIBREDASH_PERF_ITERATIONS, 5)
-const scenarios = [
-  { name: 'release_decade', visualId: 'tags_per_rating_by_decade' },
-  { name: 'activity_month', visualId: 'activity_by_month' },
-  { name: 'rating_bucket', visualId: 'rating_distribution' },
-]
+
+type PerformanceSuite = {
+	name: string
+	dashboardPath: string
+	scenarios: Array<{ name: string; visualId: string }>
+	rapidToggleScenario: string
+}
 
 export function percentile(values: number[], percentileRank: number): number {
   if (values.length === 0) return 0
@@ -184,15 +186,9 @@ export function assertInteractionTrace(trace: InteractionTrace): string[] {
     if (target.startsWith('visual:') && updates.length !== 1) {
       errors.push(`${target} updated ${updates.length} times, want exactly 1`)
     }
-    if (target.startsWith('table:')) {
-      const exactShortPage = isExactShortTablePage(updates)
-      if (!exactShortPage && updates.length !== 2) {
-        errors.push(`${target} updated ${updates.length} times, want either one exact short-page patch or exactly 2 patches (rows then count)`)
-      }
-      if (!exactShortPage && !isProgressiveTableDelivery(updates)) {
-        errors.push(`${target} did not publish rows before its exact count`)
-      }
-    }
+	if (target.startsWith('table:')) {
+		if (!isValidTableDelivery(updates)) errors.push(`${target} did not publish one bounded window or rows followed by an exact count`)
+	}
   }
   for (const target of trace.excludedTargets) {
     const count = counts.get(target) ?? 0
@@ -201,33 +197,24 @@ export function assertInteractionTrace(trace: InteractionTrace): string[] {
   return errors
 }
 
-const tableWindowSize = 50
-
-function isExactShortTablePage(updates: TargetUpdate[]): boolean {
-  if (updates.length !== 1) return false
-  const update = updates[0]
-  const rowCount = update.tableRows
-  return update.tableStart === 0
-    && update.totalRowsKnown === true
-    && typeof rowCount === 'number'
-    && rowCount >= 0
-    && rowCount < tableWindowSize
-    && update.totalRows === rowCount
-}
-
-function isProgressiveTableDelivery(updates: TargetUpdate[]): boolean {
-  if (updates.length !== 2) return false
-  const [rows, count] = updates
-  return rows.tableStart === 0
-    && count.tableStart === 0
-    && rows.totalRowsKnown === false
-    && count.totalRowsKnown === true
-    && typeof rows.tableRows === 'number'
-    && rows.tableRows >= 0
-    && count.tableRows === rows.tableRows
-    && typeof count.totalRows === 'number'
-    && count.totalRows >= rows.tableRows
-    && rows.order < count.order
+function isValidTableDelivery(updates: TargetUpdate[]): boolean {
+	if (updates.length === 1) {
+		const [window] = updates
+		return window.tableStart === 0
+			&& typeof window.tableRows === 'number'
+			&& (window.cardinalityKind === 'lower_bound' || window.cardinalityKind === 'exact')
+			&& (window.cardinalityValue ?? -1) >= window.tableRows
+	}
+	if (updates.length !== 2) return false
+	const [rows, count] = updates
+	return rows.tableStart === 0
+		&& count.tableStart === 0
+		&& rows.cardinalityKind !== 'exact'
+		&& count.cardinalityKind === 'exact'
+		&& typeof rows.tableRows === 'number'
+		&& count.tableRows === rows.tableRows
+		&& (count.cardinalityValue ?? -1) >= rows.tableRows
+		&& rows.order < count.order
 }
 
 export function evaluateThresholds(
@@ -262,10 +249,13 @@ export function classifyRapidSupersessionNetworkFailures(
   return { expectedAborts, unexpectedFailures }
 }
 
-async function main(): Promise<void> {
+export async function runPerformanceSuite(): Promise<void> {
+	const suite = await loadPerformanceSuite()
+	const scenarios = suite.scenarios
+	const outputPath = Bun.env.LIBREDASH_PERF_OUTPUT ?? join(projectRoot, `.tmp/${suite.name}-performance.json`)
 	const baseURL = await resolveBaseURL()
 	const logCursor = await refreshLogCursor()
-  const dashboardURL = new URL('/workspaces/movielens/dashboards/ratings-overview/pages/overview', baseURL).toString()
+	const dashboardURL = new URL(suite.dashboardPath, baseURL).toString()
   const browser = await chromium.launch()
   const page = await browser.newPage({ viewport: { width: 1440, height: 960 } })
   const browserHealth = collectBrowserHealth(page)
@@ -274,7 +264,7 @@ async function main(): Promise<void> {
   let rapidNetworkFailures: string[] = []
   try {
     const response = await page.goto(dashboardURL, { waitUntil: 'domcontentloaded', timeout: 120_000 })
-    if (!response?.ok()) throw new Error(`MovieLens dashboard returned status ${response?.status() ?? 'unknown'}`)
+	if (!response?.ok()) throw new Error(`${suite.name} dashboard returned status ${response?.status() ?? 'unknown'}`)
     await waitForDashboardIdle(page, 600_000)
     await installPerformanceObserver(page)
 
@@ -292,7 +282,9 @@ async function main(): Promise<void> {
       }
     }
     const rapidNetworkStart = browserHealth.failedNetworkResponses.length
-    rapidToggle = await runRapidToggle(page, scenarios[2].visualId)
+	const rapidScenario = scenarios.find((scenario) => scenario.name === suite.rapidToggleScenario) ?? scenarios.at(-1)
+	if (!rapidScenario) throw new Error('performance suite requires at least one scenario')
+	rapidToggle = await runRapidToggle(page, rapidScenario.visualId)
     rapidNetworkFailures = browserHealth.failedNetworkResponses.splice(rapidNetworkStart)
     await clearSelections(page)
   } finally {
@@ -376,8 +368,8 @@ async function main(): Promise<void> {
   await mkdir(dirname(outputPath), { recursive: true })
   await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`)
   console.log(JSON.stringify(result, null, 2))
-  if (correctnessFailures.length > 0) throw new Error(`MovieLens deterministic QA failed:\n${correctnessFailures.join('\n')}`)
-  if (thresholdFailures.length > 0) throw new Error(`MovieLens performance thresholds failed:\n${thresholdFailures.join('\n')}`)
+	if (correctnessFailures.length > 0) throw new Error(`${suite.name} deterministic QA failed:\n${correctnessFailures.join('\n')}`)
+	if (thresholdFailures.length > 0) throw new Error(`${suite.name} performance thresholds failed:\n${thresholdFailures.join('\n')}`)
 }
 
 async function runInteraction(page: Page, visualId: string, datumOffset: number): Promise<Omit<Sample, 'interaction' | 'iteration'>> {
@@ -495,8 +487,9 @@ async function installPerformanceObserver(page: Page): Promise<void> {
           let signature = ''
           let tableStart: number | undefined
           let tableRows: number | undefined
-          let totalRows: number | undefined
-          let totalRowsKnown: boolean | undefined
+			let cardinalityKind: TargetUpdate['cardinalityKind']
+			let cardinalityValue: number | undefined
+			let chunkSize: number | undefined
           if (target.startsWith('visual:')) {
             const visual = signals.visuals?.[target.slice(7)]
             signature = visual ? JSON.stringify([
@@ -510,8 +503,9 @@ async function installPerformanceObserver(page: Page): Promise<void> {
             const block = table?.blocks?.a
             tableStart = typeof block?.start === 'number' ? block.start : undefined
             tableRows = Array.isArray(block?.rows) ? block.rows.length : 0
-            totalRowsKnown = Boolean(table?.totalRowsKnown)
-            totalRows = typeof table?.totalRows === 'number' ? table.totalRows : undefined
+				cardinalityKind = table?.cardinality?.kind
+				cardinalityValue = typeof table?.cardinality?.value === 'number' ? table.cardinality.value : undefined
+				chunkSize = typeof table?.chunkSize === 'number' ? table.chunkSize : undefined
             signature = table ? JSON.stringify([
               componentStatus?.generation ?? null,
               Boolean(componentStatus?.loading),
@@ -519,8 +513,8 @@ async function installPerformanceObserver(page: Page): Promise<void> {
               block?.requestSeq ?? null,
               tableStart ?? null,
               tableRows,
-              totalRowsKnown,
-              totalRows ?? null,
+					cardinalityKind ?? null,
+					cardinalityValue ?? null,
             ]) : ''
           }
           if (!signature || active.signatures[target] === signature) continue
@@ -535,7 +529,7 @@ async function installPerformanceObserver(page: Page): Promise<void> {
               order: active.order,
               atMs: Math.round((performance.now() - active.startedAt) * 100) / 100,
               batch: active.batch,
-              ...(target.startsWith('table:') ? { tableStart, tableRows, totalRows, totalRowsKnown } : {}),
+				...(target.startsWith('table:') ? { tableStart, tableRows, cardinalityKind, cardinalityValue, chunkSize } : {}),
             })
           }
           active.signatures[target] = signature
@@ -614,8 +608,8 @@ async function finishPerformanceTrace(page: Page): Promise<PerformanceTraceResul
     const firstTargetPaintMs = targetUpdates.length > 0 ? targetUpdates[0].atMs ?? 0 : 0
     const criticalUpdates = targetUpdates.filter((update) => trace.criticalKPIs.includes(update.target))
     const tableUpdates = targetUpdates.filter((update) => update.target.startsWith('table:'))
-    const rows = tableUpdates.find((update) => (update.tableRows ?? 0) > 0 && update.totalRowsKnown === false)
-    const count = tableUpdates.find((update) => update.totalRowsKnown === true)
+	const rows = tableUpdates.find((update) => (update.tableRows ?? 0) > 0 && update.cardinalityKind !== 'exact')
+	const count = tableUpdates.find((update) => update.cardinalityKind === 'exact')
     return {
       optimisticFeedbackMs: elapsed(trace.optimisticAt),
       firstTargetPaintMs,
@@ -739,6 +733,23 @@ async function resolveBaseURL(): Promise<string> {
   return 'http://localhost:8195'
 }
 
+async function loadPerformanceSuite(): Promise<PerformanceSuite> {
+	const path = Bun.env.LIBREDASH_PERF_SCENARIO ?? join(projectRoot, 'scripts/performance/movielens.json')
+	const value = JSON.parse(await readFile(path, 'utf8')) as Partial<PerformanceSuite>
+	if (!value.name || !value.dashboardPath || !Array.isArray(value.scenarios) || value.scenarios.length === 0) {
+		throw new Error(`invalid dashboard performance scenario ${path}`)
+	}
+	for (const scenario of value.scenarios) {
+		if (!scenario?.name || !scenario.visualId) throw new Error(`invalid interaction in dashboard performance scenario ${path}`)
+	}
+	return {
+		name: value.name,
+		dashboardPath: value.dashboardPath,
+		scenarios: value.scenarios,
+		rapidToggleScenario: value.rapidToggleScenario ?? value.scenarios[value.scenarios.length - 1].name,
+	}
+}
+
 async function refreshLogCursor(): Promise<number> {
 	try {
 		return (await readFile(logPath)).byteLength
@@ -803,4 +814,4 @@ function round(value: number): number {
   return Math.round(value * 100) / 100
 }
 
-if (import.meta.main) await main()
+if (import.meta.main) await runPerformanceSuite()

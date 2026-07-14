@@ -601,8 +601,7 @@ export interface DashboardTable {
   sort: DashboardTableSort
   style: DashboardTableStyle
   title: string
-  totalRows: number
-  totalRowsKnown: boolean
+  cardinality: DashboardTableCardinality
   version: number
 }
 
@@ -612,6 +611,11 @@ export interface DashboardTableBlock {
   rows: Record<string, unknown>[]
   sort: DashboardTableSort
   start: number
+}
+
+export interface DashboardTableCardinality {
+  kind: 'unknown' | 'lower_bound' | 'estimated' | 'exact'
+  value: number
 }
 
 export interface DashboardTableColumn {

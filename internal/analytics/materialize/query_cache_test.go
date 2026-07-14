@@ -64,6 +64,41 @@ func TestQueryResultCacheUsesGovernedRequestAndReturnsDeepCopies(t *testing.T) {
 	}
 }
 
+func TestQueryResultCacheEnforcesByteBudgetAndRejectsOversizedEntries(t *testing.T) {
+	cache := newQueryResultCacheWithLimits(10, 1200, "bytes")
+	first := dataquery.Query{ModelID: "sales", Kind: dataquery.KindSemanticAggregate, Measures: []dataquery.Field{{Field: "revenue"}}}
+	second := first
+	second.Measures = []dataquery.Field{{Field: "orders"}}
+	large := first
+	large.Measures = []dataquery.Field{{Field: "large"}}
+
+	_, firstKey, generation, _, err := cache.lookup(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.store(firstKey, generation, dataquery.Result{Rows: []dataquery.Row{{"value": strings.Repeat("a", 80)}}})
+	_, secondKey, generation, _, err := cache.lookup(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.store(secondKey, generation, dataquery.Result{Rows: []dataquery.Row{{"value": strings.Repeat("b", 80)}}})
+	if cache.currentBytes > cache.maxBytes {
+		t.Fatalf("cache bytes = %d, budget = %d", cache.currentBytes, cache.maxBytes)
+	}
+	if cache.lru.Len() != 1 {
+		t.Fatalf("entries = %d, want byte-budget eviction", cache.lru.Len())
+	}
+
+	_, largeKey, generation, _, err := cache.lookup(large)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.store(largeKey, generation, dataquery.Result{Rows: []dataquery.Row{{"value": strings.Repeat("x", 5000)}}})
+	if _, ok := cache.get(largeKey); ok {
+		t.Fatal("oversized result was cached")
+	}
+}
+
 func TestQueryResultCacheKeyIncludesRawValueField(t *testing.T) {
 	cache := newQueryResultCache(256, "")
 	request := dataquery.Query{

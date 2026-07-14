@@ -91,15 +91,16 @@ Run `libredash config validate` to validate the active environment, or add `--pr
 | `LIBREDASH_DEV_RESTART` | boolean / `false` | dev server | development | Force the managed development server to restart. |
 | `LIBREDASH_DEV_SKIP_PUBLISH` | boolean / `false` | dev server | development | Skip automatic project publishing in the managed development server. |
 | `LIBREDASH_DEV_WORKTREE` | string | dev server | internal | Worktree path exported by the managed development server. |
-| `LIBREDASH_PERF_ENFORCE_THRESHOLDS` | boolean / `false` | MovieLens performance QA | development | Fail MovieLens performance QA when phase latency or query-count thresholds are exceeded. |
-| `LIBREDASH_PERF_ITERATIONS` | integer / `5` | MovieLens performance QA | development | Measured interaction iterations run by the MovieLens performance QA scenario. |
-| `LIBREDASH_PERF_LOG` | string / `.tmp/dev-server.log` | MovieLens performance QA | development | Development server log consumed by the MovieLens performance QA scenario. |
-| `LIBREDASH_PERF_MAX_ALL_TARGET_P95_MS` | integer / `1000` | MovieLens performance QA | development | Maximum all-target settlement p95 when performance thresholds are enforced. |
-| `LIBREDASH_PERF_MAX_CRITICAL_KPI_P95_MS` | integer / `1000` | MovieLens performance QA | development | Maximum critical-KPI settlement p95 when performance thresholds are enforced. |
-| `LIBREDASH_PERF_MAX_FIRST_TARGET_PAINT_P95_MS` | integer / `500` | MovieLens performance QA | development | Maximum first-target paint p95 when performance thresholds are enforced. |
-| `LIBREDASH_PERF_MAX_OPTIMISTIC_FEEDBACK_P95_MS` | integer / `16` | MovieLens performance QA | development | Maximum local optimistic-feedback p95 when performance thresholds are enforced. |
-| `LIBREDASH_PERF_MAX_QUERIES` | integer / `4` | MovieLens performance QA | development | Maximum physical queries per measured refresh when performance thresholds are enforced. |
-| `LIBREDASH_PERF_OUTPUT` | string / `.tmp/movielens-performance.json` | MovieLens performance QA | development | JSON output path written by the MovieLens performance QA scenario. |
+| `LIBREDASH_PERF_ENFORCE_THRESHOLDS` | boolean / `false` | dashboard performance QA | development | Fail dashboard performance QA when phase latency or query-count thresholds are exceeded. |
+| `LIBREDASH_PERF_ITERATIONS` | integer / `5` | dashboard performance QA | development | Measured interaction iterations run by the configured dashboard performance scenario. |
+| `LIBREDASH_PERF_LOG` | string / `.tmp/dev-server.log` | dashboard performance QA | development | Development server log consumed by dashboard performance QA. |
+| `LIBREDASH_PERF_MAX_ALL_TARGET_P95_MS` | integer / `1000` | dashboard performance QA | development | Maximum all-target settlement p95 when performance thresholds are enforced. |
+| `LIBREDASH_PERF_MAX_CRITICAL_KPI_P95_MS` | integer / `1000` | dashboard performance QA | development | Maximum critical-KPI settlement p95 when performance thresholds are enforced. |
+| `LIBREDASH_PERF_MAX_FIRST_TARGET_PAINT_P95_MS` | integer / `500` | dashboard performance QA | development | Maximum first-target paint p95 when performance thresholds are enforced. |
+| `LIBREDASH_PERF_MAX_OPTIMISTIC_FEEDBACK_P95_MS` | integer / `16` | dashboard performance QA | development | Maximum local optimistic-feedback p95 when performance thresholds are enforced. |
+| `LIBREDASH_PERF_MAX_QUERIES` | integer / `4` | dashboard performance QA | development | Maximum physical queries per measured refresh when performance thresholds are enforced. |
+| `LIBREDASH_PERF_OUTPUT` | string | dashboard performance QA | development | Optional JSON output path; defaults to a suite-specific file under .tmp. |
+| `LIBREDASH_PERF_SCENARIO` | string / `scripts/performance/movielens.json` | dashboard performance QA | development | Path to a dashboard performance scenario manifest. |
 | `LIBREDASH_SMOKE_PORT` | integer / `18080` | production image smoke test | internal | Host port used by the production image smoke test. |
 
 ## Execution
@@ -113,6 +114,8 @@ Run `libredash config validate` to validate the active environment, or add `--pr
 | `LIBREDASH_EXEC_MAX_RUNNING_WRITES` | integer / `1` | serve | supported | Maximum concurrently running refresh jobs. |
 | `LIBREDASH_EXEC_READ_QUEUE_TIMEOUT` | duration / `30s` | serve | supported | Maximum time an interactive read may wait in the queue. |
 | `LIBREDASH_EXEC_READ_TIMEOUT` | duration / `2m` | serve | supported | Maximum execution time for an interactive read query. |
+| `LIBREDASH_QUERY_CACHE_MAX_BYTES` | integer / `67108864` | serve | supported | Maximum retained bytes for governed interactive query results per semantic model runtime. |
+| `LIBREDASH_QUERY_CACHE_MAX_ENTRIES` | integer / `256` | serve | supported | Maximum governed interactive query result entries retained per semantic model runtime. |
 
 ## Operations
 

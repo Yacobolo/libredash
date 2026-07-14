@@ -13,22 +13,35 @@ import (
 )
 
 type queryResultCache struct {
-	mu         sync.Mutex
-	capacity   int
-	namespace  string
-	entries    map[string]*list.Element
-	lru        *list.List
-	group      singleflight.Group
-	generation uint64
+	mu           sync.Mutex
+	capacity     int
+	maxBytes     int64
+	currentBytes int64
+	namespace    string
+	entries      map[string]*list.Element
+	lru          *list.List
+	group        singleflight.Group
+	generation   uint64
 }
 
 type queryResultCacheEntry struct {
 	key    string
 	result dataquery.Result
+	bytes  int64
 }
 
 func newQueryResultCache(capacity int, namespace string) *queryResultCache {
-	return &queryResultCache{capacity: capacity, namespace: namespace, entries: map[string]*list.Element{}, lru: list.New()}
+	return newQueryResultCacheWithLimits(capacity, 64<<20, namespace)
+}
+
+func newQueryResultCacheWithLimits(capacity int, maxBytes int64, namespace string) *queryResultCache {
+	if capacity <= 0 {
+		capacity = 1
+	}
+	if maxBytes <= 0 {
+		maxBytes = 1
+	}
+	return &queryResultCache{capacity: capacity, maxBytes: maxBytes, namespace: namespace, entries: map[string]*list.Element{}, lru: list.New()}
 }
 
 func (c *queryResultCache) execute(ctx context.Context, request dataquery.Query, execute func() (dataquery.Result, error)) (dataquery.Result, error) {
@@ -215,16 +228,26 @@ func (c *queryResultCache) put(key string, generation uint64, result dataquery.R
 	if generation != c.generation {
 		return
 	}
-	if element, ok := c.entries[key]; ok {
-		element.Value = queryResultCacheEntry{key: key, result: cloneDataQueryResult(result)}
-		c.lru.MoveToFront(element)
+	entryBytes := int64(len(key)) + estimateDataQueryResultBytes(result)
+	if entryBytes > c.maxBytes {
 		return
 	}
-	element := c.lru.PushFront(queryResultCacheEntry{key: key, result: cloneDataQueryResult(result)})
-	c.entries[key] = element
-	for c.lru.Len() > c.capacity {
+	if element, ok := c.entries[key]; ok {
+		previous := element.Value.(queryResultCacheEntry)
+		c.currentBytes -= previous.bytes
+		element.Value = queryResultCacheEntry{key: key, result: cloneDataQueryResult(result), bytes: entryBytes}
+		c.currentBytes += entryBytes
+		c.lru.MoveToFront(element)
+	} else {
+		element := c.lru.PushFront(queryResultCacheEntry{key: key, result: cloneDataQueryResult(result), bytes: entryBytes})
+		c.entries[key] = element
+		c.currentBytes += entryBytes
+	}
+	for c.lru.Len() > c.capacity || c.currentBytes > c.maxBytes {
 		oldest := c.lru.Back()
-		delete(c.entries, oldest.Value.(queryResultCacheEntry).key)
+		entry := oldest.Value.(queryResultCacheEntry)
+		delete(c.entries, entry.key)
+		c.currentBytes -= entry.bytes
 		c.lru.Remove(oldest)
 	}
 }
@@ -234,7 +257,58 @@ func (c *queryResultCache) clear() {
 	defer c.mu.Unlock()
 	c.entries = map[string]*list.Element{}
 	c.lru.Init()
+	c.currentBytes = 0
 	c.generation++
+}
+
+func estimateDataQueryResultBytes(result dataquery.Result) int64 {
+	size := int64(len(result.SQL) + len(result.PlanText) + len(result.Error) + len(result.ExecutionState) + len(result.CacheOutcome) + len(result.Status))
+	for _, column := range result.Columns {
+		size += int64(len(column.Name)) + 16
+	}
+	for _, warning := range result.Warnings {
+		size += int64(len(warning)) + 16
+	}
+	for _, row := range result.Rows {
+		size += 48
+		for key, value := range row {
+			size += int64(len(key)) + estimateDataQueryValueBytes(value)
+		}
+	}
+	return size + 128
+}
+
+func estimateDataQueryValueBytes(value any) int64 {
+	switch typed := value.(type) {
+	case nil:
+		return 1
+	case string:
+		return int64(len(typed)) + 16
+	case []byte:
+		return int64(len(typed)) + 24
+	case []string:
+		size := int64(24)
+		for _, item := range typed {
+			size += int64(len(item)) + 16
+		}
+		return size
+	case []any:
+		size := int64(24)
+		for _, item := range typed {
+			size += estimateDataQueryValueBytes(item)
+		}
+		return size
+	case map[string]any:
+		size := int64(48)
+		for key, item := range typed {
+			size += int64(len(key)) + estimateDataQueryValueBytes(item)
+		}
+		return size
+	case bool:
+		return 1
+	default:
+		return 16
+	}
 }
 
 func cloneDataQueryResult(result dataquery.Result) dataquery.Result {

@@ -1,17 +1,16 @@
 import { describe, expect, test } from 'bun:test'
 
-import { emptyTable, normalizeTable, preserveKnownCardinality } from './block-source'
+import { emptyTable, normalizeTable, preserveCardinality } from './block-source'
 
 describe('progressive table cardinality', () => {
   test('normalizes an unknown total without hiding the available window', () => {
     const table = normalizeTable({
       ...emptyTable,
-      totalRows: 0,
-      totalRowsKnown: false,
+      cardinality: { kind: 'unknown', value: 0 },
       availableRows: 10_000,
     })
 
-    expect(table.totalRowsKnown).toBe(false)
+    expect(table.cardinality).toEqual({ kind: 'unknown', value: 0 })
     expect(table.availableRows).toBe(10_000)
   })
 
@@ -19,66 +18,34 @@ describe('progressive table cardinality', () => {
     const previous = normalizeTable({
       ...emptyTable,
       resetVersion: 4,
-      totalRows: 1_234,
-      totalRowsKnown: true,
+      cardinality: { kind: 'exact', value: 1_234 },
       availableRows: 1_234,
-      isCapped: false,
     })
     const incoming = normalizeTable({
       ...emptyTable,
       resetVersion: 4,
-      totalRows: 0,
-      totalRowsKnown: false,
+      cardinality: { kind: 'lower_bound', value: 100 },
       availableRows: 10_000,
-      isCapped: false,
     })
 
-    const merged = preserveKnownCardinality(previous, incoming)
-    expect(merged.totalRowsKnown).toBe(true)
-    expect(merged.totalRows).toBe(1_234)
+    const merged = preserveCardinality(previous, incoming)
+    expect(merged.cardinality).toEqual({ kind: 'exact', value: 1_234 })
     expect(merged.availableRows).toBe(1_234)
   })
 
-  test('does not carry an old total into a reset generation', () => {
-    const previous = normalizeTable({
-      ...emptyTable,
-      resetVersion: 4,
-      totalRows: 1_234,
-      totalRowsKnown: true,
-      availableRows: 1_234,
-    })
-    const incoming = normalizeTable({
-      ...emptyTable,
-      resetVersion: 5,
-      totalRowsKnown: false,
-      availableRows: 10_000,
-    })
+  test('does not carry old cardinality into a reset generation', () => {
+    const previous = normalizeTable({ ...emptyTable, resetVersion: 4, cardinality: { kind: 'exact', value: 1_234 } })
+    const incoming = normalizeTable({ ...emptyTable, resetVersion: 5, cardinality: { kind: 'lower_bound', value: 50 } })
 
-    expect(preserveKnownCardinality(previous, incoming).totalRowsKnown).toBe(false)
+    expect(preserveCardinality(previous, incoming).cardinality).toEqual({ kind: 'lower_bound', value: 50 })
   })
 
-  test('does not replace a known cardinality with a false overshoot total', () => {
-    const previous = normalizeTable({
-      ...emptyTable,
-      resetVersion: 4,
-      totalRows: 75,
-      totalRowsKnown: true,
-      availableRows: 75,
-    })
-    const incoming = normalizeTable({
-      ...emptyTable,
-      resetVersion: 4,
-      totalRows: 150,
-      totalRowsKnown: true,
-      availableRows: 150,
-      blocks: {
-        ...emptyTable.blocks,
-        b: { ...emptyTable.blocks.b, start: 150, rows: [] },
-      },
-    })
+  test('keeps the strongest evidence and the largest equal-strength bound', () => {
+    const first = normalizeTable({ ...emptyTable, resetVersion: 4, cardinality: { kind: 'lower_bound', value: 50 } })
+    const second = normalizeTable({ ...emptyTable, resetVersion: 4, cardinality: { kind: 'lower_bound', value: 150 } })
+    const exact = normalizeTable({ ...emptyTable, resetVersion: 4, cardinality: { kind: 'exact', value: 75 }, availableRows: 75 })
 
-    const merged = preserveKnownCardinality(previous, incoming)
-    expect(merged.totalRows).toBe(75)
-    expect(merged.availableRows).toBe(75)
+    expect(preserveCardinality(first, second).cardinality.value).toBe(150)
+    expect(preserveCardinality(exact, second).cardinality).toEqual({ kind: 'exact', value: 75 })
   })
 })

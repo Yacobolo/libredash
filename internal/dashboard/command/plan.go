@@ -4,22 +4,19 @@ import (
 	"fmt"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
 )
 
-type TargetKind string
+type TargetKind = consumer.Kind
 
 const (
-	TargetFilterOptions TargetKind = "filter_options"
-	TargetVisual        TargetKind = "visual"
-	TargetTable         TargetKind = "table"
+	TargetFilterOptions TargetKind = consumer.KindFilterOptions
+	TargetVisual        TargetKind = consumer.KindVisual
+	TargetTable         TargetKind = consumer.KindTable
 )
 
-type Target struct {
-	Kind         TargetKind
-	ID           string
-	TableRequest dashboard.TableRequest
-}
+type Target = consumer.Target
 
 type RefreshPlan struct {
 	Command string

@@ -1,23 +1,26 @@
 package query
 
+import semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+
 type Field struct {
 	Field string
 	Alias string
 }
 
 type ResolvedMeasure struct {
-	Field       string
-	Name        string
-	Label       string
-	Description string
-	Fact        string
-	Aggregation string
-	InputField  string
-	InputExpr   string
-	Filters     []MeasureFilter
-	Empty       string
-	Unit        string
-	Format      string
+	Field           string
+	Name            string
+	Label           string
+	Description     string
+	Fact            string
+	Aggregation     string
+	InputField      string
+	InputExpr       string
+	InputExpression *semanticmodel.Expression
+	Filters         []MeasureFilter
+	Empty           string
+	Unit            string
+	Format          string
 }
 
 type MeasureFilter struct {

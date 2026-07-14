@@ -413,7 +413,7 @@ func TableSignals(report reportdef.Dashboard, page dashboard.Page, request dashb
 			Interaction:   interactionSignal("row_selection", table.Interaction.RowSelection),
 			Selection:     []dashboard.InteractionSelectionEntry{},
 			Columns:       table.Columns,
-			TotalRows:     0,
+			Cardinality:   dashboard.TableCardinality{Kind: dashboard.CardinalityUnknown},
 			AvailableRows: 0,
 			IsCapped:      false,
 			RowCap:        dashboard.TableInteractiveRowCap,
