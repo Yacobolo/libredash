@@ -102,6 +102,13 @@ tasks:
     cmds:
       - bun scripts/qa_ui_framework.ts
 
+  qa:movielens-performance:
+    desc: Benchmark progressive refresh feedback and settlement against a running MovieLens dev server
+    deps:
+      - node:deps
+    cmds:
+      - bun run qa:movielens-performance
+
   generate:
     desc: Generate all checked-out derived code needed for local development
     cmds:
@@ -199,6 +206,7 @@ tasks:
       - bun run test:datastar-lit
       - bun run test:app-shell
       - bun run test:interaction-selection
+      - bun run test:movielens-performance-harness
       - bun run test:record-table
       - bun run test:visual-modal
       - bun run test:catalog-page

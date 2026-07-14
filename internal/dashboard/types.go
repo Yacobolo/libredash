@@ -169,10 +169,11 @@ type FilterControl struct {
 }
 
 type Runtime struct {
-	ClientID    string `json:"clientId"`
-	DashboardID string `json:"dashboardId"`
-	PageID      string `json:"pageId"`
-	ModelID     string `json:"modelId"`
+	ClientID         string `json:"clientId"`
+	StreamInstanceID string `json:"streamInstanceId"`
+	DashboardID      string `json:"dashboardId"`
+	PageID           string `json:"pageId"`
+	ModelID          string `json:"modelId"`
 }
 
 func (f Filters) WithDefaults() Filters {
@@ -601,6 +602,8 @@ type FilterOption struct {
 type Status struct {
 	Loading       bool   `json:"loading"`
 	Error         string `json:"error"`
+	RefreshID     string `json:"refreshId"`
+	Generation    int64  `json:"generation"`
 	LastUpdated   string `json:"lastUpdated"`
 	DataDirectory string `json:"dataDirectory"`
 	SetupRequired bool   `json:"setupRequired"`

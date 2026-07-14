@@ -91,6 +91,7 @@ model AdminPageSignal {
 @apigen.contract(#{ kind: "ui-signal", tags: #["admin", "signal"] })
 @apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
 model AdminQueryDetailSignal {
+  `connectionWaitMs`: int64;
   `correlationId`?: string;
   `createdAt`?: string;
   `durationMs`: int64;
@@ -98,10 +99,12 @@ model AdminQueryDetailSignal {
   `eventId`?: string;
   `loading`: boolean;
   `modelId`?: string;
+  `databaseMs`: int64;
   `objectId`?: string;
   `objectType`?: string;
   `operation`?: string;
   `planText`?: string;
+  `planningMs`: int64;
   `principalId`?: string;
   `queryError`?: string;
   `queryJson`?: string;
@@ -120,7 +123,9 @@ model AdminQueryDetailSignal {
 @apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "admin" })
 model AdminQueryEventSignal {
   `correlationId`: string;
+  `connectionWaitMs`: int64;
   `createdAt`: string;
+  `databaseMs`: int64;
   `durationMs`: int64;
   `error`: string;
   `id`: string;
@@ -129,6 +134,7 @@ model AdminQueryEventSignal {
   `objectType`: string;
   `operation`: string;
   `planText`: string;
+  `planningMs`: int64;
   `principalId`: string;
   `queryJson`: string;
   `queryKind`: string;
@@ -516,11 +522,20 @@ model DashboardComponentSignal {
   `y`: float64;
 }
 
+/** Progressive refresh state for one visual or table target. */
+model DashboardComponentStatus {
+  `error`: string;
+  `generation`: int64;
+  `loading`: boolean;
+}
+
 @apigen.contract(#{ kind: "ui-envelope", tags: #["dashboard", "envelope"] })
 @apigen.`metadata`(#{ `x-libredash-contract-role`: "envelope", `x-libredash-surface`: "dashboard" })
 model DashboardEnvelope {
   @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "chrome" })
   `chrome`: ChromeSignal;
+  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "componentStatus" })
+  `componentStatus`: Record<DashboardComponentStatus>;
   @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "filterConfig" })
   `filterConfig`: ReportFilterConfig[];
   @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "filterOptions" })
@@ -674,8 +689,10 @@ model DashboardPageSignal {
 model DashboardStatus {
   `dataDirectory`: string;
   `error`: string;
+  `generation`: int64;
   `lastUpdated`: string;
   `loading`: boolean;
+  `refreshId`: string;
   `setupRequired`: boolean;
 }
 
@@ -1093,6 +1110,7 @@ model RouteRuntimeSignal {
   `kind`: RouteKind;
   `modelId`?: string;
   `pageId`?: string;
+  `streamInstanceId`?: string;
   `workspaceId`?: string;
 }
 

@@ -3,6 +3,7 @@ import { property, state } from 'lit/decorators.js'
 import { RefreshCw } from 'lucide'
 import type {
   DashboardComponentSignal,
+  DashboardComponentStatus,
   DashboardFilters,
   DashboardPageNavSignal,
   DashboardPageSignal,
@@ -20,12 +21,15 @@ import './report-canvas'
 import './report-footer'
 import './visual-modal'
 import { loadDashboardComponent } from './registry'
+import { canonicalSelectionEntriesForSource } from './interaction-selection'
 
 const emptyFilters: DashboardFilters = { controls: {}, selections: [] }
 const emptyStatus: DashboardStatus = {
   loading: false,
   error: '',
+  generation: 0,
   lastUpdated: '',
+  refreshId: '',
   dataDirectory: '',
   setupRequired: false,
 }
@@ -278,6 +282,10 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
     return this.signal<DashboardStatus>('status', emptyStatus)
   }
 
+  private get componentStatus(): Record<string, DashboardComponentStatus> {
+    return this.signal<Record<string, DashboardComponentStatus>>('componentStatus', {})
+  }
+
   render() {
     if (!this.page) return html`<slot></slot>`
     return html`
@@ -328,6 +336,8 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
 
   private renderCanvasComponent(component: DashboardComponentSignal) {
     const filterVisual = component.kind === 'filter_card'
+    const statusKey = this.componentStatusKey(component)
+    const componentRefreshStatus = statusKey ? this.refreshStatusFor(statusKey) : undefined
     return html`
       <ld-dashboard-visual-frame
         data-canvas-visual
@@ -336,7 +346,9 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
         data-y=${component.y}
         data-w=${component.width}
         data-h=${component.height}
+        data-component-status-key=${statusKey || nothing}
         .transparent=${component.kind === 'header'}
+        .refreshStatus=${componentRefreshStatus}
       >
         ${this.renderComponentContent(component)}
       </ld-dashboard-visual-frame>
@@ -401,7 +413,10 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
   private renderTable(component: DashboardComponentSignal) {
     const table = component.table ? this.tables[component.table] : undefined
     if (!table) return this.missingPayload('table')
-    return html`<ld-report-table table-id=${component.table ?? ''} .table=${table}></ld-report-table>`
+    return html`<ld-report-table table-id=${component.table ?? ''} .table=${{
+      ...table,
+      selection: canonicalSelectionEntriesForSource(this.filters.selections, 'table', component.table ?? ''),
+    }}></ld-report-table>`
   }
 
   private renderFilterDock() {
@@ -420,7 +435,27 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
   }
 
   private visualFor(component: DashboardComponentSignal): DashboardVisual | undefined {
-    return component.visual ? this.visuals[component.visual] : undefined
+    const visual = component.visual ? this.visuals[component.visual] : undefined
+    if (!visual) return undefined
+    return {
+      ...visual,
+      selection: canonicalSelectionEntriesForSource(this.filters.selections, 'visual', component.visual ?? ''),
+    }
+  }
+
+  private componentStatusKey(component: DashboardComponentSignal): string {
+    if (component.table) return `table:${component.table}`
+    if (component.visual) return `visual:${component.visual}`
+    return ''
+  }
+
+  private refreshStatusFor(key: string): DashboardComponentStatus | undefined {
+    const refreshStatus = this.componentStatus[key]
+    if (!refreshStatus) return undefined
+    return {
+      ...refreshStatus,
+      loading: refreshStatus.loading && refreshStatus.generation === this.status.generation,
+    }
   }
 
   private refreshMaterializations = (): void => {
@@ -445,6 +480,7 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
 
 class DashboardVisualFrame extends LitElement {
   @property({ type: Boolean, reflect: true }) transparent = false
+  @property({ type: Object, attribute: false }) refreshStatus?: DashboardComponentStatus
 
   static styles = css`
     :host {
@@ -457,6 +493,7 @@ class DashboardVisualFrame extends LitElement {
     }
 
     .frame {
+      position: relative;
       height: 100%;
       min-width: 0;
       min-height: 0;
@@ -486,10 +523,76 @@ class DashboardVisualFrame extends LitElement {
       width: 100%;
       height: 100%;
     }
+
+    .refresh-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      background: color-mix(in srgb, var(--ld-bg-panel) 78%, transparent);
+      color: var(--ld-fg-muted);
+      padding: var(--base-size-12);
+      box-sizing: border-box;
+      pointer-events: none;
+    }
+
+    .refresh-overlay.error {
+      align-content: center;
+      gap: var(--base-size-4);
+      border: var(--ld-border-danger);
+      background: color-mix(in srgb, var(--ld-bg-danger-muted) 92%, transparent);
+      color: var(--ld-fg-danger);
+      text-align: center;
+    }
+
+    .refresh-overlay strong {
+      font-size: var(--ld-font-size-body-sm);
+      font-weight: var(--ld-font-weight-strong);
+    }
+
+    .refresh-overlay span {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: var(--ld-font-size-caption);
+    }
+
+    .spinner {
+      width: var(--base-size-16);
+      height: var(--base-size-16);
+      border: 2px solid var(--ld-line-muted);
+      border-top-color: var(--ld-fg-link);
+      border-radius: 50%;
+      animation: spin 700ms linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .spinner { animation: none; }
+    }
   `
 
   render() {
-    return html`<article class="frame"><slot></slot></article>`
+    const refreshStatus = this.refreshStatus
+    return html`
+      <article class="frame" aria-busy=${refreshStatus?.loading ? 'true' : 'false'}>
+        <slot></slot>
+        ${refreshStatus?.error ? html`
+          <div class="refresh-overlay error" role="alert">
+            <strong>Could not refresh this component</strong>
+            <span>${refreshStatus.error}</span>
+          </div>
+        ` : refreshStatus?.loading ? html`
+          <div class="refresh-overlay loading" role="status" aria-label="Refreshing component">
+            <span class="spinner" aria-hidden="true"></span>
+          </div>
+        ` : nothing}
+      </article>
+    `
   }
 }
 

@@ -22,6 +22,8 @@ func reportAggregateDataQuery(modelID string, request reportdef.AggregateQuery) 
 
 func reportRowDataQuery(modelID string, request reportdef.RowQuery, includeTotal bool) dataquery.Query {
 	return dataquery.Query{
+		Surface:      dataquery.SurfaceDashboard,
+		Operation:    dataquery.OperationDashboardRows,
 		ModelID:      modelID,
 		Kind:         dataquery.KindSemanticRows,
 		Target:       request.Table,

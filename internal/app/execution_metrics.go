@@ -23,6 +23,10 @@ func (m executionMetrics) executionService() *execution.Service {
 	return m.executor
 }
 
+func (m executionMetrics) readContext(ctx context.Context) context.Context {
+	return execution.WithReadAdmission(ctx, m.executionService())
+}
+
 func (m executionMetrics) MetricsForWorkspace(workspaceID string) (QueryMetrics, bool) {
 	provider, ok := m.QueryMetrics.(workspaceMetrics)
 	if ok {
@@ -46,16 +50,7 @@ func (m executionMetrics) QueryDashboard(ctx context.Context, dashboardID string
 }
 
 func (m executionMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
-	var patch dashboard.Patch
-	var runErr error
-	_, err := m.executionService().SubmitRead(ctx, dataquery.Query{Kind: dataquery.KindSemanticAggregate}, func(ctx context.Context) (dataquery.Result, error) {
-		patch, runErr = m.QueryMetrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
-		return dataquery.Result{}, runErr
-	})
-	if err != nil {
-		return dashboard.EmptyPatch(filters.WithDefaults(), m.QueryMetrics.DataDir(), err), nil
-	}
-	return patch, runErr
+	return m.QueryMetrics.QueryDashboardPage(m.readContext(ctx), dashboardID, pageID, filters)
 }
 
 func (m executionMetrics) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
@@ -63,48 +58,21 @@ func (m executionMetrics) QueryTable(ctx context.Context, dashboardID string, fi
 }
 
 func (m executionMetrics) QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
-	var table dashboard.Table
-	var runErr error
-	_, err := m.executionService().SubmitRead(ctx, dataquery.Query{Kind: dataquery.KindSemanticRows}, func(ctx context.Context) (dataquery.Result, error) {
-		table, runErr = m.QueryMetrics.QueryTablePage(ctx, dashboardID, pageID, filters, request)
-		return dataquery.Result{}, runErr
-	})
-	if err != nil {
-		return dashboard.EmptyTable(request.WithDefaults(), err), nil
-	}
-	return table, runErr
+	return m.QueryMetrics.QueryTablePage(m.readContext(ctx), dashboardID, pageID, filters, request)
 }
 
 func (m executionMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
-	return m.executionService().SubmitRead(ctx, request, func(ctx context.Context) (dataquery.Result, error) {
+	return execution.SubmitReadFromContext(m.readContext(ctx), request, func(ctx context.Context) (dataquery.Result, error) {
 		return m.QueryMetrics.ExecuteDataQuery(ctx, request)
 	})
 }
 
 func (m executionMetrics) QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
-	var rows reportdef.QueryRows
-	var runErr error
-	_, err := m.executionService().SubmitRead(ctx, dataquery.Query{ModelID: modelID, Kind: dataquery.KindSemanticAggregate}, func(ctx context.Context) (dataquery.Result, error) {
-		rows, runErr = m.QueryMetrics.QuerySemantic(ctx, modelID, request)
-		return dataquery.Result{}, runErr
-	})
-	if err != nil {
-		return nil, err
-	}
-	return rows, runErr
+	return m.QueryMetrics.QuerySemantic(m.readContext(ctx), modelID, request)
 }
 
 func (m executionMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
-	var rows reportdef.QueryRows
-	var runErr error
-	_, err := m.executionService().SubmitRead(ctx, dataquery.Query{ModelID: modelID, Kind: dataquery.KindSemanticRows}, func(ctx context.Context) (dataquery.Result, error) {
-		rows, runErr = m.QueryMetrics.PreviewSemantic(ctx, modelID, request)
-		return dataquery.Result{}, runErr
-	})
-	if err != nil {
-		return nil, err
-	}
-	return rows, runErr
+	return m.QueryMetrics.PreviewSemantic(m.readContext(ctx), modelID, request)
 }
 
 func (m executionMetrics) RefreshModelTables(ctx context.Context, modelID string, tableNames []string) error {

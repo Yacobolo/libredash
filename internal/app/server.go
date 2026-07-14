@@ -15,6 +15,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	queryauthz "github.com/Yacobolo/libredash/internal/analytics/query/authz"
 	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
+	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 	"github.com/Yacobolo/libredash/internal/execution"
 	"github.com/Yacobolo/libredash/internal/platform"
 	queryauditsqlite "github.com/Yacobolo/libredash/internal/queryaudit/sqlite"
@@ -66,6 +67,7 @@ type Server struct {
 	metrics             QueryMetrics
 	executor            *execution.Service
 	broker              *pagestream.Broker
+	dashboardRefreshes  *dashboardstream.Registry
 	store               *platform.Store
 	servingStateRepo    servingStateRepository
 	workspaceRepo       workspace.Repository
@@ -103,12 +105,13 @@ type Server struct {
 
 func New(metrics QueryMetrics) *Server {
 	return &Server{
-		metrics:           metrics,
-		broker:            pagestream.NewBroker(),
-		requestBodyLimit:  DefaultRequestBodyLimitConfig(),
-		telemetry:         newHTTPTelemetry(),
-		logger:            slog.Default(),
-		pendingChatTitles: map[string]struct{}{},
+		metrics:            metrics,
+		broker:             pagestream.NewBroker(),
+		dashboardRefreshes: dashboardstream.NewRegistry(),
+		requestBodyLimit:   DefaultRequestBodyLimitConfig(),
+		telemetry:          newHTTPTelemetry(),
+		logger:             slog.Default(),
+		pendingChatTitles:  map[string]struct{}{},
 	}
 }
 
@@ -430,7 +433,15 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 			}
 			return selected, true
 		},
-		Broker: s.broker,
+		Broker:       s.broker,
+		Coordinators: s.dashboardRefreshes,
+		Logger:       s.logger,
+		RefreshStarted: func(refresh dashboardstream.Refresh) {
+			s.telemetry.dashboardRefreshStarted(refresh.Command)
+		},
+		RefreshFinished:      s.telemetry.dashboardRefreshFinished,
+		RefreshEventObserved: s.telemetry.dashboardRefreshEventObserved,
+		CacheObserved:        s.telemetry.dashboardCacheObserved,
 		CurrentPrincipalID: func(r *http.Request) string {
 			principal, ok := principalFromContext(r.Context())
 			if !ok {

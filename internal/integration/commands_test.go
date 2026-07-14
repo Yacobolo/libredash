@@ -33,7 +33,7 @@ func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {
 				t.Helper()
 				requireStatusLoading(t, patches, true)
 				requireSelection(t, patches, "orders_table", "orders.status", "delivered")
-				requireTable(t, patches, "orders_table")
+				requireVisual(t, patches, "category_revenue")
 			},
 		},
 		{
@@ -49,7 +49,7 @@ func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {
 				t.Helper()
 				requireStatusLoading(t, patches, true)
 				requireNoSelection(t, patches)
-				requireTable(t, patches, "orders_table")
+				requireVisual(t, patches, "category_revenue")
 			},
 		},
 		{
@@ -80,12 +80,21 @@ func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			stream := h.openUpdatesStream(t, "executive-sales", "overview", runtimeSignals(clientIDFromSignals(tt.signals), "overview"))
 			drainInitialSnapshot(t, stream)
+			if tt.path == "/commands/clear-selection" {
+				primeSignals := mergeSignals(runtimeSignals(clientIDFromSignals(tt.signals), "overview"), map[string]any{
+					"interactionCommand": ordersRowSelectionCommand("delivered"),
+				})
+				if got := h.postCommand(t, "/commands/select", primeSignals); got != http.StatusNoContent {
+					t.Fatalf("prime selection status = %d, want %d", got, http.StatusNoContent)
+				}
+				_ = nextRefreshPatches(t, stream)
+			}
 
 			if got := h.postCommand(t, tt.path, tt.signals); got != http.StatusNoContent {
 				t.Fatalf("status = %d, want %d", got, http.StatusNoContent)
 			}
 
-			tt.assert(t, nextPatches(t, stream, 3))
+			tt.assert(t, nextRefreshPatches(t, stream))
 		})
 	}
 }
@@ -102,10 +111,12 @@ func TestTableWindowCommandPublishesOnlyRequestedTablePatch(t *testing.T) {
 		t.Fatalf("status = %d, want %d", status, http.StatusNoContent)
 	}
 
-	patch := stream.nextPatch(t)
-	requireTableBlock(t, []map[string]any{patch}, "orders_table", "a", 0, 7)
-	if hasKey(patch, "status") || hasKey(patch, "visuals") || hasKey(patch, "filters") {
-		t.Fatalf("table-window command streamed non-table patch: %#v", patch)
+	patches := nextRefreshPatches(t, stream)
+	requireTableBlock(t, patches, "orders_table", "a", 0, 7)
+	for _, patch := range patches {
+		if hasKey(patch, "visuals") || hasKey(patch, "filterOptions") {
+			t.Fatalf("table-window command streamed non-target data: %#v", patch)
+		}
 	}
 	stream.expectNoPatch(t, 150*time.Millisecond)
 }
@@ -124,7 +135,13 @@ func TestTableWindowCommandDoesNotPublishCanceledTablePatch(t *testing.T) {
 		t.Fatalf("status = %d, want %d", status, http.StatusNoContent)
 	}
 
-	stream.expectNoPatch(t, 500*time.Millisecond)
+	patches := nextRefreshPatches(t, stream)
+	for _, patch := range patches {
+		if hasKey(patch, "tables") {
+			t.Fatalf("canceled table-window command streamed table data: %#v", patch)
+		}
+	}
+	requireStatusLoading(t, patches, false)
 }
 
 func TestRefreshMaterializationsCommandIsRemoved(t *testing.T) {
@@ -232,21 +249,32 @@ func tableHasSnapshot(patch map[string]any, tableID string) bool {
 	return hasKey(table, "blocks")
 }
 
-func nextPatches(t *testing.T, stream *streamClient, count int) []map[string]any {
+func nextRefreshPatches(t *testing.T, stream *streamClient) []map[string]any {
 	t.Helper()
-	patches := make([]map[string]any, 0, count)
-	for i := 0; i < count; i++ {
-		patches = append(patches, stream.nextPatch(t))
+	patches := []map[string]any{}
+	var generation float64
+	for {
+		patch := stream.nextPatch(t)
+		patches = append(patches, patch)
+		status := mapAt(patch, "status")
+		loading, hasLoading := status["loading"].(bool)
+		currentGeneration, _ := status["generation"].(float64)
+		if hasLoading && loading && currentGeneration > 0 && generation == 0 {
+			generation = currentGeneration
+		}
+		if hasLoading && !loading && generation > 0 && currentGeneration == generation {
+			return patches
+		}
 	}
-	return patches
 }
 
 func runtimeSignals(clientID, pageID string) map[string]any {
 	return map[string]any{
 		"runtime": map[string]any{
-			"clientId":    clientID,
-			"dashboardId": "executive-sales",
-			"pageId":      pageID,
+			"clientId":         clientID,
+			"dashboardId":      "executive-sales",
+			"pageId":           pageID,
+			"streamInstanceId": clientID + "-stream",
 		},
 	}
 }
@@ -255,6 +283,12 @@ func clientIDFromSignals(signals map[string]any) string {
 	runtime, _ := signals["runtime"].(map[string]any)
 	clientID, _ := runtime["clientId"].(string)
 	return clientID
+}
+
+func streamInstanceIDFromSignals(signals map[string]any) string {
+	runtime, _ := signals["runtime"].(map[string]any)
+	streamInstanceID, _ := runtime["streamInstanceId"].(string)
+	return streamInstanceID
 }
 
 func ordersRowSelectionCommand(status string) map[string]any {

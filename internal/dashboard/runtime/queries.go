@@ -40,6 +40,18 @@ func (m *Service) QueryDashboardPage(ctx context.Context, dashboardID, pageID st
 	return m.queries.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 }
 
+func (m *Service) QueryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
+	return m.queries.QueryVisualPage(ctx, dashboardID, pageID, filters, visualID)
+}
+
+func (m *Service) QueryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	return m.queries.QueryVisualsPage(ctx, dashboardID, pageID, filters, visualIDs)
+}
+
+func (m *Service) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
+	return m.queries.QueryFilterOptionsPage(ctx, dashboardID, pageID, filterIDs)
+}
+
 func (m *Service) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	return m.queries.QueryTable(ctx, dashboardID, filters, request)
 }
@@ -54,6 +66,18 @@ func (s *QueryService) QueryDashboard(ctx context.Context, dashboardID string, f
 
 func (s *QueryService) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	return s.snapshots.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+}
+
+func (s *QueryService) QueryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
+	return s.snapshots.QueryVisualPage(ctx, dashboardID, pageID, filters, visualID)
+}
+
+func (s *QueryService) QueryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	return s.snapshots.QueryVisualsPage(ctx, dashboardID, pageID, filters, visualIDs)
+}
+
+func (s *QueryService) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
+	return s.snapshots.QueryFilterOptionsPage(ctx, dashboardID, pageID, filterIDs)
 }
 
 func (s *QueryService) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
@@ -110,6 +134,62 @@ func (s *SnapshotService) QueryDashboardPage(ctx context.Context, dashboardID, p
 	patch.Visuals = visuals
 
 	return patch, nil
+}
+
+func (s *SnapshotService) QueryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
+	visuals, err := s.QueryVisualsPage(ctx, dashboardID, pageID, filters, []string{visualID})
+	if err != nil {
+		return dashboard.Visual{}, err
+	}
+	return visuals[visualID], nil
+}
+
+func (s *SnapshotService) QueryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	report, runtime, err := s.reports.reportRuntime(dashboardID, s.runtimes)
+	if err != nil {
+		return nil, err
+	}
+	if !runtime.ready {
+		return nil, runtime.missing
+	}
+	page := dashboardPage(report, pageID)
+	filters = report.NormalizeFiltersForPage(page.ID, filters)
+	pageIDs := pageVisualIDs(page)
+	for _, visualID := range visualIDs {
+		if !contains(pageIDs, visualID) {
+			return nil, fmt.Errorf("visual %q is not on page %q", visualID, page.ID)
+		}
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.visuals.visuals(ctx, runtime, report, filters, append([]string{}, visualIDs...))
+}
+
+func (s *SnapshotService) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
+	report, runtime, err := s.reports.reportRuntime(dashboardID, s.runtimes)
+	if err != nil {
+		return nil, err
+	}
+	if !runtime.ready {
+		return nil, runtime.missing
+	}
+	page := dashboardPage(report, pageID)
+	pageFilterIDs := report.PageFilterIDs(page.ID)
+	allowed := make(map[string]struct{}, len(pageFilterIDs))
+	for _, filterID := range pageFilterIDs {
+		allowed[filterID] = struct{}{}
+	}
+	if len(filterIDs) == 0 {
+		filterIDs = pageFilterIDs
+	}
+	for _, filterID := range filterIDs {
+		if _, ok := allowed[filterID]; !ok {
+			return nil, fmt.Errorf("filter %q is not on page %q", filterID, page.ID)
+		}
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.filters.filterOptions(ctx, runtime, report, filterIDs)
 }
 
 func dashboardPage(report *reportdef.Dashboard, pageID string) dashboard.Page {
@@ -173,17 +253,39 @@ func (s *TableQueryService) QueryTablePage(ctx context.Context, dashboardID, pag
 	if tableModel.KindOrDefault() == "matrix_table" || tableModel.KindOrDefault() == "pivot_table" {
 		return s.queryAggregateTable(ctx, runtime, report, request, tableModel, filters)
 	}
+	return s.queryDataTableWindow(ctx, runtime, report, request, tableModel, filters)
+}
 
-	totalRows, err := s.filters.countRows(ctx, runtime, report, tableModel.Query.Table, filters, "table", request.Table)
+func (s *TableQueryService) queryDataTableWindow(ctx context.Context, runtime *modelRuntime, report *reportdef.Dashboard, request dashboard.TableRequest, tableModel reportdef.TableVisual, filters dashboard.Filters) (dashboard.Table, error) {
+	count := request.Count
+	if count <= 0 {
+		count = dashboard.TableChunkSize
+	}
+	if count > dashboard.TableMaxRequestCount {
+		count = dashboard.TableMaxRequestCount
+	}
+	start := request.Start
+	if request.Block == "all" {
+		start = 0
+	}
+	rowRequest, err := s.tableRowRequest(ctx, runtime, report, tableModel, filters, request, start, count)
 	if err != nil {
 		return dashboard.EmptyTable(request, err), nil
+	}
+	result, err := runtime.data.ExecuteDataQuery(ctx, reportRowDataQuery(report.SemanticModel, rowRequest, true))
+	if err != nil {
+		return dashboard.EmptyTable(request, err), nil
+	}
+	totalRows := result.TotalRows
+	if !result.TotalRowsKnown {
+		return dashboard.EmptyTable(request, fmt.Errorf("initial table query did not return total rows")), nil
 	}
 	availableRows := min(totalRows, dashboard.TableInteractiveRowCap)
-	blocks, err := s.tableBlocks(ctx, runtime, report, tableModel, filters, request, availableRows)
-	if err != nil {
-		return dashboard.EmptyTable(request, err), nil
+	rows := tableRowsFromAnalytics(reportRowsFromDataQuery(result.Rows))
+	block := request.Block
+	if block == "all" {
+		block = "a"
 	}
-
 	style := tableModel.Style.WithDefaults()
 	return dashboard.Table{
 		Version:       2,
@@ -191,7 +293,7 @@ func (s *TableQueryService) QueryTablePage(ctx context.Context, dashboardID, pag
 		Title:         tableModel.Title,
 		Style:         style,
 		Interaction:   tableInteractionConfig(tableModel.Interaction.RowSelection),
-		Selection:     selectedEntries(filters, "table", request.Table),
+		Selection:     []dashboard.InteractionSelectionEntry{},
 		Columns:       tableModel.Columns,
 		TotalRows:     totalRows,
 		AvailableRows: availableRows,
@@ -201,9 +303,11 @@ func (s *TableQueryService) QueryTablePage(ctx context.Context, dashboardID, pag
 		RowHeight:     style.RowHeight(),
 		ResetVersion:  request.ResetVersion,
 		Sort:          request.Sort,
-		Blocks:        blocks,
-		LoadingBlock:  "",
-		Error:         "",
+		Blocks: map[string]dashboard.TableBlock{
+			block: {Start: start, RequestSeq: request.RequestSeq, ResetVersion: request.ResetVersion, Sort: request.Sort, Rows: rows},
+		},
+		LoadingBlock: "",
+		Error:        "",
 	}, nil
 }
 

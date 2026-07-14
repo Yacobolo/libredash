@@ -207,7 +207,7 @@ func ChatTranscriptItem(item agent.ChatTranscriptItem) ChatTranscriptItemSignal 
 	return out
 }
 
-func DashboardInitialEnvelope(dataDir, clientID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {
+func DashboardInitialEnvelope(dataDir, clientID, streamInstanceID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {
 	activePage = activePage.WithDefaults()
 	tableRequest := DefaultTableRequest(report, activePage)
 	initialFilters = report.NormalizeFiltersForPage(activePage.ID, initialFilters).WithDefaults()
@@ -235,12 +235,14 @@ func DashboardInitialEnvelope(dataDir, clientID string, catalog dashboard.Catalo
 			Components:     dashboardComponents(activePage),
 		},
 		Runtime: RouteRuntimeSignal{
-			Kind:        RouteDashboard,
-			ClientID:    optionalValue(clientID),
-			DashboardID: optionalValue(report.ID),
-			PageID:      optionalValue(activePage.ID),
-			ModelID:     optionalValue(modelID),
+			Kind:             RouteDashboard,
+			ClientID:         optionalValue(clientID),
+			StreamInstanceID: optionalValue(streamInstanceID),
+			DashboardID:      optionalValue(report.ID),
+			PageID:           optionalValue(activePage.ID),
+			ModelID:          optionalValue(modelID),
 		},
+		ComponentStatus:    map[string]DashboardComponentStatus{},
 		FilterConfig:       ReportFilterConfigsFromReport(report.FilterConfigForPage(activePage.ID)),
 		Filters:            DashboardFiltersFromDashboard(initialFilters),
 		URLParams:          report.URLParamsFromFiltersForPage(activePage.ID, initialFilters),

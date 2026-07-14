@@ -17,6 +17,7 @@
     "test:app-shell": "playwright install chromium && bun scripts/build_test_assets.ts app-shell && bun test web/components/app/app-shell.dom.test.ts",
     "test:table-selection": "bun test web/components/dashboard/table/selection.test.ts",
     "test:interaction-selection": "bun test web/components/dashboard/charts/interactions.test.ts web/components/dashboard/charts/echarts-graph-selection.test.ts web/components/dashboard/table/selection.test.ts web/components/dashboard/filters/filter-url.test.ts",
+    "test:movielens-performance-harness": "bun test scripts/movielens_performance.test.ts",
     "test:visual-modal": "playwright install chromium && bun scripts/build_test_assets.ts visual-modal && bun test web/components/dashboard/visual-modal-focus.test.ts web/components/dashboard/visual-modal.dom.test.ts",
     "test:catalog-page": "playwright install chromium && bun scripts/build_test_assets.ts catalog-page && bun test web/components/app/catalog-page.dom.test.ts",
     "test:dashboard-page": "playwright install chromium && bun scripts/build_test_assets.ts dashboard-page && bun test web/components/dashboard/dashboard-page.dom.test.ts",
@@ -35,7 +36,8 @@
     "test:record-table": "playwright install chromium && bun scripts/build_test_assets.ts record-table && bun test web/components/shared/record-table.dom.test.ts",
     "test:asset-lineage": "playwright install chromium && bun scripts/build_test_assets.ts asset-lineage && bun test web/components/shared/asset-lineage-graph.dom.test.ts",
     "test:semantic-model-graph": "playwright install chromium && bun scripts/build_test_assets.ts semantic-model-graph && bun test web/components/shared/semantic-model-graph.dom.test.ts",
-    "qa:datastar-lit-routes": "playwright install chromium && bun scripts/datastar_lit_route_qa.ts"
+    "qa:datastar-lit-routes": "playwright install chromium && bun scripts/datastar_lit_route_qa.ts",
+    "qa:movielens-performance": "playwright install chromium && bun scripts/movielens_performance.ts"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.2.8",

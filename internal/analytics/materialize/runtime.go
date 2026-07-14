@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
 	"github.com/Yacobolo/libredash/internal/configspec"
 	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/libredash/internal/execution"
 )
 
 type RuntimeConfig struct {
@@ -42,6 +44,7 @@ type Runtime struct {
 	db          Database
 	sources     SourceRegistrar
 	queries     *semanticquery.Service
+	optionCache *queryResultCache
 	lastRefresh time.Time
 }
 
@@ -86,12 +89,13 @@ func NewRuntimeView(ctx context.Context, config RuntimeConfig) (*Runtime, error)
 		return nil, err
 	}
 	runtime := &Runtime{
-		modelID: config.ModelID,
-		model:   config.Model,
-		dataDir: config.DataDir,
-		db:      config.Database,
-		sources: config.Sources,
-		queries: semanticquery.NewService(semanticquery.NewPlanner(config.Model), config.Database),
+		modelID:     config.ModelID,
+		model:       config.Model,
+		dataDir:     config.DataDir,
+		db:          config.Database,
+		sources:     config.Sources,
+		queries:     semanticquery.NewService(semanticquery.NewPlanner(config.Model), config.Database),
+		optionCache: newQueryResultCache(256),
 	}
 	return runtime, nil
 }
@@ -175,31 +179,86 @@ func (r *Runtime) ExecuteDataQuery(ctx context.Context, request dataquery.Query)
 	if err := request.Validate(); err != nil {
 		return dataquery.Result{}, err
 	}
-	execute := func() (dataquery.Result, error) {
+	executePhysical := func(execCtx context.Context) (dataquery.Result, error) {
+		execCtx, connectionWait := dataquery.WithConnectionWaitCounter(execCtx)
+		var result dataquery.Result
+		var err error
 		switch request.Kind {
 		case dataquery.KindSemanticAggregate:
-			return r.executeSemanticAggregate(ctx, request)
+			result, err = r.executeSemanticAggregate(execCtx, request)
 		case dataquery.KindSemanticRows:
-			return r.executeSemanticRows(ctx, request)
+			result, err = r.executeSemanticRows(execCtx, request)
 		case dataquery.KindModelTableRows:
-			return r.executeModelTableRows(ctx, request)
+			result, err = r.executeModelTableRows(execCtx, request)
 		case dataquery.KindSourceRows:
-			return r.executeSourceRows(ctx, request)
+			result, err = r.executeSourceRows(execCtx, request)
 		case dataquery.KindSemanticHistogram:
-			return r.executeSemanticHistogram(ctx, request)
+			result, err = r.executeSemanticHistogram(execCtx, request)
 		case dataquery.KindSemanticDistribution:
-			return r.executeSemanticDistribution(ctx, request)
+			result, err = r.executeSemanticDistribution(execCtx, request)
 		default:
 			return dataquery.Result{}, fmt.Errorf("unsupported data query kind %q", request.Kind)
 		}
+		waitMS := connectionWait.Duration().Milliseconds()
+		result.ConnectionWaitMS += waitMS
+		if waitMS >= result.DatabaseMS {
+			result.DatabaseMS = 0
+		} else {
+			result.DatabaseMS -= waitMS
+		}
+		return result, err
 	}
-	result, err := execute()
+	execute := func() (dataquery.Result, error) {
+		execCtx, statements := withPhysicalStatementCounter(ctx)
+		result, err := execution.SubmitReadFromContext(execCtx, request, executePhysical)
+		if count := int(statements.Load()); count > 0 {
+			dataquery.ObservePhysicalQuery(ctx, dataquery.PhysicalQueryObservation{Count: count, Result: result})
+		}
+		return result, err
+	}
+	var (
+		result dataquery.Result
+		err    error
+	)
+	if request.Operation == dataquery.OperationDashboardFilterOptions {
+		result, err = r.optionCache.execute(ctx, request, execute)
+		observeFilterOptionCacheOutcome(ctx, result, err)
+	} else {
+		result, err = execute()
+	}
 	if transform != nil {
 		if transformErr := transform(&result, err); transformErr != nil {
 			return dataquery.Result{Status: dataquery.StatusError, ExecutionState: dataquery.ExecutionRejected, Error: transformErr.Error()}, transformErr
 		}
 	}
 	return result, err
+}
+
+type physicalStatementCounterContextKey struct{}
+
+func withPhysicalStatementCounter(ctx context.Context) (context.Context, *atomic.Int64) {
+	counter := &atomic.Int64{}
+	return context.WithValue(ctx, physicalStatementCounterContextKey{}, counter), counter
+}
+
+func markPhysicalStatement(ctx context.Context) {
+	if counter, ok := ctx.Value(physicalStatementCounterContextKey{}).(*atomic.Int64); ok && counter != nil {
+		counter.Add(1)
+	}
+}
+
+func observeFilterOptionCacheOutcome(ctx context.Context, result dataquery.Result, err error) {
+	outcome := result.CacheOutcome
+	if err != nil {
+		outcome = dataquery.CacheError
+	}
+	dataquery.ObserveCacheOutcome(ctx, outcome)
+}
+
+func (r *Runtime) ClearQueryCache() {
+	if r != nil && r.optionCache != nil {
+		r.optionCache.clear()
+	}
 }
 
 func (r *Runtime) executeSemanticAggregate(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
@@ -214,29 +273,39 @@ func (r *Runtime) executeSemanticAggregate(ctx context.Context, request dataquer
 		Limit:       request.Limit,
 		Offset:      request.Offset,
 	}
+	planningStarted := time.Now()
 	plan, err := semanticquery.NewPlanner(r.model).Plan(semanticRequest)
+	planningMS := elapsedStageMS(planningStarted)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
+	databaseStarted := time.Now()
+	markPhysicalStatement(ctx)
 	rows, err := r.db.Query(ctx, plan)
+	databaseMS := elapsedStageMS(databaseStarted)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
-	return dataquery.Result{Columns: dataquery.ColumnsFromNames(plan.Columns), Rows: dataQueryRows(rows), SQL: plan.SQL}, nil
+	return dataquery.Result{Columns: dataquery.ColumnsFromNames(plan.Columns), Rows: dataQueryRows(rows), SQL: plan.SQL, PlanningMS: planningMS, DatabaseMS: databaseMS}, nil
 }
 
 func (r *Runtime) executeSemanticRows(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
 	planner := semanticquery.NewPlanner(r.model)
 	if len(request.Fields) == 0 && len(request.Measures) == 0 && request.IncludeTotal {
+		planningStarted := time.Now()
 		countPlan, err := planner.PlanCount(semanticquery.CountRequest{Table: request.Target, Filters: dataQueryFilters(request.Filters)})
+		planningMS := elapsedStageMS(planningStarted)
 		if err != nil {
 			return dataquery.Result{}, err
 		}
+		databaseStarted := time.Now()
+		markPhysicalStatement(ctx)
 		total, err := r.db.Count(ctx, countPlan)
+		databaseMS := elapsedStageMS(databaseStarted)
 		if err != nil {
 			return dataquery.Result{}, err
 		}
-		return dataquery.Result{TotalRows: total, TotalRowsKnown: true, SQL: countPlan.SQL}, nil
+		return dataquery.Result{TotalRows: total, TotalRowsKnown: true, SQL: countPlan.SQL, PlanningMS: planningMS, DatabaseMS: databaseMS}, nil
 	}
 	semanticRequest := semanticquery.RowRequest{
 		Table:       request.Target,
@@ -248,31 +317,93 @@ func (r *Runtime) executeSemanticRows(ctx context.Context, request dataquery.Que
 		Limit:       request.Limit,
 		Offset:      request.Offset,
 	}
+	planningStarted := time.Now()
 	plan, err := planner.PlanRows(semanticRequest)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
+	if request.IncludeTotal {
+		plan, err = rowPlanWithTotal(plan)
+		if err != nil {
+			return dataquery.Result{}, err
+		}
+	}
+	planningMS := elapsedStageMS(planningStarted)
+	databaseStarted := time.Now()
+	markPhysicalStatement(ctx)
 	rows, err := r.db.Query(ctx, plan)
+	databaseMS := elapsedStageMS(databaseStarted)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
-	result := dataquery.Result{Columns: dataquery.ColumnsFromNames(plan.Columns), Rows: dataQueryRows(rows), SQL: plan.SQL}
+	result := dataquery.Result{Columns: dataquery.ColumnsFromNames(plan.Columns), Rows: dataQueryRows(rows), SQL: plan.SQL, PlanningMS: planningMS, DatabaseMS: databaseMS}
 	if request.IncludeTotal {
-		countPlan, err := planner.PlanCount(semanticquery.CountRequest{Table: request.Target, Filters: dataQueryFilters(request.Filters)})
-		if err != nil {
-			return dataquery.Result{}, err
+		if len(result.Rows) > 0 {
+			result.TotalRows = intFromDataQueryValue(result.Rows[0][totalRowsColumn])
+			result.TotalRowsKnown = true
+		} else if request.Offset == 0 {
+			result.TotalRowsKnown = true
 		}
-		total, err := r.db.Count(ctx, countPlan)
-		if err != nil {
-			return dataquery.Result{}, err
+		for _, row := range result.Rows {
+			delete(row, totalRowsColumn)
 		}
-		result.TotalRows = total
-		result.TotalRowsKnown = true
+		result.Columns = dataquery.ColumnsFromNames(plan.Columns[:len(plan.Columns)-1])
+		if !result.TotalRowsKnown {
+			planningStarted = time.Now()
+			countPlan, err := planner.PlanCount(semanticquery.CountRequest{Table: request.Target, Filters: dataQueryFilters(request.Filters)})
+			result.PlanningMS += elapsedStageMS(planningStarted)
+			if err != nil {
+				return dataquery.Result{}, err
+			}
+			databaseStarted = time.Now()
+			markPhysicalStatement(ctx)
+			total, err := r.db.Count(ctx, countPlan)
+			result.DatabaseMS += elapsedStageMS(databaseStarted)
+			if err != nil {
+				return dataquery.Result{}, err
+			}
+			result.TotalRows = total
+			result.TotalRowsKnown = true
+		}
 	}
 	return result, nil
 }
 
+const totalRowsColumn = "__libredash_total_rows"
+
+func rowPlanWithTotal(plan semanticquery.Plan) (semanticquery.Plan, error) {
+	from := strings.Index(plan.SQL, "\nFROM ")
+	if from < 0 {
+		return semanticquery.Plan{}, fmt.Errorf("row query plan has no FROM clause")
+	}
+	plan.SQL = plan.SQL[:from] + ", COUNT(*) OVER () AS " + totalRowsColumn + plan.SQL[from:]
+	plan.Columns = append(append([]string{}, plan.Columns...), totalRowsColumn)
+	return plan, nil
+}
+
+func intFromDataQueryValue(value any) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int32:
+		return int(typed)
+	case int64:
+		return int(typed)
+	case uint:
+		return int(typed)
+	case uint32:
+		return int(typed)
+	case uint64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	default:
+		return 0
+	}
+}
+
 func (r *Runtime) executeModelTableRows(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	planningStarted := time.Now()
 	plan, err := r.modelTableQueryPlan(ModelTableQuery{
 		Table:       request.Target,
 		Columns:     dataquery.FieldNames(request.Fields),
@@ -284,13 +415,19 @@ func (r *Runtime) executeModelTableRows(ctx context.Context, request dataquery.Q
 	if err != nil {
 		return dataquery.Result{}, err
 	}
+	planningMS := elapsedStageMS(planningStarted)
+	databaseStarted := time.Now()
+	markPhysicalStatement(ctx)
 	rows, err := r.db.Query(ctx, plan)
+	databaseMS := elapsedStageMS(databaseStarted)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
-	result := dataquery.Result{Columns: dataquery.ColumnsFromNames(plan.Columns), Rows: dataQueryRows(rows), SQL: plan.SQL}
+	result := dataquery.Result{Columns: dataquery.ColumnsFromNames(plan.Columns), Rows: dataQueryRows(rows), SQL: plan.SQL, PlanningMS: planningMS, DatabaseMS: databaseMS}
 	if request.IncludeTotal {
+		databaseStarted = time.Now()
 		total, err := r.CountModelTable(ctx, request.Target)
+		result.DatabaseMS += elapsedStageMS(databaseStarted)
 		if err != nil {
 			return dataquery.Result{}, err
 		}
@@ -301,6 +438,7 @@ func (r *Runtime) executeModelTableRows(ctx context.Context, request dataquery.Q
 }
 
 func (r *Runtime) executeSourceRows(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
+	planningStarted := time.Now()
 	source, ok := sourceInModel(r.model, request.Target)
 	if !ok {
 		return dataquery.Result{}, fmt.Errorf("source %q is not available in semantic model %q", request.Target, r.modelID)
@@ -324,13 +462,20 @@ func (r *Runtime) executeSourceRows(ctx context.Context, request dataquery.Query
 	if err != nil {
 		return dataquery.Result{}, err
 	}
+	planningMS := elapsedStageMS(planningStarted)
+	databaseStarted := time.Now()
+	markPhysicalStatement(ctx)
 	rows, err := r.db.Query(ctx, plan)
+	databaseMS := elapsedStageMS(databaseStarted)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
-	result := dataquery.Result{Columns: dataquery.ColumnsFromNames(plan.Columns), Rows: dataQueryRows(rows), SQL: plan.SQL}
+	result := dataquery.Result{Columns: dataquery.ColumnsFromNames(plan.Columns), Rows: dataQueryRows(rows), SQL: plan.SQL, PlanningMS: planningMS, DatabaseMS: databaseMS}
 	if request.IncludeTotal {
+		databaseStarted = time.Now()
+		markPhysicalStatement(ctx)
 		total, err := r.db.Count(ctx, semanticquery.Plan{SQL: "WITH data AS (" + relation + ")\nSELECT COUNT(*) FROM data", Columns: []string{"count"}})
+		result.DatabaseMS += elapsedStageMS(databaseStarted)
 		if err != nil {
 			return dataquery.Result{}, err
 		}
@@ -348,7 +493,9 @@ func (r *Runtime) executeSemanticHistogram(ctx context.Context, request dataquer
 		Filters:     dataQueryFilters(request.Filters),
 		ColumnMasks: dataQueryColumnMasks(request.ColumnMasks),
 	}
+	planningStarted := time.Now()
 	plan, err := semanticquery.NewPlanner(r.model).PlanRawValues(rawRequest)
+	planningMS := elapsedStageMS(planningStarted)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
@@ -356,10 +503,13 @@ func (r *Runtime) executeSemanticHistogram(ctx context.Context, request dataquer
 	if valueColumn == "" {
 		valueColumn = "value"
 	}
+	databaseStarted := time.Now()
+	markPhysicalStatement(ctx)
 	bins, err := r.db.Histogram(ctx, plan, semanticquery.HistogramSpec{
 		ValueColumn: valueColumn,
 		BinCount:    request.BinCount,
 	})
+	databaseMS := elapsedStageMS(databaseStarted)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
@@ -373,9 +523,11 @@ func (r *Runtime) executeSemanticHistogram(ctx context.Context, request dataquer
 		})
 	}
 	return dataquery.Result{
-		Columns: dataquery.ColumnsFromNames([]string{"bucket", "count", "start", "end"}),
-		Rows:    rows,
-		SQL:     plan.SQL,
+		Columns:    dataquery.ColumnsFromNames([]string{"bucket", "count", "start", "end"}),
+		Rows:       rows,
+		SQL:        plan.SQL,
+		PlanningMS: planningMS,
+		DatabaseMS: databaseMS,
 	}, nil
 }
 
@@ -387,7 +539,9 @@ func (r *Runtime) executeSemanticDistribution(ctx context.Context, request dataq
 		Filters:     dataQueryFilters(request.Filters),
 		ColumnMasks: dataQueryColumnMasks(request.ColumnMasks),
 	}
+	planningStarted := time.Now()
 	plan, err := semanticquery.NewPlanner(r.model).PlanRawValues(rawRequest)
+	planningMS := elapsedStageMS(planningStarted)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
@@ -399,20 +553,33 @@ func (r *Runtime) executeSemanticDistribution(ctx context.Context, request dataq
 	if len(rawRequest.Dimensions) > 0 && rawRequest.Dimensions[0].Alias != "" {
 		groupColumn = rawRequest.Dimensions[0].Alias
 	}
+	databaseStarted := time.Now()
+	markPhysicalStatement(ctx)
 	rows, err := r.db.Distribution(ctx, plan, semanticquery.DistributionSpec{
 		GroupColumn: groupColumn,
 		ValueColumn: valueColumn,
 		Sort:        dataQuerySorts(request.Sort),
 		Limit:       request.Limit,
 	})
+	databaseMS := elapsedStageMS(databaseStarted)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
 	return dataquery.Result{
-		Columns: dataquery.ColumnsFromNames([]string{"label", "min", "q1", "median", "q3", "max"}),
-		Rows:    dataQueryRows(rows),
-		SQL:     plan.SQL,
+		Columns:    dataquery.ColumnsFromNames([]string{"label", "min", "q1", "median", "q3", "max"}),
+		Rows:       dataQueryRows(rows),
+		SQL:        plan.SQL,
+		PlanningMS: planningMS,
+		DatabaseMS: databaseMS,
 	}, nil
+}
+
+func elapsedStageMS(started time.Time) int64 {
+	elapsed := time.Since(started).Milliseconds()
+	if elapsed <= 0 {
+		return 1
+	}
+	return elapsed
 }
 
 func (r *Runtime) CountModelTable(ctx context.Context, tableName string) (int, error) {
@@ -426,6 +593,7 @@ func (r *Runtime) CountModelTable(ctx context.Context, tableName string) (int, e
 	if err != nil {
 		return 0, err
 	}
+	markPhysicalStatement(ctx)
 	return r.db.Count(ctx, semanticquery.Plan{
 		SQL:     "SELECT count(*) FROM model." + quotedTable,
 		Columns: []string{"count"},
@@ -440,6 +608,7 @@ func (r *Runtime) ModelTableRows(ctx context.Context, request ModelTableQuery) (
 	if err != nil {
 		return nil, err
 	}
+	markPhysicalStatement(ctx)
 	return r.db.Query(ctx, plan)
 }
 

@@ -45,6 +45,34 @@ type Stats struct {
 	QueuedJobs   int
 }
 
+type readAdmissionContextKey struct{}
+type readAdmissionAppliedContextKey struct{}
+
+// WithReadAdmission makes a read executor available to lower-level physical
+// query boundaries without consuming a permit for the surrounding dashboard.
+func WithReadAdmission(ctx context.Context, service *Service) context.Context {
+	if service == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, readAdmissionContextKey{}, service)
+}
+
+// SubmitReadFromContext admits exactly one physical read. Nested calls are
+// treated as already admitted so wrappers cannot consume two permits.
+func SubmitReadFromContext(ctx context.Context, query dataquery.Query, execute func(context.Context) (dataquery.Result, error)) (dataquery.Result, error) {
+	if applied, _ := ctx.Value(readAdmissionAppliedContextKey{}).(bool); applied {
+		return execute(ctx)
+	}
+	service, _ := ctx.Value(readAdmissionContextKey{}).(*Service)
+	if service == nil {
+		return execute(ctx)
+	}
+	return service.SubmitRead(ctx, query, func(execCtx context.Context) (dataquery.Result, error) {
+		execCtx = context.WithValue(execCtx, readAdmissionAppliedContextKey{}, true)
+		return execute(execCtx)
+	})
+}
+
 func New(config Config) *Service {
 	config = config.withDefaults()
 	return &Service{

@@ -21,7 +21,7 @@ func TestCommandPatchesAreScopedToClientAndPage(t *testing.T) {
 		t.Fatalf("status = %d, want %d", status, http.StatusNoContent)
 	}
 
-	requireStatusLoading(t, []map[string]any{target.nextPatch(t)}, true)
+	requireStatusLoading(t, nextRefreshPatches(t, target), true)
 	otherClient.expectNoPatch(t, 150*time.Millisecond)
 }
 

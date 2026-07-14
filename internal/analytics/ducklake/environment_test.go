@@ -85,7 +85,7 @@ func TestEnvironmentCommitsAndReadsStableSnapshots(t *testing.T) {
 		t.Fatalf("snapshot2 = %d, want > snapshot1 %d", snapshot2, snapshot1)
 	}
 
-	first, err := OpenSnapshot(ctx, Config{RootDir: dir, SnapshotID: snapshot1})
+	first, err := OpenSnapshot(ctx, Config{RootDir: dir, SnapshotID: snapshot1, MaxReaders: 2})
 	if err != nil {
 		t.Fatalf("open first snapshot: %v", err)
 	}
@@ -109,6 +109,27 @@ func TestEnvironmentCommitsAndReadsStableSnapshots(t *testing.T) {
 	}
 	assertOrder(t, first, 1, "first")
 	assertOrder(t, second, 2, "second")
+	if first.ReadConcurrency() != 2 {
+		t.Fatalf("snapshot read concurrency = %d, want 2", first.ReadConcurrency())
+	}
+	connections := make([]*sql.Conn, 0, 2)
+	for range 2 {
+		connection, err := first.SQLDB().Conn(ctx)
+		if err != nil {
+			t.Fatalf("acquire snapshot reader: %v", err)
+		}
+		connections = append(connections, connection)
+	}
+	for index, connection := range connections {
+		var id int
+		if err := connection.QueryRowContext(ctx, "SELECT id FROM model.orders").Scan(&id); err != nil {
+			t.Fatalf("query snapshot reader %d: %v", index, err)
+		}
+		if id != 1 {
+			t.Fatalf("snapshot reader %d id = %d, want 1", index, id)
+		}
+		connection.Close()
+	}
 
 	if _, err := os.Stat(filepath.Join(dir, "catalog.sqlite")); err != nil {
 		t.Fatalf("catalog.sqlite missing: %v", err)

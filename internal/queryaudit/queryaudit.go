@@ -7,28 +7,31 @@ import (
 )
 
 type EventInput struct {
-	WorkspaceID    string
-	PrincipalID    string
-	Surface        string
-	Operation      string
-	QueryKind      string
-	ModelID        string
-	Target         string
-	ObjectType     string
-	ObjectID       string
-	RequestID      string
-	CorrelationID  string
-	Status         string
-	DurationMS     int64
-	QueueWaitMS    int64
-	ExecutionMS    int64
-	ExecutionState string
-	RowsReturned   int
-	BytesEstimate  int64
-	Error          string
-	SQL            string
-	PlanText       string
-	QueryJSON      string
+	WorkspaceID      string
+	PrincipalID      string
+	Surface          string
+	Operation        string
+	QueryKind        string
+	ModelID          string
+	Target           string
+	ObjectType       string
+	ObjectID         string
+	RequestID        string
+	CorrelationID    string
+	Status           string
+	DurationMS       int64
+	QueueWaitMS      int64
+	PlanningMS       int64
+	ConnectionWaitMS int64
+	DatabaseMS       int64
+	ExecutionMS      int64
+	ExecutionState   string
+	RowsReturned     int
+	BytesEstimate    int64
+	Error            string
+	SQL              string
+	PlanText         string
+	QueryJSON        string
 }
 
 type Event struct {

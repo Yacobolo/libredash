@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { chartInteractionDetailForDatum } from './interactions'
 import { selectedRows } from './utils'
 import type { ChartPayload } from './types'
+import { canonicalSelectionEntriesForSource } from '../interaction-selection'
 
 test('chartInteractionDetailForDatum preserves typed scalar values and mapping identity', () => {
   const detail = chartInteractionDetailForDatum({
@@ -103,4 +104,35 @@ test('selectedRows includes fact, grain, and scalar type in tuple identity', () 
     ],
   }]
   expect(selectedRows(payload).isSelected(payload.data?.[0] ?? {})).toBe(false)
+})
+
+test('canonical selections are projected only to their source component', () => {
+  const selections = [
+    {
+      id: 'visual:ratings:point_selection',
+      sourceKind: 'visual',
+      sourceId: 'ratings',
+      interactionKind: 'point_selection',
+      label: 'One star',
+      order: 1,
+      entries: [{ mappings: [{ field: 'rating_bucket', fact: 'ratings', value: 1 }] }],
+    },
+    {
+      id: 'table:movies:row_selection',
+      sourceKind: 'table',
+      sourceId: 'movies',
+      interactionKind: 'row_selection',
+      label: 'Movie 1',
+      order: 2,
+      entries: [{ mappings: [{ field: 'movies.movie_id', fact: 'movies', value: 1 }] }],
+    },
+  ]
+
+  expect(canonicalSelectionEntriesForSource(selections, 'visual', 'ratings')).toEqual([
+    { mappings: [{ field: 'rating_bucket', fact: 'ratings', value: 1 }] },
+  ])
+  expect(canonicalSelectionEntriesForSource(selections, 'visual', 'movies')).toEqual([])
+  expect(canonicalSelectionEntriesForSource(selections, 'table', 'movies')).toEqual([
+    { mappings: [{ field: 'movies.movie_id', fact: 'movies', value: 1 }] },
+  ])
 })

@@ -164,6 +164,15 @@ type GroupMember struct {
 	CreatedAt   string `json:"created_at"`
 }
 
+type LocalUserCredential struct {
+	PrincipalID        string         `json:"principal_id"`
+	PasswordVerifier   string         `json:"password_verifier"`
+	MustChangePassword int64          `json:"must_change_password"`
+	CreatedAt          string         `json:"created_at"`
+	UpdatedAt          string         `json:"updated_at"`
+	PasswordChangedAt  sql.NullString `json:"password_changed_at"`
+}
+
 type OauthState struct {
 	ID          string `json:"id"`
 	StateHash   string `json:"state_hash"`
@@ -197,30 +206,33 @@ type Principal struct {
 }
 
 type QueryEvent struct {
-	ID             string `json:"id"`
-	WorkspaceID    string `json:"workspace_id"`
-	PrincipalID    string `json:"principal_id"`
-	Surface        string `json:"surface"`
-	Operation      string `json:"operation"`
-	QueryKind      string `json:"query_kind"`
-	ModelID        string `json:"model_id"`
-	Target         string `json:"target"`
-	ObjectType     string `json:"object_type"`
-	ObjectID       string `json:"object_id"`
-	RequestID      string `json:"request_id"`
-	CorrelationID  string `json:"correlation_id"`
-	Status         string `json:"status"`
-	DurationMs     int64  `json:"duration_ms"`
-	QueueWaitMs    int64  `json:"queue_wait_ms"`
-	ExecutionMs    int64  `json:"execution_ms"`
-	ExecutionState string `json:"execution_state"`
-	RowsReturned   int64  `json:"rows_returned"`
-	BytesEstimate  int64  `json:"bytes_estimate"`
-	Error          string `json:"error"`
-	SqlText        string `json:"sql_text"`
-	PlanText       string `json:"plan_text"`
-	QueryJson      string `json:"query_json"`
-	CreatedAt      string `json:"created_at"`
+	ID               string `json:"id"`
+	WorkspaceID      string `json:"workspace_id"`
+	PrincipalID      string `json:"principal_id"`
+	Surface          string `json:"surface"`
+	Operation        string `json:"operation"`
+	QueryKind        string `json:"query_kind"`
+	ModelID          string `json:"model_id"`
+	Target           string `json:"target"`
+	ObjectType       string `json:"object_type"`
+	ObjectID         string `json:"object_id"`
+	RequestID        string `json:"request_id"`
+	CorrelationID    string `json:"correlation_id"`
+	Status           string `json:"status"`
+	DurationMs       int64  `json:"duration_ms"`
+	QueueWaitMs      int64  `json:"queue_wait_ms"`
+	PlanningMs       int64  `json:"planning_ms"`
+	ConnectionWaitMs int64  `json:"connection_wait_ms"`
+	DatabaseMs       int64  `json:"database_ms"`
+	ExecutionMs      int64  `json:"execution_ms"`
+	ExecutionState   string `json:"execution_state"`
+	RowsReturned     int64  `json:"rows_returned"`
+	BytesEstimate    int64  `json:"bytes_estimate"`
+	Error            string `json:"error"`
+	SqlText          string `json:"sql_text"`
+	PlanText         string `json:"plan_text"`
+	QueryJson        string `json:"query_json"`
+	CreatedAt        string `json:"created_at"`
 }
 
 type QuerySnapshotLease struct {

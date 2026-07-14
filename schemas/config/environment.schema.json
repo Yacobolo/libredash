@@ -1424,6 +1424,28 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
+    "LIBREDASH_PERF_ITERATIONS": {
+      "default": "5",
+      "description": "Measured interaction iterations run by the MovieLens performance QA scenario.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "MovieLens performance QA"
+    },
+    "LIBREDASH_PERF_LOG": {
+      "default": ".tmp/dev-server.log",
+      "description": "Development server log consumed by the MovieLens performance QA scenario.",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "MovieLens performance QA"
+    },
+    "LIBREDASH_PERF_OUTPUT": {
+      "default": ".tmp/movielens-performance.json",
+      "description": "JSON output path written by the MovieLens performance QA scenario.",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "MovieLens performance QA"
+    },
     "LIBREDASH_PRODUCTION": {
       "default": "false",
       "description": "Enable production serving and validation behavior.",

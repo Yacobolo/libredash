@@ -82,21 +82,25 @@ type Column struct {
 type Row map[string]any
 
 type Result struct {
-	Columns        []Column
-	Rows           []Row
-	TotalRows      int
-	TotalRowsKnown bool
-	SQL            string
-	PlanText       string
-	DurationMS     int64
-	QueueWaitMS    int64
-	ExecutionMS    int64
-	ExecutionState string
-	RowsReturned   int
-	BytesEstimate  int64
-	Status         string
-	Error          string
-	Warnings       []string
+	Columns          []Column
+	Rows             []Row
+	TotalRows        int
+	TotalRowsKnown   bool
+	SQL              string
+	PlanText         string
+	DurationMS       int64
+	QueueWaitMS      int64
+	PlanningMS       int64
+	ConnectionWaitMS int64
+	DatabaseMS       int64
+	ExecutionMS      int64
+	ExecutionState   string
+	CacheOutcome     string
+	RowsReturned     int
+	BytesEstimate    int64
+	Status           string
+	Error            string
+	Warnings         []string
 }
 
 const (
@@ -106,15 +110,16 @@ const (
 	SurfaceCLI          = "cli"
 	SurfaceDataExplorer = "data_explorer"
 
-	OperationDashboardAggregate    = "dashboard_aggregate"
-	OperationDashboardRows         = "dashboard_rows"
-	OperationDashboardCount        = "dashboard_count"
-	OperationDashboardHistogram    = "dashboard_histogram"
-	OperationDashboardDistribution = "dashboard_distribution"
-	OperationAPIQuery              = "api_query"
-	OperationAPIPreview            = "api_preview"
-	OperationAgentQuery            = "agent_query"
-	OperationPreviewWindow         = "preview_window"
+	OperationDashboardAggregate     = "dashboard_aggregate"
+	OperationDashboardRows          = "dashboard_rows"
+	OperationDashboardCount         = "dashboard_count"
+	OperationDashboardHistogram     = "dashboard_histogram"
+	OperationDashboardDistribution  = "dashboard_distribution"
+	OperationDashboardFilterOptions = "dashboard_filter_options"
+	OperationAPIQuery               = "api_query"
+	OperationAPIPreview             = "api_preview"
+	OperationAgentQuery             = "agent_query"
+	OperationPreviewWindow          = "preview_window"
 
 	StatusSuccess  = "success"
 	StatusError    = "error"
@@ -127,6 +132,11 @@ const (
 	ExecutionTimeout   = "timeout"
 	ExecutionSucceeded = "succeeded"
 	ExecutionFailed    = "failed"
+
+	CacheHit       = "hit"
+	CacheMiss      = "miss"
+	CacheCoalesced = "coalesced"
+	CacheError     = "error"
 )
 
 type Metadata struct {

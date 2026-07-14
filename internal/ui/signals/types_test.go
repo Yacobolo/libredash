@@ -12,7 +12,7 @@ import (
 func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 	report := testDashboardReport()
 	model := testSemanticModel()
-	envelope := DashboardInitialEnvelope(".data", "client", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})
+	envelope := DashboardInitialEnvelope(".data", "client", "stream-instance", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})
 
 	if err := ValidateDashboardEnvelope(envelope); err != nil {
 		t.Fatalf("validate dashboard envelope: %v", err)
@@ -29,11 +29,20 @@ func TestDashboardInitialEnvelopeValidatesPageScopedPayloads(t *testing.T) {
 	if _, ok := envelope.Filters.Controls["category"]; ok {
 		t.Fatalf("off-page filter control was emitted: %#v", envelope.Filters)
 	}
+	if envelope.Runtime.StreamInstanceID == nil || *envelope.Runtime.StreamInstanceID != "stream-instance" {
+		t.Fatalf("stream instance id = %#v", envelope.Runtime.StreamInstanceID)
+	}
+	if envelope.Status.RefreshID != "" || envelope.Status.Generation != 0 {
+		t.Fatalf("initial refresh status = %#v", envelope.Status)
+	}
+	if len(envelope.ComponentStatus) != 0 {
+		t.Fatalf("initial component status = %#v, want empty", envelope.ComponentStatus)
+	}
 }
 
 func TestDashboardEnvelopeRejectsMissingReferencedPayload(t *testing.T) {
 	report := testDashboardReport()
-	envelope := DashboardInitialEnvelope(".data", "client", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
+	envelope := DashboardInitialEnvelope(".data", "client", "stream-instance", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
 	delete(envelope.Visuals, "active_chart")
 
 	err := ValidateDashboardEnvelope(envelope)
@@ -44,7 +53,7 @@ func TestDashboardEnvelopeRejectsMissingReferencedPayload(t *testing.T) {
 
 func TestDashboardEnvelopeRejectsUnusedPayload(t *testing.T) {
 	report := testDashboardReport()
-	envelope := DashboardInitialEnvelope(".data", "client", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
+	envelope := DashboardInitialEnvelope(".data", "client", "stream-instance", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
 	envelope.Visuals["off_page_chart"] = DashboardVisual{ID: "off_page_chart"}
 
 	err := ValidateDashboardEnvelope(envelope)

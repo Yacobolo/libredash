@@ -220,6 +220,10 @@ func (r dashboardWorkspaceDataRuntime) DuckLakeSnapshotID() int64 {
 	return r.runtime.DuckLakeSnapshotID()
 }
 
+func (r dashboardWorkspaceDataRuntime) ReadConcurrency() int {
+	return r.runtime.ReadConcurrency()
+}
+
 type dashboardDataRuntime struct {
 	runtime *analyticsmaterialize.Runtime
 	data    reportdef.DataService

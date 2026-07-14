@@ -892,6 +892,9 @@ class LibreDashAdminPage extends DatastarLit(LitElement) {
             <h2>Timing</h2>
             <div class="query-detail-facts">
               ${queryDetailFact('Duration', `${event.durationMs ?? 0} ms`)}
+              ${queryDetailFact('Planning', `${event.planningMs ?? 0} ms`)}
+              ${queryDetailFact('Connection wait', `${event.connectionWaitMs ?? 0} ms`)}
+              ${queryDetailFact('Database', `${event.databaseMs ?? 0} ms`)}
               ${queryDetailFact('Started at', event.createdAt)}
               ${queryDetailFact('Operation', event.operation)}
               ${queryDetailFact('Kind', event.queryKind)}

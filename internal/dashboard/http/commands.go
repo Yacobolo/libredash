@@ -1,51 +1,67 @@
 package http
 
 import (
+	"context"
 	nethttp "net/http"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/dashboard/command"
 	lddatastar "github.com/Yacobolo/libredash/internal/dashboard/datastar"
+	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 )
 
+type commandPrepare func(command.Service, command.Request, dashboard.Filters) (command.PreparedRefresh, error)
+
 func (h Handler) TableWindow(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.handleCommand(w, r, func(ctx command.Service, request command.Request) []command.Event {
-		return ctx.TableWindow(r.Context(), request)
+	h.handleCommand(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
+		return service.PrepareTableWindow(request, current)
 	})
 }
 
 func (h Handler) Select(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.handleCommand(w, r, func(ctx command.Service, request command.Request) []command.Event {
-		return ctx.Select(r.Context(), request)
+	h.handleCommand(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
+		return service.PrepareSelect(request, current)
 	})
 }
 
 func (h Handler) ClearSelection(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.handleCommand(w, r, func(ctx command.Service, request command.Request) []command.Event {
-		return ctx.ClearSelection(r.Context(), request)
+	h.handleCommand(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
+		return service.PrepareClearSelection(request, current)
 	})
 }
 
 func (h Handler) Reload(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.handleCommand(w, r, func(ctx command.Service, request command.Request) []command.Event {
-		return ctx.Reload(r.Context(), request)
+	h.handleCommand(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
+		// Filter controls are authored by the client event, while selections stay
+		// coordinator-owned so a stale signal post cannot resurrect or erase a
+		// rapid interaction command.
+		current.Controls = request.Filters.Controls
+		return service.PrepareReload(request, current)
 	})
 }
 
 func (h Handler) ResetFilters(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.handleCommand(w, r, func(ctx command.Service, request command.Request) []command.Event {
-		return ctx.ResetFilters(r.Context(), request)
+	h.handleCommand(w, r, func(service command.Service, request command.Request, _ dashboard.Filters) (command.PreparedRefresh, error) {
+		return service.PrepareResetFilters(request)
 	})
 }
 
 func (h Handler) RefreshMaterializations(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.handleCommand(w, r, func(ctx command.Service, request command.Request) []command.Event {
-		return ctx.RefreshMaterializations(r.Context(), request)
+	h.handleCommandWithBefore(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
+		return service.PrepareMaterializationRefresh(request, current)
+	}, func(metrics Metrics, request command.Request) func(context.Context) error {
+		return func(ctx context.Context) error {
+			return metrics.RefreshMaterializations(ctx, request.ModelID)
+		}
 	})
 }
 
-func (h Handler) handleCommand(w nethttp.ResponseWriter, r *nethttp.Request, run func(command.Service, command.Request) []command.Event) {
+func (h Handler) handleCommand(w nethttp.ResponseWriter, r *nethttp.Request, prepare commandPrepare) {
+	h.handleCommandWithBefore(w, r, prepare, nil)
+}
+
+func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Request, prepare commandPrepare, before func(Metrics, command.Request) func(context.Context) error) {
 	metrics, ok := h.metricsForRequest(r)
 	if !ok {
 		nethttp.NotFound(w, r)
@@ -58,20 +74,74 @@ func (h Handler) handleCommand(w nethttp.ResponseWriter, r *nethttp.Request, run
 	dashboardID := lddatastar.DashboardID(r, signals, metrics.DefaultDashboardID())
 	pageID := lddatastar.PageID(r, signals)
 	modelID := lddatastar.ModelID(r, signals, dashboardID, metrics.ModelIDForDashboard)
-	clientID := lddatastar.ClientStreamID(r, signals, dashboardID, pageID)
-
-	events := run(command.Service{Metrics: metrics}, command.Request{
+	streamID := lddatastar.ClientStreamID(r, signals, dashboardID, pageID)
+	request := command.Request{
 		DashboardID:        dashboardID,
 		PageID:             pageID,
 		ModelID:            modelID,
 		Filters:            signals.Filters,
 		TableCommand:       signals.TableCommand,
 		InteractionCommand: signals.InteractionCommand,
+	}
+
+	registry := h.Coordinators
+	if registry == nil {
+		registry = dashboardstream.NewRegistry()
+	}
+	broker := h.Broker
+	if broker == nil {
+		broker = pagestream.NewBroker()
+	}
+	coordinator := registry.Ensure(streamID, context.WithoutCancel(r.Context()), func(event dashboardstream.RefreshEvent) {
+		broker.Publish(streamID, lddatastar.RefreshEventPatch(event, metrics.DataDir()))
 	})
-	for _, event := range events {
-		h.Broker.Publish(clientID, lddatastar.CommandEventPatch(event))
+	h.observeRefreshes(coordinator, dashboardID, pageID)
+	_, err := coordinator.BeginPrepared(func(current dashboard.Filters) (dashboardstream.RefreshPreparation, error) {
+		prepared, err := prepare(command.Service{Metrics: metrics}, request, current)
+		return streamPreparation(prepared), err
+	}, func(preparation dashboardstream.RefreshPreparation) dashboardstream.RefreshWork {
+		plan, _ := preparation.Plan.(command.RefreshPlan)
+		workRequest := dashboardstream.WorkRequest{
+			DashboardID:   dashboardID,
+			PageID:        pageID,
+			ModelID:       modelID,
+			Filters:       preparation.Filters,
+			Plan:          plan,
+			EventObserved: h.RefreshEventObserved,
+			CacheObserved: h.CacheObserved,
+		}
+		if before != nil {
+			workRequest.Before = before(metrics, request)
+		}
+		return dashboardstream.TargetWork(metrics, workRequest)
+	})
+	if err != nil {
+		// Invalid commands still form a generation so the canonical filters and
+		// scoped failure are delivered through the page stream.
+		_, _ = coordinator.BeginPrepared(func(current dashboard.Filters) (dashboardstream.RefreshPreparation, error) {
+			return dashboardstream.RefreshPreparation{Filters: current, Command: "invalid_command"}, nil
+		}, func(dashboardstream.RefreshPreparation) dashboardstream.RefreshWork {
+			return func(ctx context.Context, publish dashboardstream.RefreshPublisher) {
+				if ctx.Err() == nil {
+					publish(dashboardstream.RefreshEvent{Type: dashboardstream.RefreshEventTargetError, Target: "refresh", Err: err})
+				}
+			}
+		})
 	}
 	w.WriteHeader(nethttp.StatusNoContent)
+}
+
+func streamPreparation(prepared command.PreparedRefresh) dashboardstream.RefreshPreparation {
+	targets := make([]string, 0, len(prepared.Plan.Targets))
+	for _, target := range prepared.Plan.Targets {
+		targets = append(targets, string(target.Kind)+":"+target.ID)
+	}
+	return dashboardstream.RefreshPreparation{
+		Filters: prepared.Filters,
+		Command: prepared.Plan.Command,
+		Targets: targets,
+		Plan:    prepared.Plan,
+	}
 }
 
 func (h Handler) readSignals(w nethttp.ResponseWriter, r *nethttp.Request) (dashboard.Signals, bool) {

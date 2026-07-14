@@ -296,6 +296,48 @@ c2,RJ
 			t.Fatalf("query principal = %q, want test_principal: %#v", query.PrincipalID, query)
 		}
 	}
+	for _, result := range recorder.results {
+		if result.PlanningMS <= 0 || result.DatabaseMS <= 0 {
+			t.Fatalf("query stage timings were not populated: %#v", result)
+		}
+	}
+	batchedKPIs := false
+	for _, query := range recorder.queries {
+		if query.Kind == dataquery.KindSemanticAggregate && len(query.Fields) == 0 && len(query.Measures) == 3 {
+			batchedKPIs = true
+			break
+		}
+	}
+	if !batchedKPIs {
+		t.Fatalf("compatible KPI queries were not batched: %#v", recorder.queries)
+	}
+
+	recorder.queries = nil
+	recorder.results = nil
+	options, err := metrics.QueryFilterOptionsPage(ctx, "fulfillment-operations", "overview", []string{"state", "status"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(options["state"]) == 0 || len(options["status"]) == 0 {
+		t.Fatalf("targeted filter options = %#v", options)
+	}
+	for _, result := range recorder.results {
+		if result.CacheOutcome != dataquery.CacheHit {
+			t.Fatalf("warm filter option cache outcome = %q, want hit: %#v", result.CacheOutcome, recorder.results)
+		}
+	}
+	recorder.queries = nil
+	recorder.results = nil
+	visuals, err := metrics.QueryVisualsPage(ctx, "fulfillment-operations", "overview", dashboard.Filters{}, []string{"total_orders", "delivery_days", "review_score"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(visuals) != 3 || len(visuals["total_orders"].Data) == 0 {
+		t.Fatalf("targeted visuals = %#v", visuals)
+	}
+	if len(recorder.queries) != 1 || len(recorder.queries[0].Measures) != 3 {
+		t.Fatalf("targeted KPI queries = %#v, want one three-measure query", recorder.queries)
+	}
 }
 
 func TestServicePreviewsRawModelTableRows(t *testing.T) {
@@ -385,7 +427,10 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	}
 	defer metrics.Close()
 
-	table, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "all", RequestSeq: 9})
+	recorder := &runtimeAuditRecorder{}
+	ctx := dataquery.WithAuditRecorder(context.Background(), recorder)
+	ctx = dataquery.WithMetadata(ctx, dataquery.Metadata{PrincipalID: "table_test"})
+	table, err := metrics.QueryTable(ctx, "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "all", RequestSeq: 9})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,11 +446,45 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	if !table.IsCapped {
 		t.Fatal("table is not capped")
 	}
-	if got := len(table.Blocks["a"].Rows) + len(table.Blocks["b"].Rows) + len(table.Blocks["c"].Rows); got != dashboard.TableChunkSize*3 {
-		t.Fatalf("initial block rows = %d, want %d", got, dashboard.TableChunkSize*3)
+	if got := len(table.Blocks["a"].Rows); got != dashboard.TableChunkSize {
+		t.Fatalf("initial block rows = %d, want %d", got, dashboard.TableChunkSize)
+	}
+	if _, ok := table.Blocks["b"]; ok {
+		t.Fatalf("initial table unexpectedly loaded block b: %#v", table.Blocks["b"])
+	}
+	if _, ok := table.Blocks["c"]; ok {
+		t.Fatalf("initial table unexpectedly loaded block c: %#v", table.Blocks["c"])
+	}
+	if len(recorder.queries) != 1 {
+		t.Fatalf("initial table data queries = %d, want 1: %#v", len(recorder.queries), recorder.queries)
+	}
+	if !recorder.queries[0].IncludeTotal {
+		t.Fatalf("initial table query IncludeTotal = false: %#v", recorder.queries[0])
+	}
+	if !strings.Contains(recorder.results[0].SQL, "COUNT(*) OVER") {
+		t.Fatalf("initial table SQL does not fuse total count: %s", recorder.results[0].SQL)
 	}
 	if got := table.Blocks["a"].RequestSeq; got != 9 {
 		t.Fatalf("block request seq = %d, want 9", got)
+	}
+
+	recorder.queries = nil
+	recorder.results = nil
+	next, err := metrics.QueryTable(ctx, "executive-sales", dashboard.Filters{}, dashboard.TableRequest{Table: "orders_table", Block: "b", Start: dashboard.TableChunkSize, Count: dashboard.TableChunkSize, RequestSeq: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if next.Error != "" {
+		t.Fatalf("next table block error = %q", next.Error)
+	}
+	if len(next.Blocks["b"].Rows) != dashboard.TableChunkSize {
+		t.Fatalf("next block rows = %d, want %d", len(next.Blocks["b"].Rows), dashboard.TableChunkSize)
+	}
+	if next.TotalRows != rows {
+		t.Fatalf("next block total rows = %d, want %d", next.TotalRows, rows)
+	}
+	if len(recorder.queries) != 1 || !recorder.queries[0].IncludeTotal {
+		t.Fatalf("next block queries = %#v, want one fused-total query", recorder.queries)
 	}
 }
 

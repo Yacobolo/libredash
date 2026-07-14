@@ -491,11 +491,15 @@ func TestWorkspaceRuntimeQueriesPinnedDuckLakeSnapshots(t *testing.T) {
 	}
 
 	config.SnapshotID = snapshot1
+	config.MaxReaders = 2
 	first, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, config)
 	if err != nil {
 		t.Fatalf("open first snapshot: %v", err)
 	}
 	defer first.Close()
+	if got := first.ReadConcurrency(); got != 2 {
+		t.Fatalf("first snapshot read concurrency = %d, want 2", got)
+	}
 	if got := queryRevenue(t, ctx, first); got != 25 {
 		t.Fatalf("first snapshot revenue = %v, want 25", got)
 	}

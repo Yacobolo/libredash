@@ -26,6 +26,21 @@ func TestServiceDuckLakeSnapshotIDRequiresOneWorkspaceSnapshot(t *testing.T) {
 	}
 }
 
+func TestServiceAdvertisesConcurrencyOnlyForPinnedSnapshotReaders(t *testing.T) {
+	service := &Service{
+		runtimes: map[string]*modelRuntime{
+			"orders": {ready: true, data: snapshotDataRuntime{snapshotID: 42, readConcurrency: 3}},
+		},
+	}
+	if got := service.DashboardTargetConcurrency(); got != 3 {
+		t.Fatalf("DashboardTargetConcurrency = %d, want 3", got)
+	}
+	service.runtimes["orders"].data = snapshotDataRuntime{readConcurrency: 3}
+	if got := service.DashboardTargetConcurrency(); got != 1 {
+		t.Fatalf("mutable DashboardTargetConcurrency = %d, want 1", got)
+	}
+}
+
 func TestGovernedDataRuntimeForwardsDuckLakeSnapshotID(t *testing.T) {
 	runtime := newGovernedDataRuntime("sales", "sales", snapshotDataRuntime{snapshotID: 42})
 	snapshot, ok := runtime.(DataRuntimeSnapshot)
@@ -38,7 +53,8 @@ func TestGovernedDataRuntimeForwardsDuckLakeSnapshotID(t *testing.T) {
 }
 
 type snapshotDataRuntime struct {
-	snapshotID int64
+	snapshotID      int64
+	readConcurrency int
 }
 
 func (r snapshotDataRuntime) Query(context.Context, reportdef.AggregateQuery) (reportdef.QueryRows, error) {
@@ -79,4 +95,8 @@ func (r snapshotDataRuntime) LastRefresh() time.Time {
 
 func (r snapshotDataRuntime) DuckLakeSnapshotID() int64 {
 	return r.snapshotID
+}
+
+func (r snapshotDataRuntime) ReadConcurrency() int {
+	return max(1, r.readConcurrency)
 }

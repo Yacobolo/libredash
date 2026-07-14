@@ -51,6 +51,10 @@ type DataRuntimeSnapshot interface {
 	DuckLakeSnapshotID() int64
 }
 
+type DataRuntimeReadConcurrency interface {
+	ReadConcurrency() int
+}
+
 type setupRequiredError interface {
 	SetupRequired() bool
 }
@@ -269,6 +273,28 @@ func (m *Service) DuckLakeSnapshotID() int64 {
 		}
 	}
 	return snapshotID
+}
+
+func (m *Service) DashboardTargetConcurrency() int {
+	if m == nil || m.DuckLakeSnapshotID() <= 0 {
+		return 1
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	limit := 0
+	for _, runtime := range m.runtimes {
+		if runtime == nil || !runtime.ready || runtime.data == nil {
+			continue
+		}
+		capability, ok := runtime.data.(DataRuntimeReadConcurrency)
+		if !ok || capability.ReadConcurrency() <= 1 {
+			return 1
+		}
+		if limit == 0 || capability.ReadConcurrency() < limit {
+			limit = capability.ReadConcurrency()
+		}
+	}
+	return max(1, limit)
 }
 
 func discoverCatalogPath() (string, error) {

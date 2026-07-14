@@ -21,6 +21,23 @@ export interface InteractionSelectionEntry {
   label?: string
 }
 
+export interface CanonicalInteractionSelection {
+  sourceKind: string
+  sourceId: string
+  entries?: InteractionSelectionEntry[]
+}
+
+export function canonicalSelectionEntriesForSource(
+  selections: readonly CanonicalInteractionSelection[] | undefined,
+  sourceKind: 'visual' | 'table',
+  sourceId: string,
+): InteractionSelectionEntry[] {
+  if (!sourceId) return []
+  return (selections ?? [])
+    .filter((selection) => selection.sourceKind === sourceKind && selection.sourceId === sourceId)
+    .flatMap((selection) => selection.entries ?? [])
+}
+
 export function interactionSelectionValue(value: unknown): InteractionSelectionValue | undefined {
   if (value === null) return null
   if (typeof value === 'string' || typeof value === 'boolean') return value

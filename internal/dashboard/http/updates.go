@@ -1,12 +1,16 @@
 package http
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"log/slog"
 	nethttp "net/http"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/dashboard/command"
 	lddatastar "github.com/Yacobolo/libredash/internal/dashboard/datastar"
-	"github.com/Yacobolo/libredash/internal/dashboard/stream"
+	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 	reportui "github.com/Yacobolo/libredash/internal/dashboard/ui"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 )
@@ -35,25 +39,60 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 	}
 	initialFilters := reportDefinition.FiltersFromURLForPage(activePage.ID, r.URL.Query())
 	clientID := pagestream.ClientIDFromRequest(r, "")
-	request := stream.SnapshotRequest{
+	streamInstanceID := strings.TrimSpace(r.URL.Query().Get("streamInstance"))
+	if streamInstanceID == "" {
+		streamInstanceID = fallbackStreamInstanceID()
+	}
+	streamID := lddatastar.StreamID(clientID, dashboardID, activePage.ID, streamInstanceID)
+	request := command.Request{
 		DashboardID: dashboardID,
 		PageID:      activePage.ID,
-		Filters:     initialFilters,
+		ModelID:     metrics.ModelIDForDashboard(dashboardID),
 	}
 
+	broker := h.Broker
+	if broker == nil {
+		broker = pagestream.NewBroker()
+	}
+	mailbox, unsubscribe := broker.Subscribe(streamID)
+	defer unsubscribe()
+
 	updates := pagestream.NewSignalStream(w, r)
-	bootstrap := reportui.BootstrapSignals(metrics.DataDir(), clientID, metrics.Catalog(), reportDefinition, model, pages, activePage, initialFilters)
+	bootstrap := reportui.BootstrapSignals(metrics.DataDir(), clientID, streamInstanceID, metrics.Catalog(), reportDefinition, model, pages, activePage, initialFilters)
 	bootstrap["status"] = lddatastar.LoadingPatch(metrics.DataDir())["status"]
 	if err := updates.Patch(bootstrap); err != nil {
 		return
 	}
-	snapshot := stream.Service{Metrics: metrics}.Snapshot(r.Context(), request)
-	for _, patch := range lddatastar.SnapshotPatches(snapshot) {
-		if err := updates.Patch(patch); err != nil {
-			return
-		}
+
+	registry := h.Coordinators
+	if registry == nil {
+		registry = dashboardstream.NewRegistry()
 	}
-	_ = updates.Forward(r.Context(), h.Broker, lddatastar.StreamID(clientID, dashboardID, activePage.ID))
+	coordinator, closeCoordinator := registry.Open(streamID, r.Context(), func(event dashboardstream.RefreshEvent) {
+		broker.Publish(streamID, lddatastar.RefreshEventPatch(event, metrics.DataDir()))
+	})
+	defer closeCoordinator()
+	h.observeRefreshes(coordinator, dashboardID, activePage.ID)
+	service := command.Service{Metrics: metrics}
+	_, err := coordinator.BeginPrepared(func(dashboard.Filters) (dashboardstream.RefreshPreparation, error) {
+		prepared, err := service.PrepareInitial(request, initialFilters)
+		return streamPreparation(prepared), err
+	}, func(preparation dashboardstream.RefreshPreparation) dashboardstream.RefreshWork {
+		plan, _ := preparation.Plan.(command.RefreshPlan)
+		return dashboardstream.TargetWork(metrics, dashboardstream.WorkRequest{
+			DashboardID:   dashboardID,
+			PageID:        activePage.ID,
+			ModelID:       request.ModelID,
+			Filters:       preparation.Filters,
+			Plan:          plan,
+			EventObserved: h.RefreshEventObserved,
+			CacheObserved: h.CacheObserved,
+		})
+	})
+	if err != nil {
+		return
+	}
+	_ = updates.ForwardUpdates(r.Context(), mailbox)
 }
 
 func streamActivePage(pages []dashboard.Page, pageID string) (dashboard.Page, bool) {
@@ -66,4 +105,49 @@ func streamActivePage(pages []dashboard.Page, pageID string) (dashboard.Page, bo
 		}
 	}
 	return dashboard.Page{}, false
+}
+
+func fallbackStreamInstanceID() string {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err == nil {
+		return hex.EncodeToString(value[:])
+	}
+	return "server-stream"
+}
+
+func (h Handler) refreshObserver(dashboardID, pageID string) dashboardstream.SummaryObserver {
+	logger := h.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return func(summary dashboardstream.RefreshSummary) {
+		logger.Info("dashboard refresh",
+			"event", "dashboard_refresh",
+			"refreshId", summary.RefreshID,
+			"generation", summary.Generation,
+			"dashboard", dashboardID,
+			"page", pageID,
+			"command", summary.Command,
+			"plannedTargets", summary.PlannedTargets,
+			"targetSuccesses", summary.TargetSuccesses,
+			"targetErrors", summary.TargetErrors,
+			"queryCount", summary.QueryCount,
+			"cancellationCount", summary.CancellationCount,
+			"cancellationReason", summary.CancellationReason,
+			"cacheOutcomes", summary.CacheOutcomes,
+			"stageTimingsMs", summary.StageTimingsMs,
+			"outcome", summary.Outcome,
+		)
+	}
+}
+
+func (h Handler) observeRefreshes(coordinator *dashboardstream.Coordinator, dashboardID, pageID string) {
+	coordinator.SetStartObserver(h.RefreshStarted)
+	logFinished := h.refreshObserver(dashboardID, pageID)
+	coordinator.SetObserver(func(summary dashboardstream.RefreshSummary) {
+		logFinished(summary)
+		if h.RefreshFinished != nil {
+			h.RefreshFinished(summary)
+		}
+	})
 }

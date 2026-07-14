@@ -10,6 +10,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/dashboard/reportmodel"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 )
 
 type FilterService struct{}
@@ -30,15 +31,20 @@ func (s *FilterService) filterOptions(ctx context.Context, runtime *modelRuntime
 		if limit > 500 {
 			limit = 500
 		}
-		rows, err := runtime.data.Query(ctx, reportdef.AggregateQuery{
+		query := reportdef.AggregateQuery{
 			Table:      tableForField(filter.Dimension),
 			Dimensions: []reportdef.QueryField{{Field: filter.Dimension, Alias: "value"}},
 			Sort:       []reportdef.QuerySort{{Field: "value", Direction: "asc"}},
 			Limit:      limit,
-		})
+		}
+		request := reportAggregateDataQuery(report.SemanticModel, query)
+		request.Surface = dataquery.SurfaceDashboard
+		request.Operation = dataquery.OperationDashboardFilterOptions
+		result, err := runtime.data.ExecuteDataQuery(ctx, request)
 		if err != nil {
 			return nil, err
 		}
+		rows := reportRowsFromDataQuery(result.Rows)
 		values := []dashboard.FilterOption{}
 		for _, row := range rows {
 			value, ok := row["value"]

@@ -44,7 +44,7 @@ type canceledTableMetrics struct {
 
 type recordingMetrics struct {
 	fakeMetrics
-	pageIDs []string
+	pageIDs chan string
 }
 
 type namedWorkspaceMetrics struct {
@@ -361,9 +361,47 @@ func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, pageID string
 	}, nil
 }
 
+func (fakeMetrics) QueryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
+	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+	return patch.Visuals[visualID], err
+}
+
+func (fakeMetrics) QueryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+	visuals := make(map[string]dashboard.Visual, len(visualIDs))
+	for _, id := range visualIDs {
+		visuals[id] = patch.Visuals[id]
+	}
+	return visuals, err
+}
+
+func (fakeMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
+	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, dashboard.Filters{})
+	options := make(map[string][]dashboard.FilterOption, len(filterIDs))
+	for _, id := range filterIDs {
+		options[id] = patch.FilterOptions[id]
+	}
+	return options, err
+}
+
 func (m *recordingMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
-	m.pageIDs = append(m.pageIDs, pageID)
+	m.pageIDs <- pageID
 	return m.fakeMetrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
+}
+
+func (m *recordingMetrics) QueryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
+	m.pageIDs <- pageID
+	return m.fakeMetrics.QueryVisualPage(ctx, dashboardID, pageID, filters, visualID)
+}
+
+func (m *recordingMetrics) QueryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	m.pageIDs <- pageID
+	return m.fakeMetrics.QueryVisualsPage(ctx, dashboardID, pageID, filters, visualIDs)
+}
+
+func (m *recordingMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
+	m.pageIDs <- pageID
+	return m.fakeMetrics.QueryFilterOptionsPage(ctx, dashboardID, pageID, filterIDs)
 }
 
 func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
@@ -1198,14 +1236,16 @@ func TestSelectCommandAcceptsDatastarSignals(t *testing.T) {
 
 func TestPageCommandsQueryActivePage(t *testing.T) {
 	tests := []struct {
-		name string
-		path string
-		body string
+		name    string
+		path    string
+		body    string
+		queries int
 	}{
 		{
-			name: "interaction select",
-			path: "/workspaces/test-workspace/commands/select",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"tableCommand":{"block":"all","start":0,"count":50}}`,
+			name:    "interaction select",
+			path:    "/workspaces/test-workspace/commands/select",
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"tableCommand":{"block":"all","start":0,"count":50}}`,
+			queries: 1,
 		},
 		{
 			name: "clear selection",
@@ -1213,20 +1253,22 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"tableCommand":{"block":"all","start":0,"count":50}}`,
 		},
 		{
-			name: "reload",
-			path: "/workspaces/test-workspace/commands/reload",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":200,"count":50}}`,
+			name:    "reload",
+			path:    "/workspaces/test-workspace/commands/reload",
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":200,"count":50}}`,
+			queries: 2,
 		},
 		{
-			name: "reset filters",
-			path: "/workspaces/test-workspace/commands/reset-filters",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":200,"count":50}}`,
+			name:    "reset filters",
+			path:    "/workspaces/test-workspace/commands/reset-filters",
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":200,"count":50}}`,
+			queries: 2,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			metrics := &recordingMetrics{}
+			metrics := &recordingMetrics{pageIDs: make(chan string, 4)}
 			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
@@ -1236,8 +1278,15 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 			if rec.Code != http.StatusNoContent {
 				t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
 			}
-			if len(metrics.pageIDs) != 1 || metrics.pageIDs[0] != "operations" {
-				t.Fatalf("queried page IDs = %#v, want [operations]", metrics.pageIDs)
+			for i := 0; i < tt.queries; i++ {
+				select {
+				case pageID := <-metrics.pageIDs:
+					if pageID != "operations" {
+						t.Fatalf("queried page ID = %q, want operations", pageID)
+					}
+				case <-time.After(time.Second):
+					t.Fatalf("timed out after %d/%d targeted page queries", i, tt.queries)
+				}
 			}
 		})
 	}
@@ -1388,7 +1437,7 @@ func TestWorkspaceAssetRefreshCommandPublishesRunningAndFinalState(t *testing.T)
 	if runs[0].PrincipalID != principal.ID || runs[0].PrincipalDisplayName != "Owner" {
 		t.Fatalf("run attribution = %#v, want Owner principal", runs[0])
 	}
-	patches := drainPatches(updates)
+	patches := awaitAssetRefreshPatches(t, updates, materialize.RunStatusSucceeded)
 	if !patchesContainAssetRefreshStatus(patches, materialize.RunStatusRunning) {
 		t.Fatalf("patches did not include running state: %#v", patches)
 	}
@@ -1424,7 +1473,7 @@ func TestWorkspaceAssetRefreshCommandPublishesFailedError(t *testing.T) {
 	if len(runs) != 1 || runs[0].Status != materialize.RunStatusFailed || !strings.Contains(runs[0].Error, "refresh failed") {
 		t.Fatalf("runs = %#v, want one failed run with error", runs)
 	}
-	patches := drainPatches(updates)
+	patches := awaitAssetRefreshPatches(t, updates, materialize.RunStatusFailed)
 	if !patchesContainAssetRefreshStatus(patches, materialize.RunStatusFailed) || !strings.Contains(anyPatchesString(patches), "refresh failed") {
 		t.Fatalf("patches did not include failed error state: %#v", patches)
 	}
@@ -1830,6 +1879,23 @@ func drainPatches(ch <-chan pagestream.SignalPatch) []pagestream.SignalPatch {
 	}
 }
 
+func awaitAssetRefreshPatches(t *testing.T, ch <-chan pagestream.SignalPatch, terminal string) []pagestream.SignalPatch {
+	t.Helper()
+	patches := []pagestream.SignalPatch{}
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case patch := <-ch:
+			patches = append(patches, patch)
+			if patchesContainAssetRefreshStatus([]pagestream.SignalPatch{patch}, terminal) {
+				return patches
+			}
+		case <-deadline:
+			t.Fatalf("timed out waiting for asset refresh status %q; patches=%#v", terminal, patches)
+		}
+	}
+}
+
 func patchesContainAssetRefreshStatus(patches []pagestream.SignalPatch, status string) bool {
 	for _, patch := range patches {
 		refresh, ok := patch["assetRefresh"].(map[string]any)
@@ -1908,9 +1974,23 @@ func TestTableWindowCommandDoesNotPublishCanceledQueries(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
 	}
-	select {
-	case patch := <-updates:
-		t.Fatalf("received canceled table patch: %#v", patch)
-	default:
+	deadline := time.After(time.Second)
+	for {
+		select {
+		case patch := <-updates:
+			if _, ok := patch["tables"]; ok {
+				t.Fatalf("received canceled table payload: %#v", patch)
+			}
+			if statuses, ok := patch["componentStatus"].(map[string]any); ok {
+				if status, ok := statuses["table:orders"].(map[string]any); ok && status["error"] != "" {
+					t.Fatalf("cancellation surfaced as target error: %#v", patch)
+				}
+			}
+			if status, ok := patch["status"].(map[string]any); ok && status["loading"] == false {
+				return
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for canceled table generation to complete")
+		}
 	}
 }

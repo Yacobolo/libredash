@@ -1,9 +1,11 @@
 package datastar
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 )
 
 func TestPatchKeys(t *testing.T) {
@@ -35,5 +37,30 @@ func TestPatchKeys(t *testing.T) {
 	status, ok := LoadingPatch(".data")["status"].(map[string]any)
 	if !ok || status["loading"] != true || status["dataDirectory"] != ".data" {
 		t.Fatalf("loading patch = %#v", LoadingPatch(".data"))
+	}
+}
+
+func TestRefreshCompletePreservesFatalError(t *testing.T) {
+	patch := RefreshEventPatch(dashboardstream.RefreshEvent{
+		Type: dashboardstream.RefreshEventComplete, RefreshID: "refresh-1", Generation: 1, Err: errors.New("refresh failed"),
+	}, ".data")
+	status, ok := patch["status"].(map[string]any)
+	if !ok || status["loading"] != false || status["error"] != "refresh failed" {
+		t.Fatalf("terminal patch = %#v", patch)
+	}
+}
+
+type setupRequiredPatchError struct{}
+
+func (setupRequiredPatchError) Error() string       { return "source data is missing" }
+func (setupRequiredPatchError) SetupRequired() bool { return true }
+
+func TestRefreshCompleteMarksSetupRequiredErrors(t *testing.T) {
+	patch := RefreshEventPatch(dashboardstream.RefreshEvent{
+		Type: dashboardstream.RefreshEventComplete, RefreshID: "refresh-1", Generation: 1, Err: setupRequiredPatchError{},
+	}, ".data")
+	status, ok := patch["status"].(map[string]any)
+	if !ok || status["setupRequired"] != true || status["error"] != "source data is missing" {
+		t.Fatalf("terminal patch = %#v", patch)
 	}
 }

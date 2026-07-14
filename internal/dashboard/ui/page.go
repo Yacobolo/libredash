@@ -1,9 +1,12 @@
 package ui
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
@@ -99,6 +102,7 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 	tableReset := tableResetExpression()
 	initialFilters = report.NormalizeFiltersForPage(activePage.ID, initialFilters)
 	initialURLParams := report.URLParamsFromFiltersForPage(activePage.ID, initialFilters)
+	initialURLParams["streamInstance"] = newStreamInstanceID()
 	dashboardUpdatesURL := updatesURLWithParams(catalog.Workspace.ID, report.ID, activePage.ID, initialURLParams)
 	reloadAction := postAction("/workspaces/" + catalog.Workspace.ID + "/commands/reload")
 	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + tableReset
@@ -152,8 +156,8 @@ func defaultPage() dashboard.Page {
 	}
 }
 
-func BootstrapSignals(dataDir, clientID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) map[string]any {
-	envelope := uisignals.DashboardInitialEnvelope(dataDir, clientID, catalog, report, model, pages, activePage, initialFilters)
+func BootstrapSignals(dataDir, clientID, streamInstanceID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters, chromeDecorators ...ChromeDecorator) map[string]any {
+	envelope := uisignals.DashboardInitialEnvelope(dataDir, clientID, streamInstanceID, catalog, report, model, pages, activePage, initialFilters)
 	envelope.Runtime.WorkspaceID = uisignals.Optional(catalog.Workspace.ID)
 	for _, decorate := range chromeDecorators {
 		if decorate != nil {
@@ -162,6 +166,7 @@ func BootstrapSignals(dataDir, clientID string, catalog dashboard.Catalog, repor
 	}
 	return map[string]any{
 		"chrome":             envelope.Chrome,
+		"componentStatus":    envelope.ComponentStatus,
 		"page":               envelope.Page,
 		"runtime":            envelope.Runtime,
 		"filterConfig":       envelope.FilterConfig,
@@ -175,6 +180,14 @@ func BootstrapSignals(dataDir, clientID string, catalog dashboard.Catalog, repor
 		"visuals":            envelope.Visuals,
 		"status":             envelope.Status,
 	}
+}
+
+func newStreamInstanceID() string {
+	var bytes [16]byte
+	if _, err := rand.Read(bytes[:]); err == nil {
+		return hex.EncodeToString(bytes[:])
+	}
+	return hex.EncodeToString([]byte(time.Now().UTC().Format(time.RFC3339Nano)))
 }
 
 func tableResetExpression() string {

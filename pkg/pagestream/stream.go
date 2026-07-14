@@ -47,6 +47,13 @@ func (s SignalStream) Forward(ctx context.Context, broker *Broker, streamID stri
 	}
 	updates, unsubscribe := broker.Subscribe(streamID)
 	defer unsubscribe()
+	return s.ForwardUpdates(ctx, updates)
+}
+
+// ForwardUpdates relays an already-subscribed mailbox. It lets callers
+// subscribe before sending bootstrap state so no refresh event can be lost in
+// the bootstrap-to-forward handoff.
+func (s SignalStream) ForwardUpdates(ctx context.Context, updates <-chan SignalPatch) error {
 	for {
 		select {
 		case <-ctx.Done():

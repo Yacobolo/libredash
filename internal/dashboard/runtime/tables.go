@@ -12,48 +12,6 @@ import (
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 )
 
-func (s *TableQueryService) tableBlocks(ctx context.Context, runtime *modelRuntime, report *reportdef.Dashboard, table reportdef.TableVisual, filters dashboard.Filters, request dashboard.TableRequest, availableRows int) (map[string]dashboard.TableBlock, error) {
-	blocks := map[string]dashboard.TableBlock{}
-	count := request.Count
-	if count <= 0 {
-		count = dashboard.TableChunkSize
-	}
-	if count > dashboard.TableMaxRequestCount {
-		count = dashboard.TableMaxRequestCount
-	}
-	if request.Block == "all" {
-		starts := initialBlockStarts(request.Start, count, availableRows)
-		for block, start := range starts {
-			rows, err := s.tableRows(ctx, runtime, report, table, filters, request, start, count, availableRows)
-			if err != nil {
-				return nil, err
-			}
-			blocks[block] = dashboard.TableBlock{
-				Start:        start,
-				RequestSeq:   request.RequestSeq,
-				ResetVersion: request.ResetVersion,
-				Sort:         request.Sort,
-				Rows:         rows,
-			}
-		}
-		return blocks, nil
-	}
-
-	start := clampTableStart(request.Start, availableRows)
-	rows, err := s.tableRows(ctx, runtime, report, table, filters, request, start, count, availableRows)
-	if err != nil {
-		return nil, err
-	}
-	blocks[request.Block] = dashboard.TableBlock{
-		Start:        start,
-		RequestSeq:   request.RequestSeq,
-		ResetVersion: request.ResetVersion,
-		Sort:         request.Sort,
-		Rows:         rows,
-	}
-	return blocks, nil
-}
-
 func (s *TableQueryService) queryAggregateTable(ctx context.Context, runtime *modelRuntime, report *reportdef.Dashboard, request dashboard.TableRequest, table reportdef.TableVisual, filters dashboard.Filters) (dashboard.Table, error) {
 	var (
 		columns []dashboard.TableColumn
@@ -84,7 +42,7 @@ func (s *TableQueryService) queryAggregateTable(ctx context.Context, runtime *mo
 		Title:         table.Title,
 		Style:         style,
 		Interaction:   tableInteractionConfig(table.Interaction.RowSelection),
-		Selection:     selectedEntries(filters, "table", request.Table),
+		Selection:     []dashboard.InteractionSelectionEntry{},
 		Columns:       columns,
 		TotalRows:     totalRows,
 		AvailableRows: len(rows),
@@ -439,35 +397,7 @@ func uniqueTableColumnKey(candidate string, existing map[string]string) string {
 	}
 }
 
-func initialBlockStarts(start, count, availableRows int) map[string]int {
-	start = clampTableStart(start, availableRows)
-	if start <= 0 {
-		return map[string]int{"a": 0, "b": count, "c": count * 2}
-	}
-	base := (start / count) * count
-	return map[string]int{"a": max(0, base-count), "b": base, "c": base + count}
-}
-
-func clampTableStart(start, availableRows int) int {
-	if start < 0 {
-		return 0
-	}
-	if availableRows <= 0 {
-		return 0
-	}
-	if start >= availableRows {
-		return max(0, availableRows-1)
-	}
-	return start
-}
-
-func (s *TableQueryService) tableRows(ctx context.Context, runtime *modelRuntime, report *reportdef.Dashboard, table reportdef.TableVisual, filters dashboard.Filters, request dashboard.TableRequest, start, count, availableRows int) ([]map[string]any, error) {
-	if count <= 0 || start >= availableRows {
-		return []map[string]any{}, nil
-	}
-	if start+count > availableRows {
-		count = availableRows - start
-	}
+func (s *TableQueryService) tableRowRequest(ctx context.Context, runtime *modelRuntime, report *reportdef.Dashboard, table reportdef.TableVisual, filters dashboard.Filters, request dashboard.TableRequest, start, count int) (reportdef.RowQuery, error) {
 	dimensions := []reportdef.QueryField{}
 	measures := []reportdef.QueryField{}
 	for _, column := range table.DataColumns {
@@ -479,7 +409,7 @@ func (s *TableQueryService) tableRows(ctx context.Context, runtime *modelRuntime
 	}
 	queryFilters, err := s.filters.semanticFilters(ctx, runtime, report, filters, "table", request.Table)
 	if err != nil {
-		return nil, err
+		return reportdef.RowQuery{}, err
 	}
 	sortKey := tableSortKey(table, request.Sort.Key)
 	direction := request.Sort.Direction
@@ -493,7 +423,7 @@ func (s *TableQueryService) tableRows(ctx context.Context, runtime *modelRuntime
 	if sortKey != "order_id" && tableHasQueryAlias(table.DataColumns, "order_id") {
 		sorts = append(sorts, reportdef.QuerySort{Field: "order_id", Direction: "asc"})
 	}
-	rows, err := runtime.data.Rows(ctx, reportdef.RowQuery{
+	return reportdef.RowQuery{
 		Table:      table.Query.Table,
 		Dimensions: dimensions,
 		Measures:   measures,
@@ -501,11 +431,7 @@ func (s *TableQueryService) tableRows(ctx context.Context, runtime *modelRuntime
 		Sort:       sorts,
 		Limit:      count,
 		Offset:     start,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return tableRowsFromAnalytics(rows), nil
+	}, nil
 }
 
 func tableSortKey(table reportdef.TableVisual, key string) string {

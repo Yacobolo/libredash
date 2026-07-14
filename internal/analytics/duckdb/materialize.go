@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -86,6 +87,7 @@ type WorkspaceRuntimeConfig struct {
 	ArtifactDigest     string
 	SourceDataDigest   string
 	SkipInitialRefresh bool
+	MaxReaders         int
 }
 
 type WorkspaceRuntime struct {
@@ -98,6 +100,7 @@ type WorkspaceRuntime struct {
 	models               map[string]*semanticmodel.Model
 	materializationModel *semanticmodel.Model
 	queries              map[string]*semanticquery.Service
+	views                map[string]*analyticsmaterialize.Runtime
 	lastRefresh          time.Time
 	lastSnapshotID       int64
 	commitMetadata       map[string]string
@@ -129,7 +132,7 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 	var db *analyticsducklake.Environment
 	var err error
 	if config.SnapshotID > 0 {
-		db, err = analyticsducklake.OpenSnapshot(ctx, analyticsducklake.Config{RootDir: config.DBDir, CatalogPath: layout.CatalogPath, DataPath: layout.DataPath, SnapshotID: config.SnapshotID})
+		db, err = analyticsducklake.OpenSnapshot(ctx, analyticsducklake.Config{RootDir: config.DBDir, CatalogPath: layout.CatalogPath, DataPath: layout.DataPath, SnapshotID: config.SnapshotID, MaxReaders: workspaceReaderCount(config.MaxReaders)})
 	} else {
 		db, err = analyticsducklake.Open(ctx, analyticsducklake.Config{RootDir: config.DBDir, CatalogPath: layout.CatalogPath, DataPath: layout.DataPath})
 	}
@@ -157,10 +160,24 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 		models:               config.Models,
 		materializationModel: materializationModel,
 		queries:              map[string]*semanticquery.Service{},
+		views:                map[string]*analyticsmaterialize.Runtime{},
 		commitMetadata:       workspaceCommitMetadata(config),
 	}
 	for modelID, model := range config.Models {
-		runtime.queries[modelID] = semanticquery.NewService(semanticquery.NewPlanner(model), db)
+		view, err := analyticsmaterialize.NewRuntimeView(ctx, analyticsmaterialize.RuntimeConfig{
+			ModelID:  modelID,
+			Model:    model,
+			DataDir:  config.DataDir,
+			Database: db,
+			Sources:  sources,
+			Resolver: sources,
+		})
+		if err != nil {
+			db.Close()
+			return nil, fmt.Errorf("compile semantic model %q runtime: %w", modelID, err)
+		}
+		runtime.views[modelID] = view
+		runtime.queries[modelID] = view.Queries()
 	}
 	if config.SnapshotID > 0 {
 		runtime.lastSnapshotID = config.SnapshotID
@@ -171,6 +188,16 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 		}
 	}
 	return runtime, nil
+}
+
+func workspaceReaderCount(configured int) int {
+	if configured > 0 {
+		return configured
+	}
+	if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_EXEC_MAX_RUNNING_READS))); err == nil && value > 0 {
+		return value
+	}
+	return 4
 }
 
 func (r *WorkspaceRuntime) Queries(modelID string) (*semanticquery.Service, error) {
@@ -194,21 +221,14 @@ func (r *WorkspaceRuntime) ExecuteDataQuery(ctx context.Context, request dataque
 			modelID = id
 		}
 	}
-	model, ok := r.models[modelID]
+	_, ok := r.models[modelID]
 	if !ok {
 		return dataquery.Result{}, fmt.Errorf("unknown semantic model %q", modelID)
 	}
 	request.ModelID = modelID
-	view, err := analyticsmaterialize.NewRuntimeView(ctx, analyticsmaterialize.RuntimeConfig{
-		ModelID:  modelID,
-		Model:    model,
-		DataDir:  r.dataDir,
-		Database: r.db,
-		Sources:  r.sources,
-		Resolver: r.sources,
-	})
-	if err != nil {
-		return dataquery.Result{}, err
+	view := r.views[modelID]
+	if view == nil {
+		return dataquery.Result{}, fmt.Errorf("semantic model %q runtime is not compiled", modelID)
 	}
 	return view.ExecuteDataQuery(ctx, request)
 }
@@ -231,6 +251,7 @@ func (r *WorkspaceRuntime) Refresh(ctx context.Context) error {
 	}
 	r.lastRefresh = lastRefresh
 	r.lastSnapshotID = snapshotID
+	r.clearQueryCaches()
 	return nil
 }
 
@@ -257,6 +278,7 @@ func (r *WorkspaceRuntime) RefreshModelTables(ctx context.Context, modelID strin
 	}
 	r.lastRefresh = lastRefresh
 	r.lastSnapshotID = snapshotID
+	r.clearQueryCaches()
 	return nil
 }
 
@@ -282,7 +304,14 @@ func (r *WorkspaceRuntime) RefreshWorkspaceTables(ctx context.Context, tableName
 	}
 	r.lastRefresh = lastRefresh
 	r.lastSnapshotID = snapshotID
+	r.clearQueryCaches()
 	return nil
+}
+
+func (r *WorkspaceRuntime) clearQueryCaches() {
+	for _, view := range r.views {
+		view.ClearQueryCache()
+	}
 }
 
 func WorkspaceModelTableDependencyOrder(models map[string]*semanticmodel.Model, selectedTable string) ([]string, error) {
@@ -383,6 +412,22 @@ func (r *WorkspaceRuntime) DuckLakeSnapshotID() int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.lastSnapshotID
+}
+
+func (r *WorkspaceRuntime) ReadConcurrency() int {
+	if r == nil {
+		return 1
+	}
+	r.mu.Lock()
+	snapshotID := r.lastSnapshotID
+	r.mu.Unlock()
+	if snapshotID <= 0 {
+		return 1
+	}
+	if concurrency, ok := r.db.(interface{ ReadConcurrency() int }); ok {
+		return max(1, concurrency.ReadConcurrency())
+	}
+	return 1
 }
 
 type txExecutor struct {

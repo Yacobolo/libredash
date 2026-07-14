@@ -55,7 +55,7 @@ func TestExecutionMetricsBoundsDataQueries(t *testing.T) {
 	}
 }
 
-func TestExecutionMetricsWrapsDashboardReads(t *testing.T) {
+func TestExecutionMetricsDoesNotAdmitWholeDashboardReads(t *testing.T) {
 	inner := &blockingQueryMetrics{
 		started: make(chan struct{}, 2),
 		release: make(chan struct{}),
@@ -71,24 +71,25 @@ func TestExecutionMetricsWrapsDashboardReads(t *testing.T) {
 		}),
 	}
 
-	go func() {
-		_, _ = metrics.QueryDashboardPage(context.Background(), "sales", "overview", dashboard.Filters{})
-	}()
-	<-inner.started
-	secondDone := make(chan error, 1)
-	go func() {
-		_, err := metrics.QueryDashboardPage(context.Background(), "sales", "overview", dashboard.Filters{})
-		secondDone <- err
-	}()
-
-	select {
-	case <-inner.started:
-		t.Fatal("queued dashboard query executed before read capacity opened")
-	case <-time.After(50 * time.Millisecond):
+	done := make(chan error, 2)
+	for range 2 {
+		go func() {
+			_, err := metrics.QueryDashboardPage(context.Background(), "sales", "overview", dashboard.Filters{})
+			done <- err
+		}()
+	}
+	for range 2 {
+		select {
+		case <-inner.started:
+		case <-time.After(time.Second):
+			t.Fatal("dashboard request was admitted as a whole instead of entering its physical query planning")
+		}
 	}
 	close(inner.release)
-	if err := <-secondDone; err != nil {
-		t.Fatalf("queued dashboard query error = %v", err)
+	for range 2 {
+		if err := <-done; err != nil {
+			t.Fatalf("dashboard query error = %v", err)
+		}
 	}
 }
 

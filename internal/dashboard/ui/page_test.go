@@ -4,6 +4,7 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"html"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -97,7 +98,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 			t.Fatalf("%s segment = %q, want reload command without updates stream reopen:\n%s", attr, segment, showcase)
 		}
 	}
-	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals(".data", "client", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})))
+	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals(".data", "client", "stream-instance", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})))
 	if !strings.Contains(showcaseSignals, `"active_chart"`) || !strings.Contains(showcaseSignals, `"active_kpi"`) {
 		t.Fatalf("showcase bootstrap did not include active chart and KPI visuals:\n%s", showcaseSignals)
 	}
@@ -127,7 +128,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	}
 
 	tables := renderPageForTest(t, report, model, report.Pages[1])
-	tableSignals := html.UnescapeString(jsonString(BootstrapSignals(".data", "client", dashboard.Catalog{}, report, model, report.Pages, report.Pages[1], dashboard.Filters{})))
+	tableSignals := html.UnescapeString(jsonString(BootstrapSignals(".data", "client", "stream-instance", dashboard.Catalog{}, report, model, report.Pages, report.Pages[1], dashboard.Filters{})))
 	for _, tableID := range []string{"orders", "matrix", "pivot"} {
 		if !strings.Contains(tableSignals, `"`+tableID+`":{`) || !strings.Contains(tableSignals, `"availableRows"`) {
 			t.Fatalf("tables bootstrap did not include table %q with row metadata:\n%s", tableID, tableSignals)
@@ -159,6 +160,37 @@ func renderPageForTest(t *testing.T, report reportdef.Dashboard, model *semantic
 		t.Fatal(err)
 	}
 	return html.UnescapeString(out.String())
+}
+
+func TestPageCreatesUniqueStreamInstancePerRender(t *testing.T) {
+	report := reportdef.Dashboard{ID: "report", SemanticModel: "model", Pages: []dashboard.Page{{ID: "overview"}}}
+	model := &semanticmodel.Model{Name: "model"}
+
+	first := renderPageForTest(t, report, model, report.Pages[0])
+	second := renderPageForTest(t, report, model, report.Pages[0])
+	firstID := queryParamFromRenderedPage(t, first, "streamInstance")
+	secondID := queryParamFromRenderedPage(t, second, "streamInstance")
+	if firstID == "" || secondID == "" || firstID == secondID {
+		t.Fatalf("stream instances = %q and %q, want unique non-empty ids", firstID, secondID)
+	}
+}
+
+func queryParamFromRenderedPage(t *testing.T, body, name string) string {
+	t.Helper()
+	start := strings.Index(body, "/updates?")
+	if start < 0 {
+		t.Fatalf("rendered page has no updates URL")
+	}
+	end := strings.IndexAny(body[start:], "'\"")
+	if end < 0 {
+		t.Fatalf("rendered page has unterminated updates URL")
+	}
+	raw := strings.ReplaceAll(body[start:start+end], "&amp;", "&")
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("parse updates URL: %v", err)
+	}
+	return parsed.Query().Get(name)
 }
 
 func renderedAttrSegment(body, name string) string {

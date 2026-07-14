@@ -119,6 +119,35 @@ for (const viewport of [
       expect(tableState.rows).toBeGreaterThan(0)
       expect(tableState.cells).toBeGreaterThan(0)
 
+      const progressiveState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+        const root = element.shadowRoot
+        const chartFrame = root.querySelector('[data-component-status-key="visual:orders_chart"]') as any
+        const tableFrame = root.querySelector('[data-component-status-key="table:orders"]') as any
+        const kpiFrame = root.querySelector('[data-component-status-key="visual:orders_kpi"]') as any
+        const chart = chartFrame?.querySelector('ld-echart') as any
+        const table = tableFrame?.querySelector('ld-report-table') as any
+        await Promise.all([chartFrame?.updateComplete, tableFrame?.updateComplete, chart?.updateComplete, table?.updateComplete])
+        return {
+          chartBusy: chartFrame?.shadowRoot?.querySelector('article')?.getAttribute('aria-busy'),
+          chartLoadingLabel: chartFrame?.shadowRoot?.querySelector('[role="status"]')?.getAttribute('aria-label'),
+          tableAlert: tableFrame?.shadowRoot?.querySelector('[role="alert"]')?.textContent?.replace(/\s+/g, ' ').trim(),
+          tableRetainedRow: table?.shadowRoot?.textContent?.includes('o1'),
+          kpiHasOverlay: Boolean(kpiFrame?.shadowRoot?.querySelector('.refresh-overlay')),
+          chartSelection: chart?.chart?.selection,
+          tableSelection: table?.table?.selection,
+        }
+      })
+
+      expect(progressiveState).toEqual({
+        chartBusy: 'true',
+        chartLoadingLabel: 'Refreshing component',
+        tableAlert: 'Could not refresh this component Ratings query failed',
+        tableRetainedRow: true,
+        kpiHasOverlay: false,
+        chartSelection: [{ mappings: [{ field: 'orders.status', value: 'delivered', label: 'Delivered' }], label: 'Delivered' }],
+        tableSelection: [{ mappings: [{ field: 'orders.order_id', value: 'o1', label: 'o1' }], label: 'o1' }],
+      })
+
       if (viewport.name === 'desktop') {
         const dockState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
           const dock = element.shadowRoot.querySelector('ld-filter-dock') as HTMLElement
@@ -194,7 +223,29 @@ function testDocument(): string {
     operator: 'in',
     urlParam: 'state',
   }]
-  const filters = { controls: { state: { type: 'multi_select', operator: 'in', values: [] } }, selections: [] }
+  const filters = {
+    controls: { state: { type: 'multi_select', operator: 'in', values: [] } },
+    selections: [
+      {
+        id: 'visual:orders_chart:point_selection',
+        sourceKind: 'visual',
+        sourceId: 'orders_chart',
+        interactionKind: 'point_selection',
+        label: 'Delivered',
+        order: 1,
+        entries: [{ mappings: [{ field: 'orders.status', value: 'delivered', label: 'Delivered' }], label: 'Delivered' }],
+      },
+      {
+        id: 'table:orders:row_selection',
+        sourceKind: 'table',
+        sourceId: 'orders',
+        interactionKind: 'row_selection',
+        label: 'o1',
+        order: 2,
+        entries: [{ mappings: [{ field: 'orders.order_id', value: 'o1', label: 'o1' }], label: 'o1' }],
+      },
+    ],
+  }
   const visuals = {
     orders_kpi: {
       version: 3,
@@ -231,7 +282,7 @@ function testDocument(): string {
       series: [],
       options: {},
       rendererOptions: {},
-      selection: [],
+      selection: [{ mappings: [{ field: 'orders.status', value: 'shipped', label: 'Shipped' }], label: 'Shipped' }],
       data: [{ label: 'delivered', value: 42 }, { label: 'shipped', value: 7 }],
     },
   }
@@ -241,8 +292,8 @@ function testDocument(): string {
       kind: 'data_table',
       title: 'Orders',
       style: { density: 'compact', zebra: true, grid: 'full' },
-      interaction: { kind: 'row_selection', toggle: false, mappings: [] },
-      selection: [],
+      interaction: { kind: 'row_selection', toggle: false, mappings: [{ field: 'orders.order_id', value: 'order_id' }] },
+      selection: [{ mappings: [{ field: 'orders.order_id', value: 'server-value', label: 'Server value' }] }],
       columns: [{ key: 'order_id', label: 'Order', width: 180 }],
       totalRows: 1,
       availableRows: 1,
@@ -261,12 +312,17 @@ function testDocument(): string {
       error: '',
     },
   }
-  const status = { loading: false, error: '', lastUpdated: '12:00:00', dataDirectory: '.data/olist', setupRequired: false }
+  const status = { loading: true, error: '', refreshId: 'refresh-3', generation: 3, lastUpdated: '12:00:00', dataDirectory: '.data/olist', setupRequired: false }
+  const componentStatus = {
+    'visual:orders_chart': { generation: 3, loading: true, error: '' },
+    'table:orders': { generation: 3, loading: false, error: 'Ratings query failed' },
+  }
   const signals = {
     page,
     filterConfig,
     filters,
     filterOptions: { state: [{ value: 'SP', label: 'SP' }] },
+    componentStatus,
     visuals,
     tables,
     status,

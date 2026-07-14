@@ -30,6 +30,75 @@ func TestRuntimeMetricsQueryDashboardUsesRuntimeLease(t *testing.T) {
 	}
 }
 
+func TestRuntimeMetricsDashboardRefreshLeasePinsOneRuntimeAcrossTargets(t *testing.T) {
+	first := &targetLeaseRuntime{id: "first"}
+	second := &targetLeaseRuntime{id: "second"}
+	provider := &switchingLeaseProvider{current: first}
+	metrics := runtimeMetrics{provider: provider, dataDir: "/data", workspaceID: "test"}
+
+	err := metrics.WithDashboardRefreshLease(context.Background(), func(ctx context.Context) error {
+		provider.current = second
+		if _, err := metrics.QueryVisualPage(ctx, "dashboard", "page", dashboard.Filters{}, "one"); err != nil {
+			return err
+		}
+		if _, err := metrics.QueryVisualPage(ctx, "dashboard", "page", dashboard.Filters{}, "two"); err != nil {
+			return err
+		}
+		if provider.lease.released {
+			t.Fatal("refresh runtime lease released before targets completed")
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if provider.acquires != 1 {
+		t.Fatalf("runtime lease acquisitions = %d, want 1", provider.acquires)
+	}
+	if first.calls != 2 || second.calls != 0 {
+		t.Fatalf("target calls first=%d second=%d, want 2/0", first.calls, second.calls)
+	}
+	if !provider.lease.released {
+		t.Fatal("refresh runtime lease was not released")
+	}
+}
+
+type switchingLeaseProvider struct {
+	current  runtimehost.Runtime
+	lease    *recordingLease
+	acquires int
+}
+
+func (p *switchingLeaseProvider) Active(context.Context) (runtimehost.Runtime, error) {
+	return p.current, nil
+}
+
+func (p *switchingLeaseProvider) Acquire(context.Context) (runtimehost.Lease, error) {
+	p.acquires++
+	p.lease = &recordingLease{runtime: p.current, snapshotID: 42}
+	return p.lease, nil
+}
+
+type targetLeaseRuntime struct {
+	id    string
+	calls int
+}
+
+func (r *targetLeaseRuntime) Close() error { return nil }
+
+func (r *targetLeaseRuntime) QueryVisualPage(context.Context, string, string, dashboard.Filters, string) (dashboard.Visual, error) {
+	r.calls++
+	return dashboard.Visual{ID: r.id}, nil
+}
+
+func (r *targetLeaseRuntime) QueryVisualsPage(context.Context, string, string, dashboard.Filters, []string) (map[string]dashboard.Visual, error) {
+	return nil, nil
+}
+
+func (r *targetLeaseRuntime) QueryFilterOptionsPage(context.Context, string, string, []string) (map[string][]dashboard.FilterOption, error) {
+	return nil, nil
+}
+
 type leaseRecordingProvider struct {
 	runtime leaseRecordingRuntime
 	lease   *recordingLease

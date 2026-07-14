@@ -54,6 +54,7 @@ for (const viewport of [
       await page.goto(baseURL)
       await page.waitForFunction(() => customElements.get('ld-semantic-model-graph'))
       await page.waitForFunction(() => document.querySelectorAll('ld-semantic-model-graph .react-flow__node').length >= 2)
+      await page.waitForFunction(() => document.querySelectorAll('ld-semantic-model-graph .react-flow__edge').length >= 1)
 
       const state = await page.evaluate(() => {
         const graph = document.querySelector('ld-semantic-model-graph') as HTMLElement

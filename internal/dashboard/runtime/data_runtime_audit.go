@@ -64,3 +64,11 @@ func (r *governedDataRuntime) DuckLakeSnapshotID() int64 {
 	}
 	return snapshot.DuckLakeSnapshotID()
 }
+
+func (r *governedDataRuntime) ReadConcurrency() int {
+	concurrency, ok := r.DataRuntime.(DataRuntimeReadConcurrency)
+	if !ok {
+		return 1
+	}
+	return max(1, concurrency.ReadConcurrency())
+}

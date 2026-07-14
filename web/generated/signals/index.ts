@@ -54,6 +54,7 @@ export interface AdminPageSignal {
 }
 
 export interface AdminQueryDetailSignal {
+  connectionWaitMs: number
   correlationId?: string
   createdAt?: string
   durationMs: number
@@ -61,10 +62,12 @@ export interface AdminQueryDetailSignal {
   eventId?: string
   loading: boolean
   modelId?: string
+  databaseMs: number
   objectId?: string
   objectType?: string
   operation?: string
   planText?: string
+  planningMs: number
   principalId?: string
   queryError?: string
   queryJson?: string
@@ -81,7 +84,9 @@ export interface AdminQueryDetailSignal {
 
 export interface AdminQueryEventSignal {
   correlationId: string
+  connectionWaitMs: number
   createdAt: string
+  databaseMs: number
   durationMs: number
   error: string
   id: string
@@ -90,6 +95,7 @@ export interface AdminQueryEventSignal {
   objectType: string
   operation: string
   planText: string
+  planningMs: number
   principalId: string
   queryJson: string
   queryKind: string
@@ -427,8 +433,15 @@ export interface DashboardComponentSignal {
   y: number
 }
 
+export interface DashboardComponentStatus {
+  error: string
+  generation: number
+  loading: boolean
+}
+
 export interface DashboardEnvelope {
   chrome: ChromeSignal
+  componentStatus: Record<string, DashboardComponentStatus>
   filterConfig: ReportFilterConfig[]
   filterOptions: Record<string, DashboardFilterOption[]>
   filters: DashboardFilters
@@ -564,8 +577,10 @@ export interface DashboardPageSignal {
 export interface DashboardStatus {
   dataDirectory: string
   error: string
+  generation: number
   lastUpdated: string
   loading: boolean
+  refreshId: string
   setupRequired: boolean
 }
 
@@ -916,6 +931,7 @@ export interface RouteRuntimeSignal {
   kind: RouteKind
   modelId?: string
   pageId?: string
+  streamInstanceId?: string
   workspaceId?: string
 }
 

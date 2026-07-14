@@ -91,6 +91,9 @@ Run `libredash config validate` to validate the active environment, or add `--pr
 | `LIBREDASH_DEV_RESTART` | boolean / `false` | dev server | development | Force the managed development server to restart. |
 | `LIBREDASH_DEV_SKIP_PUBLISH` | boolean / `false` | dev server | development | Skip automatic project publishing in the managed development server. |
 | `LIBREDASH_DEV_WORKTREE` | string | dev server | internal | Worktree path exported by the managed development server. |
+| `LIBREDASH_PERF_ITERATIONS` | integer / `5` | MovieLens performance QA | development | Measured interaction iterations run by the MovieLens performance QA scenario. |
+| `LIBREDASH_PERF_LOG` | string / `.tmp/dev-server.log` | MovieLens performance QA | development | Development server log consumed by the MovieLens performance QA scenario. |
+| `LIBREDASH_PERF_OUTPUT` | string / `.tmp/movielens-performance.json` | MovieLens performance QA | development | JSON output path written by the MovieLens performance QA scenario. |
 | `LIBREDASH_SMOKE_PORT` | integer / `18080` | production image smoke test | internal | Host port used by the production image smoke test. |
 
 ## Execution

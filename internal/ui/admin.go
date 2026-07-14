@@ -78,26 +78,29 @@ type AdminGroup struct {
 }
 
 type AdminQueryEvent struct {
-	ID            string
-	WorkspaceID   string
-	PrincipalID   string
-	Surface       string
-	Operation     string
-	QueryKind     string
-	ModelID       string
-	Target        string
-	ObjectType    string
-	ObjectID      string
-	RequestID     string
-	CorrelationID string
-	Status        string
-	DurationMS    int64
-	RowsReturned  int
-	Error         string
-	SQL           string
-	PlanText      string
-	QueryJSON     string
-	CreatedAt     string
+	ID               string
+	WorkspaceID      string
+	PrincipalID      string
+	Surface          string
+	Operation        string
+	QueryKind        string
+	ModelID          string
+	Target           string
+	ObjectType       string
+	ObjectID         string
+	RequestID        string
+	CorrelationID    string
+	Status           string
+	DurationMS       int64
+	PlanningMS       int64
+	ConnectionWaitMS int64
+	DatabaseMS       int64
+	RowsReturned     int
+	Error            string
+	SQL              string
+	PlanText         string
+	QueryJSON        string
+	CreatedAt        string
 }
 
 type AdminQueryHistoryData struct {
@@ -338,29 +341,32 @@ func AdminQueryHistorySignalFromData(data AdminQueryHistoryData) uisignals.Admin
 
 func AdminQueryDetailSignalFromEvent(event AdminQueryEvent) uisignals.AdminQueryDetailSignal {
 	return uisignals.AdminQueryDetailSignal{
-		EventID:       uisignals.Optional(event.ID),
-		Loading:       false,
-		Error:         uisignals.Optional(event.Error),
-		Status:        uisignals.Optional(event.Status),
-		StatusLabel:   uisignals.Optional(queryEventStatusLabel(event.Status)),
-		WorkspaceID:   uisignals.Optional(event.WorkspaceID),
-		PrincipalID:   uisignals.Optional(event.PrincipalID),
-		Surface:       uisignals.Optional(event.Surface),
-		Operation:     uisignals.Optional(event.Operation),
-		QueryKind:     uisignals.Optional(event.QueryKind),
-		ModelID:       uisignals.Optional(event.ModelID),
-		Target:        uisignals.Optional(event.Target),
-		ObjectType:    uisignals.Optional(event.ObjectType),
-		ObjectID:      uisignals.Optional(event.ObjectID),
-		RequestID:     uisignals.Optional(event.RequestID),
-		CorrelationID: uisignals.Optional(event.CorrelationID),
-		DurationMS:    event.DurationMS,
-		RowsReturned:  int64(event.RowsReturned),
-		QueryError:    uisignals.Optional(event.Error),
-		SQL:           uisignals.Optional(event.SQL),
-		PlanText:      uisignals.Optional(event.PlanText),
-		QueryJSON:     uisignals.Optional(event.QueryJSON),
-		CreatedAt:     uisignals.Optional(event.CreatedAt),
+		EventID:          uisignals.Optional(event.ID),
+		Loading:          false,
+		Error:            uisignals.Optional(event.Error),
+		Status:           uisignals.Optional(event.Status),
+		StatusLabel:      uisignals.Optional(queryEventStatusLabel(event.Status)),
+		WorkspaceID:      uisignals.Optional(event.WorkspaceID),
+		PrincipalID:      uisignals.Optional(event.PrincipalID),
+		Surface:          uisignals.Optional(event.Surface),
+		Operation:        uisignals.Optional(event.Operation),
+		QueryKind:        uisignals.Optional(event.QueryKind),
+		ModelID:          uisignals.Optional(event.ModelID),
+		Target:           uisignals.Optional(event.Target),
+		ObjectType:       uisignals.Optional(event.ObjectType),
+		ObjectID:         uisignals.Optional(event.ObjectID),
+		RequestID:        uisignals.Optional(event.RequestID),
+		CorrelationID:    uisignals.Optional(event.CorrelationID),
+		DurationMS:       event.DurationMS,
+		PlanningMS:       event.PlanningMS,
+		ConnectionWaitMS: event.ConnectionWaitMS,
+		DatabaseMS:       event.DatabaseMS,
+		RowsReturned:     int64(event.RowsReturned),
+		QueryError:       uisignals.Optional(event.Error),
+		SQL:              uisignals.Optional(event.SQL),
+		PlanText:         uisignals.Optional(event.PlanText),
+		QueryJSON:        uisignals.Optional(event.QueryJSON),
+		CreatedAt:        uisignals.Optional(event.CreatedAt),
 	}
 }
 
@@ -392,26 +398,29 @@ func adminQueryEventSignals(events []AdminQueryEvent) []uisignals.AdminQueryEven
 	out := make([]uisignals.AdminQueryEventSignal, 0, len(events))
 	for _, event := range events {
 		out = append(out, uisignals.AdminQueryEventSignal{
-			ID:            event.ID,
-			WorkspaceID:   event.WorkspaceID,
-			PrincipalID:   event.PrincipalID,
-			Surface:       event.Surface,
-			Operation:     event.Operation,
-			QueryKind:     event.QueryKind,
-			ModelID:       event.ModelID,
-			Target:        event.Target,
-			ObjectType:    event.ObjectType,
-			ObjectID:      event.ObjectID,
-			RequestID:     event.RequestID,
-			CorrelationID: event.CorrelationID,
-			Status:        event.Status,
-			DurationMS:    event.DurationMS,
-			RowsReturned:  int64(event.RowsReturned),
-			Error:         event.Error,
-			SQL:           event.SQL,
-			PlanText:      event.PlanText,
-			QueryJSON:     event.QueryJSON,
-			CreatedAt:     event.CreatedAt,
+			ID:               event.ID,
+			WorkspaceID:      event.WorkspaceID,
+			PrincipalID:      event.PrincipalID,
+			Surface:          event.Surface,
+			Operation:        event.Operation,
+			QueryKind:        event.QueryKind,
+			ModelID:          event.ModelID,
+			Target:           event.Target,
+			ObjectType:       event.ObjectType,
+			ObjectID:         event.ObjectID,
+			RequestID:        event.RequestID,
+			CorrelationID:    event.CorrelationID,
+			Status:           event.Status,
+			DurationMS:       event.DurationMS,
+			PlanningMS:       event.PlanningMS,
+			ConnectionWaitMS: event.ConnectionWaitMS,
+			DatabaseMS:       event.DatabaseMS,
+			RowsReturned:     int64(event.RowsReturned),
+			Error:            event.Error,
+			SQL:              event.SQL,
+			PlanText:         event.PlanText,
+			QueryJSON:        event.QueryJSON,
+			CreatedAt:        event.CreatedAt,
 		})
 	}
 	return out

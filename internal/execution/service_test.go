@@ -67,6 +67,31 @@ func TestServiceRecordsReadTelemetry(t *testing.T) {
 	}
 }
 
+func TestSubmitReadFromContextAdmitsOnePhysicalReadAndDoesNotDoubleAdmit(t *testing.T) {
+	service := New(Config{MaxRunningReads: 1, MaxQueuedReads: -1, ReadQueueWait: time.Second})
+	ctx := WithReadAdmission(context.Background(), service)
+	var calls int
+	result, err := SubmitReadFromContext(ctx, dataquery.Query{Kind: dataquery.KindSemanticRows}, func(ctx context.Context) (dataquery.Result, error) {
+		calls++
+		if service.Stats().RunningReads != 1 {
+			t.Fatalf("running reads = %d, want 1", service.Stats().RunningReads)
+		}
+		return SubmitReadFromContext(ctx, dataquery.Query{Kind: dataquery.KindSemanticRows}, func(context.Context) (dataquery.Result, error) {
+			calls++
+			return dataquery.Result{RowsReturned: 1}, nil
+		})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || result.RowsReturned != 1 {
+		t.Fatalf("nested admitted result calls=%d result=%#v", calls, result)
+	}
+	if service.Stats().RunningReads != 0 {
+		t.Fatalf("running reads after release = %d, want 0", service.Stats().RunningReads)
+	}
+}
+
 func TestServiceAppliesReadExecutionTimeout(t *testing.T) {
 	service := New(Config{
 		MaxRunningReads:      1,

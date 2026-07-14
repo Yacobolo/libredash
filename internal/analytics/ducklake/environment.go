@@ -3,19 +3,22 @@ package ducklake
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
 
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/securefs"
-	_ "github.com/duckdb/duckdb-go/v2"
+	duckdb "github.com/duckdb/duckdb-go/v2"
 	_ "modernc.org/sqlite"
 )
 
@@ -29,6 +32,7 @@ type Config struct {
 	CatalogPath string
 	DataPath    string
 	SnapshotID  int64
+	MaxReaders  int
 }
 
 type Layout struct {
@@ -39,8 +43,9 @@ type Layout struct {
 }
 
 type Environment struct {
-	db     *sql.DB
-	layout Layout
+	db              *sql.DB
+	layout          Layout
+	readConcurrency int
 }
 
 type Snapshot struct {
@@ -84,20 +89,53 @@ func open(ctx context.Context, config Config, snapshot bool) (*Environment, erro
 	if err := MigrateSQLiteCatalogDataPath(ctx, layout.CatalogPath, layout.DataPath); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("duckdb", ":memory:")
-	if err != nil {
-		return nil, err
+	var env *Environment
+	if snapshot {
+		env, err = openSnapshotEnvironment(ctx, layout, config.SnapshotID, max(1, config.MaxReaders))
+	} else {
+		var db *sql.DB
+		db, err = sql.Open("duckdb", ":memory:")
+		if err == nil {
+			db.SetMaxOpenConns(1)
+			db.SetMaxIdleConns(1)
+			env = &Environment{db: db, layout: layout, readConcurrency: 1}
+			err = env.initialize(ctx, false, config.SnapshotID)
+		}
 	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	env := &Environment{db: db, layout: layout}
-	if err := env.initialize(ctx, snapshot, config.SnapshotID); err != nil {
-		db.Close()
+	if err != nil {
+		if env != nil && env.db != nil {
+			env.db.Close()
+		}
 		return nil, err
 	}
 	if err := secureSQLiteCatalogFiles(layout.CatalogPath); err != nil {
-		db.Close()
+		env.db.Close()
 		return nil, err
+	}
+	return env, nil
+}
+
+func openSnapshotEnvironment(ctx context.Context, layout Layout, snapshotID int64, readers int) (*Environment, error) {
+	threads := max(1, runtime.GOMAXPROCS(0)/readers)
+	attach := fmt.Sprintf("ATTACH IF NOT EXISTS 'ducklake:sqlite:%s' AS %s (DATA_PATH '%s', SNAPSHOT_VERSION %d)", sqlLiteral(layout.CatalogPath), catalogAlias, sqlLiteral(layout.DataPath), snapshotID)
+	connector, err := duckdb.NewConnector(":memory:", func(execer driver.ExecerContext) error {
+		for _, statement := range []string{"LOAD sqlite", "LOAD ducklake", attach, "USE " + catalogAlias, fmt.Sprintf("SET threads = %d", threads)} {
+			if _, err := execer.ExecContext(context.Background(), statement, nil); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	db := sql.OpenDB(connector)
+	db.SetMaxOpenConns(readers)
+	db.SetMaxIdleConns(readers)
+	env := &Environment{db: db, layout: layout, readConcurrency: readers}
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("initialize pinned DuckLake snapshot: %w", err)
 	}
 	return env, nil
 }
@@ -542,6 +580,13 @@ func (e *Environment) SQLDB() *sql.DB {
 	return e.db
 }
 
+func (e *Environment) ReadConcurrency() int {
+	if e == nil || e.readConcurrency <= 0 {
+		return 1
+	}
+	return e.readConcurrency
+}
+
 func (e *Environment) Path() string {
 	if e == nil {
 		return ""
@@ -555,7 +600,16 @@ func (e *Environment) Exec(ctx context.Context, statement string) error {
 }
 
 func (e *Environment) Query(ctx context.Context, plan semanticquery.Plan) (semanticquery.Rows, error) {
-	rows, err := e.db.QueryContext(ctx, plan.SQL, plan.Args...)
+	conn, err := e.queryConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return queryRows(ctx, conn, plan)
+}
+
+func queryRows(ctx context.Context, conn *sql.Conn, plan semanticquery.Plan) (semanticquery.Rows, error) {
+	rows, err := conn.QueryContext(ctx, plan.SQL, plan.Args...)
 	if err != nil {
 		return nil, err
 	}
@@ -581,8 +635,13 @@ func (e *Environment) Query(ctx context.Context, plan semanticquery.Plan) (seman
 }
 
 func (e *Environment) Count(ctx context.Context, plan semanticquery.Plan) (int, error) {
+	conn, err := e.queryConnection(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
 	var count int
-	if err := e.db.QueryRowContext(ctx, plan.SQL, plan.Args...).Scan(&count); err != nil {
+	if err := conn.QueryRowContext(ctx, plan.SQL, plan.Args...).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
@@ -592,9 +651,21 @@ func (e *Environment) FloatBounds(ctx context.Context, plan semanticquery.Plan, 
 	if err := validateColumnAlias(valueColumn); err != nil {
 		return semanticquery.FloatBounds{}, err
 	}
+	conn, err := e.queryConnection(ctx)
+	if err != nil {
+		return semanticquery.FloatBounds{}, err
+	}
+	defer conn.Close()
+	return floatBounds(ctx, conn, plan, valueColumn)
+}
+
+func floatBounds(ctx context.Context, conn *sql.Conn, plan semanticquery.Plan, valueColumn string) (semanticquery.FloatBounds, error) {
+	if err := validateColumnAlias(valueColumn); err != nil {
+		return semanticquery.FloatBounds{}, err
+	}
 	query := "WITH raw AS (" + plan.SQL + ")\nSELECT MIN(" + valueColumn + "), MAX(" + valueColumn + ") FROM raw"
 	var minValue, maxValue sql.NullFloat64
-	if err := e.db.QueryRowContext(ctx, query, plan.Args...).Scan(&minValue, &maxValue); err != nil {
+	if err := conn.QueryRowContext(ctx, query, plan.Args...).Scan(&minValue, &maxValue); err != nil {
 		return semanticquery.FloatBounds{}, err
 	}
 	if !minValue.Valid || !maxValue.Valid {
@@ -607,7 +678,12 @@ func (e *Environment) Histogram(ctx context.Context, plan semanticquery.Plan, sp
 	if err := validateColumnAlias(spec.ValueColumn); err != nil {
 		return nil, err
 	}
-	bounds, err := e.FloatBounds(ctx, plan, spec.ValueColumn)
+	conn, err := e.queryConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	bounds, err := floatBounds(ctx, conn, plan, spec.ValueColumn)
 	if err != nil {
 		return nil, err
 	}
@@ -620,7 +696,7 @@ func (e *Environment) Histogram(ctx context.Context, plan semanticquery.Plan, sp
 	if bounds.Min == bounds.Max {
 		var count int
 		query := "WITH raw AS (" + plan.SQL + ")\nSELECT COUNT(*) FROM raw"
-		if err := e.db.QueryRowContext(ctx, query, plan.Args...).Scan(&count); err != nil {
+		if err := conn.QueryRowContext(ctx, query, plan.Args...).Scan(&count); err != nil {
 			return nil, err
 		}
 		return []semanticquery.HistogramBin{{Bucket: 0, Count: count, Start: bounds.Min, End: bounds.Max}}, nil
@@ -633,7 +709,7 @@ FROM raw
 GROUP BY bucket
 ORDER BY bucket ASC`, plan.SQL, bucketExpr)
 	args := append(append([]any{}, plan.Args...), bounds.Min, bounds.Max, bounds.Min, spec.BinCount)
-	rows, err := e.db.QueryContext(ctx, query, args...)
+	rows, err := conn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -669,6 +745,11 @@ func (e *Environment) Distribution(ctx context.Context, plan semanticquery.Plan,
 	if err != nil {
 		return nil, err
 	}
+	conn, err := e.queryConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
 	query := fmt.Sprintf(`WITH raw AS (%s)
 SELECT %s AS label,
        MIN(%s) AS min,
@@ -682,11 +763,18 @@ ORDER BY %s`, plan.SQL, spec.GroupColumn, spec.ValueColumn, spec.ValueColumn, sp
 	if spec.Limit > 0 {
 		query += fmt.Sprintf("\nLIMIT %d", spec.Limit)
 	}
-	return e.Query(ctx, semanticquery.Plan{
+	return queryRows(ctx, conn, semanticquery.Plan{
 		SQL:     query,
 		Args:    plan.Args,
 		Columns: []string{"label", "min", "q1", "median", "q3", "max"},
 	})
+}
+
+func (e *Environment) queryConnection(ctx context.Context) (*sql.Conn, error) {
+	started := time.Now()
+	conn, err := e.db.Conn(ctx)
+	dataquery.ObserveConnectionWait(ctx, time.Since(started))
+	return conn, err
 }
 
 func (e *Environment) Layout() Layout {

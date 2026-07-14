@@ -8,6 +8,7 @@ import (
 	"time"
 
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	_ "github.com/duckdb/duckdb-go/v2"
 )
 
@@ -55,7 +56,16 @@ func (d *Database) Exec(ctx context.Context, statement string) error {
 }
 
 func (d *Database) Query(ctx context.Context, plan semanticquery.Plan) (semanticquery.Rows, error) {
-	rows, err := d.db.QueryContext(ctx, plan.SQL, plan.Args...)
+	conn, err := d.queryConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return queryRows(ctx, conn, plan)
+}
+
+func queryRows(ctx context.Context, conn *sql.Conn, plan semanticquery.Plan) (semanticquery.Rows, error) {
+	rows, err := conn.QueryContext(ctx, plan.SQL, plan.Args...)
 	if err != nil {
 		return nil, err
 	}
@@ -81,8 +91,13 @@ func (d *Database) Query(ctx context.Context, plan semanticquery.Plan) (semantic
 }
 
 func (d *Database) Count(ctx context.Context, plan semanticquery.Plan) (int, error) {
+	conn, err := d.queryConnection(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer conn.Close()
 	var count int
-	if err := d.db.QueryRowContext(ctx, plan.SQL, plan.Args...).Scan(&count); err != nil {
+	if err := conn.QueryRowContext(ctx, plan.SQL, plan.Args...).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
@@ -92,9 +107,21 @@ func (d *Database) FloatBounds(ctx context.Context, plan semanticquery.Plan, val
 	if err := validateColumnAlias(valueColumn); err != nil {
 		return semanticquery.FloatBounds{}, err
 	}
+	conn, err := d.queryConnection(ctx)
+	if err != nil {
+		return semanticquery.FloatBounds{}, err
+	}
+	defer conn.Close()
+	return floatBounds(ctx, conn, plan, valueColumn)
+}
+
+func floatBounds(ctx context.Context, conn *sql.Conn, plan semanticquery.Plan, valueColumn string) (semanticquery.FloatBounds, error) {
+	if err := validateColumnAlias(valueColumn); err != nil {
+		return semanticquery.FloatBounds{}, err
+	}
 	query := "WITH raw AS (" + plan.SQL + ")\nSELECT MIN(" + valueColumn + "), MAX(" + valueColumn + ") FROM raw"
 	var minValue, maxValue sql.NullFloat64
-	if err := d.db.QueryRowContext(ctx, query, plan.Args...).Scan(&minValue, &maxValue); err != nil {
+	if err := conn.QueryRowContext(ctx, query, plan.Args...).Scan(&minValue, &maxValue); err != nil {
 		return semanticquery.FloatBounds{}, err
 	}
 	if !minValue.Valid || !maxValue.Valid {
@@ -107,7 +134,12 @@ func (d *Database) Histogram(ctx context.Context, plan semanticquery.Plan, spec 
 	if err := validateColumnAlias(spec.ValueColumn); err != nil {
 		return nil, err
 	}
-	bounds, err := d.FloatBounds(ctx, plan, spec.ValueColumn)
+	conn, err := d.queryConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	bounds, err := floatBounds(ctx, conn, plan, spec.ValueColumn)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +152,7 @@ func (d *Database) Histogram(ctx context.Context, plan semanticquery.Plan, spec 
 	if bounds.Min == bounds.Max {
 		var count int
 		query := "WITH raw AS (" + plan.SQL + ")\nSELECT COUNT(*) FROM raw"
-		if err := d.db.QueryRowContext(ctx, query, plan.Args...).Scan(&count); err != nil {
+		if err := conn.QueryRowContext(ctx, query, plan.Args...).Scan(&count); err != nil {
 			return nil, err
 		}
 		return []semanticquery.HistogramBin{{Bucket: 0, Count: count, Start: bounds.Min, End: bounds.Max}}, nil
@@ -133,7 +165,7 @@ FROM raw
 GROUP BY bucket
 ORDER BY bucket ASC`, plan.SQL, bucketExpr)
 	args := append(append([]any{}, plan.Args...), bounds.Min, bounds.Max, bounds.Min, spec.BinCount)
-	rows, err := d.db.QueryContext(ctx, query, args...)
+	rows, err := conn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +201,11 @@ func (d *Database) Distribution(ctx context.Context, plan semanticquery.Plan, sp
 	if err != nil {
 		return nil, err
 	}
+	conn, err := d.queryConnection(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
 	query := fmt.Sprintf(`WITH raw AS (%s)
 SELECT %s AS label,
        MIN(%s) AS min,
@@ -182,11 +219,18 @@ ORDER BY %s`, plan.SQL, spec.GroupColumn, spec.ValueColumn, spec.ValueColumn, sp
 	if spec.Limit > 0 {
 		query += fmt.Sprintf("\nLIMIT %d", spec.Limit)
 	}
-	return d.Query(ctx, semanticquery.Plan{
+	return queryRows(ctx, conn, semanticquery.Plan{
 		SQL:     query,
 		Args:    plan.Args,
 		Columns: []string{"label", "min", "q1", "median", "q3", "max"},
 	})
+}
+
+func (d *Database) queryConnection(ctx context.Context) (*sql.Conn, error) {
+	started := time.Now()
+	conn, err := d.db.Conn(ctx)
+	dataquery.ObserveConnectionWait(ctx, time.Since(started))
+	return conn, err
 }
 
 func distributionOrderBy(sorts []semanticquery.Sort) (string, error) {

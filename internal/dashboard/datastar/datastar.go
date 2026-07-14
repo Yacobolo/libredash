@@ -1,10 +1,12 @@
 package datastar
 
 import (
+	"errors"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
-	"github.com/Yacobolo/libredash/internal/dashboard/command"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 )
@@ -40,11 +42,19 @@ func ModelID(r *http.Request, signals dashboard.Signals, dashboardID string, def
 }
 
 func ClientStreamID(r *http.Request, signals dashboard.Signals, dashboardID, pageID string) string {
-	return StreamID(pagestream.ClientIDFromRequest(r, signals.Runtime.ClientID), dashboardID, pageID)
+	instanceID := signals.Runtime.StreamInstanceID
+	if instanceID == "" {
+		instanceID = r.URL.Query().Get("streamInstance")
+	}
+	return StreamID(pagestream.ClientIDFromRequest(r, signals.Runtime.ClientID), dashboardID, pageID, instanceID)
 }
 
-func StreamID(clientID, dashboardID, pageID string) string {
-	return clientID + ":" + dashboardID + ":" + pageID
+func StreamID(clientID, dashboardID, pageID string, streamInstanceID ...string) string {
+	streamID := clientID + ":" + dashboardID + ":" + pageID
+	if len(streamInstanceID) > 0 && streamInstanceID[0] != "" {
+		streamID += ":" + streamInstanceID[0]
+	}
+	return streamID
 }
 
 func DashboardPatch(patch dashboard.Patch) pagestream.SignalPatch {
@@ -73,29 +83,82 @@ func LoadingPatch(dataDir string) pagestream.SignalPatch {
 		"status": map[string]any{
 			"loading":       true,
 			"error":         "",
+			"refreshId":     "",
+			"generation":    int64(0),
+			"lastUpdated":   "",
 			"dataDirectory": dataDir,
+			"setupRequired": false,
 		},
 	}
 }
 
-func CommandEventPatch(event command.Event) pagestream.SignalPatch {
+func RefreshEventPatch(event dashboardstream.RefreshEvent, dataDir string) pagestream.SignalPatch {
+	generation := int64(event.Generation)
+	status := func(loading bool, err error) map[string]any {
+		message := ""
+		if err != nil {
+			message = err.Error()
+		}
+		return map[string]any{
+			"loading":       loading,
+			"error":         message,
+			"refreshId":     event.RefreshID,
+			"generation":    generation,
+			"lastUpdated":   time.Now().Format("15:04:05"),
+			"dataDirectory": dataDir,
+			"setupRequired": errorSetupRequired(err),
+		}
+	}
+	component := func(loading bool, err string) map[string]any {
+		return map[string]any{"generation": generation, "loading": loading, "error": err}
+	}
 	switch event.Type {
-	case command.EventLoading:
-		return LoadingPatch(event.DataDir)
-	case command.EventDashboard:
-		return DashboardPatch(event.Patch)
-	case command.EventTables:
-		return TablesPatch(event.Tables)
-	case command.EventTable:
-		return TablePatch(event.TableName, event.Table)
+	case dashboardstream.RefreshEventStart:
+		components := map[string]any{}
+		for _, target := range event.Targets {
+			if strings.HasPrefix(target, "visual:") || strings.HasPrefix(target, "table:") {
+				components[target] = component(true, "")
+			}
+		}
+		return pagestream.SignalPatch{
+			"filters":         event.Filters,
+			"status":          status(true, nil),
+			"componentStatus": components,
+		}
+	case dashboardstream.RefreshEventFilterOptions:
+		options, _ := event.Value.(map[string][]dashboard.FilterOption)
+		return pagestream.SignalPatch{"filterOptions": options}
+	case dashboardstream.RefreshEventVisual:
+		visual, _ := event.Value.(dashboard.Visual)
+		key := "visual:" + event.Target
+		return pagestream.SignalPatch{
+			"visuals":         map[string]dashboard.Visual{event.Target: visual},
+			"componentStatus": map[string]any{key: component(false, "")},
+		}
+	case dashboardstream.RefreshEventTable:
+		table, _ := event.Value.(dashboard.Table)
+		key := "table:" + event.Target
+		return pagestream.SignalPatch{
+			"tables":          map[string]dashboard.Table{event.Target: table},
+			"componentStatus": map[string]any{key: component(false, "")},
+		}
+	case dashboardstream.RefreshEventTargetError:
+		if event.Target == "refresh" {
+			return pagestream.SignalPatch{"status": status(false, event.Err)}
+		}
+		message := ""
+		if event.Err != nil {
+			message = event.Err.Error()
+		}
+		return pagestream.SignalPatch{"componentStatus": map[string]any{event.Target: component(false, message)}}
+	case dashboardstream.RefreshEventComplete:
+		return pagestream.SignalPatch{"status": status(false, event.Err)}
 	default:
 		return pagestream.SignalPatch{}
 	}
 }
 
-func SnapshotPatches(snapshot dashboardstream.Snapshot) []pagestream.SignalPatch {
-	return []pagestream.SignalPatch{
-		DashboardPatch(snapshot.Patch),
-		TablesPatch(snapshot.Tables),
-	}
+func errorSetupRequired(err error) bool {
+	var setup interface{ SetupRequired() bool }
+	return errors.As(err, &setup) && setup.SetupRequired()
 }

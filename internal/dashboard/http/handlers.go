@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	"log/slog"
 	nethttp "net/http"
 	"strings"
 
@@ -10,7 +11,9 @@ import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 	reportui "github.com/Yacobolo/libredash/internal/dashboard/ui"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 	"github.com/go-chi/chi/v5"
 )
@@ -30,12 +33,18 @@ type Metrics interface {
 }
 
 type Handler struct {
-	Metrics             Metrics
-	MetricsForWorkspace func(workspaceID string) (Metrics, bool)
-	Broker              *pagestream.Broker
-	CurrentPrincipalID  func(r *nethttp.Request) string
-	CSRFToken           func(r *nethttp.Request) string
-	ChromeDecorators    func(r *nethttp.Request) []reportui.ChromeDecorator
+	Metrics              Metrics
+	MetricsForWorkspace  func(workspaceID string) (Metrics, bool)
+	Broker               *pagestream.Broker
+	Coordinators         *dashboardstream.Registry
+	Logger               *slog.Logger
+	RefreshStarted       dashboardstream.StartObserver
+	RefreshFinished      dashboardstream.SummaryObserver
+	RefreshEventObserved dashboardstream.EventPublisher
+	CacheObserved        dataquery.CacheOutcomeObserver
+	CurrentPrincipalID   func(r *nethttp.Request) string
+	CSRFToken            func(r *nethttp.Request) string
+	ChromeDecorators     func(r *nethttp.Request) []reportui.ChromeDecorator
 }
 
 func DashboardObjectRefs(r *nethttp.Request, workspaceID string) []access.ObjectRef {
