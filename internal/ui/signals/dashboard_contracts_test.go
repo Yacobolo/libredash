@@ -31,7 +31,7 @@ func TestDashboardContractConversionsPreserveJSON(t *testing.T) {
 		Columns: []dashboard.TableColumn{{Key: "amount", Label: "Amount", Align: "right", Role: "measure", Group: "sales", Measure: "amount", ColumnValue: "amount", Width: 120, Format: "currency", Formatting: []dashboard.TableFormattingRule{{
 			Kind: "gradient", Values: map[string]string{"high": "green"}, Min: &min, Max: &max, Color: "white", Background: "black", LowColor: "red", HighColor: "green",
 		}}}},
-		TotalRows: 1, AvailableRows: 1, RowCap: 100, ChunkSize: 50, RowHeight: 28, ResetVersion: 2,
+		TotalRows: 1, TotalRowsKnown: true, AvailableRows: 1, RowCap: 100, ChunkSize: 50, RowHeight: 28, ResetVersion: 2,
 		Sort: dashboard.TableSort{Key: "amount", Direction: "desc"}, Blocks: map[string]dashboard.TableBlock{"a": {Start: 0, RequestSeq: 3, ResetVersion: 2, Sort: dashboard.TableSort{Key: "amount", Direction: "desc"}, Rows: []map[string]any{{"amount": 42}}}},
 	}
 	filters := dashboard.Filters{

@@ -714,6 +714,7 @@ model DashboardTable {
   `style`: DashboardTableStyle;
   `title`: string;
   `totalRows`: int64;
+  `totalRowsKnown`: boolean;
   `version`: int64;
 }
 

@@ -17,8 +17,8 @@ func TestCommandPatchesAreScopedToClientAndPage(t *testing.T) {
 		"interactionCommand": ordersRowSelectionCommand("delivered"),
 		"tableCommand":       tableCommand("orders_table", "all", 0, 50, 12, 0),
 	}))
-	if status != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", status, http.StatusNoContent)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
 
 	requireStatusLoading(t, nextRefreshPatches(t, target), true)

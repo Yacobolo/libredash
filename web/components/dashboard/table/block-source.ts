@@ -27,6 +27,7 @@ export const emptyTable: TableSignal = {
   interaction: { kind: 'row_selection', toggle: true, mappings: [] },
   columns: [],
   totalRows: 0,
+  totalRowsKnown: false,
   availableRows: 0,
   isCapped: false,
   rowCap: 10000,
@@ -62,6 +63,7 @@ export function normalizeTable(value: Partial<TableSignal>): TableSignal {
     kind: value.kind === 'matrix_table' || value.kind === 'pivot_table' ? value.kind : 'data_table',
     style: normalizeStyle(value.style),
     totalRows: positiveNumber(value.totalRows, 0),
+    totalRowsKnown: value.totalRowsKnown === true,
     availableRows: positiveNumber(value.availableRows, positiveNumber(value.totalRows, 0)),
     rowCap: positiveNumber(value.rowCap, 10000),
     chunkSize,
@@ -76,6 +78,21 @@ export function normalizeTable(value: Partial<TableSignal>): TableSignal {
     },
     loadingBlock: value.loadingBlock ?? '',
     error: value.error ?? '',
+  }
+}
+
+// A scrolling-window payload intentionally omits the expensive exact count.
+// Keep cardinality already resolved for the same reset/sort identity while
+// still allowing a new reset to discard stale metadata immediately.
+export function preserveKnownCardinality(previous: TableSignal, incoming: TableSignal): TableSignal {
+  if (!previous.totalRowsKnown) return incoming
+  if (previous.resetVersion !== incoming.resetVersion || !sameSort(previous.sort, incoming.sort)) return incoming
+  return {
+    ...incoming,
+    totalRows: previous.totalRows,
+    totalRowsKnown: true,
+    availableRows: previous.availableRows,
+    isCapped: previous.isCapped,
   }
 }
 

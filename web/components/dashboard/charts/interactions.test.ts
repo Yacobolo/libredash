@@ -2,7 +2,11 @@ import { expect, test } from 'bun:test'
 import { chartInteractionDetailForDatum } from './interactions'
 import { selectedRows } from './utils'
 import type { ChartPayload } from './types'
-import { canonicalSelectionEntriesForSource } from '../interaction-selection'
+import {
+  applyOptimisticInteraction,
+  canonicalSelectionEntriesForSource,
+  validateInteractionCommand,
+} from '../interaction-selection'
 
 test('chartInteractionDetailForDatum preserves typed scalar values and mapping identity', () => {
   const detail = chartInteractionDetailForDatum({
@@ -135,4 +139,63 @@ test('canonical selections are projected only to their source component', () => 
   expect(canonicalSelectionEntriesForSource(selections, 'table', 'movies')).toEqual([
     { mappings: [{ field: 'movies.movie_id', fact: 'movies', value: 1 }] },
   ])
+})
+
+test('optimistic selections replace rapidly without allowing an older value to return', () => {
+  const configured = {
+    kind: 'point_selection',
+    toggle: false,
+    mappings: [{ field: 'release_decade', value: 'label' }],
+    targets: ['rating_count', 'movie_table'],
+  }
+  const first = {
+    sourceKind: 'visual',
+    sourceId: 'ratings_by_decade',
+    interactionKind: 'point_selection',
+    action: 'replace',
+    toggle: false,
+    mappings: [{ field: 'release_decade', value: '1980s', label: '1980s' }],
+  } as const
+  const second = {
+    ...first,
+    mappings: [{ field: 'release_decade', value: '1990s', label: '1990s' }],
+  } as const
+
+  expect(validateInteractionCommand(first, configured)).toBe(true)
+  const afterFirst = applyOptimisticInteraction([], first)
+  const afterSecond = applyOptimisticInteraction(afterFirst, second)
+
+  expect(canonicalSelectionEntriesForSource(afterSecond, 'visual', 'ratings_by_decade')).toEqual([
+    { mappings: [{ field: 'release_decade', value: '1990s', label: '1990s' }], label: '1990s' },
+  ])
+})
+
+test('optimistic validation rejects forged identities and incomplete composite tuples', () => {
+  const configured = {
+    kind: 'point_selection',
+    toggle: true,
+    mappings: [
+      { field: 'activity_date', grain: 'month', value: 'period' },
+      { field: 'ratings.rating_bucket', fact: 'ratings', value: 'bucket' },
+    ],
+  }
+  const valid = {
+    sourceKind: 'visual',
+    sourceId: 'activity',
+    interactionKind: 'point_selection',
+    action: 'set',
+    toggle: true,
+    mappings: [
+      { field: 'activity_date', grain: 'month', value: '2026-07-01' },
+      { field: 'ratings.rating_bucket', fact: 'ratings', value: 5 },
+    ],
+  } as const
+
+  expect(validateInteractionCommand(valid, configured)).toBe(true)
+  expect(validateInteractionCommand({ ...valid, mappings: valid.mappings.slice(0, 1) }, configured)).toBe(false)
+  expect(validateInteractionCommand({
+    ...valid,
+    mappings: [valid.mappings[0], { ...valid.mappings[1], fact: 'tags' }],
+  }, configured)).toBe(false)
+  expect(validateInteractionCommand({ ...valid, mappings: [{ ...valid.mappings[0], value: {} }] }, configured)).toBe(false)
 })

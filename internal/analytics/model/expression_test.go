@@ -39,3 +39,29 @@ func TestExpressionReportsAllowlistedFunctions(t *testing.T) {
 		t.Fatalf("functions = %#v, want %#v", got, want)
 	}
 }
+
+func TestExpressionEvaluateMetricArithmeticAndNullSemantics(t *testing.T) {
+	expression, err := ParseExpression("round(safe_divide(${tags}, ${ratings}), 3)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := expression.Evaluate(func(ref string) (any, error) {
+		return map[string]any{"tags": int64(3), "ratings": int64(8)}[ref], nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != 0.375 {
+		t.Fatalf("value = %#v, want 0.375", value)
+	}
+
+	nullValue, err := expression.Evaluate(func(ref string) (any, error) {
+		return map[string]any{"tags": int64(3), "ratings": int64(0)}[ref], nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if nullValue != nil {
+		t.Fatalf("division by zero = %#v, want nil", nullValue)
+	}
+}

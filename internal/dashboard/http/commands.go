@@ -128,7 +128,12 @@ func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Re
 			}
 		})
 	}
-	w.WriteHeader(nethttp.StatusNoContent)
+	// Datastar treats JSON responses as signal patches and consumes the body
+	// before completing its request. A 204 response is valid HTTP, but Datastar
+	// closes that branch by aborting its fetch controller, which browsers expose
+	// as a failed request. The empty patch acknowledges command acceptance while
+	// progressive results continue exclusively on the page /updates stream.
+	writeJSON(w, nethttp.StatusOK, map[string]any{})
 }
 
 func streamPreparation(prepared command.PreparedRefresh) dashboardstream.RefreshPreparation {

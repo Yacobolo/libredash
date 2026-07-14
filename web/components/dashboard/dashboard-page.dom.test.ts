@@ -149,6 +149,122 @@ for (const viewport of [
       })
 
       if (viewport.name === 'desktop') {
+        const updateIsolation = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+          const chart = element.shadowRoot.querySelector('ld-echart') as any
+          const direct = document.createElement('ld-echart') as any
+          direct.chart = structuredClone(chart.chart)
+          document.body.append(direct)
+          await direct.updateComplete
+          direct.rendererHandle?.dispose()
+          let directRendererUpdates = 0
+          direct.rendererHandle = {
+            update: () => { directRendererUpdates += 1 },
+            resize: () => {},
+            clear: () => {},
+            dispose: () => {},
+          }
+          direct.rendererName = 'echarts'
+          direct.chart = structuredClone(direct.chart)
+          await direct.updateComplete
+          const afterEquivalentClone = directRendererUpdates
+          direct.chart = { ...direct.chart, data: [{ label: 'delivered', value: 99 }] }
+          await direct.updateComplete
+          const afterDirectDataChange = directRendererUpdates
+          direct.remove()
+
+          let rendererUpdates = 0
+          chart.renderChart = () => { rendererUpdates += 1 }
+          const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+
+          mergePatch({ componentStatus: { 'table:orders': { generation: 3, loading: true, error: '' } } })
+          await element.updateComplete
+          await chart.updateComplete
+          const afterUnrelatedPatch = rendererUpdates
+
+          mergePatch({ visuals: { orders_chart: { data: [{ label: 'delivered', value: 43 }, { label: 'shipped', value: 7 }] } } })
+          await element.updateComplete
+          await chart.updateComplete
+          return { afterEquivalentClone, afterDirectDataChange, afterUnrelatedPatch, afterChartPatch: rendererUpdates }
+        })
+
+        expect(updateIsolation).toEqual({
+          afterEquivalentClone: 0,
+          afterDirectDataChange: 1,
+          afterUnrelatedPatch: 0,
+          afterChartPatch: 1,
+        })
+      }
+
+      if (viewport.name === 'desktop') {
+        const optimistic = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+          const root = element.shadowRoot
+          const chart = root.querySelector('ld-echart') as any
+          const detail = (value: string) => ({
+            sourceKind: 'visual',
+            sourceId: 'orders_chart',
+            interactionKind: 'point_selection',
+            action: 'replace',
+            toggle: true,
+            mappings: [{ field: 'orders.status', value, label: value }],
+          })
+          chart.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: detail('processing') }))
+          chart.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: detail('complete') }))
+          await element.updateComplete
+          await chart.updateComplete
+
+          const kpiFrame = root.querySelector('[data-component-status-key="visual:orders_kpi"]') as any
+          const tableFrame = root.querySelector('[data-component-status-key="table:orders"]') as any
+          await Promise.all([kpiFrame.updateComplete, tableFrame.updateComplete])
+          const pending = {
+            selection: chart.chart.selection,
+            kpiBusy: kpiFrame.shadowRoot.querySelector('article')?.getAttribute('aria-busy'),
+            tableBusy: tableFrame.shadowRoot.querySelector('article')?.getAttribute('aria-busy'),
+          }
+
+          const beforeForged = JSON.stringify(chart.chart.selection)
+          chart.dispatchEvent(new CustomEvent('ld-interaction-select', {
+            bubbles: true,
+            composed: true,
+            detail: { ...detail('forged'), mappings: [{ field: 'orders.secret', value: 'forged' }] },
+          }))
+          await element.updateComplete
+
+          const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+          mergePatch({
+            status: { generation: 4, refreshId: 'refresh-4', loading: true },
+            filters: {
+              selections: [{
+                id: 'visual:orders_chart:point_selection',
+                sourceKind: 'visual',
+                sourceId: 'orders_chart',
+                interactionKind: 'point_selection',
+                label: 'complete',
+                order: 1,
+                entries: [{ mappings: [{ field: 'orders.status', value: 'complete', label: 'complete' }], label: 'complete' }],
+              }],
+            },
+          })
+          await element.updateComplete
+          await chart.updateComplete
+          return {
+            pending,
+            forgedRolledBack: JSON.stringify(chart.chart.selection) === beforeForged,
+            canonical: chart.chart.selection,
+          }
+        })
+
+        expect(optimistic).toEqual({
+          pending: {
+            selection: [{ mappings: [{ field: 'orders.status', value: 'complete', label: 'complete' }], label: 'complete' }],
+            kpiBusy: 'true',
+            tableBusy: 'true',
+          },
+          forgedRolledBack: true,
+          canonical: [{ mappings: [{ field: 'orders.status', value: 'complete', label: 'complete' }], label: 'complete' }],
+        })
+      }
+
+      if (viewport.name === 'desktop') {
         const dockState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
           const dock = element.shadowRoot.querySelector('ld-filter-dock') as HTMLElement
           const root = dock.shadowRoot
@@ -275,7 +391,7 @@ function testDocument(): string {
       type: 'bar',
       title: 'Orders by status',
       unit: 'orders',
-      interaction: { kind: 'point_selection', toggle: true, mappings: [{ field: 'orders.status', value: 'label' }] },
+      interaction: { kind: 'point_selection', toggle: true, mappings: [{ field: 'orders.status', value: 'label' }], targets: ['orders_kpi', 'orders'] },
       dimensions: ['status'],
       measure: 'order_count',
       measures: ['order_count'],

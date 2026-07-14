@@ -98,6 +98,28 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 			t.Fatalf("%s segment = %q, want reload command without updates stream reopen:\n%s", attr, segment, showcase)
 		}
 	}
+	commandSignalFilters := map[string][]string{
+		"data-on:ld-interaction-select":  {"runtime", "interactionCommand"},
+		"data-on:ld-table-window-change": {"runtime", "tableCommand"},
+		"data-on:ld-filters-change":      {"runtime", "filters[.]controls"},
+		"data-on:ld-selection-clear":     {"runtime"},
+	}
+	for attr, signalPaths := range commandSignalFilters {
+		segment := renderedAttrSegment(showcase, attr)
+		if !strings.Contains(segment, `filterSignals`) {
+			t.Fatalf("%s segment = %q, want command-scoped Datastar signal filter", attr, segment)
+		}
+		for _, signalPath := range signalPaths {
+			if !strings.Contains(segment, signalPath) {
+				t.Fatalf("%s segment = %q, want signal path %q", attr, segment, signalPath)
+			}
+		}
+		for _, forbidden := range []string{"visuals", "tables", "filterOptions", "componentStatus"} {
+			if strings.Contains(segment, forbidden) {
+				t.Fatalf("%s segment = %q, must not post heavy signal %q", attr, segment, forbidden)
+			}
+		}
+	}
 	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals(".data", "client", "stream-instance", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})))
 	if !strings.Contains(showcaseSignals, `"active_chart"`) || !strings.Contains(showcaseSignals, `"active_kpi"`) {
 		t.Fatalf("showcase bootstrap did not include active chart and KPI visuals:\n%s", showcaseSignals)

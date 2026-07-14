@@ -51,8 +51,16 @@ func updatesURLWithParams(workspaceID, dashboardID, pageID string, params map[st
 	return "/updates?" + values.Encode()
 }
 
-func postAction(path string) string {
-	return "@post('" + path + "', {headers: window.LibreDashCommand.headers()})"
+func postAction(path string, signalPaths ...string) string {
+	if len(signalPaths) == 0 {
+		signalPaths = []string{"runtime"}
+	}
+	patterns := make([]string, 0, len(signalPaths))
+	for _, signalPath := range signalPaths {
+		patterns = append(patterns, strings.ReplaceAll(signalPath, ".", "[.]"))
+	}
+	include := "/^(?:" + strings.Join(patterns, "|") + ")(?:[.]|$)/"
+	return "@post('" + path + "', {filterSignals: {include: " + include + "}, headers: window.LibreDashCommand.headers()})"
 }
 
 func staticAsset(path string) string {
@@ -104,7 +112,7 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 	initialURLParams := report.URLParamsFromFiltersForPage(activePage.ID, initialFilters)
 	initialURLParams["streamInstance"] = newStreamInstanceID()
 	dashboardUpdatesURL := updatesURLWithParams(catalog.Workspace.ID, report.ID, activePage.ID, initialURLParams)
-	reloadAction := postAction("/workspaces/" + catalog.Workspace.ID + "/commands/reload")
+	reloadAction := postAction("/workspaces/"+catalog.Workspace.ID+"/commands/reload", "runtime", "filters.controls")
 	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + tableReset
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title: "LibreDash",
@@ -134,12 +142,12 @@ func Page(dataDir, clientID, csrfToken string, catalog dashboard.Catalog, report
 					g.Attr("dashboard-id", report.ID),
 					g.Attr("page-id", activePage.ID),
 					g.Attr("data-on:ld-filters-change", filtersUpdate+reloadAction),
-					g.Attr("data-on:ld-filters-reset", filtersUpdate+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters")),
+					g.Attr("data-on:ld-filters-reset", filtersUpdate+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters", "runtime")),
 					g.Attr("data-on:ld-filters-refresh", reloadAction),
-					g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection")),
-					g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/select")),
-					g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/table-window")),
-					g.Attr("data-on:ld-refresh-materializations", postAction("/workspaces/"+catalog.Workspace.ID+"/commands/refresh-materializations?model="+model.Name+"&dashboard="+report.ID)),
+					g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
+					g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
+					g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/table-window", "runtime", "tableCommand")),
+					g.Attr("data-on:ld-refresh-materializations", postAction("/workspaces/"+catalog.Workspace.ID+"/commands/refresh-materializations?model="+model.Name+"&dashboard="+report.ID, "runtime")),
 				),
 			),
 			inspectorElement(),

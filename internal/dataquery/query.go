@@ -2,6 +2,7 @@ package dataquery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -31,15 +32,20 @@ type Query struct {
 	Target        string
 	Fields        []Field
 	Measures      []Field
-	Value         Field
-	Time          Time
-	Filters       []Filter
-	Sort          []Sort
-	ColumnMasks   []ColumnMask
-	Offset        int
-	Limit         int
-	BinCount      int
-	IncludeTotal  bool
+	// AuthorizationFields preserves the logical projection used to authorize a
+	// physical query whose result shape intentionally omits those fields (for
+	// example, an exact COUNT for a governed dashboard table). Executors and
+	// planners must not project these fields.
+	AuthorizationFields []Field
+	Value               Field
+	Time                Time
+	Filters             []Filter
+	Sort                []Sort
+	ColumnMasks         []ColumnMask
+	Offset              int
+	Limit               int
+	BinCount            int
+	IncludeTotal        bool
 }
 
 type Field struct {
@@ -102,6 +108,45 @@ type Result struct {
 	Error            string
 	Warnings         []string
 }
+
+// BundleRequest identifies one independently decoded aggregate consumer. A
+// bundle executor must govern every Query before deciding whether the requests
+// are physically compatible.
+type BundleRequest struct {
+	ID    string
+	Query Query
+}
+
+type BundleResult struct {
+	Results map[string]Result
+	SQL     string
+}
+
+type BundleExecutor interface {
+	ExecuteDataQueryBundle(context.Context, []BundleRequest) (BundleResult, error)
+}
+
+type BundleIncompatibleError struct{ Err error }
+
+func (e *BundleIncompatibleError) Error() string {
+	return "data query bundle is incompatible: " + e.Err.Error()
+}
+func (e *BundleIncompatibleError) Unwrap() error { return e.Err }
+
+func IsBundleIncompatible(err error) bool {
+	var target *BundleIncompatibleError
+	return errors.As(err, &target)
+}
+
+type BundleBranchError struct {
+	ID  string
+	Err error
+}
+
+func (e *BundleBranchError) Error() string {
+	return fmt.Sprintf("data query bundle branch %q: %v", e.ID, e.Err)
+}
+func (e *BundleBranchError) Unwrap() error { return e.Err }
 
 const (
 	SurfaceDashboard    = "dashboard"

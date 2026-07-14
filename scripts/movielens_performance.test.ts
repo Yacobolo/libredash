@@ -1,5 +1,13 @@
 import { expect, test } from 'bun:test'
-import { aggregateSamples, logTextAfterCursor, parseRefreshSummaries, percentile } from './movielens_performance'
+import {
+  aggregateSamples,
+  assertInteractionTrace,
+  classifyRapidSupersessionNetworkFailures,
+  evaluateThresholds,
+  logTextAfterCursor,
+  parseRefreshSummaries,
+  percentile,
+} from './movielens_performance'
 
 test('percentile uses nearest-rank values', () => {
   expect(percentile([5, 1, 3, 2, 4], 50)).toBe(3)
@@ -29,10 +37,15 @@ test('refresh summaries are correlated without accepting raw non-refresh logs', 
     stageTimingsMs: { planning: 4, database: 12 },
   }])
   expect(aggregateSamples([{
-    interaction: 'decade', iteration: 1, refreshId: 'keep', generation: 2, feedbackMs: 40, settlementMs: 200,
+    interaction: 'decade', iteration: 1, refreshId: 'keep', generation: 2,
+    optimisticFeedbackMs: 4, firstTargetPaintMs: 40, criticalKPISettlementMs: 90, allTargetSettlementMs: 200,
+    targets: ['visual:kpi'], excludedTargets: ['visual:source'], targetUpdates: [{ target: 'visual:kpi', order: 1 }],
+    tableRowsBeforeCount: null, selectedValueTypes: ['number'],
   }], summaries)).toEqual({
-    feedbackMs: { samples: 1, p50: 40, p95: 40 },
-    settlementMs: { samples: 1, p50: 200, p95: 200 },
+    optimisticFeedbackMs: { samples: 1, p50: 4, p95: 4 },
+    firstTargetPaintMs: { samples: 1, p50: 40, p95: 40 },
+    criticalKPISettlementMs: { samples: 1, p50: 90, p95: 90 },
+    allTargetSettlementMs: { samples: 1, p50: 200, p95: 200 },
     queryCounts: [3],
     cancellations: 1,
     stageTimingsMs: {
@@ -50,8 +63,10 @@ test('refresh summaries accept the coordinator slog text format', () => {
 
   expect(parseRefreshSummaries(log, new Set(['keep']))).toEqual([{
     refreshId: 'keep',
+    generation: 3,
     queryCount: 4,
     cancellationCount: 2,
+    outcome: 'complete',
     stageTimingsMs: {
       admissionWait: 3,
       connectionWait: 5,
@@ -60,4 +75,140 @@ test('refresh summaries accept the coordinator slog text format', () => {
       planning: 6,
     },
   }])
+})
+
+test('refresh summaries can return all post-cursor generations for rapid cancellation analysis', () => {
+  const log = [
+    '{"event":"dashboard_refresh","refreshId":"a","generation":8,"queryCount":0,"cancellationCount":1,"cancellationReason":"superseded","outcome":"canceled"}',
+    '{"event":"dashboard_refresh","refreshId":"b","generation":9,"queryCount":2,"cancellationCount":0,"outcome":"complete"}',
+  ].join('\n')
+  expect(parseRefreshSummaries(log)).toEqual([
+    {
+      refreshId: 'a', generation: 8, queryCount: 0, cancellationCount: 1,
+      cancellationReason: 'superseded', outcome: 'canceled', stageTimingsMs: {},
+    },
+    {
+      refreshId: 'b', generation: 9, queryCount: 2, cancellationCount: 0,
+      outcome: 'complete', stageTimingsMs: {},
+    },
+  ])
+})
+
+test('interaction trace requires exactly one visual update, lazy table rows then count, and no excluded updates', () => {
+  expect(assertInteractionTrace({
+    targets: ['visual:kpi', 'table:movies'],
+    excludedTargets: ['visual:source'],
+    targetUpdates: [
+      { target: 'visual:kpi', order: 1 },
+      { target: 'table:movies', order: 2, tableStart: 0, tableRows: 50, totalRowsKnown: false },
+      { target: 'table:movies', order: 3, tableStart: 0, tableRows: 50, totalRows: 123, totalRowsKnown: true },
+    ],
+  })).toEqual([])
+
+  expect(assertInteractionTrace({
+    targets: ['visual:kpi', 'table:movies'],
+    excludedTargets: ['visual:source'],
+    targetUpdates: [
+      { target: 'visual:kpi', order: 1 },
+      { target: 'visual:kpi', order: 2 },
+      { target: 'table:movies', order: 3, tableStart: 0, tableRows: 50, totalRows: 50, totalRowsKnown: true },
+      { target: 'visual:source', order: 4 },
+    ],
+  })).toEqual([
+    'visual:kpi updated 2 times, want exactly 1',
+    'table:movies updated 1 times, want either one exact short-page patch or exactly 2 patches (rows then count)',
+    'table:movies did not publish rows before its exact count',
+    'excluded target visual:source updated 1 time',
+  ])
+
+  expect(assertInteractionTrace({
+    targets: ['table:movies'],
+    excludedTargets: [],
+    targetUpdates: [
+      { target: 'table:movies', order: 1, tableStart: 0, tableRows: 4, totalRows: 4, totalRowsKnown: true },
+    ],
+  })).toEqual([])
+})
+
+test('interaction trace rejects malformed and out-of-order table delivery', () => {
+  expect(assertInteractionTrace({
+    targets: ['table:movies'],
+    excludedTargets: [],
+    targetUpdates: [
+      { target: 'table:movies', order: 1, tableStart: 0, tableRows: 4, totalRows: 5, totalRowsKnown: true },
+    ],
+  })).toEqual([
+    'table:movies updated 1 times, want either one exact short-page patch or exactly 2 patches (rows then count)',
+    'table:movies did not publish rows before its exact count',
+  ])
+
+  expect(assertInteractionTrace({
+    targets: ['table:movies'],
+    excludedTargets: [],
+    targetUpdates: [
+      { target: 'table:movies', order: 2, tableStart: 0, tableRows: 50, totalRows: 123, totalRowsKnown: true },
+      { target: 'table:movies', order: 3, tableStart: 0, tableRows: 50, totalRowsKnown: false },
+    ],
+  })).toEqual([
+    'table:movies did not publish rows before its exact count',
+  ])
+
+  expect(assertInteractionTrace({
+    targets: ['table:movies'],
+    excludedTargets: [],
+    targetUpdates: [
+      { target: 'table:movies', order: 1, tableStart: 50, tableRows: 4, totalRows: 54, totalRowsKnown: true },
+    ],
+  })).toEqual([
+    'table:movies updated 1 times, want either one exact short-page patch or exactly 2 patches (rows then count)',
+    'table:movies did not publish rows before its exact count',
+  ])
+})
+
+test('rapid supersession permits at most the first select abort after server cancellation is proven', () => {
+  const abort = 'net::ERR_ABORTED POST http://localhost:8185/workspaces/movielens/commands/select'
+  expect(classifyRapidSupersessionNetworkFailures([abort], true)).toEqual({
+    expectedAborts: [abort],
+    unexpectedFailures: [],
+  })
+  expect(classifyRapidSupersessionNetworkFailures([abort], false)).toEqual({
+    expectedAborts: [],
+    unexpectedFailures: [abort],
+  })
+  expect(classifyRapidSupersessionNetworkFailures([abort, abort], true)).toEqual({
+    expectedAborts: [abort],
+    unexpectedFailures: [abort],
+  })
+  expect(classifyRapidSupersessionNetworkFailures([
+    'net::ERR_FAILED POST http://localhost:8185/workspaces/movielens/commands/select',
+  ], true)).toEqual({
+    expectedAborts: [],
+    unexpectedFailures: ['net::ERR_FAILED POST http://localhost:8185/workspaces/movielens/commands/select'],
+  })
+})
+
+test('performance thresholds are opt-in and report every breached phase', () => {
+  const result = {
+    optimisticFeedbackMs: { samples: 5, p50: 3, p95: 12 },
+    firstTargetPaintMs: { samples: 5, p50: 20, p95: 75 },
+    criticalKPISettlementMs: { samples: 5, p50: 80, p95: 250 },
+    allTargetSettlementMs: { samples: 5, p50: 120, p95: 480 },
+  }
+  expect(evaluateThresholds(result, {
+    optimisticFeedbackP95Ms: 16,
+    firstTargetPaintP95Ms: 100,
+    criticalKPISettlementP95Ms: 300,
+    allTargetSettlementP95Ms: 500,
+  })).toEqual([])
+  expect(evaluateThresholds(result, {
+    optimisticFeedbackP95Ms: 10,
+    firstTargetPaintP95Ms: 50,
+    criticalKPISettlementP95Ms: 200,
+    allTargetSettlementP95Ms: 400,
+  })).toEqual([
+    'optimistic feedback p95 12ms exceeds 10ms',
+    'first target paint p95 75ms exceeds 50ms',
+    'critical KPI settlement p95 250ms exceeds 200ms',
+    'all-target settlement p95 480ms exceeds 400ms',
+  ])
 })

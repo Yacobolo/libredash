@@ -35,7 +35,7 @@ import {
 import { visualMenuIcon } from '../visual-menu-icons'
 import { visualActionStyles } from '../visual-action-styles'
 import { defaultDirection, formatCell, rowKey } from './format'
-import { blockStartsForAll, emptyBlocks, emptyTable, sameSort, sortedBlockRows, tableConverter } from './block-source'
+import { blockStartsForAll, emptyBlocks, emptyTable, preserveKnownCardinality, sameSort, sortedBlockRows, tableConverter } from './block-source'
 import {
   buildRowSelectionCommand,
   rowClickSelectionAction,
@@ -1050,6 +1050,10 @@ class ReportTable extends LitElement {
   }
 
   willUpdate(changedProperties: Map<PropertyKey, unknown>): void {
+	const previousTable = changedProperties.get('table')
+	if (previousTable) {
+	  this.table = preserveKnownCardinality(previousTable as TableSignal, this.table)
+	}
     if (this.lastResetVersion !== this.table.resetVersion) {
       this.lastResetVersion = this.table.resetVersion
       this.blockCache = emptyBlocks()
@@ -1743,11 +1747,12 @@ class ReportTable extends LitElement {
   }
 
   private rowRangeText(): string {
-    if (!this.table.totalRows || !this.availableRows) return 'No rows'
+	if (!this.availableRows) return this.table.totalRowsKnown ? 'No rows' : 'Waiting for row count'
     const firstIndex = Math.min(this.availableRows - 1, Math.max(0, Math.floor(this.viewportTop / this.rowHeight)))
     const visibleRows = Math.max(1, Math.ceil((this.viewportHeight || this.rowHeight) / this.rowHeight))
     const lastIndex = Math.min(this.availableRows, firstIndex + visibleRows)
-    return `${(firstIndex + 1).toLocaleString()}-${lastIndex.toLocaleString()} of ${this.table.totalRows.toLocaleString()}`
+	const total = this.table.totalRowsKnown ? this.table.totalRows.toLocaleString() : '…'
+	return `${(firstIndex + 1).toLocaleString()}-${lastIndex.toLocaleString()} of ${total}`
   }
 
   private mergeIncomingBlocks(): void {

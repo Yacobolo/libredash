@@ -60,6 +60,20 @@ func (s *Service) Query(ctx context.Context, request Request) (Rows, error) {
 	return s.executor.Query(ctx, plan)
 }
 
+// QueryBundle executes all compatible aggregate branches as one physical
+// statement and restores each branch's authored output aliases.
+func (s *Service) QueryBundle(ctx context.Context, requests []BundleRequest) (map[string]Rows, error) {
+	plan, err := s.planner.PlanBundle(requests)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.executor.Query(ctx, plan.Plan)
+	if err != nil {
+		return nil, err
+	}
+	return plan.Decode(rows)
+}
+
 func (s *Service) Rows(ctx context.Context, request RowRequest) (Rows, error) {
 	plan, err := s.planner.PlanRows(request)
 	if err != nil {

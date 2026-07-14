@@ -440,6 +440,9 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	if table.TotalRows != rows {
 		t.Fatalf("total rows = %d, want %d", table.TotalRows, rows)
 	}
+	if !table.TotalRowsKnown {
+		t.Fatal("initial table total rows are not known")
+	}
 	if table.AvailableRows != dashboard.TableInteractiveRowCap {
 		t.Fatalf("available rows = %d, want %d", table.AvailableRows, dashboard.TableInteractiveRowCap)
 	}
@@ -455,14 +458,17 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	if _, ok := table.Blocks["c"]; ok {
 		t.Fatalf("initial table unexpectedly loaded block c: %#v", table.Blocks["c"])
 	}
-	if len(recorder.queries) != 1 {
-		t.Fatalf("initial table data queries = %d, want 1: %#v", len(recorder.queries), recorder.queries)
+	if len(recorder.queries) != 2 {
+		t.Fatalf("initial table data queries = %d, want rows plus count: %#v", len(recorder.queries), recorder.queries)
 	}
-	if !recorder.queries[0].IncludeTotal {
-		t.Fatalf("initial table query IncludeTotal = false: %#v", recorder.queries[0])
+	if recorder.queries[0].IncludeTotal {
+		t.Fatalf("initial row query IncludeTotal = true: %#v", recorder.queries[0])
 	}
-	if !strings.Contains(recorder.results[0].SQL, "COUNT(*) OVER") {
-		t.Fatalf("initial table SQL does not fuse total count: %s", recorder.results[0].SQL)
+	if strings.Contains(recorder.results[0].SQL, "COUNT(*) OVER") {
+		t.Fatalf("initial row SQL blocks on a window count: %s", recorder.results[0].SQL)
+	}
+	if !recorder.queries[1].IncludeTotal || len(recorder.queries[1].Fields) != 0 || len(recorder.queries[1].Measures) != 0 {
+		t.Fatalf("initial count query = %#v, want count-only semantic rows request", recorder.queries[1])
 	}
 	if got := table.Blocks["a"].RequestSeq; got != 9 {
 		t.Fatalf("block request seq = %d, want 9", got)
@@ -483,8 +489,18 @@ func TestServiceTableInteractiveCap(t *testing.T) {
 	if next.TotalRows != rows {
 		t.Fatalf("next block total rows = %d, want %d", next.TotalRows, rows)
 	}
-	if len(recorder.queries) != 1 || !recorder.queries[0].IncludeTotal {
-		t.Fatalf("next block queries = %#v, want one fused-total query", recorder.queries)
+	if len(recorder.queries) != 2 || recorder.queries[0].IncludeTotal || !recorder.queries[1].IncludeTotal {
+		t.Fatalf("next block queries = %#v, want independent rows and count", recorder.queries)
+	}
+
+	overshoot, err := metrics.QueryTableRowsPage(ctx, "executive-sales", "", dashboard.Filters{}, dashboard.TableRequest{
+		Table: "orders_table", Block: "b", Start: rows + dashboard.TableChunkSize, Count: dashboard.TableChunkSize, RequestSeq: 11,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overshoot.TotalRowsKnown {
+		t.Fatalf("overshoot total = %d known=true, must remain unknown", overshoot.TotalRows)
 	}
 }
 

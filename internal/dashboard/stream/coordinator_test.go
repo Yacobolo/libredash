@@ -62,6 +62,47 @@ func TestCoordinatorPublishesStartBeforeWorkCompletes(t *testing.T) {
 	assertRefreshEvent(t, events, RefreshEventComplete, 1)
 }
 
+func TestCoordinatorDebounceSkipsSupersededGenerationWork(t *testing.T) {
+	coordinator := NewCoordinator(context.Background(), func(RefreshEvent) {})
+	t.Cleanup(coordinator.Close)
+	var mu sync.Mutex
+	invoked := []string{}
+	startedAt := time.Now()
+	work := func(name string) RefreshWork {
+		return func(context.Context, RefreshPublisher) {
+			mu.Lock()
+			invoked = append(invoked, name)
+			mu.Unlock()
+		}
+	}
+	begin := func(name string) error {
+		_, err := coordinator.BeginPrepared(func(current dashboard.Filters) (RefreshPreparation, error) {
+			return RefreshPreparation{Filters: current, Command: "select"}, nil
+		}, func(RefreshPreparation) RefreshWork { return work(name) })
+		return err
+	}
+	if err := begin("stale"); err != nil {
+		t.Fatal(err)
+	}
+	if err := begin("current"); err != nil {
+		t.Fatal(err)
+	}
+
+	eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(invoked) == 1
+	})
+	mu.Lock()
+	defer mu.Unlock()
+	if len(invoked) != 1 || invoked[0] != "current" {
+		t.Fatalf("invoked work = %#v, want latest generation only", invoked)
+	}
+	if elapsed := time.Since(startedAt); elapsed < 25*time.Millisecond {
+		t.Fatalf("latest work invoked after %s, want generation debounce", elapsed)
+	}
+}
+
 func TestCoordinatorLatestGenerationSuppressesCanceledResultsAndCompletion(t *testing.T) {
 	var (
 		mu     sync.Mutex

@@ -1,9 +1,12 @@
 package runtime
 
 import (
+	"reflect"
 	"testing"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	"github.com/Yacobolo/libredash/internal/dashboard"
+	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 )
 
 func TestAggregateMemberMetadataResolvesMetricPresentation(t *testing.T) {
@@ -13,5 +16,22 @@ func TestAggregateMemberMetadataResolvesMetricPresentation(t *testing.T) {
 	got := aggregateMemberMetadata(model, "tags_per_rating")
 	if got.Label != "Tags per rating" || got.Unit != "ratio" || got.Format != "decimal" {
 		t.Fatalf("metric metadata = %#v", got)
+	}
+}
+
+func TestCategoryMultiMeasureDatumsDecodesBundledWideRows(t *testing.T) {
+	runtime := &modelRuntime{model: &semanticmodel.Model{Measures: map[string]semanticmodel.MetricMeasure{
+		"rating_count": {Label: "Ratings"},
+		"tag_count":    {Label: "Tags"},
+	}}}
+	visual := reportdef.Visual{Query: reportdef.VisualQuery{Measures: []reportdef.FieldRef{{Field: "rating_count"}, {Field: "tag_count"}}}}
+	rows := []dashboard.Datum{{"label": "2024-01-01", "value_0": int64(8), "value_1": int64(3)}}
+	got := categoryMultiMeasureDatums(runtime, visual, rows)
+	want := []dashboard.Datum{
+		{"label": "2024-01-01", "series": "Ratings", "value": int64(8)},
+		{"label": "2024-01-01", "series": "Tags", "value": int64(3)},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("datums = %#v, want %#v", got, want)
 	}
 }

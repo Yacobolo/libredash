@@ -84,14 +84,14 @@ func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {
 				primeSignals := mergeSignals(runtimeSignals(clientIDFromSignals(tt.signals), "overview"), map[string]any{
 					"interactionCommand": ordersRowSelectionCommand("delivered"),
 				})
-				if got := h.postCommand(t, "/commands/select", primeSignals); got != http.StatusNoContent {
-					t.Fatalf("prime selection status = %d, want %d", got, http.StatusNoContent)
+				if got := h.postCommand(t, "/commands/select", primeSignals); got != http.StatusOK {
+					t.Fatalf("prime selection status = %d, want %d", got, http.StatusOK)
 				}
 				_ = nextRefreshPatches(t, stream)
 			}
 
-			if got := h.postCommand(t, tt.path, tt.signals); got != http.StatusNoContent {
-				t.Fatalf("status = %d, want %d", got, http.StatusNoContent)
+			if got := h.postCommand(t, tt.path, tt.signals); got != http.StatusOK {
+				t.Fatalf("status = %d, want %d", got, http.StatusOK)
 			}
 
 			tt.assert(t, nextRefreshPatches(t, stream))
@@ -107,8 +107,8 @@ func TestTableWindowCommandPublishesOnlyRequestedTablePatch(t *testing.T) {
 	status := h.postCommand(t, "/commands/table-window", mergeSignals(runtimeSignals("cmd-table", "overview"), map[string]any{
 		"tableCommand": tableCommand("orders_table", "a", 0, 1, 7, 0),
 	}))
-	if status != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", status, http.StatusNoContent)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
 
 	patches := nextRefreshPatches(t, stream)
@@ -131,8 +131,8 @@ func TestTableWindowCommandDoesNotPublishCanceledTablePatch(t *testing.T) {
 	status := h.postCommand(t, "/commands/table-window", mergeSignals(runtimeSignals("cmd-table-canceled", "overview"), map[string]any{
 		"tableCommand": tableCommand("orders_table", "a", 0, 1, 8, 0),
 	}))
-	if status != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", status, http.StatusNoContent)
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", status, http.StatusOK)
 	}
 
 	patches := nextRefreshPatches(t, stream)

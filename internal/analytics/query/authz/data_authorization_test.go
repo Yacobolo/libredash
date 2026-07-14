@@ -115,6 +115,70 @@ func TestGovernModelAggregateUsesTransitivePhysicalPolicies(t *testing.T) {
 	}
 }
 
+func TestGovernDashboardCountUsesAuthorizationProjectionPolicies(t *testing.T) {
+	ctx := context.Background()
+	store, err := platform.Open(ctx, filepath.Join(t.TempDir(), "libredash.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatal(err)
+	}
+	repo := accesssqlite.NewRepository(store.SQLDB())
+	principal, err := repo.UpsertPrincipal(ctx, access.PrincipalInput{ID: "analyst", Email: "analyst@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	model := governanceTestModel()
+	modelObject := access.ItemObject(access.SecurableSemanticModel, "test", model.Name)
+	dataset := access.ItemObjectWithParent(access.SecurableDataset, "test", model.Name+"/ratings", modelObject)
+	column := access.ItemObjectWithParent(access.SecurableColumn, "test", model.Name+"/ratings/rating", dataset)
+	for _, object := range []access.ObjectRef{modelObject, dataset, column} {
+		if _, err := repo.UpsertSecurableObject(ctx, object, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := repo.CreateGrant(ctx, access.GrantInput{
+		Object: dataset, SubjectType: access.SubjectPrincipal, SubjectID: principal.ID, Privilege: access.PrivilegeQueryData,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.UpsertDataPolicy(ctx, access.DataPolicyInput{
+		Object: column, PolicyType: "row_filter", ExpressionJSON: `{"field":"ratings.status","operator":"equals","values":["published"]}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.UpsertDataPolicy(ctx, access.DataPolicyInput{
+		Object: column, PolicyType: "column_mask", ExpressionJSON: `{"field":"ratings.rating","mask":"null"}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	metrics := New(semanticModelMetrics{model: model}, Options{
+		Repo: repo,
+		PrincipalFromContext: func(context.Context) (Principal, bool) {
+			return Principal{ID: principal.ID}, true
+		},
+		DefaultWorkspaceID: "test",
+	})
+	governed, _, err := metrics.GovernDataQuery(ctx, dataquery.Query{
+		Surface: dataquery.SurfaceDashboard, Operation: dataquery.OperationDashboardCount,
+		WorkspaceID: "test", ModelID: model.Name, Kind: dataquery.KindSemanticRows, Target: "ratings", IncludeTotal: true,
+		AuthorizationFields: []dataquery.Field{{Field: "ratings.rating", Alias: "rating"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(governed.Filters) != 1 || governed.Filters[0].Field != "ratings.status" {
+		t.Fatalf("governed count filters = %#v", governed.Filters)
+	}
+	if len(governed.ColumnMasks) != 1 || governed.ColumnMasks[0].Field != "ratings.rating" {
+		t.Fatalf("governed count masks = %#v", governed.ColumnMasks)
+	}
+}
+
 func governanceTestModel() *semanticmodel.Model {
 	return &semanticmodel.Model{
 		Name: "activity",

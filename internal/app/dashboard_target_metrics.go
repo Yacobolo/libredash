@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	"github.com/Yacobolo/libredash/internal/dataquery"
 )
 
 type dashboardTargetRuntime interface {
@@ -18,6 +19,10 @@ type dashboardTargetMetrics interface {
 	QueryVisualPage(context.Context, string, string, dashboard.Filters, string) (dashboard.Visual, error)
 	QueryVisualsPage(context.Context, string, string, dashboard.Filters, []string) (map[string]dashboard.Visual, error)
 	QueryFilterOptionsPage(context.Context, string, string, []string) (map[string][]dashboard.FilterOption, error)
+}
+
+type dashboardVisualBundleRuntime interface {
+	QueryVisualBundlePage(context.Context, string, string, dashboard.Filters, []string) (map[string]dashboard.Visual, error)
 }
 
 type dashboardConcurrencyMetrics interface {
@@ -118,6 +123,19 @@ func (m runtimeMetrics) QueryVisualsPage(ctx context.Context, dashboardID, pageI
 	return port.QueryVisualsPage(ctx, dashboardID, pageID, filters, visualIDs)
 }
 
+func (m runtimeMetrics) QueryVisualBundlePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	runtime, release, err := m.activeForDashboardRefresh(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	port, ok := runtime.(dashboardVisualBundleRuntime)
+	if !ok {
+		return nil, dashboardBundleUnavailable(runtime)
+	}
+	return port.QueryVisualBundlePage(ctx, dashboardID, pageID, filters, visualIDs)
+}
+
 func (m runtimeMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
 	runtime, release, err := m.activeForDashboardRefresh(ctx)
 	if err != nil {
@@ -147,6 +165,10 @@ func (m multiWorkspaceMetrics) QueryVisualsPage(ctx context.Context, dashboardID
 	return port.QueryVisualsPage(ctx, dashboardID, pageID, filters, visualIDs)
 }
 
+func (m multiWorkspaceMetrics) QueryVisualBundlePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	return queryVisualBundleFrom(ctx, m.defaultMetrics(), dashboardID, pageID, filters, visualIDs)
+}
+
 func (m multiWorkspaceMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
 	port, err := targetMetricsFrom(m.defaultMetrics())
 	if err != nil {
@@ -169,6 +191,10 @@ func (m *dynamicRuntimeMetrics) QueryVisualsPage(ctx context.Context, dashboardI
 		return nil, err
 	}
 	return port.QueryVisualsPage(ctx, dashboardID, pageID, filters, visualIDs)
+}
+
+func (m *dynamicRuntimeMetrics) QueryVisualBundlePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	return queryVisualBundleFrom(ctx, m.defaultMetrics(), dashboardID, pageID, filters, visualIDs)
 }
 
 func (m *dynamicRuntimeMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
@@ -195,6 +221,10 @@ func (m executionMetrics) QueryVisualsPage(ctx context.Context, dashboardID, pag
 	return port.QueryVisualsPage(m.readContext(ctx), dashboardID, pageID, filters, visualIDs)
 }
 
+func (m executionMetrics) QueryVisualBundlePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	return queryVisualBundleFrom(m.readContext(ctx), m.QueryMetrics, dashboardID, pageID, filters, visualIDs)
+}
+
 func (m executionMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
 	port, err := targetMetricsFrom(m.QueryMetrics)
 	if err != nil {
@@ -217,6 +247,10 @@ func (m queryAuditMetrics) QueryVisualsPage(ctx context.Context, dashboardID, pa
 		return nil, err
 	}
 	return port.QueryVisualsPage(m.auditContext(ctx), dashboardID, pageID, filters, visualIDs)
+}
+
+func (m queryAuditMetrics) QueryVisualBundlePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	return queryVisualBundleFrom(m.auditContext(ctx), m.QueryMetrics, dashboardID, pageID, filters, visualIDs)
 }
 
 func (m queryAuditMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
@@ -243,6 +277,10 @@ func (m dashboardCommandMetrics) QueryVisualsPage(ctx context.Context, dashboard
 	return port.QueryVisualsPage(ctx, dashboardID, pageID, filters, visualIDs)
 }
 
+func (m dashboardCommandMetrics) QueryVisualBundlePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	return queryVisualBundleFrom(ctx, m.QueryMetrics, dashboardID, pageID, filters, visualIDs)
+}
+
 func (m dashboardCommandMetrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {
 	port, err := targetMetricsFrom(m.QueryMetrics)
 	if err != nil {
@@ -260,4 +298,16 @@ func targetMetricsFrom(metrics any) (dashboardTargetMetrics, error) {
 		return nil, fmt.Errorf("%T does not provide dashboard target queries", metrics)
 	}
 	return port, nil
+}
+
+func queryVisualBundleFrom(ctx context.Context, metrics any, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	port, ok := metrics.(dashboardVisualBundleRuntime)
+	if !ok {
+		return nil, dashboardBundleUnavailable(metrics)
+	}
+	return port.QueryVisualBundlePage(ctx, dashboardID, pageID, filters, visualIDs)
+}
+
+func dashboardBundleUnavailable(metrics any) error {
+	return &dataquery.BundleIncompatibleError{Err: fmt.Errorf("%T does not provide dashboard aggregate bundles", metrics)}
 }

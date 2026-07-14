@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"unicode"
@@ -44,8 +45,17 @@ func (e Expression) SQL(resolve func(string) (string, error)) (string, error) {
 	return e.root.sql(resolve)
 }
 
+// Evaluate applies the parsed scalar expression to already aggregated values.
+func (e Expression) Evaluate(resolve func(string) (any, error)) (any, error) {
+	if e.root == nil {
+		return nil, fmt.Errorf("expression is not parsed")
+	}
+	return e.root.evaluate(resolve)
+}
+
 type expressionNode interface {
 	sql(func(string) (string, error)) (string, error)
+	evaluate(func(string) (any, error)) (any, error)
 }
 
 type expressionRef string
@@ -54,10 +64,18 @@ func (n expressionRef) sql(resolve func(string) (string, error)) (string, error)
 	return resolve(string(n))
 }
 
+func (n expressionRef) evaluate(resolve func(string) (any, error)) (any, error) {
+	return resolve(string(n))
+}
+
 type expressionNumber string
 
 func (n expressionNumber) sql(_ func(string) (string, error)) (string, error) {
 	return string(n), nil
+}
+
+func (n expressionNumber) evaluate(_ func(string) (any, error)) (any, error) {
+	return strconv.ParseFloat(string(n), 64)
 }
 
 type expressionUnary struct {
@@ -71,6 +89,21 @@ func (n expressionUnary) sql(resolve func(string) (string, error)) (string, erro
 		return "", err
 	}
 	return "(" + string(n.op) + value + ")", nil
+}
+
+func (n expressionUnary) evaluate(resolve func(string) (any, error)) (any, error) {
+	value, err := n.node.evaluate(resolve)
+	if err != nil || value == nil {
+		return value, err
+	}
+	number, err := expressionFloat(value)
+	if err != nil {
+		return nil, err
+	}
+	if n.op == '-' {
+		return -number, nil
+	}
+	return number, nil
 }
 
 type expressionBinary struct {
@@ -88,6 +121,40 @@ func (n expressionBinary) sql(resolve func(string) (string, error)) (string, err
 		return "", err
 	}
 	return "(" + left + " " + string(n.op) + " " + right + ")", nil
+}
+
+func (n expressionBinary) evaluate(resolve func(string) (any, error)) (any, error) {
+	left, err := n.left.evaluate(resolve)
+	if err != nil {
+		return nil, err
+	}
+	right, err := n.right.evaluate(resolve)
+	if err != nil {
+		return nil, err
+	}
+	if left == nil || right == nil {
+		return nil, nil
+	}
+	l, err := expressionFloat(left)
+	if err != nil {
+		return nil, err
+	}
+	r, err := expressionFloat(right)
+	if err != nil {
+		return nil, err
+	}
+	switch n.op {
+	case '+':
+		return l + r, nil
+	case '-':
+		return l - r, nil
+	case '*':
+		return l * r, nil
+	case '/':
+		return l / r, nil
+	default:
+		return nil, fmt.Errorf("unsupported arithmetic operator %q", n.op)
+	}
 }
 
 type expressionCall struct {
@@ -108,6 +175,120 @@ func (n expressionCall) sql(resolve func(string) (string, error)) (string, error
 		return "(" + args[0] + " / NULLIF(" + args[1] + ", 0))", nil
 	}
 	return strings.ToUpper(n.name) + "(" + strings.Join(args, ", ") + ")", nil
+}
+
+func (n expressionCall) evaluate(resolve func(string) (any, error)) (any, error) {
+	args := make([]any, len(n.args))
+	for i, arg := range n.args {
+		value, err := arg.evaluate(resolve)
+		if err != nil {
+			return nil, err
+		}
+		args[i] = value
+	}
+	switch n.name {
+	case "coalesce":
+		for _, value := range args {
+			if value != nil {
+				return value, nil
+			}
+		}
+		return nil, nil
+	case "nullif":
+		if args[0] == nil || args[1] == nil {
+			return args[0], nil
+		}
+		left, err := expressionFloat(args[0])
+		if err != nil {
+			return nil, err
+		}
+		right, err := expressionFloat(args[1])
+		if err != nil {
+			return nil, err
+		}
+		if left == right {
+			return nil, nil
+		}
+		return args[0], nil
+	case "abs":
+		if args[0] == nil {
+			return nil, nil
+		}
+		value, err := expressionFloat(args[0])
+		return math.Abs(value), err
+	case "round":
+		if args[0] == nil {
+			return nil, nil
+		}
+		value, err := expressionFloat(args[0])
+		if err != nil {
+			return nil, err
+		}
+		digits := 0
+		if len(args) == 2 {
+			if args[1] == nil {
+				return nil, nil
+			}
+			digitValue, digitErr := expressionFloat(args[1])
+			if digitErr != nil {
+				return nil, digitErr
+			}
+			digits = int(digitValue)
+		}
+		factor := math.Pow10(digits)
+		return math.Round(value*factor) / factor, nil
+	case "safe_divide":
+		if args[0] == nil || args[1] == nil {
+			return nil, nil
+		}
+		numerator, err := expressionFloat(args[0])
+		if err != nil {
+			return nil, err
+		}
+		denominator, err := expressionFloat(args[1])
+		if err != nil {
+			return nil, err
+		}
+		if denominator == 0 {
+			return nil, nil
+		}
+		return numerator / denominator, nil
+	default:
+		return nil, fmt.Errorf("unsupported expression function %q", n.name)
+	}
+}
+
+func expressionFloat(value any) (float64, error) {
+	switch typed := value.(type) {
+	case int:
+		return float64(typed), nil
+	case int8:
+		return float64(typed), nil
+	case int16:
+		return float64(typed), nil
+	case int32:
+		return float64(typed), nil
+	case int64:
+		return float64(typed), nil
+	case uint:
+		return float64(typed), nil
+	case uint8:
+		return float64(typed), nil
+	case uint16:
+		return float64(typed), nil
+	case uint32:
+		return float64(typed), nil
+	case uint64:
+		return float64(typed), nil
+	case float32:
+		return float64(typed), nil
+	case float64:
+		return typed, nil
+	case interface{ Float64() float64 }:
+		return typed.Float64(), nil
+	default:
+		return 0, fmt.Errorf("expression value %T is not numeric", value)
+	}
 }
 
 type expressionParser struct {

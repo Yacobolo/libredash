@@ -71,6 +71,7 @@ export interface TableSignal {
   selection?: InteractionSelectionEntry[]
   columns: TableColumn[]
   totalRows: number
+  totalRowsKnown: boolean
   availableRows: number
   isCapped: boolean
   rowCap: number

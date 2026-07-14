@@ -1424,6 +1424,14 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
+    "LIBREDASH_PERF_ENFORCE_THRESHOLDS": {
+      "default": "false",
+      "description": "Fail MovieLens performance QA when phase latency or query-count thresholds are exceeded.",
+      "pattern": "^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "MovieLens performance QA"
+    },
     "LIBREDASH_PERF_ITERATIONS": {
       "default": "5",
       "description": "Measured interaction iterations run by the MovieLens performance QA scenario.",
@@ -1435,6 +1443,46 @@
     "LIBREDASH_PERF_LOG": {
       "default": ".tmp/dev-server.log",
       "description": "Development server log consumed by the MovieLens performance QA scenario.",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "MovieLens performance QA"
+    },
+    "LIBREDASH_PERF_MAX_ALL_TARGET_P95_MS": {
+      "default": "1000",
+      "description": "Maximum all-target settlement p95 when performance thresholds are enforced.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "MovieLens performance QA"
+    },
+    "LIBREDASH_PERF_MAX_CRITICAL_KPI_P95_MS": {
+      "default": "1000",
+      "description": "Maximum critical-KPI settlement p95 when performance thresholds are enforced.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "MovieLens performance QA"
+    },
+    "LIBREDASH_PERF_MAX_FIRST_TARGET_PAINT_P95_MS": {
+      "default": "500",
+      "description": "Maximum first-target paint p95 when performance thresholds are enforced.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "MovieLens performance QA"
+    },
+    "LIBREDASH_PERF_MAX_OPTIMISTIC_FEEDBACK_P95_MS": {
+      "default": "16",
+      "description": "Maximum local optimistic-feedback p95 when performance thresholds are enforced.",
+      "pattern": "^-?[0-9]+$",
+      "type": "string",
+      "x-lifecycle": "development",
+      "x-scope": "MovieLens performance QA"
+    },
+    "LIBREDASH_PERF_MAX_QUERIES": {
+      "default": "4",
+      "description": "Maximum physical queries per measured refresh when performance thresholds are enforced.",
+      "pattern": "^-?[0-9]+$",
       "type": "string",
       "x-lifecycle": "development",
       "x-scope": "MovieLens performance QA"

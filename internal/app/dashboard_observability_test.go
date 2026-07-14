@@ -11,6 +11,7 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 	for _, event := range []dashboardstream.RefreshEvent{
 		{Type: dashboardstream.RefreshEventVisual, Target: "revenue"},
 		{Type: dashboardstream.RefreshEventTable, Target: "orders"},
+		{Type: dashboardstream.RefreshEventTableCountErr, Target: "orders"},
 		{Type: dashboardstream.RefreshEventFilterOptions, Target: "state"},
 		{Type: dashboardstream.RefreshEventTargetError, Target: "visual:broken"},
 		{Type: dashboardstream.RefreshEventTargetError, Target: "refresh"},
@@ -23,6 +24,7 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 		"filter_options:success": 1,
 		"refresh:error":          1,
 		"table:success":          1,
+		"table_count:error":      1,
 		"visual:error":           1,
 		"visual:success":         1,
 	}

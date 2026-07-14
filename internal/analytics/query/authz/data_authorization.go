@@ -642,13 +642,18 @@ func dataQueryColumnObjects(request dataquery.Query) []access.ObjectRef {
 }
 
 func dataQuerySelectedFields(request dataquery.Query) []string {
-	fields := make([]string, 0, len(request.Fields)+len(request.Measures)+1)
+	fields := make([]string, 0, len(request.Fields)+len(request.Measures)+len(request.AuthorizationFields)+1)
 	for _, field := range request.Fields {
 		if field.Field != "" {
 			fields = append(fields, field.Field)
 		}
 	}
 	for _, field := range request.Measures {
+		if field.Field != "" {
+			fields = append(fields, field.Field)
+		}
+	}
+	for _, field := range request.AuthorizationFields {
 		if field.Field != "" {
 			fields = append(fields, field.Field)
 		}

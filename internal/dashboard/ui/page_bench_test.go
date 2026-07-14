@@ -50,7 +50,7 @@ func benchmarkDashboardBridge(b *testing.B, legacy bool) {
 
 func benchmarkDashboardDocument(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, activePage dashboard.Page, signals map[string]any, legacy bool) g.Node {
 	dashboardUpdatesURL := updatesURL(catalog.Workspace.ID, report.ID, activePage.ID)
-	reloadAction := postAction("/workspaces/" + catalog.Workspace.ID + "/commands/reload")
+	reloadAction := postAction("/workspaces/"+catalog.Workspace.ID+"/commands/reload", "runtime", "filters.controls")
 	tableReset := tableResetExpression()
 	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + tableReset
 	body := benchmarkDatastarLitDashboardRoot(catalog, report, model, filtersUpdate, reloadAction)
@@ -134,12 +134,12 @@ func benchmarkLegacyDashboardRoot(catalog dashboard.Catalog, report reportdef.Da
 func benchmarkDashboardCommandAttrs(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, filtersUpdate, reloadAction string) []g.Node {
 	return []g.Node{
 		g.Attr("data-on:ld-filters-change", filtersUpdate+reloadAction),
-		g.Attr("data-on:ld-filters-reset", filtersUpdate+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters")),
+		g.Attr("data-on:ld-filters-reset", filtersUpdate+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/reset-filters", "runtime")),
 		g.Attr("data-on:ld-filters-refresh", reloadAction),
-		g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection")),
-		g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/select")),
-		g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/table-window")),
-		g.Attr("data-on:ld-refresh-materializations", postAction("/workspaces/"+catalog.Workspace.ID+"/commands/refresh-materializations?model="+model.Name+"&dashboard="+report.ID)),
+		g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
+		g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
+		g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; "+postAction("/workspaces/"+catalog.Workspace.ID+"/commands/table-window", "runtime", "tableCommand")),
+		g.Attr("data-on:ld-refresh-materializations", postAction("/workspaces/"+catalog.Workspace.ID+"/commands/refresh-materializations?model="+model.Name+"&dashboard="+report.ID, "runtime")),
 	}
 }
 

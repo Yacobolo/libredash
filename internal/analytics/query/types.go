@@ -102,3 +102,34 @@ type Plan struct {
 	PhysicalDependencies []string
 	RelationshipPaths    []string
 }
+
+// BundleRequest is one independently shaped aggregate in a shared governed
+// single-fact scan. ID is an opaque consumer key and must be unique in a
+// bundle.
+type BundleRequest struct {
+	ID      string
+	Request Request
+}
+
+// BundlePlan is one physical statement containing independently shaped result
+// branches over a common governed scan.
+type BundlePlan struct {
+	Plan     Plan
+	Branches []BundleBranch
+}
+
+type BundleBranch struct {
+	ID      string
+	Ordinal int
+	Columns []BundleColumn
+}
+
+type BundleColumn struct {
+	Output   string
+	Physical string
+}
+
+const (
+	BundleBranchColumn = "__bundle_branch"
+	BundleRowColumn    = "__bundle_row"
+)

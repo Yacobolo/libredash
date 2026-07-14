@@ -14,6 +14,10 @@ type dashboardTargetMetrics interface {
 	QueryFilterOptionsPage(context.Context, string, string, []string) (map[string][]dashboard.FilterOption, error)
 }
 
+type dashboardVisualBundleMetrics interface {
+	QueryVisualBundlePage(context.Context, string, string, dashboard.Filters, []string) (map[string]dashboard.Visual, error)
+}
+
 func (m Metrics) DashboardTargetConcurrency() int {
 	capability, ok := m.Metrics.(interface{ DashboardTargetConcurrency() int })
 	if !ok || capability.DashboardTargetConcurrency() <= 1 {
@@ -47,6 +51,14 @@ func (m Metrics) QueryVisualsPage(ctx context.Context, dashboardID, pageID strin
 		return nil, err
 	}
 	return port.QueryVisualsPage(dataquery.WithGovernor(ctx, m), dashboardID, pageID, filters, visualIDs)
+}
+
+func (m Metrics) QueryVisualBundlePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
+	port, ok := m.Metrics.(dashboardVisualBundleMetrics)
+	if !ok {
+		return nil, &dataquery.BundleIncompatibleError{Err: errors.New("dashboard aggregate bundles are not configured")}
+	}
+	return port.QueryVisualBundlePage(dataquery.WithGovernor(ctx, m), dashboardID, pageID, filters, visualIDs)
 }
 
 func (m Metrics) QueryFilterOptionsPage(ctx context.Context, dashboardID, pageID string, filterIDs []string) (map[string][]dashboard.FilterOption, error) {

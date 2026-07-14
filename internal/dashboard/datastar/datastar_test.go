@@ -50,6 +50,20 @@ func TestRefreshCompletePreservesFatalError(t *testing.T) {
 	}
 }
 
+func TestTableMetadataUpdatesDataWithoutChangingComponentStatus(t *testing.T) {
+	table := dashboard.Table{Title: "Orders", TotalRows: 42, TotalRowsKnown: true}
+	patch := RefreshEventPatch(dashboardstream.RefreshEvent{
+		Type: dashboardstream.RefreshEventTableMetadata, Target: "orders", Value: table,
+	}, ".data")
+	tables, ok := patch["tables"].(map[string]dashboard.Table)
+	if !ok || tables["orders"].TotalRows != 42 || !tables["orders"].TotalRowsKnown {
+		t.Fatalf("metadata patch = %#v", patch)
+	}
+	if _, ok := patch["componentStatus"]; ok {
+		t.Fatalf("metadata patch changed target status: %#v", patch)
+	}
+}
+
 type setupRequiredPatchError struct{}
 
 func (setupRequiredPatchError) Error() string       { return "source data is missing" }

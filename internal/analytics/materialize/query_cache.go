@@ -15,6 +15,7 @@ import (
 type queryResultCache struct {
 	mu         sync.Mutex
 	capacity   int
+	namespace  string
 	entries    map[string]*list.Element
 	lru        *list.List
 	group      singleflight.Group
@@ -26,8 +27,8 @@ type queryResultCacheEntry struct {
 	result dataquery.Result
 }
 
-func newQueryResultCache(capacity int) *queryResultCache {
-	return &queryResultCache{capacity: capacity, entries: map[string]*list.Element{}, lru: list.New()}
+func newQueryResultCache(capacity int, namespace string) *queryResultCache {
+	return &queryResultCache{capacity: capacity, namespace: namespace, entries: map[string]*list.Element{}, lru: list.New()}
 }
 
 func (c *queryResultCache) execute(ctx context.Context, request dataquery.Query, execute func() (dataquery.Result, error)) (dataquery.Result, error) {
@@ -81,23 +82,72 @@ func (c *queryResultCache) execute(ctx context.Context, request dataquery.Query,
 	}
 }
 
+// coalesce runs one exact multi-query flight at a time without caching the
+// opaque result. Callers remain responsible for generation-safe per-query
+// stores after they have checked cancellation and decoded every branch.
+func (c *queryResultCache) coalesce(ctx context.Context, key string, execute func() (any, error)) (any, bool, error) {
+	flightKey := "bundle:" + key
+	for {
+		resultChannel := c.group.DoChan(flightKey, func() (any, error) {
+			result, err := execute()
+			if ownerErr := ctx.Err(); ownerErr != nil {
+				return nil, canceledQueryCacheFlightError{err: ownerErr}
+			}
+			return result, err
+		})
+		select {
+		case <-ctx.Done():
+			return nil, false, ctx.Err()
+		case call := <-resultChannel:
+			if err := ctx.Err(); err != nil {
+				return nil, false, err
+			}
+			if call.Err != nil {
+				var canceledFlight canceledQueryCacheFlightError
+				if errors.As(call.Err, &canceledFlight) && ctx.Err() == nil {
+					continue
+				}
+				return nil, call.Shared, call.Err
+			}
+			return call.Val, call.Shared, nil
+		}
+	}
+}
+
+func (c *queryResultCache) lookup(request dataquery.Query) (dataquery.Result, string, uint64, bool, error) {
+	key, generation, err := c.cacheKey(request)
+	if err != nil {
+		return dataquery.Result{}, "", 0, false, err
+	}
+	result, ok := c.get(key)
+	return result, key, generation, ok, nil
+}
+
+func (c *queryResultCache) store(key string, generation uint64, result dataquery.Result) {
+	result.CacheOutcome = dataquery.CacheMiss
+	c.put(key, generation, result)
+}
+
 func (c *queryResultCache) cacheKey(request dataquery.Query) (string, uint64, error) {
 	keyBytes, err := json.Marshal(queryResultCacheKey{
-		WorkspaceID:  request.WorkspaceID,
-		Operation:    request.Operation,
-		ModelID:      request.ModelID,
-		Kind:         request.Kind,
-		Target:       request.Target,
-		Fields:       request.Fields,
-		Measures:     request.Measures,
-		Time:         request.Time,
-		Filters:      request.Filters,
-		Sort:         request.Sort,
-		ColumnMasks:  request.ColumnMasks,
-		Offset:       request.Offset,
-		Limit:        request.Limit,
-		BinCount:     request.BinCount,
-		IncludeTotal: request.IncludeTotal,
+		Namespace:           c.namespace,
+		WorkspaceID:         request.WorkspaceID,
+		Operation:           request.Operation,
+		ModelID:             request.ModelID,
+		Kind:                request.Kind,
+		Target:              request.Target,
+		Fields:              request.Fields,
+		Measures:            request.Measures,
+		AuthorizationFields: request.AuthorizationFields,
+		Value:               request.Value,
+		Time:                request.Time,
+		Filters:             request.Filters,
+		Sort:                request.Sort,
+		ColumnMasks:         request.ColumnMasks,
+		Offset:              request.Offset,
+		Limit:               request.Limit,
+		BinCount:            request.BinCount,
+		IncludeTotal:        request.IncludeTotal,
 	})
 	if err != nil {
 		return "", 0, fmt.Errorf("encode governed query cache key: %w", err)
@@ -121,21 +171,24 @@ func (e canceledQueryCacheFlightError) Unwrap() error { return e.err }
 // so equivalent governed query shapes can share a result without observability IDs
 // defeating warm-cache hits. Runtime replacement/generation provides snapshot safety.
 type queryResultCacheKey struct {
-	WorkspaceID  string
-	Operation    string
-	ModelID      string
-	Kind         dataquery.Kind
-	Target       string
-	Fields       []dataquery.Field
-	Measures     []dataquery.Field
-	Time         dataquery.Time
-	Filters      []dataquery.Filter
-	Sort         []dataquery.Sort
-	ColumnMasks  []dataquery.ColumnMask
-	Offset       int
-	Limit        int
-	BinCount     int
-	IncludeTotal bool
+	Namespace           string
+	WorkspaceID         string
+	Operation           string
+	ModelID             string
+	Kind                dataquery.Kind
+	Target              string
+	Fields              []dataquery.Field
+	Measures            []dataquery.Field
+	AuthorizationFields []dataquery.Field
+	Value               dataquery.Field
+	Time                dataquery.Time
+	Filters             []dataquery.Filter
+	Sort                []dataquery.Sort
+	ColumnMasks         []dataquery.ColumnMask
+	Offset              int
+	Limit               int
+	BinCount            int
+	IncludeTotal        bool
 }
 
 func (c *queryResultCache) get(key string) (dataquery.Result, bool) {
@@ -200,6 +253,10 @@ func cloneDataQueryResult(result dataquery.Result) dataquery.Result {
 
 func cloneDataQueryValue(value any) any {
 	switch typed := value.(type) {
+	case []byte:
+		return append([]byte{}, typed...)
+	case []string:
+		return append([]string{}, typed...)
 	case []any:
 		out := make([]any, len(typed))
 		for index, item := range typed {

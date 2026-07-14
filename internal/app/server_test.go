@@ -1229,8 +1229,19 @@ func TestSelectCommandAcceptsDatastarSignals(t *testing.T) {
 
 	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
+	assertDatastarCommandAccepted(t, rec)
+}
+
+func assertDatastarCommandAccepted(t *testing.T, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := rec.Header().Get("Content-Type"); got != "application/json" {
+		t.Fatalf("content type = %q, want application/json", got)
+	}
+	if got := rec.Body.String(); got != "{}\n" {
+		t.Fatalf("body = %q, want empty Datastar JSON signal patch", got)
 	}
 }
 
@@ -1275,9 +1286,7 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 
 			New(metrics).Routes().ServeHTTP(rec, req)
 
-			if rec.Code != http.StatusNoContent {
-				t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
-			}
+			assertDatastarCommandAccepted(t, rec)
 			for i := 0; i < tt.queries; i++ {
 				select {
 				case pageID := <-metrics.pageIDs:
@@ -1928,9 +1937,7 @@ func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
 
 	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
-	}
+	assertDatastarCommandAccepted(t, rec)
 }
 
 func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
@@ -1941,9 +1948,7 @@ func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
 
 	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
-	}
+	assertDatastarCommandAccepted(t, rec)
 }
 
 func TestTableWindowCommandAcceptsDatastarSignals(t *testing.T) {
@@ -1954,9 +1959,7 @@ func TestTableWindowCommandAcceptsDatastarSignals(t *testing.T) {
 
 	New(fakeMetrics{}).Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
-	}
+	assertDatastarCommandAccepted(t, rec)
 }
 
 func TestTableWindowCommandDoesNotPublishCanceledQueries(t *testing.T) {
@@ -1971,9 +1974,7 @@ func TestTableWindowCommandDoesNotPublishCanceledQueries(t *testing.T) {
 
 	server.Routes().ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d, body:\n%s", rec.Code, http.StatusNoContent, rec.Body.String())
-	}
+	assertDatastarCommandAccepted(t, rec)
 	deadline := time.After(time.Second)
 	for {
 		select {

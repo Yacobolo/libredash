@@ -142,6 +142,9 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent, dataDir string) pages
 			"tables":          map[string]dashboard.Table{event.Target: table},
 			"componentStatus": map[string]any{key: component(false, "")},
 		}
+	case dashboardstream.RefreshEventTableMetadata:
+		table, _ := event.Value.(dashboard.Table)
+		return pagestream.SignalPatch{"tables": map[string]dashboard.Table{event.Target: table}}
 	case dashboardstream.RefreshEventTargetError:
 		if event.Target == "refresh" {
 			return pagestream.SignalPatch{"status": status(false, event.Err)}

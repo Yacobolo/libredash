@@ -165,12 +165,13 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 	}
 	for modelID, model := range config.Models {
 		view, err := analyticsmaterialize.NewRuntimeView(ctx, analyticsmaterialize.RuntimeConfig{
-			ModelID:  modelID,
-			Model:    model,
-			DataDir:  config.DataDir,
-			Database: db,
-			Sources:  sources,
-			Resolver: sources,
+			ModelID:             modelID,
+			Model:               model,
+			DataDir:             config.DataDir,
+			QueryCacheNamespace: workspaceQueryCacheNamespace(config),
+			Database:            db,
+			Sources:             sources,
+			Resolver:            sources,
 		})
 		if err != nil {
 			db.Close()
@@ -188,6 +189,19 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 		}
 	}
 	return runtime, nil
+}
+
+func workspaceQueryCacheNamespace(config WorkspaceRuntimeConfig) string {
+	return fmt.Sprintf(
+		"snapshot=%d;serving=%q;workspace=%q;environment=%q;semantic=%q;artifact=%q;source=%q",
+		config.SnapshotID,
+		config.ServingStateID,
+		config.WorkspaceID,
+		config.Environment,
+		config.SemanticDigest,
+		config.ArtifactDigest,
+		config.SourceDataDigest,
+	)
 }
 
 func workspaceReaderCount(configured int) int {
@@ -233,6 +247,31 @@ func (r *WorkspaceRuntime) ExecuteDataQuery(ctx context.Context, request dataque
 	return view.ExecuteDataQuery(ctx, request)
 }
 
+func (r *WorkspaceRuntime) ExecuteDataQueryBundle(ctx context.Context, requests []dataquery.BundleRequest) (dataquery.BundleResult, error) {
+	if len(requests) == 0 {
+		return dataquery.BundleResult{}, &dataquery.BundleIncompatibleError{Err: fmt.Errorf("bundle is empty")}
+	}
+	modelID := strings.TrimSpace(requests[0].Query.ModelID)
+	if modelID == "" && len(r.models) == 1 {
+		for id := range r.models {
+			modelID = id
+		}
+	}
+	view := r.views[modelID]
+	if view == nil {
+		return dataquery.BundleResult{}, fmt.Errorf("semantic model %q runtime is not compiled", modelID)
+	}
+	for i := range requests {
+		if requests[i].Query.ModelID == "" {
+			requests[i].Query.ModelID = modelID
+		}
+		if requests[i].Query.ModelID != modelID {
+			return dataquery.BundleResult{}, &dataquery.BundleIncompatibleError{Err: fmt.Errorf("bundle spans semantic models")}
+		}
+	}
+	return view.ExecuteDataQueryBundle(ctx, requests)
+}
+
 func (r *WorkspaceRuntime) Refresh(ctx context.Context) error {
 	if r == nil {
 		return fmt.Errorf("workspace runtime is not initialized")
@@ -244,6 +283,7 @@ func (r *WorkspaceRuntime) Refresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	r.clearQueryCaches()
 	for modelID, model := range r.models {
 		if err := DiscoverSchemasWithDataDir(ctx, r.sqlDB, model, r.dataDir); err != nil {
 			return fmt.Errorf("discovering semantic model %q schemas: %w", modelID, err)
@@ -251,7 +291,6 @@ func (r *WorkspaceRuntime) Refresh(ctx context.Context) error {
 	}
 	r.lastRefresh = lastRefresh
 	r.lastSnapshotID = snapshotID
-	r.clearQueryCaches()
 	return nil
 }
 
@@ -271,6 +310,7 @@ func (r *WorkspaceRuntime) RefreshModelTables(ctx context.Context, modelID strin
 	if err != nil {
 		return err
 	}
+	r.clearQueryCaches()
 	for discoverModelID, discoverModel := range r.models {
 		if err := DiscoverSchemasWithDataDir(ctx, r.sqlDB, discoverModel, r.dataDir); err != nil {
 			return fmt.Errorf("discovering semantic model %q schemas: %w", discoverModelID, err)
@@ -278,7 +318,6 @@ func (r *WorkspaceRuntime) RefreshModelTables(ctx context.Context, modelID strin
 	}
 	r.lastRefresh = lastRefresh
 	r.lastSnapshotID = snapshotID
-	r.clearQueryCaches()
 	return nil
 }
 
@@ -297,6 +336,7 @@ func (r *WorkspaceRuntime) RefreshWorkspaceTables(ctx context.Context, tableName
 	if err != nil {
 		return err
 	}
+	r.clearQueryCaches()
 	for discoverModelID, discoverModel := range r.models {
 		if err := DiscoverSchemasWithDataDir(ctx, r.sqlDB, discoverModel, r.dataDir); err != nil {
 			return fmt.Errorf("discovering semantic model %q schemas: %w", discoverModelID, err)
@@ -304,7 +344,6 @@ func (r *WorkspaceRuntime) RefreshWorkspaceTables(ctx context.Context, tableName
 	}
 	r.lastRefresh = lastRefresh
 	r.lastSnapshotID = snapshotID
-	r.clearQueryCaches()
 	return nil
 }
 

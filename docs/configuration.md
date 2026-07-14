@@ -91,8 +91,14 @@ Run `libredash config validate` to validate the active environment, or add `--pr
 | `LIBREDASH_DEV_RESTART` | boolean / `false` | dev server | development | Force the managed development server to restart. |
 | `LIBREDASH_DEV_SKIP_PUBLISH` | boolean / `false` | dev server | development | Skip automatic project publishing in the managed development server. |
 | `LIBREDASH_DEV_WORKTREE` | string | dev server | internal | Worktree path exported by the managed development server. |
+| `LIBREDASH_PERF_ENFORCE_THRESHOLDS` | boolean / `false` | MovieLens performance QA | development | Fail MovieLens performance QA when phase latency or query-count thresholds are exceeded. |
 | `LIBREDASH_PERF_ITERATIONS` | integer / `5` | MovieLens performance QA | development | Measured interaction iterations run by the MovieLens performance QA scenario. |
 | `LIBREDASH_PERF_LOG` | string / `.tmp/dev-server.log` | MovieLens performance QA | development | Development server log consumed by the MovieLens performance QA scenario. |
+| `LIBREDASH_PERF_MAX_ALL_TARGET_P95_MS` | integer / `1000` | MovieLens performance QA | development | Maximum all-target settlement p95 when performance thresholds are enforced. |
+| `LIBREDASH_PERF_MAX_CRITICAL_KPI_P95_MS` | integer / `1000` | MovieLens performance QA | development | Maximum critical-KPI settlement p95 when performance thresholds are enforced. |
+| `LIBREDASH_PERF_MAX_FIRST_TARGET_PAINT_P95_MS` | integer / `500` | MovieLens performance QA | development | Maximum first-target paint p95 when performance thresholds are enforced. |
+| `LIBREDASH_PERF_MAX_OPTIMISTIC_FEEDBACK_P95_MS` | integer / `16` | MovieLens performance QA | development | Maximum local optimistic-feedback p95 when performance thresholds are enforced. |
+| `LIBREDASH_PERF_MAX_QUERIES` | integer / `4` | MovieLens performance QA | development | Maximum physical queries per measured refresh when performance thresholds are enforced. |
 | `LIBREDASH_PERF_OUTPUT` | string / `.tmp/movielens-performance.json` | MovieLens performance QA | development | JSON output path written by the MovieLens performance QA scenario. |
 | `LIBREDASH_SMOKE_PORT` | integer / `18080` | production image smoke test | internal | Host port used by the production image smoke test. |
 

@@ -602,6 +602,7 @@ export interface DashboardTable {
   style: DashboardTableStyle
   title: string
   totalRows: number
+  totalRowsKnown: boolean
   version: number
 }
 

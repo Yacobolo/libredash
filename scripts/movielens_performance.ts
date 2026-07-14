@@ -7,14 +7,44 @@ type Sample = {
   iteration: number
   refreshId: string
   generation: number
-  feedbackMs: number
-  settlementMs: number
+  optimisticFeedbackMs: number
+  firstTargetPaintMs: number
+  criticalKPISettlementMs: number
+  allTargetSettlementMs: number
+  targets: string[]
+  excludedTargets: string[]
+  targetUpdates: TargetUpdate[]
+  tableRowsBeforeCount: boolean | null
+  selectedValueTypes: string[]
+}
+
+export type TargetUpdate = {
+  target: string
+  order: number
+  atMs?: number
+  batch?: number
+  tableStart?: number
+  tableRows?: number
+  totalRows?: number
+  totalRowsKnown?: boolean
+}
+
+export type InteractionTrace = Pick<Sample, 'targets' | 'excludedTargets' | 'targetUpdates'>
+
+export type PerformanceThresholds = {
+  optimisticFeedbackP95Ms: number
+  firstTargetPaintP95Ms: number
+  criticalKPISettlementP95Ms: number
+  allTargetSettlementP95Ms: number
 }
 
 type RefreshSummary = {
   refreshId: string
+  generation?: number
   queryCount: number | null
   cancellationCount: number | null
+  cancellationReason?: string
+  outcome?: string
   stageTimingsMs: Record<string, number>
 }
 
@@ -35,11 +65,11 @@ export function percentile(values: number[], percentileRank: number): number {
   return round(sorted[Math.min(index, sorted.length - 1)])
 }
 
-export function parseRefreshSummaries(log: string, refreshIDs: ReadonlySet<string>): RefreshSummary[] {
+export function parseRefreshSummaries(log: string, refreshIDs?: ReadonlySet<string>): RefreshSummary[] {
   const summaries: RefreshSummary[] = []
   for (const line of log.split('\n')) {
     const summary = parseJSONRefreshSummary(line) ?? parseSlogRefreshSummary(line)
-    if (summary && refreshIDs.has(summary.refreshId)) summaries.push(summary)
+    if (summary && (!refreshIDs || refreshIDs.has(summary.refreshId))) summaries.push(summary)
   }
   return summaries
 }
@@ -62,10 +92,16 @@ function parseJSONRefreshSummary(line: string): RefreshSummary | null {
   if (event !== 'dashboard_refresh' && event !== 'dashboard refresh') return null
   const refreshId = stringField(value, 'refreshId') || stringField(value, 'refresh_id')
   if (!refreshId) return null
+  const generation = numberField(value, 'generation')
+  const cancellationReason = stringField(value, 'cancellationReason') || stringField(value, 'cancellation_reason')
+  const outcome = stringField(value, 'outcome')
   return {
     refreshId,
+    ...(generation === null ? {} : { generation }),
     queryCount: numberField(value, 'queryCount', 'query_count'),
     cancellationCount: numberField(value, 'cancellationCount', 'cancellation_count', 'cancellations'),
+    ...(cancellationReason ? { cancellationReason } : {}),
+    ...(outcome ? { outcome } : {}),
     stageTimingsMs: timingFields(value.stageTimingsMs ?? value.stage_timings_ms ?? value.stageTimings),
   }
 }
@@ -75,10 +111,16 @@ function parseSlogRefreshSummary(line: string): RefreshSummary | null {
   if (event !== 'dashboard_refresh' && event !== 'dashboard refresh') return null
   const refreshId = slogField(line, 'refreshId') || slogField(line, 'refresh_id')
   if (!refreshId) return null
+  const generation = slogNumberField(line, 'generation')
+  const cancellationReason = slogField(line, 'cancellationReason') || slogField(line, 'cancellation_reason')
+  const outcome = slogField(line, 'outcome')
   return {
     refreshId,
+    ...(generation === null ? {} : { generation }),
     queryCount: slogNumberField(line, 'queryCount', 'query_count'),
     cancellationCount: slogNumberField(line, 'cancellationCount', 'cancellation_count', 'cancellations'),
+    ...(cancellationReason ? { cancellationReason } : {}),
+    ...(outcome ? { outcome } : {}),
     stageTimingsMs: slogTimingFields(line),
   }
 }
@@ -123,12 +165,101 @@ export function aggregateSamples(samples: Sample[], summaries: RefreshSummary[])
     }
   }
   return {
-    feedbackMs: timingStats(samples.map((sample) => sample.feedbackMs)),
-    settlementMs: timingStats(samples.map((sample) => sample.settlementMs)),
+    optimisticFeedbackMs: timingStats(samples.map((sample) => sample.optimisticFeedbackMs)),
+    firstTargetPaintMs: timingStats(samples.map((sample) => sample.firstTargetPaintMs)),
+    criticalKPISettlementMs: timingStats(samples.map((sample) => sample.criticalKPISettlementMs)),
+    allTargetSettlementMs: timingStats(samples.map((sample) => sample.allTargetSettlementMs)),
     queryCounts: summaries.map((summary) => summary.queryCount).filter((value): value is number => value !== null),
     cancellations: cancellationCounts.length > 0 ? cancellationCounts.reduce((sum, value) => sum + value, 0) : null,
     stageTimingsMs: Object.fromEntries([...stageValues].sort(([left], [right]) => left.localeCompare(right)).map(([name, values]) => [name, timingStats(values)])),
   }
+}
+
+export function assertInteractionTrace(trace: InteractionTrace): string[] {
+  const errors: string[] = []
+  const counts = new Map<string, number>()
+  for (const update of trace.targetUpdates) counts.set(update.target, (counts.get(update.target) ?? 0) + 1)
+  for (const target of trace.targets) {
+    const updates = trace.targetUpdates.filter((update) => update.target === target)
+    if (target.startsWith('visual:') && updates.length !== 1) {
+      errors.push(`${target} updated ${updates.length} times, want exactly 1`)
+    }
+    if (target.startsWith('table:')) {
+      const exactShortPage = isExactShortTablePage(updates)
+      if (!exactShortPage && updates.length !== 2) {
+        errors.push(`${target} updated ${updates.length} times, want either one exact short-page patch or exactly 2 patches (rows then count)`)
+      }
+      if (!exactShortPage && !isProgressiveTableDelivery(updates)) {
+        errors.push(`${target} did not publish rows before its exact count`)
+      }
+    }
+  }
+  for (const target of trace.excludedTargets) {
+    const count = counts.get(target) ?? 0
+    if (count > 0) errors.push(`excluded target ${target} updated ${count} time${count === 1 ? '' : 's'}`)
+  }
+  return errors
+}
+
+const tableWindowSize = 50
+
+function isExactShortTablePage(updates: TargetUpdate[]): boolean {
+  if (updates.length !== 1) return false
+  const update = updates[0]
+  const rowCount = update.tableRows
+  return update.tableStart === 0
+    && update.totalRowsKnown === true
+    && typeof rowCount === 'number'
+    && rowCount >= 0
+    && rowCount < tableWindowSize
+    && update.totalRows === rowCount
+}
+
+function isProgressiveTableDelivery(updates: TargetUpdate[]): boolean {
+  if (updates.length !== 2) return false
+  const [rows, count] = updates
+  return rows.tableStart === 0
+    && count.tableStart === 0
+    && rows.totalRowsKnown === false
+    && count.totalRowsKnown === true
+    && typeof rows.tableRows === 'number'
+    && rows.tableRows >= 0
+    && count.tableRows === rows.tableRows
+    && typeof count.totalRows === 'number'
+    && count.totalRows >= rows.tableRows
+    && rows.order < count.order
+}
+
+export function evaluateThresholds(
+  result: Pick<ReturnType<typeof aggregateSamples>, 'optimisticFeedbackMs' | 'firstTargetPaintMs' | 'criticalKPISettlementMs' | 'allTargetSettlementMs'>,
+  thresholds: PerformanceThresholds,
+): string[] {
+  const phases: Array<[string, number, number]> = [
+    ['optimistic feedback', result.optimisticFeedbackMs.p95, thresholds.optimisticFeedbackP95Ms],
+    ['first target paint', result.firstTargetPaintMs.p95, thresholds.firstTargetPaintP95Ms],
+    ['critical KPI settlement', result.criticalKPISettlementMs.p95, thresholds.criticalKPISettlementP95Ms],
+    ['all-target settlement', result.allTargetSettlementMs.p95, thresholds.allTargetSettlementP95Ms],
+  ]
+  return phases
+    .filter(([, actual, limit]) => actual > limit)
+    .map(([name, actual, limit]) => `${name} p95 ${actual}ms exceeds ${limit}ms`)
+}
+
+export function classifyRapidSupersessionNetworkFailures(
+  failures: string[],
+  supersessionProven: boolean,
+): { expectedAborts: string[]; unexpectedFailures: string[] } {
+  const expectedAborts: string[] = []
+  const unexpectedFailures: string[] = []
+  const selectAbort = /^net::ERR_ABORTED POST https?:\/\/[^/]+\/workspaces\/[^/]+\/commands\/select$/
+  for (const failure of failures) {
+    if (supersessionProven && expectedAborts.length === 0 && selectAbort.test(failure)) {
+      expectedAborts.push(failure)
+    } else {
+      unexpectedFailures.push(failure)
+    }
+  }
+  return { expectedAborts, unexpectedFailures }
 }
 
 async function main(): Promise<void> {
@@ -137,11 +268,15 @@ async function main(): Promise<void> {
   const dashboardURL = new URL('/workspaces/movielens/dashboards/ratings-overview/pages/overview', baseURL).toString()
   const browser = await chromium.launch()
   const page = await browser.newPage({ viewport: { width: 1440, height: 960 } })
+  const browserHealth = collectBrowserHealth(page)
   const samples: Sample[] = []
+  let rapidToggle: RapidToggleResult | null = null
+  let rapidNetworkFailures: string[] = []
   try {
     const response = await page.goto(dashboardURL, { waitUntil: 'domcontentloaded', timeout: 120_000 })
     if (!response?.ok()) throw new Error(`MovieLens dashboard returned status ${response?.status() ?? 'unknown'}`)
     await waitForDashboardIdle(page, 600_000)
+    await installPerformanceObserver(page)
 
     // Warm the compiled runtime, filter-option cache, reader pool, and every fixed interaction shape.
     for (const scenario of scenarios) {
@@ -156,24 +291,82 @@ async function main(): Promise<void> {
         await clearSelections(page)
       }
     }
+    const rapidNetworkStart = browserHealth.failedNetworkResponses.length
+    rapidToggle = await runRapidToggle(page, scenarios[2].visualId)
+    rapidNetworkFailures = browserHealth.failedNetworkResponses.splice(rapidNetworkStart)
+    await clearSelections(page)
   } finally {
     await browser.close()
   }
 
+  const allSummaries = await readRefreshSummaries(undefined, logCursor)
   const refreshIDs = new Set(samples.map((sample) => sample.refreshId).filter(Boolean))
-	const summaries = await readRefreshSummaries(refreshIDs, logCursor)
+  const summaries = allSummaries.filter((summary) => refreshIDs.has(summary.refreshId))
   const byInteraction = Object.fromEntries(scenarios.map((scenario) => {
     const selected = samples.filter((sample) => sample.interaction === scenario.name)
     const selectedIDs = new Set(selected.map((sample) => sample.refreshId))
     return [scenario.name, aggregateSamples(selected, summaries.filter((summary) => selectedIDs.has(summary.refreshId)))]
   }))
+  const overall = aggregateSamples(samples, summaries)
+  const rapidSummaries = rapidToggle
+    ? allSummaries.filter((summary) => (summary.generation ?? -1) > rapidToggle!.generationBefore && (summary.generation ?? Infinity) <= rapidToggle!.generation)
+    : []
+  if (rapidToggle) {
+    rapidToggle.cancellationObserved = rapidSummaries.some((summary) => summary.outcome === 'canceled' && summary.cancellationReason === 'superseded')
+    rapidToggle.queryCounts = rapidSummaries.map((summary) => summary.queryCount).filter((value): value is number => value !== null)
+  }
+  const canceledRapidGenerationObserved = Boolean(rapidToggle && rapidSummaries.some((summary) =>
+    summary.generation === rapidToggle!.generationBefore + 1
+    && summary.outcome === 'canceled'
+    && summary.cancellationReason === 'superseded',
+  ))
+  const completedRapidGenerationObserved = Boolean(rapidToggle && rapidSummaries.some((summary) =>
+    summary.generation === rapidToggle!.generation && summary.outcome === 'complete',
+  ))
+  const rapidSupersessionProven = Boolean(
+    rapidToggle
+    && rapidToggle.commandRequests === 2
+    && rapidToggle.finalSelectionMatchesB
+    && canceledRapidGenerationObserved
+    && completedRapidGenerationObserved,
+  )
+  const rapidNetworkHealth = classifyRapidSupersessionNetworkFailures(rapidNetworkFailures, rapidSupersessionProven)
+  browserHealth.expectedRapidSupersessionAborts.push(...rapidNetworkHealth.expectedAborts)
+  browserHealth.failedNetworkResponses.push(...rapidNetworkHealth.unexpectedFailures)
+  const correctnessFailures = samples.flatMap((sample) =>
+    assertInteractionTrace(sample).map((failure) => `${sample.interaction} iteration ${sample.iteration}: ${failure}`),
+  )
+  if (rapidToggle && !rapidToggle.cancellationObserved) correctnessFailures.push('rapid A→B interaction did not record a superseded generation')
+  if (rapidToggle && (!canceledRapidGenerationObserved || !completedRapidGenerationObserved)) correctnessFailures.push('rapid A→B interaction did not record both canceled A and completed B generations')
+  if (rapidToggle && !rapidToggle.finalSelectionMatchesB) correctnessFailures.push('rapid A→B interaction did not retain the typed B selection')
+  if (rapidToggle && rapidToggle.commandRequests !== 2) correctnessFailures.push(`rapid A→B issued ${rapidToggle.commandRequests} commands, want 2`)
+  correctnessFailures.push(...browserHealth.consoleErrors.map((message) => `browser console: ${message}`))
+  correctnessFailures.push(...browserHealth.failedNetworkResponses.map((message) => `network: ${message}`))
+
+  const thresholdMode = booleanEnvironment(Bun.env.LIBREDASH_PERF_ENFORCE_THRESHOLDS)
+  const thresholdLimits = performanceThresholdsFromEnvironment()
+  const thresholdFailures = thresholdMode ? evaluateThresholds(overall, thresholdLimits) : []
+  const maxQueries = positiveInteger(Bun.env.LIBREDASH_PERF_MAX_QUERIES, 4)
+  if (thresholdMode) {
+    for (const summary of summaries) {
+      if (summary.queryCount !== null && summary.queryCount > maxQueries) {
+        thresholdFailures.push(`refresh ${summary.refreshId} executed ${summary.queryCount} queries, exceeds ${maxQueries}`)
+      }
+    }
+  }
   const result = {
     generatedAt: new Date().toISOString(),
     baseURL,
     iterations,
     samples,
-    overall: aggregateSamples(samples, summaries),
+    overall,
     interactions: byInteraction,
+    rapidToggle: rapidToggle ? { ...rapidToggle, summaries: rapidSummaries } : null,
+    browserHealth,
+    assertions: {
+      deterministicFailures: correctnessFailures,
+      thresholds: { enabled: thresholdMode, limits: thresholdLimits, maxQueries, failures: thresholdFailures },
+    },
     observability: {
       refreshSummariesFound: summaries.length,
       refreshSummariesExpected: refreshIDs.size,
@@ -183,12 +376,78 @@ async function main(): Promise<void> {
   await mkdir(dirname(outputPath), { recursive: true })
   await writeFile(outputPath, `${JSON.stringify(result, null, 2)}\n`)
   console.log(JSON.stringify(result, null, 2))
+  if (correctnessFailures.length > 0) throw new Error(`MovieLens deterministic QA failed:\n${correctnessFailures.join('\n')}`)
+  if (thresholdFailures.length > 0) throw new Error(`MovieLens performance thresholds failed:\n${thresholdFailures.join('\n')}`)
 }
 
 async function runInteraction(page: Page, visualId: string, datumOffset: number): Promise<Omit<Sample, 'interaction' | 'iteration'>> {
   const before = await dashboardStatus(page)
-  const startedAt = performance.now()
-  await page.locator('ld-dashboard-page').evaluate((element: any, input) => {
+  const input = await interactionInput(page, visualId, datumOffset)
+  await beginPerformanceTrace(page, input)
+  await page.locator('ld-dashboard-page').evaluate((element: any, command) => {
+    element.dispatchEvent(new CustomEvent('ld-interaction-select', {
+      bubbles: true,
+      composed: true,
+      detail: command,
+    }))
+  }, input.command)
+
+  await page.waitForFunction(() => (window as any).__ldPerfObserver?.active?.optimisticAt !== null, undefined, { timeout: 10_000 })
+  const feedback = await waitForStatus(page, (status) => status.generation > before.generation && status.loading, 10_000)
+  const settled = await waitForStatus(page, (status) => status.generation === feedback.generation && !status.loading, 600_000)
+  const trace = await finishPerformanceTrace(page)
+  return {
+    refreshId: settled.refreshId,
+    generation: settled.generation,
+    optimisticFeedbackMs: trace.optimisticFeedbackMs,
+    firstTargetPaintMs: trace.firstTargetPaintMs,
+    criticalKPISettlementMs: trace.criticalKPISettlementMs,
+    allTargetSettlementMs: trace.allTargetSettlementMs,
+    targets: trace.targets,
+    excludedTargets: trace.excludedTargets,
+    targetUpdates: trace.targetUpdates,
+    tableRowsBeforeCount: trace.tableRowsBeforeCount,
+    selectedValueTypes: trace.selectedValueTypes,
+  }
+}
+
+type InteractionInput = {
+  visualId: string
+  command: {
+    sourceKind: 'visual'
+    sourceId: string
+    interactionKind: string
+    action: 'replace'
+    toggle: false
+    mappings: Array<{ field: string; fact?: string; grain?: string; value: string | number | boolean | null; label: string }>
+  }
+  targets: string[]
+}
+
+type PerformanceTraceResult = {
+  optimisticFeedbackMs: number
+  firstTargetPaintMs: number
+  criticalKPISettlementMs: number
+  allTargetSettlementMs: number
+  targets: string[]
+  excludedTargets: string[]
+  targetUpdates: TargetUpdate[]
+  tableRowsBeforeCount: boolean | null
+  selectedValueTypes: string[]
+}
+
+type RapidToggleResult = PerformanceTraceResult & {
+  generationBefore: number
+  generation: number
+  refreshId: string
+  commandRequests: number
+  finalSelectionMatchesB: boolean
+  cancellationObserved: boolean
+  queryCounts: number[]
+}
+
+async function interactionInput(page: Page, visualId: string, datumOffset: number): Promise<InteractionInput> {
+  return page.locator('ld-dashboard-page').evaluate((element: any, input) => {
     const chart = element.shadowRoot?.querySelector(`ld-echart[visual-id="${input.visualId}"]`) as any
     const payload = chart?.chart
     const rows = payload?.data ?? []
@@ -206,28 +465,214 @@ async function runInteraction(page: Page, visualId: string, datumOffset: number)
         label: labelValue === null ? '' : String(labelValue),
       }
     })
-    element.dispatchEvent(new CustomEvent('ld-interaction-select', {
-      bubbles: true,
-      composed: true,
-      detail: {
-        sourceKind: 'visual',
+    return {
+      visualId: input.visualId,
+      command: {
+        sourceKind: 'visual' as const,
         sourceId: input.visualId,
         interactionKind: payload.interaction?.kind || 'point_selection',
-        action: 'replace',
-        toggle: false,
+        action: 'replace' as const,
+        toggle: false as const,
         mappings,
       },
-    }))
+      targets: [...(payload.interaction?.targets ?? [])],
+    }
   }, { visualId, datumOffset })
+}
 
-  const feedback = await waitForStatus(page, (status) => status.generation > before.generation && status.loading, 10_000)
-  const feedbackMs = performance.now() - startedAt
-  const settled = await waitForStatus(page, (status) => status.generation === feedback.generation && !status.loading, 600_000)
-  return {
-    refreshId: settled.refreshId,
-    generation: settled.generation,
-    feedbackMs: round(feedbackMs),
-    settlementMs: round(performance.now() - startedAt),
+async function installPerformanceObserver(page: Page): Promise<void> {
+  await page.locator('ld-dashboard-page').evaluate((element: any) => {
+    if ((window as any).__ldPerfObserver) return
+    const observer: any = {
+      active: null,
+      capture() {
+        const active = observer.active
+        if (!active) return
+        const signals = element.signals ?? {}
+        active.batch += 1
+        for (const target of [...active.targets, ...active.excludedTargets]) {
+          const componentStatus = signals.componentStatus?.[target]
+          let signature = ''
+          let tableStart: number | undefined
+          let tableRows: number | undefined
+          let totalRows: number | undefined
+          let totalRowsKnown: boolean | undefined
+          if (target.startsWith('visual:')) {
+            const visual = signals.visuals?.[target.slice(7)]
+            signature = visual ? JSON.stringify([
+              componentStatus?.generation ?? null,
+              Boolean(componentStatus?.loading),
+              visual.version ?? null,
+              visual.data ?? null,
+            ]) : ''
+          } else if (target.startsWith('table:')) {
+            const table = signals.tables?.[target.slice(6)]
+            const block = table?.blocks?.a
+            tableStart = typeof block?.start === 'number' ? block.start : undefined
+            tableRows = Array.isArray(block?.rows) ? block.rows.length : 0
+            totalRowsKnown = Boolean(table?.totalRowsKnown)
+            totalRows = typeof table?.totalRows === 'number' ? table.totalRows : undefined
+            signature = table ? JSON.stringify([
+              componentStatus?.generation ?? null,
+              Boolean(componentStatus?.loading),
+              table.version ?? null,
+              block?.requestSeq ?? null,
+              tableStart ?? null,
+              tableRows,
+              totalRowsKnown,
+              totalRows ?? null,
+            ]) : ''
+          }
+          if (!signature || active.signatures[target] === signature) continue
+          if (componentStatus?.loading) {
+            active.signatures[target] = signature
+            continue
+          }
+          if (active.initialized) {
+            active.order += 1
+            active.targetUpdates.push({
+              target,
+              order: active.order,
+              atMs: Math.round((performance.now() - active.startedAt) * 100) / 100,
+              batch: active.batch,
+              ...(target.startsWith('table:') ? { tableStart, tableRows, totalRows, totalRowsKnown } : {}),
+            })
+          }
+          active.signatures[target] = signature
+        }
+        active.initialized = true
+
+        const source = element.shadowRoot?.querySelector(`ld-echart[visual-id="${active.visualId}"]`) as any
+        const selected = (source?.chart?.selection ?? []).flatMap((entry: any) => entry.mappings ?? [])
+        const matches = active.expectedMappings.every((expected: any) => selected.some((actual: any) =>
+          actual.field === expected.field
+          && (actual.fact ?? '') === (expected.fact ?? '')
+          && (actual.grain ?? '') === (expected.grain ?? '')
+          && Object.is(actual.value, expected.value),
+        ))
+        if (matches && active.optimisticAt === null) {
+          active.optimisticAt = performance.now()
+          active.selectedValueTypes = selected.map((mapping: any) => mapping.value === null ? 'null' : typeof mapping.value)
+        }
+      },
+      begin(input: any) {
+        const signals = element.signals ?? {}
+        const components = signals.page?.components ?? []
+        const keyFor = (id: string) => {
+          const component = components.find((candidate: any) => candidate.visual === id || candidate.table === id)
+          return component?.table ? `table:${component.table}` : component?.visual ? `visual:${component.visual}` : ''
+        }
+        const targets = input.targets.map(keyFor).filter(Boolean)
+        const allTargets = components.map((component: any) => component.table ? `table:${component.table}` : component.visual ? `visual:${component.visual}` : '').filter(Boolean)
+        const criticalKPIs = input.targets
+          .filter((id: string) => signals.visuals?.[id]?.shape === 'single_value')
+          .map((id: string) => `visual:${id}`)
+        observer.active = {
+          visualId: input.visualId,
+          expectedMappings: input.command.mappings,
+          targets,
+          excludedTargets: allTargets.filter((target: string) => !targets.includes(target)),
+          criticalKPIs,
+          signatures: {},
+          targetUpdates: [],
+          order: 0,
+          batch: 0,
+          initialized: false,
+          optimisticAt: null,
+          selectedValueTypes: [],
+          startedAt: performance.now(),
+        }
+        observer.capture()
+      },
+      finish() {
+        observer.capture()
+        const active = observer.active
+        observer.active = null
+        return active
+      },
+    }
+    const originalRequestUpdate = element.requestUpdate.bind(element)
+    element.requestUpdate = (...args: any[]) => {
+      observer.capture()
+      const result = originalRequestUpdate(...args)
+      queueMicrotask(() => Promise.resolve(element.updateComplete).then(() => observer.capture()))
+      return result
+    }
+    ;(window as any).__ldPerfObserver = observer
+  })
+}
+
+async function beginPerformanceTrace(page: Page, input: InteractionInput): Promise<void> {
+  await page.evaluate((value) => (window as any).__ldPerfObserver.begin(value), input)
+}
+
+async function finishPerformanceTrace(page: Page): Promise<PerformanceTraceResult> {
+  return page.evaluate(() => {
+    const trace = (window as any).__ldPerfObserver.finish()
+    const elapsed = (at: number | null) => at === null ? 0 : Math.round((at - trace.startedAt) * 100) / 100
+    const targetUpdates = trace.targetUpdates as TargetUpdate[]
+    const firstTargetPaintMs = targetUpdates.length > 0 ? targetUpdates[0].atMs ?? 0 : 0
+    const criticalUpdates = targetUpdates.filter((update) => trace.criticalKPIs.includes(update.target))
+    const tableUpdates = targetUpdates.filter((update) => update.target.startsWith('table:'))
+    const rows = tableUpdates.find((update) => (update.tableRows ?? 0) > 0 && update.totalRowsKnown === false)
+    const count = tableUpdates.find((update) => update.totalRowsKnown === true)
+    return {
+      optimisticFeedbackMs: elapsed(trace.optimisticAt),
+      firstTargetPaintMs,
+      criticalKPISettlementMs: criticalUpdates.length > 0 ? Math.max(...criticalUpdates.map((update) => update.atMs ?? 0)) : firstTargetPaintMs,
+      allTargetSettlementMs: Math.round((performance.now() - trace.startedAt) * 100) / 100,
+      targets: trace.targets,
+      excludedTargets: trace.excludedTargets,
+      targetUpdates,
+      tableRowsBeforeCount: tableUpdates.length === 0 ? null : Boolean(rows && count && rows.order < count.order),
+      selectedValueTypes: trace.selectedValueTypes,
+    }
+  })
+}
+
+async function runRapidToggle(page: Page, visualId: string): Promise<RapidToggleResult> {
+  const before = await dashboardStatus(page)
+  const first = await interactionInput(page, visualId, 0)
+  const second = await interactionInput(page, visualId, 1)
+  if (JSON.stringify(first.command.mappings) === JSON.stringify(second.command.mappings)) throw new Error(`${visualId} needs two distinct rows for rapid-toggle QA`)
+  await beginPerformanceTrace(page, second)
+  let commandRequests = 0
+  const onRequest = (request: { url(): string; method(): string }) => {
+    const url = new URL(request.url())
+    if (request.method() === 'POST' && url.pathname.endsWith('/commands/select')) commandRequests += 1
+  }
+  page.on('request', onRequest)
+  try {
+    await page.locator('ld-dashboard-page').evaluate((element: any, commands) => {
+      for (const command of commands) {
+        element.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: command }))
+      }
+    }, [first.command, second.command])
+    const settled = await waitForStatus(page, (status) => status.generation >= before.generation + 2 && !status.loading, 600_000)
+    const trace = await finishPerformanceTrace(page)
+    const finalSelectionMatchesB = await page.locator('ld-dashboard-page').evaluate((element: any, expected) => {
+      const chart = element.shadowRoot?.querySelector(`ld-echart[visual-id="${expected.visualId}"]`) as any
+      const selected = (chart?.chart?.selection ?? []).flatMap((entry: any) => entry.mappings ?? [])
+      return expected.command.mappings.every((mapping: any) => selected.some((candidate: any) =>
+        candidate.field === mapping.field
+        && (candidate.fact ?? '') === (mapping.fact ?? '')
+        && (candidate.grain ?? '') === (mapping.grain ?? '')
+        && Object.is(candidate.value, mapping.value)
+        && (candidate.value === null ? 'null' : typeof candidate.value) === (mapping.value === null ? 'null' : typeof mapping.value),
+      ))
+    }, second)
+    return {
+      ...trace,
+      generationBefore: before.generation,
+      generation: settled.generation,
+      refreshId: settled.refreshId,
+      commandRequests,
+      finalSelectionMatchesB,
+      cancellationObserved: false,
+      queryCounts: [],
+    }
+  } finally {
+    page.off('request', onRequest)
   }
 }
 
@@ -264,6 +709,27 @@ async function waitForStatus(page: Page, predicate: (status: DashboardStatusSnap
   throw new Error(`timed out after ${timeoutMs}ms waiting for dashboard refresh state`)
 }
 
+function collectBrowserHealth(page: Page): { consoleErrors: string[]; failedNetworkResponses: string[]; expectedRapidSupersessionAborts: string[] } {
+  const health = {
+    consoleErrors: [] as string[],
+    failedNetworkResponses: [] as string[],
+    expectedRapidSupersessionAborts: [] as string[],
+  }
+  page.on('console', (message) => {
+    if (message.type() === 'error' || (message.type() === 'warning' && message.text().includes('[LibreDash]'))) {
+      health.consoleErrors.push(`${message.type()}: ${message.text()}`)
+    }
+  })
+  page.on('response', (response) => {
+    if (response.status() >= 400) health.failedNetworkResponses.push(`${response.status()} ${response.request().method()} ${response.url()}`)
+  })
+  page.on('requestfailed', (request) => {
+    if (new URL(request.url()).pathname === '/updates') return
+    health.failedNetworkResponses.push(`${request.failure()?.errorText ?? 'request failed'} ${request.method()} ${request.url()}`)
+  })
+  return health
+}
+
 async function resolveBaseURL(): Promise<string> {
   if (Bun.env.LIBREDASH_BASE_URL) return Bun.env.LIBREDASH_BASE_URL
   try {
@@ -281,7 +747,7 @@ async function refreshLogCursor(): Promise<number> {
 	}
 }
 
-async function readRefreshSummaries(refreshIDs: ReadonlySet<string>, cursor: number): Promise<RefreshSummary[]> {
+async function readRefreshSummaries(refreshIDs: ReadonlySet<string> | undefined, cursor: number): Promise<RefreshSummary[]> {
 	try {
 		const log = await readFile(logPath)
 		return parseRefreshSummaries(logTextAfterCursor(log, cursor), refreshIDs)
@@ -297,6 +763,24 @@ function timingStats(values: number[]) {
 function positiveInteger(raw: string | undefined, fallback: number): number {
   const value = Number(raw)
   return Number.isInteger(value) && value > 0 ? value : fallback
+}
+
+function positiveNumber(raw: string | undefined, fallback: number): number {
+  const value = Number(raw)
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function booleanEnvironment(raw: string | undefined): boolean {
+  return /^(1|true|yes|on)$/i.test(raw?.trim() ?? '')
+}
+
+function performanceThresholdsFromEnvironment(): PerformanceThresholds {
+  return {
+    optimisticFeedbackP95Ms: positiveNumber(Bun.env.LIBREDASH_PERF_MAX_OPTIMISTIC_FEEDBACK_P95_MS, 16),
+    firstTargetPaintP95Ms: positiveNumber(Bun.env.LIBREDASH_PERF_MAX_FIRST_TARGET_PAINT_P95_MS, 500),
+    criticalKPISettlementP95Ms: positiveNumber(Bun.env.LIBREDASH_PERF_MAX_CRITICAL_KPI_P95_MS, 1_000),
+    allTargetSettlementP95Ms: positiveNumber(Bun.env.LIBREDASH_PERF_MAX_ALL_TARGET_P95_MS, 1_000),
+  }
 }
 
 function stringField(value: Record<string, unknown>, name: string): string {

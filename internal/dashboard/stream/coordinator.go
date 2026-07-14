@@ -19,6 +19,8 @@ const (
 	RefreshEventFilterOptions RefreshEventType = "filter_options"
 	RefreshEventVisual        RefreshEventType = "visual"
 	RefreshEventTable         RefreshEventType = "table"
+	RefreshEventTableMetadata RefreshEventType = "table_metadata"
+	RefreshEventTableCountErr RefreshEventType = "table_count_error"
 	RefreshEventTargetError   RefreshEventType = "target_error"
 	RefreshEventCacheOutcome  RefreshEventType = "cache_outcome"
 	RefreshEventComplete      RefreshEventType = "complete"
@@ -78,6 +80,12 @@ type StartObserver func(Refresh)
 type SummaryObserver func(RefreshSummary)
 
 var refreshSequence atomic.Uint64
+
+// refreshExecutionDebounce lets a burst of interaction commands settle while
+// still publishing the canonical filters and loading state synchronously. The
+// generation context makes the timer latest-only: superseded work never
+// reaches a query port.
+const refreshExecutionDebounce = 35 * time.Millisecond
 
 var ErrCoordinatorClosed = errors.New("dashboard refresh coordinator is closed")
 
@@ -243,6 +251,17 @@ func (c *Coordinator) run(ctx context.Context, refresh Refresh, work RefreshWork
 	metadata := dataquery.MetadataFromContext(ctx)
 	metadata.CorrelationID = refresh.ID
 	ctx = dataquery.WithMetadata(ctx, metadata)
+	if work != nil && debounceRefreshCommand(refresh.Command) {
+		timer := time.NewTimer(refreshExecutionDebounce)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return
+		}
+	}
 	if work != nil {
 		work(ctx, func(event RefreshEvent) bool {
 			if ctx.Err() != nil {
@@ -258,6 +277,10 @@ func (c *Coordinator) run(ctx context.Context, refresh Refresh, work RefreshWork
 		return
 	}
 	c.finish(refresh, "complete", 0)
+}
+
+func debounceRefreshCommand(command string) bool {
+	return command == "select" || command == "clear_selection"
 }
 
 func (c *Coordinator) emitCurrent(refresh Refresh, event RefreshEvent) bool {
