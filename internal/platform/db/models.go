@@ -244,6 +244,36 @@ type ManagedDataRolloutTarget struct {
 	Error               string         `json:"error"`
 }
 
+type ManagedDataS3MultipartPart struct {
+	MultipartUploadID string `json:"multipart_upload_id"`
+	PartNumber        int64  `json:"part_number"`
+	SizeBytes         int64  `json:"size_bytes"`
+	Sha256            string `json:"sha256"`
+	CreatedAt         string `json:"created_at"`
+	UpdatedAt         string `json:"updated_at"`
+}
+
+type ManagedDataS3MultipartUpload struct {
+	ID                    string         `json:"id"`
+	UploadSessionID       string         `json:"upload_session_id"`
+	LogicalPath           string         `json:"logical_path"`
+	Sha256                string         `json:"sha256"`
+	SizeBytes             int64          `json:"size_bytes"`
+	ObjectKey             string         `json:"object_key"`
+	ProviderUploadID      string         `json:"provider_upload_id"`
+	Status                string         `json:"status"`
+	Existing              int64          `json:"existing"`
+	IdempotencyIdentity   string         `json:"idempotency_identity"`
+	CompletionIdentity    string         `json:"completion_identity"`
+	CompletionRequestHash string         `json:"completion_request_hash"`
+	AbortIdentity         string         `json:"abort_identity"`
+	CreatedAt             string         `json:"created_at"`
+	UpdatedAt             string         `json:"updated_at"`
+	CompletedAt           sql.NullString `json:"completed_at"`
+	AbortedAt             sql.NullString `json:"aborted_at"`
+	Error                 string         `json:"error"`
+}
+
 type ManagedDataServingStateBinding struct {
 	ServingStateID string `json:"serving_state_id"`
 	CollectionID   string `json:"collection_id"`

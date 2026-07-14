@@ -880,6 +880,94 @@ UPDATE managed_data_upload_sessions
 SET status = 'expired', updated_at = CURRENT_TIMESTAMP
 WHERE status = 'open' AND expires_at <= ?;
 
+-- name: CreateManagedDataS3MultipartUpload :exec
+INSERT INTO managed_data_s3_multipart_uploads (
+  id, upload_session_id, logical_path, sha256, size_bytes, idempotency_identity
+)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: GetManagedDataS3MultipartUpload :one
+SELECT * FROM managed_data_s3_multipart_uploads WHERE id = ?;
+
+-- name: GetManagedDataS3MultipartUploadByIdentity :one
+SELECT * FROM managed_data_s3_multipart_uploads
+WHERE upload_session_id = ? AND idempotency_identity = ?;
+
+-- name: InitializeManagedDataS3MultipartUpload :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET object_key = ?, provider_upload_id = ?, status = 'open', updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'creating' AND existing = 0;
+
+-- name: InitializeExistingManagedDataS3MultipartUpload :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET object_key = ?, provider_upload_id = '', status = 'completed', existing = 1,
+    completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'creating';
+
+-- name: CreateManagedDataS3MultipartPart :exec
+INSERT INTO managed_data_s3_multipart_parts (
+  multipart_upload_id, part_number, size_bytes, sha256
+)
+VALUES (?, ?, ?, ?);
+
+-- name: GetManagedDataS3MultipartPart :one
+SELECT * FROM managed_data_s3_multipart_parts
+WHERE multipart_upload_id = ? AND part_number = ?;
+
+-- name: ListManagedDataS3MultipartParts :many
+SELECT * FROM managed_data_s3_multipart_parts
+WHERE multipart_upload_id = ?
+ORDER BY part_number;
+
+-- name: SumManagedDataS3MultipartPartSizes :one
+SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER)
+FROM managed_data_s3_multipart_parts
+WHERE multipart_upload_id = ?;
+
+-- name: BeginManagedDataS3MultipartCompletion :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'completing', completion_identity = ?, completion_request_hash = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'open';
+
+-- name: FinishManagedDataS3MultipartCompletion :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'completing';
+
+-- name: BeginManagedDataS3MultipartAbort :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'aborting', abort_identity = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('creating', 'open', 'failed');
+
+-- name: FinishManagedDataS3MultipartAbort :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'aborted', aborted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'aborting';
+
+-- name: FailManagedDataS3MultipartUpload :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('creating', 'open', 'completing');
+
+-- name: ListRecoverableManagedDataS3MultipartUploads :many
+SELECT multipart.*
+FROM managed_data_s3_multipart_uploads AS multipart
+JOIN managed_data_upload_sessions AS session ON session.id = multipart.upload_session_id
+WHERE multipart.provider_upload_id <> ''
+  AND multipart.updated_at <= sqlc.arg(updated_cutoff)
+  AND (
+    multipart.status IN ('aborting', 'failed')
+    OR (
+      multipart.status = 'open'
+      AND (
+        session.status IN ('complete', 'aborted', 'expired', 'failed')
+        OR (session.status = 'open' AND session.expires_at <= sqlc.arg(expiry_cutoff))
+      )
+    )
+  )
+ORDER BY multipart.updated_at, multipart.id
+LIMIT sqlc.arg(row_limit);
+
 -- name: NextManagedDataRevisionSequence :one
 SELECT COALESCE(MAX(sequence), 0) + 1
 FROM managed_data_revisions

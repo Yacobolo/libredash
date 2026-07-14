@@ -185,6 +185,368 @@ func (r *Repository) ExpireUploadSessions(ctx context.Context, now time.Time) (i
 	return result.RowsAffected()
 }
 
+func (r *Repository) CreateS3MultipartUpload(ctx context.Context, input manageddata.CreateS3MultipartUploadInput) (manageddata.S3MultipartUpload, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	input.UploadSessionID = strings.TrimSpace(input.UploadSessionID)
+	input.LogicalPath = strings.TrimSpace(input.LogicalPath)
+	input.SHA256 = strings.TrimSpace(input.SHA256)
+	input.IdempotencyIdentity = strings.TrimSpace(input.IdempotencyIdentity)
+	if input.ID == "" || input.UploadSessionID == "" || input.LogicalPath == "" {
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("multipart upload id, session id, and logical path are required")
+	}
+	if err := validateHexIdentity("multipart SHA-256", input.SHA256); err != nil {
+		return manageddata.S3MultipartUpload{}, err
+	}
+	if input.SizeBytes < 0 {
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("multipart size cannot be negative")
+	}
+	if err := validateHexIdentity("multipart idempotency identity", input.IdempotencyIdentity); err != nil {
+		return manageddata.S3MultipartUpload{}, err
+	}
+	err := r.q.CreateManagedDataS3MultipartUpload(ctx, platformdb.CreateManagedDataS3MultipartUploadParams{
+		ID: input.ID, UploadSessionID: input.UploadSessionID, LogicalPath: input.LogicalPath, Sha256: input.SHA256,
+		SizeBytes: input.SizeBytes, IdempotencyIdentity: input.IdempotencyIdentity,
+	})
+	if err == nil {
+		return r.S3MultipartUploadByID(ctx, input.ID)
+	}
+	if row, lookupErr := r.q.GetManagedDataS3MultipartUpload(ctx, input.ID); lookupErr == nil {
+		return idempotentS3MultipartUpload(mapS3MultipartUpload(row), input)
+	}
+	if _, lookupErr := r.q.GetManagedDataS3MultipartUploadByIdentity(ctx, platformdb.GetManagedDataS3MultipartUploadByIdentityParams{
+		UploadSessionID: input.UploadSessionID, IdempotencyIdentity: input.IdempotencyIdentity,
+	}); lookupErr == nil {
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("%w: multipart idempotency identity is already in use", manageddata.ErrConflict)
+	}
+	return manageddata.S3MultipartUpload{}, mapError(err)
+}
+
+func (r *Repository) S3MultipartUploadByID(ctx context.Context, id string) (manageddata.S3MultipartUpload, error) {
+	row, err := r.q.GetManagedDataS3MultipartUpload(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return manageddata.S3MultipartUpload{}, mapError(err)
+	}
+	return mapS3MultipartUpload(row), nil
+}
+
+func (r *Repository) InitializeS3MultipartUpload(ctx context.Context, input manageddata.InitializeS3MultipartUploadInput) (manageddata.S3MultipartUpload, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	input.ObjectKey = strings.TrimSpace(input.ObjectKey)
+	input.ProviderUploadID = strings.TrimSpace(input.ProviderUploadID)
+	if input.ID == "" || input.ObjectKey == "" || !safeMetadata(input.ObjectKey, 2048) {
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("multipart upload id and safe object key are required")
+	}
+	if input.Existing && input.ProviderUploadID != "" || !input.Existing && (input.ProviderUploadID == "" || !safeMetadata(input.ProviderUploadID, 2048)) {
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("multipart provider upload id does not match existing state")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return manageddata.S3MultipartUpload{}, err
+	}
+	defer tx.Rollback()
+	q := r.q.WithTx(tx)
+	row, err := q.GetManagedDataS3MultipartUpload(ctx, input.ID)
+	if err != nil {
+		return manageddata.S3MultipartUpload{}, mapError(err)
+	}
+	current := mapS3MultipartUpload(row)
+	if current.Status != manageddata.S3MultipartStatusCreating {
+		if sameS3MultipartInitialization(current, input) {
+			return current, nil
+		}
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("%w: multipart upload is %s", manageddata.ErrConflict, current.Status)
+	}
+	var result sql.Result
+	if input.Existing {
+		result, err = q.InitializeExistingManagedDataS3MultipartUpload(ctx, platformdb.InitializeExistingManagedDataS3MultipartUploadParams{ObjectKey: input.ObjectKey, ID: input.ID})
+	} else {
+		result, err = q.InitializeManagedDataS3MultipartUpload(ctx, platformdb.InitializeManagedDataS3MultipartUploadParams{ObjectKey: input.ObjectKey, ProviderUploadID: input.ProviderUploadID, ID: input.ID})
+	}
+	if err := expectOne(result, err, "multipart upload changed while initializing"); err != nil {
+		return manageddata.S3MultipartUpload{}, err
+	}
+	row, err = q.GetManagedDataS3MultipartUpload(ctx, input.ID)
+	if err != nil {
+		return manageddata.S3MultipartUpload{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return manageddata.S3MultipartUpload{}, mapError(err)
+	}
+	return mapS3MultipartUpload(row), nil
+}
+
+func (r *Repository) ReserveS3MultipartPart(ctx context.Context, part manageddata.S3MultipartPart) (manageddata.S3MultipartPart, error) {
+	part.MultipartUploadID = strings.TrimSpace(part.MultipartUploadID)
+	part.SHA256 = strings.TrimSpace(part.SHA256)
+	if part.MultipartUploadID == "" || part.PartNumber < 1 || part.PartNumber > 10_000 || part.SizeBytes <= 0 {
+		return manageddata.S3MultipartPart{}, fmt.Errorf("invalid multipart part reservation")
+	}
+	if part.SHA256 != "" {
+		if err := validateHexIdentity("multipart part SHA-256", part.SHA256); err != nil {
+			return manageddata.S3MultipartPart{}, err
+		}
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return manageddata.S3MultipartPart{}, err
+	}
+	defer tx.Rollback()
+	q := r.q.WithTx(tx)
+	uploadRow, err := q.GetManagedDataS3MultipartUpload(ctx, part.MultipartUploadID)
+	if err != nil {
+		return manageddata.S3MultipartPart{}, mapError(err)
+	}
+	if uploadRow.Status != string(manageddata.S3MultipartStatusOpen) {
+		return manageddata.S3MultipartPart{}, fmt.Errorf("%w: multipart upload is %s", manageddata.ErrConflict, uploadRow.Status)
+	}
+	existing, err := q.GetManagedDataS3MultipartPart(ctx, platformdb.GetManagedDataS3MultipartPartParams{
+		MultipartUploadID: part.MultipartUploadID, PartNumber: int64(part.PartNumber),
+	})
+	if err == nil {
+		mapped := mapS3MultipartPart(existing)
+		if mapped == part {
+			return mapped, nil
+		}
+		return manageddata.S3MultipartPart{}, fmt.Errorf("%w: multipart part number was reused with different metadata", manageddata.ErrConflict)
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return manageddata.S3MultipartPart{}, err
+	}
+	total, err := q.SumManagedDataS3MultipartPartSizes(ctx, part.MultipartUploadID)
+	if err != nil {
+		return manageddata.S3MultipartPart{}, err
+	}
+	if total > uploadRow.SizeBytes-part.SizeBytes {
+		return manageddata.S3MultipartPart{}, fmt.Errorf("%w: multipart part reservations exceed blob size", manageddata.ErrConflict)
+	}
+	if err := q.CreateManagedDataS3MultipartPart(ctx, platformdb.CreateManagedDataS3MultipartPartParams{
+		MultipartUploadID: part.MultipartUploadID, PartNumber: int64(part.PartNumber), SizeBytes: part.SizeBytes, Sha256: part.SHA256,
+	}); err != nil {
+		return manageddata.S3MultipartPart{}, mapError(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return manageddata.S3MultipartPart{}, mapError(err)
+	}
+	return part, nil
+}
+
+func (r *Repository) ListS3MultipartParts(ctx context.Context, id string) ([]manageddata.S3MultipartPart, error) {
+	rows, err := r.q.ListManagedDataS3MultipartParts(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+	parts := make([]manageddata.S3MultipartPart, 0, len(rows))
+	for _, row := range rows {
+		parts = append(parts, mapS3MultipartPart(row))
+	}
+	return parts, nil
+}
+
+func (r *Repository) BeginS3MultipartCompletion(ctx context.Context, input manageddata.BeginS3MultipartCompletionInput) (manageddata.S3MultipartCompletion, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	input.IdempotencyIdentity = strings.TrimSpace(input.IdempotencyIdentity)
+	input.RequestHash = strings.TrimSpace(input.RequestHash)
+	if input.ID == "" {
+		return manageddata.S3MultipartCompletion{}, fmt.Errorf("multipart upload id is required")
+	}
+	if err := validateHexIdentity("completion idempotency identity", input.IdempotencyIdentity); err != nil {
+		return manageddata.S3MultipartCompletion{}, err
+	}
+	if err := validateHexIdentity("completion request hash", input.RequestHash); err != nil {
+		return manageddata.S3MultipartCompletion{}, err
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return manageddata.S3MultipartCompletion{}, err
+	}
+	defer tx.Rollback()
+	q := r.q.WithTx(tx)
+	row, err := q.GetManagedDataS3MultipartUpload(ctx, input.ID)
+	if err != nil {
+		return manageddata.S3MultipartCompletion{}, mapError(err)
+	}
+	upload := mapS3MultipartUpload(row)
+	execute := true
+	switch upload.Status {
+	case manageddata.S3MultipartStatusOpen:
+		result, updateErr := q.BeginManagedDataS3MultipartCompletion(ctx, platformdb.BeginManagedDataS3MultipartCompletionParams{
+			CompletionIdentity: input.IdempotencyIdentity, CompletionRequestHash: input.RequestHash, ID: input.ID,
+		})
+		if err := expectOne(result, updateErr, "multipart upload changed while beginning completion"); err != nil {
+			return manageddata.S3MultipartCompletion{}, err
+		}
+		row, err = q.GetManagedDataS3MultipartUpload(ctx, input.ID)
+		if err != nil {
+			return manageddata.S3MultipartCompletion{}, err
+		}
+		upload = mapS3MultipartUpload(row)
+	case manageddata.S3MultipartStatusCompleting:
+		if upload.CompletionIdentity != input.IdempotencyIdentity || upload.CompletionRequestHash != input.RequestHash {
+			return manageddata.S3MultipartCompletion{}, fmt.Errorf("%w: multipart completion identity conflicts", manageddata.ErrConflict)
+		}
+	case manageddata.S3MultipartStatusCompleted:
+		if upload.CompletionIdentity != input.IdempotencyIdentity || upload.CompletionRequestHash != input.RequestHash {
+			return manageddata.S3MultipartCompletion{}, fmt.Errorf("%w: multipart completion identity conflicts", manageddata.ErrConflict)
+		}
+		execute = false
+	default:
+		return manageddata.S3MultipartCompletion{}, fmt.Errorf("%w: multipart upload is %s", manageddata.ErrConflict, upload.Status)
+	}
+	partRows, err := q.ListManagedDataS3MultipartParts(ctx, input.ID)
+	if err != nil {
+		return manageddata.S3MultipartCompletion{}, err
+	}
+	parts := make([]manageddata.S3MultipartPart, 0, len(partRows))
+	for _, part := range partRows {
+		parts = append(parts, mapS3MultipartPart(part))
+	}
+	if err := tx.Commit(); err != nil {
+		return manageddata.S3MultipartCompletion{}, mapError(err)
+	}
+	return manageddata.S3MultipartCompletion{Upload: upload, Parts: parts, Execute: execute}, nil
+}
+
+func (r *Repository) FinishS3MultipartCompletion(ctx context.Context, id string) (manageddata.S3MultipartUpload, error) {
+	return r.finishS3Multipart(ctx, strings.TrimSpace(id), manageddata.S3MultipartStatusCompleting, manageddata.S3MultipartStatusCompleted)
+}
+
+func (r *Repository) BeginS3MultipartAbort(ctx context.Context, input manageddata.BeginS3MultipartAbortInput) (manageddata.S3MultipartAbort, error) {
+	input.ID = strings.TrimSpace(input.ID)
+	input.IdempotencyIdentity = strings.TrimSpace(input.IdempotencyIdentity)
+	if input.ID == "" {
+		return manageddata.S3MultipartAbort{}, fmt.Errorf("multipart upload id is required")
+	}
+	if err := validateHexIdentity("abort idempotency identity", input.IdempotencyIdentity); err != nil {
+		return manageddata.S3MultipartAbort{}, err
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return manageddata.S3MultipartAbort{}, err
+	}
+	defer tx.Rollback()
+	q := r.q.WithTx(tx)
+	row, err := q.GetManagedDataS3MultipartUpload(ctx, input.ID)
+	if err != nil {
+		return manageddata.S3MultipartAbort{}, mapError(err)
+	}
+	upload := mapS3MultipartUpload(row)
+	execute := true
+	switch upload.Status {
+	case manageddata.S3MultipartStatusCreating, manageddata.S3MultipartStatusOpen, manageddata.S3MultipartStatusFailed:
+		result, updateErr := q.BeginManagedDataS3MultipartAbort(ctx, platformdb.BeginManagedDataS3MultipartAbortParams{AbortIdentity: input.IdempotencyIdentity, ID: input.ID})
+		if err := expectOne(result, updateErr, "multipart upload changed while beginning abort"); err != nil {
+			return manageddata.S3MultipartAbort{}, err
+		}
+		row, err = q.GetManagedDataS3MultipartUpload(ctx, input.ID)
+		if err != nil {
+			return manageddata.S3MultipartAbort{}, err
+		}
+		upload = mapS3MultipartUpload(row)
+	case manageddata.S3MultipartStatusAborting:
+		if upload.AbortIdentity != input.IdempotencyIdentity {
+			return manageddata.S3MultipartAbort{}, fmt.Errorf("%w: multipart abort identity conflicts", manageddata.ErrConflict)
+		}
+	case manageddata.S3MultipartStatusAborted:
+		if upload.AbortIdentity != input.IdempotencyIdentity {
+			return manageddata.S3MultipartAbort{}, fmt.Errorf("%w: multipart abort identity conflicts", manageddata.ErrConflict)
+		}
+		execute = false
+	default:
+		return manageddata.S3MultipartAbort{}, fmt.Errorf("%w: multipart upload is %s", manageddata.ErrConflict, upload.Status)
+	}
+	if err := tx.Commit(); err != nil {
+		return manageddata.S3MultipartAbort{}, mapError(err)
+	}
+	return manageddata.S3MultipartAbort{Upload: upload, Execute: execute}, nil
+}
+
+func (r *Repository) FinishS3MultipartAbort(ctx context.Context, id string) (manageddata.S3MultipartUpload, error) {
+	return r.finishS3Multipart(ctx, strings.TrimSpace(id), manageddata.S3MultipartStatusAborting, manageddata.S3MultipartStatusAborted)
+}
+
+func (r *Repository) FailS3MultipartUpload(ctx context.Context, id, message string) (manageddata.S3MultipartUpload, error) {
+	id = strings.TrimSpace(id)
+	message = strings.TrimSpace(message)
+	if id == "" || message == "" || !safeMetadata(message, 2048) {
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("multipart upload id and safe terminal error are required")
+	}
+	current, err := r.S3MultipartUploadByID(ctx, id)
+	if err != nil {
+		return manageddata.S3MultipartUpload{}, err
+	}
+	if current.Status == manageddata.S3MultipartStatusFailed {
+		if current.Error == message {
+			return current, nil
+		}
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("%w: multipart terminal error conflicts", manageddata.ErrConflict)
+	}
+	result, err := r.q.FailManagedDataS3MultipartUpload(ctx, platformdb.FailManagedDataS3MultipartUploadParams{Error: message, ID: id})
+	if err := expectOne(result, err, "multipart upload cannot fail from its current state"); err != nil {
+		return manageddata.S3MultipartUpload{}, err
+	}
+	return r.S3MultipartUploadByID(ctx, id)
+}
+
+func (r *Repository) ListRecoverableS3MultipartUploads(ctx context.Context, before time.Time, limit int64) ([]manageddata.S3MultipartUpload, error) {
+	if before.IsZero() {
+		before = time.Now()
+	}
+	if limit < 1 || limit > 1000 {
+		return nil, fmt.Errorf("multipart recovery limit must be between 1 and 1000")
+	}
+	rows, err := r.q.ListRecoverableManagedDataS3MultipartUploads(ctx, platformdb.ListRecoverableManagedDataS3MultipartUploadsParams{
+		UpdatedCutoff: timestamp(before), ExpiryCutoff: timestamp(before), RowLimit: limit,
+	})
+	if err != nil {
+		return nil, err
+	}
+	uploads := make([]manageddata.S3MultipartUpload, 0, len(rows))
+	for _, row := range rows {
+		uploads = append(uploads, mapS3MultipartUpload(row))
+	}
+	return uploads, nil
+}
+
+func (r *Repository) finishS3Multipart(ctx context.Context, id string, from, to manageddata.S3MultipartStatus) (manageddata.S3MultipartUpload, error) {
+	if id == "" {
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("multipart upload id is required")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return manageddata.S3MultipartUpload{}, err
+	}
+	defer tx.Rollback()
+	q := r.q.WithTx(tx)
+	row, err := q.GetManagedDataS3MultipartUpload(ctx, id)
+	if err != nil {
+		return manageddata.S3MultipartUpload{}, mapError(err)
+	}
+	current := mapS3MultipartUpload(row)
+	if current.Status == to {
+		return current, nil
+	}
+	if current.Status != from {
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("%w: multipart upload is %s", manageddata.ErrConflict, current.Status)
+	}
+	var result sql.Result
+	if to == manageddata.S3MultipartStatusCompleted {
+		result, err = q.FinishManagedDataS3MultipartCompletion(ctx, id)
+	} else {
+		result, err = q.FinishManagedDataS3MultipartAbort(ctx, id)
+	}
+	if err := expectOne(result, err, "multipart upload changed while finishing transition"); err != nil {
+		return manageddata.S3MultipartUpload{}, err
+	}
+	row, err = q.GetManagedDataS3MultipartUpload(ctx, id)
+	if err != nil {
+		return manageddata.S3MultipartUpload{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return manageddata.S3MultipartUpload{}, mapError(err)
+	}
+	return mapS3MultipartUpload(row), nil
+}
+
 func (r *Repository) CompleteUpload(ctx context.Context, input manageddata.CompleteUploadInput) (manageddata.Revision, error) {
 	input.SessionID = strings.TrimSpace(input.SessionID)
 	if input.SessionID == "" {
@@ -614,6 +976,61 @@ func mapRevisionFile(row platformdb.ManagedDataRevisionFile) manageddata.Revisio
 
 func mapUploadSession(row platformdb.ManagedDataUploadSession) manageddata.UploadSession {
 	return manageddata.UploadSession{ID: row.ID, CollectionID: row.CollectionID, BaseRevisionID: row.BaseRevisionID.String, RevisionID: row.RevisionID.String, Status: manageddata.UploadStatus(row.Status), ManifestJSON: row.ManifestJson, ExpectedFileCount: row.ExpectedFileCount, ExpectedSizeBytes: row.ExpectedSizeBytes, UploadedFileCount: row.UploadedFileCount, UploadedSizeBytes: row.UploadedSizeBytes, StorageBackend: row.StorageBackend, StagingPrefix: row.StagingPrefix, CreatedBy: row.CreatedBy, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, ExpiresAt: row.ExpiresAt, CompletedAt: row.CompletedAt.String, Error: row.Error}
+}
+
+func mapS3MultipartUpload(row platformdb.ManagedDataS3MultipartUpload) manageddata.S3MultipartUpload {
+	return manageddata.S3MultipartUpload{
+		ID: row.ID, UploadSessionID: row.UploadSessionID, LogicalPath: row.LogicalPath, SHA256: row.Sha256, SizeBytes: row.SizeBytes,
+		ObjectKey: row.ObjectKey, ProviderUploadID: row.ProviderUploadID, Status: manageddata.S3MultipartStatus(row.Status),
+		Existing: row.Existing == 1, IdempotencyIdentity: row.IdempotencyIdentity,
+		CompletionIdentity: row.CompletionIdentity, CompletionRequestHash: row.CompletionRequestHash,
+		AbortIdentity: row.AbortIdentity, CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		CompletedAt: row.CompletedAt.String, AbortedAt: row.AbortedAt.String, Error: row.Error,
+	}
+}
+
+func mapS3MultipartPart(row platformdb.ManagedDataS3MultipartPart) manageddata.S3MultipartPart {
+	return manageddata.S3MultipartPart{MultipartUploadID: row.MultipartUploadID, PartNumber: int32(row.PartNumber), SizeBytes: row.SizeBytes, SHA256: row.Sha256}
+}
+
+func idempotentS3MultipartUpload(existing manageddata.S3MultipartUpload, input manageddata.CreateS3MultipartUploadInput) (manageddata.S3MultipartUpload, error) {
+	if existing.ID != input.ID || existing.UploadSessionID != input.UploadSessionID || existing.LogicalPath != input.LogicalPath || existing.SHA256 != input.SHA256 ||
+		existing.SizeBytes != input.SizeBytes || existing.IdempotencyIdentity != input.IdempotencyIdentity {
+		return manageddata.S3MultipartUpload{}, fmt.Errorf("%w: multipart identity was reused with different metadata", manageddata.ErrConflict)
+	}
+	return existing, nil
+}
+
+func sameS3MultipartInitialization(existing manageddata.S3MultipartUpload, input manageddata.InitializeS3MultipartUploadInput) bool {
+	if existing.ObjectKey != input.ObjectKey || existing.Existing != input.Existing {
+		return false
+	}
+	if input.Existing {
+		return existing.Status == manageddata.S3MultipartStatusCompleted && existing.ProviderUploadID == ""
+	}
+	return existing.ProviderUploadID == input.ProviderUploadID && existing.Status != manageddata.S3MultipartStatusCreating
+}
+
+func validateHexIdentity(name, value string) error {
+	if len(value) != 64 || strings.ToLower(value) != value {
+		return fmt.Errorf("%s must be 64 lowercase hexadecimal characters", name)
+	}
+	if _, err := hex.DecodeString(value); err != nil {
+		return fmt.Errorf("%s must be 64 lowercase hexadecimal characters", name)
+	}
+	return nil
+}
+
+func safeMetadata(value string, max int) bool {
+	if value == "" || len(value) > max {
+		return false
+	}
+	for _, char := range value {
+		if char < 0x20 || char == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func mapRollout(row platformdb.ManagedDataRollout, targetRows []platformdb.ManagedDataRolloutTarget) manageddata.Rollout {

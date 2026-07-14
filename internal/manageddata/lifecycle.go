@@ -185,6 +185,84 @@ type UploadProgress struct {
 	UploadedSizeBytes int64
 }
 
+type S3MultipartStatus string
+
+const (
+	S3MultipartStatusCreating   S3MultipartStatus = "creating"
+	S3MultipartStatusOpen       S3MultipartStatus = "open"
+	S3MultipartStatusCompleting S3MultipartStatus = "completing"
+	S3MultipartStatusCompleted  S3MultipartStatus = "completed"
+	S3MultipartStatusAborting   S3MultipartStatus = "aborting"
+	S3MultipartStatusAborted    S3MultipartStatus = "aborted"
+	S3MultipartStatusFailed     S3MultipartStatus = "failed"
+)
+
+type S3MultipartUpload struct {
+	ID                    string
+	UploadSessionID       string
+	LogicalPath           string
+	SHA256                string
+	SizeBytes             int64
+	ObjectKey             string
+	ProviderUploadID      string
+	Status                S3MultipartStatus
+	Existing              bool
+	IdempotencyIdentity   string
+	CompletionIdentity    string
+	CompletionRequestHash string
+	AbortIdentity         string
+	CreatedAt             string
+	UpdatedAt             string
+	CompletedAt           string
+	AbortedAt             string
+	Error                 string
+}
+
+type CreateS3MultipartUploadInput struct {
+	ID                  string
+	UploadSessionID     string
+	LogicalPath         string
+	SHA256              string
+	SizeBytes           int64
+	IdempotencyIdentity string
+}
+
+type InitializeS3MultipartUploadInput struct {
+	ID               string
+	ObjectKey        string
+	ProviderUploadID string
+	Existing         bool
+}
+
+type S3MultipartPart struct {
+	MultipartUploadID string
+	PartNumber        int32
+	SizeBytes         int64
+	SHA256            string
+}
+
+type BeginS3MultipartCompletionInput struct {
+	ID                  string
+	IdempotencyIdentity string
+	RequestHash         string
+}
+
+type S3MultipartCompletion struct {
+	Upload  S3MultipartUpload
+	Parts   []S3MultipartPart
+	Execute bool
+}
+
+type BeginS3MultipartAbortInput struct {
+	ID                  string
+	IdempotencyIdentity string
+}
+
+type S3MultipartAbort struct {
+	Upload  S3MultipartUpload
+	Execute bool
+}
+
 type CompleteUploadInput struct {
 	SessionID  string
 	RevisionID string
@@ -264,6 +342,17 @@ type Repository interface {
 	UpdateUploadProgress(context.Context, string, UploadProgress) error
 	AbortUploadSession(context.Context, string) error
 	ExpireUploadSessions(context.Context, time.Time) (int64, error)
+	CreateS3MultipartUpload(context.Context, CreateS3MultipartUploadInput) (S3MultipartUpload, error)
+	S3MultipartUploadByID(context.Context, string) (S3MultipartUpload, error)
+	InitializeS3MultipartUpload(context.Context, InitializeS3MultipartUploadInput) (S3MultipartUpload, error)
+	ReserveS3MultipartPart(context.Context, S3MultipartPart) (S3MultipartPart, error)
+	ListS3MultipartParts(context.Context, string) ([]S3MultipartPart, error)
+	BeginS3MultipartCompletion(context.Context, BeginS3MultipartCompletionInput) (S3MultipartCompletion, error)
+	FinishS3MultipartCompletion(context.Context, string) (S3MultipartUpload, error)
+	BeginS3MultipartAbort(context.Context, BeginS3MultipartAbortInput) (S3MultipartAbort, error)
+	FinishS3MultipartAbort(context.Context, string) (S3MultipartUpload, error)
+	FailS3MultipartUpload(context.Context, string, string) (S3MultipartUpload, error)
+	ListRecoverableS3MultipartUploads(context.Context, time.Time, int64) ([]S3MultipartUpload, error)
 	CompleteUpload(context.Context, CompleteUploadInput) (Revision, error)
 	RevisionByID(context.Context, string) (Revision, error)
 	ListRevisions(context.Context, string) ([]Revision, error)

@@ -208,6 +208,37 @@ func (q *Queries) ArchiveManagedDataCollection(ctx context.Context, id string) (
 	return q.db.ExecContext(ctx, archiveManagedDataCollection, id)
 }
 
+const beginManagedDataS3MultipartAbort = `-- name: BeginManagedDataS3MultipartAbort :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'aborting', abort_identity = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('creating', 'open', 'failed')
+`
+
+type BeginManagedDataS3MultipartAbortParams struct {
+	AbortIdentity string `json:"abort_identity"`
+	ID            string `json:"id"`
+}
+
+func (q *Queries) BeginManagedDataS3MultipartAbort(ctx context.Context, arg BeginManagedDataS3MultipartAbortParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, beginManagedDataS3MultipartAbort, arg.AbortIdentity, arg.ID)
+}
+
+const beginManagedDataS3MultipartCompletion = `-- name: BeginManagedDataS3MultipartCompletion :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'completing', completion_identity = ?, completion_request_hash = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'open'
+`
+
+type BeginManagedDataS3MultipartCompletionParams struct {
+	CompletionIdentity    string `json:"completion_identity"`
+	CompletionRequestHash string `json:"completion_request_hash"`
+	ID                    string `json:"id"`
+}
+
+func (q *Queries) BeginManagedDataS3MultipartCompletion(ctx context.Context, arg BeginManagedDataS3MultipartCompletionParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, beginManagedDataS3MultipartCompletion, arg.CompletionIdentity, arg.CompletionRequestHash, arg.ID)
+}
+
 const clearAssetEdgesForServingState = `-- name: ClearAssetEdgesForServingState :exec
 DELETE FROM asset_edges WHERE serving_state_id = ?
 `
@@ -469,6 +500,58 @@ func (q *Queries) CreateManagedDataRolloutTarget(ctx context.Context, arg Create
 		arg.WorkspaceID,
 		arg.ServingStateID,
 		arg.PriorServingStateID,
+	)
+	return err
+}
+
+const createManagedDataS3MultipartPart = `-- name: CreateManagedDataS3MultipartPart :exec
+INSERT INTO managed_data_s3_multipart_parts (
+  multipart_upload_id, part_number, size_bytes, sha256
+)
+VALUES (?, ?, ?, ?)
+`
+
+type CreateManagedDataS3MultipartPartParams struct {
+	MultipartUploadID string `json:"multipart_upload_id"`
+	PartNumber        int64  `json:"part_number"`
+	SizeBytes         int64  `json:"size_bytes"`
+	Sha256            string `json:"sha256"`
+}
+
+func (q *Queries) CreateManagedDataS3MultipartPart(ctx context.Context, arg CreateManagedDataS3MultipartPartParams) error {
+	_, err := q.db.ExecContext(ctx, createManagedDataS3MultipartPart,
+		arg.MultipartUploadID,
+		arg.PartNumber,
+		arg.SizeBytes,
+		arg.Sha256,
+	)
+	return err
+}
+
+const createManagedDataS3MultipartUpload = `-- name: CreateManagedDataS3MultipartUpload :exec
+INSERT INTO managed_data_s3_multipart_uploads (
+  id, upload_session_id, logical_path, sha256, size_bytes, idempotency_identity
+)
+VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type CreateManagedDataS3MultipartUploadParams struct {
+	ID                  string `json:"id"`
+	UploadSessionID     string `json:"upload_session_id"`
+	LogicalPath         string `json:"logical_path"`
+	Sha256              string `json:"sha256"`
+	SizeBytes           int64  `json:"size_bytes"`
+	IdempotencyIdentity string `json:"idempotency_identity"`
+}
+
+func (q *Queries) CreateManagedDataS3MultipartUpload(ctx context.Context, arg CreateManagedDataS3MultipartUploadParams) error {
+	_, err := q.db.ExecContext(ctx, createManagedDataS3MultipartUpload,
+		arg.ID,
+		arg.UploadSessionID,
+		arg.LogicalPath,
+		arg.Sha256,
+		arg.SizeBytes,
+		arg.IdempotencyIdentity,
 	)
 	return err
 }
@@ -861,6 +944,21 @@ func (q *Queries) FailManagedDataRollout(ctx context.Context, arg FailManagedDat
 	return q.db.ExecContext(ctx, failManagedDataRollout, arg.Error, arg.ID)
 }
 
+const failManagedDataS3MultipartUpload = `-- name: FailManagedDataS3MultipartUpload :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('creating', 'open', 'completing')
+`
+
+type FailManagedDataS3MultipartUploadParams struct {
+	Error string `json:"error"`
+	ID    string `json:"id"`
+}
+
+func (q *Queries) FailManagedDataS3MultipartUpload(ctx context.Context, arg FailManagedDataS3MultipartUploadParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, failManagedDataS3MultipartUpload, arg.Error, arg.ID)
+}
+
 const finishAgentRun = `-- name: FinishAgentRun :one
 UPDATE agent_runs
 SET status = ?1,
@@ -926,6 +1024,26 @@ func (q *Queries) FinishAgentRun(ctx context.Context, arg FinishAgentRunParams) 
 		&i.MetadataJson,
 	)
 	return i, err
+}
+
+const finishManagedDataS3MultipartAbort = `-- name: FinishManagedDataS3MultipartAbort :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'aborted', aborted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'aborting'
+`
+
+func (q *Queries) FinishManagedDataS3MultipartAbort(ctx context.Context, id string) (sql.Result, error) {
+	return q.db.ExecContext(ctx, finishManagedDataS3MultipartAbort, id)
+}
+
+const finishManagedDataS3MultipartCompletion = `-- name: FinishManagedDataS3MultipartCompletion :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'completing'
+`
+
+func (q *Queries) FinishManagedDataS3MultipartCompletion(ctx context.Context, id string) (sql.Result, error) {
+	return q.db.ExecContext(ctx, finishManagedDataS3MultipartCompletion, id)
 }
 
 const getAPITokenByFingerprint = `-- name: GetAPITokenByFingerprint :one
@@ -1285,6 +1403,96 @@ func (q *Queries) GetManagedDataRollout(ctx context.Context, id string) (Managed
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.CompletedAt,
+		&i.Error,
+	)
+	return i, err
+}
+
+const getManagedDataS3MultipartPart = `-- name: GetManagedDataS3MultipartPart :one
+SELECT multipart_upload_id, part_number, size_bytes, sha256, created_at, updated_at FROM managed_data_s3_multipart_parts
+WHERE multipart_upload_id = ? AND part_number = ?
+`
+
+type GetManagedDataS3MultipartPartParams struct {
+	MultipartUploadID string `json:"multipart_upload_id"`
+	PartNumber        int64  `json:"part_number"`
+}
+
+func (q *Queries) GetManagedDataS3MultipartPart(ctx context.Context, arg GetManagedDataS3MultipartPartParams) (ManagedDataS3MultipartPart, error) {
+	row := q.db.QueryRowContext(ctx, getManagedDataS3MultipartPart, arg.MultipartUploadID, arg.PartNumber)
+	var i ManagedDataS3MultipartPart
+	err := row.Scan(
+		&i.MultipartUploadID,
+		&i.PartNumber,
+		&i.SizeBytes,
+		&i.Sha256,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getManagedDataS3MultipartUpload = `-- name: GetManagedDataS3MultipartUpload :one
+SELECT id, upload_session_id, logical_path, sha256, size_bytes, object_key, provider_upload_id, status, existing, idempotency_identity, completion_identity, completion_request_hash, abort_identity, created_at, updated_at, completed_at, aborted_at, error FROM managed_data_s3_multipart_uploads WHERE id = ?
+`
+
+func (q *Queries) GetManagedDataS3MultipartUpload(ctx context.Context, id string) (ManagedDataS3MultipartUpload, error) {
+	row := q.db.QueryRowContext(ctx, getManagedDataS3MultipartUpload, id)
+	var i ManagedDataS3MultipartUpload
+	err := row.Scan(
+		&i.ID,
+		&i.UploadSessionID,
+		&i.LogicalPath,
+		&i.Sha256,
+		&i.SizeBytes,
+		&i.ObjectKey,
+		&i.ProviderUploadID,
+		&i.Status,
+		&i.Existing,
+		&i.IdempotencyIdentity,
+		&i.CompletionIdentity,
+		&i.CompletionRequestHash,
+		&i.AbortIdentity,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.AbortedAt,
+		&i.Error,
+	)
+	return i, err
+}
+
+const getManagedDataS3MultipartUploadByIdentity = `-- name: GetManagedDataS3MultipartUploadByIdentity :one
+SELECT id, upload_session_id, logical_path, sha256, size_bytes, object_key, provider_upload_id, status, existing, idempotency_identity, completion_identity, completion_request_hash, abort_identity, created_at, updated_at, completed_at, aborted_at, error FROM managed_data_s3_multipart_uploads
+WHERE upload_session_id = ? AND idempotency_identity = ?
+`
+
+type GetManagedDataS3MultipartUploadByIdentityParams struct {
+	UploadSessionID     string `json:"upload_session_id"`
+	IdempotencyIdentity string `json:"idempotency_identity"`
+}
+
+func (q *Queries) GetManagedDataS3MultipartUploadByIdentity(ctx context.Context, arg GetManagedDataS3MultipartUploadByIdentityParams) (ManagedDataS3MultipartUpload, error) {
+	row := q.db.QueryRowContext(ctx, getManagedDataS3MultipartUploadByIdentity, arg.UploadSessionID, arg.IdempotencyIdentity)
+	var i ManagedDataS3MultipartUpload
+	err := row.Scan(
+		&i.ID,
+		&i.UploadSessionID,
+		&i.LogicalPath,
+		&i.Sha256,
+		&i.SizeBytes,
+		&i.ObjectKey,
+		&i.ProviderUploadID,
+		&i.Status,
+		&i.Existing,
+		&i.IdempotencyIdentity,
+		&i.CompletionIdentity,
+		&i.CompletionRequestHash,
+		&i.AbortIdentity,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.CompletedAt,
+		&i.AbortedAt,
 		&i.Error,
 	)
 	return i, err
@@ -1668,6 +1876,38 @@ func (q *Queries) GetWorkspaceWithActiveMetadata(ctx context.Context, arg GetWor
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const initializeExistingManagedDataS3MultipartUpload = `-- name: InitializeExistingManagedDataS3MultipartUpload :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET object_key = ?, provider_upload_id = '', status = 'completed', existing = 1,
+    completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'creating'
+`
+
+type InitializeExistingManagedDataS3MultipartUploadParams struct {
+	ObjectKey string `json:"object_key"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) InitializeExistingManagedDataS3MultipartUpload(ctx context.Context, arg InitializeExistingManagedDataS3MultipartUploadParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, initializeExistingManagedDataS3MultipartUpload, arg.ObjectKey, arg.ID)
+}
+
+const initializeManagedDataS3MultipartUpload = `-- name: InitializeManagedDataS3MultipartUpload :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET object_key = ?, provider_upload_id = ?, status = 'open', updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'creating' AND existing = 0
+`
+
+type InitializeManagedDataS3MultipartUploadParams struct {
+	ObjectKey        string `json:"object_key"`
+	ProviderUploadID string `json:"provider_upload_id"`
+	ID               string `json:"id"`
+}
+
+func (q *Queries) InitializeManagedDataS3MultipartUpload(ctx context.Context, arg InitializeManagedDataS3MultipartUploadParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, initializeManagedDataS3MultipartUpload, arg.ObjectKey, arg.ProviderUploadID, arg.ID)
 }
 
 const insertAsset = `-- name: InsertAsset :exec
@@ -2847,6 +3087,42 @@ func (q *Queries) ListManagedDataRolloutTargets(ctx context.Context, rolloutID s
 	return items, nil
 }
 
+const listManagedDataS3MultipartParts = `-- name: ListManagedDataS3MultipartParts :many
+SELECT multipart_upload_id, part_number, size_bytes, sha256, created_at, updated_at FROM managed_data_s3_multipart_parts
+WHERE multipart_upload_id = ?
+ORDER BY part_number
+`
+
+func (q *Queries) ListManagedDataS3MultipartParts(ctx context.Context, multipartUploadID string) ([]ManagedDataS3MultipartPart, error) {
+	rows, err := q.db.QueryContext(ctx, listManagedDataS3MultipartParts, multipartUploadID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ManagedDataS3MultipartPart{}
+	for rows.Next() {
+		var i ManagedDataS3MultipartPart
+		if err := rows.Scan(
+			&i.MultipartUploadID,
+			&i.PartNumber,
+			&i.SizeBytes,
+			&i.Sha256,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listManagedDataServingStateBindings = `-- name: ListManagedDataServingStateBindings :many
 SELECT serving_state_id, collection_id, revision_id, environment, bound_at FROM managed_data_serving_state_bindings
 WHERE serving_state_id = ?
@@ -2976,6 +3252,74 @@ func (q *Queries) ListQueryEvents(ctx context.Context, arg ListQueryEventsParams
 			&i.PlanText,
 			&i.QueryJson,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecoverableManagedDataS3MultipartUploads = `-- name: ListRecoverableManagedDataS3MultipartUploads :many
+SELECT multipart.id, multipart.upload_session_id, multipart.logical_path, multipart.sha256, multipart.size_bytes, multipart.object_key, multipart.provider_upload_id, multipart.status, multipart.existing, multipart.idempotency_identity, multipart.completion_identity, multipart.completion_request_hash, multipart.abort_identity, multipart.created_at, multipart.updated_at, multipart.completed_at, multipart.aborted_at, multipart.error
+FROM managed_data_s3_multipart_uploads AS multipart
+JOIN managed_data_upload_sessions AS session ON session.id = multipart.upload_session_id
+WHERE multipart.provider_upload_id <> ''
+  AND multipart.updated_at <= ?1
+  AND (
+    multipart.status IN ('aborting', 'failed')
+    OR (
+      multipart.status = 'open'
+      AND (
+        session.status IN ('complete', 'aborted', 'expired', 'failed')
+        OR (session.status = 'open' AND session.expires_at <= ?2)
+      )
+    )
+  )
+ORDER BY multipart.updated_at, multipart.id
+LIMIT ?3
+`
+
+type ListRecoverableManagedDataS3MultipartUploadsParams struct {
+	UpdatedCutoff string `json:"updated_cutoff"`
+	ExpiryCutoff  string `json:"expiry_cutoff"`
+	RowLimit      int64  `json:"row_limit"`
+}
+
+func (q *Queries) ListRecoverableManagedDataS3MultipartUploads(ctx context.Context, arg ListRecoverableManagedDataS3MultipartUploadsParams) ([]ManagedDataS3MultipartUpload, error) {
+	rows, err := q.db.QueryContext(ctx, listRecoverableManagedDataS3MultipartUploads, arg.UpdatedCutoff, arg.ExpiryCutoff, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ManagedDataS3MultipartUpload{}
+	for rows.Next() {
+		var i ManagedDataS3MultipartUpload
+		if err := rows.Scan(
+			&i.ID,
+			&i.UploadSessionID,
+			&i.LogicalPath,
+			&i.Sha256,
+			&i.SizeBytes,
+			&i.ObjectKey,
+			&i.ProviderUploadID,
+			&i.Status,
+			&i.Existing,
+			&i.IdempotencyIdentity,
+			&i.CompletionIdentity,
+			&i.CompletionRequestHash,
+			&i.AbortIdentity,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.CompletedAt,
+			&i.AbortedAt,
+			&i.Error,
 		); err != nil {
 			return nil, err
 		}
@@ -3748,6 +4092,19 @@ type SetActiveServingStateParams struct {
 func (q *Queries) SetActiveServingState(ctx context.Context, arg SetActiveServingStateParams) error {
 	_, err := q.db.ExecContext(ctx, setActiveServingState, arg.WorkspaceID, arg.Environment, arg.ServingStateID)
 	return err
+}
+
+const sumManagedDataS3MultipartPartSizes = `-- name: SumManagedDataS3MultipartPartSizes :one
+SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER)
+FROM managed_data_s3_multipart_parts
+WHERE multipart_upload_id = ?
+`
+
+func (q *Queries) SumManagedDataS3MultipartPartSizes(ctx context.Context, multipartUploadID string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, sumManagedDataS3MultipartPartSizes, multipartUploadID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const supersedeManagedDataRollout = `-- name: SupersedeManagedDataRollout :exec
