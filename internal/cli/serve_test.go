@@ -297,6 +297,5 @@ func serveTestConfig(home string) config.Config {
 		ManagedDataGCInterval:        time.Hour,
 		ManagedDataGCGracePeriod:     time.Hour,
 		ManagedDataMinFreeBytes:      1,
-		ManagedDataGCTargetFreeBytes: 1,
 	}
 }
