@@ -2,10 +2,27 @@ package cli
 
 import (
 	"context"
+	"time"
 
+	"github.com/Yacobolo/libredash/internal/manageddata/control"
 	manageddatahttp "github.com/Yacobolo/libredash/internal/manageddata/http"
 	"github.com/Yacobolo/libredash/internal/manageddata/s3multipart"
 )
+
+type managedDataMaintenance struct {
+	uploads   *control.Service
+	multipart *s3multipart.Service
+	uploadTTL time.Duration
+}
+
+func (m managedDataMaintenance) ExpireUploads(ctx context.Context) (control.ExpireResult, error) {
+	result, err := m.uploads.ExpireUploads(ctx)
+	if err != nil || m.multipart == nil {
+		return result, err
+	}
+	_, err = m.multipart.RecoverOrphaned(ctx, time.Now().UTC().Add(-m.uploadTTL), 100)
+	return result, err
+}
 
 type managedDataMultipartHTTP struct{ service *s3multipart.Service }
 

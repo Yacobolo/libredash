@@ -3,12 +3,17 @@ package cli
 import (
 	"context"
 	"errors"
+	"math"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/config"
 	"github.com/Yacobolo/libredash/internal/manageddata/control"
+	"github.com/Yacobolo/libredash/internal/manageddata/maintenance"
 	"github.com/Yacobolo/libredash/internal/manageddata/storage"
 )
 
@@ -36,6 +41,22 @@ func TestNewManagedDataStorageLocal(t *testing.T) {
 		if info.Mode().Perm()&0o077 != 0 {
 			t.Fatalf("%s permissions = %o, want private", relative, info.Mode().Perm())
 		}
+	}
+}
+
+func TestCapacityProtectedTusRejectsChunkWithoutReserve(t *testing.T) {
+	checker, err := maintenance.NewCapacityChecker(t.TempDir(), math.MaxInt64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	handler := capacityProtectedTus(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { called = true }), checker)
+	request := httptest.NewRequest(http.MethodPatch, "/tus/upload", strings.NewReader("x"))
+	request.ContentLength = 1
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusInsufficientStorage || called {
+		t.Fatalf("status = %d, called = %v", recorder.Code, called)
 	}
 }
 

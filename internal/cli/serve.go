@@ -225,6 +225,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 		return nil, nil, err
 	}
 	var managedDataMultipart manageddatahttp.MultipartCoordinator
+	var managedDataMultipartService *s3multipart.Service
 	if managedDataStorage.s3 != nil {
 		multipartService, multipartErr := s3multipart.New(managedDataRepo, managedDataStorage.s3, s3multipart.Config{Backend: "s3"})
 		if multipartErr != nil {
@@ -232,6 +233,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 			return nil, nil, multipartErr
 		}
 		managedDataMultipart = managedDataMultipartHTTP{service: multipartService}
+		managedDataMultipartService = multipartService
 	}
 	if err := materializesqlite.NewSQLRunRepository(store.SQLDB()).FailRunsForTerminalServingStates(ctx, "refresh did not complete"); err != nil {
 		cleanup()
@@ -376,8 +378,11 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 			Repository: managedDataAPI, Uploads: managedDataControl,
 			Multipart: managedDataMultipart, Rollouts: managedDataAPI,
 		},
-		ManagedDataTus:            managedDataStorage.tus,
-		ManagedDataExpirer:        managedDataControl,
+		ManagedDataTus: managedDataStorage.tus,
+		ManagedDataExpirer: managedDataMaintenance{
+			uploads: managedDataControl, multipart: managedDataMultipartService,
+			uploadTTL: cfg.ManagedDataUploadSessionTTL,
+		},
 		ManagedDataExpireInterval: cfg.ManagedDataGCInterval,
 	})
 	return server, cleanupWithRegistry, nil

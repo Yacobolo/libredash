@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/config"
 	"github.com/Yacobolo/libredash/internal/manageddata"
 	"github.com/Yacobolo/libredash/internal/manageddata/control"
+	"github.com/Yacobolo/libredash/internal/manageddata/maintenance"
 	"github.com/Yacobolo/libredash/internal/manageddata/runtimeview"
 	"github.com/Yacobolo/libredash/internal/manageddata/s3multipart"
 	"github.com/Yacobolo/libredash/internal/manageddata/storage"
@@ -64,7 +66,11 @@ func newManagedDataStorage(ctx context.Context, cfg config.Config) (managedDataS
 		if err != nil {
 			return managedDataStorage{}, err
 		}
-		result.blobs, result.transport, result.tus = blobs, transport, handler
+		capacity, err := maintenance.NewCapacityChecker(root, cfg.ManagedDataMinFreeBytes)
+		if err != nil {
+			return managedDataStorage{}, err
+		}
+		result.blobs, result.transport, result.tus = blobs, transport, capacityProtectedTus(handler, capacity)
 	case "s3":
 		store, err := newManagedDataS3Store(ctx, cfg)
 		if err != nil {
@@ -89,6 +95,30 @@ func newManagedDataStorage(ctx context.Context, cfg config.Config) (managedDataS
 	}
 	result.cache = cache
 	return result, nil
+}
+
+func capacityProtectedTus(next http.Handler, capacity *maintenance.CapacityChecker) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPatch {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.ContentLength < 0 {
+			http.Error(w, "Content-Length is required", http.StatusLengthRequired)
+			return
+		}
+		reservation, err := capacity.Reserve(r.Context(), r.ContentLength)
+		if err != nil {
+			status := http.StatusServiceUnavailable
+			if errors.Is(err, maintenance.ErrInsufficientCapacity) {
+				status = http.StatusInsufficientStorage
+			}
+			http.Error(w, http.StatusText(status), status)
+			return
+		}
+		defer reservation.Release()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func newManagedDataS3Store(ctx context.Context, cfg config.Config) (*manageds3.Store, error) {
