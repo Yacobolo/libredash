@@ -62,17 +62,18 @@ func TestBinderPinsDistinctManagedConnectionsDeterministically(t *testing.T) {
 	}
 }
 
-func TestBinderClearsBindingsForLegacyUnmanagedArtifact(t *testing.T) {
+func TestBinderRejectsArtifactWithoutProject(t *testing.T) {
 	repo := &fakeRepository{replaced: []manageddata.ServingStateBinding{{CollectionID: "stale"}}}
 	binder := newBinder(repo, func(string) (servingstatefs.CompiledWorkspaceArtifact, error) {
 		return compiledArtifact("", map[string]map[string]string{"sales": {"local": "local"}}), nil
 	})
 
-	if err := binder.AfterArtifactValidation(t.Context(), servingstate.State{ID: "state-1", Environment: "dev"}, servingstate.Validation{RootDir: "/artifact"}); err != nil {
-		t.Fatal(err)
+	err := binder.AfterArtifactValidation(t.Context(), servingstate.State{ID: "state-1", Environment: "dev"}, servingstate.Validation{RootDir: "/artifact"})
+	if !errors.Is(err, ErrArtifactMetadata) {
+		t.Fatalf("error = %v, want ErrArtifactMetadata", err)
 	}
-	if repo.replaceCalls != 1 || len(repo.replaced) != 0 {
-		t.Fatalf("replace calls = %d, bindings = %#v; want one empty replacement", repo.replaceCalls, repo.replaced)
+	if repo.replaceCalls != 0 {
+		t.Fatalf("ReplaceServingStateBindings() calls = %d, want 0", repo.replaceCalls)
 	}
 }
 

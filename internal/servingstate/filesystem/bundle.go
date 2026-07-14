@@ -48,7 +48,7 @@ type ValidateOptions struct {
 
 type CompiledWorkspaceArtifact struct {
 	Version        int                                    `json:"version"`
-	ProjectID      string                                 `json:"projectId,omitempty"`
+	ProjectID      string                                 `json:"projectId"`
 	WorkspaceID    string                                 `json:"workspaceId"`
 	WorkspaceTitle string                                 `json:"workspaceTitle"`
 	Environment    string                                 `json:"environment"`
@@ -628,6 +628,9 @@ func readCompiledWorkspaceArtifact(root string, manifest Manifest) (CompiledWork
 	}
 	if compiled.Version != 1 {
 		return CompiledWorkspaceArtifact{}, fmt.Errorf("compiled artifact version = %d, want 1", compiled.Version)
+	}
+	if compiled.ProjectID == "" || compiled.ProjectID != strings.TrimSpace(compiled.ProjectID) {
+		return CompiledWorkspaceArtifact{}, fmt.Errorf("compiled artifact projectId is required")
 	}
 	if compiled.Definition == nil {
 		return CompiledWorkspaceArtifact{}, fmt.Errorf("compiled artifact definition is required")

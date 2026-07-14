@@ -70,7 +70,7 @@ func (b *Binder) AfterArtifactValidation(ctx context.Context, candidate servings
 	if err != nil {
 		return err
 	}
-	if compiled.ProjectID != strings.TrimSpace(compiled.ProjectID) || len(connections) > 0 && compiled.ProjectID == "" {
+	if compiled.ProjectID == "" || compiled.ProjectID != strings.TrimSpace(compiled.ProjectID) {
 		return ErrArtifactMetadata
 	}
 
