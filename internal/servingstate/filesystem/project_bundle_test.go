@@ -7,19 +7,27 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 )
 
+const olistManagedDataRevision = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+func olistManagedDataRevisions() map[string]string {
+	return map[string]string{"olist": olistManagedDataRevision}
+}
+
 func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
 	servingStateID := servingstate.ID("dep_ops")
-	manifest, _, err := PackProject(projectPath, "operations", servingStateID, &bundle)
+	manifest, _, err := PackProject(projectPath, PackProjectOptions{WorkspaceID: "operations", ServingStateID: servingStateID, ManagedDataRevisions: olistManagedDataRevisions()}, &bundle)
 	if err != nil {
 		t.Fatalf("PackProject() error = %v", err)
 	}
@@ -54,11 +62,101 @@ func TestPackProjectValidatesSelectedWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadCompiledWorkspaceArtifact() error = %v", err)
 	}
+	if compiled.ProjectID != "libredash-showcase" {
+		t.Fatalf("ProjectID = %q, want libredash-showcase", compiled.ProjectID)
+	}
+	if compiled.ProjectDigest == "" {
+		t.Fatal("ProjectDigest is empty")
+	}
+	wantWorkspaces := []string{"operations", "sales", "visuals"}
+	if !reflect.DeepEqual(compiled.ProjectWorkspaces, wantWorkspaces) {
+		t.Fatalf("ProjectWorkspaces = %#v, want %#v", compiled.ProjectWorkspaces, wantWorkspaces)
+	}
+	if validation.ProjectDigest != compiled.ProjectDigest || !reflect.DeepEqual(validation.ProjectWorkspaces, wantWorkspaces) {
+		t.Fatalf("validation project identity = (%q, %#v), want (%q, %#v)", validation.ProjectDigest, validation.ProjectWorkspaces, compiled.ProjectDigest, wantWorkspaces)
+	}
+	if !reflect.DeepEqual(validation.AccessPolicy, compiled.Definition.Access) {
+		t.Fatalf("validation access policy does not match compiled artifact")
+	}
 	if compiled.Validation.Status != "passed" || compiled.Validation.SchemaVersion != "libredash.dev/v1" {
 		t.Fatalf("compiled validation = %#v, want passed libredash.dev/v1", compiled.Validation)
 	}
 	if compiled.Validation.GraphHash == "" || compiled.Validation.GraphHash != graphHash(compiled.Graph) {
 		t.Fatalf("compiled validation graph hash = %q, want %q", compiled.Validation.GraphHash, graphHash(compiled.Graph))
+	}
+}
+
+func TestPackProjectEmbedsCanonicalManagedDataRevisionPins(t *testing.T) {
+	projectPath := writeManagedBundleProject(t)
+	digest := "sha256:" + strings.Repeat("a", 64)
+	var bundle bytes.Buffer
+	_, _, err := PackProject(projectPath, PackProjectOptions{
+		WorkspaceID:          "sales",
+		ServingStateID:       "dep_sales",
+		ManagedDataRevisions: map[string]string{"orders": digest},
+	}, &bundle)
+	if err != nil {
+		t.Fatalf("PackProject() error = %v", err)
+	}
+	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
+	if err := os.WriteFile(path, bundle.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	if err := ExtractArtifact(path, root); err != nil {
+		t.Fatal(err)
+	}
+	compiled, _, err := LoadCompiledWorkspaceArtifact(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := compiled.ManagedDataRevisions["orders"]; got != digest {
+		t.Fatalf("managedDataRevisions[orders] = %q, want %q", got, digest)
+	}
+}
+
+func TestPackProjectRequiresExactManagedDataRevisionPins(t *testing.T) {
+	projectPath := writeManagedBundleProject(t)
+	digest := "sha256:" + strings.Repeat("a", 64)
+	tests := []struct {
+		name string
+		pins map[string]string
+	}{
+		{name: "missing", pins: map[string]string{}},
+		{name: "extra", pins: map[string]string{"orders": digest, "other": digest}},
+		{name: "whitespace key", pins: map[string]string{"orders ": digest}},
+		{name: "internal revision id", pins: map[string]string{"orders": "revision_1"}},
+		{name: "uppercase digest", pins: map[string]string{"orders": "sha256:" + strings.Repeat("A", 64)}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var bundle bytes.Buffer
+			_, _, err := PackProject(projectPath, PackProjectOptions{
+				WorkspaceID:          "sales",
+				ServingStateID:       "dep_sales",
+				ManagedDataRevisions: test.pins,
+			}, &bundle)
+			if err == nil {
+				t.Fatal("PackProject() error = nil, want pin validation error")
+			}
+		})
+	}
+}
+
+func TestValidateCompiledWorkspaceArtifactRejectsConflictingManagedConnectionDefinitions(t *testing.T) {
+	digest := "sha256:" + strings.Repeat("a", 64)
+	compiled := CompiledWorkspaceArtifact{
+		Version:   1,
+		ProjectID: "project-a",
+		Definition: &workspace.Definition{Models: map[string]*semanticmodel.Model{
+			"first":  {Connections: map[string]semanticmodel.Connection{"orders": {Kind: "managed"}}},
+			"second": {Connections: map[string]semanticmodel.Connection{"orders": {Kind: "managed", Description: "different"}}},
+		}},
+		ManagedDataRevisions: map[string]string{"orders": digest},
+	}
+	compiled.Validation = CompiledArtifactValidation{Status: "passed", SchemaVersion: projectAPIVersion, GraphHash: graphHash(compiled.Graph)}
+	if err := ValidateCompiledWorkspaceArtifact(compiled); err == nil {
+		t.Fatal("ValidateCompiledWorkspaceArtifact() error = nil, want conflicting connection rejection")
 	}
 }
 
@@ -93,52 +191,30 @@ func TestValidateArtifactRejectsUnlistedBundleFile(t *testing.T) {
 	}
 }
 
-func TestValidateArtifactWithDiscoveryPersistsValidatedCompiledGraph(t *testing.T) {
+func TestValidateArtifactIsDataLocationIndependent(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
 	servingStateID := servingstate.ID("dep_discovered")
-	if _, _, err := PackProject(projectPath, "sales", servingStateID, &bundle); err != nil {
+	if _, _, err := PackProject(projectPath, PackProjectOptions{WorkspaceID: "sales", ServingStateID: servingStateID, ManagedDataRevisions: olistManagedDataRevisions()}, &bundle); err != nil {
 		t.Fatalf("PackProject() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
 	if err := os.WriteFile(path, bundle.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	dataDir := filepath.Join("..", "..", "..", ".data", "olist")
-	if _, err := os.Stat(dataDir); err != nil {
-		t.Skipf("Olist data is not available: %v", err)
-	}
-
-	validation, err := ValidateArtifactWithOptions(path, "sales", servingStateID, ValidateOptions{DataDir: dataDir})
+	validation, err := ValidateArtifact(path, "sales", servingStateID)
 	if err != nil {
-		t.Fatalf("ValidateArtifactWithOptions() error = %v", err)
+		t.Fatalf("ValidateArtifact() error = %v", err)
 	}
-	root := t.TempDir()
-	if err := ExtractArtifact(path, root); err != nil {
-		t.Fatalf("ExtractArtifact() error = %v", err)
-	}
-	compiled, manifest, err := LoadCompiledWorkspaceArtifact(root)
-	if err != nil {
-		t.Fatalf("LoadCompiledWorkspaceArtifact() error = %v", err)
-	}
-	if compiled.Validation.GraphHash != graphHash(compiled.Graph) {
-		t.Fatalf("compiled validation graphHash = %q, want %q", compiled.Validation.GraphHash, graphHash(compiled.Graph))
-	}
-	if manifest.GraphHash != digestCompiledForTest(t, compiled) {
-		t.Fatalf("manifest graphHash = %q, want digest of persisted compiled graph", manifest.GraphHash)
-	}
-	if validation.Graph.Assets[0].ContentHash == "" {
-		t.Fatal("validation graph has empty content hash")
-	}
-	if graphHash(validation.Graph) != graphHash(compiled.Graph) {
-		t.Fatalf("returned validation graph hash = %q, persisted compiled graph hash = %q", graphHash(validation.Graph), graphHash(compiled.Graph))
+	if len(validation.Graph.Assets) == 0 {
+		t.Fatal("validated graph has no assets")
 	}
 }
 
 func TestValidateArtifactRejectsWrongDeploymentCompiledGraph(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
-	if _, _, err := PackProject(projectPath, "operations", servingstate.ID("dep_ops"), &bundle); err != nil {
+	if _, _, err := PackProject(projectPath, PackProjectOptions{WorkspaceID: "operations", ServingStateID: "dep_ops", ManagedDataRevisions: olistManagedDataRevisions()}, &bundle); err != nil {
 		t.Fatalf("PackProject() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
@@ -214,8 +290,8 @@ func packedProjectArtifact(t *testing.T, workspaceID string, environment serving
 	t.Helper()
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
-	if _, _, err := PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, environment, servingStateID, workspace.AssetGraph{}, &bundle); err != nil {
-		t.Fatalf("PackProjectAgainstGraphForEnvironment() error = %v", err)
+	if _, _, err := PackProject(projectPath, PackProjectOptions{WorkspaceID: workspaceID, Environment: environment, ServingStateID: servingStateID, ManagedDataRevisions: olistManagedDataRevisions()}, &bundle); err != nil {
+		t.Fatalf("PackProject() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
 	if err := os.WriteFile(path, bundle.Bytes(), 0o644); err != nil {
@@ -309,7 +385,7 @@ func addUnlistedArtifactFileForTest(t *testing.T, path, name, content string) {
 func TestPackProjectRejectsUnknownWorkspace(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
-	_, _, err := PackProject(projectPath, "missing", servingstate.ID("dep_missing"), &bundle)
+	_, _, err := PackProject(projectPath, PackProjectOptions{WorkspaceID: "missing", ServingStateID: "dep_missing"}, &bundle)
 	if err == nil {
 		t.Fatal("PackProject() error = nil, want unknown workspace error")
 	}
@@ -347,8 +423,8 @@ func TestPackProjectStoresActiveDeploymentPlanDiff(t *testing.T) {
 	})
 
 	var bundle bytes.Buffer
-	if _, _, err := PackProjectAgainstGraph(projectPath, "operations", servingstate.ID("dep_ops"), activeGraph, &bundle); err != nil {
-		t.Fatalf("PackProjectAgainstGraph() error = %v", err)
+	if _, _, err := PackProject(projectPath, PackProjectOptions{WorkspaceID: "operations", ServingStateID: "dep_ops", ActiveGraph: activeGraph, ManagedDataRevisions: olistManagedDataRevisions()}, &bundle); err != nil {
+		t.Fatalf("PackProject() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
 	if err := os.WriteFile(path, bundle.Bytes(), 0o644); err != nil {
@@ -496,7 +572,7 @@ spec:
 	})
 
 	var bundle bytes.Buffer
-	if _, _, err := PackProject(projectPath, "sales", servingstate.ID("dep_sales"), &bundle); err != nil {
+	if _, _, err := PackProject(projectPath, PackProjectOptions{WorkspaceID: "sales", ServingStateID: "dep_sales"}, &bundle); err != nil {
 		t.Fatalf("PackProject() error = %v", err)
 	}
 	path := filepath.Join(t.TempDir(), "artifact.tar.gz")
@@ -529,6 +605,91 @@ func writeBundleProjectFixture(t *testing.T, files map[string]string) string {
 		}
 	}
 	return filepath.Join(dir, ProjectFile)
+}
+
+func writeManagedBundleProject(t *testing.T) string {
+	t.Helper()
+	return writeBundleProjectFixture(t, map[string]string{
+		"libredash.yaml": `
+apiVersion: libredash.dev/v1
+kind: Project
+metadata:
+  name: project-a
+spec:
+  connections:
+    include: [connections/*.yaml]
+  sources:
+    include: [sources/*.yaml]
+  workspaces:
+    include: [workspaces/*/workspace.yaml]
+`,
+		"connections/orders.yaml": `
+apiVersion: libredash.dev/v1
+kind: Connection
+metadata:
+  name: orders
+spec:
+  kind: managed
+  credentials:
+    provider: none
+`,
+		"sources/orders.orders.yaml": `
+apiVersion: libredash.dev/v1
+kind: Source
+metadata:
+  name: orders.orders
+spec:
+  connection: orders
+  path: orders.csv
+  format: csv
+  fields:
+    order_id:
+      type: string
+`,
+		"workspaces/sales/workspace.yaml": `
+apiVersion: libredash.dev/v1
+kind: Workspace
+metadata:
+  name: sales
+spec:
+  uses:
+    sources: [orders.orders]
+  models:
+    include: [models/*.yaml]
+  semanticModels:
+    include: [semantic-models/*.yaml]
+  dashboards:
+    include: []
+  access:
+    include: []
+  agentPolicy:
+    include: []
+`,
+		"workspaces/sales/models/orders.yaml": `
+apiVersion: libredash.dev/v1
+kind: ModelTable
+metadata:
+  workspace: sales
+  name: orders
+spec:
+  source: orders.orders
+  primaryKey: order_id
+  fields:
+    order_id:
+      label: Order ID
+`,
+		"workspaces/sales/semantic-models/sales.yaml": `
+apiVersion: libredash.dev/v1
+kind: SemanticModel
+metadata:
+  workspace: sales
+  name: sales
+spec:
+  baseTable: orders
+  tables: [orders]
+  measures: {}
+`,
+	})
 }
 
 func writeTestBundle(t *testing.T, files map[string]string) string {

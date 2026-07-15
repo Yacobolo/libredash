@@ -32,8 +32,11 @@ func TestPatchKeys(t *testing.T) {
 		t.Fatalf("table patch = %#v", tablePatch)
 	}
 
-	status, ok := LoadingPatch(".data")["status"].(map[string]any)
-	if !ok || status["loading"] != true || status["dataDirectory"] != ".data" {
-		t.Fatalf("loading patch = %#v", LoadingPatch(".data"))
+	status, ok := LoadingPatch()["status"].(map[string]any)
+	if !ok || status["loading"] != true {
+		t.Fatalf("loading patch = %#v", LoadingPatch())
+	}
+	if _, exists := status["dataDirectory"]; exists {
+		t.Fatalf("loading patch exposes dataDirectory: %#v", status)
 	}
 }

@@ -43,24 +43,24 @@ func TestLoadRejectsMalformedTypedValues(t *testing.T) {
 	}
 }
 
-func TestListenAddressAliasPrecedence(t *testing.T) {
-	t.Setenv("LIBREDASH_ADDR", "127.0.0.1:9001")
+func TestListenAddressUsesExplicitLibreDashSetting(t *testing.T) {
 	t.Setenv("ADDR", "127.0.0.1:9002")
 	t.Setenv("PORT", "9003")
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
+	if got := cfg.ListenAddr(); got != ":8080" {
+		t.Fatalf("ListenAddr() with only legacy aliases = %q, want default", got)
+	}
+
+	t.Setenv("LIBREDASH_ADDR", "127.0.0.1:9001")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got := cfg.ListenAddr(); got != "127.0.0.1:9001" {
 		t.Fatalf("ListenAddr() = %q", got)
-	}
-	cfg.Addr = ""
-	if got := cfg.ListenAddr(); got != "127.0.0.1:9002" {
-		t.Fatalf("ADDR compatibility alias = %q", got)
-	}
-	cfg.AddrFallback = ""
-	if got := cfg.ListenAddr(); got != ":9003" {
-		t.Fatalf("PORT compatibility alias = %q", got)
 	}
 }
 

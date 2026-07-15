@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -40,9 +40,6 @@ func TestRepositorySaveValidatedCommitsDeploymentGraph(t *testing.T) {
 	}
 	if gotArtifact.Path != "artifact.tar.gz" {
 		t.Fatalf("artifact path = %q, want artifact.tar.gz", gotArtifact.Path)
-	}
-	if gotArtifact.DataRoot != ".data/test" {
-		t.Fatalf("artifact data root = %q, want .data/test", gotArtifact.DataRoot)
 	}
 }
 
@@ -77,7 +74,7 @@ func TestRepositorySaveValidatedRollsBackOnDuplicateEdge(t *testing.T) {
 	}
 }
 
-func TestRepositorySaveValidatedReplacesDeploymentGraph(t *testing.T) {
+func TestRepositorySaveValidatedIsIdempotentAndRejectsCandidateMutation(t *testing.T) {
 	ctx := context.Background()
 	store, repo := openRepo(t, ctx)
 	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
@@ -88,15 +85,19 @@ func TestRepositorySaveValidatedReplacesDeploymentGraph(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	if _, err := repo.SaveValidated(ctx, created.ID, validationGraph(created.ID), artifact(created.ID, "test")); err != nil {
+	original := validationGraph(created.ID)
+	if _, err := repo.SaveValidated(ctx, created.ID, original, artifact(created.ID, "test")); err != nil {
 		t.Fatalf("first save validated: %v", err)
+	}
+	if _, err := repo.SaveValidated(ctx, created.ID, original, artifact(created.ID, "test")); err != nil {
+		t.Fatalf("idempotent save validated: %v", err)
 	}
 
 	replacement := validationGraph(created.ID)
 	replacement.Digest = "replacement"
 	replacement.Graph.Edges = replacement.Graph.Edges[:1]
-	if _, err := repo.SaveValidated(ctx, created.ID, replacement, artifact(created.ID, "test")); err != nil {
-		t.Fatalf("replacement save validated: %v", err)
+	if _, err := repo.SaveValidated(ctx, created.ID, replacement, artifact(created.ID, "test")); err == nil {
+		t.Fatal("replacement save validated error = nil")
 	}
 	if _, err := repo.Activate(ctx, "test", servingstate.DefaultEnvironment, created.ID); err != nil {
 		t.Fatalf("activate: %v", err)
@@ -108,9 +109,8 @@ func TestRepositorySaveValidatedReplacesDeploymentGraph(t *testing.T) {
 	if !ok {
 		t.Fatal("active graph ok = false")
 	}
-	wantEdgeID := workspace.NewAssetEdgeID(workspace.ServingStateID(created.ID), replacement.Graph.Edges[0].FromAssetID, replacement.Graph.Edges[0].ToAssetID, replacement.Graph.Edges[0].Type)
-	if len(graph.Edges) != 1 || graph.Edges[0].ID != wantEdgeID {
-		t.Fatalf("edges after replacement = %#v, want only %q", graph.Edges, wantEdgeID)
+	if len(graph.Edges) != len(original.Graph.Edges) {
+		t.Fatalf("edges after rejected replacement = %#v, want original graph", graph.Edges)
 	}
 }
 
@@ -131,8 +131,11 @@ func TestRepositoryActivateRegistersSecurablesFromDeploymentGraph(t *testing.T) 
 	field := mustTestAsset(workspaceID, servingStateID, workspace.AssetTypeField, "test.sales.orders.email", table.ID)
 	dashboard := mustTestAsset(workspaceID, servingStateID, workspace.AssetTypeDashboard, "test.executive", "")
 	validation := servingstate.Validation{
-		Digest:       "digest",
-		ManifestJSON: "{}",
+		Digest:            "digest",
+		ManifestJSON:      "{}",
+		ProjectID:         "project",
+		ProjectDigest:     "sha256:" + strings.Repeat("a", 64),
+		ProjectWorkspaces: []string{"test"},
 		Graph: workspace.AssetGraph{
 			Assets: []workspace.Asset{model, table, field, dashboard},
 			Edges: []workspace.AssetEdge{
@@ -178,6 +181,25 @@ func TestRepositorySaveValidatedRollsBackOnDuplicateLogicalAsset(t *testing.T) {
 	}
 	if _, err := repo.ArtifactByServingState(ctx, created.ID); !errors.Is(err, servingstate.ErrNotFound) {
 		t.Fatalf("artifact error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestRepositorySaveValidatedPersistsProjectIdentity(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openRepo(t, ctx)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
+		t.Fatalf("ensure workspace: %v", err)
+	}
+	created, err := repo.Create(ctx, servingstate.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	validated, err := repo.SaveValidated(ctx, created.ID, validationGraph(created.ID), artifact(created.ID, "test"))
+	if err != nil {
+		t.Fatalf("save validated: %v", err)
+	}
+	if validated.ProjectID != "project" {
+		t.Fatalf("project id = %q, want project", validated.ProjectID)
 	}
 }
 
@@ -250,13 +272,6 @@ func TestRepositoryTracksActiveDeploymentsPerEnvironment(t *testing.T) {
 	}
 	if activeDev.ID != dev.ID || activeProd.ID != prod.ID {
 		t.Fatalf("active dev/prod = %s/%s, want %s/%s", activeDev.ID, activeProd.ID, dev.ID, prod.ID)
-	}
-	devRows, err := repo.List(ctx, "test", "dev")
-	if err != nil {
-		t.Fatalf("list dev: %v", err)
-	}
-	if len(devRows) != 1 || devRows[0].ID != dev.ID {
-		t.Fatalf("dev serving_states = %#v, want only %s", devRows, dev.ID)
 	}
 }
 
@@ -522,72 +537,6 @@ func TestRepositorySaveValidatedRejectsMismatchedArtifactEnvironment(t *testing.
 	}
 }
 
-func TestRepositoryActivateWithWorkspacePolicyIsAtomic(t *testing.T) {
-	ctx := context.Background()
-	store, repo := openRepo(t, ctx)
-	workspaceRepo := workspacesqlite.NewRepository(store.SQLDB())
-	if err := workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: "test", Title: "Test"}); err != nil {
-		t.Fatalf("ensure workspace: %v", err)
-	}
-	first, err := repo.Create(ctx, servingstate.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
-	if err != nil {
-		t.Fatalf("create first: %v", err)
-	}
-	second, err := repo.Create(ctx, servingstate.CreateInput{WorkspaceID: "test", CreatedBy: "tester"})
-	if err != nil {
-		t.Fatalf("create second: %v", err)
-	}
-	if _, err := repo.SaveValidated(ctx, first.ID, validationGraph(first.ID), artifact(first.ID, "test")); err != nil {
-		t.Fatalf("save first: %v", err)
-	}
-	if _, err := repo.SaveValidated(ctx, second.ID, validationGraph(second.ID), artifact(second.ID, "test")); err != nil {
-		t.Fatalf("save second: %v", err)
-	}
-	initial := workspace.AccessPolicy{
-		Groups: map[string]workspace.WorkspaceGroup{
-			"analysts": {Name: "analysts", Members: []workspace.WorkspaceGroupMember{{Email: "analyst@example.com"}}},
-		},
-		RoleBindings: map[string]workspace.WorkspaceRoleBinding{
-			"analysts-viewer": {Role: "viewer", Subject: workspace.WorkspaceRoleBindingSubject{Kind: "group", Group: "analysts"}},
-		},
-	}
-	if _, err := repo.ActivateWithWorkspacePolicy(ctx, "test", servingstate.DefaultEnvironment, first.ID, initial); err != nil {
-		t.Fatalf("activate first: %v", err)
-	}
-
-	invalid := workspace.AccessPolicy{
-		RoleBindings: map[string]workspace.WorkspaceRoleBinding{
-			"missing-viewer": {Role: "viewer", Subject: workspace.WorkspaceRoleBindingSubject{Kind: "group", Group: "missing"}},
-		},
-	}
-	if _, err := repo.ActivateWithWorkspacePolicy(ctx, "test", servingstate.DefaultEnvironment, second.ID, invalid); err == nil {
-		t.Fatal("ActivateWithWorkspacePolicy() error = nil, want atomic policy failure")
-	}
-
-	active, _, err := repo.ActiveArtifact(ctx, "test", servingstate.DefaultEnvironment)
-	if err != nil {
-		t.Fatalf("active artifact: %v", err)
-	}
-	if active.ID != first.ID {
-		t.Fatalf("active deployment = %s, want %s", active.ID, first.ID)
-	}
-	accessRepo := accesssqlite.NewRepository(store.SQLDB())
-	groups, err := accessRepo.ListGroups(ctx, "test")
-	if err != nil {
-		t.Fatalf("list groups: %v", err)
-	}
-	if len(groups) != 1 || groups[0].Name != "analysts" {
-		t.Fatalf("groups after failed activation = %#v, want original analysts group", groups)
-	}
-	bindings, err := accessRepo.ListRoleBindings(ctx, "test")
-	if err != nil {
-		t.Fatalf("list bindings: %v", err)
-	}
-	if len(bindings) != 1 || bindings[0].Role != "viewer" {
-		t.Fatalf("bindings after failed activation = %#v, want original viewer binding", bindings)
-	}
-}
-
 func TestRepositorySaveValidatedRejectsMismatchedAssetGraph(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -706,8 +655,11 @@ func validationGraph(servingStateID servingstate.ID) servingstate.Validation {
 	assetA := mustTestAsset(workspaceID, workspace.ServingStateID(servingStateID), workspace.AssetTypeDashboard, "a", "")
 	assetB := mustTestAsset(workspaceID, workspace.ServingStateID(servingStateID), workspace.AssetTypeSemanticModel, "b", "")
 	return servingstate.Validation{
-		Digest:       "digest",
-		ManifestJSON: "{}",
+		Digest:            "digest",
+		ManifestJSON:      "{}",
+		ProjectID:         "project",
+		ProjectDigest:     "sha256:" + strings.Repeat("a", 64),
+		ProjectWorkspaces: []string{"test"},
 		Graph: workspace.AssetGraph{
 			Assets: []workspace.Asset{assetA, assetB},
 			Edges: []workspace.AssetEdge{
@@ -739,7 +691,6 @@ func artifactForEnvironment(servingStateID servingstate.ID, workspaceID servings
 		Digest:         "digest",
 		Format:         "tar.gz",
 		Path:           "artifact.tar.gz",
-		DataRoot:       ".data/" + string(workspaceID),
 		ManifestJSON:   "{}",
 	}
 }

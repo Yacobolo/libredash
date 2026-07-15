@@ -23,11 +23,10 @@ import { loadDashboardComponent } from './registry'
 
 const emptyFilters: DashboardFilters = { controls: {}, selections: [] }
 const emptyStatus: DashboardStatus = {
-  loading: false,
-  error: '',
-  lastUpdated: '',
-  dataDirectory: '',
-  setupRequired: false,
+	loading: false,
+	error: '',
+	lastUpdated: '',
+	setupRequired: false,
 }
 
 class LibreDashDashboardPage extends DatastarLit(LitElement) {

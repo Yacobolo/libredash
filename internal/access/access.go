@@ -6,28 +6,28 @@ import (
 	"encoding/hex"
 	"strings"
 	"time"
-
-	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
 type Privilege string
 
 const (
-	PrivilegeUseWorkspace    Privilege = "USE_WORKSPACE"
-	PrivilegeViewItem        Privilege = "VIEW_ITEM"
-	PrivilegeEditItem        Privilege = "EDIT_ITEM"
-	PrivilegeManageItem      Privilege = "MANAGE_ITEM"
-	PrivilegeQueryData       Privilege = "QUERY_DATA"
-	PrivilegePreviewData     Privilege = "PREVIEW_DATA"
-	PrivilegeRefreshData     Privilege = "REFRESH_DATA"
-	PrivilegeDeploy          Privilege = "DEPLOY"
-	PrivilegeActivatePublish Privilege = "ACTIVATE_PUBLISH"
-	PrivilegeUseAgent        Privilege = "USE_AGENT"
-	PrivilegeViewAgent       Privilege = "VIEW_AGENT"
-	PrivilegeManageGrants    Privilege = "MANAGE_GRANTS"
-	PrivilegeViewAudit       Privilege = "VIEW_AUDIT"
-	PrivilegeManageWorkspace Privilege = "MANAGE_WORKSPACE"
-	PrivilegeManagePlatform  Privilege = "MANAGE_PLATFORM"
+	PrivilegeUseWorkspace       Privilege = "USE_WORKSPACE"
+	PrivilegeViewItem           Privilege = "VIEW_ITEM"
+	PrivilegeEditItem           Privilege = "EDIT_ITEM"
+	PrivilegeManageItem         Privilege = "MANAGE_ITEM"
+	PrivilegeQueryData          Privilege = "QUERY_DATA"
+	PrivilegePreviewData        Privilege = "PREVIEW_DATA"
+	PrivilegeRefreshData        Privilege = "REFRESH_DATA"
+	PrivilegeDeploy             Privilege = "DEPLOY"
+	PrivilegeActivateDeployment Privilege = "ACTIVATE_DEPLOYMENT"
+	PrivilegeUseAgent           Privilege = "USE_AGENT"
+	PrivilegeViewAgent          Privilege = "VIEW_AGENT"
+	PrivilegeManageGrants       Privilege = "MANAGE_GRANTS"
+	PrivilegeViewAudit          Privilege = "VIEW_AUDIT"
+	PrivilegeManageWorkspace    Privilege = "MANAGE_WORKSPACE"
+	PrivilegeManagePlatform     Privilege = "MANAGE_PLATFORM"
+	PrivilegeViewData           Privilege = "VIEW_DATA"
+	PrivilegeIngestData         Privilege = "INGEST_DATA"
 )
 
 const (
@@ -38,6 +38,7 @@ const (
 	RoleEditor        = "editor"
 	RoleMember        = "member"
 	RoleViewer        = "viewer"
+	RoleDataDeployer  = "data_deployer"
 	RolePlatformAdmin = "platform_admin"
 )
 
@@ -53,7 +54,7 @@ var defaultRoles = []Role{
 			PrivilegePreviewData,
 			PrivilegeRefreshData,
 			PrivilegeDeploy,
-			PrivilegeActivatePublish,
+			PrivilegeActivateDeployment,
 			PrivilegeUseAgent,
 			PrivilegeViewAgent,
 			PrivilegeManageGrants,
@@ -72,7 +73,7 @@ var defaultRoles = []Role{
 			PrivilegePreviewData,
 			PrivilegeRefreshData,
 			PrivilegeDeploy,
-			PrivilegeActivatePublish,
+			PrivilegeActivateDeployment,
 			PrivilegeUseAgent,
 			PrivilegeViewAgent,
 			PrivilegeManageGrants,
@@ -88,7 +89,7 @@ var defaultRoles = []Role{
 			PrivilegeQueryData,
 			PrivilegeRefreshData,
 			PrivilegeDeploy,
-			PrivilegeActivatePublish,
+			PrivilegeActivateDeployment,
 		},
 	},
 	{
@@ -141,9 +142,18 @@ var defaultRoles = []Role{
 		},
 	},
 	{
+		Name: RoleDataDeployer,
+		Privileges: []Privilege{
+			PrivilegeViewData,
+			PrivilegeIngestData,
+		},
+	},
+	{
 		Name: RolePlatformAdmin,
 		Privileges: []Privilege{
 			PrivilegeManagePlatform,
+			PrivilegeViewData,
+			PrivilegeIngestData,
 			PrivilegeUseWorkspace,
 			PrivilegeViewItem,
 			PrivilegeEditItem,
@@ -152,7 +162,7 @@ var defaultRoles = []Role{
 			PrivilegePreviewData,
 			PrivilegeRefreshData,
 			PrivilegeDeploy,
-			PrivilegeActivatePublish,
+			PrivilegeActivateDeployment,
 			PrivilegeUseAgent,
 			PrivilegeViewAgent,
 			PrivilegeManageGrants,
@@ -658,10 +668,6 @@ type Repository interface {
 	ListAuditEvents(ctx context.Context, filter AuditEventFilter) ([]AuditEvent, error)
 }
 
-type WorkspacePolicyReconciler interface {
-	ReconcileWorkspacePolicy(ctx context.Context, workspaceID string, policy workspace.AccessPolicy) error
-}
-
 func DefaultRoles() []Role {
 	roles := make([]Role, len(defaultRoles))
 	for i, role := range defaultRoles {
@@ -671,6 +677,28 @@ func DefaultRoles() []Role {
 		}
 	}
 	return roles
+}
+
+func KnownPrivileges() []Privilege {
+	return []Privilege{
+		PrivilegeUseWorkspace,
+		PrivilegeViewItem,
+		PrivilegeEditItem,
+		PrivilegeManageItem,
+		PrivilegeQueryData,
+		PrivilegePreviewData,
+		PrivilegeRefreshData,
+		PrivilegeDeploy,
+		PrivilegeActivateDeployment,
+		PrivilegeUseAgent,
+		PrivilegeViewAgent,
+		PrivilegeManageGrants,
+		PrivilegeViewAudit,
+		PrivilegeManageWorkspace,
+		PrivilegeManagePlatform,
+		PrivilegeViewData,
+		PrivilegeIngestData,
+	}
 }
 
 func PrincipalIDForEmail(email string) string {

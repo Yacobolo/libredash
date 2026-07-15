@@ -1,9 +1,13 @@
 package integration
 
 import (
+	"archive/tar"
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +34,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/platform"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
 	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -43,6 +48,8 @@ type harness struct {
 	store       *platform.Store
 	workspaceID string
 }
+
+const integrationOlistManagedDataRevision = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 var integrationDataInitUpdatesPattern = regexp.MustCompile(`data-init="@get\('([^']+)'`)
 
@@ -70,7 +77,6 @@ type integrationMetrics interface {
 	QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error)
 	PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
 	RefreshMaterializations(ctx context.Context, modelID string) error
-	DataDir() string
 	Pages(dashboardID string) []dashboard.Page
 }
 
@@ -198,15 +204,135 @@ func newHarnessWithMetrics(t *testing.T, opts ...harnessOption) (*harness, integ
 }
 
 func newHarnessRuntime(dataDir, catalogPath, duckDBDir string) (*dashboardruntime.Service, error) {
-	services, err := dashboardruntime.NewFromProject(dataDir, catalogPath, duckDBDir, integrationDataRuntimeFactory{})
+	compiled, err := workspacecompiler.CompileProject(catalogPath, workspacecompiler.Options{})
 	if err != nil {
 		return nil, err
 	}
-	service, ok := services["sales"]
+	compiledWorkspace, ok := compiled.Workspaces["sales"]
 	if !ok {
 		return nil, fmt.Errorf("project has no sales workspace")
 	}
+	if err := bindManagedConnectionRoots(compiledWorkspace.Definition, dataDir); err != nil {
+		return nil, err
+	}
+	service, err := dashboardruntime.NewFromDefinition(filepath.Join(duckDBDir, "sales"), integrationDataRuntimeFactory{}, compiledWorkspace.Definition)
+	if err != nil {
+		return nil, fmt.Errorf("loading workspace %q: %w", "sales", err)
+	}
 	return service, nil
+}
+
+func integrationOlistManagedDataRevisions() map[string]string {
+	return map[string]string{"olist": integrationOlistManagedDataRevision}
+}
+
+func bindManagedConnectionRoots(definition *workspace.Definition, root string) error {
+	if definition == nil {
+		return fmt.Errorf("managed connection root binding requires a workspace definition")
+	}
+	if root == "" || !filepath.IsAbs(root) {
+		return fmt.Errorf("managed connection root must be absolute: %q", root)
+	}
+	for modelID, model := range definition.Models {
+		if model == nil {
+			return fmt.Errorf("workspace definition contains nil model %q", modelID)
+		}
+		for connectionName, connection := range model.Connections {
+			if connection.Kind != "managed" {
+				continue
+			}
+			connection.Root = root
+			model.Connections[connectionName] = connection
+		}
+	}
+	return nil
+}
+
+func bindManagedConnectionRootsInArtifact(t *testing.T, artifactPath, root string) {
+	t.Helper()
+
+	extractedRoot := t.TempDir()
+	if err := servingstatefs.ExtractArtifact(artifactPath, extractedRoot); err != nil {
+		t.Fatalf("extract integration artifact: %v", err)
+	}
+	compiled, manifest, err := servingstatefs.LoadCompiledWorkspaceArtifact(extractedRoot)
+	if err != nil {
+		t.Fatalf("load integration artifact: %v", err)
+	}
+	if err := bindManagedConnectionRoots(compiled.Definition, root); err != nil {
+		t.Fatalf("bind integration artifact managed roots: %v", err)
+	}
+	compiledBytes, err := json.MarshalIndent(compiled, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal integration artifact: %v", err)
+	}
+	compiledPath := filepath.Join(extractedRoot, filepath.FromSlash(manifest.CompiledPath))
+	if err := os.WriteFile(compiledPath, compiledBytes, 0o644); err != nil {
+		t.Fatalf("write integration artifact compiled definition: %v", err)
+	}
+	manifest.GraphHash = integrationDigestBytes(compiledBytes)
+	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal integration artifact manifest: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(extractedRoot, "manifest.json"), manifestBytes, 0o644); err != nil {
+		t.Fatalf("write integration artifact manifest: %v", err)
+	}
+
+	temporaryPath, err := os.CreateTemp(filepath.Dir(artifactPath), ".integration-artifact-*.tar.gz")
+	if err != nil {
+		t.Fatalf("create rewritten integration artifact: %v", err)
+	}
+	temporaryName := temporaryPath.Name()
+	defer os.Remove(temporaryName)
+	gzipWriter := gzip.NewWriter(temporaryPath)
+	tarWriter := tar.NewWriter(gzipWriter)
+	if err := filepath.WalkDir(extractedRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		relative, err := filepath.Rel(extractedRoot, path)
+		if err != nil {
+			return err
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := tarWriter.WriteHeader(&tar.Header{Name: filepath.ToSlash(relative), Mode: 0o644, Size: int64(len(content))}); err != nil {
+			return err
+		}
+		_, err = tarWriter.Write(content)
+		return err
+	}); err != nil {
+		_ = tarWriter.Close()
+		_ = gzipWriter.Close()
+		_ = temporaryPath.Close()
+		t.Fatalf("rewrite integration artifact: %v", err)
+	}
+	if err := tarWriter.Close(); err != nil {
+		_ = gzipWriter.Close()
+		_ = temporaryPath.Close()
+		t.Fatalf("close rewritten integration artifact tar: %v", err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		_ = temporaryPath.Close()
+		t.Fatalf("close rewritten integration artifact gzip: %v", err)
+	}
+	if err := temporaryPath.Close(); err != nil {
+		t.Fatalf("close rewritten integration artifact: %v", err)
+	}
+	if err := os.Rename(temporaryName, artifactPath); err != nil {
+		t.Fatalf("replace integration artifact: %v", err)
+	}
+}
+
+func integrationDigestBytes(content []byte) string {
+	digest := sha256.Sum256(content)
+	return hex.EncodeToString(digest[:])
 }
 
 func (h *harness) getUpdates(t *testing.T, dashboardID, pageID string, signals map[string]any) string {
@@ -681,9 +807,12 @@ func seedIntegrationActiveDeployment(t *testing.T, store *platform.Store, worksp
 		t.Fatalf("extract workspace assets: %v", err)
 	}
 	validation := servingstate.Validation{
-		Digest:       "digest-" + string(created.ID),
-		ManifestJSON: "{}",
-		Graph:        graph,
+		Digest:            "digest-" + string(created.ID),
+		ManifestJSON:      "{}",
+		ProjectID:         compiled.Project.Name,
+		ProjectDigest:     "sha256:" + strings.Repeat("a", 64),
+		ProjectWorkspaces: []string{workspaceID},
+		Graph:             graph,
 	}
 	if _, err := deploymentRepo.SaveValidated(ctx, created.ID, validation, integrationZeroArtifact(created.ID, workspaceID)); err != nil {
 		t.Fatalf("save validated deployment: %v", err)
@@ -730,7 +859,6 @@ func (integrationDataRuntimeFactory) OpenDashboardDataRuntime(ctx context.Contex
 	runtime, err := analyticsduckdb.OpenMaterializeRuntime(ctx, materializeruntime.RuntimeConfig{
 		ModelID: config.ModelID,
 		Model:   config.Model,
-		DataDir: config.DataDir,
 		DBDir:   config.DBDir,
 	})
 	if err != nil {

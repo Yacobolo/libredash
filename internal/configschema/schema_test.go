@@ -72,6 +72,18 @@ spec:
 	assertDiagnostic(t, err, "schema.enum", "type")
 }
 
+func TestValidateBytesRejectsRemovedLocalConnectionKind(t *testing.T) {
+	err := ValidateBytes(KindConnection, "local.yaml", []byte(`
+apiVersion: libredash.dev/v1
+kind: Connection
+metadata:
+  name: files
+spec:
+  kind: local
+`))
+	assertDiagnostic(t, err, "schema.enum", "local")
+}
+
 func TestValidateBytesRejectsInvalidIdentifierKey(t *testing.T) {
 	err := ValidateBytes(KindModelTable, "orders.yaml", []byte(`
 apiVersion: libredash.dev/v1

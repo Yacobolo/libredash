@@ -54,8 +54,8 @@ ON CONFLICT(workspace_id, environment) DO UPDATE SET
   updated_at = CURRENT_TIMESTAMP;
 
 -- name: CreateServingState :exec
-INSERT INTO serving_states (id, workspace_id, environment, status, source, created_by)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT INTO serving_states (id, workspace_id, project_id, environment, status, source, created_by)
+VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetServingState :one
 SELECT * FROM serving_states WHERE id = ?;
@@ -65,11 +65,6 @@ SELECT d.*
 FROM serving_states d
 JOIN workspace_active_serving_states active ON active.serving_state_id = d.id
 WHERE active.workspace_id = ? AND active.environment = ?;
-
--- name: ListServingStates :many
-SELECT * FROM serving_states
-WHERE workspace_id = ? AND environment = ?
-ORDER BY created_at DESC;
 
 -- name: ListReferencedDuckLakeSnapshots :many
 SELECT DISTINCT ducklake_snapshot_id
@@ -125,7 +120,7 @@ WHERE status = 'delete_scheduled';
 
 -- name: UpdateServingStateValidated :exec
 UPDATE serving_states
-SET status = ?, digest = ?, manifest_json = ?, error = ''
+SET status = ?, project_id = ?, project_digest = ?, project_workspaces_json = ?, access_policy_json = ?, digest = ?, manifest_json = ?, error = ''
 WHERE id = ?;
 
 -- name: UpdateServingStateDuckLakeSnapshot :exec
@@ -149,14 +144,13 @@ SET status = 'inactive'
 WHERE workspace_id = ? AND environment = ? AND id <> ? AND status = 'active';
 
 -- name: InsertServingStateArtifact :exec
-INSERT INTO serving_state_artifacts (id, serving_state_id, workspace_id, environment, digest, format, path, data_root, manifest_json, size_bytes)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO serving_state_artifacts (id, serving_state_id, workspace_id, environment, digest, format, path, manifest_json, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(serving_state_id) DO UPDATE SET
   environment = excluded.environment,
   digest = excluded.digest,
   format = excluded.format,
   path = excluded.path,
-  data_root = excluded.data_root,
   manifest_json = excluded.manifest_json,
   size_bytes = excluded.size_bytes;
 
@@ -820,3 +814,287 @@ WHERE (sqlc.arg(workspace_id) = '' OR workspace_id = sqlc.arg(workspace_id))
   )
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(limit);
+
+
+-- name: CreateManagedDataCollection :exec
+INSERT INTO managed_data_collections (id, project_id, connection_name, name, description, created_by)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: GetManagedDataCollection :one
+SELECT * FROM managed_data_collections WHERE id = ?;
+
+-- name: GetManagedDataCollectionByProjectConnection :one
+SELECT * FROM managed_data_collections
+WHERE project_id = ? AND connection_name = ?;
+
+-- name: ListActiveManagedDataCollections :many
+SELECT * FROM managed_data_collections
+WHERE status = 'active'
+ORDER BY project_id, connection_name, id;
+
+-- name: ListAllManagedDataCollections :many
+SELECT * FROM managed_data_collections
+ORDER BY project_id, connection_name, id;
+
+-- name: ArchiveManagedDataCollection :execresult
+UPDATE managed_data_collections
+SET status = 'archived', archived_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'active';
+
+-- name: CreateManagedDataUploadSession :exec
+INSERT INTO managed_data_upload_sessions (
+  id, collection_id, base_revision_id, status, manifest_json,
+  expected_file_count, expected_size_bytes, storage_backend, staging_prefix,
+  created_by, expires_at
+)
+VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?);
+
+-- name: GetManagedDataUploadSession :one
+SELECT * FROM managed_data_upload_sessions WHERE id = ?;
+
+-- name: MarkManagedDataUploadCommitting :execresult
+UPDATE managed_data_upload_sessions
+SET status = 'committing', updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'open' AND expires_at > CURRENT_TIMESTAMP;
+
+-- name: UpdateManagedDataUploadProgress :execresult
+UPDATE managed_data_upload_sessions
+SET uploaded_file_count = ?, uploaded_size_bytes = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'open'
+  AND ? <= expected_file_count
+  AND ? <= expected_size_bytes;
+
+-- name: AbortManagedDataUploadSession :execresult
+UPDATE managed_data_upload_sessions
+SET status = 'aborted', updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'open';
+
+-- name: ExpireManagedDataUploadSessions :execresult
+UPDATE managed_data_upload_sessions
+SET status = 'expired', updated_at = CURRENT_TIMESTAMP
+WHERE status = 'open' AND expires_at <= ?;
+
+-- name: CreateManagedDataS3MultipartUpload :exec
+INSERT INTO managed_data_s3_multipart_uploads (
+  id, upload_session_id, logical_path, sha256, size_bytes, idempotency_identity
+)
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: GetManagedDataS3MultipartUpload :one
+SELECT * FROM managed_data_s3_multipart_uploads WHERE id = ?;
+
+-- name: GetManagedDataS3MultipartUploadByIdentity :one
+SELECT * FROM managed_data_s3_multipart_uploads
+WHERE upload_session_id = ? AND idempotency_identity = ?;
+
+-- name: InitializeManagedDataS3MultipartUpload :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET object_key = ?, provider_upload_id = ?, status = 'open', updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'creating' AND existing = 0;
+
+-- name: InitializeExistingManagedDataS3MultipartUpload :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET object_key = ?, provider_upload_id = '', status = 'completed', existing = 1,
+    completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'creating';
+
+-- name: CreateManagedDataS3MultipartPart :exec
+INSERT INTO managed_data_s3_multipart_parts (
+  multipart_upload_id, part_number, size_bytes, sha256
+)
+VALUES (?, ?, ?, ?);
+
+-- name: GetManagedDataS3MultipartPart :one
+SELECT * FROM managed_data_s3_multipart_parts
+WHERE multipart_upload_id = ? AND part_number = ?;
+
+-- name: ListManagedDataS3MultipartParts :many
+SELECT * FROM managed_data_s3_multipart_parts
+WHERE multipart_upload_id = ?
+ORDER BY part_number;
+
+-- name: SumManagedDataS3MultipartPartSizes :one
+SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER)
+FROM managed_data_s3_multipart_parts
+WHERE multipart_upload_id = ?;
+
+-- name: BeginManagedDataS3MultipartCompletion :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'completing', completion_identity = ?, completion_request_hash = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'open';
+
+-- name: FinishManagedDataS3MultipartCompletion :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'completing';
+
+-- name: BeginManagedDataS3MultipartAbort :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'aborting', abort_identity = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('creating', 'open', 'failed');
+
+-- name: FinishManagedDataS3MultipartAbort :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'aborted', aborted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'aborting';
+
+-- name: FailManagedDataS3MultipartUpload :execresult
+UPDATE managed_data_s3_multipart_uploads
+SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('creating', 'open', 'completing');
+
+-- name: ListRecoverableManagedDataS3MultipartUploads :many
+SELECT multipart.*
+FROM managed_data_s3_multipart_uploads AS multipart
+JOIN managed_data_upload_sessions AS session ON session.id = multipart.upload_session_id
+WHERE multipart.provider_upload_id <> ''
+  AND multipart.updated_at <= sqlc.arg(updated_cutoff)
+  AND (
+    multipart.status IN ('aborting', 'failed')
+    OR (
+      multipart.status = 'open'
+      AND (
+        session.status IN ('complete', 'aborted', 'expired', 'failed')
+        OR (session.status = 'open' AND session.expires_at <= sqlc.arg(expiry_cutoff))
+      )
+    )
+  )
+ORDER BY multipart.updated_at, multipart.id
+LIMIT sqlc.arg(row_limit);
+
+-- name: NextManagedDataRevisionSequence :one
+SELECT COALESCE(MAX(sequence), 0) + 1
+FROM managed_data_revisions
+WHERE collection_id = ?;
+
+-- name: CreateReadyManagedDataRevision :exec
+INSERT INTO managed_data_revisions (
+  id, collection_id, sequence, digest, status, manifest_json,
+  file_count, size_bytes, created_by, ready_at
+)
+VALUES (?, ?, ?, ?, 'ready', ?, ?, ?, ?, CURRENT_TIMESTAMP);
+
+-- name: CreateManagedDataRevisionFile :exec
+INSERT INTO managed_data_revision_files (
+  revision_id, logical_path, size_bytes, sha256, storage_key, media_type, etag
+)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+-- name: CompleteManagedDataUploadSession :execresult
+UPDATE managed_data_upload_sessions
+SET status = 'complete', revision_id = ?,
+    uploaded_file_count = expected_file_count,
+    uploaded_size_bytes = expected_size_bytes,
+    completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'committing';
+
+-- name: GetManagedDataRevision :one
+SELECT * FROM managed_data_revisions WHERE id = ?;
+
+-- name: ListManagedDataRevisions :many
+SELECT * FROM managed_data_revisions
+WHERE collection_id = ?
+ORDER BY sequence DESC;
+
+-- name: GetManagedDataUploadSessionIDByRevision :one
+SELECT id FROM managed_data_upload_sessions
+WHERE revision_id = ? AND status = 'complete';
+
+-- name: ListManagedDataRevisionFiles :many
+SELECT * FROM managed_data_revision_files
+WHERE revision_id = ?
+ORDER BY logical_path;
+
+-- name: CreateProjectDeployment :exec
+INSERT INTO project_deployments (id, project_id, environment, request_digest, status, created_by)
+VALUES (?, ?, ?, ?, 'pending', ?);
+
+-- name: CreateProjectDeploymentTarget :exec
+INSERT INTO project_deployment_targets (
+  deployment_id, workspace_id, serving_state_id, prior_serving_state_id, status
+)
+VALUES (?, ?, ?, ?, 'pending');
+
+-- name: CreateProjectDeploymentConnection :exec
+INSERT INTO project_deployment_connections (
+  deployment_id, collection_id, revision_id, prior_revision_id, prior_generation
+)
+VALUES (?, ?, ?, ?, ?);
+
+-- name: GetProjectDeployment :one
+SELECT * FROM project_deployments WHERE id = ?;
+
+-- name: ListProjectDeploymentTargets :many
+SELECT * FROM project_deployment_targets
+WHERE deployment_id = ?
+ORDER BY workspace_id;
+
+-- name: ListProjectDeploymentConnections :many
+SELECT * FROM project_deployment_connections
+WHERE deployment_id = ?
+ORDER BY collection_id;
+
+-- name: GetWorkspaceActiveServingStateID :one
+SELECT serving_state_id
+FROM workspace_active_serving_states
+WHERE workspace_id = ? AND environment = ?;
+
+-- name: GetManagedDataEnvironmentPointer :one
+SELECT * FROM managed_data_environment_pointers
+WHERE collection_id = ? AND environment = ?;
+
+-- name: UpsertManagedDataEnvironmentPointer :exec
+INSERT INTO managed_data_environment_pointers (
+  collection_id, environment, revision_id, deployment_id, generation, updated_by
+)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(collection_id, environment) DO UPDATE SET
+  revision_id = excluded.revision_id,
+  deployment_id = excluded.deployment_id,
+  generation = excluded.generation,
+  updated_by = excluded.updated_by,
+  updated_at = CURRENT_TIMESTAMP;
+
+-- name: ActivateProjectDeploymentTarget :execresult
+UPDATE project_deployment_targets
+SET status = 'active', activated_at = CURRENT_TIMESTAMP, error = ''
+WHERE deployment_id = ? AND workspace_id = ? AND status = 'pending';
+
+-- name: ActivateProjectDeploymentConnection :execresult
+UPDATE project_deployment_connections
+SET activated_generation = ?
+WHERE deployment_id = ? AND collection_id = ? AND activated_generation IS NULL;
+
+-- name: ActivateProjectDeployment :execresult
+UPDATE project_deployments
+SET status = 'active', activated_at = CURRENT_TIMESTAMP, error = ''
+WHERE id = ? AND status = 'pending';
+
+-- name: SupersedeOtherProjectDeployments :exec
+UPDATE project_deployments
+SET status = 'superseded'
+WHERE project_id = ? AND environment = ? AND id <> ? AND status = 'active';
+
+-- name: FailProjectDeployment :execresult
+UPDATE project_deployments
+SET status = 'failed', error = ?
+WHERE id = ? AND status = 'pending';
+
+-- name: DeleteManagedDataServingStateBindings :exec
+DELETE FROM managed_data_serving_state_bindings
+WHERE serving_state_id = ?;
+
+-- name: CreateManagedDataServingStateBinding :exec
+INSERT INTO managed_data_serving_state_bindings (
+  serving_state_id, collection_id, revision_id, environment
+)
+VALUES (?, ?, ?, ?)
+ON CONFLICT(serving_state_id, collection_id) DO UPDATE SET
+  revision_id = excluded.revision_id,
+  environment = excluded.environment,
+  bound_at = CURRENT_TIMESTAMP;
+
+-- name: ListManagedDataServingStateBindings :many
+SELECT * FROM managed_data_serving_state_bindings
+WHERE serving_state_id = ?
+ORDER BY collection_id;

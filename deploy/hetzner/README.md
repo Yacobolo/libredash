@@ -4,7 +4,8 @@ This Terraform deployment runs LibreDash and Caddy on one Hetzner Cloud server.
 It provides automatic HTTPS, generated production secrets, restricted SSH,
 daily provider backups, consistent application backups, and healthchecked
 upgrades with rollback. It is the supported small-instance topology, not a
-high-availability deployment.
+high-availability deployment. Managed data uses the local backend by default and
+is stored on the persistent application-state volume.
 
 ## Deploy
 
@@ -55,15 +56,22 @@ libredash login \
 The unrestricted bootstrap token exists only in provisioning memory and is
 rotated after these credentials are created.
 
-## Publish
+## Deploy Project
 
 ```sh
-libredash publish \
+libredash deploy \
   --project ../../dashboards/libredash.yaml \
+  --revision "olist=sha256:<64-lowercase-hex>" \
   --target "$(terraform output -raw url)" \
   --environment prod \
   --auto-approve
 ```
+
+For project-global file ingestion, follow the [managed data ingestion
+guide](../../docs/data-ingestion.md). `data sync` stages a revision; the
+project-level deploy pins that revision and atomically activates every project
+workspace. Omit `--revision` for projects without managed connections, or
+repeat it exactly once per managed connection.
 
 ## Operations
 
@@ -77,12 +85,15 @@ $(terraform output -raw operations_command) logs
 Important paths:
 
 - `/var/lib/libredash`: application state and analytical data
+- `/var/lib/libredash/managed-data`: local managed-data object store and runtime views
 - `/var/backups/libredash`: consistent local archives and checksums
 - `/etc/libredash/libredash.env`: generated application configuration
 - `/etc/libredash/deployment.env`: pinned images and deployment metadata
 
 The server creates a consistent backup every day and retains seven local
-archives. Hetzner's daily server backups are also enabled.
+archives. Hetzner's daily server backups are also enabled. The application is
+stopped while the archive is created, and the complete `/var/lib/libredash`
+tree is captured, including the local managed-data object store.
 
 Create and restore an archive manually:
 
@@ -93,6 +104,11 @@ $(terraform output -raw operations_command) restore "$ARCHIVE"
 
 Restore verifies the checksum and archive paths. If the restored instance fails
 its healthcheck, the previous state is reinstated automatically.
+
+If you reconfigure managed data to use S3, these archives retain LibreDash
+metadata and the local runtime cache but do not contain authoritative S3 object
+data. Enable bucket versioning and a bucket-native backup or replication policy;
+disaster recovery requires both the metadata archive and the bucket objects.
 
 For independent encrypted backups, place a root-only Restic environment file at
 `/etc/libredash/restic.env`. Subsequent scheduled backups initialize the

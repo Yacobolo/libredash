@@ -36,6 +36,21 @@ type RuntimeFactory interface {
 	Prepare(ctx context.Context, input RuntimeInput) (Runtime, error)
 }
 
+type ManagedDataResolution struct {
+	RevisionID string
+	Roots      map[string]string
+	Lifetime   ManagedDataLifetime
+}
+
+// ManagedDataLifetime keeps all roots in a resolution available to its runtime.
+type ManagedDataLifetime interface {
+	Release() error
+}
+
+type ManagedDataResolver interface {
+	ResolveManagedData(ctx context.Context, servingStateID servingstate.ID) (ManagedDataResolution, error)
+}
+
 type SnapshotLeaseRepository interface {
 	CreateQuerySnapshotLease(ctx context.Context, input servingstate.SnapshotLeaseInput) (string, error)
 	ReleaseQuerySnapshotLease(ctx context.Context, id string) error
@@ -43,54 +58,64 @@ type SnapshotLeaseRepository interface {
 }
 
 type RuntimeInput struct {
-	State      servingstate.State
-	Artifact   servingstate.Artifact
-	DataDir    string
-	DuckDBDir  string
-	RuntimeDir string
+	State       servingstate.State
+	Artifact    servingstate.Artifact
+	ManagedData ManagedDataResolution
+	DuckDBDir   string
+	RuntimeDir  string
 }
 
 type Manager struct {
-	mu                   sync.RWMutex
-	repo                 ServingStateRepository
-	workspaceID          servingstate.WorkspaceID
-	environment          servingstate.Environment
-	dataDir              string
-	factory              RuntimeFactory
-	onDrained            func(servingstate.ID, int64)
-	leaseTTL             time.Duration
-	leaseOwner           string
-	activeServingStateID servingstate.ID
-	activeDigest         string
-	activeSnapshotID     int64
-	current              *managedRuntime
-	retired              []*managedRuntime
+	mu                    sync.RWMutex
+	repo                  ServingStateRepository
+	workspaceID           servingstate.WorkspaceID
+	environment           servingstate.Environment
+	factory               RuntimeFactory
+	managedData           ManagedDataResolver
+	onDrained             func(servingstate.ID, int64)
+	leaseTTL              time.Duration
+	leaseOwner            string
+	activeServingStateID  servingstate.ID
+	activeDigest          string
+	activeManagedRevision string
+	activeSnapshotID      int64
+	current               *managedRuntime
+	retired               []*managedRuntime
 }
 
 type ManagerOptions struct {
 	Repo        ServingStateRepository
 	WorkspaceID servingstate.WorkspaceID
 	Environment servingstate.Environment
-	DataDir     string
 	Factory     RuntimeFactory
+	ManagedData ManagedDataResolver
 	OnDrained   func(servingstate.ID, int64)
 	LeaseTTL    time.Duration
 	LeaseOwner  string
 }
 
 type Prepared struct {
-	servingStateID servingstate.ID
-	digest         string
-	runtime        Runtime
-	noChange       bool
-	snapshotID     int64
+	servingStateID  servingstate.ID
+	digest          string
+	managedRevision string
+	runtime         Runtime
+	managedData     ManagedDataLifetime
+	noChange        bool
+	snapshotID      int64
 }
 
 func (p *Prepared) Close() error {
-	if p == nil || p.runtime == nil {
+	if p == nil {
 		return nil
 	}
-	return p.runtime.Close()
+	var runtimeErr error
+	if p.runtime != nil {
+		runtimeErr = p.runtime.Close()
+		p.runtime = nil
+	}
+	managedDataErr := releaseManagedDataLifetime(p.managedData)
+	p.managedData = nil
+	return errors.Join(runtimeErr, managedDataErr)
 }
 
 func (p *Prepared) DuckLakeSnapshotID() int64 {
@@ -105,8 +130,8 @@ func NewManagerWithFactory(options ManagerOptions) *Manager {
 		repo:        options.Repo,
 		workspaceID: options.WorkspaceID,
 		environment: servingstate.NormalizeEnvironment(options.Environment),
-		dataDir:     options.DataDir,
 		factory:     options.Factory,
+		managedData: options.ManagedData,
 		onDrained:   options.OnDrained,
 		leaseTTL:    normalizedLeaseTTL(options.LeaseTTL),
 		leaseOwner:  firstNonEmpty(options.LeaseOwner, "runtimehost"),
@@ -125,7 +150,11 @@ func (m *Manager) ReloadBeforePrepare(ctx context.Context, beforePrepare func() 
 		}
 		return err
 	}
-	if !m.needsPrepare(current, artifact) {
+	managedData, err := m.resolveManagedData(ctx, current.ID)
+	if err != nil {
+		return err
+	}
+	if !m.needsPrepare(current, artifact, managedData.RevisionID) {
 		return nil
 	}
 	if beforePrepare != nil && current.DuckLakeSnapshotID == 0 {
@@ -133,7 +162,7 @@ func (m *Manager) ReloadBeforePrepare(ctx context.Context, beforePrepare func() 
 			return err
 		}
 	}
-	prepared, err := m.prepare(ctx, current, artifact)
+	prepared, err := m.prepareResolved(ctx, current, artifact, managedData)
 	if err != nil {
 		return err
 	}
@@ -146,12 +175,13 @@ func (m *Manager) ReloadBeforePrepare(ctx context.Context, beforePrepare func() 
 	return m.CommitPrepared(prepared)
 }
 
-func (m *Manager) needsPrepare(current servingstate.State, artifact servingstate.Artifact) bool {
+func (m *Manager) needsPrepare(current servingstate.State, artifact servingstate.Artifact, managedRevision string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.current == nil ||
 		m.activeServingStateID != current.ID ||
 		m.activeDigest != artifact.Digest ||
+		m.activeManagedRevision != managedRevision ||
 		m.activeSnapshotID != current.DuckLakeSnapshotID
 }
 
@@ -171,20 +201,38 @@ func (m *Manager) PrepareServingState(ctx context.Context, servingStateID string
 }
 
 func (m *Manager) prepare(ctx context.Context, current servingstate.State, artifact servingstate.Artifact) (*Prepared, error) {
-	m.mu.RLock()
-	if m.current != nil && m.activeServingStateID == current.ID && m.activeDigest == artifact.Digest && m.activeSnapshotID == current.DuckLakeSnapshotID {
-		m.mu.RUnlock()
-		return &Prepared{servingStateID: current.ID, digest: artifact.Digest, noChange: true}, nil
-	}
-	m.mu.RUnlock()
-
-	runtime, err := m.factory.Prepare(ctx, RuntimeInput{
-		State:    current,
-		Artifact: artifact,
-		DataDir:  m.dataDir,
-	})
+	managedData, err := m.resolveManagedData(ctx, current.ID)
 	if err != nil {
 		return nil, err
+	}
+	return m.prepareResolved(ctx, current, artifact, managedData)
+}
+
+func (m *Manager) resolveManagedData(ctx context.Context, servingStateID servingstate.ID) (ManagedDataResolution, error) {
+	if m.managedData == nil {
+		return ManagedDataResolution{}, nil
+	}
+	return m.managedData.ResolveManagedData(ctx, servingStateID)
+}
+
+func (m *Manager) prepareResolved(ctx context.Context, current servingstate.State, artifact servingstate.Artifact, managedData ManagedDataResolution) (*Prepared, error) {
+	m.mu.RLock()
+	if m.current != nil && m.activeServingStateID == current.ID && m.activeDigest == artifact.Digest && m.activeManagedRevision == managedData.RevisionID && m.activeSnapshotID == current.DuckLakeSnapshotID {
+		m.mu.RUnlock()
+		if err := releaseManagedDataLifetime(managedData.Lifetime); err != nil {
+			return nil, err
+		}
+		return &Prepared{servingStateID: current.ID, digest: artifact.Digest, managedRevision: managedData.RevisionID, noChange: true}, nil
+	}
+	m.mu.RUnlock()
+	factoryManagedData := managedData
+	factoryManagedData.Lifetime = nil
+	runtime, err := m.factory.Prepare(ctx, RuntimeInput{State: current, Artifact: artifact, ManagedData: factoryManagedData})
+	if err != nil {
+		return nil, errors.Join(err, releaseManagedDataLifetime(managedData.Lifetime))
+	}
+	if runtime == nil {
+		return nil, errors.Join(errors.New("runtime factory returned nil"), releaseManagedDataLifetime(managedData.Lifetime))
 	}
 	var snapshotID int64
 	if snapshot, ok := runtime.(RuntimeSnapshot); ok {
@@ -193,7 +241,7 @@ func (m *Manager) prepare(ctx context.Context, current servingstate.State, artif
 	if snapshotID == 0 {
 		snapshotID = current.DuckLakeSnapshotID
 	}
-	return &Prepared{servingStateID: current.ID, digest: artifact.Digest, runtime: runtime, snapshotID: snapshotID}, nil
+	return &Prepared{servingStateID: current.ID, digest: artifact.Digest, managedRevision: managedData.RevisionID, runtime: runtime, managedData: managedData.Lifetime, snapshotID: snapshotID}, nil
 }
 
 func (m *Manager) CommitPrepared(candidate servingstate.PreparedRuntime) error {
@@ -214,16 +262,18 @@ func (m *Manager) CommitPrepared(candidate servingstate.PreparedRuntime) error {
 		servingStateID: prepared.servingStateID,
 		digest:         prepared.digest,
 		runtime:        prepared.runtime,
+		managedData:    prepared.managedData,
 		snapshotID:     prepared.snapshotID,
 	}
 	m.activeServingStateID = prepared.servingStateID
 	m.activeDigest = prepared.digest
+	m.activeManagedRevision = prepared.managedRevision
 	m.activeSnapshotID = prepared.snapshotID
 	prepared.runtime = nil
+	prepared.managedData = nil
 	oldToClose := m.retireLocked(old)
 	m.mu.Unlock()
-	m.closeManaged(oldToClose)
-	return nil
+	return m.closeManaged(oldToClose)
 }
 
 func (m *Manager) Close() error {
@@ -232,6 +282,7 @@ func (m *Manager) Close() error {
 	m.current = nil
 	m.activeServingStateID = ""
 	m.activeDigest = ""
+	m.activeManagedRevision = ""
 	m.activeSnapshotID = 0
 	currentToClose := m.retireLocked(current)
 	m.mu.Unlock()
@@ -342,23 +393,37 @@ func (m *Manager) removeRetiredLocked(runtime *managedRuntime) {
 }
 
 func (m *Manager) closeManaged(runtime *managedRuntime) error {
-	if runtime == nil || runtime.runtime == nil {
+	if runtime == nil {
 		return nil
 	}
-	err := runtime.runtime.Close()
+	var runtimeErr error
+	if runtime.runtime != nil {
+		runtimeErr = runtime.runtime.Close()
+		runtime.runtime = nil
+	}
+	managedDataErr := releaseManagedDataLifetime(runtime.managedData)
+	runtime.managedData = nil
 	if runtime.closing && m.onDrained != nil {
 		m.onDrained(runtime.servingStateID, runtime.snapshotID)
 	}
-	return err
+	return errors.Join(runtimeErr, managedDataErr)
 }
 
 type managedRuntime struct {
 	servingStateID servingstate.ID
 	digest         string
 	runtime        Runtime
+	managedData    ManagedDataLifetime
 	snapshotID     int64
 	refs           int
 	closing        bool
+}
+
+func releaseManagedDataLifetime(lifetime ManagedDataLifetime) error {
+	if lifetime == nil {
+		return nil
+	}
+	return lifetime.Release()
 }
 
 type runtimeLease struct {

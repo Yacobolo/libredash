@@ -34,7 +34,6 @@ func (s *Server) workspaceRefreshSupport() workspacehttp.Support {
 		DispatchQueued: func() {
 			s.dispatchQueuedRefreshJobs(context.Background())
 		},
-		DataDir:      s.dataDirForWorkspace,
 		DirectRunner: appRefreshRunner{metrics: s.metrics},
 		ModelLookup:  refreshModelLookup(s.metrics),
 		Broker:       s.broker,
@@ -71,7 +70,6 @@ func (s *Server) workspaceRefreshService(runRepo refresh.RunRepository) (refresh
 			DuckDBDir:       s.duckDBDir,
 			DuckLakeCatalog: s.duckLakeCatalogPath,
 			DuckLakeData:    s.duckLakeDataPath,
-			DataDir:         s.dataDirForWorkspace,
 		},
 		Runtime:   appRefreshRuntimeHost{reloader: s.reloader},
 		Retention: appRefreshRetention{server: s},

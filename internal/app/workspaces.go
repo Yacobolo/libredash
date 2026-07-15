@@ -3,35 +3,11 @@ package app
 import (
 	"context"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/gorilla/csrf"
 )
-
-func (s *Server) dataDirForWorkspace(workspaceID string, artifact servingstate.Artifact) string {
-	if strings.TrimSpace(artifact.DataRoot) != "" {
-		return artifact.DataRoot
-	}
-	dataDir := ""
-	if workspaceMetrics, ok := s.metrics.(workspaceMetrics); ok {
-		if metrics, ok := workspaceMetrics.MetricsForWorkspace(workspaceID); ok && metrics != nil {
-			dataDir = metrics.DataDir()
-		}
-	}
-	if strings.TrimSpace(dataDir) == "" && s.metrics != nil {
-		dataDir = s.metrics.DataDir()
-	}
-	workspaceDataDir := filepath.Join(".data", workspaceID)
-	if info, err := os.Stat(workspaceDataDir); err == nil && info.IsDir() {
-		return workspaceDataDir
-	}
-	return dataDir
-}
 
 func (s *Server) assetVersionsStateForSection(ctx context.Context, workspaceID, environment string, asset workspace.AssetView, section string) (ui.AssetVersionsState, error) {
 	state := ui.AssetVersionsState{CurrentContentHash: asset.ContentHash}

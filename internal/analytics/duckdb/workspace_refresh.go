@@ -14,14 +14,9 @@ type WorkspaceRefreshMaterializer struct {
 	DuckDBDir       string
 	DuckLakeCatalog string
 	DuckLakeData    string
-	DataDir         func(workspaceID string, artifact servingstate.Artifact) string
 }
 
 func (m WorkspaceRefreshMaterializer) Materialize(ctx context.Context, input refresh.MaterializeInput) (int64, error) {
-	dataDir := ""
-	if m.DataDir != nil {
-		dataDir = m.DataDir(string(input.Candidate.WorkspaceID), input.Artifact)
-	}
 	dbDir := m.DuckDBDir
 	if strings.TrimSpace(dbDir) == "" {
 		dbDir = filepath.Join(".libredash", "duckdb")
@@ -29,7 +24,6 @@ func (m WorkspaceRefreshMaterializer) Materialize(ctx context.Context, input ref
 	dbDir = filepath.Join(dbDir, string(servingstate.NormalizeEnvironment(input.Environment)))
 	runtime, err := OpenWorkspaceMaterializeRuntime(ctx, WorkspaceRuntimeConfig{
 		Models:             input.Definition.Models,
-		DataDir:            dataDir,
 		DBDir:              dbDir,
 		CatalogPath:        m.DuckLakeCatalog,
 		DuckLakeDataPath:   m.DuckLakeData,

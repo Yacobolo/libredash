@@ -29,7 +29,7 @@ func TestRepositoryChecksGrantPrivileges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("set principal role: %v", err)
 	}
-	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivatePublish)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivateDeployment)
 	if err != nil {
 		t.Fatalf("check privilege: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestRepositoryChecksGroupRolePrivileges(t *testing.T) {
 		t.Fatalf("binding subject = %q/%q, want group/%q", binding.SubjectType, binding.SubjectID, group.ID)
 	}
 
-	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivatePublish)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivateDeployment)
 	if err != nil {
 		t.Fatalf("check privilege: %v", err)
 	}
@@ -200,7 +200,7 @@ func TestRepositoryChecksGroupRolePrivileges(t *testing.T) {
 	if err := repo.RemoveGroupMember(ctx, "test", group.ID, principal.ID); err != nil {
 		t.Fatalf("remove group member: %v", err)
 	}
-	allowed, err = testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivatePublish)
+	allowed, err = testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivateDeployment)
 	if err != nil {
 		t.Fatalf("check privilege after remove: %v", err)
 	}
@@ -653,90 +653,6 @@ func TestRepositoryRejectsExpiredAPITokenCreate(t *testing.T) {
 	}
 }
 
-func TestRepositoryReconcilesWorkspacePolicySnapshot(t *testing.T) {
-	ctx := context.Background()
-	_, repo := openAccessRepo(t, ctx)
-
-	first := workspace.AccessPolicy{
-		Groups: map[string]workspace.WorkspaceGroup{
-			"analysts": {
-				ID:   "analysts",
-				Name: "analysts",
-				Members: []workspace.WorkspaceGroupMember{
-					{Email: "Analyst@Example.com", DisplayName: "Analyst"},
-				},
-			},
-		},
-		RoleBindings: map[string]workspace.WorkspaceRoleBinding{
-			"analysts-viewer": {
-				ID:   "analysts-viewer",
-				Name: "analysts-viewer",
-				Role: access.RoleViewer,
-				Subject: workspace.WorkspaceRoleBindingSubject{
-					Kind:  string(access.SubjectGroup),
-					Group: "analysts",
-				},
-			},
-		},
-	}
-	if err := repo.ReconcileWorkspacePolicy(ctx, "test", first); err != nil {
-		t.Fatalf("reconcile first: %v", err)
-	}
-	groups, err := repo.ListGroups(ctx, "test")
-	if err != nil {
-		t.Fatalf("list groups: %v", err)
-	}
-	if len(groups) != 1 || groups[0].Name != "analysts" || groups[0].Provider != "local" || groups[0].ExternalID != "analysts" {
-		t.Fatalf("groups = %#v, want local analysts", groups)
-	}
-	members, err := repo.ListGroupMembers(ctx, "test", groups[0].ID)
-	if err != nil {
-		t.Fatalf("list members: %v", err)
-	}
-	if len(members) != 1 || members[0].Email != "analyst@example.com" {
-		t.Fatalf("members = %#v, want normalized analyst", members)
-	}
-	bindings, err := repo.ListRoleBindings(ctx, "test")
-	if err != nil {
-		t.Fatalf("list role bindings: %v", err)
-	}
-	if len(bindings) != 1 || bindings[0].SubjectType != access.SubjectGroup || bindings[0].GroupID != groups[0].ID || bindings[0].Role != access.RoleViewer {
-		t.Fatalf("bindings = %#v, want analysts viewer group binding", bindings)
-	}
-
-	rollback := workspace.AccessPolicy{
-		RoleBindings: map[string]workspace.WorkspaceRoleBinding{
-			"owner": {
-				ID:   "owner",
-				Name: "owner",
-				Role: access.RoleOwner,
-				Subject: workspace.WorkspaceRoleBindingSubject{
-					Kind:        string(access.SubjectPrincipal),
-					Email:       "owner@example.com",
-					DisplayName: "Owner",
-				},
-			},
-		},
-	}
-	if err := repo.ReconcileWorkspacePolicy(ctx, "test", rollback); err != nil {
-		t.Fatalf("reconcile rollback: %v", err)
-	}
-	groups, err = repo.ListGroups(ctx, "test")
-	if err != nil {
-		t.Fatalf("list rollback groups: %v", err)
-	}
-	if len(groups) != 0 {
-		t.Fatalf("rollback groups = %#v, want none", groups)
-	}
-	bindings, err = repo.ListRoleBindings(ctx, "test")
-	if err != nil {
-		t.Fatalf("list rollback bindings: %v", err)
-	}
-	if len(bindings) != 1 || bindings[0].SubjectType != access.SubjectPrincipal || bindings[0].Email != "owner@example.com" || bindings[0].Role != access.RoleOwner {
-		t.Fatalf("rollback bindings = %#v, want owner principal binding", bindings)
-	}
-}
-
 func TestRepositoryManagesRoleBindingsByID(t *testing.T) {
 	ctx := context.Background()
 	_, repo := openAccessRepo(t, ctx)
@@ -820,7 +736,7 @@ func TestRepositoryResolveExternalPrincipalAttachesBootstrappedEmail(t *testing.
 	if principal.ID != access.PrincipalIDForEmail("owner@example.com") {
 		t.Fatalf("principal id = %q, want bootstrapped email principal", principal.ID)
 	}
-	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivatePublish)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivateDeployment)
 	if err != nil {
 		t.Fatalf("check privilege: %v", err)
 	}
@@ -880,7 +796,7 @@ func TestRepositoryResolveExternalPrincipalWithoutEmailCreatesUnprivilegedPrinci
 	if err != nil {
 		t.Fatalf("resolve external principal: %v", err)
 	}
-	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivatePublish)
+	allowed, err := testAuthorize(ctx, repo, "test", principal.ID, access.PrivilegeActivateDeployment)
 	if err != nil {
 		t.Fatalf("check privilege: %v", err)
 	}

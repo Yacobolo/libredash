@@ -11,7 +11,6 @@ type Metrics interface {
 	report.Metrics
 	NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
 	QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error)
-	DataDir() string
 }
 
 type Service struct {
@@ -35,7 +34,7 @@ func (s Service) Snapshot(ctx context.Context, request SnapshotRequest) Snapshot
 	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.TableCommand)
 	patch, err := s.Metrics.QueryDashboardPage(ctx, request.DashboardID, request.PageID, filters)
 	if err != nil {
-		patch = dashboard.EmptyPatch(filters, s.Metrics.DataDir(), err)
+		patch = dashboard.EmptyPatch(filters, err)
 	}
 	return Snapshot{
 		Patch:  patch,

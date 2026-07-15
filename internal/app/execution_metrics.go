@@ -53,7 +53,7 @@ func (m executionMetrics) QueryDashboardPage(ctx context.Context, dashboardID, p
 		return dataquery.Result{}, runErr
 	})
 	if err != nil {
-		return dashboard.EmptyPatch(filters.WithDefaults(), m.QueryMetrics.DataDir(), err), nil
+		return dashboard.EmptyPatch(filters.WithDefaults(), err), nil
 	}
 	return patch, runErr
 }

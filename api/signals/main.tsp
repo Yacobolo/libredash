@@ -664,8 +664,7 @@ model DashboardPageSignal {
 }
 
 model DashboardStatus {
-  `dataDirectory`: string;
-  `error`: string;
+	`error`: string;
   `lastUpdated`: string;
   `loading`: boolean;
   `setupRequired`: boolean;

@@ -41,10 +41,6 @@ func dataExplorerTestRequest(method, target string, body io.Reader) *http.Reques
 	return req.WithContext(context.WithValue(req.Context(), principalContextKey{}, Principal{ID: "test_principal"}))
 }
 
-func (m dataExplorerFixtureMetrics) DataDir() string {
-	return m.dataDir
-}
-
 func (m dataExplorerFixtureMetrics) Catalog() dashboard.Catalog {
 	modelID := firstNonEmpty(m.modelID, "olist")
 	return dashboard.Catalog{
@@ -67,15 +63,15 @@ func (m dataExplorerFixtureMetrics) SemanticModel(modelID string) (*semanticmode
 	return &semanticmodel.Model{
 		Name:              expectedModelID,
 		Title:             expectedModelID,
-		DefaultConnection: "local",
+		DefaultConnection: "managed",
 		Connections: map[string]semanticmodel.Connection{
-			"local": {Kind: "local"},
+			"managed": {Kind: "managed", Root: m.dataDir},
 		},
 		Sources: map[string]semanticmodel.Source{
 			sourceKey: {
 				Path:       "orders.csv",
 				Format:     "csv",
-				Connection: "local",
+				Connection: "managed",
 				Schema: semanticmodel.TableSchema{Columns: []semanticmodel.ColumnSchema{
 					{Name: "order_id", PhysicalType: "VARCHAR", Ordinal: 1},
 					{Name: "status", PhysicalType: "VARCHAR", Ordinal: 2},

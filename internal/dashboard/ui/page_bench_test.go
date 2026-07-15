@@ -30,7 +30,7 @@ func benchmarkDashboardBridge(b *testing.B, legacy bool) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		signals := BootstrapSignals(".data/olist", "client", catalog, report, model, report.Pages, activePage, dashboard.Filters{})
+		signals := BootstrapSignals("client", catalog, report, model, report.Pages, activePage, dashboard.Filters{})
 		node := benchmarkDashboardDocument(catalog, report, model, activePage, signals, legacy)
 		var out strings.Builder
 		if err := node.Render(&out); err != nil {

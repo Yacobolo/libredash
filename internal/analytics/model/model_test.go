@@ -1,16 +1,45 @@
 package model
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
+func TestManagedConnectionRejectsAuthoredPhysicalLocation(t *testing.T) {
+	for _, connection := range []Connection{
+		{Kind: "managed", Root: "/server/revision"},
+		{Kind: "managed", Scope: "s3://private-bucket/revision"},
+	} {
+		if _, err := connection.Validate("olist"); err == nil || !strings.Contains(err.Error(), "physical location") {
+			t.Fatalf("Validate() error = %v, want managed physical location rejection", err)
+		}
+	}
+}
+
+func TestConnectionRejectsRemovedLocalKind(t *testing.T) {
+	_, err := (Connection{Kind: "local"}).Validate("files")
+	if err == nil || !strings.Contains(err.Error(), `unsupported kind "local"`) {
+		t.Fatalf("Validate() error = %v, want unsupported local kind", err)
+	}
+}
+
+func TestManagedSourceRejectsAbsoluteAndTraversalPaths(t *testing.T) {
+	connections := map[string]Connection{"olist": {Kind: "managed"}}
+	for _, value := range []string{filepath.Join(string(filepath.Separator), "orders.csv"), "../orders.csv"} {
+		source := Source{Connection: "olist", Path: value, Format: "csv"}
+		if err := source.Validate("orders", connections); err == nil {
+			t.Fatalf("Validate(%q) error = nil, want unsafe managed path rejection", value)
+		}
+	}
+}
+
 func TestValidateRejectsAuthoredSourceReads(t *testing.T) {
 	model := &Model{
 		Name:        "test",
-		Connections: map[string]Connection{"local_files": {Kind: "local"}},
+		Connections: map[string]Connection{"files": {Kind: "managed"}},
 		Sources: map[string]Source{
-			"orders": {Connection: "local_files", Path: "orders.csv", Format: "csv"},
+			"orders": {Connection: "files", Path: "orders.csv", Format: "csv"},
 		},
 		BaseTable: "orders",
 		Tables: map[string]Table{

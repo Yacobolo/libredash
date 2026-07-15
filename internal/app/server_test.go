@@ -117,10 +117,6 @@ func (fakeMetrics) ModelIDForDashboard(dashboardID string) string {
 	return ""
 }
 
-func (fakeMetrics) DataDir() string {
-	return "../../.data/olist"
-}
-
 func (fakeMetrics) Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool) {
 	if dashboardID != "executive-sales" {
 		return reportdef.Dashboard{}, nil, false
@@ -350,9 +346,8 @@ func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, pageID string
 			"state": {{Value: "SP", Label: "SP"}},
 		},
 		Status: dashboard.Status{
-			Loading:       false,
-			LastUpdated:   "12:00:00",
-			DataDirectory: ".data/olist",
+			Loading:     false,
+			LastUpdated: "12:00:00",
 		},
 		Visuals: map[string]dashboard.Visual{
 			chartID: {Title: chartTitle, Unit: "orders", Data: []dashboard.Datum{{"label": "delivered", "value": 1}}},
@@ -932,10 +927,6 @@ func (m *localDevStyleModelTableMetrics) DefaultDashboardID() string {
 
 func (m *localDevStyleModelTableMetrics) ModelIDForDashboard(dashboardID string) string {
 	return fakeMetrics{}.ModelIDForDashboard(dashboardID)
-}
-
-func (m *localDevStyleModelTableMetrics) DataDir() string {
-	return fakeMetrics{}.DataDir()
 }
 
 func (m *localDevStyleModelTableMetrics) Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool) {

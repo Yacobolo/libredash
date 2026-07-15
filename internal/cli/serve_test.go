@@ -15,7 +15,6 @@ import (
 	"github.com/Yacobolo/libredash/internal/config"
 	"github.com/Yacobolo/libredash/internal/platform"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	workspacesqlite "github.com/Yacobolo/libredash/internal/workspace/sqlite"
 )
@@ -98,7 +97,7 @@ func TestDefaultHTTPServerShutdownTimeout(t *testing.T) {
 
 func TestDeploymentBackedDevServerAlwaysOpensPlatformStore(t *testing.T) {
 	home := t.TempDir()
-	_, cleanup, err := servingStateBackedServer(context.Background(), config.Config{HomeDir: home}, "", false, servingstate.DefaultEnvironment)
+	_, cleanup, err := servingStateBackedServer(context.Background(), serveTestConfig(home), false, servingstate.DefaultEnvironment)
 	if err != nil {
 		t.Fatalf("deployment-backed dev server: %v", err)
 	}
@@ -122,7 +121,7 @@ func TestDeploymentBackedServerCreatesPrivateStateDirectories(t *testing.T) {
 	parent := t.TempDir()
 	home := filepath.Join(parent, "home")
 	restoreUmask := setServeTestUmask(t, 0)
-	_, cleanup, err := servingStateBackedServer(context.Background(), config.Config{HomeDir: home}, "", false, servingstate.DefaultEnvironment)
+	_, cleanup, err := servingStateBackedServer(context.Background(), serveTestConfig(home), false, servingstate.DefaultEnvironment)
 	restoreUmask()
 	if err != nil {
 		t.Fatalf("deployment-backed dev server: %v", err)
@@ -149,16 +148,15 @@ func TestDeploymentBackedServerCreatesPrivateStateDirectories(t *testing.T) {
 
 func TestProductionServerAllowsCallbackHostAndRejectsOthers(t *testing.T) {
 	home := t.TempDir()
-	server, cleanup, err := servingStateBackedServer(context.Background(), config.Config{
-		HomeDir:            home,
-		Production:         true,
-		OIDCIssuerURL:      "https://issuer.example",
-		OIDCClientID:       "client-id",
-		OIDCSecret:         "client-secret",
-		OIDCCallbackURL:    "https://app.example.com/auth/oidc/callback",
-		CSRFKey:            "0123456789abcdef0123456789abcdef",
-		MetricsBearerToken: "0123456789abcdef0123456789abcdef",
-	}, "", true, servingstate.Environment("prod"))
+	cfg := serveTestConfig(home)
+	cfg.Production = true
+	cfg.OIDCIssuerURL = "https://issuer.example"
+	cfg.OIDCClientID = "client-id"
+	cfg.OIDCSecret = "client-secret"
+	cfg.OIDCCallbackURL = "https://app.example.com/auth/oidc/callback"
+	cfg.CSRFKey = "0123456789abcdef0123456789abcdef"
+	cfg.MetricsBearerToken = "0123456789abcdef0123456789abcdef"
+	server, cleanup, err := servingStateBackedServer(context.Background(), cfg, true, servingstate.Environment("prod"))
 	if err != nil {
 		t.Fatalf("production server: %v", err)
 	}
@@ -193,37 +191,10 @@ func setServeTestUmask(t *testing.T, mask int) func() {
 	}
 }
 
-func TestDeploymentBackedDevServerRemovesLegacyDuckLakeArtifacts(t *testing.T) {
-	home := t.TempDir()
-	legacyCatalog := filepath.Join(home, "duckdb", "dev", "catalog.sqlite")
-	if err := os.MkdirAll(filepath.Join(filepath.Dir(legacyCatalog), "data"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(legacyCatalog, []byte("stale"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(filepath.Dir(legacyCatalog), "data", "old.parquet"), []byte("stale"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	_, cleanup, err := servingStateBackedServer(context.Background(), config.Config{HomeDir: home}, "", false, servingstate.DefaultEnvironment)
-	if err != nil {
-		t.Fatalf("deployment-backed dev server: %v", err)
-	}
-	defer cleanup()
-
-	if _, err := os.Stat(legacyCatalog); !os.IsNotExist(err) {
-		t.Fatalf("legacy DuckLake catalog exists or stat failed: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(filepath.Dir(legacyCatalog), "data")); !os.IsNotExist(err) {
-		t.Fatalf("legacy DuckLake data exists or stat failed: %v", err)
-	}
-}
-
 func TestDeploymentBackedDevServerSeedsPlatformAdminPrincipal(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
-	_, cleanup, err := servingStateBackedServer(ctx, config.Config{HomeDir: home}, "", false, servingstate.DefaultEnvironment)
+	_, cleanup, err := servingStateBackedServer(ctx, serveTestConfig(home), false, servingstate.DefaultEnvironment)
 	if err != nil {
 		t.Fatalf("deployment-backed dev server: %v", err)
 	}
@@ -257,7 +228,7 @@ func TestDeploymentBackedDevServerSeedsPlatformAdminPrincipal(t *testing.T) {
 func TestDeploymentBackedDevServerDoesNotCreateWorkspacesOrDeployments(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
-	_, cleanup, err := servingStateBackedServer(ctx, config.Config{HomeDir: home}, "", false, servingstate.DefaultEnvironment)
+	_, cleanup, err := servingStateBackedServer(ctx, serveTestConfig(home), false, servingstate.DefaultEnvironment)
 	if err != nil {
 		t.Fatalf("deployment-backed dev server: %v", err)
 	}
@@ -276,12 +247,26 @@ func TestDeploymentBackedDevServerDoesNotCreateWorkspacesOrDeployments(t *testin
 	if len(workspaces) != 0 {
 		t.Fatalf("workspaces = %#v, want none before explicit deploy", workspaces)
 	}
-	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
-	deployments, err := servingStateRepo.List(ctx, servingstate.WorkspaceID("test"), servingstate.DefaultEnvironment)
-	if err != nil {
-		t.Fatalf("list deployments: %v", err)
+	var servingStateCount int
+	if err := store.SQLDB().QueryRowContext(ctx, `SELECT count(*) FROM serving_states`).Scan(&servingStateCount); err != nil {
+		t.Fatalf("count serving states: %v", err)
 	}
-	if len(deployments) != 0 {
-		t.Fatalf("deployments = %#v, want none before explicit deploy", deployments)
+	if servingStateCount != 0 {
+		t.Fatalf("serving state count = %d, want none before explicit deploy", servingStateCount)
+	}
+}
+
+func serveTestConfig(home string) config.Config {
+	return config.Config{
+		HomeDir:                     home,
+		ManagedDataBackend:          "local",
+		ManagedDataDir:              filepath.Join(home, "managed-data"),
+		ManagedDataMaxFiles:         100,
+		ManagedDataMaxFileBytes:     1 << 20,
+		ManagedDataMaxRevisionBytes: 10 << 20,
+		ManagedDataUploadSessionTTL: time.Hour,
+		ManagedDataGCInterval:       time.Hour,
+		ManagedDataGCGracePeriod:    time.Hour,
+		ManagedDataMinFreeBytes:     1,
 	}
 }

@@ -53,7 +53,7 @@ func TestProductionGoEnvironmentReadsAreCataloged(t *testing.T) {
 
 func TestOperationalEnvironmentReferencesAreCataloged(t *testing.T) {
 	known := knownSettings()
-	pattern := regexp.MustCompile(`\b(?:LIBREDASH_[A-Z0-9_]+|ADDR|PORT)\b`)
+	pattern := regexp.MustCompile(`\bLIBREDASH_[A-Z0-9_]+\b`)
 	root := filepath.Join("..", "..")
 	paths := []string{"README.md", "Taskfile.yml", "Dockerfile", ".env.example", "docs", "scripts", "deploy", "dashboards"}
 	for _, relative := range paths {

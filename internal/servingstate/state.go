@@ -41,6 +41,10 @@ const (
 type State struct {
 	ID                 ID
 	WorkspaceID        WorkspaceID
+	ProjectID          string
+	ProjectDigest      string
+	ProjectWorkspaces  []string
+	AccessPolicyJSON   string
 	Environment        Environment
 	Status             Status
 	Source             Source
@@ -60,6 +64,7 @@ func (d State) CanActivate() bool {
 
 type CreateInput struct {
 	WorkspaceID WorkspaceID
+	ProjectID   string
 	Environment Environment
 	CreatedBy   string
 	Source      Source
@@ -73,7 +78,6 @@ type Artifact struct {
 	Digest         string
 	Format         string
 	Path           string
-	DataRoot       string
 	ManifestJSON   string
 	SizeBytes      int64
 	CreatedAt      string
@@ -89,11 +93,15 @@ type SnapshotLeaseInput struct {
 }
 
 type Validation struct {
-	Digest       string
-	ManifestJSON string
-	RootDir      string
-	DataRoot     string
-	Graph        workspace.AssetGraph
+	Digest               string
+	ManifestJSON         string
+	RootDir              string
+	ProjectID            string
+	ProjectDigest        string
+	ProjectWorkspaces    []string
+	AccessPolicy         workspace.AccessPolicy
+	ManagedDataRevisions map[string]string
+	Graph                workspace.AssetGraph
 }
 
 type PreparedRuntime interface {

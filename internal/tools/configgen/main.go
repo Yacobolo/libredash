@@ -117,6 +117,8 @@ func goType(valueType configspec.ValueType) string {
 		return "bool"
 	case configspec.TypeInt:
 		return "int"
+	case configspec.TypeInt64:
+		return "int64"
 	case configspec.TypeDuration:
 		return "time.Duration"
 	default:
@@ -224,7 +226,7 @@ func generateSchema() ([]byte, error) {
 		switch setting.Type {
 		case configspec.TypeBool:
 			property["pattern"] = `^(1|t|T|true|TRUE|True|0|f|F|false|FALSE|False)$`
-		case configspec.TypeInt:
+		case configspec.TypeInt, configspec.TypeInt64:
 			property["pattern"] = `^-?[0-9]+$`
 		case configspec.TypeDuration:
 			property["pattern"] = `^-?[0-9]+(ns|us|µs|ms|s|m|h)([0-9]+(ns|us|µs|ms|s|m|h))*$`
@@ -292,6 +294,18 @@ func predicateSchema(predicate configspec.Predicate) any {
 		return map[string]any{"required": []string{predicate.Name}, "properties": map[string]any{predicate.Name: map[string]any{"pattern": "^https://[^/]+"}}}
 	case configspec.PredicateSlug:
 		return map[string]any{"properties": map[string]any{predicate.Name: map[string]any{"maxLength": 64, "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"}}}
+	case configspec.PredicateEquals:
+		return map[string]any{"required": []string{predicate.Name}, "properties": map[string]any{predicate.Name: map[string]any{"const": predicate.Value}}}
+	case configspec.PredicateOneOf:
+		return map[string]any{"required": []string{predicate.Name}, "properties": map[string]any{predicate.Name: map[string]any{"enum": predicate.Values}}}
+	case configspec.PredicatePositive:
+		// Defaults are applied by the runtime decoder, so sparse environment
+		// documents must not be forced to repeat every positive default.
+		return map[string]any{"x-runtime-positive": predicate.Name}
+	case configspec.PredicateAtLeast:
+		// JSON Schema cannot compare two environment-string properties without
+		// non-standard extensions; runtime validation enforces this relationship.
+		return map[string]any{"x-runtime-at-least": []string{predicate.Name, predicate.OtherName}}
 	default:
 		return true
 	}

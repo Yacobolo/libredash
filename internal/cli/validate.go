@@ -58,9 +58,10 @@ func planCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
-	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL for active publish diff")
+	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL for active deployment diff")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
-	cmd.Flags().StringVar(&opts.environment, "environment", "dev", "publish environment for active diff")
+	cmd.Flags().StringVar(&opts.environment, "environment", "dev", "deployment environment for active diff")
+	cmd.Flags().StringVar(&opts.workspaceID, "workspace", opts.workspaceID, "workspace id for active diff")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "emit JSON plan")
 	return cmd
 }

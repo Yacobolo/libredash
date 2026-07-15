@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -127,6 +128,62 @@ func (a apiGenAdapter) ListCurrentSessions(w http.ResponseWriter, r *http.Reques
 	a.server.accessHTTPHandler().ListCurrentSessions(w, r)
 }
 
+func (a apiGenAdapter) GetManagedDataEnvironmentRevision(w http.ResponseWriter, r *http.Request, project, connection, environment string) {
+	a.server.managedDataHTTPHandler().GetManagedDataEnvironmentRevision(w, r, project, connection, environment)
+}
+
+func (a apiGenAdapter) ListManagedDataRevisions(w http.ResponseWriter, r *http.Request, project, connection string, params apigenapi.GenListManagedDataRevisionsParams) {
+	a.server.managedDataHTTPHandler().ListManagedDataRevisions(w, r, project, connection, params)
+}
+
+func (a apiGenAdapter) GetManagedDataRevision(w http.ResponseWriter, r *http.Request, project, connection, revision string) {
+	a.server.managedDataHTTPHandler().GetManagedDataRevision(w, r, project, connection, revision)
+}
+
+func (a apiGenAdapter) CreateManagedDataUploadSession(w http.ResponseWriter, r *http.Request, project, connection string, headers apigenapi.GenCreateManagedDataUploadSessionHeaders) {
+	a.server.managedDataHTTPHandler().CreateManagedDataUploadSession(w, r, project, connection, headers)
+}
+
+func (a apiGenAdapter) GetManagedDataUploadSession(w http.ResponseWriter, r *http.Request, project, connection, uploadSession string) {
+	a.server.managedDataHTTPHandler().GetManagedDataUploadSession(w, r, project, connection, uploadSession)
+}
+
+func (a apiGenAdapter) AbortManagedDataUploadSession(w http.ResponseWriter, r *http.Request, project, connection, uploadSession string, headers apigenapi.GenAbortManagedDataUploadSessionHeaders) {
+	a.server.managedDataHTTPHandler().AbortManagedDataUploadSession(w, r, project, connection, uploadSession, headers)
+}
+
+func (a apiGenAdapter) FinalizeManagedDataUploadSession(w http.ResponseWriter, r *http.Request, project, connection, uploadSession string, headers apigenapi.GenFinalizeManagedDataUploadSessionHeaders) {
+	a.server.managedDataHTTPHandler().FinalizeManagedDataUploadSession(w, r, project, connection, uploadSession, headers)
+}
+
+func (a apiGenAdapter) CreateManagedDataS3MultipartUpload(w http.ResponseWriter, r *http.Request, project, connection, uploadSession string, headers apigenapi.GenCreateManagedDataS3MultipartUploadHeaders) {
+	a.server.managedDataHTTPHandler().CreateManagedDataS3MultipartUpload(w, r, project, connection, uploadSession, headers)
+}
+
+func (a apiGenAdapter) AbortManagedDataS3MultipartUpload(w http.ResponseWriter, r *http.Request, project, connection, uploadSession, multipartUpload string, headers apigenapi.GenAbortManagedDataS3MultipartUploadHeaders) {
+	a.server.managedDataHTTPHandler().AbortManagedDataS3MultipartUpload(w, r, project, connection, uploadSession, multipartUpload, headers)
+}
+
+func (a apiGenAdapter) CompleteManagedDataS3MultipartUpload(w http.ResponseWriter, r *http.Request, project, connection, uploadSession, multipartUpload string, headers apigenapi.GenCompleteManagedDataS3MultipartUploadHeaders) {
+	a.server.managedDataHTTPHandler().CompleteManagedDataS3MultipartUpload(w, r, project, connection, uploadSession, multipartUpload, headers)
+}
+
+func (a apiGenAdapter) SignManagedDataS3MultipartPart(w http.ResponseWriter, r *http.Request, project, connection, uploadSession, multipartUpload string, partNumber int32) {
+	a.server.managedDataHTTPHandler().SignManagedDataS3MultipartPart(w, r, project, connection, uploadSession, multipartUpload, partNumber)
+}
+
+func (a apiGenAdapter) CreateProjectDeployment(w http.ResponseWriter, r *http.Request, project string, headers apigenapi.GenCreateProjectDeploymentHeaders) {
+	a.server.deploymentHTTPHandler().Create(w, r, project, headers)
+}
+
+func (a apiGenAdapter) GetProjectDeployment(w http.ResponseWriter, r *http.Request, project, deployment string) {
+	a.server.deploymentHTTPHandler().Get(w, r, project, deployment)
+}
+
+func (a apiGenAdapter) ActivateProjectDeployment(w http.ResponseWriter, r *http.Request, project, deployment string, headers apigenapi.GenActivateProjectDeploymentHeaders) {
+	a.server.deploymentHTTPHandler().Activate(w, r, project, deployment, headers)
+}
+
 func (a apiGenAdapter) RevokeCurrentSession(w http.ResponseWriter, r *http.Request, _ string) {
 	a.server.accessHTTPHandler().RevokeCurrentSession(w, r)
 }
@@ -223,28 +280,16 @@ func (a apiGenAdapter) ListDashboardFilterOptions(w http.ResponseWriter, r *http
 	a.server.dashboardHTTP().ListDashboardFilterOptions(w, r)
 }
 
-func (a apiGenAdapter) ListPublishes(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListPublishesParams) {
-	a.server.publishHTTPHandler().List(w, r)
+func (a apiGenAdapter) CreateDeploymentCandidate(w http.ResponseWriter, r *http.Request, project, workspace string) {
+	a.server.deploymentCandidateHTTPHandler().CreateCandidate(w, r, project, workspace)
 }
 
-func (a apiGenAdapter) CreatePublish(w http.ResponseWriter, r *http.Request, _ string) {
-	a.server.publishHTTPHandler().Create(w, r)
+func (a apiGenAdapter) UploadDeploymentCandidateArtifact(w http.ResponseWriter, r *http.Request, project, workspace, candidate string, _ apigenapi.GenUploadDeploymentCandidateArtifactHeaders) {
+	a.server.deploymentCandidateHTTPHandler().UploadCandidateArtifact(w, r, project, workspace, servingstate.ID(candidate))
 }
 
-func (a apiGenAdapter) GetPublish(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenGetPublishParams) {
-	a.server.publishHTTPHandler().Get(w, r)
-}
-
-func (a apiGenAdapter) UploadPublishArtifact(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenUploadPublishArtifactHeaders) {
-	a.server.publishHTTPHandler().UploadArtifact(w, r)
-}
-
-func (a apiGenAdapter) ActivatePublish(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenActivatePublishParams) {
-	a.server.publishHTTPHandler().Activate(w, r)
-}
-
-func (a apiGenAdapter) ValidatePublish(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenValidatePublishParams) {
-	a.server.publishHTTPHandler().Validate(w, r)
+func (a apiGenAdapter) ValidateDeploymentCandidate(w http.ResponseWriter, r *http.Request, project, workspace, candidate string) {
+	a.server.deploymentCandidateHTTPHandler().ValidateCandidate(w, r, project, workspace, servingstate.ID(candidate))
 }
 
 func (a apiGenAdapter) CreateRefreshRun(w http.ResponseWriter, r *http.Request, _ string) {

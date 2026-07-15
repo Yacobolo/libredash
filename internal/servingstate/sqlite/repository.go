@@ -6,13 +6,16 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/libredash/internal/manageddata"
 	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -32,6 +35,7 @@ func (r *Repository) Create(ctx context.Context, input servingstate.CreateInput)
 	if err := r.q.CreateServingState(ctx, platformdb.CreateServingStateParams{
 		ID:          string(id),
 		WorkspaceID: string(input.WorkspaceID),
+		ProjectID:   strings.TrimSpace(input.ProjectID),
 		Environment: string(servingstate.NormalizeEnvironment(input.Environment)),
 		Status:      string(servingstate.StatusPending),
 		Source:      string(servingstate.NormalizeSource(input.Source)),
@@ -48,18 +52,6 @@ func (r *Repository) ByID(ctx context.Context, id servingstate.ID) (servingstate
 		return servingstate.State{}, mapNotFound(err)
 	}
 	return mapServingState(row), nil
-}
-
-func (r *Repository) List(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment) ([]servingstate.State, error) {
-	rows, err := r.q.ListServingStates(ctx, platformdb.ListServingStatesParams{WorkspaceID: string(workspaceID), Environment: string(servingstate.NormalizeEnvironment(environment))})
-	if err != nil {
-		return nil, err
-	}
-	states := make([]servingstate.State, 0, len(rows))
-	for _, row := range rows {
-		states = append(states, mapServingState(row))
-	}
-	return states, nil
 }
 
 func (r *Repository) MarkFailed(ctx context.Context, servingStateID servingstate.ID, cause error) error {
@@ -173,6 +165,24 @@ func (r *Repository) ReconcileRetention(ctx context.Context, now time.Time) erro
 }
 
 func (r *Repository) SaveValidated(ctx context.Context, servingStateID servingstate.ID, validation servingstate.Validation, artifact servingstate.Artifact) (servingstate.State, error) {
+	validation.ProjectID = strings.TrimSpace(validation.ProjectID)
+	if validation.ProjectID == "" {
+		return servingstate.State{}, fmt.Errorf("validated serving state requires project id")
+	}
+	if err := manageddata.ValidateRevisionID(validation.ProjectDigest); err != nil {
+		return servingstate.State{}, fmt.Errorf("validated serving state requires project digest: %w", err)
+	}
+	if len(validation.ProjectWorkspaces) == 0 || !sort.StringsAreSorted(validation.ProjectWorkspaces) {
+		return servingstate.State{}, fmt.Errorf("validated serving state requires sorted project workspaces")
+	}
+	projectWorkspacesJSON, err := json.Marshal(validation.ProjectWorkspaces)
+	if err != nil {
+		return servingstate.State{}, err
+	}
+	accessPolicyJSON, err := json.Marshal(validation.AccessPolicy)
+	if err != nil {
+		return servingstate.State{}, err
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return servingstate.State{}, err
@@ -187,8 +197,25 @@ func (r *Repository) SaveValidated(ctx context.Context, servingStateID servingst
 	if artifact.WorkspaceID != servingstate.WorkspaceID(current.WorkspaceID) {
 		return servingstate.State{}, fmt.Errorf("artifact workspace = %q, want %q", artifact.WorkspaceID, current.WorkspaceID)
 	}
+	if current.ProjectID != "" && current.ProjectID != validation.ProjectID {
+		return servingstate.State{}, fmt.Errorf("artifact project = %q, want %q", validation.ProjectID, current.ProjectID)
+	}
+	if !containsExact(validation.ProjectWorkspaces, current.WorkspaceID) {
+		return servingstate.State{}, fmt.Errorf("project workspaces omit candidate workspace %q", current.WorkspaceID)
+	}
 	if servingstate.NormalizeEnvironment(artifact.Environment) != servingstate.Environment(current.Environment) {
 		return servingstate.State{}, fmt.Errorf("artifact environment = %q, want %q", servingstate.NormalizeEnvironment(artifact.Environment), current.Environment)
+	}
+	switch servingstate.Status(current.Status) {
+	case servingstate.StatusPending:
+	case servingstate.StatusValidated:
+		existingArtifact, existingErr := q.GetArtifactByServingState(ctx, current.ID)
+		if existingErr == nil && current.ProjectID == validation.ProjectID && current.ProjectDigest == validation.ProjectDigest && current.ProjectWorkspacesJson == string(projectWorkspacesJSON) && current.AccessPolicyJson == string(accessPolicyJSON) && current.Digest == validation.Digest && current.ManifestJson == validation.ManifestJSON && sameArtifact(existingArtifact, artifact) {
+			return mapServingState(current), nil
+		}
+		return servingstate.State{}, fmt.Errorf("validated serving state %s is immutable", servingStateID)
+	default:
+		return servingstate.State{}, fmt.Errorf("serving state %s has status %q, want pending", servingStateID, current.Status)
 	}
 	if err := workspace.ValidateAssetGraphForServingState(validation.Graph, workspace.WorkspaceID(current.WorkspaceID), workspace.ServingStateID(servingStateID)); err != nil {
 		return servingstate.State{}, err
@@ -234,10 +261,14 @@ func (r *Repository) SaveValidated(ctx context.Context, servingStateID servingst
 		}
 	}
 	if err := q.UpdateServingStateValidated(ctx, platformdb.UpdateServingStateValidatedParams{
-		Status:       string(servingstate.StatusValidated),
-		Digest:       validation.Digest,
-		ManifestJson: validation.ManifestJSON,
-		ID:           string(servingStateID),
+		Status:                string(servingstate.StatusValidated),
+		ProjectID:             validation.ProjectID,
+		ProjectDigest:         validation.ProjectDigest,
+		ProjectWorkspacesJson: string(projectWorkspacesJSON),
+		AccessPolicyJson:      string(accessPolicyJSON),
+		Digest:                validation.Digest,
+		ManifestJson:          validation.ManifestJSON,
+		ID:                    string(servingStateID),
 	}); err != nil {
 		return servingstate.State{}, err
 	}
@@ -247,15 +278,45 @@ func (r *Repository) SaveValidated(ctx context.Context, servingStateID servingst
 	return r.ByID(ctx, servingStateID)
 }
 
+func sameArtifact(existing platformdb.ServingStateArtifact, candidate servingstate.Artifact) bool {
+	return existing.ServingStateID == string(candidate.ServingStateID) &&
+		existing.WorkspaceID == string(candidate.WorkspaceID) &&
+		existing.Environment == string(servingstate.NormalizeEnvironment(candidate.Environment)) &&
+		existing.Digest == candidate.Digest && existing.Format == candidate.Format &&
+		existing.Path == candidate.Path && existing.ManifestJson == candidate.ManifestJSON &&
+		existing.SizeBytes == candidate.SizeBytes
+}
+
 func (r *Repository) Activate(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment, servingStateID servingstate.ID) (servingstate.State, error) {
-	return r.activate(ctx, workspaceID, environment, servingStateID, nil)
+	return r.activate(ctx, workspaceID, environment, servingStateID)
 }
 
-func (r *Repository) ActivateWithWorkspacePolicy(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment, servingStateID servingstate.ID, policy workspace.AccessPolicy) (servingstate.State, error) {
-	return r.activate(ctx, workspaceID, environment, servingStateID, &policy)
+// ApplyAccessSnapshotTx installs the securable graph and access policy captured
+// by a validated serving state in the caller's deployment transaction.
+func ApplyAccessSnapshotTx(ctx context.Context, tx *sql.Tx, q *platformdb.Queries, candidate platformdb.ServingState) error {
+	assets, err := q.ListAssetsByServingState(ctx, candidate.ID)
+	if err != nil {
+		return err
+	}
+	if err := registerServingStateSecurablesTx(ctx, tx, candidate.WorkspaceID, candidate.CreatedBy, assets); err != nil {
+		return err
+	}
+	var policy workspace.AccessPolicy
+	decoder := json.NewDecoder(strings.NewReader(candidate.AccessPolicyJson))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&policy); err != nil {
+		return fmt.Errorf("decode access policy: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return fmt.Errorf("decode access policy: trailing JSON value")
+		}
+		return fmt.Errorf("decode access policy: %w", err)
+	}
+	return reconcileWorkspacePolicyTx(ctx, tx, q, candidate.WorkspaceID, policy)
 }
 
-func (r *Repository) activate(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment, servingStateID servingstate.ID, policy *workspace.AccessPolicy) (servingstate.State, error) {
+func (r *Repository) activate(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment, servingStateID servingstate.ID) (servingstate.State, error) {
 	environment = servingstate.NormalizeEnvironment(environment)
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -283,11 +344,6 @@ func (r *Repository) activate(ctx context.Context, workspaceID servingstate.Work
 	}
 	if err := registerServingStateSecurablesTx(ctx, tx, string(workspaceID), current.CreatedBy, assets); err != nil {
 		return servingstate.State{}, err
-	}
-	if policy != nil {
-		if err := reconcileWorkspacePolicyTx(ctx, tx, q, string(workspaceID), *policy); err != nil {
-			return servingstate.State{}, err
-		}
 	}
 	if err := q.MarkOtherServingStatesDraining(ctx, platformdb.MarkOtherServingStatesDrainingParams{
 		WorkspaceID: string(workspaceID),
@@ -718,9 +774,15 @@ func (r *Repository) ArtifactByServingState(ctx context.Context, servingStateID 
 }
 
 func mapServingState(row platformdb.ServingState) servingstate.State {
+	var projectWorkspaces []string
+	_ = json.Unmarshal([]byte(row.ProjectWorkspacesJson), &projectWorkspaces)
 	out := servingstate.State{
 		ID:                 servingstate.ID(row.ID),
 		WorkspaceID:        servingstate.WorkspaceID(row.WorkspaceID),
+		ProjectID:          row.ProjectID,
+		ProjectDigest:      row.ProjectDigest,
+		ProjectWorkspaces:  projectWorkspaces,
+		AccessPolicyJSON:   row.AccessPolicyJson,
 		Environment:        servingstate.Environment(row.Environment),
 		Status:             servingstate.Status(row.Status),
 		Source:             servingstate.NormalizeSource(servingstate.Source(row.Source)),
@@ -740,6 +802,15 @@ func mapServingState(row platformdb.ServingState) servingstate.State {
 	return out
 }
 
+func containsExact(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func mapArtifact(row platformdb.ServingStateArtifact) servingstate.Artifact {
 	return servingstate.Artifact{
 		ID:             row.ID,
@@ -749,7 +820,6 @@ func mapArtifact(row platformdb.ServingStateArtifact) servingstate.Artifact {
 		Digest:         row.Digest,
 		Format:         row.Format,
 		Path:           row.Path,
-		DataRoot:       row.DataRoot,
 		ManifestJSON:   row.ManifestJson,
 		SizeBytes:      row.SizeBytes,
 		CreatedAt:      row.CreatedAt,
@@ -765,7 +835,6 @@ func mapArtifactParams(artifact servingstate.Artifact) platformdb.InsertServingS
 		Digest:         artifact.Digest,
 		Format:         artifact.Format,
 		Path:           artifact.Path,
-		DataRoot:       artifact.DataRoot,
 		ManifestJson:   artifact.ManifestJSON,
 		SizeBytes:      artifact.SizeBytes,
 	}

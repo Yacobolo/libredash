@@ -24,7 +24,7 @@ type SourceRegistrar interface {
 }
 
 type sourceRelationPlanner interface {
-	SourceRelation(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error)
+	SourceRelation(model *semanticmodel.Model, source semanticmodel.Source) (string, error)
 }
 
 type ModelTablePlan struct {
@@ -40,16 +40,15 @@ const (
 )
 
 type SourcePathResolver interface {
-	ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error)
+	ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source) (string, error)
 }
 
 type MissingDataError struct {
-	DataDir string
 	Missing []string
 }
 
 func (e *MissingDataError) Error() string {
-	return fmt.Sprintf("local source files are missing in %s: %s. Run the workspace bootstrap tool or set LIBREDASH_DATA_DIR.", e.DataDir, strings.Join(e.Missing, ", "))
+	return fmt.Sprintf("managed source files are missing: %s", strings.Join(e.Missing, ", "))
 }
 
 func (e *MissingDataError) SetupRequired() bool {
@@ -88,11 +87,11 @@ func RefreshModelTables(ctx context.Context, executor Executor, sources SourceRe
 	return time.Now(), nil
 }
 
-func ValidateFiles(model *semanticmodel.Model, dataDir string) error {
-	return ValidateFilesWithResolver(model, dataDir, defaultSourcePathResolver{})
+func ValidateFiles(model *semanticmodel.Model) error {
+	return ValidateFilesWithResolver(model, defaultSourcePathResolver{})
 }
 
-func ValidateFilesWithResolver(model *semanticmodel.Model, dataDir string, resolver SourcePathResolver) error {
+func ValidateFilesWithResolver(model *semanticmodel.Model, resolver SourcePathResolver) error {
 	if resolver == nil {
 		return fmt.Errorf("source path resolver is required")
 	}
@@ -102,12 +101,12 @@ func ValidateFilesWithResolver(model *semanticmodel.Model, dataDir string, resol
 			continue
 		}
 		connection := model.Connections[source.Connection]
-		if connection.Kind != "local" {
+		if connection.Kind != "managed" {
 			continue
 		}
-		file, err := resolver.ResolveSourcePath(model, source, dataDir)
+		file, err := resolver.ResolveSourcePath(model, source)
 		if err != nil {
-			return fmt.Errorf("resolving local source %s: %w", name, err)
+			return fmt.Errorf("resolving managed source %s: %w", name, err)
 		}
 		if _, err := os.Stat(file); errors.Is(err, os.ErrNotExist) {
 			missing = append(missing, file)
@@ -117,31 +116,37 @@ func ValidateFilesWithResolver(model *semanticmodel.Model, dataDir string, resol
 	}
 	if len(missing) > 0 {
 		sort.Strings(missing)
-		return &MissingDataError{DataDir: dataDir, Missing: missing}
+		return &MissingDataError{Missing: missing}
 	}
 	return nil
 }
 
-func ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error) {
-	return defaultSourcePathResolver{}.ResolveSourcePath(model, source, dataDir)
+func ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source) (string, error) {
+	return defaultSourcePathResolver{}.ResolveSourcePath(model, source)
 }
 
 type defaultSourcePathResolver struct{}
 
-func (defaultSourcePathResolver) ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error) {
+func (defaultSourcePathResolver) ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source) (string, error) {
 	connection := model.Connections[source.Connection]
 	switch connection.Kind {
-	case "local":
-		if filepath.IsAbs(source.Path) {
-			return source.Path, nil
-		}
-		root := connection.Root
+	case "managed":
+		root := strings.TrimSpace(connection.Root)
 		if root == "" {
-			root = dataDir
-		} else if !filepath.IsAbs(root) {
-			root = filepath.Join(dataDir, root)
+			return "", fmt.Errorf("managed connection %q has no active revision", source.Connection)
 		}
-		return filepath.Join(root, source.Path), nil
+		if !filepath.IsAbs(root) {
+			return "", fmt.Errorf("managed connection %q revision root must be absolute", source.Connection)
+		}
+		if filepath.IsAbs(source.Path) {
+			return "", fmt.Errorf("managed connection %q source path must be relative", source.Connection)
+		}
+		target := filepath.Clean(filepath.Join(root, source.Path))
+		relative, err := filepath.Rel(filepath.Clean(root), target)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return "", fmt.Errorf("managed connection %q source path escapes its active revision", source.Connection)
+		}
+		return target, nil
 	default:
 		if connection.Scope == "" {
 			return source.Path, nil

@@ -16,10 +16,10 @@ import (
 	"github.com/Yacobolo/libredash/internal/runtimehost"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
+	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
 type servingStateRuntimeFactory struct {
-	dataDir          string
 	duckDBDir        string
 	runtimeDir       string
 	catalogPath      string
@@ -27,7 +27,6 @@ type servingStateRuntimeFactory struct {
 }
 
 func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost.RuntimeInput) (runtimehost.Runtime, error) {
-	dataDir := runtimeDataDir(input, f.dataDir)
 	duckDBDir := runtimeFirstNonEmpty(input.DuckDBDir, f.duckDBDir)
 	runtimeDir := runtimeFirstNonEmpty(input.RuntimeDir, f.runtimeDir)
 	targetDir := filepath.Join(runtimeDir, string(input.State.ID)+"-"+shortDigest(input.Artifact.Digest))
@@ -48,8 +47,11 @@ func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost
 	if compiled.WorkspaceID != string(input.State.WorkspaceID) {
 		return nil, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, input.State.WorkspaceID)
 	}
+	if err := bindManagedDataRoots(compiled.Definition, input.ManagedData); err != nil {
+		return nil, err
+	}
 	dataPath := runtimeFirstNonEmpty(f.duckLakeDataPath, filepath.Join(duckDir, "data"))
-	service, err := dashboardruntime.NewFromDefinition(dataDir, duckDir, dashboardDataRuntimeFactory{
+	service, err := dashboardruntime.NewFromDefinition(duckDir, dashboardDataRuntimeFactory{
 		snapshotID:          input.State.DuckLakeSnapshotID,
 		catalogPath:         f.catalogPath,
 		duckLakeDataPath:    dataPath,
@@ -58,6 +60,7 @@ func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost
 		environment:         string(servingstate.NormalizeEnvironment(input.State.Environment)),
 		semanticModelDigest: input.State.Digest,
 		artifactDigest:      input.Artifact.Digest,
+		sourceDataDigest:    input.ManagedData.RevisionID,
 	}, compiled.Definition)
 	if err != nil {
 		return nil, err
@@ -68,7 +71,7 @@ func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost
 			if err := service.Close(); err != nil {
 				return nil, err
 			}
-			service, err = dashboardruntime.NewFromDefinition(dataDir, duckDir, dashboardDataRuntimeFactory{
+			service, err = dashboardruntime.NewFromDefinition(duckDir, dashboardDataRuntimeFactory{
 				snapshotID:          snapshotID,
 				catalogPath:         f.catalogPath,
 				duckLakeDataPath:    dataPath,
@@ -77,6 +80,7 @@ func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost
 				environment:         string(servingstate.NormalizeEnvironment(input.State.Environment)),
 				semanticModelDigest: input.State.Digest,
 				artifactDigest:      input.Artifact.Digest,
+				sourceDataDigest:    input.ManagedData.RevisionID,
 			}, compiled.Definition)
 			if err != nil {
 				return nil, err
@@ -84,6 +88,33 @@ func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost
 		}
 	}
 	return service, nil
+}
+
+func bindManagedDataRoots(definition *workspace.Definition, resolution runtimehost.ManagedDataResolution) error {
+	if definition == nil {
+		return fmt.Errorf("workspace definition is required")
+	}
+	for modelID, model := range definition.Models {
+		if model == nil {
+			continue
+		}
+		for connectionName, connection := range model.Connections {
+			if connection.Kind != "managed" {
+				continue
+			}
+			root := filepath.Clean(resolution.Roots[connectionName])
+			if resolution.Roots[connectionName] == "" {
+				return fmt.Errorf("semantic model %q managed connection %q has no bound revision", modelID, connectionName)
+			}
+			if !filepath.IsAbs(root) {
+				return fmt.Errorf("semantic model %q managed connection %q revision root must be absolute", modelID, connectionName)
+			}
+			connection.Root = root
+			connection.Scope = ""
+			model.Connections[connectionName] = connection
+		}
+	}
+	return nil
 }
 
 type dashboardDataRuntimeFactory struct {
@@ -104,7 +135,6 @@ func (f dashboardDataRuntimeFactory) OpenDashboardWorkspaceDataRuntimes(ctx cont
 	}
 	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
 		Models:           config.Definition.Models,
-		DataDir:          config.DataDir,
 		DBDir:            config.DBDir,
 		CatalogPath:      f.catalogPath,
 		DuckLakeDataPath: f.duckLakeDataPath,
@@ -141,7 +171,6 @@ func (dashboardDataRuntimeFactory) OpenDashboardDataRuntime(ctx context.Context,
 	runtime, err := analyticsduckdb.OpenMaterializeRuntime(ctx, analyticsmaterialize.RuntimeConfig{
 		ModelID: config.ModelID,
 		Model:   config.Model,
-		DataDir: config.DataDir,
 		DBDir:   config.DBDir,
 	})
 	if err != nil {
@@ -272,15 +301,4 @@ func runtimeFirstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func runtimeDataDir(input runtimehost.RuntimeInput, fallback string) string {
-	if input.Artifact.DataRoot != "" {
-		return input.Artifact.DataRoot
-	}
-	workspaceDataDir := filepath.Join(".data", string(input.State.WorkspaceID))
-	if info, err := os.Stat(workspaceDataDir); err == nil && info.IsDir() {
-		return workspaceDataDir
-	}
-	return runtimeFirstNonEmpty(input.DataDir, fallback)
 }

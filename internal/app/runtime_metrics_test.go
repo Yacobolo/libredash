@@ -11,7 +11,7 @@ import (
 
 func TestRuntimeMetricsQueryDashboardUsesRuntimeLease(t *testing.T) {
 	provider := &leaseRecordingProvider{}
-	metrics := NewRuntimeMetrics(provider, "/data", "test")
+	metrics := NewRuntimeMetrics(provider, "test")
 
 	if _, err := metrics.QueryDashboardPage(context.Background(), "dashboard", "page", dashboard.Filters{}); err != nil {
 		t.Fatalf("query dashboard: %v", err)

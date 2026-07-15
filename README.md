@@ -15,16 +15,14 @@ Generated files such as `static/app.css`, route entrypoints, and other bundled c
 ```sh
 bun install
 bun run build
-go run ./internal/tools/bootstrapolist
+go run ./internal/tools/bootstrapolist --out .data/olist
 go run ./cmd/libredash
 ```
 
-By default, the bootstrap tool copies CSVs into `.data/olist`. To use a different path:
+Local files are staged through managed data sync before deployment:
 
 ```sh
-export LIBREDASH_DATA_DIR=/path/to/olist-csvs
-bun run build
-go run ./cmd/libredash
+go run ./cmd/libredash data sync --project dashboards/libredash.yaml --connection olist --from .data/olist
 ```
 
 ## Architecture
@@ -103,14 +101,14 @@ semantic_models:
 
 `base_table` is the required semantic-model root; every table in the model must be reachable from it through one safe active relationship path.
 
-Local CSV:
+Managed CSV:
 
 ```yaml
 default_connection: olist
 
 connections:
   olist:
-    kind: local
+    kind: managed
     defaults:
       options:
         header: true
@@ -235,20 +233,23 @@ For file and table paths, LibreDash infers `format` from clear extensions such a
 
 ## Deploy
 
-Start the development server, then explicitly deploy the project to it:
+Start the development server; the default Olist project is synced and deployed
+before the command reports readiness:
 
 ```sh
 task dev
-task deploy:dev
 ```
 
-After YAML changes, run `task deploy:dev` again and refresh or navigate the UI. The server reads workspace assets, details, lineage, and versions from the active deployment records.
+After data or YAML changes, run `task deploy:dev` and refresh or navigate the
+UI. The server reads workspace assets, details, lineage, and versions from the
+active deployment records.
 
 For the supported small production topology, use the [Hetzner single-node
 guide](deploy/hetzner/README.md). It provisions pinned release images, HTTPS,
 generated secrets, restricted SSH, backups, and healthchecked upgrades with
 rollback using Terraform. The remaining examples in this section describe
-custom deployments.
+custom deployments. See [managed data ingestion](docs/data-ingestion.md) for
+planning, staging, and inspecting project-global file revisions.
 
 Production mode serves the active deployed BI-as-code bundle from `.libredash` by default:
 
@@ -261,10 +262,16 @@ export LIBREDASH_METRICS_BEARER_TOKEN=<32+ byte secret>
 export LIBREDASH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
 libredash serve --production
 libredash admin bootstrap
-libredash publish --project dashboards/libredash.yaml --target http://localhost:8080 --token <token> --environment prod --auto-approve
+SYNC_OUTPUT="$(libredash data sync --project dashboards/libredash.yaml --connection olist --from /srv/olist --target http://localhost:8080 --token <token>)"
+REVISION="$(printf '%s\n' "$SYNC_OUTPUT" | awk '$1 == "staged" { print $2 }')"
+libredash deploy --project dashboards/libredash.yaml --revision "olist=$REVISION" --target http://localhost:8080 --token <token> --environment prod --auto-approve
 ```
 
-Use `--workspace <id>` for a targeted deployment.
+`deploy` validates the complete project, pins each supplied managed data
+revision into its workspace artifacts, and activates all project workspaces in
+one atomic rollout. Supply exactly one repeatable `--revision
+"<connection>=sha256:<64-lowercase-hex>"` pin for every managed project
+connection. Projects without managed connections omit the flag.
 Create consistent instance backups with `libredash admin backup --out /backup/libredash-$(date +%Y%m%d%H%M%S).tar.gz`.
 The archive includes the control-plane SQLite database, DuckLake catalog, deployed artifacts, DuckLake files, and other `LIBREDASH_HOME` state. Restore while the server is stopped; the command validates the archive and requires a backup path for the current instance before replacement:
 
@@ -312,7 +319,6 @@ production configuration is:
 ```sh
 LIBREDASH_PRODUCTION=1
 LIBREDASH_HOME=/var/lib/libredash
-LIBREDASH_DATA_DIR=/path/to/data
 LIBREDASH_LOCAL_AUTH=1
 LIBREDASH_BOOTSTRAP_ADMIN_EMAIL=admin@example.com
 LIBREDASH_CSRF_KEY=<32+ byte secret>

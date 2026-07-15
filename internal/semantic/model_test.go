@@ -24,8 +24,8 @@ func TestLoadOlistModel(t *testing.T) {
 	if got := model.DefaultConnection; got != "olist" {
 		t.Fatalf("default connection = %q, want olist", got)
 	}
-	if got := model.Connections["olist"].Kind; got != "local" {
-		t.Fatalf("olist connection kind = %q, want local", got)
+	if got := model.Connections["olist"].Kind; got != "managed" {
+		t.Fatalf("olist connection kind = %q, want managed", got)
 	}
 	if got := model.Sources["olist_orders"].Format; got != "csv" {
 		t.Fatalf("orders source format = %q, want csv", got)
@@ -50,7 +50,7 @@ func TestLoadRejectsLegacyFieldTransformKeys(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`
 name: olist
 connections:
-  local: {kind: local}
+  local: {kind: managed}
 sources:
   orders:
     connection: local
@@ -129,7 +129,7 @@ func TestModelValidateAcceptsNativeSourceFamilies(t *testing.T) {
 	model.DefaultConnection = "local_files"
 	model.Connections = map[string]Connection{
 		"local_files": {
-			Kind: "local",
+			Kind: "managed",
 			Defaults: ConnectionDefaults{
 				Options: map[string]any{"header": true},
 			},
@@ -248,7 +248,7 @@ func TestModelValidateConnectionCredentialsEnvReference(t *testing.T) {
 func TestModelValidateConnectionCredentialsNone(t *testing.T) {
 	model := minimalSourceModel()
 	model.Connections["default"] = Connection{
-		Kind:        "local",
+		Kind:        "managed",
 		Credentials: ConnectionCredentials{Provider: "none"},
 	}
 	if err := model.Validate(); err != nil {
@@ -262,7 +262,7 @@ func TestModelValidateConnectionCredentialsNone(t *testing.T) {
 func TestModelValidateRejectsConnectionCredentialsNoneSecret(t *testing.T) {
 	model := minimalSourceModel()
 	model.Connections["default"] = Connection{
-		Kind:        "local",
+		Kind:        "managed",
 		Credentials: ConnectionCredentials{Provider: "none", Secret: "LIBREDASH_TEST_SECRET"},
 	}
 	assertModelValidateError(t, model, `none credentials cannot set secret`)
@@ -316,7 +316,7 @@ func TestModelValidateInfersFileFormats(t *testing.T) {
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			model := minimalSourceModel()
-			model.Connections["local_files"] = Connection{Kind: "local"}
+			model.Connections["local_files"] = Connection{Kind: "managed"}
 			model.Sources = map[string]Source{"orders": {Path: tc.path}}
 			if err := model.Validate(); err != nil {
 				t.Fatal(err)
@@ -369,7 +369,7 @@ func TestModelValidateRejectsInvalidSources(t *testing.T) {
 		},
 		"database_wrong_connection_kind": {
 			source:   Source{Connection: "local_files", Object: "public.accounts"},
-			contains: "object cannot use local connection",
+			contains: "object cannot use managed connection",
 		},
 		"unknown_connection": {
 			source:   Source{Format: "parquet", Path: "s3://bucket/*.parquet", Connection: "missing"},
@@ -387,7 +387,7 @@ func TestModelValidateRejectsInvalidSources(t *testing.T) {
 				model.DefaultConnection = ""
 			}
 			model.Connections = map[string]Connection{
-				"local_files": {Kind: "local"},
+				"local_files": {Kind: "managed"},
 				"crm":         {Kind: "mysql", Auth: ConnectionAuth{"connection_string": "mysql://crm"}},
 				"lakehouse":   {Kind: "ducklake", Path: "metadata.ducklake"},
 				"remote_quack": {
@@ -424,7 +424,7 @@ func TestModelValidateRejectsInvalidConnections(t *testing.T) {
 			contains:   "missing required credentials",
 		},
 		"bad_default_option": {
-			connection: Connection{Kind: "local", Defaults: ConnectionDefaults{Options: map[string]any{"bad-key": true}}},
+			connection: Connection{Kind: "managed", Defaults: ConnectionDefaults{Options: map[string]any{"bad-key": true}}},
 			contains:   "default option",
 		},
 		"ducklake_missing_path": {
@@ -497,7 +497,7 @@ sources:
 		"connection_default_format": `
 connections:
   other_files:
-    kind: local
+    kind: managed
     defaults:
       format: csv
 `,
@@ -554,7 +554,7 @@ title: Test
 default_connection: local_files
 connections:
   local_files:
-    kind: local
+    kind: managed
 sources:
   products:
     path: products.csv
@@ -597,7 +597,7 @@ func minimalSourceModel() *Model {
 		DefaultConnection: "local_files",
 		Connections: map[string]Connection{
 			"local_files": {
-				Kind: "local",
+				Kind: "managed",
 			},
 		},
 		Sources: map[string]Source{

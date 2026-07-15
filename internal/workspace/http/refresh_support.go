@@ -29,7 +29,6 @@ type Support struct {
 	Environment    func(*nethttp.Request) servingstate.Environment
 	PrincipalID    func(*nethttp.Request) string
 	DispatchQueued func()
-	DataDir        func(workspaceID string, artifact servingstate.Artifact) string
 	DirectRunner   materialize.RefreshRunner
 	ModelLookup    materialize.ModelLookup
 	Broker         interface {
@@ -117,7 +116,6 @@ func (s Support) queueAssetRefreshWithPatches(r *nethttp.Request, workspaceID st
 		Environment: environment,
 		PrincipalID: s.principalID(r),
 		Asset:       asset,
-		DataRoot:    s.dataDir(workspaceID, artifact),
 	}); err != nil {
 		return err
 	}
@@ -286,13 +284,6 @@ func (s Support) principalID(r *nethttp.Request) string {
 		return ""
 	}
 	return s.PrincipalID(r)
-}
-
-func (s Support) dataDir(workspaceID string, artifact servingstate.Artifact) string {
-	if s.DataDir == nil {
-		return ""
-	}
-	return s.DataDir(workspaceID, artifact)
 }
 
 func (s Support) publish(streamID string, patch pagestream.SignalPatch) {

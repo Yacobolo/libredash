@@ -11,7 +11,7 @@ LIBREDASH_IMAGE=${libredash_image}
 # shellcheck disable=SC2154
 CADDY_IMAGE=${caddy_image}
 
-install -d -m 0700 /etc/libredash /var/lib/libredash /var/backups/libredash
+install -d -m 0700 /etc/libredash /var/lib/libredash /var/lib/libredash/managed-data /var/backups/libredash
 install -d -m 0700 /opt/libredash
 
 umask 077
@@ -28,6 +28,8 @@ if [[ ! -s /etc/libredash/libredash.env ]]; then
 LIBREDASH_PRODUCTION=1
 LIBREDASH_ADDR=:8080
 LIBREDASH_HOME=/var/lib/libredash
+LIBREDASH_MANAGED_DATA_BACKEND=local
+LIBREDASH_MANAGED_DATA_DIR=/var/lib/libredash/managed-data
 LIBREDASH_LOCAL_AUTH=1
 LIBREDASH_COOKIE_SECURE=true
 LIBREDASH_TRUST_PROXY_HEADERS=true
@@ -73,7 +75,7 @@ if [[ ! -e /etc/libredash/admin-initialized ]]; then
   publish_payload="$(jq -nc --arg expires "$publish_expires_at" '{
     name:"initial-publisher",
     expiresAt:$expires,
-    privileges:["USE_WORKSPACE","VIEW_ITEM","QUERY_DATA","REFRESH_DATA","DEPLOY","ACTIVATE_PUBLISH"]
+    privileges:["USE_WORKSPACE","VIEW_ITEM","QUERY_DATA","REFRESH_DATA","DEPLOY","ACTIVATE_DEPLOYMENT","VIEW_DATA","INGEST_DATA"]
   }')"
   publish_response="$(curl -fsS \
     -X POST \

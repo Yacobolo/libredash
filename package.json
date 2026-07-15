@@ -31,6 +31,8 @@
     "test:code-editor": "playwright install chromium && bun scripts/build_test_assets.ts code-editor && bun test web/components/shared/code-editor.dom.test.ts",
     "test:markdown-view": "playwright install chromium && bun scripts/build_test_assets.ts markdown-view && bun test web/components/shared/markdown-view.dom.test.ts",
     "test:login-page": "playwright install chromium && bun scripts/build_test_assets.ts login-page && bun test web/components/login/login-page.dom.test.ts",
+    "test:topology-background": "playwright install chromium && bun scripts/build_test_assets.ts topology-background && bun test web/components/login/topology-background.dom.test.ts",
+    "test:production-assets": "bun test scripts/build_assets.test.ts",
     "test:record-table": "playwright install chromium && bun scripts/build_test_assets.ts record-table && bun test web/components/shared/record-table.dom.test.ts",
     "test:asset-lineage": "playwright install chromium && bun scripts/build_test_assets.ts asset-lineage && bun test web/components/shared/asset-lineage-graph.dom.test.ts",
     "test:semantic-model-graph": "playwright install chromium && bun scripts/build_test_assets.ts semantic-model-graph && bun test web/components/shared/semantic-model-graph.dom.test.ts",
@@ -61,7 +63,7 @@
     "lucide": "^1.21.0",
     "markdown-it": "^14.2.0",
     "monaco-editor-core": "^0.55.1",
-    "p5": "^1.11.13",
+    "p5": "^2.3.0",
     "shiki": "^4.3.0",
     "sql-formatter": "^15.8.2"
   },

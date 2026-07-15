@@ -165,17 +165,21 @@ func TestServiceQueueAssetRefreshCreatesDependencyRuns(t *testing.T) {
 	}
 }
 
-func TestServiceCreateRefreshCandidatePersistsResolvedDataRoot(t *testing.T) {
+func TestServiceCreateRefreshCandidateCopiesActiveArtifactMetadata(t *testing.T) {
 	ctx := context.Background()
 	repo := newFakeRepo()
 	service := Service{ServingStates: repo}
 	active := ServingState{
 		State: servingstate.State{
-			ID:           "dep_active",
-			WorkspaceID:  "movielens",
-			Environment:  servingstate.DefaultEnvironment,
-			Digest:       "artifact-digest",
-			ManifestJSON: "{}",
+			ID:                "dep_active",
+			WorkspaceID:       "movielens",
+			ProjectID:         "movie-project",
+			ProjectDigest:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			ProjectWorkspaces: []string{"movielens", "ratings"},
+			AccessPolicyJSON:  `{"groups":{"readers":{"name":"Readers"}}}`,
+			Environment:       servingstate.DefaultEnvironment,
+			Digest:            "artifact-digest",
+			ManifestJSON:      "{}",
 		},
 		Artifact: servingstate.Artifact{
 			ServingStateID: "dep_active",
@@ -184,7 +188,6 @@ func TestServiceCreateRefreshCandidatePersistsResolvedDataRoot(t *testing.T) {
 			Digest:         "artifact-digest",
 			Format:         "tar.gz",
 			Path:           "/tmp/artifact.tgz",
-			DataRoot:       ".data/movielens",
 		},
 	}
 
@@ -199,14 +202,17 @@ func TestServiceCreateRefreshCandidatePersistsResolvedDataRoot(t *testing.T) {
 		t.Fatalf("create refresh candidate: %v", err)
 	}
 
-	if repo.savedArtifact.DataRoot != ".data/movielens" {
-		t.Fatalf("saved artifact data root = %q, want .data/movielens", repo.savedArtifact.DataRoot)
+	if repo.savedArtifact.Path != active.Artifact.Path || candidate.Artifact.Path != active.Artifact.Path {
+		t.Fatalf("candidate artifact path = %q, want %q", candidate.Artifact.Path, active.Artifact.Path)
 	}
-	if repo.savedValidation.DataRoot != ".data/movielens" {
-		t.Fatalf("saved validation data root = %q, want .data/movielens", repo.savedValidation.DataRoot)
+	if repo.savedValidation.ProjectID != active.State.ProjectID {
+		t.Fatalf("candidate project = %q, want %q", repo.savedValidation.ProjectID, active.State.ProjectID)
 	}
-	if candidate.Artifact.DataRoot != ".data/movielens" {
-		t.Fatalf("candidate artifact data root = %q, want .data/movielens", candidate.Artifact.DataRoot)
+	if repo.savedValidation.ProjectDigest != active.State.ProjectDigest || !reflect.DeepEqual(repo.savedValidation.ProjectWorkspaces, active.State.ProjectWorkspaces) {
+		t.Fatalf("candidate project provenance = (%q, %#v), want (%q, %#v)", repo.savedValidation.ProjectDigest, repo.savedValidation.ProjectWorkspaces, active.State.ProjectDigest, active.State.ProjectWorkspaces)
+	}
+	if group := repo.savedValidation.AccessPolicy.Groups["readers"]; group.Name != "Readers" {
+		t.Fatalf("candidate access policy = %#v, want active policy", repo.savedValidation.AccessPolicy)
 	}
 }
 
@@ -240,12 +246,16 @@ type fakeRepo struct {
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		activeDeployment: servingstate.State{
-			ID:           "dep_active",
-			WorkspaceID:  "sales",
-			Environment:  servingstate.DefaultEnvironment,
-			Status:       servingstate.StatusActive,
-			Digest:       "digest",
-			ManifestJSON: "{}",
+			ID:                "dep_active",
+			WorkspaceID:       "sales",
+			ProjectID:         "project",
+			ProjectDigest:     "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			ProjectWorkspaces: []string{"sales"},
+			AccessPolicyJSON:  "{}",
+			Environment:       servingstate.DefaultEnvironment,
+			Status:            servingstate.StatusActive,
+			Digest:            "digest",
+			ManifestJSON:      "{}",
 		},
 		activeArtifact: servingstate.Artifact{
 			ServingStateID: "dep_active",
@@ -254,7 +264,6 @@ func newFakeRepo() *fakeRepo {
 			Digest:         "digest",
 			Format:         "tar.gz",
 			Path:           "/tmp/artifact.tar.gz",
-			DataRoot:       ".data/sales",
 			ManifestJSON:   "{}",
 		},
 		candidateState: servingstate.State{
@@ -272,7 +281,6 @@ func newFakeRepo() *fakeRepo {
 			Digest:         "digest",
 			Format:         "tar.gz",
 			Path:           "/tmp/artifact.tar.gz",
-			DataRoot:       ".data/sales",
 			ManifestJSON:   "{}",
 		},
 		runStatuses: map[string]string{

@@ -36,6 +36,7 @@ func searchCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 		},
 	}
 	addTargetTokenFlags(cmd, opts)
+	cmd.Flags().StringVar(&opts.workspaceID, "workspace", opts.workspaceID, "workspace id")
 	addPaginationFlags(cmd, opts)
 	cmd.Flags().StringArrayVar(&opts.searchTypes, "type", nil, "result type filter; repeatable or comma-separated")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "print JSON response")

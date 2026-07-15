@@ -59,6 +59,15 @@ func TestHealthcheckURLDefaultsFromListenEnvironment(t *testing.T) {
 	}
 }
 
+func TestHealthcheckURLIgnoresRemovedListenAliases(t *testing.T) {
+	t.Setenv("ADDR", "127.0.0.1:19090")
+	t.Setenv("PORT", "19091")
+
+	if got := healthcheckURL(&rootOptions{}); got != defaultHealthcheckURL {
+		t.Fatalf("healthcheck URL with only legacy aliases = %q, want %q", got, defaultHealthcheckURL)
+	}
+}
+
 func TestHealthcheckURLForListenAddrUsesLoopbackForWildcardHosts(t *testing.T) {
 	for _, addr := range []string{":18080", "0.0.0.0:18080", "[::]:18080", "18080"} {
 		if got, want := healthcheckURLForListenAddr(addr), "http://127.0.0.1:18080/readyz"; got != want {

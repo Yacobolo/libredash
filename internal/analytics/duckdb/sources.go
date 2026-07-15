@@ -17,7 +17,7 @@ import (
 
 var identifierPattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-func PrepareSourceRuntime(ctx context.Context, db *sql.DB, model *semanticmodel.Model, dataDir string, attachedConnections map[string]struct{}) error {
+func PrepareSourceRuntime(ctx context.Context, db *sql.DB, model *semanticmodel.Model, attachedConnections map[string]struct{}) error {
 	for _, extension := range RequiredExtensions(model) {
 		if err := validateIdentifier(extension); err != nil {
 			return fmt.Errorf("invalid extension %q: %w", extension, err)
@@ -69,7 +69,7 @@ func PrepareSourceRuntime(ctx context.Context, db *sql.DB, model *semanticmodel.
 		if !connectionRequiresObjectAttach(connectionSpec) {
 			continue
 		}
-		stmt, err := compileObjectAttach(model, source.Connection, connection, dataDir)
+		stmt, err := compileObjectAttach(model, source.Connection, connection)
 		if err != nil {
 			return err
 		}
@@ -110,12 +110,12 @@ type sourceReadColumn struct {
 	OutputField string
 }
 
-func SourceRelation(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error) {
-	return SourceReadRelation(model, source, dataDir, nil, nil, false)
+func SourceRelation(model *semanticmodel.Model, source semanticmodel.Source) (string, error) {
+	return SourceReadRelation(model, source, nil, nil, false)
 }
 
-func SourceReadRelation(model *semanticmodel.Model, source semanticmodel.Source, dataDir string, fields []string, columns []sourceReadColumn, rowPresenceOnly bool) (string, error) {
-	plan, err := ResolveSourcePlan(model, source, dataDir)
+func SourceReadRelation(model *semanticmodel.Model, source semanticmodel.Source, fields []string, columns []sourceReadColumn, rowPresenceOnly bool) (string, error) {
+	plan, err := ResolveSourcePlan(model, source)
 	if err != nil {
 		return "", err
 	}
@@ -125,7 +125,7 @@ func SourceReadRelation(model *semanticmodel.Model, source semanticmodel.Source,
 	return compileSourceRelation(plan)
 }
 
-func ResolveSourcePlan(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (sourcePlan, error) {
+func ResolveSourcePlan(model *semanticmodel.Model, source semanticmodel.Source) (sourcePlan, error) {
 	plan := sourcePlan{
 		kind:       source.Kind(),
 		format:     source.Format,
@@ -142,7 +142,7 @@ func ResolveSourcePlan(model *semanticmodel.Model, source semanticmodel.Source, 
 	if source.Path == "" {
 		return plan, nil
 	}
-	path, err := ResolveSourcePath(model, source, dataDir)
+	path, err := ResolveSourcePath(model, source)
 	if err != nil {
 		return plan, err
 	}
@@ -150,8 +150,8 @@ func ResolveSourcePlan(model *semanticmodel.Model, source semanticmodel.Source, 
 	return plan, nil
 }
 
-func ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error) {
-	return analyticsmaterialize.ResolveSourcePath(model, source, dataDir)
+func ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source) (string, error) {
+	return analyticsmaterialize.ResolveSourcePath(model, source)
 }
 
 func compileSourceRelation(plan sourcePlan) (string, error) {
@@ -164,7 +164,7 @@ func compileSourceRelation(plan sourcePlan) (string, error) {
 
 type sourceAdapter interface {
 	CompileRead(sourcePlan) (string, error)
-	Discover(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source, dataDir string) ([]semanticmodel.ColumnSchema, error)
+	Discover(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source) ([]semanticmodel.ColumnSchema, error)
 }
 
 type pathSourceAdapter struct{}
@@ -585,13 +585,13 @@ func duckDBAuthParameter(key string) string {
 	}
 }
 
-func compileObjectAttach(model *semanticmodel.Model, connectionName string, connection semanticmodel.Connection, dataDir string) (string, error) {
+func compileObjectAttach(model *semanticmodel.Model, connectionName string, connection semanticmodel.Connection) (string, error) {
 	connectionSpec, ok := connectors.LookupConnection(connection.Kind)
 	if !ok {
 		return "", fmt.Errorf("unsupported connection kind %q", connection.Kind)
 	}
 	if connectionSpec.AttachKind == connectors.AttachDuckLake {
-		return compileDuckLakeAttach(model, connectionName, connection, dataDir)
+		return compileDuckLakeAttach(model, connectionName, connection)
 	}
 	if connectionSpec.AttachKind == "" {
 		return "", nil
@@ -617,12 +617,12 @@ func compileDatabaseAttach(connectionName string, connection semanticmodel.Conne
 	return fmt.Sprintf("ATTACH '%s' AS %s (%s)", sqlString(connectionString), alias, strings.Join(parts, ", ")), nil
 }
 
-func compileDuckLakeAttach(model *semanticmodel.Model, connectionName string, connection semanticmodel.Connection, dataDir string) (string, error) {
+func compileDuckLakeAttach(model *semanticmodel.Model, connectionName string, connection semanticmodel.Connection) (string, error) {
 	alias, err := databaseAlias(connectionName)
 	if err != nil {
 		return "", err
 	}
-	path, err := resolveConnectionPath(model, connection, dataDir)
+	path, err := resolveConnectionPath(model, connection)
 	if err != nil {
 		return "", err
 	}
@@ -632,7 +632,7 @@ func compileDuckLakeAttach(model *semanticmodel.Model, connectionName string, co
 	}
 	parts := []string{}
 	if dataPath, ok := connection.Options["data_path"]; ok {
-		resolved, err := resolvePathInConnectionScope(model, connection, fmt.Sprint(dataPath), dataDir)
+		resolved, err := resolvePathInConnectionScope(model, connection, fmt.Sprint(dataPath))
 		if err != nil {
 			return "", err
 		}
@@ -644,11 +644,11 @@ func compileDuckLakeAttach(model *semanticmodel.Model, connectionName string, co
 	return fmt.Sprintf("ATTACH '%s' AS %s (%s)", sqlString(attachPath), alias, strings.Join(parts, ", ")), nil
 }
 
-func resolveConnectionPath(model *semanticmodel.Model, connection semanticmodel.Connection, dataDir string) (string, error) {
-	return resolvePathInConnectionScope(model, connection, connection.Path, dataDir)
+func resolveConnectionPath(model *semanticmodel.Model, connection semanticmodel.Connection) (string, error) {
+	return resolvePathInConnectionScope(model, connection, connection.Path)
 }
 
-func resolvePathInConnectionScope(_ *semanticmodel.Model, connection semanticmodel.Connection, path string, dataDir string) (string, error) {
+func resolvePathInConnectionScope(_ *semanticmodel.Model, connection semanticmodel.Connection, path string) (string, error) {
 	if connection.Scope != "" {
 		if connectors.IsLocalPath(path) {
 			return connectors.JoinScope(connection.Scope, path), nil
@@ -658,10 +658,7 @@ func resolvePathInConnectionScope(_ *semanticmodel.Model, connection semanticmod
 		}
 		return path, nil
 	}
-	if filepath.IsAbs(path) || !connectors.IsLocalPath(path) {
-		return path, nil
-	}
-	return filepath.Join(dataDir, path), nil
+	return path, nil
 }
 
 func databaseAttachSecret(connectionName string, connection semanticmodel.Connection) (string, bool, error) {

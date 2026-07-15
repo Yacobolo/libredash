@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,7 +15,6 @@ import (
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
 	"github.com/Yacobolo/libredash/internal/securefs"
 	_ "github.com/duckdb/duckdb-go/v2"
-	_ "modernc.org/sqlite"
 )
 
 const catalogAlias = "lake"
@@ -32,10 +30,9 @@ type Config struct {
 }
 
 type Layout struct {
-	RootDir          string
-	CatalogPath      string
-	DataPath         string
-	LegacyDuckDBPath string
+	RootDir     string
+	CatalogPath string
+	DataPath    string
 }
 
 type Environment struct {
@@ -49,10 +46,9 @@ type Snapshot struct {
 
 func NewLayout(rootDir string) Layout {
 	return Layout{
-		RootDir:          rootDir,
-		CatalogPath:      filepath.Join(rootDir, "catalog.sqlite"),
-		DataPath:         filepath.Join(rootDir, "data"),
-		LegacyDuckDBPath: filepath.Join(rootDir, "libredash-workspace.duckdb"),
+		RootDir:     rootDir,
+		CatalogPath: filepath.Join(rootDir, "catalog.sqlite"),
+		DataPath:    filepath.Join(rootDir, "data"),
 	}
 }
 
@@ -79,9 +75,6 @@ func open(ctx context.Context, config Config, snapshot bool) (*Environment, erro
 		return nil, err
 	}
 	if err := securefs.EnsurePrivateDir(layout.DataPath); err != nil {
-		return nil, err
-	}
-	if err := MigrateSQLiteCatalogDataPath(ctx, layout.CatalogPath, layout.DataPath); err != nil {
 		return nil, err
 	}
 	db, err := sql.Open("duckdb", ":memory:")
@@ -120,94 +113,6 @@ func (c Config) layout() (Layout, error) {
 	return layout, nil
 }
 
-func MigrateSQLiteCatalogDataPath(ctx context.Context, catalogPath, targetDataPath string) error {
-	if strings.TrimSpace(catalogPath) == "" || strings.TrimSpace(targetDataPath) == "" {
-		return nil
-	}
-	unlock := lockCatalogWrites(catalogPath)
-	defer unlock()
-	if _, err := os.Stat(catalogPath); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	db, err := sql.Open("sqlite", sqliteFileDSN(catalogPath))
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	var stored string
-	err = db.QueryRowContext(ctx, `SELECT value FROM ducklake_metadata WHERE "key" = 'data_path' AND scope IS NULL LIMIT 1`).Scan(&stored)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) || strings.Contains(strings.ToLower(err.Error()), "no such table") {
-			return nil
-		}
-		return err
-	}
-	if sameFilesystemPath(stored, targetDataPath) {
-		return secureSQLiteCatalogFiles(catalogPath)
-	}
-	if err := migrateLocalDataDir(stored, targetDataPath); err != nil {
-		return err
-	}
-	if _, err = db.ExecContext(ctx, `UPDATE ducklake_metadata SET value = ? WHERE "key" = 'data_path' AND scope IS NULL`, duckLakeMetadataPath(targetDataPath)); err != nil {
-		return err
-	}
-	return secureSQLiteCatalogFiles(catalogPath)
-}
-
-func MigrateSharedSQLiteCatalog(ctx context.Context, sharedCatalogPath, targetCatalogPath, targetDataPath string) error {
-	sharedCatalogPath = strings.TrimSpace(sharedCatalogPath)
-	targetCatalogPath = strings.TrimSpace(targetCatalogPath)
-	if sharedCatalogPath == "" || targetCatalogPath == "" || sameFilesystemPath(sharedCatalogPath, targetCatalogPath) {
-		return nil
-	}
-	if _, err := os.Stat(targetCatalogPath); err == nil {
-		return nil
-	} else if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	if _, err := os.Stat(sharedCatalogPath); err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	unlock := lockCatalogWrites(sharedCatalogPath)
-	defer unlock()
-	db, err := sql.Open("sqlite", sqliteFileDSN(sharedCatalogPath))
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-	var hasDuckLakeMetadata int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'ducklake_metadata'`).Scan(&hasDuckLakeMetadata); err != nil {
-		return fmt.Errorf("inspect shared DuckLake catalog: %w", err)
-	}
-	if hasDuckLakeMetadata == 0 {
-		return nil
-	}
-	if err := securefs.EnsurePrivateDir(filepath.Dir(targetCatalogPath)); err != nil {
-		return err
-	}
-	if _, err := db.ExecContext(ctx, `VACUUM main INTO '`+sqliteString(targetCatalogPath)+`'`); err != nil {
-		return fmt.Errorf("migrate shared DuckLake catalog: %w", err)
-	}
-	if err := secureSQLiteCatalogFiles(targetCatalogPath); err != nil {
-		return fmt.Errorf("secure migrated DuckLake catalog: %w", err)
-	}
-	return MigrateSQLiteCatalogDataPath(ctx, targetCatalogPath, targetDataPath)
-}
-
-func sqliteFileDSN(path string) string {
-	return "file:" + filepath.ToSlash(path) + "?_pragma=busy_timeout(5000)"
-}
-
-func sqliteString(value string) string {
-	return strings.ReplaceAll(value, "'", "''")
-}
-
 func secureSQLiteCatalogFiles(path string) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
@@ -219,141 +124,6 @@ func secureSQLiteCatalogFiles(path string) error {
 		}
 	}
 	return nil
-}
-
-func sameFilesystemPath(left, right string) bool {
-	leftAbs, leftErr := filepath.Abs(filepath.Clean(left))
-	rightAbs, rightErr := filepath.Abs(filepath.Clean(right))
-	if leftErr == nil && rightErr == nil {
-		return leftAbs == rightAbs
-	}
-	return filepath.Clean(left) == filepath.Clean(right)
-}
-
-func duckLakeMetadataPath(path string) string {
-	path = filepath.ToSlash(filepath.Clean(path))
-	if !strings.HasSuffix(path, "/") {
-		path += "/"
-	}
-	return path
-}
-
-func migrateLocalDataDir(source, target string) error {
-	source = filepath.Clean(source)
-	target = filepath.Clean(target)
-	if sameFilesystemPath(source, target) {
-		return nil
-	}
-	sourceInfo, sourceErr := os.Stat(source)
-	if sourceErr != nil {
-		if os.IsNotExist(sourceErr) {
-			return securefs.EnsurePrivateDir(target)
-		}
-		return sourceErr
-	}
-	if !sourceInfo.IsDir() {
-		return fmt.Errorf("DuckLake data path %s is not a directory", source)
-	}
-	targetInfo, targetErr := os.Stat(target)
-	if targetErr != nil {
-		if os.IsNotExist(targetErr) {
-			if err := securefs.EnsurePrivateDir(filepath.Dir(target)); err != nil {
-				return err
-			}
-			if err := os.Rename(source, target); err == nil {
-				if err := securefs.EnsurePrivateDir(target); err != nil {
-					return err
-				}
-				return nil
-			}
-			return copyDir(source, target)
-		}
-		return targetErr
-	}
-	if !targetInfo.IsDir() {
-		return fmt.Errorf("DuckLake target data path %s is not a directory", target)
-	}
-	empty, err := dirIsEmpty(target)
-	if err != nil {
-		return err
-	}
-	if empty {
-		if err := os.Remove(target); err != nil {
-			return err
-		}
-		if err := os.Rename(source, target); err == nil {
-			if err := securefs.EnsurePrivateDir(target); err != nil {
-				return err
-			}
-			return nil
-		}
-		if err := securefs.EnsurePrivateDir(target); err != nil {
-			return err
-		}
-	}
-	return copyDir(source, target)
-}
-
-func dirIsEmpty(path string) (bool, error) {
-	dir, err := os.Open(path)
-	if err != nil {
-		return false, err
-	}
-	defer dir.Close()
-	_, err = dir.Readdirnames(1)
-	if errors.Is(err, io.EOF) {
-		return true, nil
-	}
-	return false, err
-}
-
-func copyDir(source, target string) error {
-	return filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, err := filepath.Rel(source, path)
-		if err != nil {
-			return err
-		}
-		targetPath := filepath.Join(target, rel)
-		if entry.IsDir() {
-			return securefs.EnsurePrivateDir(targetPath)
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		if existing, err := os.Stat(targetPath); err == nil && existing.Size() == info.Size() {
-			return nil
-		} else if err != nil && !os.IsNotExist(err) {
-			return err
-		}
-		return copyFile(path, targetPath, securefs.PrivateFileMode)
-	})
-}
-
-func copyFile(source, target string, mode os.FileMode) error {
-	if err := securefs.EnsurePrivateDir(filepath.Dir(target)); err != nil {
-		return err
-	}
-	src, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-	dst, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(dst, src); err != nil {
-		_ = dst.Close()
-		return err
-	}
-	if err := dst.Close(); err != nil {
-		return err
-	}
-	return os.Chmod(target, mode)
 }
 
 func (e *Environment) initialize(ctx context.Context, snapshot bool, snapshotID int64) error {

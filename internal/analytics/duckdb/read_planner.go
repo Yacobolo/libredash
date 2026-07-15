@@ -16,7 +16,7 @@ import (
 
 const rowPresenceColumn = "__libredash_row_present"
 
-func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semanticmodel.Model, dataDir string, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
+func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
 	if err := validateIdentifier(tableName); err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
 	}
@@ -25,7 +25,7 @@ func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semantic
 		sqlText = strings.TrimSpace(table.SQL)
 	}
 	if table.Source != "" && sqlText == "" {
-		return planDirectSourceTable(ctx, runtimeDB, model, dataDir, tableName, table)
+		return planDirectSourceTable(ctx, runtimeDB, model, tableName, table)
 	}
 	if sqlText == "" {
 		return analyticsmaterialize.ModelTablePlan{}, fmt.Errorf("model table %q requires source or transform.sql", tableName)
@@ -61,7 +61,7 @@ func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semantic
 		}
 		return materializationPlan(analyticsmaterialize.PlanModeWholeQueryPushdown, tableName, "SELECT * FROM "+call), nil
 	}
-	sourceSchemas, err := discoverPlanningSourceSchemas(ctx, runtimeDB, model, dataDir, table.SourceDependencies)
+	sourceSchemas, err := discoverPlanningSourceSchemas(ctx, runtimeDB, model, table.SourceDependencies)
 	if err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
 	}
@@ -80,7 +80,7 @@ func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semantic
 	if err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
 	}
-	replacements, err := inlineSourceReplacements(model, dataDir, plans)
+	replacements, err := inlineSourceReplacements(model, plans)
 	if err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
 	}
@@ -91,20 +91,20 @@ func PlanModelTable(ctx context.Context, runtimeDB queryContext, model *semantic
 	return materializationPlan(analyticsmaterialize.PlanModeProjectedSourceInline, tableName, rewritten), nil
 }
 
-func planDirectSourceTable(ctx context.Context, runtimeDB queryContext, model *semanticmodel.Model, dataDir string, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
+func planDirectSourceTable(ctx context.Context, runtimeDB queryContext, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
 	source, ok := model.Sources[table.Source]
 	if !ok {
 		return analyticsmaterialize.ModelTablePlan{}, fmt.Errorf("unknown source %q", table.Source)
 	}
 	if len(source.Schema.Columns) == 0 {
-		if columns, err := discoverSourceSchemaWithDataDir(ctx, runtimeDB, model, source, dataDir); err != nil {
+		if columns, err := discoverSourceSchema(ctx, runtimeDB, model, source); err != nil {
 			return analyticsmaterialize.ModelTablePlan{}, fmt.Errorf("discovering source %s schema: %w", table.Source, err)
 		} else if len(columns) > 0 {
 			source.Schema = semanticmodel.TableSchema{Columns: columns}
 			model.Sources[table.Source] = source
 		}
 	}
-	relation, err := SourceReadRelation(model, source, dataDir, nil, modelTableReadColumns(table), false)
+	relation, err := SourceReadRelation(model, source, nil, modelTableReadColumns(table), false)
 	if err != nil {
 		return analyticsmaterialize.ModelTablePlan{}, err
 	}
@@ -140,7 +140,7 @@ func modelTableReadColumns(table semanticmodel.Table) []sourceReadColumn {
 	return columns
 }
 
-func discoverPlanningSourceSchemas(ctx context.Context, db queryContext, model *semanticmodel.Model, dataDir string, sources []string) (map[string][]semanticmodel.ColumnSchema, error) {
+func discoverPlanningSourceSchemas(ctx context.Context, db queryContext, model *semanticmodel.Model, sources []string) (map[string][]semanticmodel.ColumnSchema, error) {
 	result := map[string][]semanticmodel.ColumnSchema{}
 	for _, sourceName := range sources {
 		source, ok := model.Sources[sourceName]
@@ -149,7 +149,7 @@ func discoverPlanningSourceSchemas(ctx context.Context, db queryContext, model *
 		}
 		columns := source.Schema.Columns
 		if len(columns) == 0 {
-			discovered, err := discoverSourceSchemaWithDataDir(ctx, db, model, source, dataDir)
+			discovered, err := discoverSourceSchema(ctx, db, model, source)
 			if err != nil {
 				return nil, fmt.Errorf("discovering source %s schema: %w", sourceName, err)
 			}
@@ -413,14 +413,14 @@ func sourceReadPlansFromExplain(tableName string, table semanticmodel.Table, sou
 	return plans, nil
 }
 
-func inlineSourceReplacements(model *semanticmodel.Model, dataDir string, plans []sourceReadPlan) (map[string]string, error) {
+func inlineSourceReplacements(model *semanticmodel.Model, plans []sourceReadPlan) (map[string]string, error) {
 	replacements := map[string]string{}
 	for _, plan := range plans {
 		source, ok := model.Sources[plan.Source]
 		if !ok {
 			return nil, fmt.Errorf("unknown source %q", plan.Source)
 		}
-		relation, err := SourceReadRelation(model, source, dataDir, plan.Fields, plan.Columns, plan.RowPresenceOnly)
+		relation, err := SourceReadRelation(model, source, plan.Fields, plan.Columns, plan.RowPresenceOnly)
 		if err != nil {
 			return nil, fmt.Errorf("compiling source %s relation: %w", plan.Source, err)
 		}

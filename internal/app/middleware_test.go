@@ -443,7 +443,7 @@ func TestDeploymentAPIRateLimitPreservesAuth(t *testing.T) {
 	handler := server.Routes()
 
 	for i := 0; i < 2; i++ {
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes?workspace=test", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/assets", nil)
 		req.RemoteAddr = "192.0.2.20:1234"
 		req.Header.Set("Authorization", "Bearer dev")
 		req.Header.Set("Accept", "application/json")
@@ -465,7 +465,7 @@ func TestDevBypassStillUsesGrantPrivileges(t *testing.T) {
 	auth := NewAuth(repo, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes?workspace=test", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/assets", nil)
 	req.Header.Set("Authorization", "Bearer dev")
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
@@ -477,7 +477,7 @@ func TestDevBypassStillUsesGrantPrivileges(t *testing.T) {
 	if err := SeedLocalDeveloperPlatformAdmin(ctx, repo); err != nil {
 		t.Fatalf("seed local developer: %v", err)
 	}
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes?workspace=test", nil)
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/assets", nil)
 	req.Header.Set("Authorization", "Bearer dev")
 	req.Header.Set("Accept", "application/json")
 	rec = httptest.NewRecorder()

@@ -14,7 +14,6 @@ type fakeMetrics struct {
 	queryErr error
 }
 
-func (fakeMetrics) DataDir() string { return ".data" }
 func (fakeMetrics) DefaultFilters(string) dashboard.Filters {
 	return dashboard.Filters{Controls: map[string]dashboard.FilterControl{"state": {Type: "multi_select", Operator: "in"}}}
 }
@@ -41,7 +40,7 @@ func (m fakeMetrics) QueryDashboardPage(_ context.Context, _, _ string, filters 
 	return dashboard.Patch{
 		Filters:       filters.WithDefaults(),
 		FilterOptions: map[string][]dashboard.FilterOption{"state": {{Value: "SP", Label: "SP"}}},
-		Status:        dashboard.Status{DataDirectory: ".data"},
+		Status:        dashboard.Status{},
 		Visuals:       map[string]dashboard.Visual{"orders_chart": {Title: "Orders"}},
 	}, nil
 }

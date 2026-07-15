@@ -436,7 +436,6 @@ type Status struct {
 	Loading       bool   `json:"loading"`
 	Error         string `json:"error"`
 	LastUpdated   string `json:"lastUpdated"`
-	DataDirectory string `json:"dataDirectory"`
 	SetupRequired bool   `json:"setupRequired"`
 }
 
@@ -683,7 +682,7 @@ func emptyTableBlocks() map[string]TableBlock {
 	}
 }
 
-func EmptyPatch(filters Filters, dataDir string, err error) Patch {
+func EmptyPatch(filters Filters, err error) Patch {
 	message := ""
 	if err != nil {
 		message = err.Error()
@@ -694,7 +693,6 @@ func EmptyPatch(filters Filters, dataDir string, err error) Patch {
 		Status: Status{
 			Loading:       false,
 			Error:         message,
-			DataDirectory: dataDir,
 			SetupRequired: err != nil,
 		},
 		Visuals: map[string]Visual{},

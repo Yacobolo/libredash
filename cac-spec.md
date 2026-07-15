@@ -178,8 +178,7 @@ kind: Connection
 metadata:
   name: olist
 spec:
-  kind: local
-  scope: ${LIBREDASH_DATA_DIR}/olist
+  kind: managed
   credentials:
     provider: none
 ```

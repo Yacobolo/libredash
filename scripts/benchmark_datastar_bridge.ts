@@ -330,7 +330,7 @@ function benchmarkSignals(): Record<string, unknown> {
         },
       },
     ])),
-    status: { loading: false, error: '', lastUpdated: 'initial', dataDirectory: '.data/olist', setupRequired: false },
+    status: { loading: false, error: '', lastUpdated: 'initial', setupRequired: false },
   }
 }
 

@@ -126,8 +126,8 @@ var formats = map[string]Format{
 }
 
 var connections = map[string]ConnectionSpec{
-	"local": {
-		Kind:             "local",
+	"managed": {
+		Kind:             "managed",
 		AllowsPathSource: true,
 		AllowNoAuth:      true,
 	},

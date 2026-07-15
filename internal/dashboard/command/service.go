@@ -12,7 +12,6 @@ type Metrics interface {
 	NormalizeTableRequest(dashboardID string, request dashboard.TableRequest) dashboard.TableRequest
 	QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error)
 	RefreshMaterializations(ctx context.Context, modelID string) error
-	DataDir() string
 }
 
 type Service struct {
@@ -39,7 +38,6 @@ const (
 
 type Event struct {
 	Type      EventType
-	DataDir   string
 	Patch     dashboard.Patch
 	Tables    map[string]dashboard.Table
 	TableName string
@@ -83,11 +81,11 @@ func (s Service) ResetFilters(ctx context.Context, request Request) []Event {
 
 func (s Service) RefreshMaterializations(ctx context.Context, request Request) []Event {
 	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, request.Filters)
-	events := []Event{{Type: EventLoading, DataDir: s.Metrics.DataDir()}}
+	events := []Event{{Type: EventLoading}}
 	if err := s.Metrics.RefreshMaterializations(ctx, request.ModelID); err != nil {
 		events = append(events, Event{
 			Type:  EventDashboard,
-			Patch: dashboard.EmptyPatch(filters, s.Metrics.DataDir(), err),
+			Patch: dashboard.EmptyPatch(filters, err),
 		})
 		return events
 	}
@@ -95,7 +93,7 @@ func (s Service) RefreshMaterializations(ctx context.Context, request Request) [
 }
 
 func (s Service) reload(ctx context.Context, request Request, filters dashboard.Filters) []Event {
-	events := []Event{{Type: EventLoading, DataDir: s.Metrics.DataDir()}}
+	events := []Event{{Type: EventLoading}}
 	return append(events, s.reloadEvents(ctx, request, filters)...)
 }
 
@@ -103,7 +101,7 @@ func (s Service) reloadEvents(ctx context.Context, request Request, filters dash
 	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.TableCommand).Reset()
 	patch, err := s.Metrics.QueryDashboardPage(ctx, request.DashboardID, request.PageID, filters)
 	if err != nil {
-		patch = dashboard.EmptyPatch(filters, s.Metrics.DataDir(), err)
+		patch = dashboard.EmptyPatch(filters, err)
 	}
 	return []Event{
 		{Type: EventDashboard, Patch: patch},

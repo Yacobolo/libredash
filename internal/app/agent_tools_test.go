@@ -48,7 +48,6 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		"describe_dashboard",
 		"describe_dashboard_visual",
 		"describe_model",
-		"get_publish",
 		"get_refresh_run",
 		"asset_lineage",
 		"describe_asset",
@@ -56,7 +55,6 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		"list_dashboard_filter_options",
 		"list_assets",
 		"list_dashboards",
-		"list_publishes",
 		"list_refresh_runs",
 		"list_semantic_datasets",
 		"list_semantic_fields",
@@ -81,9 +79,11 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		"activate_publish",
 		"create_agent_turn",
 		"create_publish",
+		"create_deployment_candidate",
 		"create_role_binding",
 		"revoke_current_api_token",
 		"upload_publish_artifact",
+		"upload_deployment_candidate_artifact",
 	} {
 		if _, ok := names[forbidden]; ok {
 			t.Fatalf("risky operation exposed as agent tool %q", forbidden)

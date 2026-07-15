@@ -556,7 +556,6 @@ export interface DashboardPageSignal {
 }
 
 export interface DashboardStatus {
-  dataDirectory: string
   error: string
   lastUpdated: string
   loading: boolean

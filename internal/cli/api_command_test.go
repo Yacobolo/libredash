@@ -116,7 +116,7 @@ func TestAPICommandCallDefaultsBinaryBodyFileContentTypeFromGeneratedContract(t 
 		if r.Method != http.MethodPut {
 			t.Fatalf("method = %s", r.Method)
 		}
-		if r.URL.Path != "/api/v1/workspaces/test/publishes/dep_1/artifact" {
+		if r.URL.Path != "/api/v1/projects/project/workspaces/test/deployment-candidates/dep_1/artifact" {
 			t.Fatalf("path = %s", r.URL.Path)
 		}
 		if got := r.Header.Get("Content-Type"); got != "application/octet-stream" {
@@ -129,10 +129,11 @@ func TestAPICommandCallDefaultsBinaryBodyFileContentTypeFromGeneratedContract(t 
 	captureStdout(t, func() {
 		cmd := apiCommand(context.Background(), &rootOptions{target: server.URL, token: "token", workspaceID: "test"})
 		cmd.SetArgs([]string{
-			"call", "uploadPublishArtifact",
+			"call", "uploadDeploymentCandidateArtifact",
 			"--target", server.URL,
 			"--token", "token",
-			"--path", "publish=dep_1",
+			"--path", "project=project",
+			"--path", "candidate=dep_1",
 			"--body-file", bodyPath,
 		})
 		if err := cmd.Execute(); err != nil {

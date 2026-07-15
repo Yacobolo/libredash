@@ -207,7 +207,7 @@ func ChatTranscriptItem(item agent.ChatTranscriptItem) ChatTranscriptItemSignal 
 	return out
 }
 
-func DashboardInitialEnvelope(dataDir, clientID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {
+func DashboardInitialEnvelope(clientID string, catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, pages []dashboard.Page, activePage dashboard.Page, initialFilters dashboard.Filters) DashboardEnvelope {
 	activePage = activePage.WithDefaults()
 	tableRequest := DefaultTableRequest(report, activePage)
 	initialFilters = report.NormalizeFiltersForPage(activePage.ID, initialFilters).WithDefaults()
@@ -254,7 +254,6 @@ func DashboardInitialEnvelope(dataDir, clientID string, catalog dashboard.Catalo
 			Loading:       false,
 			Error:         "",
 			LastUpdated:   "",
-			DataDirectory: dataDir,
 			SetupRequired: false,
 		}),
 	}

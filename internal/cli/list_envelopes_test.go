@@ -14,51 +14,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func TestPubsListDecodesEnvelopePreservingTableOutput(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/workspaces/test/publishes" {
-			t.Fatalf("path = %s", r.URL.Path)
-		}
-		if got := r.Header.Get("Authorization"); got != "Bearer token" {
-			t.Fatalf("Authorization = %q", got)
-		}
-		writeCLIJSON(t, w, map[string]any{
-			"items": []map[string]any{{
-				"id":          "dep_1",
-				"workspaceId": "test",
-				"environment": "dev",
-				"status":      "active",
-				"digest":      "sha256:1234567890abcdef",
-				"createdAt":   "2026-01-02T15:04:05Z",
-				"activatedAt": "2026-01-02T15:05:05Z",
-			}},
-			"page": map[string]any{"nextCursor": ""},
-		})
-	}))
-	defer server.Close()
-
-	output := captureStdout(t, func() {
-		err := runPublishesList(context.Background(), &rootOptions{target: server.URL, token: "token", workspaceID: "test"})
-		if err != nil {
-			t.Fatalf("run list: %v", err)
-		}
-	})
-
-	lines := strings.Split(strings.TrimSpace(output), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("output lines = %d, want 2:\n%s", len(lines), output)
-	}
-	if got := strings.Fields(lines[0]); strings.Join(got, "|") != "ID|ENVIRONMENT|STATUS|DIGEST|CREATED|ACTIVATED" {
-		t.Fatalf("header fields = %#v output=\n%s", got, output)
-	}
-	if got := strings.Fields(lines[1]); strings.Join(got, "|") != "dep_1|dev|active|sha256:12345|2026-01-02T15:04:05Z|2026-01-02T15:05:05Z" {
-		t.Fatalf("row fields = %#v output=\n%s", got, output)
-	}
-	if strings.Contains(output, "items") || strings.Contains(output, "nextCursor") {
-		t.Fatalf("output leaked envelope:\n%s", output)
-	}
-}
-
 func TestAgentConversationsDecodesEnvelopePreservingJSONOutput(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/v1/workspaces/test/agent/conversations" {
@@ -122,12 +77,6 @@ func TestFriendlyListCommandsPassPaginationQuery(t *testing.T) {
 			command: semanticModelsCommand,
 			args:    []string{"list"},
 			path:    "/api/v1/workspaces/test/semantic-models",
-		},
-		{
-			name:    "deployments",
-			command: publishesCommand,
-			args:    []string{"list"},
-			path:    "/api/v1/workspaces/test/publishes",
 		},
 		{
 			name:    "agent conversations",

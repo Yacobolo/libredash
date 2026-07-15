@@ -27,13 +27,13 @@ func TestAPITokenWorkspaceAndPrivilegeAllowlistAreEnforced(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	publishesReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/publishes", nil)
+	publishesReq := httptest.NewRequest(http.MethodPost, "/api/v1/projects/project/workspaces/test/deployment-candidates", strings.NewReader(`{"environment":"dev"}`))
 	publishesReq.Header.Set("Authorization", "Bearer "+token)
 	publishesReq.Header.Set("Accept", "application/json")
 	publishesRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(publishesRec, publishesReq)
 	if publishesRec.Code != http.StatusForbidden {
-		t.Fatalf("publish list status = %d, want %d body=%s", publishesRec.Code, http.StatusForbidden, publishesRec.Body.String())
+		t.Fatalf("deployment candidate status = %d, want %d body=%s", publishesRec.Code, http.StatusForbidden, publishesRec.Body.String())
 	}
 
 	foreignWorkspaceReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/other/assets", nil)

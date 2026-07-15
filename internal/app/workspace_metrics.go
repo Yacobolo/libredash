@@ -64,14 +64,14 @@ func (m multiWorkspaceMetrics) QueryDashboard(ctx context.Context, dashboardID s
 	if metrics := m.defaultMetrics(); metrics != nil {
 		return metrics.QueryDashboard(ctx, dashboardID, filters)
 	}
-	return dashboard.EmptyPatch(filters.WithDefaults(), "", fmt.Errorf("workspace metrics are not configured")), nil
+	return dashboard.EmptyPatch(filters.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
 }
 
 func (m multiWorkspaceMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	if metrics := m.defaultMetrics(); metrics != nil {
 		return metrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 	}
-	return dashboard.EmptyPatch(filters.WithDefaults(), "", fmt.Errorf("workspace metrics are not configured")), nil
+	return dashboard.EmptyPatch(filters.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
 }
 
 func (m multiWorkspaceMetrics) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
@@ -118,13 +118,6 @@ func (m multiWorkspaceMetrics) RefreshMaterializations(ctx context.Context, mode
 		return metrics.RefreshMaterializations(ctx, modelID)
 	}
 	return fmt.Errorf("workspace metrics are not configured")
-}
-
-func (m multiWorkspaceMetrics) DataDir() string {
-	if metrics := m.defaultMetrics(); metrics != nil {
-		return metrics.DataDir()
-	}
-	return ""
 }
 
 func (m multiWorkspaceMetrics) Pages(dashboardID string) []dashboard.Page {
@@ -199,14 +192,14 @@ func (m *dynamicRuntimeMetrics) QueryDashboard(ctx context.Context, dashboardID 
 	if metrics := m.defaultMetrics(); metrics != nil {
 		return metrics.QueryDashboard(ctx, dashboardID, filters)
 	}
-	return dashboard.EmptyPatch(filters.WithDefaults(), "", fmt.Errorf("workspace metrics are not configured")), nil
+	return dashboard.EmptyPatch(filters.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
 }
 
 func (m *dynamicRuntimeMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	if metrics := m.defaultMetrics(); metrics != nil {
 		return metrics.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 	}
-	return dashboard.EmptyPatch(filters.WithDefaults(), "", fmt.Errorf("workspace metrics are not configured")), nil
+	return dashboard.EmptyPatch(filters.WithDefaults(), fmt.Errorf("workspace metrics are not configured")), nil
 }
 
 func (m *dynamicRuntimeMetrics) QueryTable(ctx context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
@@ -256,13 +249,6 @@ func (m *dynamicRuntimeMetrics) RefreshMaterializations(ctx context.Context, mod
 		return metrics.RefreshMaterializations(ctx, modelID)
 	}
 	return fmt.Errorf("workspace metrics are not configured")
-}
-
-func (m *dynamicRuntimeMetrics) DataDir() string {
-	if metrics := m.defaultMetrics(); metrics != nil {
-		return metrics.DataDir()
-	}
-	return m.dataDir
 }
 
 func (m *dynamicRuntimeMetrics) Pages(dashboardID string) []dashboard.Page {

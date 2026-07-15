@@ -68,12 +68,11 @@ func TablesPatch(tables map[string]dashboard.Table) pagestream.SignalPatch {
 	return pagestream.SignalPatch{"tables": tables}
 }
 
-func LoadingPatch(dataDir string) pagestream.SignalPatch {
+func LoadingPatch() pagestream.SignalPatch {
 	return pagestream.SignalPatch{
 		"status": map[string]any{
-			"loading":       true,
-			"error":         "",
-			"dataDirectory": dataDir,
+			"loading": true,
+			"error":   "",
 		},
 	}
 }
@@ -81,7 +80,7 @@ func LoadingPatch(dataDir string) pagestream.SignalPatch {
 func CommandEventPatch(event command.Event) pagestream.SignalPatch {
 	switch event.Type {
 	case command.EventLoading:
-		return LoadingPatch(event.DataDir)
+		return LoadingPatch()
 	case command.EventDashboard:
 		return DashboardPatch(event.Patch)
 	case command.EventTables:

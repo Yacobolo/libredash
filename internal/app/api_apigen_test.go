@@ -225,11 +225,9 @@ func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/preview",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/query/explain",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/preview/explain",
-		"/api/v1/workspaces/{workspace}/publishes",
-		"/api/v1/workspaces/{workspace}/publishes/{publish}",
-		"/api/v1/workspaces/{workspace}/publishes/{publish}/artifact",
-		"/api/v1/workspaces/{workspace}/publishes/{publish}/validate",
-		"/api/v1/workspaces/{workspace}/publishes/{publish}/activate",
+		"/api/v1/projects/{project}/workspaces/{workspace}/deployment-candidates",
+		"/api/v1/projects/{project}/workspaces/{workspace}/deployment-candidates/{candidate}/artifact",
+		"/api/v1/projects/{project}/workspaces/{workspace}/deployment-candidates/{candidate}/validate",
 		"/api/v1/workspaces/{workspace}/refresh-runs",
 		"/api/v1/workspaces/{workspace}/refresh-runs/{run}",
 		"/api/v1/workspaces/{workspace}/agent/conversations",
@@ -257,7 +255,7 @@ func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 		}
 	}
 
-	for _, path := range []string{"/api/workspaces", "/api/publishes", "/api/v1/workspaces/{workspace}/publishes/{publish}/rollback", "/updates", "/commands/select", "/workspaces/{workspace}/chat/updates", "/dashboards/{dashboard}"} {
+	for _, path := range []string{"/api/workspaces", "/api/publishes", "/api/v1/workspaces/{workspace}/publishes", "/api/v1/workspaces/{workspace}/publishes/{publish}", "/updates", "/commands/select", "/workspaces/{workspace}/chat/updates", "/dashboards/{dashboard}"} {
 		if _, ok := paths[path]; ok {
 			t.Fatalf("generated OpenAPI should not include UI transport path %s", path)
 		}
@@ -285,8 +283,8 @@ func TestAPIGenOperationAuthCoverage(t *testing.T) {
 			t.Fatalf("%s has app privilege mapping but no generated contract", operationID)
 		}
 	}
-	if got := apigenOperationPrivileges["uploadPublishArtifact"]; got != access.PrivilegeDeploy {
-		t.Fatalf("uploadPublishArtifact privilege = %q, want %q", got, access.PrivilegeDeploy)
+	if got := apigenOperationPrivileges["uploadDeploymentCandidateArtifact"]; got != access.PrivilegeDeploy {
+		t.Fatalf("uploadDeploymentCandidateArtifact privilege = %q, want %q", got, access.PrivilegeDeploy)
 	}
 }
 
@@ -346,8 +344,7 @@ func TestAPIGenOperationObjectResolverCoverage(t *testing.T) {
 		"listSemanticModels",
 		"createAgentConversation",
 		"listAgentConversations",
-		"createPublish",
-		"listPublishes",
+		"createDeploymentCandidate",
 		"createRefreshRun",
 		"listRefreshRuns",
 	} {
@@ -365,7 +362,6 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		toolsByOperation[tool.OperationID] = name
 	}
 	agentTools := map[string]string{
-		"getPublish":                 "get_publish",
 		"getDashboard":               "describe_dashboard",
 		"getDashboardVisual":         "describe_dashboard_visual",
 		"getWorkspaceAsset":          "describe_asset",
@@ -375,7 +371,6 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		"getRefreshRun":              "get_refresh_run",
 		"listDashboardComponents":    "list_dashboard_components",
 		"listDashboards":             "list_dashboards",
-		"listPublishes":              "list_publishes",
 		"listDashboardFilterOptions": "list_dashboard_filter_options",
 		"listRefreshRuns":            "list_refresh_runs",
 		"listSemanticDatasets":       "list_semantic_datasets",
@@ -430,7 +425,7 @@ func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
 	if !ok {
 		t.Fatalf("openapi paths missing: %#v", spec["paths"])
 	}
-	operation := mustOpenAPIOperation(t, paths, "/api/v1/workspaces/{workspace}/publishes/{publish}/artifact", "put")
+	operation := mustOpenAPIOperation(t, paths, "/api/v1/projects/{project}/workspaces/{workspace}/deployment-candidates/{candidate}/artifact", "put")
 	if _, ok := operation["x-libredash-dispatch"]; ok {
 		t.Fatalf("upload operation should not use x-libredash-dispatch: %#v", operation["x-libredash-dispatch"])
 	}
@@ -471,7 +466,7 @@ func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
 		t.Fatalf("decode APIGen IR: %v", err)
 	}
 	for _, endpoint := range irDoc.Endpoints {
-		if endpoint.OperationID != "uploadPublishArtifact" {
+		if endpoint.OperationID != "uploadDeploymentCandidateArtifact" {
 			continue
 		}
 		if endpoint.RequestBody == nil || len(endpoint.RequestBody.Contents) != 1 {
@@ -481,11 +476,11 @@ func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
 		if content.ContentType != "application/octet-stream" || content.BodyKind != "binary" {
 			t.Fatalf("upload IR content = %#v, want application/octet-stream binary", content)
 		}
-		var generatedBody apigenapi.GenUploadPublishArtifactBody
+		var generatedBody apigenapi.GenUploadDeploymentCandidateArtifactBody
 		_ = []byte(generatedBody)
 		return
 	}
-	t.Fatal("uploadPublishArtifact missing from APIGen IR")
+	t.Fatal("uploadDeploymentCandidateArtifact missing from APIGen IR")
 }
 
 func TestAPIGenListOperationsUseStandardEnvelope(t *testing.T) {
@@ -513,7 +508,6 @@ func TestAPIGenListOperationsUseStandardEnvelope(t *testing.T) {
 		{"/api/v1/workspaces/{workspace}/semantic-models", "get"},
 		{"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets", "get"},
 		{"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/fields", "get"},
-		{"/api/v1/workspaces/{workspace}/publishes", "get"},
 		{"/api/v1/workspaces/{workspace}/refresh-runs", "get"},
 		{"/api/v1/workspaces/{workspace}/agent/conversations", "get"},
 	} {

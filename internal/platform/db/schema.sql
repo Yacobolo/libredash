@@ -9,6 +9,10 @@ CREATE TABLE IF NOT EXISTS workspaces (
 CREATE TABLE IF NOT EXISTS serving_states (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL DEFAULT '',
+  project_digest TEXT NOT NULL DEFAULT '',
+  project_workspaces_json TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(project_workspaces_json)),
+  access_policy_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(access_policy_json)),
   environment TEXT NOT NULL DEFAULT 'dev',
   status TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'publish',
@@ -45,7 +49,6 @@ CREATE TABLE IF NOT EXISTS serving_state_artifacts (
   digest TEXT NOT NULL,
   format TEXT NOT NULL,
   path TEXT NOT NULL,
-  data_root TEXT NOT NULL DEFAULT '',
   manifest_json TEXT NOT NULL DEFAULT '{}',
   size_bytes INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -433,3 +436,231 @@ CREATE INDEX IF NOT EXISTS agent_conversations_owner_updated_idx ON agent_conver
 CREATE INDEX IF NOT EXISTS agent_messages_conversation_seq_idx ON agent_messages(conversation_id, seq);
 CREATE INDEX IF NOT EXISTS agent_runs_conversation_started_idx ON agent_runs(conversation_id, started_at DESC);
 CREATE INDEX IF NOT EXISTS agent_events_run_seq_idx ON agent_events(run_id, seq);
+
+CREATE TABLE IF NOT EXISTS managed_data_collections (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  connection_name TEXT NOT NULL COLLATE NOCASE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'archived')),
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  archived_at TEXT,
+  UNIQUE(project_id, connection_name),
+  CHECK(length(id) BETWEEN 1 AND 128),
+  CHECK(length(trim(project_id)) > 0),
+  CHECK(length(trim(connection_name)) > 0),
+  CHECK(length(trim(name)) > 0),
+  CHECK((status = 'archived') = (archived_at IS NOT NULL))
+);
+
+CREATE TABLE IF NOT EXISTS managed_data_revisions (
+  id TEXT PRIMARY KEY,
+  collection_id TEXT NOT NULL REFERENCES managed_data_collections(id) ON DELETE RESTRICT,
+  sequence INTEGER NOT NULL CHECK(sequence > 0),
+  digest TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'ready', 'failed')),
+  manifest_json TEXT NOT NULL,
+  file_count INTEGER NOT NULL CHECK(file_count >= 0),
+  size_bytes INTEGER NOT NULL CHECK(size_bytes >= 0),
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  ready_at TEXT,
+  error TEXT NOT NULL DEFAULT '',
+  UNIQUE(collection_id, id),
+  UNIQUE(collection_id, sequence),
+  UNIQUE(collection_id, digest),
+  CHECK(length(digest) = 71 AND substr(digest, 1, 7) = 'sha256:'),
+  CHECK(json_valid(manifest_json)),
+  CHECK((status = 'ready') = (ready_at IS NOT NULL)),
+  CHECK(status <> 'failed' OR length(error) > 0)
+);
+
+CREATE TRIGGER IF NOT EXISTS managed_data_ready_revision_immutable
+BEFORE UPDATE ON managed_data_revisions
+WHEN OLD.status = 'ready'
+BEGIN
+  SELECT RAISE(ABORT, 'ready managed data revisions are immutable');
+END;
+
+CREATE TABLE IF NOT EXISTS managed_data_revision_files (
+  revision_id TEXT NOT NULL REFERENCES managed_data_revisions(id) ON DELETE CASCADE,
+  logical_path TEXT NOT NULL COLLATE NOCASE,
+  size_bytes INTEGER NOT NULL CHECK(size_bytes >= 0),
+  sha256 TEXT NOT NULL,
+  storage_key TEXT NOT NULL,
+  media_type TEXT NOT NULL DEFAULT '',
+  etag TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(revision_id, logical_path),
+  CHECK(length(logical_path) > 0),
+  CHECK(length(sha256) = 64),
+  CHECK(length(storage_key) > 0)
+);
+
+CREATE TABLE IF NOT EXISTS managed_data_upload_sessions (
+  id TEXT PRIMARY KEY,
+  collection_id TEXT NOT NULL REFERENCES managed_data_collections(id) ON DELETE RESTRICT,
+  base_revision_id TEXT,
+  revision_id TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'committing', 'complete', 'aborted', 'expired', 'failed')),
+  manifest_json TEXT NOT NULL,
+  expected_file_count INTEGER NOT NULL CHECK(expected_file_count >= 0),
+  expected_size_bytes INTEGER NOT NULL CHECK(expected_size_bytes >= 0),
+  uploaded_file_count INTEGER NOT NULL DEFAULT 0 CHECK(uploaded_file_count >= 0),
+  uploaded_size_bytes INTEGER NOT NULL DEFAULT 0 CHECK(uploaded_size_bytes >= 0),
+  storage_backend TEXT NOT NULL,
+  staging_prefix TEXT NOT NULL,
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT NOT NULL,
+  completed_at TEXT,
+  error TEXT NOT NULL DEFAULT '',
+  FOREIGN KEY(collection_id, base_revision_id) REFERENCES managed_data_revisions(collection_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY(collection_id, revision_id) REFERENCES managed_data_revisions(collection_id, id) ON DELETE RESTRICT,
+  CHECK(json_valid(manifest_json)),
+  CHECK(length(storage_backend) > 0),
+  CHECK(length(staging_prefix) > 0),
+  CHECK((status = 'complete') = (revision_id IS NOT NULL)),
+  CHECK((status = 'complete') = (completed_at IS NOT NULL)),
+  CHECK(status <> 'failed' OR length(error) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS managed_data_upload_sessions_expiry_idx
+  ON managed_data_upload_sessions(status, expires_at);
+
+CREATE TABLE IF NOT EXISTS managed_data_s3_multipart_uploads (
+  id TEXT PRIMARY KEY,
+  upload_session_id TEXT NOT NULL REFERENCES managed_data_upload_sessions(id) ON DELETE CASCADE,
+  logical_path TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL CHECK(size_bytes >= 0),
+  object_key TEXT NOT NULL DEFAULT '',
+  provider_upload_id TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'creating'
+    CHECK(status IN ('creating', 'open', 'completing', 'completed', 'aborting', 'aborted', 'failed')),
+  existing INTEGER NOT NULL DEFAULT 0 CHECK(existing IN (0, 1)),
+  idempotency_identity TEXT NOT NULL,
+  completion_identity TEXT NOT NULL DEFAULT '',
+  completion_request_hash TEXT NOT NULL DEFAULT '',
+  abort_identity TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  completed_at TEXT,
+  aborted_at TEXT,
+  error TEXT NOT NULL DEFAULT '',
+  UNIQUE(upload_session_id, idempotency_identity),
+  CHECK(length(logical_path) > 0),
+  CHECK(length(sha256) = 64 AND sha256 = lower(sha256)),
+  CHECK(length(idempotency_identity) = 64),
+  CHECK(completion_identity = '' OR length(completion_identity) = 64),
+  CHECK(completion_request_hash = '' OR length(completion_request_hash) = 64),
+  CHECK(abort_identity = '' OR length(abort_identity) = 64),
+  CHECK(status = 'creating' OR length(object_key) > 0 OR status IN ('aborting', 'aborted')),
+  CHECK(existing = 0 OR status = 'completed'),
+  CHECK((status = 'completed') = (completed_at IS NOT NULL)),
+  CHECK((status = 'aborted') = (aborted_at IS NOT NULL)),
+  CHECK(status <> 'failed' OR length(error) > 0),
+  CHECK(length(error) <= 2048)
+);
+
+CREATE INDEX IF NOT EXISTS managed_data_s3_multipart_recovery_idx
+  ON managed_data_s3_multipart_uploads(status, updated_at, id);
+
+CREATE TABLE IF NOT EXISTS managed_data_s3_multipart_parts (
+  multipart_upload_id TEXT NOT NULL REFERENCES managed_data_s3_multipart_uploads(id) ON DELETE CASCADE,
+  part_number INTEGER NOT NULL CHECK(part_number BETWEEN 1 AND 10000),
+  size_bytes INTEGER NOT NULL CHECK(size_bytes > 0),
+  sha256 TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(multipart_upload_id, part_number),
+  CHECK(sha256 = '' OR (length(sha256) = 64 AND sha256 = lower(sha256)))
+);
+
+CREATE INDEX IF NOT EXISTS managed_data_revisions_collection_created_idx
+  ON managed_data_revisions(collection_id, sequence DESC);
+
+CREATE TABLE IF NOT EXISTS project_deployments (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  environment TEXT NOT NULL,
+  request_digest TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'failed', 'superseded')),
+  created_by TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  activated_at TEXT,
+  error TEXT NOT NULL DEFAULT '',
+  CHECK(length(trim(project_id)) > 0),
+  CHECK(length(environment) BETWEEN 1 AND 128),
+  CHECK(length(request_digest) > 0),
+  CHECK((status IN ('active', 'superseded')) = (activated_at IS NOT NULL)),
+  CHECK(status <> 'failed' OR length(error) > 0)
+);
+
+CREATE TABLE IF NOT EXISTS project_deployment_targets (
+  deployment_id TEXT NOT NULL REFERENCES project_deployments(id) ON DELETE CASCADE,
+  workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE RESTRICT,
+  serving_state_id TEXT NOT NULL REFERENCES serving_states(id) ON DELETE RESTRICT,
+  prior_serving_state_id TEXT REFERENCES serving_states(id) ON DELETE RESTRICT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'failed')),
+  activated_at TEXT,
+  error TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(deployment_id, workspace_id),
+  UNIQUE(deployment_id, serving_state_id),
+  CHECK(serving_state_id <> COALESCE(prior_serving_state_id, '')),
+  CHECK((status = 'active') = (activated_at IS NOT NULL)),
+  CHECK(status <> 'failed' OR length(error) > 0)
+);
+
+CREATE INDEX IF NOT EXISTS project_deployment_targets_serving_state_idx
+  ON project_deployment_targets(serving_state_id);
+
+CREATE TABLE IF NOT EXISTS project_deployment_connections (
+  deployment_id TEXT NOT NULL REFERENCES project_deployments(id) ON DELETE CASCADE,
+  collection_id TEXT NOT NULL,
+  revision_id TEXT NOT NULL,
+  prior_revision_id TEXT,
+  prior_generation INTEGER NOT NULL DEFAULT 0 CHECK(prior_generation >= 0),
+  activated_generation INTEGER CHECK(activated_generation > 0),
+  PRIMARY KEY(deployment_id, collection_id),
+  FOREIGN KEY(collection_id, revision_id) REFERENCES managed_data_revisions(collection_id, id) ON DELETE RESTRICT,
+  FOREIGN KEY(collection_id, prior_revision_id) REFERENCES managed_data_revisions(collection_id, id) ON DELETE RESTRICT,
+  CHECK((prior_generation = 0) = (prior_revision_id IS NULL))
+);
+
+CREATE TABLE IF NOT EXISTS managed_data_environment_pointers (
+  collection_id TEXT NOT NULL,
+  environment TEXT NOT NULL,
+  revision_id TEXT NOT NULL,
+  deployment_id TEXT NOT NULL REFERENCES project_deployments(id) ON DELETE RESTRICT,
+  generation INTEGER NOT NULL CHECK(generation > 0),
+  updated_by TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(collection_id, environment),
+  FOREIGN KEY(collection_id, revision_id) REFERENCES managed_data_revisions(collection_id, id) ON DELETE RESTRICT,
+  CHECK(length(environment) BETWEEN 1 AND 128)
+);
+
+CREATE INDEX IF NOT EXISTS managed_data_environment_pointers_revision_idx
+  ON managed_data_environment_pointers(revision_id);
+
+CREATE INDEX IF NOT EXISTS project_deployments_project_environment_idx
+  ON project_deployments(project_id, environment, created_at DESC, id DESC);
+
+CREATE TABLE IF NOT EXISTS managed_data_serving_state_bindings (
+  serving_state_id TEXT NOT NULL REFERENCES serving_states(id) ON DELETE CASCADE,
+  collection_id TEXT NOT NULL,
+  revision_id TEXT NOT NULL,
+  environment TEXT NOT NULL,
+  bound_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY(serving_state_id, collection_id),
+  FOREIGN KEY(collection_id, revision_id) REFERENCES managed_data_revisions(collection_id, id) ON DELETE RESTRICT,
+  CHECK(length(environment) BETWEEN 1 AND 128)
+);
+
+CREATE INDEX IF NOT EXISTS managed_data_serving_state_bindings_revision_idx
+  ON managed_data_serving_state_bindings(revision_id);

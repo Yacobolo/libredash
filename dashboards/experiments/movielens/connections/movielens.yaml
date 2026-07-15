@@ -4,8 +4,8 @@ metadata:
   name: movielens
   title: MovieLens CSV files
 spec:
-  kind: local
-  description: Local CSV files for the MovieLens 32M experimental dataset.
+  kind: managed
+  description: Project-global managed MovieLens 32M experimental data.
   credentials:
     provider: none
   defaults:

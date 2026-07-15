@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"crypto/md5"
 	"encoding/hex"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,15 +36,17 @@ var expectedFiles = []expectedFile{
 }
 
 func main() {
+	out := flag.String("out", "", "directory for downloaded MovieLens CSV files")
+	flag.Parse()
 	client := &http.Client{Timeout: 30 * time.Minute}
-	if err := run(client); err != nil {
+	if err := run(client, *out); err != nil {
 		fmt.Fprintf(os.Stderr, "bootstrap movielens: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(client *http.Client) error {
-	target, err := targetDir()
+func run(client *http.Client, out string) error {
+	target, err := targetDir(out)
 	if err != nil {
 		return err
 	}
@@ -97,14 +100,13 @@ func run(client *http.Client) error {
 	return nil
 }
 
-func targetDir() (string, error) {
-	target := os.Getenv(configspec.EnvLIBREDASH_DATA_DIR)
-	if target == "" {
-		target = ".data/movielens"
+func targetDir(out string) (string, error) {
+	if strings.TrimSpace(out) == "" {
+		return "", fmt.Errorf("out is required")
 	}
-	abs, err := filepath.Abs(target)
+	abs, err := filepath.Abs(out)
 	if err != nil {
-		return "", fmt.Errorf("resolve data directory %s: %w", target, err)
+		return "", fmt.Errorf("resolve output directory %s: %w", out, err)
 	}
 	return abs, nil
 }

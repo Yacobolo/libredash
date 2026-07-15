@@ -97,7 +97,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 			t.Fatalf("%s segment = %q, want reload command without updates stream reopen:\n%s", attr, segment, showcase)
 		}
 	}
-	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals(".data", "client", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})))
+	showcaseSignals := html.UnescapeString(jsonString(BootstrapSignals("client", dashboard.Catalog{}, report, model, report.Pages, report.Pages[0], dashboard.Filters{})))
 	if !strings.Contains(showcaseSignals, `"active_chart"`) || !strings.Contains(showcaseSignals, `"active_kpi"`) {
 		t.Fatalf("showcase bootstrap did not include active chart and KPI visuals:\n%s", showcaseSignals)
 	}
@@ -127,7 +127,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	}
 
 	tables := renderPageForTest(t, report, model, report.Pages[1])
-	tableSignals := html.UnescapeString(jsonString(BootstrapSignals(".data", "client", dashboard.Catalog{}, report, model, report.Pages, report.Pages[1], dashboard.Filters{})))
+	tableSignals := html.UnescapeString(jsonString(BootstrapSignals("client", dashboard.Catalog{}, report, model, report.Pages, report.Pages[1], dashboard.Filters{})))
 	for _, tableID := range []string{"orders", "matrix", "pivot"} {
 		if !strings.Contains(tableSignals, `"`+tableID+`":{`) || !strings.Contains(tableSignals, `"availableRows"`) {
 			t.Fatalf("tables bootstrap did not include table %q with row metadata:\n%s", tableID, tableSignals)
@@ -154,7 +154,7 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 func renderPageForTest(t *testing.T, report reportdef.Dashboard, model *semanticmodel.Model, activePage dashboard.Page) string {
 	t.Helper()
 	var out strings.Builder
-	err := Page(".data", "client", "", dashboard.Catalog{}, report, model, report.Pages, activePage, dashboard.Filters{}).Render(&out)
+	err := Page("client", "", dashboard.Catalog{}, report, model, report.Pages, activePage, dashboard.Filters{}).Render(&out)
 	if err != nil {
 		t.Fatal(err)
 	}

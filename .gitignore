@@ -12,6 +12,9 @@ api/gen/
 internal/api/gen/
 internal/ui/signals/models.gen.go
 internal/cli/gen/
+internal/platform/db/db.go
+internal/platform/db/models.go
+internal/platform/db/queries.sql.go
 static/app.css
 static/asset-version.txt
 static/*.js

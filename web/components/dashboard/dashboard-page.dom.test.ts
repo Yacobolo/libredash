@@ -261,7 +261,7 @@ function testDocument(): string {
       error: '',
     },
   }
-  const status = { loading: false, error: '', lastUpdated: '12:00:00', dataDirectory: '.data/olist', setupRequired: false }
+	const status = { loading: false, error: '', lastUpdated: '12:00:00', setupRequired: false }
   const signals = {
     page,
     filterConfig,

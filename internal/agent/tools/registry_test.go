@@ -9,8 +9,8 @@ import (
 
 func TestAPIGenOperationsUseGeneratedReadOnlyToolContracts(t *testing.T) {
 	operations := APIGenOperations()
-	if len(operations) != 28 {
-		t.Fatalf("APIGenOperations() count = %d, want 28", len(operations))
+	if len(operations) != 26 {
+		t.Fatalf("APIGenOperations() count = %d, want 26", len(operations))
 	}
 	for _, operation := range operations {
 		if operation.Tool.Effect != agenttool.EffectRead {

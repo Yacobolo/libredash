@@ -78,7 +78,7 @@ func (m queryAuditMetrics) QueryDashboard(ctx context.Context, dashboardID strin
 
 func (m queryAuditMetrics) QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	if m.QueryMetrics == nil {
-		return dashboard.EmptyPatch(filters.WithDefaults(), "", errors.New("query metrics are not configured")), nil
+		return dashboard.EmptyPatch(filters.WithDefaults(), errors.New("query metrics are not configured")), nil
 	}
 	return m.QueryMetrics.QueryDashboardPage(m.auditContext(ctx), dashboardID, pageID, filters)
 }

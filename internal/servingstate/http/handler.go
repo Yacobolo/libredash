@@ -3,36 +3,24 @@ package http
 import (
 	"context"
 	"database/sql"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	stdhttp "net/http"
 
-	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/api"
+	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	manageddatabinding "github.com/Yacobolo/libredash/internal/manageddata/binding"
 	"github.com/Yacobolo/libredash/internal/servingstate"
-	"github.com/Yacobolo/libredash/internal/servingstate/activate"
 	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
 	"github.com/Yacobolo/libredash/internal/servingstate/validate"
 	"github.com/Yacobolo/libredash/internal/workspace"
-	"github.com/go-chi/chi/v5"
 )
-
-type RuntimeHost interface {
-	Reload(ctx context.Context) error
-	PrepareServingState(ctx context.Context, servingStateID string) (servingstate.PreparedRuntime, error)
-	CommitPrepared(prepared servingstate.PreparedRuntime) error
-}
 
 type Repository interface {
 	validate.Repository
-	activate.Repository
-	servingstatefs.ArtifactRepository
-	ActiveArtifact(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment) (servingstate.State, servingstate.Artifact, error)
 	Create(ctx context.Context, input servingstate.CreateInput) (servingstate.State, error)
-	List(ctx context.Context, workspaceID servingstate.WorkspaceID, environment servingstate.Environment) ([]servingstate.State, error)
 }
 
 type Principal struct {
@@ -41,12 +29,10 @@ type Principal struct {
 
 type Options struct {
 	Repository          func() (Repository, error)
+	BindingRepository   func() (manageddatabinding.Repository, error)
 	WorkspaceRepository func() (workspace.Repository, error)
-	AccessRepository    func() (access.Repository, error)
-	Runtime             RuntimeHost
 	CurrentPrincipal    func(*stdhttp.Request) (Principal, bool)
 	ArtifactDir         string
-	DataDir             func() string
 	DefaultEnvironment  string
 	WorkspaceID         func(string) string
 }
@@ -59,13 +45,17 @@ func NewHandler(options Options) *Handler {
 	return &Handler{options: options}
 }
 
-func (h *Handler) Create(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-	var input api.PublishCreateRequest
+func (h *Handler) CreateCandidate(w stdhttp.ResponseWriter, r *stdhttp.Request, projectID, workspaceName string) {
+	var input apigenapi.DeploymentCandidateCreateRequest
 	if err := decodeOptionalJSONBody(r, &input); err != nil {
 		writeJSONError(w, err, stdhttp.StatusBadRequest)
 		return
 	}
-	workspaceID := h.workspaceID(chi.URLParam(r, "workspace"))
+	if input.Environment == "" {
+		writeJSONError(w, fmt.Errorf("environment is required"), stdhttp.StatusBadRequest)
+		return
+	}
+	workspaceID := h.workspaceID(workspaceName)
 	workspaceRepo, err := h.workspaceRepository()
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
@@ -75,7 +65,15 @@ func (h *Handler) Create(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		writeJSONError(w, fmt.Errorf("workspace repository is not configured"), stdhttp.StatusInternalServerError)
 		return
 	}
-	if err := workspaceRepo.Ensure(r.Context(), workspace.EnsureInput{ID: workspace.WorkspaceID(workspaceID), Title: firstNonEmpty(input.Title, workspaceID), Description: input.Description}); err != nil {
+	title := workspaceID
+	if input.Title != nil && *input.Title != "" {
+		title = *input.Title
+	}
+	description := ""
+	if input.Description != nil {
+		description = *input.Description
+	}
+	if err := workspaceRepo.Ensure(r.Context(), workspace.EnsureInput{ID: workspace.WorkspaceID(workspaceID), Title: title, Description: description}); err != nil {
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
 		return
 	}
@@ -91,22 +89,21 @@ func (h *Handler) Create(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		}
 	}
 	environment := requestServingEnvironment(r, input.Environment)
-	row, err := repo.Create(r.Context(), servingstate.CreateInput{WorkspaceID: servingstate.WorkspaceID(workspaceID), Environment: environment, CreatedBy: createdBy})
+	row, err := repo.Create(r.Context(), servingstate.CreateInput{WorkspaceID: servingstate.WorkspaceID(workspaceID), ProjectID: projectID, Environment: environment, CreatedBy: createdBy})
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, stdhttp.StatusCreated, publishDTO(row))
+	writeJSON(w, stdhttp.StatusCreated, candidateDTO(row))
 }
 
-func (h *Handler) UploadArtifact(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-	servingStateID := chi.URLParam(r, "publish")
+func (h *Handler) UploadCandidateArtifact(w stdhttp.ResponseWriter, r *stdhttp.Request, projectID, workspace string, servingStateID servingstate.ID) {
 	repo, err := h.repository()
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
 		return
 	}
-	row, err := h.servingStateByIDForRequestWorkspace(r, repo, servingstate.ID(servingStateID))
+	row, err := h.servingStateByIDForScope(r.Context(), repo, servingStateID, projectID, workspace)
 	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
@@ -122,135 +119,51 @@ func (h *Handler) UploadArtifact(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		writeJSONError(w, copyErr, stdhttp.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, stdhttp.StatusOK, map[string]any{"publishId": row.ID, "sizeBytes": size})
+	writeJSON(w, stdhttp.StatusOK, map[string]any{"candidateId": row.ID, "sizeBytes": size})
 }
 
-func (h *Handler) Validate(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-	servingStateID := chi.URLParam(r, "publish")
+func (h *Handler) ValidateCandidate(w stdhttp.ResponseWriter, r *stdhttp.Request, projectID, workspace string, servingStateID servingstate.ID) {
 	repo, err := h.repository()
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
 		return
 	}
-	if _, err := h.servingStateByIDForRequestWorkspace(r, repo, servingstate.ID(servingStateID)); err != nil {
+	if _, err := h.servingStateByIDForScope(r.Context(), repo, servingStateID, projectID, workspace); err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	service := validate.NewService(repo, servingstatefs.NewArtifactStore(h.options.ArtifactDir), servingstatefs.Validator{DataDir: h.dataDir()})
-	row, err := service.Validate(r.Context(), servingstate.ID(servingStateID))
+	if h.options.BindingRepository == nil {
+		writeJSONError(w, fmt.Errorf("managed data binding repository is not configured"), stdhttp.StatusInternalServerError)
+		return
+	}
+	bindingRepository, err := h.options.BindingRepository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	binder, err := manageddatabinding.New(bindingRepository)
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	service := validate.NewService(repo, servingstatefs.NewArtifactStore(h.options.ArtifactDir), servingstatefs.Validator{}, binder)
+	row, err := service.Validate(r.Context(), servingStateID)
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusBadRequest)
 		return
 	}
-	writeJSON(w, stdhttp.StatusOK, publishDTO(row))
+	writeJSON(w, stdhttp.StatusOK, candidateDTO(row))
 }
 
-func (h *Handler) Activate(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-	servingStateID := chi.URLParam(r, "publish")
-	repo, err := h.repository()
-	if err != nil {
-		writeJSONError(w, err, stdhttp.StatusInternalServerError)
-		return
-	}
-	current, err := h.servingStateByIDForRequestWorkspace(r, repo, servingstate.ID(servingStateID))
-	if err != nil {
-		writeJSONError(w, err, statusForNotFound(err))
-		return
-	}
-	accessRepo, err := h.accessRepository()
-	if err != nil {
-		writeJSONError(w, err, stdhttp.StatusInternalServerError)
-		return
-	}
-	var accessReconciler access.WorkspacePolicyReconciler
-	if accessRepo != nil {
-		if reconciler, ok := accessRepo.(access.WorkspacePolicyReconciler); ok {
-			accessReconciler = reconciler
-		}
-	}
-	service := activate.NewServiceWithAccess(repo, h.options.Runtime, servingstatefs.NewAccessPolicyLoader(repo), accessReconciler)
-	row, err := service.Activate(r.Context(), servingstate.ID(servingStateID))
-	if err != nil {
-		writeJSONError(w, err, statusForActivationError(err))
-		return
-	}
-	if current.Status == servingstate.StatusInactive {
-		h.recordRollbackAudit(r, accessRepo, row)
-	}
-	writeJSON(w, stdhttp.StatusOK, publishDTO(row))
-}
-
-func (h *Handler) recordRollbackAudit(r *stdhttp.Request, repo access.Repository, row servingstate.State) {
-	if repo == nil {
-		return
-	}
-	principalID := ""
-	if h.options.CurrentPrincipal != nil {
-		if principal, ok := h.options.CurrentPrincipal(r); ok {
-			principalID = principal.ID
-		}
-	}
-	_ = repo.RecordAuditEvent(r.Context(), access.AuditEventInput{
-		WorkspaceID:   string(row.WorkspaceID),
-		PrincipalID:   principalID,
-		Action:        "publish.rolled_back",
-		TargetType:    "publish",
-		TargetID:      string(row.ID),
-		Privilege:     access.PrivilegeActivatePublish,
-		Status:        "success",
-		RequestID:     r.Header.Get("X-Request-Id"),
-		CorrelationID: r.Header.Get("X-Correlation-Id"),
-		MetadataJSON:  "{}",
-	})
-}
-
-func (h *Handler) List(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-	workspaceID := h.workspaceID(firstNonEmpty(chi.URLParam(r, "workspace"), r.URL.Query().Get("workspace")))
-	repo, err := h.repository()
-	if err != nil {
-		writeJSONError(w, err, stdhttp.StatusInternalServerError)
-		return
-	}
-	rows, err := repo.List(r.Context(), servingstate.WorkspaceID(workspaceID), requestServingEnvironment(r, ""))
-	if err != nil {
-		writeJSONError(w, err, stdhttp.StatusInternalServerError)
-		return
-	}
-	response := make([]api.PublishResponse, 0, len(rows))
-	for _, row := range rows {
-		response = append(response, publishDTO(row))
-	}
-	limit, ok := apiLimitForRequest(w, r)
-	if !ok {
-		return
-	}
-	page, nextCursor := pagePublishes(response, limit, r.URL.Query().Get("pageToken"))
-	writeJSON(w, stdhttp.StatusOK, pagedResponseWithCursor(page, nextCursor))
-}
-
-func (h *Handler) Get(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-	repo, err := h.repository()
-	if err != nil {
-		writeJSONError(w, err, stdhttp.StatusInternalServerError)
-		return
-	}
-	row, err := h.servingStateByIDForRequestWorkspace(r, repo, servingstate.ID(chi.URLParam(r, "publish")))
-	if err != nil {
-		writeJSONError(w, err, statusForNotFound(err))
-		return
-	}
-	writeJSON(w, stdhttp.StatusOK, publishDTO(row))
-}
-
-func (h *Handler) servingStateByIDForRequestWorkspace(r *stdhttp.Request, repo Repository, servingStateID servingstate.ID) (servingstate.State, error) {
-	row, err := repo.ByID(r.Context(), servingStateID)
+func (h *Handler) servingStateByIDForScope(ctx context.Context, repo Repository, servingStateID servingstate.ID, projectID, workspaceID string) (servingstate.State, error) {
+	row, err := repo.ByID(ctx, servingStateID)
 	if err != nil {
 		return servingstate.State{}, err
 	}
-	if workspaceID := chi.URLParam(r, "workspace"); workspaceID != "" && row.WorkspaceID != servingstate.WorkspaceID(h.workspaceID(workspaceID)) {
+	if workspaceID != "" && row.WorkspaceID != servingstate.WorkspaceID(h.workspaceID(workspaceID)) {
 		return servingstate.State{}, servingstate.ErrNotFound
 	}
-	if row.Environment != requestServingEnvironment(r, "") {
+	if projectID != "" && row.ProjectID != projectID {
 		return servingstate.State{}, servingstate.ErrNotFound
 	}
 	return row, nil
@@ -270,13 +183,6 @@ func (h *Handler) workspaceRepository() (workspace.Repository, error) {
 	return h.options.WorkspaceRepository()
 }
 
-func (h *Handler) accessRepository() (access.Repository, error) {
-	if h.options.AccessRepository == nil {
-		return nil, nil
-	}
-	return h.options.AccessRepository()
-}
-
 func (h *Handler) workspaceID(candidate string) string {
 	if h.options.WorkspaceID != nil {
 		return h.options.WorkspaceID(candidate)
@@ -284,24 +190,19 @@ func (h *Handler) workspaceID(candidate string) string {
 	return candidate
 }
 
-func (h *Handler) dataDir() string {
-	if h.options.DataDir == nil {
-		return ""
-	}
-	return h.options.DataDir()
-}
-
-func publishDTO(row servingstate.State) api.PublishResponse {
-	out := api.PublishResponse{
-		ID:          string(row.ID),
-		WorkspaceID: string(row.WorkspaceID),
+func candidateDTO(row servingstate.State) apigenapi.DeploymentCandidateResponse {
+	out := apigenapi.DeploymentCandidateResponse{
+		Id:          string(row.ID),
+		Project:     row.ProjectID,
+		Workspace:   string(row.WorkspaceID),
 		Environment: string(servingstate.NormalizeEnvironment(row.Environment)),
 		Status:      string(row.Status),
 		Digest:      row.Digest,
 		CreatedAt:   row.CreatedAt,
-		Error:       row.Error,
 	}
-	out.ActivatedAt = row.ActivatedAt
+	if row.Error != "" {
+		out.Error = &row.Error
+	}
 	return out
 }
 
@@ -310,40 +211,6 @@ func requestServingEnvironment(r *stdhttp.Request, fallback string) servingstate
 		fallback = query
 	}
 	return servingstate.NormalizeEnvironment(servingstate.Environment(fallback))
-}
-
-func pagePublishes(rows []api.PublishResponse, limit int, pageToken string) ([]api.PublishResponse, string) {
-	cursorCreatedAt, cursorID := decodeCursor(pageToken)
-	start := 0
-	if cursorCreatedAt != "" && cursorID != "" {
-		for i, row := range rows {
-			if row.CreatedAt == cursorCreatedAt && row.ID == cursorID {
-				start = i + 1
-				break
-			}
-		}
-	}
-	if start > len(rows) {
-		start = len(rows)
-	}
-	end := start + limit
-	if end > len(rows) {
-		end = len(rows)
-	}
-	nextCursor := ""
-	if end < len(rows) && end > start {
-		last := rows[end-1]
-		nextCursor = encodeCursor(last.CreatedAt, last.ID)
-	}
-	return rows[start:end], nextCursor
-}
-
-type pageResponse struct {
-	NextCursor string `json:"nextCursor"`
-}
-
-func pagedResponseWithCursor(items any, nextCursor string) map[string]any {
-	return map[string]any{"items": items, "page": pageResponse{NextCursor: nextCursor}}
 }
 
 func writeJSON(w stdhttp.ResponseWriter, status int, value any) {
@@ -388,69 +255,4 @@ func statusForNotFound(err error) int {
 		return stdhttp.StatusNotFound
 	}
 	return stdhttp.StatusInternalServerError
-}
-
-func statusForActivationError(err error) int {
-	if errors.Is(err, servingstate.ErrNotFound) {
-		return stdhttp.StatusNotFound
-	}
-	if errors.Is(err, activate.ErrInvalidStatus) {
-		return stdhttp.StatusBadRequest
-	}
-	return stdhttp.StatusInternalServerError
-}
-
-func apiLimitForRequest(w stdhttp.ResponseWriter, r *stdhttp.Request) (int, bool) {
-	limit, err := parseAPILimit(r.URL.Query().Get("limit"))
-	if err != nil {
-		writeJSONError(w, err, stdhttp.StatusBadRequest)
-		return 0, false
-	}
-	return limit, true
-}
-
-func parseAPILimit(value string) (int, error) {
-	if value == "" {
-		return 50, nil
-	}
-	var limit int
-	if _, err := fmt.Sscanf(value, "%d", &limit); err != nil {
-		return 0, fmt.Errorf("limit must be an integer")
-	}
-	if limit < 1 {
-		return 0, fmt.Errorf("limit must be at least 1")
-	}
-	if limit > 100 {
-		return 100, nil
-	}
-	return limit, nil
-}
-
-func decodeCursor(token string) (string, string) {
-	if token == "" {
-		return "", ""
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(token)
-	if err != nil {
-		return "", ""
-	}
-	for i, b := range raw {
-		if b == 0 {
-			return string(raw[:i]), string(raw[i+1:])
-		}
-	}
-	return "", ""
-}
-
-func encodeCursor(createdAt, id string) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(createdAt + "\x00" + id))
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }

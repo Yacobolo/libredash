@@ -50,8 +50,8 @@ export LIBREDASH_AGENT_API_KEY="$DEEPSEEK_KEY"
 export LIBREDASH_AGENT_BASE_URL="https://api.deepseek.com"
 export LIBREDASH_AGENT_MODEL="deepseek-v4-flash"
 
-TOKEN="$("$BIN" admin bootstrap --workspace sales)"
-"$BIN" serve --workspace sales > "$TMP_DIR/server.log" 2>&1 &
+TOKEN="$("$BIN" admin bootstrap)"
+"$BIN" serve > "$TMP_DIR/server.log" 2>&1 &
 SERVER_PID="$!"
 
 for _ in {1..80}; do
@@ -65,7 +65,14 @@ for _ in {1..80}; do
   sleep 0.25
 done
 
-"$BIN" publish --target "$TARGET" --token "$TOKEN" --workspace sales --project dashboards/libredash.yaml --auto-approve
+SYNC_OUTPUT="$("$BIN" data sync --project dashboards/libredash.yaml --connection olist --from .data/olist --target "$TARGET" --token "$TOKEN")"
+echo "$SYNC_OUTPUT"
+REVISION="$(awk '$1 == "staged" { print $2 }' <<<"$SYNC_OUTPUT")"
+[[ "$REVISION" =~ ^sha256:[0-9a-f]{64}$ ]] || {
+  echo "managed data sync did not return a canonical revision" >&2
+  exit 1
+}
+"$BIN" deploy --target "$TARGET" --token "$TOKEN" --project dashboards/libredash.yaml --revision "olist=$REVISION" --environment dev --auto-approve
 
 OUTPUT="$("$BIN" agent ask "List the dashboards I can use in this workspace and mention the Olist context." --target "$TARGET" --token "$TOKEN" --workspace sales --json)"
 echo "$OUTPUT"

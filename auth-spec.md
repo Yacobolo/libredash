@@ -120,7 +120,7 @@ Core privileges:
 - `REFRESH_DATA`: run materialization or cache refresh jobs.
 - `DEPLOY`: create publishes, upload artifacts, and validate serving-state
   candidates.
-- `ACTIVATE_PUBLISH`: activate publishes or roll back active serving state.
+- `ACTIVATE_DEPLOYMENT`: atomically activate project deployments.
 - `USE_AGENT`: run agent turns.
 - `VIEW_AGENT`: read agent conversations and runs.
 - `MANAGE_GRANTS`: grant and revoke privileges.
@@ -155,7 +155,7 @@ Default mapping:
 | `viewer` | `USE_WORKSPACE`, `VIEW_ITEM`, `QUERY_DATA`, `USE_AGENT`, `VIEW_AGENT` |
 | `contributor` | `viewer` + `EDIT_ITEM`, `REFRESH_DATA`, `DEPLOY` |
 | `member` | `contributor` + `MANAGE_ITEM` |
-| `admin` | `member` + `MANAGE_GRANTS`, `ACTIVATE_PUBLISH`, `VIEW_AUDIT`, `MANAGE_WORKSPACE` |
+| `admin` | `member` + `MANAGE_GRANTS`, `ACTIVATE_DEPLOYMENT`, `VIEW_AUDIT`, `MANAGE_WORKSPACE` |
 | `platform_admin` | `MANAGE_PLATFORM` plus admin-equivalent grants across workspaces |
 
 Roles must compile into grants. Runtime authorization should check privileges,

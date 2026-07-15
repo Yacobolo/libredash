@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,7 +15,7 @@ import (
 )
 
 func TestManagerReloadIgnoresMissingActiveDeployment(t *testing.T) {
-	manager := NewManagerWithFactory(ManagerOptions{Repo: &fakeRepo{activeErr: servingstate.ErrNotFound}, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: &fakeRepo{activeErr: servingstate.ErrNotFound}, WorkspaceID: "test", Environment: "dev", Factory: &fakeFactory{}})
 
 	if err := manager.Reload(context.Background()); err != nil {
 		t.Fatalf("reload: %v", err)
@@ -26,7 +28,7 @@ func TestManagerReloadClearsStaleRuntimeWhenActiveDeploymentMissing(t *testing.T
 		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive},
 		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
 	}
-	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", Factory: &fakeFactory{}})
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("reload active: %v", err)
 	}
@@ -44,7 +46,7 @@ func TestManagerReloadUsesConfiguredEnvironment(t *testing.T) {
 		deployment: servingstate.State{ID: "dep_prod", WorkspaceID: "test", Environment: "prod", Status: servingstate.StatusValidated},
 		artifact:   servingstate.Artifact{ServingStateID: "dep_prod", Environment: "prod", Digest: "digest"},
 	}
-	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "prod", DataDir: "/data", Factory: &fakeFactory{}})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "prod", Factory: &fakeFactory{}})
 
 	if err := manager.Reload(context.Background()); err != nil {
 		t.Fatalf("reload: %v", err)
@@ -61,7 +63,7 @@ func TestManagerPrepareCommitSwapsRuntimeAndClosesOld(t *testing.T) {
 		artifact:   servingstate.Artifact{ServingStateID: "dep_1", Digest: "digest"},
 	}
 	factory := &fakeFactory{}
-	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: factory})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", Factory: factory})
 
 	prepared, err := manager.PrepareServingState(ctx, "dep_1")
 	if err != nil {
@@ -90,6 +92,58 @@ func TestManagerPrepareCommitSwapsRuntimeAndClosesOld(t *testing.T) {
 	}
 }
 
+func TestManagerPassesManagedDataResolutionToRuntimeFactory(t *testing.T) {
+	repo := &fakeRepo{
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "prod", Status: servingstate.StatusValidated},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "prod", Digest: "digest"},
+	}
+	resolver := fakeManagedDataResolver{resolution: ManagedDataResolution{
+		RevisionID: "sha256:" + strings.Repeat("a", 64),
+		Roots:      map[string]string{"olist": "/managed/olist/revision"},
+	}}
+	factory := &fakeFactory{}
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "prod", Factory: factory, ManagedData: resolver})
+
+	prepared, err := manager.PrepareServingState(context.Background(), "dep_1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	if factory.input.ManagedData.RevisionID != resolver.resolution.RevisionID {
+		t.Fatalf("revision = %q", factory.input.ManagedData.RevisionID)
+	}
+	if got := factory.input.ManagedData.Roots["olist"]; got != "/managed/olist/revision" {
+		t.Fatalf("olist root = %q", got)
+	}
+	if factory.input.ManagedData.Lifetime != nil {
+		t.Fatal("runtime factory received the manager-owned managed-data lifetime")
+	}
+}
+
+func TestManagerReloadsWhenManagedDataRevisionChanges(t *testing.T) {
+	repo := &fakeRepo{
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "prod", Status: servingstate.StatusActive},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "prod", Digest: "digest"},
+	}
+	resolver := &fakeManagedDataResolver{resolution: ManagedDataResolution{RevisionID: "sha256:" + strings.Repeat("a", 64)}}
+	factory := &fakeFactory{}
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "prod", Factory: factory, ManagedData: resolver})
+
+	if err := manager.Reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	resolver.resolution = ManagedDataResolution{RevisionID: "sha256:" + strings.Repeat("b", 64)}
+	if err := manager.Reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if factory.prepareCalls != 2 {
+		t.Fatalf("factory calls = %d, want reload for managed-data revision change", factory.prepareCalls)
+	}
+	if got := factory.input.ManagedData.RevisionID; got != resolver.resolution.RevisionID {
+		t.Fatalf("prepared managed-data revision = %q, want %q", got, resolver.resolution.RevisionID)
+	}
+}
+
 func TestManagerKeepsOldRuntimeOpenUntilLeaseRelease(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
@@ -101,7 +155,6 @@ func TestManagerKeepsOldRuntimeOpenUntilLeaseRelease(t *testing.T) {
 		Repo:        repo,
 		WorkspaceID: "test",
 		Environment: "dev",
-		DataDir:     "/data",
 		Factory:     &fakeFactory{},
 		OnDrained: func(_ servingstate.ID, snapshotID int64) {
 			drained = append(drained, snapshotID)
@@ -148,6 +201,72 @@ func TestManagerKeepsOldRuntimeOpenUntilLeaseRelease(t *testing.T) {
 	}
 }
 
+func TestManagerKeepsManagedDataLifetimeUntilRuntimeDrains(t *testing.T) {
+	repo := &fakeRepo{
+		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest-1"},
+	}
+	lifetime := &fakeManagedDataLifetime{}
+	resolver := &fakeManagedDataResolver{resolution: ManagedDataResolution{
+		RevisionID: "sha256:" + strings.Repeat("a", 64),
+		Roots:      map[string]string{"warehouse": "/runtime/revision"},
+		Lifetime:   lifetime,
+	}}
+	manager := NewManagerWithFactory(ManagerOptions{
+		Repo: repo, WorkspaceID: "test", Environment: "dev", Factory: &fakeFactory{}, ManagedData: resolver,
+	})
+	if err := manager.Reload(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	queryLease, err := manager.Acquire()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := queryLease.Runtime().(*fakeRuntime)
+	if err := manager.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if lifetime.releases != 0 {
+		t.Fatal("managed-data lifetime released while a query still held the runtime")
+	}
+	queryLease.Release()
+	if !runtime.closed {
+		t.Fatal("runtime was not closed after its final query lease")
+	}
+	if lifetime.releases != 1 {
+		t.Fatalf("managed-data lifetime releases = %d, want 1", lifetime.releases)
+	}
+}
+
+func TestPreparedReleasesManagedDataLifetimeOnFailureAndAbandonment(t *testing.T) {
+	state := servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusValidated}
+	artifact := servingstate.Artifact{ServingStateID: state.ID, WorkspaceID: state.WorkspaceID, Environment: state.Environment, Digest: "digest"}
+	repo := &fakeRepo{deployment: state, artifact: artifact}
+
+	failureLifetime := &fakeManagedDataLifetime{}
+	failing := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", Factory: &fakeFactory{err: errors.New("prepare failed")}})
+	_, err := failing.prepareResolved(t.Context(), state, artifact, ManagedDataResolution{Lifetime: failureLifetime})
+	if err == nil {
+		t.Fatal("prepare unexpectedly succeeded")
+	}
+	if failureLifetime.releases != 1 {
+		t.Fatalf("failed preparation releases = %d, want 1", failureLifetime.releases)
+	}
+
+	abandonedLifetime := &fakeManagedDataLifetime{}
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", Factory: &fakeFactory{}})
+	prepared, err := manager.prepareResolved(t.Context(), state, artifact, ManagedDataResolution{Lifetime: abandonedLifetime})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := prepared.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if abandonedLifetime.releases != 1 {
+		t.Fatalf("abandoned preparation releases = %d, want 1", abandonedLifetime.releases)
+	}
+}
+
 func TestManagerPersistsSnapshotLeaseOnAcquireAndRelease(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
@@ -158,7 +277,6 @@ func TestManagerPersistsSnapshotLeaseOnAcquireAndRelease(t *testing.T) {
 		Repo:        repo,
 		WorkspaceID: "test",
 		Environment: "dev",
-		DataDir:     "/data",
 		Factory:     &fakeFactory{},
 		LeaseTTL:    time.Minute,
 		LeaseOwner:  "test-owner",
@@ -199,7 +317,6 @@ func TestManagerRetriesPersistentLeaseRelease(t *testing.T) {
 		Repo:        repo,
 		WorkspaceID: "test",
 		Environment: "dev",
-		DataDir:     "/data",
 		Factory:     &fakeFactory{},
 	})
 	if err := manager.Reload(ctx); err != nil {
@@ -223,7 +340,7 @@ func TestManagerCloseDefersRuntimeCloseUntilLeaseRelease(t *testing.T) {
 		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Environment: "dev", Status: servingstate.StatusActive, DuckLakeSnapshotID: 11},
 		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "digest"},
 	}
-	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", Factory: &fakeFactory{}})
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("reload: %v", err)
 	}
@@ -257,7 +374,6 @@ func TestManagerPreparedRuntimeExposesDuckLakeSnapshot(t *testing.T) {
 		Repo:        repo,
 		WorkspaceID: "test",
 		Environment: "dev",
-		DataDir:     "/data",
 		Factory:     &fakeFactory{snapshotID: 42},
 	})
 
@@ -284,7 +400,6 @@ func TestManagerReloadBackfillsMissingDeploymentSnapshot(t *testing.T) {
 		Repo:        repo,
 		WorkspaceID: "test",
 		Environment: "dev",
-		DataDir:     "/data",
 		Factory:     &fakeFactory{snapshotID: 42},
 	})
 
@@ -303,7 +418,7 @@ func TestManagerReloadRoutesWhenOnlyActiveDeploymentPointerChanges(t *testing.T)
 		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"},
 	}
 	factory := &fakeFactory{}
-	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: factory})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", Factory: factory})
 
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("first reload: %v", err)
@@ -340,7 +455,7 @@ func TestManagerReloadRoutesWhenOnlyDuckLakeSnapshotPointerChanges(t *testing.T)
 		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"},
 	}
 	factory := &fakeFactory{}
-	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: factory})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", Factory: factory})
 
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("first reload: %v", err)
@@ -368,7 +483,7 @@ func TestManagerReloadReusesRuntimeWhenDeploymentDigestAndSnapshotMatch(t *testi
 		artifact:   servingstate.Artifact{ServingStateID: "dep_1", WorkspaceID: "test", Environment: "dev", Digest: "same-digest"},
 	}
 	factory := &fakeFactory{}
-	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: factory})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", Factory: factory})
 
 	if err := manager.Reload(ctx); err != nil {
 		t.Fatalf("first reload: %v", err)
@@ -382,7 +497,7 @@ func TestManagerReloadReusesRuntimeWhenDeploymentDigestAndSnapshotMatch(t *testi
 }
 
 func TestManagerRejectsPreparedFromDifferentHost(t *testing.T) {
-	manager := NewManagerWithFactory(ManagerOptions{Repo: &fakeRepo{}, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: &fakeRepo{}, WorkspaceID: "test", Environment: "dev", Factory: &fakeFactory{}})
 	if err := manager.CommitPrepared(fakePrepared{}); err == nil {
 		t.Fatal("expected wrong prepared runtime error")
 	}
@@ -394,7 +509,7 @@ func TestManagerCloseClearsActiveRuntime(t *testing.T) {
 		deployment: servingstate.State{ID: "dep_1", WorkspaceID: "test", Status: servingstate.StatusValidated},
 		artifact:   servingstate.Artifact{ServingStateID: "dep_1", Digest: "digest"},
 	}
-	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", DataDir: "/data", Factory: &fakeFactory{}})
+	manager := NewManagerWithFactory(ManagerOptions{Repo: repo, WorkspaceID: "test", Environment: "dev", Factory: &fakeFactory{}})
 	prepared, err := manager.PrepareServingState(ctx, "dep_1")
 	if err != nil {
 		t.Fatalf("prepare: %v", err)
@@ -430,7 +545,6 @@ func TestRegistryReloadLoadsConfiguredEnvironmentForEachWorkspace(t *testing.T) 
 		Repo:         repo,
 		WorkspaceIDs: []servingstate.WorkspaceID{"sales", "operations", "empty"},
 		Environment:  "prod",
-		DataDir:      "/data",
 		Factory:      factory,
 	})
 
@@ -463,7 +577,6 @@ func TestRegistryPrepareCommitRoutesDeploymentByWorkspace(t *testing.T) {
 		Repo:         repo,
 		WorkspaceIDs: []servingstate.WorkspaceID{"sales"},
 		Environment:  "prod",
-		DataDir:      "/data",
 		Factory:      factory,
 	})
 
@@ -489,6 +602,201 @@ func TestRegistryPrepareCommitRoutesDeploymentByWorkspace(t *testing.T) {
 	}
 }
 
+func TestRegistryPreparedSetActivatesAndCommitsEveryWorkspaceTogether(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	for _, workspaceID := range []servingstate.WorkspaceID{"operations", "sales"} {
+		activeID := servingstate.ID("dep_" + string(workspaceID) + "_active")
+		repo.active[string(workspaceID)+"/prod"] = registryDeploymentArtifact{
+			deployment: servingstate.State{ID: activeID, WorkspaceID: workspaceID, Environment: "prod", Status: servingstate.StatusActive, DuckLakeSnapshotID: 1},
+			artifact:   servingstate.Artifact{ServingStateID: activeID, WorkspaceID: workspaceID, Environment: "prod", Digest: string(workspaceID) + "-active"},
+		}
+		id := servingstate.ID("dep_" + string(workspaceID) + "_prod")
+		repo.deployments[id] = servingstate.State{ID: id, WorkspaceID: workspaceID, Environment: "prod", Status: servingstate.StatusValidated}
+		repo.artifacts[id] = servingstate.Artifact{ServingStateID: id, WorkspaceID: workspaceID, Environment: "prod", Digest: string(workspaceID) + "-prod"}
+	}
+	factory := &recordingRegistryFactory{}
+	registry := NewRegistryWithFactory(RegistryOptions{
+		Repo:         repo,
+		WorkspaceIDs: []servingstate.WorkspaceID{"operations", "sales"},
+		Environment:  "prod",
+		Factory:      factory,
+	})
+	if err := registry.Reload(context.Background()); err != nil {
+		t.Fatalf("reload active generation: %v", err)
+	}
+
+	prepared, err := registry.PrepareServingStates(context.Background(), []string{"dep_sales_prod", "dep_operations_prod"})
+	if err != nil {
+		t.Fatalf("prepare set: %v", err)
+	}
+	defer prepared.Close()
+	if len(factory.runtimes) != 4 || factory.runtimes[0].closed || factory.runtimes[1].closed {
+		t.Fatalf("active generation was not retained during prepare: %#v", factory.runtimes)
+	}
+	if runtime, err := registry.managerForWorkspace("operations").Active(); err != nil || runtime != factory.runtimes[0] {
+		t.Fatalf("operations active during prepare = %#v, %v", runtime, err)
+	}
+	activated := false
+	err = registry.CommitPreparedSet(prepared, func() error {
+		activated = true
+		for _, workspaceID := range []servingstate.WorkspaceID{"operations", "sales"} {
+			id := servingstate.ID("dep_" + string(workspaceID) + "_prod")
+			repo.active[string(workspaceID)+"/prod"] = registryDeploymentArtifact{deployment: repo.deployments[id], artifact: repo.artifacts[id]}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("commit set: %v", err)
+	}
+	if !activated {
+		t.Fatal("metadata activation was not called")
+	}
+	for _, workspaceID := range []servingstate.WorkspaceID{"operations", "sales"} {
+		if _, err := registry.ActiveForWorkspace(context.Background(), workspaceID); err != nil {
+			t.Fatalf("%s active: %v", workspaceID, err)
+		}
+	}
+	if got := factory.inputs; !equalStrings(got, []string{"operations/prod/dep_operations_active", "sales/prod/dep_sales_active", "operations/prod/dep_operations_prod", "sales/prod/dep_sales_prod"}) {
+		t.Fatalf("factory inputs = %#v", got)
+	}
+}
+
+func TestRegistryPreparedSetDoesNotCommitWhenMetadataActivationFails(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.deployments["dep_sales_prod"] = servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_prod"] = servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"}
+	factory := &recordingRegistryFactory{}
+	registry := NewRegistryWithFactory(RegistryOptions{Repo: repo, WorkspaceIDs: []servingstate.WorkspaceID{"sales"}, Environment: "prod", Factory: factory})
+
+	prepared, err := registry.PrepareServingStates(context.Background(), []string{"dep_sales_prod"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	wantErr := errors.New("activation failed")
+	if err := registry.CommitPreparedSet(prepared, func() error { return wantErr }); !errors.Is(err, wantErr) {
+		t.Fatalf("commit error = %v, want %v", err, wantErr)
+	}
+	if _, err := registry.managerForWorkspace("sales").Active(); err == nil {
+		t.Fatal("runtime committed after metadata activation failed")
+	}
+}
+
+func TestRegistryPreparesExplicitManagedDataCandidateBeforeActivation(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.deployments["dep_sales_prod"] = servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_prod"] = servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"}
+	resolver := &fakeManagedDataResolver{resolution: ManagedDataResolution{RevisionID: "sha256:" + strings.Repeat("a", 64)}}
+	factory := &recordingRegistryFactory{}
+	registry := NewRegistryWithFactory(RegistryOptions{Repo: repo, WorkspaceIDs: []servingstate.WorkspaceID{"sales"}, Environment: "prod", Factory: factory, ManagedData: resolver})
+	candidate := ManagedDataResolution{RevisionID: "sha256:" + strings.Repeat("b", 64), Roots: map[string]string{"warehouse": "/cache/revision-b"}}
+
+	prepared, err := registry.PrepareServingStateCandidates(context.Background(), []ServingStateCandidate{{ServingStateID: "dep_sales_prod", ManagedData: candidate}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	if len(factory.managedData) != 1 || factory.managedData[0].RevisionID != candidate.RevisionID {
+		t.Fatalf("prepared managed data = %#v, want candidate revision", factory.managedData)
+	}
+	if got := factory.managedData[0].Roots["warehouse"]; got != "/cache/revision-b" {
+		t.Fatalf("prepared warehouse root = %q", got)
+	}
+}
+
+func TestRegistryPreparationFailureReleasesUnprocessedManagedDataLifetimes(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	for _, workspaceID := range []servingstate.WorkspaceID{"operations", "sales"} {
+		stateID := servingstate.ID("dep_" + string(workspaceID) + "_prod")
+		repo.deployments[stateID] = servingstate.State{ID: stateID, WorkspaceID: workspaceID, Environment: "prod", Status: servingstate.StatusValidated}
+		repo.artifacts[stateID] = servingstate.Artifact{ServingStateID: stateID, WorkspaceID: workspaceID, Environment: "prod", Digest: string(workspaceID)}
+	}
+	first := &fakeManagedDataLifetime{}
+	second := &fakeManagedDataLifetime{}
+	registry := NewRegistryWithFactory(RegistryOptions{Repo: repo, Environment: "prod", Factory: &fakeFactory{err: errors.New("prepare failed")}})
+	_, err := registry.PrepareServingStateCandidates(t.Context(), []ServingStateCandidate{
+		{ServingStateID: "dep_operations_prod", ManagedData: ManagedDataResolution{RevisionID: "sha256:" + strings.Repeat("a", 64), Lifetime: first}},
+		{ServingStateID: "dep_sales_prod", ManagedData: ManagedDataResolution{RevisionID: "sha256:" + strings.Repeat("b", 64), Lifetime: second}},
+	})
+	if err == nil {
+		t.Fatal("preparation unexpectedly succeeded")
+	}
+	if first.releases != 1 || second.releases != 1 {
+		t.Fatalf("managed-data releases = (%d, %d), want (1, 1)", first.releases, second.releases)
+	}
+}
+
+func TestPreparedSetReportsCandidateSnapshots(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.deployments["dep_sales_prod"] = servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_prod"] = servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"}
+	registry := NewRegistryWithFactory(RegistryOptions{Repo: repo, Environment: "prod", Factory: &fakeFactory{snapshotID: 42}})
+
+	prepared, err := registry.PrepareServingStates(context.Background(), []string{"dep_sales_prod"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	want := []PreparedSnapshot{{WorkspaceID: "sales", ServingStateID: "dep_sales_prod", DuckLakeSnapshotID: 42}}
+	if got := prepared.Snapshots(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("snapshots = %#v, want %#v", got, want)
+	}
+}
+
+func TestRegistryServesActiveGenerationWhilePreparedSetIsBuilding(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.active["sales/prod"] = registryDeploymentArtifact{
+		deployment: servingstate.State{ID: "dep_sales_active", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusActive, DuckLakeSnapshotID: 1},
+		artifact:   servingstate.Artifact{ServingStateID: "dep_sales_active", WorkspaceID: "sales", Environment: "prod", Digest: "active"},
+	}
+	repo.deployments["dep_sales_next"] = servingstate.State{ID: "dep_sales_next", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_next"] = servingstate.Artifact{ServingStateID: "dep_sales_next", WorkspaceID: "sales", Environment: "prod", Digest: "next"}
+	factory := &blockingRegistryFactory{started: make(chan struct{}), release: make(chan struct{})}
+	registry := NewRegistryWithFactory(RegistryOptions{Repo: repo, WorkspaceIDs: []servingstate.WorkspaceID{"sales"}, Environment: "prod", Factory: factory})
+	if err := registry.Reload(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	preparedResult := make(chan *PreparedSet, 1)
+	errResult := make(chan error, 1)
+	go func() {
+		prepared, err := registry.PrepareServingStates(context.Background(), []string{"dep_sales_next"})
+		preparedResult <- prepared
+		errResult <- err
+	}()
+	<-factory.started
+
+	leaseResult := make(chan Lease, 1)
+	leaseErr := make(chan error, 1)
+	go func() {
+		lease, err := registry.AcquireForWorkspace(context.Background(), "sales")
+		leaseResult <- lease
+		leaseErr <- err
+	}()
+	select {
+	case err := <-leaseErr:
+		if err != nil {
+			t.Fatalf("acquire active generation: %v", err)
+		}
+		lease := <-leaseResult
+		if lease.ServingStateID() != "dep_sales_active" {
+			t.Fatalf("serving state = %q", lease.ServingStateID())
+		}
+		lease.Release()
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("active acquisition blocked behind candidate materialization")
+	}
+
+	close(factory.release)
+	prepared := <-preparedResult
+	if err := <-errResult; err != nil {
+		t.Fatal(err)
+	}
+	if prepared != nil {
+		defer prepared.Close()
+	}
+}
+
 func TestRegistryRejectsPreparedDeploymentFromDifferentEnvironment(t *testing.T) {
 	repo := newFakeRegistryRepo()
 	repo.deployments["dep_ops_dev"] = servingstate.State{ID: "dep_ops_dev", WorkspaceID: "operations", Environment: "dev", Status: servingstate.StatusValidated}
@@ -497,7 +805,6 @@ func TestRegistryRejectsPreparedDeploymentFromDifferentEnvironment(t *testing.T)
 		Repo:         repo,
 		WorkspaceIDs: []servingstate.WorkspaceID{"operations"},
 		Environment:  "prod",
-		DataDir:      "/data",
 		Factory:      &recordingRegistryFactory{},
 	})
 
@@ -517,7 +824,6 @@ func TestRegistrySerializesRuntimePrepareAcrossWorkspaces(t *testing.T) {
 		Repo:         repo,
 		WorkspaceIDs: []servingstate.WorkspaceID{"operations", "sales"},
 		Environment:  "prod",
-		DataDir:      "/data",
 		Factory:      factory,
 	})
 
@@ -567,7 +873,6 @@ func TestRegistryPrepareServingStateClosesLoadedRuntimesBeforePrepare(t *testing
 		Repo:         repo,
 		WorkspaceIDs: []servingstate.WorkspaceID{"operations", "sales"},
 		Environment:  "prod",
-		DataDir:      "/data",
 		Factory:      factory,
 	})
 	if err := registry.Reload(context.Background()); err != nil {
@@ -605,7 +910,6 @@ func TestRegistryAcquireForWorkspaceClosesLoadedRuntimesBeforeLazyPrepare(t *tes
 		Repo:         repo,
 		WorkspaceIDs: []servingstate.WorkspaceID{"operations", "sales", "visuals"},
 		Environment:  "prod",
-		DataDir:      "/data",
 		Factory:      factory,
 	})
 	if err := registry.Reload(context.Background()); err != nil {
@@ -647,7 +951,6 @@ func TestRegistryAcquireForWorkspaceKeepsLoadedRuntimesOpenOnNoChangeReload(t *t
 		Repo:         repo,
 		WorkspaceIDs: []servingstate.WorkspaceID{"operations", "sales"},
 		Environment:  "prod",
-		DataDir:      "/data",
 		Factory:      factory,
 	})
 	if err := registry.Reload(context.Background()); err != nil {
@@ -682,7 +985,6 @@ func TestRegistryCloseClosesEveryActiveWorkspaceRuntime(t *testing.T) {
 		Repo:         repo,
 		WorkspaceIDs: []servingstate.WorkspaceID{"sales", "operations"},
 		Environment:  "prod",
-		DataDir:      "/data",
 		Factory:      factory,
 	})
 	if err := registry.Reload(context.Background()); err != nil {
@@ -768,10 +1070,12 @@ type fakeFactory struct {
 	prepareCalls int
 	err          error
 	snapshotID   int64
+	input        RuntimeInput
 }
 
 func (f *fakeFactory) Prepare(_ context.Context, input RuntimeInput) (Runtime, error) {
 	f.prepareCalls++
+	f.input = input
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -779,6 +1083,24 @@ func (f *fakeFactory) Prepare(_ context.Context, input RuntimeInput) (Runtime, e
 		return &fakeRuntime{snapshotID: input.State.DuckLakeSnapshotID}, nil
 	}
 	return &fakeRuntime{snapshotID: f.snapshotID}, nil
+}
+
+type fakeManagedDataResolver struct {
+	resolution ManagedDataResolution
+	err        error
+}
+
+type fakeManagedDataLifetime struct {
+	releases int
+}
+
+func (l *fakeManagedDataLifetime) Release() error {
+	l.releases++
+	return nil
+}
+
+func (r fakeManagedDataResolver) ResolveManagedData(context.Context, servingstate.ID) (ManagedDataResolution, error) {
+	return r.resolution, r.err
 }
 
 type fakeRuntime struct {
@@ -859,12 +1181,14 @@ func (r *fakeRegistryRepo) RecordDuckLakeSnapshot(_ context.Context, servingStat
 }
 
 type recordingRegistryFactory struct {
-	inputs   []string
-	runtimes []*recordingRuntime
+	inputs      []string
+	managedData []ManagedDataResolution
+	runtimes    []*recordingRuntime
 }
 
 func (f *recordingRegistryFactory) Prepare(_ context.Context, input RuntimeInput) (Runtime, error) {
 	f.inputs = append(f.inputs, fmt.Sprintf("%s/%s/%s", input.State.WorkspaceID, input.State.Environment, input.State.ID))
+	f.managedData = append(f.managedData, input.ManagedData)
 	runtime := &recordingRuntime{}
 	f.runtimes = append(f.runtimes, runtime)
 	return runtime, nil
@@ -882,6 +1206,19 @@ func (r *recordingRuntime) Close() error {
 type overlapDetectingRegistryFactory struct {
 	active     atomic.Int32
 	overlapped atomic.Bool
+}
+
+type blockingRegistryFactory struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (f *blockingRegistryFactory) Prepare(_ context.Context, input RuntimeInput) (Runtime, error) {
+	if input.State.ID == "dep_sales_next" {
+		close(f.started)
+		<-f.release
+	}
+	return &recordingRuntime{}, nil
 }
 
 func (f *overlapDetectingRegistryFactory) Prepare(context.Context, RuntimeInput) (Runtime, error) {

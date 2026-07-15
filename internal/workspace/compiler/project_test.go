@@ -23,7 +23,7 @@ kind: Connection
 metadata:
   name: olist
 spec:
-  kind: local
+  kind: managed
 `,
 		"sources/olist.orders.yaml":                                    sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                                 sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -300,7 +300,7 @@ kind: Connection
 metadata:
   name: olist
 spec:
-  kind: local
+  kind: managed
 `,
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
@@ -936,8 +936,8 @@ kind: Connection
 metadata:
   name: scoped
 spec:
-  kind: local
-  scope: data/allowed
+  kind: http
+  scope: https://example.com/data/allowed
 `,
 			"sources/unused.escape.yaml": `
 apiVersion: libredash.dev/v1
@@ -946,7 +946,7 @@ metadata:
   name: unused.escape
 spec:
   connection: scoped
-  path: ../outside.csv
+  path: https://example.com/outside.csv
   format: csv
 `,
 		}))
@@ -1067,7 +1067,7 @@ kind: Connection
 metadata:
   name: olist
 spec:
-  kind: local
+  kind: managed
   auth:
     token: secret
 `,
@@ -1285,7 +1285,7 @@ kind: Connection
 metadata:
   name: ` + name + `
 spec:
-  kind: local
+  kind: managed
 `
 }
 

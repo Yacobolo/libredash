@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/analytics/connectors"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 )
 
@@ -20,10 +19,10 @@ type queryContext interface {
 }
 
 func DiscoverSchemas(ctx context.Context, db *Database, model *semanticmodel.Model) error {
-	return DiscoverSchemasWithDataDir(ctx, db, model, "")
+	return discoverSchemas(ctx, db, model)
 }
 
-func DiscoverSchemasWithDataDir(ctx context.Context, db sqlDBProvider, model *semanticmodel.Model, dataDir string) error {
+func discoverSchemas(ctx context.Context, db sqlDBProvider, model *semanticmodel.Model) error {
 	if db == nil || db.SQLDB() == nil {
 		return fmt.Errorf("schema discovery requires a DuckDB database")
 	}
@@ -79,7 +78,7 @@ ORDER BY schema_name, table_name, column_index`, databaseName)
 	}
 
 	for name, source := range model.Sources {
-		columns, err := discoverSourceSchemaWithDataDir(ctx, db.SQLDB(), model, source, dataDir)
+		columns, err := discoverSourceSchema(ctx, db.SQLDB(), model, source)
 		if err != nil {
 			return fmt.Errorf("discovering source %s schema: %w", name, err)
 		}
@@ -104,14 +103,7 @@ ORDER BY schema_name, table_name, column_index`, databaseName)
 }
 
 func discoverSourceSchema(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source) ([]semanticmodel.ColumnSchema, error) {
-	return discoverSourceSchemaWithDataDir(ctx, db, model, source, "")
-}
-
-func discoverSourceSchemaWithDataDir(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source, dataDir string) ([]semanticmodel.ColumnSchema, error) {
-	if dataDir == "" && source.Kind() == connectors.KindPath {
-		return nil, nil
-	}
-	plan, err := ResolveSourcePlan(model, source, dataDir)
+	plan, err := ResolveSourcePlan(model, source)
 	if err != nil {
 		return nil, err
 	}
@@ -119,18 +111,18 @@ func discoverSourceSchemaWithDataDir(ctx context.Context, db queryContext, model
 	if err != nil {
 		return nil, err
 	}
-	return adapter.Discover(ctx, db, model, source, dataDir)
+	return adapter.Discover(ctx, db, model, source)
 }
 
-func (pathSourceAdapter) Discover(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source, dataDir string) ([]semanticmodel.ColumnSchema, error) {
-	return describeSourceSchema(ctx, db, model, source, dataDir)
+func (pathSourceAdapter) Discover(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source) ([]semanticmodel.ColumnSchema, error) {
+	return describeSourceSchema(ctx, db, model, source)
 }
 
-func (attachedObjectSourceAdapter) Discover(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source, dataDir string) ([]semanticmodel.ColumnSchema, error) {
-	return describeSourceSchema(ctx, db, model, source, dataDir)
+func (attachedObjectSourceAdapter) Discover(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source) ([]semanticmodel.ColumnSchema, error) {
+	return describeSourceSchema(ctx, db, model, source)
 }
 
-func (quackSourceAdapter) Discover(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source, _ string) ([]semanticmodel.ColumnSchema, error) {
+func (quackSourceAdapter) Discover(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source) ([]semanticmodel.ColumnSchema, error) {
 	connection := model.Connections[source.Connection]
 	sqlText, err := quackMetadataColumnsSQL(connection.Path, source.Object, connection.Options)
 	if err != nil {
@@ -173,8 +165,8 @@ func (quackSourceAdapter) Discover(ctx context.Context, db queryContext, model *
 	return describeQuackLimitZeroSchema(ctx, db, connection.Path, source.Object, connection.Options)
 }
 
-func describeSourceSchema(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source, dataDir string) ([]semanticmodel.ColumnSchema, error) {
-	relation, err := SourceRelation(model, source, dataDir)
+func describeSourceSchema(ctx context.Context, db queryContext, model *semanticmodel.Model, source semanticmodel.Source) ([]semanticmodel.ColumnSchema, error) {
+	relation, err := SourceRelation(model, source)
 	if err != nil {
 		return nil, err
 	}

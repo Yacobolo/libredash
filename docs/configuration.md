@@ -105,6 +105,28 @@ Run `libredash config validate` to validate the active environment, or add `--pr
 | `LIBREDASH_EXEC_READ_QUEUE_TIMEOUT` | duration / `30s` | serve | supported | Maximum time an interactive read may wait in the queue. |
 | `LIBREDASH_EXEC_READ_TIMEOUT` | duration / `2m` | serve | supported | Maximum execution time for an interactive read query. |
 
+## Managed Data
+
+| Environment variable | Type / default | Scope | Lifecycle | Description |
+|---|---|---|---|---|
+| `LIBREDASH_MANAGED_DATA_BACKEND` | string / `local` | serve | supported | Storage backend for project-global managed data; supported values are local and s3. |
+| `LIBREDASH_MANAGED_DATA_DIR` | string / `.libredash/managed-data` | serve | supported | Private local root for managed-data objects, upload staging, and verified runtime views; S3 deployments use it as the runtime cache. |
+| `LIBREDASH_MANAGED_DATA_GC_GRACE_PERIOD` | duration / `24h` | serve | supported | Minimum age of unreferenced managed-data objects before garbage collection. |
+| `LIBREDASH_MANAGED_DATA_GC_INTERVAL` | duration / `1h` | serve | supported | Interval between managed-data garbage-collection passes. |
+| `LIBREDASH_MANAGED_DATA_MAX_FILES` | integer / `10000` | serve | supported | Maximum number of files in one managed-data revision. |
+| `LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES` | integer64 / `1073741824` | serve | supported | Maximum size in bytes of one managed-data file. |
+| `LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES` | integer64 / `10737418240` | serve | supported | Maximum total size in bytes of one managed-data revision. |
+| `LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES` | integer64 / `5368709120` | serve | supported | Minimum free bytes required before accepting local managed-data uploads. |
+| `LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID` | string / secret | serve | supported | Optional S3 access-key identifier for managed-data storage. |
+| `LIBREDASH_MANAGED_DATA_S3_BUCKET` | string | serve | supported | S3 bucket used for managed-data objects and staging. |
+| `LIBREDASH_MANAGED_DATA_S3_ENDPOINT` | string | serve | supported | Optional S3-compatible endpoint URL. |
+| `LIBREDASH_MANAGED_DATA_S3_PATH_STYLE` | boolean / `false` | serve | supported | Use path-style addressing for S3-compatible managed-data storage. |
+| `LIBREDASH_MANAGED_DATA_S3_PREFIX` | string / `managed-data` | serve | supported | Object-key prefix for managed data in the configured S3 bucket. |
+| `LIBREDASH_MANAGED_DATA_S3_REGION` | string | serve | supported | S3 region used for managed-data requests. |
+| `LIBREDASH_MANAGED_DATA_S3_SECRET_ACCESS_KEY` | string / secret | serve | supported | Optional S3 secret access key for managed-data storage. |
+| `LIBREDASH_MANAGED_DATA_S3_SESSION_TOKEN` | string / secret | serve | supported | Optional temporary S3 session token for managed-data storage. |
+| `LIBREDASH_MANAGED_DATA_UPLOAD_SESSION_TTL` | duration / `24h` | serve | supported | Lifetime of an incomplete managed-data upload session. |
+
 ## Operations
 
 | Environment variable | Type / default | Scope | Lifecycle | Description |
@@ -126,19 +148,14 @@ Run `libredash config validate` to validate the active environment, or add `--pr
 
 | Environment variable | Type / default | Scope | Lifecycle | Description |
 |---|---|---|---|---|
-| `ADDR` | string | serve | compatibility | Compatibility listen-address alias used after LIBREDASH_ADDR. Alias for `LIBREDASH_ADDR`. |
 | `LIBREDASH_ADDR` | string | serve,healthcheck | supported | HTTP listen address. |
 | `LIBREDASH_PRODUCTION` | boolean / `false` | serve,admin | supported | Enable production serving and validation behavior. |
-| `PORT` | string | serve,healthcheck | compatibility | Compatibility port alias used after LIBREDASH_ADDR and ADDR. Alias for `LIBREDASH_ADDR`. |
 
 ## Storage
 
 | Environment variable | Type / default | Scope | Lifecycle | Description |
 |---|---|---|---|---|
-| `LIBREDASH_CATALOG_PATH` | string | serve | supported | Legacy dashboard catalog path override. |
-| `LIBREDASH_DATA_DIR` | string / `.data/olist` | serve,bootstrap tools | supported | Directory containing source data files. |
 | `LIBREDASH_DUCKDB_DIR` | string | serve | supported | Directory containing workspace DuckDB runtime files. |
-| `LIBREDASH_DUCKDB_PATH` | string | serve | supported | Explicit legacy DuckDB database path override. |
 | `LIBREDASH_DUCKLAKE_CATALOG_PATH` | string | serve,admin | supported | Path to the single global DuckLake catalog. |
 | `LIBREDASH_HOME` | string / `.libredash` | serve,admin,client | supported | Instance state directory containing databases, artifacts, and runtime files. |
 
@@ -157,3 +174,9 @@ Run `libredash config validate` to validate the active environment, or add `--pr
 - **production-oidc-provider-slug:** The OIDC provider identifier must be route-safe. Failure: `LIBREDASH_OIDC_PROVIDER_ID must be a route-safe slug containing only letters, numbers, dots, underscores, or dashes`.
 - **production-azure-callback-https:** The production Azure callback must use HTTPS. Failure: `production serve requires LIBREDASH_AZURE_CALLBACK_URL to be an https URL`.
 - **production-scim-token:** A configured production SCIM token must contain at least 32 characters. Failure: `production SCIM provisioning requires LIBREDASH_SCIM_BEARER_TOKEN with at least 32 characters`.
+- **managed-data-backend:** Managed data uses a supported storage backend. Failure: `LIBREDASH_MANAGED_DATA_BACKEND must be local or s3`.
+- **managed-data-runtime-dir:** Every managed-data backend requires a private local runtime and staging directory. Failure: `managed-data storage requires LIBREDASH_MANAGED_DATA_DIR`.
+- **managed-data-s3-location:** The S3 managed-data backend requires a bucket and region. Failure: `S3 managed-data storage requires LIBREDASH_MANAGED_DATA_S3_BUCKET and LIBREDASH_MANAGED_DATA_S3_REGION`.
+- **managed-data-s3-credentials:** Managed-data S3 credentials are either omitted or configured as a complete key pair. Failure: `managed-data S3 credentials require both LIBREDASH_MANAGED_DATA_S3_ACCESS_KEY_ID and LIBREDASH_MANAGED_DATA_S3_SECRET_ACCESS_KEY; a session token also requires that pair`.
+- **managed-data-positive-limits:** Managed-data upload, session, garbage-collection, and free-space limits are positive. Failure: `managed-data limits, durations, and free-space thresholds must be positive`.
+- **managed-data-revision-limit:** The managed-data revision limit is at least the per-file limit. Failure: `LIBREDASH_MANAGED_DATA_MAX_REVISION_BYTES must be at least LIBREDASH_MANAGED_DATA_MAX_FILE_BYTES`.

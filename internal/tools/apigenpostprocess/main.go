@@ -3,6 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"os"
 	"strings"
 )
@@ -15,6 +19,84 @@ func main() {
 	}
 	if err := relaxEmbeddedOpenAPI("internal/api/gen/server.apigen.gen.go"); err != nil {
 		fatal(err)
+	}
+	if err := widenGeneratedInt64Fields("internal/api/gen/request_models.gen.go"); err != nil {
+		fatal(err)
+	}
+}
+
+func widenGeneratedInt64Fields(path string) error {
+	set := token.NewFileSet()
+	file, err := parser.ParseFile(set, path, nil, parser.ParseComments)
+	if err != nil {
+		return err
+	}
+	widened := 0
+	for _, declaration := range file.Decls {
+		general, ok := declaration.(*ast.GenDecl)
+		if !ok || general.Tok != token.TYPE {
+			continue
+		}
+		for _, spec := range general.Specs {
+			typeSpec, ok := spec.(*ast.TypeSpec)
+			if !ok {
+				continue
+			}
+			structure, ok := typeSpec.Type.(*ast.StructType)
+			if !ok {
+				continue
+			}
+			for _, field := range structure.Fields.List {
+				if len(field.Names) != 1 || !generatedInt64Field(typeSpec.Name.Name, field.Names[0].Name) {
+					continue
+				}
+				identifier := integerIdentifier(field.Type)
+				if identifier == nil || identifier.Name != "int32" {
+					continue
+				}
+				identifier.Name = "int64"
+				widened++
+			}
+		}
+	}
+	if widened != 9 {
+		return fmt.Errorf("%s: widened %d generated int64 fields, want 9", path, widened)
+	}
+	output, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	if err := format.Node(output, set, file); err != nil {
+		output.Close()
+		return err
+	}
+	return output.Close()
+}
+
+func generatedInt64Field(typeName, fieldName string) bool {
+	if strings.HasPrefix(typeName, "ProjectDeployment") {
+		return fieldName == "PriorGeneration" || fieldName == "ActivatedGeneration"
+	}
+	if !strings.HasPrefix(typeName, "ManagedData") {
+		return false
+	}
+	switch fieldName {
+	case "Size", "Offset", "MinimumPartSize", "MaximumPartSize":
+		return true
+	default:
+		return false
+	}
+}
+
+func integerIdentifier(expression ast.Expr) *ast.Ident {
+	switch value := expression.(type) {
+	case *ast.Ident:
+		return value
+	case *ast.StarExpr:
+		identifier, _ := value.X.(*ast.Ident)
+		return identifier
+	default:
+		return nil
 	}
 }
 

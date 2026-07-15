@@ -65,7 +65,7 @@ func healthcheckURL(opts *rootOptions) string {
 	if url := strings.TrimSpace(os.Getenv(configspec.EnvLIBREDASH_HEALTHCHECK_URL)); url != "" {
 		return url
 	}
-	if url := healthcheckURLForListenAddr(firstNonEmptyEnv(configspec.EnvLIBREDASH_ADDR, configspec.EnvADDR, configspec.EnvPORT)); url != "" {
+	if url := healthcheckURLForListenAddr(os.Getenv(configspec.EnvLIBREDASH_ADDR)); url != "" {
 		return url
 	}
 	return defaultHealthcheckURL
@@ -99,13 +99,4 @@ func healthcheckListenHostPort(addr string) (string, string) {
 		return "", ""
 	}
 	return host, port
-}
-
-func firstNonEmptyEnv(names ...string) string {
-	for _, name := range names {
-		if value := strings.TrimSpace(os.Getenv(name)); value != "" {
-			return value
-		}
-	}
-	return ""
 }

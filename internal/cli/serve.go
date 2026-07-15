@@ -16,11 +16,19 @@ import (
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/agent"
 	agentsqlite "github.com/Yacobolo/libredash/internal/agent/sqlite"
-	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
 	materializesqlite "github.com/Yacobolo/libredash/internal/analytics/materialize/sqlite"
 	"github.com/Yacobolo/libredash/internal/app"
 	"github.com/Yacobolo/libredash/internal/config"
+	projectdeployment "github.com/Yacobolo/libredash/internal/deployment"
+	deploymentapiadapter "github.com/Yacobolo/libredash/internal/deployment/apiadapter"
+	deploymenthttp "github.com/Yacobolo/libredash/internal/deployment/http"
+	deploymentsqlite "github.com/Yacobolo/libredash/internal/deployment/sqlite"
 	"github.com/Yacobolo/libredash/internal/execution"
+	manageddataapiadapter "github.com/Yacobolo/libredash/internal/manageddata/apiadapter"
+	manageddatahttp "github.com/Yacobolo/libredash/internal/manageddata/http"
+	manageddataresolver "github.com/Yacobolo/libredash/internal/manageddata/resolver"
+	"github.com/Yacobolo/libredash/internal/manageddata/s3multipart"
+	manageddatasqlite "github.com/Yacobolo/libredash/internal/manageddata/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
 	"github.com/Yacobolo/libredash/internal/securefs"
@@ -44,7 +52,6 @@ func serveCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&opts.addr, "addr", "", "listen address; defaults to the configured address")
-	cmd.Flags().StringVar(&opts.dataDir, "data-dir", "", "dashboard source data directory; defaults to the configured data directory")
 	cmd.Flags().StringVar(&opts.environment, "environment", "", "serving environment; defaults to prod in production and dev otherwise")
 	cmd.Flags().BoolVar(&opts.production, "production", false, "serve active serving state from the platform DB")
 	return cmd
@@ -61,15 +68,11 @@ func runServe(ctx context.Context, opts *rootOptions) error {
 	if addr == "" {
 		addr = cfg.ListenAddr()
 	}
-	dataDir := opts.dataDir
-	if dataDir == "" {
-		dataDir = cfg.DataDir
-	}
 	if err := cfg.Validate(config.ProfileServe); err != nil {
 		return err
 	}
 	environment := serveEnvironment(production, opts.environment)
-	server, cleanup, err := servingStateBackedServer(ctx, cfg, dataDir, production, environment)
+	server, cleanup, err := servingStateBackedServer(ctx, cfg, production, environment)
 	if err != nil {
 		return err
 	}
@@ -159,7 +162,7 @@ func runHTTPServer(ctx context.Context, server *http.Server) error {
 	}
 }
 
-func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir string, production bool, environment servingstate.Environment) (*app.Server, func(), error) {
+func servingStateBackedServer(ctx context.Context, cfg config.Config, production bool, environment servingstate.Environment) (*app.Server, func(), error) {
 	cookieSecure, err := cfg.CookieSecure()
 	if err != nil {
 		return nil, nil, err
@@ -179,15 +182,6 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 			return nil, nil, err
 		}
 	}
-	if err := analyticsducklake.MigrateSharedSQLiteCatalog(ctx, cfg.DBPath(), duckLakeCatalogPath, cfg.DuckLakeDataDir()); err != nil {
-		return nil, nil, err
-	}
-	if err := analyticsducklake.MigrateSQLiteCatalogDataPath(ctx, duckLakeCatalogPath, cfg.DuckLakeDataDir()); err != nil {
-		return nil, nil, err
-	}
-	if err := removeLegacyDuckLakeArtifacts(cfg.DuckDBDirPath()); err != nil {
-		return nil, nil, err
-	}
 	store, err := platform.Open(ctx, cfg.DBPath())
 	if err != nil {
 		return nil, nil, err
@@ -202,6 +196,43 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 		}
 	}
 	servingStateRepo := servingstatesqlite.NewRepository(store.SQLDB())
+	managedDataRepo := manageddatasqlite.NewRepository(store.SQLDB())
+	managedDataStorage, err := newManagedDataStorage(ctx, cfg)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	managedDataControl, err := newManagedDataControl(managedDataRepo, managedDataStorage, cfg)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	managedDataCollector, err := newManagedDataCollector(store.SQLDB(), managedDataStorage, cfg)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	managedDataRuntimeCollector, err := newManagedDataRuntimeCollector(managedDataStorage, cfg)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	managedDataResolver, err := manageddataresolver.New(managedDataRepo, servingStateRepo, managedDataStorage.materializer)
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	var managedDataMultipart s3multipart.Coordinator
+	var managedDataMultipartService *s3multipart.Service
+	if managedDataStorage.s3 != nil {
+		multipartService, multipartErr := s3multipart.New(managedDataRepo, managedDataStorage.s3, s3multipart.Config{Backend: "s3"})
+		if multipartErr != nil {
+			cleanup()
+			return nil, nil, multipartErr
+		}
+		managedDataMultipart = multipartService
+		managedDataMultipartService = multipartService
+	}
 	if err := materializesqlite.NewSQLRunRepository(store.SQLDB()).FailRunsForTerminalServingStates(ctx, "refresh did not complete"); err != nil {
 		cleanup()
 		return nil, nil, err
@@ -230,7 +261,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 		Repo:         servingStateRepo,
 		WorkspaceIDs: workspaceIDs,
 		Environment:  environment,
-		DataDir:      dataDir,
+		ManagedData:  managedDataResolver,
 		OnDrained: func(servingstate.ID, int64) {
 			go func() {
 				protected := []int64(nil)
@@ -249,7 +280,6 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 			}()
 		},
 		Factory: servingStateRuntimeFactory{
-			dataDir:          dataDir,
 			duckDBDir:        cfg.DuckDBDirPath(),
 			runtimeDir:       cfg.RuntimeDir(),
 			catalogPath:      duckLakeCatalogPath,
@@ -260,11 +290,35 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 		cleanup()
 		return nil, nil, err
 	}
+	deploymentRuntime, err := projectdeployment.NewRegistryRuntime(registry)
+	if err != nil {
+		_ = registry.Close()
+		cleanup()
+		return nil, nil, err
+	}
+	deploymentService, err := projectdeployment.New(deploymentsqlite.NewRepository(store.SQLDB()), servingStateRepo, deploymentRuntime, managedDataResolver)
+	if err != nil {
+		_ = registry.Close()
+		cleanup()
+		return nil, nil, err
+	}
+	deploymentAPI, err := deploymentapiadapter.New(deploymentService, managedDataRepo)
+	if err != nil {
+		_ = registry.Close()
+		cleanup()
+		return nil, nil, err
+	}
+	managedDataAPI, err := manageddataapiadapter.New(managedDataRepo)
+	if err != nil {
+		_ = registry.Close()
+		cleanup()
+		return nil, nil, err
+	}
 	cleanupWithRegistry := func() {
 		_ = registry.Close()
 		cleanup()
 	}
-	runtimeMetrics := app.NewDynamicRuntimeMetrics("", dataDir, func(workspaceID string) app.RuntimeProvider {
+	runtimeMetrics := app.NewDynamicRuntimeMetrics("", func(workspaceID string) app.RuntimeProvider {
 		return registry.ProviderForWorkspace(servingstate.WorkspaceID(workspaceID))
 	})
 	assetCatalog := workspace.NewAssetCatalogService(workspaceRepo)
@@ -322,40 +376,17 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, dataDir st
 		AllowedHosts:        allowedHosts,
 		Executor:            execution.New(cfg.ExecutionConfig()),
 		JobLeaseTimeout:     cfg.ExecJobLeaseTimeout,
+		ManagedData: manageddatahttp.Options{
+			Repository: managedDataAPI, Uploads: managedDataControl,
+			Multipart: managedDataMultipart,
+		},
+		Deployment:     deploymenthttp.Options{Coordinator: deploymentAPI},
+		ManagedDataTus: managedDataStorage.tus,
+		ManagedDataExpirer: managedDataMaintenance{
+			uploads: managedDataControl, multipart: managedDataMultipartService,
+			uploadTTL: cfg.ManagedDataUploadSessionTTL, collector: managedDataCollector, runtime: managedDataRuntimeCollector,
+		},
+		ManagedDataExpireInterval: cfg.ManagedDataGCInterval,
 	})
 	return server, cleanupWithRegistry, nil
-}
-
-func removeLegacyDuckLakeArtifacts(root string) error {
-	info, err := os.Stat(root)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	if !info.IsDir() {
-		return nil
-	}
-	return filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			if os.IsNotExist(walkErr) {
-				return nil
-			}
-			return walkErr
-		}
-		if entry.IsDir() || entry.Name() != "catalog.sqlite" {
-			return nil
-		}
-		dir := filepath.Dir(path)
-		for _, suffix := range []string{"", "-wal", "-shm"} {
-			if err := os.Remove(path + suffix); err != nil && !os.IsNotExist(err) {
-				return err
-			}
-		}
-		if err := os.RemoveAll(filepath.Join(dir, "data")); err != nil {
-			return err
-		}
-		return nil
-	})
 }

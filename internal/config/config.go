@@ -39,15 +39,6 @@ func (c Config) ListenAddr() string {
 	if c.Addr != "" {
 		return c.Addr
 	}
-	if c.AddrFallback != "" {
-		return c.AddrFallback
-	}
-	if c.Port != "" {
-		if c.Port[0] == ':' {
-			return c.Port
-		}
-		return ":" + c.Port
-	}
 	return ":8080"
 }
 

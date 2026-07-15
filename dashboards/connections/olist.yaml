@@ -4,8 +4,8 @@ metadata:
   name: olist
   title: Olist CSV files
 spec:
-  kind: local
-  description: Local CSV files for the Olist ecommerce demo dataset.
+  kind: managed
+  description: Project-global managed Olist ecommerce demo data.
   credentials:
     provider: none
   defaults:

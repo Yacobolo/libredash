@@ -30,6 +30,7 @@ func workspacesCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 
 func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	parent := &cobra.Command{Use: "dashboards", Short: "Inspect dashboards"}
+	parent.PersistentFlags().StringVar(&opts.workspaceID, "workspace", opts.workspaceID, "workspace id")
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "List dashboards",
@@ -156,6 +157,7 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 
 func semanticModelsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	parent := &cobra.Command{Use: "semantic-models", Short: "Inspect semantic models"}
+	parent.PersistentFlags().StringVar(&opts.workspaceID, "workspace", opts.workspaceID, "workspace id")
 	list := &cobra.Command{
 		Use:   "list",
 		Short: "List semantic models",

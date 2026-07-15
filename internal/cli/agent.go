@@ -19,6 +19,7 @@ import (
 
 func agentCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	parent := &cobra.Command{Use: "agent", Short: "Use the LibreDash read-only agent"}
+	parent.PersistentFlags().StringVar(&opts.workspaceID, "workspace", opts.workspaceID, "workspace id")
 	ask := &cobra.Command{
 		Use:   "ask [question]",
 		Short: "Ask the LibreDash read-only agent a question",

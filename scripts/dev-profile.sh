@@ -47,7 +47,6 @@ existing_quack_token="${LIBREDASH_QUACK_TOKEN:-}"
 existing_agent_api_key="${LIBREDASH_AGENT_API_KEY:-}"
 existing_home="${LIBREDASH_HOME:-}"
 existing_duckdb_dir="${LIBREDASH_DUCKDB_DIR:-}"
-existing_data_dir="${LIBREDASH_DATA_DIR:-}"
 
 set -a
 # shellcheck source=/dev/null
@@ -66,9 +65,8 @@ if [[ -z "${LIBREDASH_AGENT_API_KEY:-}" && -n "$existing_agent_api_key" ]]; then
 fi
 export LIBREDASH_HOME="${existing_home:-$ROOT/.tmp/profiles/$profile/home}"
 export LIBREDASH_DUCKDB_DIR="${existing_duckdb_dir:-$ROOT/.tmp/profiles/$profile/duckdb}"
-export LIBREDASH_DATA_DIR="${existing_data_dir:-$ROOT/.tmp/profiles/$profile/data}"
 
-for dir in "${LIBREDASH_HOME:-}" "${LIBREDASH_DUCKDB_DIR:-}" "${LIBREDASH_DATA_DIR:-}"; do
+for dir in "${LIBREDASH_HOME:-}" "${LIBREDASH_DUCKDB_DIR:-}"; do
   if [[ -n "$dir" ]]; then
     mkdir -p "$dir"
   fi

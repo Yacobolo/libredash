@@ -8,6 +8,23 @@ import (
 	"testing"
 )
 
+func TestTargetDirRequiresExplicitOutput(t *testing.T) {
+	if _, err := targetDir(""); err == nil || !strings.Contains(err.Error(), "out is required") {
+		t.Fatalf("targetDir empty output error = %v, want required error", err)
+	}
+}
+
+func TestTargetDirResolvesExplicitOutput(t *testing.T) {
+	want := filepath.Join(t.TempDir(), "movielens")
+	got, err := targetDir(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("targetDir = %q, want %q", got, want)
+	}
+}
+
 func TestMissingFiles(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, expectedFiles[0].Name), []byte("ok\n"), 0o644); err != nil {

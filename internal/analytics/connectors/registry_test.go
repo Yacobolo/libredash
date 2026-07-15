@@ -16,7 +16,7 @@ func TestRegistryIncludesSupportedFormats(t *testing.T) {
 }
 
 func TestRegistryIncludesSupportedConnectionKinds(t *testing.T) {
-	expected := []string{"local", "s3", "r2", "gcs", "http", "azure_blob", "postgres", "mysql", "sqlite", "ducklake", "quack"}
+	expected := []string{"managed", "s3", "r2", "gcs", "http", "azure_blob", "postgres", "mysql", "sqlite", "ducklake", "quack"}
 	for _, kind := range expected {
 		connection, ok := LookupConnection(kind)
 		if !ok {
@@ -25,6 +25,9 @@ func TestRegistryIncludesSupportedConnectionKinds(t *testing.T) {
 		if connection.Kind != kind {
 			t.Fatalf("connection kind %q registered with kind %q", kind, connection.Kind)
 		}
+	}
+	if _, ok := LookupConnection("local"); ok {
+		t.Fatal("local connection kind must not be registered")
 	}
 }
 
@@ -95,9 +98,9 @@ func TestRegistryConnectionAuthPolicy(t *testing.T) {
 		t.Fatalf("azure required auth sets = %#v, want connection string or service principal", azure.RequiredAuthSets)
 	}
 
-	local, _ := LookupConnection("local")
-	if !local.AllowNoAuth || len(local.AuthKeys) != 0 {
-		t.Fatalf("local auth policy = %#v, want no-auth only", local)
+	managed, _ := LookupConnection("managed")
+	if !managed.AllowNoAuth || len(managed.AuthKeys) != 0 || !managed.AllowsPathSource {
+		t.Fatalf("managed auth policy = %#v, want no-auth path source", managed)
 	}
 
 	quack, _ := LookupConnection("quack")

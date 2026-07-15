@@ -42,8 +42,8 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 	}
 
 	updates := pagestream.NewSignalStream(w, r)
-	bootstrap := reportui.BootstrapSignals(metrics.DataDir(), clientID, metrics.Catalog(), reportDefinition, model, pages, activePage, initialFilters)
-	bootstrap["status"] = lddatastar.LoadingPatch(metrics.DataDir())["status"]
+	bootstrap := reportui.BootstrapSignals(clientID, metrics.Catalog(), reportDefinition, model, pages, activePage, initialFilters)
+	bootstrap["status"] = lddatastar.LoadingPatch()["status"]
 	if err := updates.Patch(bootstrap); err != nil {
 		return
 	}

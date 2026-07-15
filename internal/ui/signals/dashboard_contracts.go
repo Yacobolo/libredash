@@ -67,7 +67,7 @@ func DashboardPagePlacementFromDashboard(value dashboard.PagePlacement) Dashboar
 func DashboardStatusFromDashboard(value dashboard.Status) DashboardStatus {
 	return DashboardStatus{
 		Loading: value.Loading, Error: value.Error, LastUpdated: value.LastUpdated,
-		DataDirectory: value.DataDirectory, SetupRequired: value.SetupRequired,
+		SetupRequired: value.SetupRequired,
 	}
 }
 

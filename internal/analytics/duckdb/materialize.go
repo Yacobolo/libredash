@@ -15,38 +15,35 @@ import (
 	analyticsmaterialize "github.com/Yacobolo/libredash/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	"github.com/Yacobolo/libredash/internal/configspec"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 )
 
 type SourceRuntime struct {
 	db                  sqlDBProvider
-	dataDir             string
 	attachedConnections map[string]struct{}
 }
 
-func NewSourceRuntime(db sqlDBProvider, dataDir string) *SourceRuntime {
+func NewSourceRuntime(db sqlDBProvider) *SourceRuntime {
 	return &SourceRuntime{
 		db:                  db,
-		dataDir:             dataDir,
 		attachedConnections: map[string]struct{}{},
 	}
 }
 
 func (r *SourceRuntime) PrepareSourceRuntime(ctx context.Context, model *semanticmodel.Model) error {
-	return PrepareSourceRuntime(ctx, r.db.SQLDB(), model, r.dataDir, r.attachedConnections)
+	return PrepareSourceRuntime(ctx, r.db.SQLDB(), model, r.attachedConnections)
 }
 
-func (r *SourceRuntime) SourceRelation(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error) {
-	return SourceRelation(model, source, dataDir)
+func (r *SourceRuntime) SourceRelation(model *semanticmodel.Model, source semanticmodel.Source) (string, error) {
+	return SourceRelation(model, source)
 }
 
 func (r *SourceRuntime) PlanModelTable(ctx context.Context, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
-	return PlanModelTable(ctx, r.db.SQLDB(), model, r.dataDir, tableName, table)
+	return PlanModelTable(ctx, r.db.SQLDB(), model, tableName, table)
 }
 
-func (r *SourceRuntime) ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source, dataDir string) (string, error) {
-	return ResolveSourcePath(model, source, dataDir)
+func (r *SourceRuntime) ResolveSourcePath(model *semanticmodel.Model, source semanticmodel.Source) (string, error) {
+	return ResolveSourcePath(model, source)
 }
 
 func OpenMaterializeRuntime(ctx context.Context, config analyticsmaterialize.RuntimeConfig) (*analyticsmaterialize.Runtime, error) {
@@ -58,7 +55,7 @@ func OpenMaterializeRuntime(ctx context.Context, config analyticsmaterialize.Run
 	if err != nil {
 		return nil, err
 	}
-	sources := NewSourceRuntime(db, config.DataDir)
+	sources := NewSourceRuntime(db)
 	config.Database = db
 	config.Sources = sources
 	config.Resolver = sources
@@ -72,7 +69,6 @@ func OpenMaterializeRuntime(ctx context.Context, config analyticsmaterialize.Run
 
 type WorkspaceRuntimeConfig struct {
 	Models             map[string]*semanticmodel.Model
-	DataDir            string
 	DBDir              string
 	CatalogPath        string
 	DuckLakeDataPath   string
@@ -94,7 +90,6 @@ type WorkspaceRuntime struct {
 	sqlDB                sqlDBProvider
 	committer            duckLakeCommitter
 	sources              *SourceRuntime
-	dataDir              string
 	models               map[string]*semanticmodel.Model
 	materializationModel *semanticmodel.Model
 	queries              map[string]*semanticquery.Service
@@ -121,11 +116,6 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 	if err := os.MkdirAll(layout.RootDir, 0o755); err != nil {
 		return nil, err
 	}
-	if os.Getenv(configspec.EnvLIBREDASH_DUCKDB_PATH) == "" {
-		if err := removeStaleDuckDBDatabases(config.DBDir); err != nil {
-			return nil, err
-		}
-	}
 	var db *analyticsducklake.Environment
 	var err error
 	if config.SnapshotID > 0 {
@@ -136,14 +126,14 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 	if err != nil {
 		return nil, err
 	}
-	sources := NewSourceRuntime(db, config.DataDir)
+	sources := NewSourceRuntime(db)
 	materializationModel, err := physicalWorkspaceModel(config.Models)
 	if err != nil {
 		db.Close()
 		return nil, err
 	}
 	for modelID, model := range config.Models {
-		if err := analyticsmaterialize.ValidateFilesWithResolver(model, config.DataDir, sources); err != nil {
+		if err := analyticsmaterialize.ValidateFilesWithResolver(model, sources); err != nil {
 			db.Close()
 			return nil, fmt.Errorf("semantic model %q: %w", modelID, err)
 		}
@@ -153,7 +143,6 @@ func OpenWorkspaceMaterializeRuntime(ctx context.Context, config WorkspaceRuntim
 		sqlDB:                db,
 		committer:            db,
 		sources:              sources,
-		dataDir:              config.DataDir,
 		models:               config.Models,
 		materializationModel: materializationModel,
 		queries:              map[string]*semanticquery.Service{},
@@ -202,7 +191,6 @@ func (r *WorkspaceRuntime) ExecuteDataQuery(ctx context.Context, request dataque
 	view, err := analyticsmaterialize.NewRuntimeView(ctx, analyticsmaterialize.RuntimeConfig{
 		ModelID:  modelID,
 		Model:    model,
-		DataDir:  r.dataDir,
 		Database: r.db,
 		Sources:  r.sources,
 		Resolver: r.sources,
@@ -225,7 +213,7 @@ func (r *WorkspaceRuntime) Refresh(ctx context.Context) error {
 		return err
 	}
 	for modelID, model := range r.models {
-		if err := DiscoverSchemasWithDataDir(ctx, r.sqlDB, model, r.dataDir); err != nil {
+		if err := discoverSchemas(ctx, r.sqlDB, model); err != nil {
 			return fmt.Errorf("discovering semantic model %q schemas: %w", modelID, err)
 		}
 	}
@@ -251,7 +239,7 @@ func (r *WorkspaceRuntime) RefreshModelTables(ctx context.Context, modelID strin
 		return err
 	}
 	for discoverModelID, discoverModel := range r.models {
-		if err := DiscoverSchemasWithDataDir(ctx, r.sqlDB, discoverModel, r.dataDir); err != nil {
+		if err := discoverSchemas(ctx, r.sqlDB, discoverModel); err != nil {
 			return fmt.Errorf("discovering semantic model %q schemas: %w", discoverModelID, err)
 		}
 	}
@@ -276,7 +264,7 @@ func (r *WorkspaceRuntime) RefreshWorkspaceTables(ctx context.Context, tableName
 		return err
 	}
 	for discoverModelID, discoverModel := range r.models {
-		if err := DiscoverSchemasWithDataDir(ctx, r.sqlDB, discoverModel, r.dataDir); err != nil {
+		if err := discoverSchemas(ctx, r.sqlDB, discoverModel); err != nil {
 			return fmt.Errorf("discovering semantic model %q schemas: %w", discoverModelID, err)
 		}
 	}
@@ -400,20 +388,7 @@ type txSourceRuntime struct {
 }
 
 func (r txSourceRuntime) PlanModelTable(ctx context.Context, model *semanticmodel.Model, tableName string, table semanticmodel.Table) (analyticsmaterialize.ModelTablePlan, error) {
-	return PlanModelTable(ctx, r.tx, model, r.dataDir, tableName, table)
-}
-
-func removeStaleDuckDBDatabases(dbDir string) error {
-	matches, err := filepath.Glob(filepath.Join(dbDir, "libredash-*.duckdb*"))
-	if err != nil {
-		return err
-	}
-	for _, match := range matches {
-		if err := os.Remove(match); err != nil && !os.IsNotExist(err) {
-			return err
-		}
-	}
-	return nil
+	return PlanModelTable(ctx, r.tx, model, tableName, table)
 }
 
 func physicalWorkspaceModel(models map[string]*semanticmodel.Model) (*semanticmodel.Model, error) {

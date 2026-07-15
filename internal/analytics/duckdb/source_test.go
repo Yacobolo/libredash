@@ -28,7 +28,7 @@ func TestDiscoverSchemasCapturesSourceAndModelColumns(t *testing.T) {
 	model := &semanticmodel.Model{
 		Name:              "olist",
 		DefaultConnection: "local",
-		Connections:       map[string]semanticmodel.Connection{"local": {Kind: "local"}},
+		Connections:       map[string]semanticmodel.Connection{"local": {Kind: "managed"}},
 		Sources: map[string]semanticmodel.Source{"orders": {
 			Connection: "local",
 			Path:       "orders.csv",
@@ -56,7 +56,8 @@ func TestDiscoverSchemasCapturesSourceAndModelColumns(t *testing.T) {
 	if err := model.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := analyticsmaterialize.Refresh(ctx, db, NewSourceRuntime(db, dir), model); err != nil {
+	bindTestManagedRoot(model, "local", dir)
+	if _, err := analyticsmaterialize.Refresh(ctx, db, NewSourceRuntime(db), model); err != nil {
 		t.Fatal(err)
 	}
 	if err := DiscoverSchemas(ctx, db, model); err != nil {
@@ -94,7 +95,7 @@ func TestDiscoverSchemasIgnoresAttachedDatabaseSchemas(t *testing.T) {
 	model := &semanticmodel.Model{
 		Name:              "olist",
 		DefaultConnection: "local",
-		Connections:       map[string]semanticmodel.Connection{"local": {Kind: "local"}},
+		Connections:       map[string]semanticmodel.Connection{"local": {Kind: "managed"}},
 		Sources: map[string]semanticmodel.Source{"orders": {
 			Connection: "local",
 			Path:       "orders.csv",
@@ -116,7 +117,8 @@ func TestDiscoverSchemasIgnoresAttachedDatabaseSchemas(t *testing.T) {
 	if err := model.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := analyticsmaterialize.Refresh(ctx, db, NewSourceRuntime(db, dir), model); err != nil {
+	bindTestManagedRoot(model, "local", dir)
+	if _, err := analyticsmaterialize.Refresh(ctx, db, NewSourceRuntime(db), model); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.SQLDB().ExecContext(ctx, `
@@ -158,7 +160,7 @@ func TestDiscoverSchemasRejectsMissingDocumentedSourceField(t *testing.T) {
 	model := &semanticmodel.Model{
 		Name:              "olist",
 		DefaultConnection: "local",
-		Connections:       map[string]semanticmodel.Connection{"local": {Kind: "local"}},
+		Connections:       map[string]semanticmodel.Connection{"local": {Kind: "managed"}},
 		Sources: map[string]semanticmodel.Source{"orders": {
 			Connection: "local",
 			Path:       "orders.csv",
@@ -186,7 +188,8 @@ func TestDiscoverSchemasRejectsMissingDocumentedSourceField(t *testing.T) {
 	if err := model.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := analyticsmaterialize.Refresh(ctx, db, NewSourceRuntime(db, dir), model); err != nil {
+	bindTestManagedRoot(model, "local", dir)
+	if _, err := analyticsmaterialize.Refresh(ctx, db, NewSourceRuntime(db), model); err != nil {
 		t.Fatal(err)
 	}
 	err = DiscoverSchemas(ctx, db, model)
@@ -583,18 +586,17 @@ func TestCompileDatabaseAttach(t *testing.T) {
 }
 
 func TestCompileDuckLakeAttach(t *testing.T) {
-	dir := t.TempDir()
 	stmt, err := compileObjectAttach(&semanticmodel.Model{}, "lakehouse", semanticmodel.Connection{
 		Kind: "ducklake",
 		Path: "metadata.ducklake",
 		Options: map[string]any{
 			"data_path": "data_files",
 		},
-	}, dir)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "ATTACH 'ducklake:" + SQLString(filepath.Join(dir, "metadata.ducklake")) + "' AS conn_lakehouse (DATA_PATH '" + SQLString(filepath.Join(dir, "data_files")) + "')"
+	want := "ATTACH 'ducklake:metadata.ducklake' AS conn_lakehouse (DATA_PATH 'data_files')"
 	if stmt != want {
 		t.Fatalf("local ducklake attach = %q, want %q", stmt, want)
 	}
@@ -606,7 +608,7 @@ func TestCompileDuckLakeAttach(t *testing.T) {
 		Options: map[string]any{
 			"data_path": "data",
 		},
-	}, dir)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -652,8 +654,7 @@ func TestSourceRelationResolvesSourcePlans(t *testing.T) {
 		DefaultConnection: "local_files",
 		Connections: map[string]semanticmodel.Connection{
 			"local_files": {
-				Kind: "local",
-				Root: "fixtures",
+				Kind: "managed",
 				Defaults: semanticmodel.ConnectionDefaults{
 					Options: map[string]any{"header": true},
 				},
@@ -687,7 +688,8 @@ func TestSourceRelationResolvesSourcePlans(t *testing.T) {
 	if err := model.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	relation, err := SourceRelation(model, model.Sources["orders"], dir)
+	bindTestManagedRoot(model, "local_files", filepath.Join(dir, "fixtures"))
+	relation, err := SourceRelation(model, model.Sources["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -696,7 +698,7 @@ func TestSourceRelationResolvesSourcePlans(t *testing.T) {
 		t.Fatalf("local relation = %q, want %q", relation, wantLocal)
 	}
 
-	relation, err = SourceRelation(model, model.Sources["events"], dir)
+	relation, err = SourceRelation(model, model.Sources["events"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -704,7 +706,7 @@ func TestSourceRelationResolvesSourcePlans(t *testing.T) {
 		t.Fatalf("remote relation = %q, want %q", relation, want)
 	}
 
-	relation, err = SourceRelation(model, model.Sources["delta"], dir)
+	relation, err = SourceRelation(model, model.Sources["delta"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -712,7 +714,7 @@ func TestSourceRelationResolvesSourcePlans(t *testing.T) {
 		t.Fatalf("delta relation = %q, want %q", relation, want)
 	}
 
-	relation, err = SourceRelation(model, model.Sources["embeddings"], dir)
+	relation, err = SourceRelation(model, model.Sources["embeddings"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -720,7 +722,7 @@ func TestSourceRelationResolvesSourcePlans(t *testing.T) {
 		t.Fatalf("lance relation = %q, want %q", relation, want)
 	}
 
-	relation, err = SourceRelation(model, model.Sources["schemata"], dir)
+	relation, err = SourceRelation(model, model.Sources["schemata"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -730,10 +732,36 @@ func TestSourceRelationResolvesSourcePlans(t *testing.T) {
 
 	bad := model.Sources["events"]
 	bad.Path = "s3://other-bucket/events/*"
-	_, err = SourceRelation(model, bad, dir)
+	_, err = SourceRelation(model, bad)
 	if err == nil || !strings.Contains(err.Error(), "outside connection") {
 		t.Fatalf("mismatched remote path error = %v, want outside connection", err)
 	}
+}
+
+func TestManagedSourceRelationUsesImmutableConnectionRoot(t *testing.T) {
+	root := t.TempDir()
+	model := &semanticmodel.Model{
+		Connections: map[string]semanticmodel.Connection{
+			"olist": {Kind: "managed", Root: root},
+		},
+		Sources: map[string]semanticmodel.Source{
+			"orders": {Connection: "olist", Path: "orders.csv", Format: "csv"},
+		},
+	}
+	relation, err := SourceRelation(model, model.Sources["orders"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "SELECT * FROM read_csv('" + SQLString(filepath.Join(root, "orders.csv")) + "')"
+	if relation != want {
+		t.Fatalf("managed relation = %q, want %q", relation, want)
+	}
+}
+
+func bindTestManagedRoot(model *semanticmodel.Model, connectionName, root string) {
+	connection := model.Connections[connectionName]
+	connection.Root = root
+	model.Connections[connectionName] = connection
 }
 
 func TestDuckDBQuackSmoke(t *testing.T) {

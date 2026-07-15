@@ -220,7 +220,7 @@ func validPrivilege(privilege access.Privilege) bool {
 		access.PrivilegePreviewData,
 		access.PrivilegeRefreshData,
 		access.PrivilegeDeploy,
-		access.PrivilegeActivatePublish,
+		access.PrivilegeActivateDeployment,
 		access.PrivilegeUseAgent,
 		access.PrivilegeViewAgent,
 		access.PrivilegeManageGrants,

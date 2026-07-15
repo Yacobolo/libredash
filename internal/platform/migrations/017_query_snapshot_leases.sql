@@ -1,8 +1,6 @@
 -- +goose Up
 -- Persist query snapshot leases so cleanup can protect snapshots even when
 -- invoked outside the serving process.
-ALTER TABLE serving_state_artifacts ADD COLUMN data_root TEXT NOT NULL DEFAULT '';
-
 CREATE TABLE IF NOT EXISTS query_snapshot_leases (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,

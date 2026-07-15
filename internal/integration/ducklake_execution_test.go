@@ -91,7 +91,6 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		Repo:         deploymentRepo,
 		WorkspaceIDs: []servingstate.WorkspaceID{servingstate.WorkspaceID(workspaceID)},
 		Environment:  servingstate.DefaultEnvironment,
-		DataDir:      dataDir,
 		OnDrained: func(servingstate.ID, int64) {
 			_, _ = storagemaintenance.Run(context.Background(), deploymentRepo, storagemaintenance.Options{
 				RootDir:                      homeDir,
@@ -102,7 +101,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 			})
 		},
 		Factory: duckLakeIntegrationRuntimeFactory{
-			dataDir:          dataDir,
+			managedRoot:      dataDir,
 			duckDBDir:        duckDBDir,
 			runtimeDir:       runtimeDir,
 			catalogPath:      catalogPath,
@@ -113,7 +112,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		t.Fatalf("reload registry for %s: %v", initial.ID, err)
 	}
 	t.Cleanup(func() { _ = registry.Close() })
-	runtimeMetrics := app.NewDynamicRuntimeMetrics("", dataDir, func(workspaceID string) app.RuntimeProvider {
+	runtimeMetrics := app.NewDynamicRuntimeMetrics("", func(workspaceID string) app.RuntimeProvider {
 		return registry.ProviderForWorkspace(servingstate.WorkspaceID(workspaceID))
 	})
 	auth := app.NewAuth(accessRepo, "", app.AuthConfig{DevBypass: true})
@@ -183,16 +182,20 @@ func createAndActivateProjectDeployment(t *testing.T, ctx context.Context, repo 
 	if err != nil {
 		t.Fatalf("create artifact: %v", err)
 	}
-	if _, _, err := servingstatefs.PackProjectAgainstGraphForEnvironment(projectPath, workspaceID, servingstate.DefaultEnvironment, created.ID, workspace.AssetGraph{}, file); err != nil {
+	if _, _, err := servingstatefs.PackProject(projectPath, servingstatefs.PackProjectOptions{
+		WorkspaceID:          workspaceID,
+		Environment:          servingstate.DefaultEnvironment,
+		ServingStateID:       created.ID,
+		ManagedDataRevisions: integrationOlistManagedDataRevisions(),
+	}, file); err != nil {
 		_ = file.Close()
 		t.Fatalf("pack artifact: %v", err)
 	}
 	if err := file.Close(); err != nil {
 		t.Fatalf("close artifact: %v", err)
 	}
+	bindManagedConnectionRootsInArtifact(t, artifactPath, dataDir)
 	validation, err := servingstatefs.ValidateArtifactWithOptions(artifactPath, servingstate.WorkspaceID(workspaceID), created.ID, servingstatefs.ValidateOptions{
-		DataDir:     dataDir,
-		DuckDBDir:   duckDBDir,
 		Environment: servingstate.DefaultEnvironment,
 	})
 	if err != nil {
@@ -211,7 +214,6 @@ func createAndActivateProjectDeployment(t *testing.T, ctx context.Context, repo 
 		Digest:         validation.Digest,
 		Format:         servingstatefs.BundleFormat,
 		Path:           artifactPath,
-		DataRoot:       validation.DataRoot,
 		ManifestJSON:   validation.ManifestJSON,
 		SizeBytes:      info.Size(),
 	})
@@ -226,7 +228,7 @@ func createAndActivateProjectDeployment(t *testing.T, ctx context.Context, repo 
 }
 
 type duckLakeIntegrationRuntimeFactory struct {
-	dataDir          string
+	managedRoot      string
 	duckDBDir        string
 	runtimeDir       string
 	catalogPath      string
@@ -234,10 +236,6 @@ type duckLakeIntegrationRuntimeFactory struct {
 }
 
 func (f duckLakeIntegrationRuntimeFactory) Prepare(_ context.Context, input runtimehost.RuntimeInput) (runtimehost.Runtime, error) {
-	dataDir := input.Artifact.DataRoot
-	if dataDir == "" {
-		dataDir = f.dataDir
-	}
 	targetDir := filepath.Join(f.runtimeDir, string(input.State.ID))
 	if err := os.RemoveAll(targetDir); err != nil {
 		return nil, err
@@ -252,7 +250,10 @@ func (f duckLakeIntegrationRuntimeFactory) Prepare(_ context.Context, input runt
 	if err != nil {
 		return nil, err
 	}
-	service, err := dashboardruntime.NewFromDefinition(dataDir, filepath.Join(f.duckDBDir, string(servingstate.NormalizeEnvironment(input.State.Environment))), duckLakeIntegrationDataRuntimeFactory{
+	if err := bindManagedConnectionRoots(compiled.Definition, f.managedRoot); err != nil {
+		return nil, err
+	}
+	service, err := dashboardruntime.NewFromDefinition(filepath.Join(f.duckDBDir, string(servingstate.NormalizeEnvironment(input.State.Environment))), duckLakeIntegrationDataRuntimeFactory{
 		snapshotID:       input.State.DuckLakeSnapshotID,
 		catalogPath:      f.catalogPath,
 		duckLakeDataPath: f.duckLakeDataPath,
@@ -271,7 +272,7 @@ func (f duckLakeIntegrationRuntimeFactory) Prepare(_ context.Context, input runt
 			if err := service.Close(); err != nil {
 				return nil, err
 			}
-			service, err = dashboardruntime.NewFromDefinition(dataDir, filepath.Join(f.duckDBDir, string(servingstate.NormalizeEnvironment(input.State.Environment))), duckLakeIntegrationDataRuntimeFactory{
+			service, err = dashboardruntime.NewFromDefinition(filepath.Join(f.duckDBDir, string(servingstate.NormalizeEnvironment(input.State.Environment))), duckLakeIntegrationDataRuntimeFactory{
 				snapshotID:       snapshotID,
 				catalogPath:      f.catalogPath,
 				duckLakeDataPath: f.duckLakeDataPath,
@@ -303,7 +304,6 @@ type duckLakeIntegrationDataRuntimeFactory struct {
 func (f duckLakeIntegrationDataRuntimeFactory) OpenDashboardWorkspaceDataRuntimes(ctx context.Context, config dashboardruntime.WorkspaceDataRuntimeConfig) (map[string]dashboardruntime.DataRuntime, error) {
 	runtime, err := analyticsduckdb.OpenWorkspaceMaterializeRuntime(ctx, analyticsduckdb.WorkspaceRuntimeConfig{
 		Models:           config.Definition.Models,
-		DataDir:          config.DataDir,
 		DBDir:            config.DBDir,
 		CatalogPath:      f.catalogPath,
 		DuckLakeDataPath: f.duckLakeDataPath,
@@ -708,9 +708,8 @@ func (h *duckLakeHarness) startReplacementRegistry(t *testing.T) {
 		Repo:         h.deployments,
 		WorkspaceIDs: []servingstate.WorkspaceID{"sales"},
 		Environment:  servingstate.DefaultEnvironment,
-		DataDir:      h.dataDir,
 		Factory: duckLakeIntegrationRuntimeFactory{
-			dataDir:          h.dataDir,
+			managedRoot:      h.dataDir,
 			duckDBDir:        h.duckDBDir,
 			runtimeDir:       h.runtimeDir,
 			catalogPath:      h.catalogPath,
@@ -721,7 +720,7 @@ func (h *duckLakeHarness) startReplacementRegistry(t *testing.T) {
 		t.Fatalf("reload replacement registry: %v", err)
 	}
 	h.registry = registry
-	server := app.NewWithOptions(app.NewDynamicRuntimeMetrics("", h.dataDir, func(workspaceID string) app.RuntimeProvider {
+	server := app.NewWithOptions(app.NewDynamicRuntimeMetrics("", func(workspaceID string) app.RuntimeProvider {
 		return registry.ProviderForWorkspace(servingstate.WorkspaceID(workspaceID))
 	}), app.Options{
 		Store:               h.store,
@@ -806,15 +805,21 @@ func (h *duckLakeHarness) createQueuedWorkspaceAssetRefreshRun(t *testing.T, tar
 		Digest:         artifact.Digest,
 		Format:         artifact.Format,
 		Path:           artifact.Path,
-		DataRoot:       artifact.DataRoot,
 		ManifestJSON:   artifact.ManifestJSON,
 		SizeBytes:      artifact.SizeBytes,
 	}
+	var accessPolicy workspace.AccessPolicy
+	if err := json.Unmarshal([]byte(active.AccessPolicyJSON), &accessPolicy); err != nil {
+		t.Fatalf("decode active access policy: %v", err)
+	}
 	if _, err := h.deployments.SaveValidated(ctx, created.ID, servingstate.Validation{
-		Digest:       active.Digest,
-		ManifestJSON: active.ManifestJSON,
-		Graph:        integrationRetargetAssetGraph(compiled.Graph, workspace.WorkspaceID(active.WorkspaceID), workspace.ServingStateID(created.ID)),
-		DataRoot:     artifact.DataRoot,
+		Digest:            active.Digest,
+		ManifestJSON:      active.ManifestJSON,
+		ProjectID:         active.ProjectID,
+		ProjectDigest:     active.ProjectDigest,
+		ProjectWorkspaces: append([]string(nil), active.ProjectWorkspaces...),
+		AccessPolicy:      accessPolicy,
+		Graph:             integrationRetargetAssetGraph(compiled.Graph, workspace.WorkspaceID(active.WorkspaceID), workspace.ServingStateID(created.ID)),
 	}, candidateArtifact); err != nil {
 		t.Fatalf("save refresh candidate deployment: %v", err)
 	}

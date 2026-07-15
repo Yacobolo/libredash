@@ -55,6 +55,49 @@ func TestComposeSecurityContracts(t *testing.T) {
 	}
 }
 
+func TestLocalManagedDataStorageContracts(t *testing.T) {
+	main := readFile(t, "main.tf")
+	cloudInit := readFile(t, "cloud-init.yaml.tftpl")
+	compose := readFile(t, filepath.Join("files", "compose.yaml"))
+	provision := readFile(t, filepath.Join("files", "provision.sh.tftpl"))
+
+	for name, contract := range map[string][]string{
+		"terraform": {
+			`compose_b64        = base64encode(file("${path.module}/files/compose.yaml"))`,
+			`provision_b64 = base64encode(templatefile("${path.module}/files/provision.sh.tftpl"`,
+		},
+		"cloud-init": {
+			"content: ${compose_b64}",
+			"content: ${provision_b64}",
+			"[bash, /opt/libredash/provision.sh]",
+		},
+		"compose": {
+			"/var/lib/libredash:/var/lib/libredash",
+		},
+		"provision": {
+			"/var/lib/libredash/managed-data",
+			"LIBREDASH_MANAGED_DATA_BACKEND=local",
+			"LIBREDASH_MANAGED_DATA_DIR=/var/lib/libredash/managed-data",
+			`"ACTIVATE_DEPLOYMENT","VIEW_DATA","INGEST_DATA"`,
+		},
+	} {
+		for _, fragment := range contract {
+			if !strings.Contains(map[string]string{
+				"terraform":  main,
+				"cloud-init": cloudInit,
+				"compose":    compose,
+				"provision":  provision,
+			}[name], fragment) {
+				t.Errorf("%s contract is missing %q", name, fragment)
+			}
+		}
+	}
+
+	if strings.Contains(provision, strings.ToUpper("libredash_managed_data_s3_")) {
+		t.Fatal("single-node provisioning must not configure an implicit S3 backend")
+	}
+}
+
 func TestReleaseWorkflowPublishesAttestedImage(t *testing.T) {
 	workflow := readFile(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
 
@@ -250,6 +293,13 @@ func TestBackupAndRestoreRoundTrip(t *testing.T) {
 	if err := os.WriteFile(stateFile, []byte("before-backup"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	managedObject := filepath.Join(env.stateDir, "managed-data", "objects", "sha256", "managed-object")
+	if err := os.MkdirAll(filepath.Dir(managedObject), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(managedObject, []byte("managed-data-before-backup"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	archive := filepath.Join(env.backupDir, "round-trip.tar.gz")
 	cmd := env.command("backup", archive)
 	var stdout, stderr bytes.Buffer
@@ -267,6 +317,9 @@ func TestBackupAndRestoreRoundTrip(t *testing.T) {
 	if err := os.WriteFile(stateFile, []byte("after-backup"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(managedObject, []byte("managed-data-after-backup"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	env.run(t, "restore", archive)
 	contents, err := os.ReadFile(stateFile)
@@ -275,6 +328,29 @@ func TestBackupAndRestoreRoundTrip(t *testing.T) {
 	}
 	if string(contents) != "before-backup" {
 		t.Fatalf("restored contents = %q", contents)
+	}
+	managedContents, err := os.ReadFile(managedObject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(managedContents) != "managed-data-before-backup" {
+		t.Fatalf("restored managed data contents = %q", managedContents)
+	}
+}
+
+func TestManagedDataOperatorDocumentationContracts(t *testing.T) {
+	document := readFile(t, filepath.Join("..", "..", "docs", "data-ingestion.md"))
+	for _, fragment := range []string{
+		"libredash data plan",
+		"libredash data sync",
+		"libredash data revisions list",
+		"libredash data revisions current",
+		"stages",
+		"does not activate",
+		"bucket-native backup",
+		"versioning",
+	} {
+		requireContains(t, document, fragment)
 	}
 }
 

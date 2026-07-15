@@ -17,6 +17,7 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
+    go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate && \
     go run ./internal/tools/configgen && \
     go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 typespec-compile -manifest api/apigen.yaml -target libredash-v1 && \
     go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 all -manifest api/apigen.yaml -target libredash-v1 && \
@@ -48,6 +49,9 @@ COPY . .
 COPY --from=sourcegen /src/api/gen ./api/gen
 COPY --from=sourcegen /src/internal/api/gen ./internal/api/gen
 COPY --from=sourcegen /src/internal/cli/gen ./internal/cli/gen
+COPY --from=sourcegen /src/internal/platform/db/db.go ./internal/platform/db/db.go
+COPY --from=sourcegen /src/internal/platform/db/models.go ./internal/platform/db/models.go
+COPY --from=sourcegen /src/internal/platform/db/queries.sql.go ./internal/platform/db/queries.sql.go
 COPY --from=sourcegen /src/internal/ui/signals/models.gen.go ./internal/ui/signals/models.gen.go
 COPY --from=sourcegen /src/schemas ./schemas
 COPY --from=sourcegen /src/web/generated ./web/generated
@@ -90,6 +94,7 @@ USER libredash
 
 ENV LIBREDASH_ADDR=:8080 \
     LIBREDASH_HOME=/var/lib/libredash \
+    LIBREDASH_MANAGED_DATA_DIR=/var/lib/libredash/managed-data \
     LIBREDASH_PRODUCTION=1
 
 EXPOSE 8080

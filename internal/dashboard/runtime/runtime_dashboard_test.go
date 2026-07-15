@@ -17,6 +17,7 @@ import (
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/workspace"
+	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 )
 
 type runtimeAuditRecorder struct {
@@ -32,30 +33,38 @@ func (r *runtimeAuditRecorder) RecordDataQuery(_ context.Context, query dataquer
 
 func newLegacyRuntime(t *testing.T, dataDir string) (*Service, error) {
 	t.Helper()
-	projectPath := filepath.Join("..", "..", "..", "dashboards", "libredash.yaml")
-	services, err := NewFromProject(dataDir, projectPath, dataDir, testDataRuntimeFactory{})
-	if err != nil {
-		return nil, err
-	}
-	service, ok := services["sales"]
-	if !ok {
-		return nil, fmt.Errorf("showcase project has no sales workspace")
-	}
-	return service, nil
+	return newManagedFixtureRuntime(dataDir, "sales")
 }
 
 func newOperationsRuntime(t *testing.T, dataDir string) (*Service, error) {
 	t.Helper()
+	return newManagedFixtureRuntime(dataDir, "operations")
+}
+
+func newManagedFixtureRuntime(dataDir, workspaceID string) (*Service, error) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", "libredash.yaml")
-	services, err := NewFromProject(dataDir, projectPath, dataDir, testDataRuntimeFactory{})
+	compiled, err := workspacecompiler.CompileProject(projectPath, workspacecompiler.Options{})
 	if err != nil {
 		return nil, err
 	}
-	service, ok := services["operations"]
+	compiledWorkspace, ok := compiled.Workspaces[workspaceID]
 	if !ok {
-		return nil, fmt.Errorf("showcase project has no operations workspace")
+		return nil, fmt.Errorf("showcase project has no %s workspace", workspaceID)
 	}
-	return service, nil
+	bindManagedFixtureRoots(compiledWorkspace.Definition, dataDir)
+	return NewFromDefinition(filepath.Join(dataDir, workspaceID), testDataRuntimeFactory{}, compiledWorkspace.Definition)
+}
+
+func bindManagedFixtureRoots(definition *workspace.Definition, root string) {
+	for _, model := range definition.Models {
+		for name, connection := range model.Connections {
+			if connection.Kind != "managed" {
+				continue
+			}
+			connection.Root = root
+			model.Connections[name] = connection
+		}
+	}
 }
 
 func TestWorkspaceRuntimeUsesSingleDuckDBForSharedModelTables(t *testing.T) {
@@ -64,18 +73,9 @@ func TestWorkspaceRuntimeUsesSingleDuckDBForSharedModelTables(t *testing.T) {
 o1,10
 o2,20
 `)
-	if err := os.WriteFile(filepath.Join(dir, "libredash-model_a.duckdb"), []byte("stale"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "libredash-model_b.duckdb.wal"), []byte("stale"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "libredash-workspace.duckdb"), []byte("stale"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
 	definition := sharedOrdersWorkspaceDefinition(t)
-	metrics, err := NewFromDefinition(dir, dir, testDataRuntimeFactory{}, definition)
+	bindManagedFixtureRoots(definition, dir)
+	metrics, err := NewFromDefinition(dir, testDataRuntimeFactory{}, definition)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,12 +106,6 @@ o2,20
 	if _, err := os.Stat(filepath.Join(dir, "data")); err != nil {
 		t.Fatalf("data dir stat error = %v", err)
 	}
-	if matches, err := filepath.Glob(filepath.Join(dir, "libredash-*.duckdb*")); err != nil {
-		t.Fatal(err)
-	} else if len(matches) != 0 {
-		t.Fatalf("legacy DuckDB files = %v, want none", matches)
-	}
-
 	db, err := sql.Open("duckdb", ":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -172,7 +166,7 @@ func sharedOrdersModel(name string) *semanticmodel.Model {
 	return &semanticmodel.Model{
 		Name:              name,
 		DefaultConnection: "local",
-		Connections:       map[string]semanticmodel.Connection{"local": {Kind: "local"}},
+		Connections:       map[string]semanticmodel.Connection{"local": {Kind: "managed"}},
 		Sources: map[string]semanticmodel.Source{
 			"orders": {Connection: "local", Path: "orders.csv", Format: "csv"},
 		},

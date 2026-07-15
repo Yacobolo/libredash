@@ -14,7 +14,6 @@ type fakeMetrics struct {
 	queries       []string
 }
 
-func (fakeMetrics) DataDir() string { return ".data" }
 func (fakeMetrics) RefreshMaterializations(context.Context, string) error {
 	return nil
 }
@@ -36,7 +35,7 @@ func (fakeMetrics) Report(string) (reportdef.Dashboard, *semanticmodel.Model, bo
 }
 func (m *fakeMetrics) QueryDashboardPage(_ context.Context, _, pageID string, filters dashboard.Filters) (dashboard.Patch, error) {
 	m.queries = append(m.queries, pageID)
-	return dashboard.Patch{Filters: filters.WithDefaults(), Status: dashboard.Status{DataDirectory: ".data"}}, nil
+	return dashboard.Patch{Filters: filters.WithDefaults()}, nil
 }
 func (m *fakeMetrics) QueryTablePage(_ context.Context, _, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	if m.canceledTable {
@@ -126,9 +125,6 @@ func TestReloadReturnsReloadEventsForCurrentFilters(t *testing.T) {
 		if events[i].Type != kind {
 			t.Fatalf("event %d = %#v, want %s", i, events[i], kind)
 		}
-	}
-	if events[1].Patch.Status.DataDirectory != ".data" {
-		t.Fatalf("dashboard patch = %#v", events[1].Patch)
 	}
 	if len(metrics.queries) != 1 || metrics.queries[0] != "overview" {
 		t.Fatalf("queries = %#v", metrics.queries)

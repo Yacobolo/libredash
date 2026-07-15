@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -31,11 +32,9 @@ func TestPlanModelTableCompilesCSVSQLModelToInlineRelations(t *testing.T) {
 			GROUP BY o.order_id, o.customer_id
 		`},
 	})
-	if err := model.Validate(); err != nil {
-		t.Fatal(err)
-	}
+	validateAndBindPlanningManagedRoot(t, model, managedPlanningRoot)
 
-	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,8 +43,8 @@ func TestPlanModelTableCompilesCSVSQLModelToInlineRelations(t *testing.T) {
 	}
 	for _, want := range []string{
 		"CREATE OR REPLACE TABLE model.orders AS",
-		"FROM (SELECT customer_id, order_id, status FROM read_csv('orders.csv')) o",
-		"JOIN (SELECT order_id, payment_value FROM read_csv('payments.csv')) p",
+		"FROM (SELECT customer_id, order_id, status FROM read_csv('/managed/revision/orders.csv')) o",
+		"JOIN (SELECT order_id, payment_value FROM read_csv('/managed/revision/payments.csv')) p",
 	} {
 		if !strings.Contains(plan.SQL, want) {
 			t.Fatalf("plan SQL = %s, want %q", plan.SQL, want)
@@ -72,18 +71,16 @@ func TestPlanModelTableCompilesDirectSourceFromColumns(t *testing.T) {
 		},
 		Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Label: "Order ID"}, "status": {Label: "Status"}},
 	})
-	if err := model.Validate(); err != nil {
-		t.Fatal(err)
-	}
+	validateAndBindPlanningManagedRoot(t, model, managedPlanningRoot)
 
-	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
 	if plan.Mode != analyticsmaterialize.PlanModeDirectSourceRead {
 		t.Fatalf("mode = %q, want direct", plan.Mode)
 	}
-	want := "CREATE OR REPLACE TABLE model.orders AS SELECT raw_order_id AS order_id, gross_revenue AS revenue, status FROM read_csv('orders.csv')"
+	want := "CREATE OR REPLACE TABLE model.orders AS SELECT raw_order_id AS order_id, gross_revenue AS revenue, status FROM read_csv('/managed/revision/orders.csv')"
 	if plan.SQL != want {
 		t.Fatalf("plan SQL = %q, want %q", plan.SQL, want)
 	}
@@ -103,15 +100,13 @@ func TestPlanModelTableCompilesCountStarToInlineRowPresence(t *testing.T) {
 		},
 		Transform: semanticmodel.Transform{SQL: `SELECT COUNT(*) AS order_count FROM source.orders`},
 	})
-	if err := model.Validate(); err != nil {
-		t.Fatal(err)
-	}
+	validateAndBindPlanningManagedRoot(t, model, managedPlanningRoot)
 
-	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(plan.SQL, "FROM (SELECT 1 AS __libredash_row_present FROM read_csv('orders.csv'))") {
+	if !strings.Contains(plan.SQL, "FROM (SELECT 1 AS __libredash_row_present FROM read_csv('/managed/revision/orders.csv'))") {
 		t.Fatalf("plan SQL = %s, want row-presence inline relation", plan.SQL)
 	}
 }
@@ -132,11 +127,9 @@ func TestPlanModelTableAliasesUnaliasedInlineSourceRefs(t *testing.T) {
 		Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Label: "Order ID"}},
 		Transform:  semanticmodel.Transform{SQL: `SELECT orders.order_id FROM source.orders`},
 	})
-	if err := model.Validate(); err != nil {
-		t.Fatal(err)
-	}
+	validateAndBindPlanningManagedRoot(t, model, dir)
 
-	plan, err := PlanModelTable(ctx, db, model, dir, "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,18 +157,16 @@ func TestPlanModelTablePreservesMixedInlineSourceAliases(t *testing.T) {
 		Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Label: "Order ID"}},
 		Transform:  semanticmodel.Transform{SQL: `SELECT orders.order_id, p.payment_value FROM source.orders JOIN source.payments p USING (order_id)`},
 	})
-	if err := model.Validate(); err != nil {
-		t.Fatal(err)
-	}
+	validateAndBindPlanningManagedRoot(t, model, managedPlanningRoot)
 
-	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(plan.SQL, "FROM (SELECT order_id FROM read_csv('orders.csv')) AS orders") {
+	if !strings.Contains(plan.SQL, "FROM (SELECT order_id FROM read_csv('/managed/revision/orders.csv')) AS orders") {
 		t.Fatalf("plan SQL = %s, want generated alias for orders", plan.SQL)
 	}
-	if !strings.Contains(plan.SQL, "JOIN (SELECT order_id, payment_value FROM read_csv('payments.csv')) p") {
+	if !strings.Contains(plan.SQL, "JOIN (SELECT order_id, payment_value FROM read_csv('/managed/revision/payments.csv')) p") {
 		t.Fatalf("plan SQL = %s, want explicit payments alias preserved", plan.SQL)
 	}
 }
@@ -192,11 +183,9 @@ func TestPlanModelTableRejectsQualifiedSourceColumnRefs(t *testing.T) {
 		Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Label: "Order ID"}},
 		Transform:  semanticmodel.Transform{SQL: `SELECT source.orders.order_id FROM source.orders`},
 	})
-	if err := model.Validate(); err != nil {
-		t.Fatal(err)
-	}
+	validateAndBindPlanningManagedRoot(t, model, managedPlanningRoot)
 
-	_, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	_, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err == nil || !strings.Contains(err.Error(), `column reference "source.orders.order_id" must use a table alias`) {
 		t.Fatalf("PlanModelTable error = %v, want qualified source column rejection", err)
 	}
@@ -211,7 +200,7 @@ func TestPlanModelTableCompilesEligibleQuackModelToWholeQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +234,7 @@ func TestPlanModelTablePushesDownQuackWithoutDiscoveredSourceSchemas(t *testing.
 		t.Fatal(err)
 	}
 
-	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -271,7 +260,7 @@ func TestPlanModelTablePushesDownQuackBeforeEmptyExplainPlan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,11 +287,9 @@ func TestPlanModelTableFailsClosedWhenInlineExplainOmitsSourceScan(t *testing.T)
 		Dimensions: map[string]semanticmodel.MetricDimension{"order_id": {Label: "Order ID"}},
 		Transform:  semanticmodel.Transform{SQL: `SELECT * FROM source.orders WHERE 1=0`},
 	})
-	if err := model.Validate(); err != nil {
-		t.Fatal(err)
-	}
+	validateAndBindPlanningManagedRoot(t, model, managedPlanningRoot)
 
-	_, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	_, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err == nil || !strings.Contains(err.Error(), `SQL plan did not expose projections for source "orders"`) {
 		t.Fatalf("PlanModelTable error = %v, want fail-closed missing projection error", err)
 	}
@@ -324,11 +311,9 @@ func TestPlanModelTableFailsClosedForUnusedCTESourceRef(t *testing.T) {
 			SELECT order_id FROM source.orders
 		`},
 	})
-	if err := model.Validate(); err != nil {
-		t.Fatal(err)
-	}
+	validateAndBindPlanningManagedRoot(t, model, managedPlanningRoot)
 
-	_, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	_, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err == nil || !strings.Contains(err.Error(), `SQL plan did not expose projections for source "payments"`) {
 		t.Fatalf("PlanModelTable error = %v, want fail-closed unused source error", err)
 	}
@@ -356,7 +341,7 @@ func TestPlanModelTableFallsBackToInlineQuackForModelDependency(t *testing.T) {
 		Description: "stub",
 	}
 
-	plan, err := PlanModelTable(ctx, db, model, "", "orders", model.Tables["orders"])
+	plan, err := PlanModelTable(ctx, db, model, "orders", model.Tables["orders"])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,6 +362,22 @@ func openPlanningRuntimeDB(t *testing.T) *sql.DB {
 	return db
 }
 
+const managedPlanningRoot = "/managed/revision"
+
+func validateAndBindPlanningManagedRoot(t *testing.T, model *semanticmodel.Model, root string) {
+	t.Helper()
+	if err := model.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	for name, connection := range model.Connections {
+		if connection.Kind != "managed" {
+			continue
+		}
+		connection.Root = filepath.Clean(root)
+		model.Connections[name] = connection
+	}
+}
+
 func planningModel(sourceColumns map[string][]string, table semanticmodel.Table) *semanticmodel.Model {
 	sources := map[string]semanticmodel.Source{}
 	for name, columns := range sourceColumns {
@@ -393,7 +394,7 @@ func planningModel(sourceColumns map[string][]string, table semanticmodel.Table)
 	}
 	return &semanticmodel.Model{
 		Name:        "test",
-		Connections: map[string]semanticmodel.Connection{"local_files": {Kind: "local"}},
+		Connections: map[string]semanticmodel.Connection{"local_files": {Kind: "managed"}},
 		Sources:     sources,
 		BaseTable:   "orders",
 		Tables:      map[string]semanticmodel.Table{"orders": table},

@@ -1,0 +1,850 @@
+package http
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	stdhttp "net/http"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+
+	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	"github.com/Yacobolo/libredash/internal/manageddata"
+	"github.com/Yacobolo/libredash/internal/manageddata/control"
+	"github.com/Yacobolo/libredash/internal/manageddata/s3multipart"
+)
+
+const (
+	defaultPageLimit  = 50
+	maxPageLimit      = 200
+	maxManifestFiles  = 10_000
+	maxCompletedParts = 10_000
+)
+
+var (
+	scopeIDPattern  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+	revisionPattern = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	digestPattern   = regexp.MustCompile(`^[0-9a-f]{64}$`)
+)
+
+func (h *Handler) GetManagedDataEnvironmentRevision(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, environment string) {
+	collection, ok := h.collection(w, r, project, connection)
+	if !ok {
+		return
+	}
+	if !validScopeID(environment) {
+		h.writeError(w, r, ErrInvalid)
+		return
+	}
+	pointer, err := h.options.Repository.EnvironmentPointer(r.Context(), collection.ID, manageddata.Environment(environment))
+	if errors.Is(err, manageddata.ErrNotFound) || errors.Is(err, ErrNotFound) {
+		h.writeJSON(w, stdhttp.StatusOK, apigenapi.ManagedDataEnvironmentRevisionResponse{Environment: environment})
+		return
+	}
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	if pointer.CollectionID != collection.ID || string(pointer.Environment) != environment {
+		h.writeError(w, r, ErrNotFound)
+		return
+	}
+	metadata, err := h.options.Repository.RevisionByID(r.Context(), collection.ID, pointer.RevisionID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	summary, err := revisionSummary(metadata, collection.ID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	response := apigenapi.ManagedDataEnvironmentRevisionResponse{Environment: environment, Revision: &summary}
+	response.DeploymentId = stringPointer(pointer.DeploymentID)
+	response.ActivatedAt = stringPointer(pointer.UpdatedAt)
+	h.writeJSON(w, stdhttp.StatusOK, response)
+}
+
+func (h *Handler) ListManagedDataRevisions(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection string, params apigenapi.GenListManagedDataRevisionsParams) {
+	collection, ok := h.collection(w, r, project, connection)
+	if !ok {
+		return
+	}
+	rows, err := h.options.Repository.ListRevisions(r.Context(), collection.ID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].Revision.CreatedAt == rows[j].Revision.CreatedAt {
+			return rows[i].Revision.ID > rows[j].Revision.ID
+		}
+		return rows[i].Revision.CreatedAt > rows[j].Revision.CreatedAt
+	})
+	items := make([]apigenapi.ManagedDataRevisionSummaryResponse, 0, len(rows))
+	for _, row := range rows {
+		if row.Revision.Status != manageddata.RevisionStatusReady {
+			continue
+		}
+		item, mapErr := revisionSummary(row, collection.ID)
+		if mapErr != nil {
+			h.writeError(w, r, mapErr)
+			return
+		}
+		items = append(items, item)
+	}
+	page, next, err := pageSlice(items, params.Limit, params.PageToken, "revisions\x00"+collection.ID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, stdhttp.StatusOK, apigenapi.ManagedDataRevisionListResponse{Items: page, Page: apigenapi.PageInfo{NextCursor: next}})
+}
+
+func (h *Handler) GetManagedDataRevision(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, revisionID string) {
+	collection, ok := h.collection(w, r, project, connection)
+	if !ok {
+		return
+	}
+	if !revisionPattern.MatchString(revisionID) {
+		h.writeError(w, r, ErrInvalid)
+		return
+	}
+	metadata, err := h.options.Repository.RevisionByID(r.Context(), collection.ID, revisionID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	response, err := revisionResponse(metadata, collection.ID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, stdhttp.StatusOK, response)
+}
+
+func (h *Handler) CreateManagedDataUploadSession(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection string, headers apigenapi.GenCreateManagedDataUploadSessionHeaders) {
+	if h.options.Uploads == nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	if !validScope(project, connection) || !validIdempotencyKey(headers.IdempotencyKey) {
+		h.writeError(w, r, ErrInvalid)
+		return
+	}
+	var body apigenapi.ManagedDataUploadSessionCreateRequest
+	if err := h.decodeRequiredJSON(w, r, &body); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	manifest, err := manifestFromWire(body.Manifest)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	actor, ok := h.actor(w, r)
+	if !ok {
+		return
+	}
+	result, err := h.options.Uploads.BeginUpload(r.Context(), control.BeginUploadRequest{
+		Project: project, Connection: connection, Manifest: manifest, Actor: actor, IdempotencyKey: headers.IdempotencyKey,
+	})
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	response, err := uploadResponse(result, project, connection, "")
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, stdhttp.StatusCreated, response)
+}
+
+func (h *Handler) GetManagedDataUploadSession(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession string) {
+	result, ok := h.recoverUpload(w, r, project, connection, uploadSession)
+	if !ok {
+		return
+	}
+	response, err := uploadResponse(result, project, connection, uploadSession)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, stdhttp.StatusOK, response)
+}
+
+func (h *Handler) AbortManagedDataUploadSession(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession string, headers apigenapi.GenAbortManagedDataUploadSessionHeaders) {
+	if h.options.Uploads == nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	if !validUploadScope(project, connection, uploadSession) || !validIdempotencyKey(headers.IdempotencyKey) {
+		h.writeError(w, r, ErrInvalid)
+		return
+	}
+	result, err := h.options.Uploads.AbortUpload(r.Context(), control.UploadRequest{Project: project, Connection: connection, UploadID: uploadSession})
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	response, err := uploadResponse(result, project, connection, uploadSession)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, stdhttp.StatusOK, response)
+}
+
+func (h *Handler) FinalizeManagedDataUploadSession(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession string, headers apigenapi.GenFinalizeManagedDataUploadSessionHeaders) {
+	if h.options.Uploads == nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	if !validUploadScope(project, connection, uploadSession) || !validIdempotencyKey(headers.IdempotencyKey) {
+		h.writeError(w, r, ErrInvalid)
+		return
+	}
+	result, err := h.options.Uploads.FinalizeUpload(r.Context(), control.UploadRequest{Project: project, Connection: connection, UploadID: uploadSession})
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	response, err := uploadResponse(result.Upload, project, connection, uploadSession)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, stdhttp.StatusAccepted, response)
+}
+
+func (h *Handler) CreateManagedDataS3MultipartUpload(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession string, headers apigenapi.GenCreateManagedDataS3MultipartUploadHeaders) {
+	if h.options.Multipart == nil || h.options.Uploads == nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	if !validUploadScope(project, connection, uploadSession) || !validIdempotencyKey(headers.IdempotencyKey) {
+		h.writeError(w, r, ErrInvalid)
+		return
+	}
+	var body apigenapi.ManagedDataS3MultipartCreateRequest
+	if err := h.decodeRequiredJSON(w, r, &body); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	upload, ok := h.recoverUpload(w, r, project, connection, uploadSession)
+	if !ok {
+		return
+	}
+	file, found := uploadFile(upload, body.Path)
+	if !found {
+		h.writeError(w, r, ErrNotFound)
+		return
+	}
+	if file.Status == control.FileStatusVerified || file.Transport.Protocol != control.ProtocolS3Multipart {
+		h.writeError(w, r, ErrConflict)
+		return
+	}
+	if _, ok := h.actor(w, r); !ok {
+		return
+	}
+	result, err := h.options.Multipart.Create(r.Context(), s3multipart.CreateRequest{
+		Project: project, Connection: connection, UploadSessionID: uploadSession,
+		Path: body.Path, IdempotencyKey: headers.IdempotencyKey,
+	})
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	response, err := multipartResponse(result, upload, "")
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, stdhttp.StatusCreated, response)
+}
+
+func (h *Handler) SignManagedDataS3MultipartPart(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession, multipartUpload string, partNumber int32) {
+	if h.options.Multipart == nil || h.options.Uploads == nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	if !validUploadScope(project, connection, uploadSession) || !validResourceID(multipartUpload, 160) || partNumber < 1 || partNumber > 10_000 {
+		h.writeError(w, r, ErrInvalid)
+		return
+	}
+	var body apigenapi.ManagedDataS3MultipartSignPartRequest
+	if err := h.decodeRequiredJSON(w, r, &body); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	if body.Size < 1 || body.Sha256 != nil && !digestPattern.MatchString(*body.Sha256) {
+		h.writeError(w, r, ErrInvalid)
+		return
+	}
+	if _, ok := h.recoverUpload(w, r, project, connection, uploadSession); !ok {
+		return
+	}
+	if _, ok := h.actor(w, r); !ok {
+		return
+	}
+	result, err := h.options.Multipart.SignPart(r.Context(), s3multipart.SignPartRequest{
+		Project: project, Connection: connection, UploadSessionID: uploadSession, MultipartUploadID: multipartUpload,
+		PartNumber: partNumber, Size: int64(body.Size), SHA256: valueOrEmpty(body.Sha256),
+	})
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	response, err := signedPartResponse(result, uploadSession, multipartUpload, partNumber)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, stdhttp.StatusOK, response)
+}
+
+func (h *Handler) CompleteManagedDataS3MultipartUpload(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession, multipartUpload string, headers apigenapi.GenCompleteManagedDataS3MultipartUploadHeaders) {
+	if h.options.Multipart == nil || h.options.Uploads == nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	if !validMultipartMutation(project, connection, uploadSession, multipartUpload, headers.IdempotencyKey) {
+		h.writeError(w, r, ErrInvalid)
+		return
+	}
+	var body apigenapi.ManagedDataS3MultipartCompleteRequest
+	if err := h.decodeRequiredJSON(w, r, &body); err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	if len(body.Parts) < 1 || len(body.Parts) > maxCompletedParts {
+		h.writeError(w, r, ErrTooLarge)
+		return
+	}
+	parts := make([]s3multipart.CompletedPart, len(body.Parts))
+	seen := make(map[int32]struct{}, len(body.Parts))
+	for i, part := range body.Parts {
+		if part.PartNumber < 1 || part.PartNumber > 10_000 || strings.TrimSpace(part.Etag) == "" || len(part.Etag) > 1024 || part.Sha256 != nil && !digestPattern.MatchString(*part.Sha256) {
+			h.writeError(w, r, ErrInvalid)
+			return
+		}
+		if _, exists := seen[part.PartNumber]; exists {
+			h.writeError(w, r, ErrInvalid)
+			return
+		}
+		seen[part.PartNumber] = struct{}{}
+		parts[i] = s3multipart.CompletedPart{PartNumber: part.PartNumber, ETag: part.Etag, SHA256: valueOrEmpty(part.Sha256)}
+	}
+	upload, ok := h.recoverUpload(w, r, project, connection, uploadSession)
+	if !ok {
+		return
+	}
+	if _, ok := h.actor(w, r); !ok {
+		return
+	}
+	result, err := h.options.Multipart.Complete(r.Context(), s3multipart.CompleteRequest{
+		Project: project, Connection: connection, UploadSessionID: uploadSession, MultipartUploadID: multipartUpload,
+		IdempotencyKey: headers.IdempotencyKey, Parts: parts,
+	})
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	response, err := multipartResponse(result, upload, multipartUpload)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, stdhttp.StatusOK, response)
+}
+
+func (h *Handler) AbortManagedDataS3MultipartUpload(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession, multipartUpload string, headers apigenapi.GenAbortManagedDataS3MultipartUploadHeaders) {
+	if h.options.Multipart == nil || h.options.Uploads == nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	if !validMultipartMutation(project, connection, uploadSession, multipartUpload, headers.IdempotencyKey) {
+		h.writeError(w, r, ErrInvalid)
+		return
+	}
+	upload, ok := h.recoverUpload(w, r, project, connection, uploadSession)
+	if !ok {
+		return
+	}
+	if _, ok := h.actor(w, r); !ok {
+		return
+	}
+	result, err := h.options.Multipart.Abort(r.Context(), s3multipart.AbortRequest{
+		Project: project, Connection: connection, UploadSessionID: uploadSession,
+		MultipartUploadID: multipartUpload, IdempotencyKey: headers.IdempotencyKey,
+	})
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	response, err := multipartResponse(result, upload, multipartUpload)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	h.writeJSON(w, stdhttp.StatusOK, response)
+}
+
+func (h *Handler) collection(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection string) (manageddata.Collection, bool) {
+	if h.options.Repository == nil {
+		h.writeUnavailable(w, r)
+		return manageddata.Collection{}, false
+	}
+	if !validScope(project, connection) {
+		h.writeError(w, r, ErrInvalid)
+		return manageddata.Collection{}, false
+	}
+	collection, err := h.options.Repository.CollectionByProjectConnection(r.Context(), project, connection)
+	if err != nil {
+		h.writeError(w, r, err)
+		return manageddata.Collection{}, false
+	}
+	if collection.ProjectID != project || collection.ConnectionName != connection || collection.Status != manageddata.CollectionStatusActive {
+		h.writeError(w, r, ErrNotFound)
+		return manageddata.Collection{}, false
+	}
+	return collection, true
+}
+
+func (h *Handler) recoverUpload(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession string) (control.UploadResult, bool) {
+	if h.options.Uploads == nil {
+		h.writeUnavailable(w, r)
+		return control.UploadResult{}, false
+	}
+	if !validUploadScope(project, connection, uploadSession) {
+		h.writeError(w, r, ErrInvalid)
+		return control.UploadResult{}, false
+	}
+	result, err := h.options.Uploads.RecoverUpload(r.Context(), control.UploadRequest{Project: project, Connection: connection, UploadID: uploadSession})
+	if err != nil {
+		h.writeError(w, r, err)
+		return control.UploadResult{}, false
+	}
+	if result.ID != uploadSession || result.Collection.Project != project || result.Collection.Connection != connection || result.Collection.ID == "" {
+		h.writeError(w, r, ErrNotFound)
+		return control.UploadResult{}, false
+	}
+	return result, true
+}
+
+func (h *Handler) actor(w stdhttp.ResponseWriter, r *stdhttp.Request) (string, bool) {
+	if h.options.CurrentPrincipal == nil {
+		h.writeError(w, r, errors.New("current principal callback is not configured"))
+		return "", false
+	}
+	principal, ok := h.options.CurrentPrincipal(r)
+	if !ok || strings.TrimSpace(principal.ID) == "" {
+		h.writeError(w, r, errors.New("current principal is unavailable"))
+		return "", false
+	}
+	return strings.TrimSpace(principal.ID), true
+}
+
+func (h *Handler) decodeRequiredJSON(w stdhttp.ResponseWriter, r *stdhttp.Request, target any) error {
+	if r.Body == nil || r.Body == stdhttp.NoBody {
+		return ErrInvalid
+	}
+	return h.decodeJSON(w, r, target, false)
+}
+
+func (h *Handler) decodeOptionalJSON(w stdhttp.ResponseWriter, r *stdhttp.Request, target any) error {
+	if r.Body == nil || r.Body == stdhttp.NoBody {
+		return nil
+	}
+	return h.decodeJSON(w, r, target, true)
+}
+
+func (h *Handler) decodeJSON(w stdhttp.ResponseWriter, r *stdhttp.Request, target any, optional bool) error {
+	r.Body = stdhttp.MaxBytesReader(w, r.Body, h.options.MaxJSONBodyBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		var maxErr *stdhttp.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return ErrTooLarge
+		}
+		if optional && errors.Is(err, io.EOF) {
+			return nil
+		}
+		return ErrInvalid
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		var maxErr *stdhttp.MaxBytesError
+		if errors.As(err, &maxErr) {
+			return ErrTooLarge
+		}
+		return ErrInvalid
+	}
+	return nil
+}
+
+func (h *Handler) writeJSON(w stdhttp.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
+
+func (h *Handler) writeUnavailable(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	h.writePublicError(w, r, stdhttp.StatusServiceUnavailable, "managed-data service is not configured")
+}
+
+func (h *Handler) writeError(w stdhttp.ResponseWriter, r *stdhttp.Request, err error) {
+	status := statusForError(err)
+	message := "managed-data service failed"
+	switch status {
+	case stdhttp.StatusBadRequest:
+		message = "invalid managed-data request"
+	case stdhttp.StatusNotFound:
+		message = "managed-data resource not found"
+	case stdhttp.StatusConflict:
+		message = "managed-data request conflicts with current state"
+	case stdhttp.StatusRequestEntityTooLarge:
+		message = "managed-data request is too large"
+	case stdhttp.StatusBadGateway:
+		message = "managed-data storage is unavailable"
+	}
+	h.writePublicError(w, r, status, message)
+}
+
+func (h *Handler) writePublicError(w stdhttp.ResponseWriter, r *stdhttp.Request, status int, message string) {
+	details := map[string]any{}
+	requestID := r.Header.Get("X-Request-Id")
+	h.writeJSON(w, status, apigenapi.Error{Code: int32(status), Message: message, Details: &details, RequestId: stringPointer(requestID)})
+}
+
+func statusForError(err error) int {
+	switch {
+	case errors.Is(err, ErrTooLarge):
+		return stdhttp.StatusRequestEntityTooLarge
+	case errors.Is(err, ErrInvalid), errors.Is(err, control.ErrInvalid):
+		return stdhttp.StatusBadRequest
+	case errors.Is(err, ErrNotFound), errors.Is(err, manageddata.ErrNotFound), errors.Is(err, control.ErrNotFound):
+		return stdhttp.StatusNotFound
+	case errors.Is(err, ErrConflict), errors.Is(err, manageddata.ErrConflict), errors.Is(err, control.ErrConflict), errors.Is(err, control.ErrIncomplete), errors.Is(err, control.ErrExpired), errors.Is(err, control.ErrIntegrity):
+		return stdhttp.StatusConflict
+	case errors.Is(err, ErrBackend), errors.Is(err, control.ErrBackend):
+		return stdhttp.StatusBadGateway
+	default:
+		return stdhttp.StatusInternalServerError
+	}
+}
+
+func revisionSummary(metadata RevisionMetadata, collectionID string) (apigenapi.ManagedDataRevisionSummaryResponse, error) {
+	revision := metadata.Revision
+	fileCount, err := checkedInt32(revision.FileCount)
+	if err != nil || revision.CollectionID != collectionID || revision.Status != manageddata.RevisionStatusReady || !revisionPattern.MatchString(revision.ID) || !validResourceID(metadata.UploadSessionID, 160) || revision.CreatedAt == "" {
+		if revision.CollectionID != collectionID {
+			return apigenapi.ManagedDataRevisionSummaryResponse{}, ErrNotFound
+		}
+		return apigenapi.ManagedDataRevisionSummaryResponse{}, errors.New("invalid revision metadata")
+	}
+	if fileCount < 1 || revision.SizeBytes < 0 {
+		return apigenapi.ManagedDataRevisionSummaryResponse{}, errors.New("invalid revision metadata")
+	}
+	return apigenapi.ManagedDataRevisionSummaryResponse{Id: revision.ID, Status: apigenapi.ManagedDataRevisionStatusAvailable, FileCount: fileCount, Size: revision.SizeBytes, CreatedAt: revision.CreatedAt, UploadSessionId: metadata.UploadSessionID}, nil
+}
+
+func revisionResponse(metadata RevisionMetadata, collectionID string) (apigenapi.ManagedDataRevisionResponse, error) {
+	summary, err := revisionSummary(metadata, collectionID)
+	if err != nil {
+		return apigenapi.ManagedDataRevisionResponse{}, err
+	}
+	var manifest manageddata.Manifest
+	decoder := json.NewDecoder(strings.NewReader(metadata.Revision.ManifestJSON))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&manifest); err != nil || manifest.Validate(manageddata.Limits{MaxFiles: maxManifestFiles}) != nil {
+		return apigenapi.ManagedDataRevisionResponse{}, errors.New("invalid revision manifest")
+	}
+	wired, err := manifestToWire(manifest)
+	if err != nil {
+		return apigenapi.ManagedDataRevisionResponse{}, err
+	}
+	return apigenapi.ManagedDataRevisionResponse{Id: summary.Id, Status: summary.Status, Manifest: wired, FileCount: summary.FileCount, Size: summary.Size, CreatedAt: summary.CreatedAt, UploadSessionId: summary.UploadSessionId}, nil
+}
+
+func manifestFromWire(value apigenapi.ManagedDataManifest) (manageddata.Manifest, error) {
+	if len(value.Files) < 1 {
+		return manageddata.Manifest{}, ErrInvalid
+	}
+	if len(value.Files) > maxManifestFiles {
+		return manageddata.Manifest{}, ErrTooLarge
+	}
+	manifest := manageddata.Manifest{Files: make([]manageddata.File, len(value.Files))}
+	for i, file := range value.Files {
+		if len(file.Path) > 1024 || file.Size < 0 {
+			return manageddata.Manifest{}, ErrInvalid
+		}
+		manifest.Files[i] = manageddata.File{Path: file.Path, Size: int64(file.Size), SHA256: file.Sha256}
+	}
+	if err := manifest.Validate(manageddata.Limits{MaxFiles: maxManifestFiles}); err != nil {
+		return manageddata.Manifest{}, ErrInvalid
+	}
+	return manifest, nil
+}
+
+func manifestToWire(manifest manageddata.Manifest) (apigenapi.ManagedDataManifest, error) {
+	if len(manifest.Files) < 1 || len(manifest.Files) > maxManifestFiles {
+		return apigenapi.ManagedDataManifest{}, errors.New("invalid manifest size")
+	}
+	files := make([]apigenapi.ManagedDataFileMetadata, len(manifest.Files))
+	for i, file := range manifest.Files {
+		if file.Size < 0 {
+			return apigenapi.ManagedDataManifest{}, errors.New("invalid manifest file size")
+		}
+		files[i] = apigenapi.ManagedDataFileMetadata{Path: file.Path, Size: file.Size, Sha256: file.SHA256}
+	}
+	return apigenapi.ManagedDataManifest{Files: files}, nil
+}
+
+func uploadResponse(result control.UploadResult, project, connection, expectedID string) (apigenapi.ManagedDataUploadSessionResponse, error) {
+	if result.Collection.Project != project || result.Collection.Connection != connection || result.Collection.ID == "" || !validResourceID(result.ID, 160) || expectedID != "" && result.ID != expectedID {
+		return apigenapi.ManagedDataUploadSessionResponse{}, ErrNotFound
+	}
+	manifest, err := manifestToWire(result.Manifest)
+	if err != nil {
+		return apigenapi.ManagedDataUploadSessionResponse{}, err
+	}
+	status, ok := uploadStatus(result.Status)
+	if !ok || result.CreatedAt == "" || result.ExpiresAt == "" {
+		return apigenapi.ManagedDataUploadSessionResponse{}, errors.New("invalid upload metadata")
+	}
+	files := make([]apigenapi.ManagedDataFileUploadResponse, len(result.Files))
+	for i, file := range result.Files {
+		metadata, err := fileToWire(file.File)
+		if err != nil {
+			return apigenapi.ManagedDataUploadSessionResponse{}, err
+		}
+		fileStatus := apigenapi.ManagedDataFileUploadStatusPending
+		if file.Status == control.FileStatusVerified {
+			fileStatus = apigenapi.ManagedDataFileUploadStatusVerified
+		}
+		negotiation, err := negotiationToWire(file.Transport)
+		if err != nil {
+			return apigenapi.ManagedDataUploadSessionResponse{}, err
+		}
+		files[i] = apigenapi.ManagedDataFileUploadResponse{File: metadata, Status: fileStatus, Negotiation: negotiation}
+	}
+	revisionID := result.Manifest.RevisionID()
+	if !revisionPattern.MatchString(revisionID) {
+		return apigenapi.ManagedDataUploadSessionResponse{}, errors.New("invalid upload revision identity")
+	}
+	response := apigenapi.ManagedDataUploadSessionResponse{Id: result.ID, Project: project, Connection: connection, RevisionId: revisionID, Status: status, Manifest: manifest, Files: files, CreatedAt: result.CreatedAt, ExpiresAt: result.ExpiresAt}
+	response.CompletedAt = stringPointer(result.CompletedAt)
+	if result.Status == manageddata.UploadStatusFailed {
+		response.Error = stringPointer("managed-data upload failed")
+	}
+	return response, nil
+}
+
+func uploadStatus(status manageddata.UploadStatus) (apigenapi.ManagedDataUploadSessionStatus, bool) {
+	switch status {
+	case manageddata.UploadStatusOpen:
+		return apigenapi.ManagedDataUploadSessionStatusOpen, true
+	case manageddata.UploadStatusCommitting:
+		return apigenapi.ManagedDataUploadSessionStatusFinalizing, true
+	case manageddata.UploadStatusComplete:
+		return apigenapi.ManagedDataUploadSessionStatusCompleted, true
+	case manageddata.UploadStatusAborted:
+		return apigenapi.ManagedDataUploadSessionStatusAborted, true
+	case manageddata.UploadStatusFailed:
+		return apigenapi.ManagedDataUploadSessionStatusFailed, true
+	case manageddata.UploadStatusExpired:
+		return apigenapi.ManagedDataUploadSessionStatusExpired, true
+	default:
+		return "", false
+	}
+}
+
+func negotiationToWire(value control.TransportDescription) (apigenapi.ManagedDataUploadNegotiation, error) {
+	switch value.Protocol {
+	case control.ProtocolAlreadyPresent:
+		return apigenapi.ManagedDataUploadNegotiation{Protocol: apigenapi.ManagedDataUploadProtocolAlreadyPresent}, nil
+	case control.ProtocolTus:
+		if value.Tus == nil || value.S3Multipart != nil || value.Tus.Endpoint == "" || value.Tus.UploadID == "" || value.Tus.ExpiresAt == "" {
+			return apigenapi.ManagedDataUploadNegotiation{}, errors.New("invalid tus negotiation")
+		}
+		if value.Tus.Offset < 0 {
+			return apigenapi.ManagedDataUploadNegotiation{}, errors.New("invalid tus offset")
+		}
+		return apigenapi.ManagedDataUploadNegotiation{Protocol: apigenapi.ManagedDataUploadProtocolTus, Tus: &apigenapi.ManagedDataTusUploadNegotiation{Endpoint: value.Tus.Endpoint, UploadId: value.Tus.UploadID, Offset: value.Tus.Offset, ExpiresAt: value.Tus.ExpiresAt}}, nil
+	case control.ProtocolS3Multipart:
+		if value.S3Multipart == nil || value.Tus != nil {
+			return apigenapi.ManagedDataUploadNegotiation{}, errors.New("invalid multipart negotiation")
+		}
+		if value.S3Multipart.MinimumPartSize <= 0 {
+			return apigenapi.ManagedDataUploadNegotiation{}, errors.New("invalid multipart minimum part size")
+		}
+		if value.S3Multipart.MaximumPartSize < value.S3Multipart.MinimumPartSize {
+			return apigenapi.ManagedDataUploadNegotiation{}, errors.New("invalid multipart maximum part size")
+		}
+		return apigenapi.ManagedDataUploadNegotiation{Protocol: apigenapi.ManagedDataUploadProtocolS3Multipart, S3Multipart: &apigenapi.ManagedDataS3MultipartNegotiation{CreateEndpoint: value.S3Multipart.CreateEndpoint, MinimumPartSize: value.S3Multipart.MinimumPartSize, MaximumPartSize: value.S3Multipart.MaximumPartSize, MaximumParts: value.S3Multipart.MaximumParts}}, nil
+	default:
+		return apigenapi.ManagedDataUploadNegotiation{}, errors.New("invalid upload negotiation")
+	}
+}
+
+func multipartResponse(result s3multipart.UploadResult, upload control.UploadResult, expectedID string) (apigenapi.ManagedDataS3MultipartUploadResponse, error) {
+	if result.UploadSessionID != upload.ID || !validResourceID(result.ID, 160) || expectedID != "" && result.ID != expectedID || result.CreatedAt == "" {
+		return apigenapi.ManagedDataS3MultipartUploadResponse{}, ErrNotFound
+	}
+	expectedFile, ok := uploadFile(upload, result.File.Path)
+	if !ok || expectedFile.File != result.File {
+		return apigenapi.ManagedDataS3MultipartUploadResponse{}, ErrNotFound
+	}
+	file, err := fileToWire(result.File)
+	if err != nil {
+		return apigenapi.ManagedDataS3MultipartUploadResponse{}, err
+	}
+	status := apigenapi.ManagedDataS3MultipartStatus(result.Status)
+	if status != apigenapi.ManagedDataS3MultipartStatusOpen && status != apigenapi.ManagedDataS3MultipartStatusCompleted && status != apigenapi.ManagedDataS3MultipartStatusAborted {
+		return apigenapi.ManagedDataS3MultipartUploadResponse{}, errors.New("invalid multipart status")
+	}
+	return apigenapi.ManagedDataS3MultipartUploadResponse{Id: result.ID, UploadSessionId: result.UploadSessionID, File: file, Status: status, Existing: result.Existing, CreatedAt: result.CreatedAt, ExpiresAt: stringPointer(result.ExpiresAt)}, nil
+}
+
+func signedPartResponse(result s3multipart.SignedPartResult, uploadSession, multipartUpload string, partNumber int32) (apigenapi.ManagedDataS3MultipartSignedPartResponse, error) {
+	if result.UploadSessionID != uploadSession || result.MultipartUploadID != multipartUpload || result.PartNumber != partNumber || result.URL == "" || len(result.URL) > 8192 || result.ExpiresAt == "" || len(result.Headers) > 32 {
+		return apigenapi.ManagedDataS3MultipartSignedPartResponse{}, ErrNotFound
+	}
+	headers := make([]apigenapi.ManagedDataHTTPHeader, len(result.Headers))
+	for i, header := range result.Headers {
+		if header.Name == "" || len(header.Name) > 256 || header.Value == "" || len(header.Value) > 8192 || strings.ContainsAny(header.Name+header.Value, "\x00\r\n") {
+			return apigenapi.ManagedDataS3MultipartSignedPartResponse{}, errors.New("invalid signed part headers")
+		}
+		headers[i] = apigenapi.ManagedDataHTTPHeader{Name: header.Name, Value: header.Value}
+	}
+	return apigenapi.ManagedDataS3MultipartSignedPartResponse{PartNumber: result.PartNumber, Url: result.URL, Headers: headers, ExpiresAt: result.ExpiresAt}, nil
+}
+
+func uploadFile(upload control.UploadResult, path string) (control.UploadFile, bool) {
+	for _, file := range upload.Files {
+		if file.File.Path == path {
+			return file, true
+		}
+	}
+	return control.UploadFile{}, false
+}
+
+func fileToWire(file manageddata.File) (apigenapi.ManagedDataFileMetadata, error) {
+	if file.Size < 0 || file.Path == "" || len(file.Path) > 1024 || !digestPattern.MatchString(file.SHA256) {
+		return apigenapi.ManagedDataFileMetadata{}, errors.New("invalid managed-data file metadata")
+	}
+	return apigenapi.ManagedDataFileMetadata{Path: file.Path, Size: file.Size, Sha256: file.SHA256}, nil
+}
+
+func pageSlice[T any](items []T, limitValue *int32, tokenValue *string, scope string) ([]T, *string, error) {
+	limit := defaultPageLimit
+	if limitValue != nil {
+		if *limitValue < 1 || *limitValue > maxPageLimit {
+			return nil, nil, ErrInvalid
+		}
+		limit = int(*limitValue)
+	}
+	offset, err := decodePageToken(valueOrEmpty(tokenValue), scope)
+	if err != nil {
+		return nil, nil, err
+	}
+	if offset > len(items) {
+		return nil, nil, ErrInvalid
+	}
+	end := offset + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	var next *string
+	if end < len(items) {
+		next = stringPointer(encodePageToken(scope, end))
+	}
+	return append([]T(nil), items[offset:end]...), next, nil
+}
+
+type pageToken struct {
+	Scope  string `json:"scope"`
+	Offset int    `json:"offset"`
+}
+
+func encodePageToken(scope string, offset int) string {
+	value, _ := json.Marshal(pageToken{Scope: scope, Offset: offset})
+	return base64.RawURLEncoding.EncodeToString(value)
+}
+
+func decodePageToken(value, scope string) (int, error) {
+	if value == "" {
+		return 0, nil
+	}
+	if len(value) > 2048 {
+		return 0, ErrInvalid
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return 0, ErrInvalid
+	}
+	var token pageToken
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&token); err != nil || token.Scope != scope || token.Offset < 0 {
+		return 0, ErrInvalid
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return 0, ErrInvalid
+	}
+	return token.Offset, nil
+}
+
+func validScope(project, connection string) bool {
+	return validScopeID(project) && validScopeID(connection)
+}
+
+func validScopeID(value string) bool {
+	return scopeIDPattern.MatchString(value)
+}
+
+func validUploadScope(project, connection, uploadSession string) bool {
+	return validScope(project, connection) && validResourceID(uploadSession, 160)
+}
+
+func validMultipartMutation(project, connection, uploadSession, multipartUpload, key string) bool {
+	return validUploadScope(project, connection, uploadSession) && validResourceID(multipartUpload, 160) && validIdempotencyKey(key)
+}
+
+func validIdempotencyKey(value string) bool {
+	return validResourceID(value, 255)
+}
+
+func validResourceID(value string, maximum int) bool {
+	value = strings.TrimSpace(value)
+	return value != "" && len(value) <= maximum && !strings.ContainsAny(value, "\x00\r\n")
+}
+
+func checkedInt32(value int64) (int32, error) {
+	if value < 0 || value > math.MaxInt32 {
+		return 0, fmt.Errorf("managed-data integer %s is outside the generated wire range", strconv.FormatInt(value, 10))
+	}
+	return int32(value), nil
+}
+
+func stringPointer(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func valueOrEmpty[T ~string](value *T) string {
+	if value == nil {
+		return ""
+	}
+	return string(*value)
+}

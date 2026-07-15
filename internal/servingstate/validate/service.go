@@ -22,14 +22,19 @@ type Validator interface {
 	Cleanup(validation servingstate.Validation) error
 }
 
+type Hook interface {
+	AfterArtifactValidation(ctx context.Context, candidate servingstate.State, validation servingstate.Validation) error
+}
+
 type Service struct {
 	repo      Repository
 	artifacts ArtifactStore
 	validator Validator
+	hooks     []Hook
 }
 
-func NewService(repo Repository, artifacts ArtifactStore, validator Validator) Service {
-	return Service{repo: repo, artifacts: artifacts, validator: validator}
+func NewService(repo Repository, artifacts ArtifactStore, validator Validator, hooks ...Hook) Service {
+	return Service{repo: repo, artifacts: artifacts, validator: validator, hooks: append([]Hook(nil), hooks...)}
 }
 
 func (s Service) Validate(ctx context.Context, servingStateID servingstate.ID) (servingstate.State, error) {
@@ -43,6 +48,15 @@ func (s Service) Validate(ctx context.Context, servingStateID servingstate.ID) (
 		return servingstate.State{}, err
 	}
 	defer func() { _ = s.validator.Cleanup(validation) }()
+	for _, hook := range s.hooks {
+		if hook == nil {
+			continue
+		}
+		if err := hook.AfterArtifactValidation(ctx, current, validation); err != nil {
+			_ = s.repo.MarkFailed(ctx, current.ID, err)
+			return servingstate.State{}, err
+		}
+	}
 
 	artifact, err := s.artifacts.PromoteUploaded(ctx, current.ID, validation.Digest, validation.ManifestJSON)
 	if err != nil {
@@ -50,6 +64,5 @@ func (s Service) Validate(ctx context.Context, servingStateID servingstate.ID) (
 	}
 	artifact.WorkspaceID = current.WorkspaceID
 	artifact.Environment = current.Environment
-	artifact.DataRoot = validation.DataRoot
 	return s.repo.SaveValidated(ctx, current.ID, validation, artifact)
 }

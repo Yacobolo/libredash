@@ -68,7 +68,7 @@ for (const build of builds) {
   await runBuild(build)
 }
 await Bun.write('static/monaco-editor-css.css', Bun.file('static/admin-page.css'))
-await hardenProductionJavaScriptBundles()
+await validateProductionJavaScriptBundles()
 await writeStaticAssetVersion()
 
 async function runBuild(build: AssetBuild): Promise<void> {
@@ -98,17 +98,12 @@ async function removePath(path: string): Promise<void> {
   }
 }
 
-async function hardenProductionJavaScriptBundles(): Promise<void> {
+async function validateProductionJavaScriptBundles(): Promise<void> {
   const forbiddenHosts = ['cdn.jsdelivr.net', 'unpkg.com', 'esm.sh', 'skypack.dev']
   const files = new Bun.Glob('static/**/*.js')
 
   for await (const path of files.scan({ cwd: '.', dot: true, onlyFiles: true })) {
-    let text = await Bun.file(path).text()
-    const hardened = text.replaceAll('https://cdn.jsdelivr.net/npm/p5@', '/static/vendor/p5-translations/')
-    if (hardened !== text) {
-      await Bun.write(path, hardened)
-      text = hardened
-    }
+    const text = await Bun.file(path).text()
 
     for (const host of forbiddenHosts) {
       if (text.includes(host)) {

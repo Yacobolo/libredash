@@ -391,6 +391,7 @@ func TestProductionContainerContractExists(t *testing.T) {
 		"WORKDIR /app",
 		"COPY --from=web /src/static ./static",
 		"LIBREDASH_HOME=/var/lib/libredash",
+		"LIBREDASH_MANAGED_DATA_DIR=/var/lib/libredash/managed-data",
 		"LIBREDASH_PRODUCTION=1",
 		"HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD [\"libredash\", \"healthcheck\"]",
 		"CMD [\"serve\", \"--production\"]",
@@ -409,6 +410,36 @@ func TestProductionContainerContractExists(t *testing.T) {
 		if !strings.Contains(ignoreText, want) {
 			t.Fatalf(".dockerignore missing generated or runtime path %q", want)
 		}
+	}
+}
+
+func TestDevelopmentServerTracksCompiledFallbackProcess(t *testing.T) {
+	root := repoRoot(t)
+	server, err := os.ReadFile(filepath.Join(root, "scripts", "dev-server.sh"))
+	if err != nil {
+		t.Fatalf("read development server script: %v", err)
+	}
+	serverText := string(server)
+	for _, want := range []string{
+		`go build -o "$TMP_DIR/libredash-dev" ./cmd/libredash`,
+		`"$TMP_DIR/libredash-dev" >> "$LOG_FILE" 2>&1 &`,
+	} {
+		if !strings.Contains(serverText, want) {
+			t.Fatalf("development server script missing tracked binary fragment %q", want)
+		}
+	}
+	if strings.Contains(serverText, `go run ./cmd/libredash >> "$LOG_FILE" 2>&1 &`) {
+		t.Fatal("development server must not track the go run wrapper as the server process")
+	}
+
+	qa, err := os.ReadFile(filepath.Join(root, "scripts", "qa_ui_framework.ts"))
+	if err != nil {
+		t.Fatalf("read UI framework QA script: %v", err)
+	}
+	qaText := string(qa)
+	if !strings.Contains(qaText, "const managedServerReadyAttempts = 1800") ||
+		!strings.Contains(qaText, "attempt < managedServerReadyAttempts") {
+		t.Fatal("UI framework QA must allow a cold Go build before checking server readiness")
 	}
 }
 
@@ -507,6 +538,51 @@ func TestContinuousIntegrationWorkflowRunsProductionGates(t *testing.T) {
 	} {
 		if !strings.Contains(scriptText, want) {
 			t.Fatalf("production image smoke script missing fragment %q", want)
+		}
+	}
+}
+
+func TestSQLCOutputsAreGeneratedBuildInputs(t *testing.T) {
+	root := repoRoot(t)
+	files := map[string][]string{
+		"Taskfile.yml": {
+			"db:generate:",
+			"go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate",
+			"- task: db:generate",
+		},
+		".gitignore": {
+			"internal/platform/db/db.go",
+			"internal/platform/db/models.go",
+			"internal/platform/db/queries.sql.go",
+		},
+		".dockerignore": {
+			"internal/platform/db/db.go",
+			"internal/platform/db/models.go",
+			"internal/platform/db/queries.sql.go",
+		},
+		filepath.Join(".github", "workflows", "ci.yml"): {
+			"Check generated database code is untracked",
+			"git ls-files -- internal/platform/db/db.go internal/platform/db/models.go internal/platform/db/queries.sql.go",
+			"internal/platform/db/db.go",
+			"internal/platform/db/models.go",
+			"internal/platform/db/queries.sql.go",
+		},
+		"Dockerfile": {
+			"go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate",
+			"COPY --from=sourcegen /src/internal/platform/db/db.go ./internal/platform/db/db.go",
+			"COPY --from=sourcegen /src/internal/platform/db/models.go ./internal/platform/db/models.go",
+			"COPY --from=sourcegen /src/internal/platform/db/queries.sql.go ./internal/platform/db/queries.sql.go",
+		},
+	}
+	for name, fragments := range files {
+		body, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		for _, fragment := range fragments {
+			if !strings.Contains(string(body), fragment) {
+				t.Errorf("%s missing sqlc generation contract fragment %q", name, fragment)
+			}
 		}
 	}
 }
@@ -727,7 +803,7 @@ func isAdapterOrCompositionPackage(pkgDir string) bool {
 		strings.HasPrefix(pkgDir, "internal/testutil/") {
 		return true
 	}
-	for _, suffix := range []string{"/http", "/sqlite", "/filesystem", "/duckdb", "/ducklake", "/datastar", "/openai", "/ui"} {
+	for _, suffix := range []string{"/http", "/sqlite", "/filesystem", "/s3", "/tus", "/duckdb", "/ducklake", "/datastar", "/openai", "/ui"} {
 		if strings.HasSuffix(pkgDir, suffix) || strings.Contains(pkgDir, suffix+"/") {
 			return true
 		}
@@ -749,7 +825,7 @@ func isForbiddenUseCaseImport(imported string) bool {
 	if !strings.HasPrefix(imported, modulePath+"/internal/") {
 		return false
 	}
-	for _, segment := range []string{"/sqlite", "/filesystem", "/duckdb", "/ducklake", "/datastar", "/http", "/openai"} {
+	for _, segment := range []string{"/sqlite", "/filesystem", "/s3", "/tus", "/duckdb", "/ducklake", "/datastar", "/http", "/openai"} {
 		if strings.Contains(strings.TrimPrefix(imported, modulePath), segment) {
 			return true
 		}

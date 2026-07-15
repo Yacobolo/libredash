@@ -71,7 +71,7 @@
         "PREVIEW_DATA",
         "REFRESH_DATA",
         "DEPLOY",
-        "ACTIVATE_PUBLISH",
+        "ACTIVATE_DEPLOYMENT",
         "USE_AGENT",
         "VIEW_AGENT",
         "MANAGE_GRANTS",

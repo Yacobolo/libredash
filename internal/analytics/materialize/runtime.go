@@ -3,7 +3,6 @@ package materialize
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -11,14 +10,12 @@ import (
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
-	"github.com/Yacobolo/libredash/internal/configspec"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 )
 
 type RuntimeConfig struct {
 	ModelID string
 	Model   *semanticmodel.Model
-	DataDir string
 	DBDir   string
 
 	Database Database
@@ -38,7 +35,6 @@ type ModelTableQuery struct {
 type Runtime struct {
 	modelID     string
 	model       *semanticmodel.Model
-	dataDir     string
 	db          Database
 	sources     SourceRegistrar
 	queries     *semanticquery.Service
@@ -82,13 +78,12 @@ func NewRuntimeView(ctx context.Context, config RuntimeConfig) (*Runtime, error)
 	if resolver == nil {
 		resolver = defaultSourcePathResolver{}
 	}
-	if err := ValidateFilesWithResolver(config.Model, config.DataDir, resolver); err != nil {
+	if err := ValidateFilesWithResolver(config.Model, resolver); err != nil {
 		return nil, err
 	}
 	runtime := &Runtime{
 		modelID: config.ModelID,
 		model:   config.Model,
-		dataDir: config.DataDir,
 		db:      config.Database,
 		sources: config.Sources,
 		queries: semanticquery.NewService(semanticquery.NewPlanner(config.Model), config.Database),
@@ -97,17 +92,7 @@ func NewRuntimeView(ctx context.Context, config RuntimeConfig) (*Runtime, error)
 }
 
 func DatabasePath(dbDir, modelID string) string {
-	if path := os.Getenv(configspec.EnvLIBREDASH_DUCKDB_PATH); path != "" {
-		return path
-	}
 	return filepath.Join(dbDir, "libredash-"+modelID+".duckdb")
-}
-
-func WorkspaceDatabasePath(dbDir string) string {
-	if path := os.Getenv(configspec.EnvLIBREDASH_DUCKDB_PATH); path != "" {
-		return path
-	}
-	return filepath.Join(dbDir, "libredash-workspace.duckdb")
 }
 
 func (r *Runtime) Close() error {
@@ -312,7 +297,7 @@ func (r *Runtime) executeSourceRows(ctx context.Context, request dataquery.Query
 	if err := r.sources.PrepareSourceRuntime(ctx, r.model); err != nil {
 		return dataquery.Result{}, err
 	}
-	relation, err := planner.SourceRelation(r.model, source, r.dataDir)
+	relation, err := planner.SourceRelation(r.model, source)
 	if err != nil {
 		return dataquery.Result{}, err
 	}
