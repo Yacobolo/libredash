@@ -8,8 +8,8 @@ import (
 )
 
 func TestNormalizeProgressPercentKeepsThePublicSignalBounded(t *testing.T) {
-	if progress := NormalizeProgressPercent(nil, true); progress != nil {
-		t.Fatalf("planning progress = %v, want nil", *progress)
+	if progress := NormalizeProgressPercent(nil, true); progress == nil || *progress != 0 {
+		t.Fatalf("planning progress = %v, want 0", progress)
 	}
 	if progress := NormalizeProgressPercent(nil, false); progress == nil || *progress != 100 {
 		t.Fatalf("complete progress = %v, want 100", progress)
@@ -31,8 +31,8 @@ func TestNormalizeProgressPercentKeepsThePublicSignalBounded(t *testing.T) {
 		})
 	}
 	notANumber := math.NaN()
-	if progress := NormalizeProgressPercent(&notANumber, true); progress != nil {
-		t.Fatalf("invalid progress = %v, want nil", *progress)
+	if progress := NormalizeProgressPercent(&notANumber, true); progress == nil || *progress != 0 {
+		t.Fatalf("invalid progress = %v, want 0", progress)
 	}
 }
 

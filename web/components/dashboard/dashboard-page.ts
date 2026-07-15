@@ -58,8 +58,7 @@ type DashboardRefreshProgress = {
   active: boolean
   complete: boolean
   generation: number
-  percent?: number
-  indeterminate: boolean
+  percent: number
 }
 
 class LibreDashDashboardPage extends DatastarLit(LitElement) {
@@ -216,16 +215,6 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
       transition: width var(--motion-transition-stateChange);
     }
 
-    .dashboard-refresh-progress[data-indeterminate] .dashboard-refresh-progress-value {
-      width: 36%;
-      animation: dashboard-refresh-indeterminate 900ms ease-in-out infinite;
-    }
-
-    @keyframes dashboard-refresh-indeterminate {
-      from { transform: translateX(-110%); }
-      to { transform: translateX(310%); }
-    }
-
     .canvas-wrap {
       display: grid;
       min-width: 0;
@@ -316,10 +305,6 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
       .dashboard-refresh-progress,
       .dashboard-refresh-progress-value {
         transition: none;
-      }
-
-      .dashboard-refresh-progress[data-indeterminate] .dashboard-refresh-progress-value {
-        animation: none;
       }
     }
   `
@@ -438,9 +423,7 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
   }
 
   private renderRefreshProgress(progress: DashboardRefreshProgress) {
-    const valueText = progress.percent !== undefined
-      ? `${Math.round(progress.percent)}% of dashboard refresh complete`
-      : 'Refreshing dashboard'
+    const valueText = `${Math.round(progress.percent)}% of dashboard refresh complete`
     return html`
       <div
         class="dashboard-refresh-progress"
@@ -448,31 +431,29 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
         data-active=${String(progress.active)}
         data-complete=${String(progress.complete)}
         data-generation=${progress.generation}
-        ?data-indeterminate=${progress.indeterminate}
         role="progressbar"
         aria-label="Refreshing dashboard"
         aria-hidden=${String(!progress.active)}
         aria-valuemin="0"
-        aria-valuenow=${progress.indeterminate ? nothing : progress.percent}
-        aria-valuemax=${progress.indeterminate ? nothing : 100}
+        aria-valuenow=${progress.percent}
+        aria-valuemax="100"
         aria-valuetext=${valueText}
       >
         <div
           class="dashboard-refresh-progress-value"
-          style=${progress.percent === undefined ? nothing : `width:${progress.percent}%`}
+          style=${`width:${progress.percent}%`}
         ></div>
       </div>
     `
   }
 
   private refreshProgress(snapshot: DashboardRenderSnapshot): DashboardRefreshProgress {
-    const percent = snapshot.status.progressPercent
+    const percent = snapshot.status.progressPercent ?? (snapshot.status.loading ? 0 : 100)
     return {
       active: snapshot.status.loading,
       complete: !snapshot.status.loading && percent === 100,
       generation: snapshot.status.generation,
       percent,
-      indeterminate: snapshot.status.loading && percent === undefined,
     }
   }
 

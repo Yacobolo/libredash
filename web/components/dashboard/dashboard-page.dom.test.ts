@@ -332,6 +332,7 @@ test('dashboard refresh progress follows only the latest generation', async () =
           text: progress?.getAttribute('aria-valuetext'),
           indeterminate: progress?.hasAttribute('data-indeterminate'),
           width: value?.getAttribute('style'),
+          animationName: getComputedStyle(value).animationName,
           fadeDelay: getComputedStyle(progress).transitionDelay,
         }
       }
@@ -395,17 +396,19 @@ test('dashboard refresh progress follows only the latest generation', async () =
         text: '50% of dashboard refresh complete',
         indeterminate: false,
         width: 'width:50%',
+        animationName: 'none',
         fadeDelay: '0s',
       },
       planning: {
         active: 'true',
         complete: 'false',
         generation: '4',
-        now: null,
-        max: null,
-        text: 'Refreshing dashboard',
-        indeterminate: true,
-        width: null,
+        now: '0',
+        max: '100',
+        text: '0% of dashboard refresh complete',
+        indeterminate: false,
+        width: 'width:0%',
+        animationName: 'none',
         fadeDelay: '0s',
       },
       started: {
@@ -417,6 +420,7 @@ test('dashboard refresh progress follows only the latest generation', async () =
         text: '0% of dashboard refresh complete',
         indeterminate: false,
         width: 'width:0%',
+        animationName: 'none',
         fadeDelay: '0s',
       },
       progressive: {
@@ -428,6 +432,7 @@ test('dashboard refresh progress follows only the latest generation', async () =
         text: '33% of dashboard refresh complete',
         indeterminate: false,
         width: 'width:33.33333333333333%',
+        animationName: 'none',
         fadeDelay: '0s',
       },
       complete: {
@@ -439,6 +444,7 @@ test('dashboard refresh progress follows only the latest generation', async () =
         text: '100% of dashboard refresh complete',
         indeterminate: false,
         width: 'width:100%',
+        animationName: 'none',
         fadeDelay: '0.18s',
       },
     })

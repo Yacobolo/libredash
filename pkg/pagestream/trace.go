@@ -21,10 +21,11 @@ const (
 )
 
 type TraceOptions struct {
-	CapacityPerStream int
-	MaxStreams        int
-	Logger            *slog.Logger
-	IncludePayloads   bool
+	CapacityPerStream       int
+	SignalCapacityPerStream int
+	MaxStreams              int
+	Logger                  *slog.Logger
+	IncludePayloads         bool
 }
 
 type TraceRecord struct {
@@ -65,21 +66,26 @@ type TraceQuery struct {
 }
 
 type traceBuffer struct {
-	events   []TraceEvent
-	sequence uint64
-	lastID   uint64
+	events          []TraceEvent
+	signalState     map[string]any
+	signalChanges   []SignalChange
+	sequence        uint64
+	lastID          uint64
+	lastDeliveredID uint64
 }
 
 // TraceStore is a development-only, bounded record of page-stream lifecycle
 // events. Payloads are sanitized before retention and are never logged.
 type TraceStore struct {
-	mu                sync.Mutex
-	capacityPerStream int
-	maxStreams        int
-	logger            *slog.Logger
-	includePayloads   bool
-	nextID            uint64
-	streams           map[string]*traceBuffer
+	mu                      sync.Mutex
+	capacityPerStream       int
+	signalCapacityPerStream int
+	maxStreams              int
+	logger                  *slog.Logger
+	includePayloads         bool
+	nextID                  uint64
+	nextSignalChangeID      uint64
+	streams                 map[string]*traceBuffer
 }
 
 func NewTraceStore(options TraceOptions) *TraceStore {
@@ -92,11 +98,12 @@ func NewTraceStore(options TraceOptions) *TraceStore {
 		maxStreams = 32
 	}
 	return &TraceStore{
-		capacityPerStream: capacity,
-		maxStreams:        maxStreams,
-		logger:            options.Logger,
-		includePayloads:   options.IncludePayloads,
-		streams:           map[string]*traceBuffer{},
+		capacityPerStream:       capacity,
+		signalCapacityPerStream: signalCapacity(options.SignalCapacityPerStream),
+		maxStreams:              maxStreams,
+		logger:                  options.Logger,
+		includePayloads:         options.IncludePayloads,
+		streams:                 map[string]*traceBuffer{},
 	}
 }
 
@@ -114,6 +121,7 @@ func (s *TraceStore) Record(record TraceRecord) TraceEvent {
 		return TraceEvent{}
 	}
 	encoded, _ := json.Marshal(record.Signals)
+	sanitized := sanitizedPayload(encoded)
 	digest := ""
 	if len(encoded) > 0 {
 		sum := sha256.Sum256(encoded)
@@ -157,13 +165,16 @@ func (s *TraceStore) Record(record TraceRecord) TraceEvent {
 		Outcome:           strings.TrimSpace(record.Outcome),
 	}
 	if s.includePayloads {
-		event.Payload = sanitizedPayload(encoded)
+		event.Payload = cloneSignalMap(sanitized)
 	}
 	buffer.events = append(buffer.events, event)
 	if overflow := len(buffer.events) - s.capacityPerStream; overflow > 0 {
 		buffer.events = append([]TraceEvent(nil), buffer.events[overflow:]...)
 	}
 	buffer.lastID = event.ID
+	if record.Stage == TraceStageDelivered {
+		s.applyDeliveredSignalsLocked(buffer, event, sanitized)
+	}
 	logger := s.logger
 	s.mu.Unlock()
 
@@ -184,6 +195,13 @@ func (s *TraceStore) Record(record TraceRecord) TraceEvent {
 		)
 	}
 	return event
+}
+
+func signalCapacity(value int) int {
+	if value <= 0 {
+		return 4096
+	}
+	return value
 }
 
 func (s *TraceStore) Events(query TraceQuery) []TraceEvent {

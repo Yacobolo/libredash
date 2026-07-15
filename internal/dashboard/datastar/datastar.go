@@ -89,7 +89,7 @@ func LoadingPatch(dataDir string) pagestream.SignalPatch {
 			"lastUpdated":     "",
 			"dataDirectory":   dataDir,
 			"setupRequired":   false,
-			"progressPercent": (*float64)(nil),
+			"progressPercent": dashboard.NormalizeProgressPercent(nil, true),
 		},
 	}
 }

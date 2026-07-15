@@ -191,6 +191,7 @@ func (c *Coordinator) BeginPrepared(prepare RefreshPrepare, work func(RefreshPre
 	}
 	c.active = &activeRefresh{
 		refresh: refresh, startedAt: time.Now(), plannedTargets: len(preparation.Targets),
+		progressPercent: dashboard.NormalizeProgressPercent(nil, true),
 	}
 	c.mu.Unlock()
 

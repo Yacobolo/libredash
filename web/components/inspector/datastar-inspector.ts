@@ -1,8 +1,7 @@
 /**
  * Datastar Inspector - Dev-only debugging tool
  *
- * A self-contained web component for inspecting Datastar signals.
- * Works in any Datastar project with zero configuration.
+ * A development-only view of effective Datastar signal state and history.
  */
 import { LitElement, css, html, nothing } from 'lit'
 import { customElement, state } from 'lit/decorators.js'
@@ -11,8 +10,9 @@ import { ChevronDown, ChevronRight, X } from 'lucide'
 import { lucideIcon } from '../shared/lucide-icons'
 import type {
   InspectorState,
-  PageStreamTraceEvent,
-  PageStreamTraceResponse,
+  PageStreamSignalChange,
+  PageStreamSignalLeaf,
+  PageStreamSignalsResponse,
   SignalObject,
 } from './types.js'
 import {
@@ -24,8 +24,8 @@ import {
 
 const FLASH_DURATION = 400
 const STORAGE_KEY = 'ds-inspector'
-const TRACE_POLL_INTERVAL = 500
-const TRACE_EVENT_LIMIT = 500
+const SIGNAL_POLL_INTERVAL = 500
+const SIGNAL_HISTORY_LIMIT = 500
 
 @customElement('datastar-inspector')
 export class DatastarInspector extends LitElement {
@@ -36,9 +36,11 @@ export class DatastarInspector extends LitElement {
   @state() private changedPaths: Set<string> = new Set()
   @state() private expandedPaths: Set<string> = new Set()
   @state() private hasUnseenChanges = false
-  @state() private activeView: 'signals' | 'events' = 'signals'
-  @state() private traceEvents: PageStreamTraceEvent[] = []
-  @state() private traceError = ''
+  @state() private signalLeaves: PageStreamSignalLeaf[] = []
+  @state() private signalHistory: PageStreamSignalChange[] = []
+  @state() private signalStreamID = ''
+  @state() private selectedSignalPath = ''
+  @state() private signalError = ''
 
   private observer: MutationObserver | null = null
   private signalsElementId = `ds-inspector-signals-${Math.random().toString(36).slice(2, 9)}`
@@ -46,10 +48,10 @@ export class DatastarInspector extends LitElement {
   private previousSignals: SignalObject = {}
   private flashTimeout: number | null = null
   private parseFrame: number | null = null
-  private traceAfter = 0
-  private traceTimer: number | null = null
-  private traceLoading = false
-  private traceAbort: AbortController | null = null
+  private signalTimer: number | null = null
+  private signalAfter = 0
+  private signalLoading = false
+  private signalAbort: AbortController | null = null
 
   static styles = css`
     :host {
@@ -136,8 +138,8 @@ export class DatastarInspector extends LitElement {
       bottom: 16px;
       z-index: var(--zIndex-popover);
       display: flex;
-      width: min(384px, calc(100vw - 32px));
-      height: min(512px, calc(100vh - 32px));
+      width: min(760px, calc(100vw - 32px));
+      height: min(600px, calc(100vh - 32px));
       overflow: hidden;
       flex-direction: column;
       border: 1px solid var(--ds-border);
@@ -153,28 +155,6 @@ export class DatastarInspector extends LitElement {
       border-bottom: 1px solid var(--ds-border-muted);
       background: color-mix(in srgb, var(--ds-panel-muted), var(--ds-panel) 32%);
       padding: 8px 10px;
-    }
-
-    .tabs {
-      display: flex;
-      gap: 4px;
-      border-bottom: 1px solid var(--ds-border-muted);
-      padding: 6px 10px;
-    }
-
-    .tab {
-      border: 0;
-      border-radius: var(--ds-radius);
-      background: transparent;
-      color: var(--ds-muted);
-      cursor: pointer;
-      font-size: 12px;
-      padding: 5px 8px;
-    }
-
-    .tab[aria-selected='true'] {
-      background: var(--ds-panel-muted);
-      color: var(--ds-fg);
     }
 
     .badge {
@@ -273,6 +253,27 @@ export class DatastarInspector extends LitElement {
       padding: 2px 4px;
     }
 
+    button.row {
+      width: 100%;
+      background: transparent;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: inherit;
+      text-align: left;
+    }
+
+    button.row:hover,
+    button.row:focus-visible,
+    button.row[aria-selected='true'] {
+      background: var(--ds-panel-muted);
+      color: var(--ds-fg);
+      outline: 0;
+    }
+
+    button.row[aria-selected='true'] {
+      box-shadow: 2px 0 0 var(--ds-accent) inset;
+    }
+
     .branch {
       display: flex;
       align-items: center;
@@ -350,96 +351,118 @@ export class DatastarInspector extends LitElement {
       color: var(--ds-success);
     }
 
-    .trace-toolbar {
+    .signal-error {
+      color: var(--ds-warning);
+      font-size: 12px;
+      padding: 8px 10px 0;
+    }
+
+    .signal-content {
       display: flex;
-      justify-content: flex-end;
-      margin-bottom: 8px;
+      overflow: hidden;
+      flex-direction: column;
+      padding: 0;
     }
 
-    .trace-action {
-      border: 1px solid var(--ds-border);
-      border-radius: var(--ds-radius);
-      background: transparent;
+    .signal-workbench {
+      display: grid;
+      min-height: 0;
+      flex: 1;
+      grid-template-columns: minmax(250px, 0.9fr) minmax(300px, 1.1fr);
+    }
+
+    .signal-tree-pane,
+    .signal-history-pane {
+      min-height: 0;
+      overflow: auto;
+      padding: 10px;
+    }
+
+    .signal-tree-pane {
+      border-right: 1px solid var(--ds-border-muted);
+    }
+
+    .signal-path {
+      color: var(--ds-fg);
+      font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+      font-size: 12px;
+      font-weight: var(--ld-font-weight-strong);
+      overflow-wrap: anywhere;
+    }
+
+    .signal-section-label {
       color: var(--ds-muted);
-      cursor: pointer;
-      font-size: 11px;
-      padding: 4px 7px;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      margin: 14px 0 5px;
+      text-transform: uppercase;
     }
 
-    .trace-event {
+    .signal-current {
       border: 1px solid var(--ds-border-muted);
       border-radius: var(--ds-radius);
       background: var(--ds-bg);
-      margin-bottom: 7px;
-    }
-
-    .trace-event summary {
-      display: grid;
-      grid-template-columns: auto auto minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 7px;
-      cursor: pointer;
       font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
+      font-size: 12px;
+      margin: 0;
+      overflow-wrap: anywhere;
+      padding: 8px;
+      white-space: pre-wrap;
+    }
+
+    .signal-sparkline {
+      display: block;
+      width: 100%;
+      height: 54px;
+      border: 1px solid var(--ds-border-muted);
+      border-radius: var(--ds-radius);
+      background: var(--ds-bg);
+    }
+
+    .signal-sparkline polyline {
+      fill: none;
+      stroke: var(--ds-accent);
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 2;
+    }
+
+    .signal-change {
+      display: grid;
+      grid-template-columns: 68px minmax(0, 1fr);
+      align-items: start;
+      gap: 8px;
+      border-top: 1px solid var(--ds-border-muted);
       font-size: 11px;
-      list-style: none;
-      padding: 7px;
+      padding: 8px 0;
     }
 
-    .trace-event summary::-webkit-details-marker {
-      display: none;
-    }
-
-    .trace-sequence,
-    .trace-meta,
-    .trace-roots {
+    .signal-change-time,
+    .signal-change-meta {
       color: var(--ds-muted);
     }
 
-    .trace-stage {
-      border-radius: var(--ds-radius-full);
-      background: var(--ds-panel-muted);
-      color: var(--ds-fg);
-      padding: 2px 6px;
-    }
-
-    .trace-origin {
-      min-width: 0;
-      overflow: hidden;
-      color: var(--ds-fg);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .trace-detail {
-      border-top: 1px solid var(--ds-border-muted);
-      padding: 7px;
-    }
-
-    .trace-roots {
-      font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-      font-size: 11px;
-      margin-bottom: 6px;
-    }
-
-    .trace-payload {
-      max-height: 240px;
-      overflow: auto;
-      border-radius: 4px;
-      background: var(--ds-panel-muted);
+    .signal-change-value {
       color: var(--ds-fg);
       font-family: var(--fontStack-monospace, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace);
-      font-size: 10px;
-      line-height: 1.45;
-      margin: 0;
-      padding: 7px;
-      white-space: pre-wrap;
-      word-break: break-word;
+      overflow-wrap: anywhere;
     }
 
-    .trace-error {
+    .signal-change-removed {
       color: var(--ds-warning);
-      font-size: 12px;
-      margin-bottom: 8px;
+      font-style: italic;
+    }
+
+    @media (max-width: 620px) {
+      .signal-workbench {
+        grid-template-columns: 1fr;
+        grid-template-rows: minmax(180px, 0.9fr) minmax(220px, 1.1fr);
+      }
+
+      .signal-tree-pane {
+        border-right: 0;
+        border-bottom: 1px solid var(--ds-border-muted);
+      }
     }
   `
 
@@ -447,7 +470,6 @@ export class DatastarInspector extends LitElement {
     super.connectedCallback()
     this.ensureSignalsElement()
     this.loadState()
-    this.startTracePolling()
   }
 
   override disconnectedCallback() {
@@ -459,14 +481,15 @@ export class DatastarInspector extends LitElement {
     if (this.flashTimeout) {
       clearTimeout(this.flashTimeout)
     }
-    if (this.traceTimer !== null) {
-      clearInterval(this.traceTimer)
+    if (this.signalTimer !== null) {
+      clearInterval(this.signalTimer)
     }
-    this.traceAbort?.abort()
+    this.signalAbort?.abort()
   }
 
   override firstUpdated() {
     this.setupSignalObserver()
+    this.startSignalPolling()
   }
 
   private ensureSignalsElement() {
@@ -489,7 +512,6 @@ export class DatastarInspector extends LitElement {
         this.expanded = state.expanded ?? false
         this.filter = state.filter ?? ''
         this.expandedPaths = new Set(state.expandedPaths ?? [])
-        this.activeView = state.view === 'events' ? 'events' : 'signals'
       }
     } catch {
       /* ignore parse errors */
@@ -501,7 +523,6 @@ export class DatastarInspector extends LitElement {
       expanded: this.expanded,
       filter: this.filter,
       expandedPaths: [...this.expandedPaths],
-      view: this.activeView,
     }
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state))
   }
@@ -592,67 +613,83 @@ export class DatastarInspector extends LitElement {
     this.saveState()
   }
 
-  private selectView(view: 'signals' | 'events') {
-    this.activeView = view
-    this.saveState()
-    if (view === 'events') {
-      void this.loadTraceEvents()
-    }
+  private startSignalPolling() {
+    if (!this.signalsURL()) return
+    void this.loadSignals()
+    this.signalTimer = window.setInterval(() => {
+      void this.loadSignals()
+    }, SIGNAL_POLL_INTERVAL)
   }
 
-  private startTracePolling() {
-    if (!this.traceURL()) return
-    void this.loadTraceEvents()
-    this.traceTimer = window.setInterval(() => void this.loadTraceEvents(), TRACE_POLL_INTERVAL)
+  private signalsURL() {
+    return this.getAttribute('signals-url')?.trim() ?? ''
   }
 
-  private traceURL() {
-    return this.getAttribute('trace-url')?.trim() ?? ''
+  private preferredSignalStreamID() {
+    const runtime = this.signals.runtime
+    if (!runtime || Array.isArray(runtime) || typeof runtime !== 'object') return this.signalStreamID
+    const values = runtime as Record<string, unknown>
+    const parts = ['clientId', 'dashboardId', 'pageId'].map((key) => typeof values[key] === 'string' ? values[key] as string : '')
+    if (parts.some((part) => !part)) return this.signalStreamID
+    if (typeof values.streamInstanceId === 'string' && values.streamInstanceId) parts.push(values.streamInstanceId)
+    return parts.join(':')
   }
 
-  private async loadTraceEvents() {
-    const rawURL = this.traceURL()
-    if (!rawURL || this.traceLoading) return
-    this.traceLoading = true
-    this.traceAbort?.abort()
-    this.traceAbort = new AbortController()
+  private async loadSignals() {
+    const rawURL = this.signalsURL()
+    if (!rawURL || this.signalLoading) return
+    const requestedPath = this.selectedSignalPath
+    this.signalLoading = true
+    this.signalAbort?.abort()
+    this.signalAbort = new AbortController()
     try {
       const url = new URL(rawURL, window.location.href)
-      if (this.traceAfter > 0) url.searchParams.set('after', String(this.traceAfter))
+      const streamID = this.preferredSignalStreamID()
+      if (streamID) url.searchParams.set('streamId', streamID)
+      if (this.selectedSignalPath) url.searchParams.set('path', this.selectedSignalPath)
+      if (this.signalAfter > 0) url.searchParams.set('after', String(this.signalAfter))
       url.searchParams.set('limit', '200')
       const response = await fetch(url, {
         cache: 'no-store',
         credentials: 'same-origin',
-        signal: this.traceAbort.signal,
+        signal: this.signalAbort.signal,
       })
-      if (!response.ok) throw new Error(`Trace request failed (${response.status})`)
-      const body = await response.json() as PageStreamTraceResponse
-      const incoming = Array.isArray(body.events) ? body.events.filter((event) => event.id > this.traceAfter) : []
-      if (incoming.length > 0) {
-        const byID = new Map(this.traceEvents.map((event) => [event.id, event]))
-        for (const event of incoming) byID.set(event.id, event)
-        this.traceEvents = [...byID.values()].sort((left, right) => left.id - right.id).slice(-TRACE_EVENT_LIMIT)
-        if (!this.expanded) this.hasUnseenChanges = true
+      if (!response.ok) throw new Error(`Signal history request failed (${response.status})`)
+      const body = await response.json() as PageStreamSignalsResponse
+      if (this.signalStreamID && body.streamId && this.signalStreamID !== body.streamId) {
+        this.signalAfter = 0
+        this.signalHistory = []
       }
-      this.traceAfter = Math.max(this.traceAfter, Number(body.nextAfter) || 0)
-      this.traceError = ''
+      this.signalStreamID = body.streamId || streamID
+      this.signals = body.state && typeof body.state === 'object' ? body.state : {}
+      this.signalLeaves = Array.isArray(body.leaves) ? body.leaves : []
+      this.signalCount = this.signalLeaves.length
+      const incoming = Array.isArray(body.history) ? body.history : []
+      if (incoming.length > 0) {
+        const byID = new Map(this.signalHistory.map((change) => [change.id, change]))
+        for (const change of incoming) byID.set(change.id, change)
+        this.signalHistory = [...byID.values()].sort((left, right) => right.id - left.id).slice(0, SIGNAL_HISTORY_LIMIT)
+      }
+      this.signalAfter = Math.max(this.signalAfter, Number(body.nextAfter) || 0)
+      this.signalError = ''
     } catch (error) {
       if (!(error instanceof DOMException && error.name === 'AbortError')) {
-        this.traceError = error instanceof Error ? error.message : String(error)
+        this.signalError = error instanceof Error ? error.message : String(error)
       }
     } finally {
-      this.traceLoading = false
+      this.signalLoading = false
+      if (requestedPath !== this.selectedSignalPath) {
+        void this.loadSignals()
+      }
     }
   }
 
-  private filteredTraceEvents() {
-    const filter = this.filter.trim().toLowerCase()
-    if (!filter) return this.traceEvents
-    return this.traceEvents.filter((event) => JSON.stringify(event).toLowerCase().includes(filter))
-  }
-
-  private clearTraceEvents() {
-    this.traceEvents = []
+  private selectSignal(path: string) {
+    if (this.selectedSignalPath === path) return
+    this.selectedSignalPath = path
+    this.signalHistory = []
+    this.signalAfter = 0
+    void this.loadSignals()
   }
 
   private togglePath(path: string) {
@@ -686,10 +723,6 @@ export class DatastarInspector extends LitElement {
   }
 
   private renderOpenPanel() {
-    if (this.activeView === 'events') {
-      const events = this.filteredTraceEvents()
-      return this.renderPanel(this.renderTraceEvents(events), events.length, this.traceEvents.length)
-    }
     const filteredSignals = this.getFilteredSignals()
     const filteredCount = countSignals(filteredSignals)
     const hasFilter = this.filter.trim().length > 0
@@ -701,7 +734,6 @@ export class DatastarInspector extends LitElement {
     return html`
       <div class="panel">
         ${this.renderHeader(filteredCount, totalCount, hasFilter)}
-        ${this.renderTabs()}
         ${content}
       </div>
     `
@@ -710,7 +742,7 @@ export class DatastarInspector extends LitElement {
   private renderHeader(filteredCount: number, totalCount: number, hasFilter: boolean) {
     const placeholder = hasFilter
       ? `${filteredCount}/${totalCount} match...`
-      : `Filter ${totalCount} ${this.activeView}...`
+      : `Filter ${totalCount} signals...`
 
     return html`
       <div class="header">
@@ -730,70 +762,99 @@ export class DatastarInspector extends LitElement {
     `
   }
 
-  private renderTabs() {
-    return html`
-      <div class="tabs" role="tablist" aria-label="Inspector views">
-        <button class="tab" data-view="signals" role="tab" aria-selected=${String(this.activeView === 'signals')} @click=${() => this.selectView('signals')}>Signals</button>
-        <button class="tab" data-view="events" role="tab" aria-selected=${String(this.activeView === 'events')} @click=${() => this.selectView('events')}>Events</button>
-      </div>
-    `
-  }
-
   private renderSignalContent(filteredSignals: SignalObject, hasFilter: boolean) {
     const isEmpty = Object.keys(filteredSignals).length === 0
 
     return html`
-      <div class="content">
-        ${isEmpty
-          ? html`<div class="empty">
-              ${hasFilter ? 'No signals match filter' : 'No signals found'}
-            </div>`
-          : this.renderJsonView(filteredSignals)}
-      </div>
-    `
-  }
-
-  private renderTraceEvents(events: PageStreamTraceEvent[]) {
-    return html`
-      <div class="content">
-        <div class="trace-toolbar">
-          <button class="trace-action" data-clear-events @click=${this.clearTraceEvents} ?disabled=${this.traceEvents.length === 0}>Clear events</button>
-        </div>
-        ${this.traceError ? html`<div class="trace-error" role="alert">${this.traceError}</div>` : nothing}
-        ${events.length === 0
-          ? html`<div class="empty">${this.filter.trim() ? 'No page-stream events match filter' : 'No page-stream events'}</div>`
-          : events.map((event) => this.renderTraceEvent(event))}
-      </div>
-    `
-  }
-
-  private renderTraceEvent(event: PageStreamTraceEvent) {
-    const queue = event.queueMilliseconds && event.queueMilliseconds > 0
-      ? `${event.queueMilliseconds.toFixed(1)} ms`
-      : ''
-    const origin = event.origin || 'unknown origin'
-    return html`
-      <details class="trace-event">
-        <summary>
-          <span class="trace-sequence">#${event.sequence}</span>
-          <span class="trace-stage">${event.stage}</span>
-          <span class="trace-origin" title=${origin}>${origin}</span>
-          <span class="trace-meta">${queue || `${event.bytes} B`}</span>
-        </summary>
-        <div class="trace-detail">
-          <div class="trace-roots">
-            ${event.streamId} · generation ${event.generation ?? '—'} · ${event.roots.join(', ') || 'no roots'}
+      <div class="content signal-content">
+        ${this.signalError ? html`<div class="signal-error" role="alert">${this.signalError}</div>` : nothing}
+        <div class="signal-workbench">
+          <div class="signal-tree-pane">
+            ${isEmpty
+              ? html`<div class="empty">
+                  ${hasFilter ? 'No signals match filter' : 'No delivered signals found'}
+                </div>`
+              : this.renderJsonView(filteredSignals)}
           </div>
-          <pre class="trace-payload">${JSON.stringify(event.payload ?? {}, null, 2)}</pre>
+          <div class="signal-history-pane">
+            ${this.renderSignalHistory()}
+          </div>
         </div>
-      </details>
+      </div>
+    `
+  }
+
+  private renderSignalHistory() {
+    if (!this.selectedSignalPath) {
+      return html`<div class="empty">Select a signal to inspect its delivered history</div>`
+    }
+    const leaf = this.signalLeaves.find((candidate) => candidate.path === this.selectedSignalPath)
+    const latest = this.signalHistory[0]
+    const displayPath = leaf?.displayPath || latest?.displayPath || this.selectedSignalPath
+    const removed = !leaf && latest?.operation === 'removed'
+    const current = leaf
+      ? JSON.stringify(leaf.value, null, 2)
+      : this.signalLoading && this.signalHistory.length === 0
+        ? 'Loading history…'
+        : removed
+          ? 'removed'
+          : 'No current value'
+    return html`
+      <div class="signal-path">${displayPath}</div>
+      <div class="signal-section-label">Current value</div>
+      <pre class="signal-current ${removed ? 'signal-change-removed' : ''}">${current}</pre>
+      ${this.renderSignalSparkline()}
+      <div class="signal-section-label">Effective delivered changes · ${this.signalHistory.length}</div>
+      ${this.signalHistory.length === 0
+        ? html`<div class="empty">No retained changes for this signal</div>`
+        : this.signalHistory.map((change) => this.renderSignalChange(change))}
+    `
+  }
+
+  private renderSignalSparkline() {
+    const numeric = [...this.signalHistory].reverse()
+      .filter((change) => change.operation === 'set' && typeof change.value === 'number' && Number.isFinite(change.value))
+      .map((change) => change.value as number)
+    if (numeric.length < 2) return nothing
+    const minValue = Math.min(...numeric)
+    const maxValue = Math.max(...numeric)
+    const span = maxValue - minValue || 1
+    const points = numeric.map((value, index) => {
+      const x = numeric.length === 1 ? 50 : 4 + (index / (numeric.length - 1)) * 92
+      const y = 46 - ((value - minValue) / span) * 38
+      return `${x.toFixed(1)},${y.toFixed(1)}`
+    }).join(' ')
+    return html`
+      <div class="signal-section-label">Trend</div>
+      <svg class="signal-sparkline" data-signal-sparkline viewBox="0 0 100 54" preserveAspectRatio="none" aria-label="Numeric signal history">
+        <polyline points=${points}></polyline>
+      </svg>
+    `
+  }
+
+  private renderSignalChange(change: PageStreamSignalChange) {
+    const time = new Date(change.timestamp).toLocaleTimeString([], { hour12: false })
+    const value = change.operation === 'removed' ? 'removed' : JSON.stringify(change.value)
+    const metadata = [
+      `generation ${change.generation ?? '—'}`,
+      change.origin || 'unknown origin',
+      change.correlationId || 'no correlation',
+    ].join(' · ')
+    return html`
+      <div class="signal-change" data-signal-change>
+        <span class="signal-change-time">${time}</span>
+        <div>
+          <div class="signal-change-value ${change.operation === 'removed' ? 'signal-change-removed' : ''}">${value}</div>
+          <div class="signal-change-meta">${metadata}</div>
+        </div>
+      </div>
     `
   }
 
   private renderJsonView(signals: SignalObject) {
     return html`
       <div class="tree">
-        ${Object.entries(signals).map(([key, value]) => this.renderTreeNode(key, value, key, 0, this.filter.trim().length > 0))}
+        ${Object.entries(signals).map(([key, value]) => this.renderTreeNode(key, value, `/${this.escapePointerSegment(key)}`, 0, this.filter.trim().length > 0))}
       </div>
     `
   }
@@ -805,11 +866,11 @@ export class DatastarInspector extends LitElement {
 
     if (!this.isBranch(value)) {
       return html`
-        <div class="row${rowClass}" style=${rowStyle}>
+        <button class="row${rowClass}" data-signal-path=${path} aria-selected=${String(this.selectedSignalPath === path)} style=${rowStyle} @click=${() => this.selectSignal(path)}>
           <span class="key">${key}</span>
           <span class="separator">:</span>
           ${this.renderPrimitive(value)}
-        </div>
+        </button>
       `
     }
 
@@ -822,6 +883,7 @@ export class DatastarInspector extends LitElement {
         <button
           type="button"
           class="branch${rowClass}"
+          data-signal-branch=${path}
           style=${rowStyle}
           aria-expanded=${String(expanded)}
           aria-label=${expanded ? `Collapse ${key}` : `Expand ${key}`}
@@ -833,7 +895,7 @@ export class DatastarInspector extends LitElement {
         </button>
         ${expanded
           ? this.childEntries(value).map(([childKey, childValue]) =>
-              this.renderTreeNode(childKey, childValue, this.childPath(path, childKey, value), depth + 1, hasFilter)
+              this.renderTreeNode(childKey, childValue, this.childPath(path, childKey), depth + 1, hasFilter)
             )
           : nothing}
       </div>
@@ -863,22 +925,26 @@ export class DatastarInspector extends LitElement {
         </span>
       `
     }
+    if (Array.isArray(value)) {
+      return html`<span class="value">${JSON.stringify(value)}</span>`
+    }
     return html`<span class="value">${String(value)}</span>`
   }
 
   private isBranch(value: unknown): value is Record<string, unknown> | unknown[] {
-    return typeof value === 'object' && value !== null
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
   }
 
   private childEntries(value: Record<string, unknown> | unknown[]): Array<[string, unknown]> {
-    if (Array.isArray(value)) {
-      return value.map((item, index) => [String(index), item])
-    }
     return Object.entries(value)
   }
 
-  private childPath(path: string, key: string, parent: Record<string, unknown> | unknown[]) {
-    return Array.isArray(parent) ? `${path}[${key}]` : `${path}.${key}`
+  private childPath(path: string, key: string) {
+    return `${path}/${this.escapePointerSegment(key)}`
+  }
+
+  private escapePointerSegment(value: string) {
+    return value.replaceAll('~', '~0').replaceAll('/', '~1')
   }
 
   private isChanged(path: string) {

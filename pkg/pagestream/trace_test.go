@@ -88,3 +88,112 @@ func TestTraceStoreIncrementalLimitReturnsOldestUnreadEventsFirst(t *testing.T) 
 		t.Fatalf("second page = %#v", second)
 	}
 }
+
+func TestTraceStoreBuildsEffectiveDeliveredSignalHistory(t *testing.T) {
+	store := NewTraceStore(TraceOptions{CapacityPerStream: 16, SignalCapacityPerStream: 32, MaxStreams: 2})
+
+	store.Record(TraceRecord{
+		StreamID: "dashboard:page:tab-1", Stage: TraceStagePublished,
+		Signals: SignalPatch{"status": map[string]any{"progressPercent": 0}},
+	})
+	first := store.Record(TraceRecord{
+		StreamID: "dashboard:page:tab-1", Stage: TraceStageDelivered,
+		Signals:    SignalPatch{"status": map[string]any{"progressPercent": 0, "loading": true}},
+		Generation: 4, Origin: "dashboard.refresh", CorrelationID: "refresh-4",
+	})
+	store.Record(TraceRecord{
+		StreamID: "dashboard:page:tab-1", Stage: TraceStageDelivered,
+		Signals:    SignalPatch{"status": map[string]any{"progressPercent": 0}},
+		Generation: 4, Origin: "dashboard.refresh", CorrelationID: "refresh-4",
+	})
+	second := store.Record(TraceRecord{
+		StreamID: "dashboard:page:tab-1", Stage: TraceStageDelivered,
+		Signals:    SignalPatch{"status": map[string]any{"progressPercent": 25}},
+		Generation: 4, Origin: "dashboard.refresh", CorrelationID: "refresh-4",
+	})
+	third := store.Record(TraceRecord{
+		StreamID: "dashboard:page:tab-1", Stage: TraceStageDelivered,
+		Signals:    SignalPatch{"status": map[string]any{"progressPercent": nil}},
+		Generation: 4, Origin: "dashboard.refresh", CorrelationID: "refresh-4",
+	})
+
+	snapshot, ok := store.SignalSnapshot("dashboard:page:tab-1")
+	if !ok {
+		t.Fatal("expected delivered signal snapshot")
+	}
+	status := snapshot.State["status"].(map[string]any)
+	if status["loading"] != true {
+		t.Fatalf("status = %#v", status)
+	}
+	if _, exists := status["progressPercent"]; exists {
+		t.Fatalf("deleted progressPercent remained in state: %#v", status)
+	}
+	if len(snapshot.Leaves) != 1 || snapshot.Leaves[0].Path != "/status/loading" {
+		t.Fatalf("leaves = %#v", snapshot.Leaves)
+	}
+
+	changes := store.SignalChanges(SignalHistoryQuery{
+		StreamID: "dashboard:page:tab-1", Path: "/status/progressPercent", Limit: 10,
+	})
+	if len(changes) != 3 {
+		t.Fatalf("progress history = %#v, want set 0, set 25, removed", changes)
+	}
+	if changes[0].Operation != SignalChangeSet || changes[0].Value != float64(0) || changes[0].TraceEventID != first.ID {
+		t.Fatalf("first change = %#v", changes[0])
+	}
+	if changes[1].Operation != SignalChangeSet || changes[1].Value != float64(25) || changes[1].TraceEventID != second.ID {
+		t.Fatalf("second change = %#v", changes[1])
+	}
+	if changes[2].Operation != SignalChangeRemoved || changes[2].TraceEventID != third.ID {
+		t.Fatalf("third change = %#v", changes[2])
+	}
+	for _, change := range changes {
+		if change.DisplayPath != "status.progressPercent" || change.Generation != 4 || change.Origin != "dashboard.refresh" || change.CorrelationID != "refresh-4" {
+			t.Fatalf("change metadata = %#v", change)
+		}
+	}
+}
+
+func TestTraceStoreSignalHistoryIsSanitizedAtomicBoundedAndStreamScoped(t *testing.T) {
+	store := NewTraceStore(TraceOptions{CapacityPerStream: 8, SignalCapacityPerStream: 8, MaxStreams: 2})
+	store.Record(TraceRecord{
+		StreamID: "one", Stage: TraceStageDelivered,
+		Signals: SignalPatch{
+			"rows": []any{map[string]any{"id": 1}, map[string]any{"id": 2}},
+			"auth": map[string]any{"accessToken": "private"},
+			"a/b":  1,
+		},
+	})
+	store.Record(TraceRecord{StreamID: "two", Stage: TraceStageDelivered, Signals: SignalPatch{"value": 9}})
+
+	snapshot, ok := store.SignalSnapshot("one")
+	if !ok {
+		t.Fatal("expected stream one snapshot")
+	}
+	if got := snapshot.State["auth"].(map[string]any)["accessToken"]; got != "[REDACTED]" {
+		t.Fatalf("sanitized state token = %#v", got)
+	}
+	rows := store.SignalChanges(SignalHistoryQuery{StreamID: "one", Path: "/rows", Limit: 10})
+	if len(rows) != 1 {
+		t.Fatalf("array must be one atomic history value: %#v", rows)
+	}
+	escaped := store.SignalChanges(SignalHistoryQuery{StreamID: "one", Path: "/a~1b", Limit: 10})
+	if len(escaped) != 1 || escaped[0].DisplayPath != `["a/b"]` {
+		t.Fatalf("escaped-key history = %#v", escaped)
+	}
+	if changes := store.SignalChanges(SignalHistoryQuery{StreamID: "one", Limit: 10}); len(changes) != 3 {
+		t.Fatalf("signal changes = %#v", changes)
+	}
+	if changes := store.SignalChanges(SignalHistoryQuery{StreamID: "two", Limit: 10}); len(changes) != 1 || changes[0].Path != "/value" {
+		t.Fatalf("stream two changes = %#v", changes)
+	}
+
+	bounded := NewTraceStore(TraceOptions{SignalCapacityPerStream: 2, MaxStreams: 1})
+	for value := 1; value <= 3; value++ {
+		bounded.Record(TraceRecord{StreamID: "bounded", Stage: TraceStageDelivered, Signals: SignalPatch{"value": value}})
+	}
+	changes := bounded.SignalChanges(SignalHistoryQuery{StreamID: "bounded", Path: "/value", Limit: 10})
+	if len(changes) != 2 || changes[0].Value != float64(2) || changes[1].Value != float64(3) {
+		t.Fatalf("bounded signal history = %#v", changes)
+	}
+}

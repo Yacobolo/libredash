@@ -39,6 +39,10 @@ func TestPatchKeys(t *testing.T) {
 	if !ok || status["loading"] != true || status["dataDirectory"] != ".data" {
 		t.Fatalf("loading patch = %#v", LoadingPatch(".data"))
 	}
+	progress, ok := status["progressPercent"].(*float64)
+	if !ok || progress == nil || *progress != 0 {
+		t.Fatalf("loading progress = %#v, want 0", status["progressPercent"])
+	}
 }
 
 func TestRefreshCompletePreservesFatalError(t *testing.T) {
@@ -62,6 +66,7 @@ func TestRefreshProgressIsBackendOwned(t *testing.T) {
 			event: dashboardstream.RefreshEvent{
 				Type: dashboardstream.RefreshEventStart, Generation: 4,
 			},
+			percent: testPercent(0),
 		},
 		{
 			name: "executing",

@@ -30,6 +30,7 @@ func (s *Server) Routes() http.Handler {
 	mux.Get("/readyz", s.readyz)
 	if s.pageStreamTrace != nil {
 		mux.Get("/__dev/pagestream/traces", s.pageStreamTraces)
+		mux.Get("/__dev/pagestream/signals", s.pageStreamSignals)
 	}
 	mux.With(s.rateLimits.authMiddleware()).Handle("/metrics", s.metricsHandler())
 	mux.With(s.csrf).Get("/login", s.login)

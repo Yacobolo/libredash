@@ -612,10 +612,10 @@ type Status struct {
 
 func NormalizeProgressPercent(percent *float64, loading bool) *float64 {
 	if percent == nil || math.IsNaN(*percent) || math.IsInf(*percent, 0) {
-		if loading {
-			return nil
-		}
 		value := float64(100)
+		if loading {
+			value = 0
+		}
 		return &value
 	}
 	value := math.Max(0, math.Min(100, *percent))

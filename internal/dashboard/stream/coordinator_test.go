@@ -90,7 +90,7 @@ func TestCoordinatorPublishesMonotonicBackendProgressAndCompletesThePlan(t *test
 	}
 
 	start := next()
-	if start.Type != RefreshEventStart || start.ProgressPercent != nil {
+	if start.Type != RefreshEventStart || start.ProgressPercent == nil || *start.ProgressPercent != 0 {
 		t.Fatalf("start event = %#v", start)
 	}
 	for completed := 0; completed <= 4; completed++ {

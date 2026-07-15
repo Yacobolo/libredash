@@ -702,7 +702,7 @@ func assertDevDatastarRuntime(t *testing.T, body string) {
 		`/static/vendor/datastar-1.0.2.js?v=dev`,
 		`/static/datastar-inspector.js`,
 		`<datastar-inspector`,
-		`trace-url="/__dev/pagestream/traces"`,
+		`signals-url="/__dev/pagestream/signals"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("page missing Datastar inspector marker %q:\n%s", want, body)

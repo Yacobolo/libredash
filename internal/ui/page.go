@@ -56,7 +56,7 @@ func inspectorElement() g.Node {
 	if staticasset.Production() {
 		return nil
 	}
-	return g.El("datastar-inspector", g.Attr("trace-url", "/__dev/pagestream/traces"))
+	return g.El("datastar-inspector", g.Attr("signals-url", "/__dev/pagestream/signals"))
 }
 
 func pageHead(extra ...g.Node) []g.Node {
