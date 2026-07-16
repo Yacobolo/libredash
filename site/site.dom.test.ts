@@ -72,6 +72,27 @@ test('site streams an initial chart and switches its metric through PageStream',
   }
 })
 
+test('site brand pairs the LibreDash wordmark with a Lucide dashboard mark', async () => {
+  const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
+  try {
+    await page.goto(baseURL)
+    const brand = page.getByRole('link', { name: 'LibreDash', exact: true }).first()
+    const mark = brand.locator('ld-site-brand-mark')
+    expect(await mark.count()).toBe(1)
+    expect(await mark.getAttribute('aria-hidden')).toBe('true')
+    expect(await mark.evaluate((element) => element.shadowRoot?.querySelectorAll('svg').length)).toBe(1)
+    const navigation = await page.locator('.site-nav').evaluate((element) => ({
+      left: element.getBoundingClientRect().left,
+      width: element.getBoundingClientRect().width,
+      viewportWidth: window.innerWidth,
+    }))
+    expect(navigation.left).toBe(0)
+    expect(navigation.width).toBe(navigation.viewportWidth)
+  } finally {
+    await page.close()
+  }
+})
+
 test('site supports system, light, and dark color modes', async () => {
   const page = await browser.newPage()
   try {
@@ -329,7 +350,7 @@ test('documentation articles provide a readable, navigable reference experience'
     expect(typography.orderedListStyle).toBe('decimal')
     expect(typography.unorderedListStyle).toBe('disc')
     expect(typography.paragraphWidth).toBeGreaterThanOrEqual(620)
-    expect(typography.articleWidth).toBeGreaterThan(typography.paragraphWidth)
+    expect(Math.abs(typography.articleWidth - typography.paragraphWidth)).toBeLessThanOrEqual(1)
     expect(typography.actionLeft).toBeGreaterThanOrEqual(typography.headingRight)
 
     expect(await page.locator('.site-docs-callout[data-callout="tip"]').count()).toBe(1)
@@ -352,12 +373,16 @@ test('documentation articles provide a readable, navigable reference experience'
     const search = page.locator('ld-site-search')
     await search.getByRole('button', { name: 'Search documentation' }).click()
     expect(await search.getByRole('dialog', { name: 'Search documentation' }).isVisible()).toBe(true)
-    await page.waitForFunction(() => {
-      const search = document.querySelector('ld-site-search')
-      return search?.shadowRoot?.activeElement?.matches('input[type="search"]')
-    })
-    expect(await search.evaluate((element) => element.shadowRoot?.activeElement?.matches('input[type="search"]'))).toBe(true)
-    expect(await search.locator('form').getAttribute('action')).toBe('/docs/search')
+    const searchInput = search.locator('input[slot="input"]')
+    await page.waitForFunction(() => document.activeElement?.matches('ld-site-search input[slot="input"]'))
+    expect(await searchInput.getAttribute('data-bind')).toBe('docsSearch.query')
+    expect(await searchInput.getAttribute('data-on:input__debounce.200ms')).toBe("@get('/docs/search/active', {filterSignals: {include: /^docsSearch\\./}})")
+    await searchInput.fill('semantic relationships')
+    const semanticModelsResult = search.getByRole('link', { name: 'Semantic models' })
+    await semanticModelsResult.waitFor({ state: 'visible' })
+    expect(await semanticModelsResult.isVisible()).toBe(true)
+    expect(page.url()).toBe(`${baseURL}/docs/guides/build`)
+    expect(await search.getByText('14 results', { exact: true }).isVisible()).toBe(true)
     await search.getByRole('button', { name: 'Close search' }).click()
     await page.keyboard.press('/')
     expect(await search.getByRole('dialog', { name: 'Search documentation' }).isVisible()).toBe(true)
@@ -367,13 +392,18 @@ test('documentation articles provide a readable, navigable reference experience'
 })
 
 test('documentation navigation collapses before the prose becomes cramped', async () => {
-  const page = await browser.newPage({ viewport: { width: 768, height: 900 } })
+  const page = await browser.newPage({ viewport: { width: 837, height: 900 } })
   try {
     await page.goto(`${baseURL}/docs/guides/build`)
     const sidebar = page.locator('.site-docs-sidebar')
     expect(await sidebar.evaluate((element) => getComputedStyle(element).position)).toBe('fixed')
     expect(await sidebar.getAttribute('aria-hidden')).toBe('true')
     expect(await page.getByRole('button', { name: 'Open documentation menu' }).isVisible()).toBe(true)
+    const widths = await page.locator('.site-guide-shell').evaluate((shell) => ({
+      article: shell.querySelector('.site-docs-article')?.getBoundingClientRect().width ?? 0,
+      shell: shell.getBoundingClientRect().width,
+    }))
+    expect(Math.abs(widths.shell - widths.article)).toBeLessThanOrEqual(1)
 
     await page.setViewportSize({ width: 390, height: 844 })
     const hierarchy = await page.locator('.site-docs-article').evaluate((article) => ({
@@ -386,17 +416,77 @@ test('documentation navigation collapses before the prose becomes cramped', asyn
   }
 })
 
+test('documentation reading columns stay centered and readable at every layout tier', async () => {
+  const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
+  try {
+    await page.goto(`${baseURL}/docs/introduction`)
+
+    const measure = () => page.locator('.site-docs-reading-layout').evaluate((reading) => {
+      const content = document.querySelector('.site-docs-content') as HTMLElement
+      const shell = reading.querySelector('.site-guide-shell') as HTMLElement
+      const article = reading.querySelector('.site-docs-article') as HTMLElement
+      const paragraph = article.querySelector('p') as HTMLElement
+      const outline = reading.querySelector('ld-site-article-toc') as HTMLElement
+      const contentRect = content.getBoundingClientRect()
+      const contentStyle = getComputedStyle(content)
+      const readingRect = reading.getBoundingClientRect()
+      const articleRect = article.getBoundingClientRect()
+      const paragraphRect = paragraph.getBoundingClientRect()
+      const shellRect = shell.getBoundingClientRect()
+      return {
+        articleLeftSpace: articleRect.left - shellRect.left,
+        articleRightSpace: shellRect.right - articleRect.right,
+        articleWidth: articleRect.width,
+        outlineVisible: getComputedStyle(outline).display !== 'none',
+        paragraphWidth: paragraphRect.width,
+        readingLeftSpace: readingRect.left - (contentRect.left + Number.parseFloat(contentStyle.paddingLeft)),
+        readingRightSpace: contentRect.right - Number.parseFloat(contentStyle.paddingRight) - readingRect.right,
+        shellWidth: shellRect.width,
+      }
+    })
+
+    const wide = await measure()
+    expect(wide.outlineVisible).toBe(true)
+    expect(Math.abs(wide.readingLeftSpace - wide.readingRightSpace)).toBeLessThanOrEqual(1)
+    expect(wide.articleWidth).toBeLessThanOrEqual(816)
+    expect(Math.abs(wide.paragraphWidth - wide.articleWidth)).toBeLessThanOrEqual(1)
+
+    await page.setViewportSize({ width: 1200, height: 900 })
+    const desktop = await measure()
+    expect(desktop.outlineVisible).toBe(false)
+    expect(Math.abs(desktop.articleLeftSpace - desktop.articleRightSpace)).toBeLessThanOrEqual(1)
+    expect(desktop.articleWidth).toBeLessThanOrEqual(816)
+    expect(Math.abs(desktop.paragraphWidth - desktop.articleWidth)).toBeLessThanOrEqual(1)
+
+    await page.setViewportSize({ width: 768, height: 900 })
+    const tablet = await measure()
+    expect(tablet.outlineVisible).toBe(false)
+    expect(Math.abs(tablet.articleLeftSpace - tablet.articleRightSpace)).toBeLessThanOrEqual(1)
+    expect(Math.abs(tablet.articleWidth - tablet.shellWidth)).toBeLessThanOrEqual(1)
+    expect(Math.abs(tablet.paragraphWidth - tablet.articleWidth)).toBeLessThanOrEqual(1)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    const mobile = await measure()
+    expect(mobile.outlineVisible).toBe(false)
+    expect(Math.abs(mobile.articleLeftSpace - mobile.articleRightSpace)).toBeLessThanOrEqual(1)
+    expect(Math.abs(mobile.articleWidth - mobile.shellWidth)).toBeLessThanOrEqual(1)
+    expect(Math.abs(mobile.paragraphWidth - mobile.articleWidth)).toBeLessThanOrEqual(1)
+  } finally {
+    await page.close()
+  }
+})
+
 test('documentation CSS keeps site tokens available and fragment targets below the sticky header', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   try {
     await page.goto(`${baseURL}/docs/getting-started`)
     const runtimeStyles = await page.locator('.site-docs-article').evaluate((article) => ({
-      articleMaxWidth: getComputedStyle(article).maxWidth,
       articleWidth: article.getBoundingClientRect().width,
+      shellWidth: article.closest('.site-guide-shell')?.getBoundingClientRect().width ?? 0,
       readingWidth: getComputedStyle(document.documentElement).getPropertyValue('--site-reading-width').trim(),
     }))
     expect(runtimeStyles.readingWidth).not.toBe('')
-    expect(runtimeStyles.articleMaxWidth).not.toBe('none')
+    expect(Math.abs(runtimeStyles.articleWidth - runtimeStyles.shellWidth)).toBeLessThanOrEqual(1)
     expect(runtimeStyles.articleWidth).toBeLessThanOrEqual(816)
 
     await page.getByRole('navigation', { name: 'In this article' }).getByRole('link', { name: 'Run LibreDash' }).click()
@@ -475,6 +565,34 @@ test('compact documentation navigation opens in a drawer', async () => {
     expect(await headerDrawerToggle.evaluate((element) => element.shadowRoot?.querySelector('button')?.getAttribute('aria-expanded'))).toBe('false')
   } finally {
     await context.close()
+  }
+})
+
+test('documentation outlines distinguish major sections from subsections', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  try {
+    await page.goto(`${baseURL}/docs/guides/build/model-tables`)
+    const toc = page.locator('ld-site-article-toc')
+    const major = toc.locator('a[data-level="2"]').first()
+    const subsection = toc.locator('a[data-level="3"]').first()
+    expect(await toc.locator('a[data-level="2"]').count()).toBeGreaterThanOrEqual(2)
+    expect(await toc.locator('a[data-level="3"]').count()).toBeGreaterThanOrEqual(2)
+    const tocHierarchy = await major.evaluate((majorLink, subsectionLink) => ({
+      majorFontSize: Number.parseFloat(getComputedStyle(majorLink).fontSize),
+      majorPadding: Number.parseFloat(getComputedStyle(majorLink).paddingLeft),
+      subsectionFontSize: Number.parseFloat(getComputedStyle(subsectionLink as Element).fontSize),
+      subsectionPadding: Number.parseFloat(getComputedStyle(subsectionLink as Element).paddingLeft),
+    }), await subsection.elementHandle())
+    expect(tocHierarchy.majorFontSize).toBeGreaterThan(tocHierarchy.subsectionFontSize)
+    expect(tocHierarchy.subsectionPadding).toBeGreaterThan(tocHierarchy.majorPadding)
+
+    const articleHierarchy = await page.locator('.site-docs-article').evaluate((article) => ({
+      h2: Number.parseFloat(getComputedStyle(article.querySelector('h2') as Element).fontSize),
+      h3: Number.parseFloat(getComputedStyle(article.querySelector('h3') as Element).fontSize),
+    }))
+    expect(articleHierarchy.h2).toBeGreaterThan(articleHierarchy.h3)
+  } finally {
+    await page.close()
   }
 })
 

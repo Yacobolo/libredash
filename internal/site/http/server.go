@@ -20,6 +20,7 @@ func NewHandler() http.Handler {
 	mux.HandleFunc("GET /charts", charts)
 	mux.HandleFunc("GET /docs", docsIndex)
 	mux.HandleFunc("GET /docs/search", docsSearch)
+	mux.HandleFunc("GET /docs/search/active", docsActiveSearch)
 	mux.HandleFunc("GET /docs/openapi.yaml", docsOpenAPISpecification)
 	mux.HandleFunc("GET /docs/schemas/{schema}", docsConfigurationSchema)
 	mux.HandleFunc("GET /docs/{path...}", docsArticle)
@@ -66,6 +67,12 @@ type gzipResponseWriter struct {
 	writer io.Writer
 }
 
+type docsActiveSearchResult struct {
+	Href    string `json:"href"`
+	Summary string `json:"summary"`
+	Title   string `json:"title"`
+}
+
 func (w *gzipResponseWriter) WriteHeader(statusCode int) {
 	w.Header().Del("Content-Length")
 	w.ResponseWriter.WriteHeader(statusCode)
@@ -102,6 +109,42 @@ func docsSearch(w http.ResponseWriter, r *http.Request) {
 	if err := docsSearchPage(strings.TrimSpace(r.URL.Query().Get("q"))).Render(w); err != nil {
 		http.Error(w, "render documentation search", http.StatusInternalServerError)
 	}
+}
+
+func docsActiveSearch(w http.ResponseWriter, r *http.Request) {
+	var signals struct {
+		DocsSearch struct {
+			Query string `json:"query"`
+		} `json:"docsSearch"`
+	}
+	if err := pagestream.ReadSignals(r, &signals); err != nil {
+		http.Error(w, "read documentation search signals", http.StatusBadRequest)
+		return
+	}
+
+	query := strings.TrimSpace(signals.DocsSearch.Query)
+	matches := searchSiteDocuments(query)
+	const resultLimit = 8
+	visible := matches
+	if len(visible) > resultLimit {
+		visible = visible[:resultLimit]
+	}
+	results := make([]docsActiveSearchResult, 0, len(visible))
+	for _, document := range visible {
+		results = append(results, docsActiveSearchResult{
+			Href:    "/docs/" + document.slug,
+			Summary: document.summary,
+			Title:   document.title,
+		})
+	}
+
+	_ = pagestream.PatchResponse(w, r, pagestream.SignalPatch{
+		"docsSearch": map[string]any{
+			"resultQuery": query,
+			"results":     results,
+			"total":       len(matches),
+		},
+	})
 }
 
 func docsArticle(w http.ResponseWriter, r *http.Request) {

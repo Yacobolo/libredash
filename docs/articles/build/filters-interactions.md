@@ -2,7 +2,9 @@
 
 Filters and selections let users change a report without giving the browser unrestricted query control. Dashboard YAML defines allowed fields, operators, option sources, URL state, semantic mappings, and targets; the server validates and applies each command.
 
-## Define a multi-select filter
+## Define dashboard filters
+
+### Define a multi-select filter
 
 ```yaml
 filters:
@@ -29,7 +31,7 @@ Place the filter on a page:
   placement: {col: 1, row: 1, col_span: 4, row_span: 2}
 ```
 
-## Define a date range
+### Define a date range
 
 Date filters can provide shareable URL bounds and named presets:
 
@@ -51,7 +53,7 @@ filters:
 
 Choose calendar bounds in the same business timezone and date semantics used by the modeled field. A date derived from a UTC timestamp may differ from a local-business date near midnight; resolve that in the model table instead of compensating in each filter.
 
-## Define a text filter
+### Define a text filter
 
 Text filters can expose an allowed operator set and persist the selected operator separately:
 
@@ -69,13 +71,15 @@ filters:
 
 Offer only operators that make sense for the field and data volume. Stable URL parameter names let users bookmark and share report state. Renaming one invalidates old links, so treat it as a compatibility change.
 
-## Scope filter targets
+## Control interaction scope
+
+### Scope filter targets
 
 By default, a dashboard filter may participate broadly according to the runtime contract. Use explicit targets when a filter should affect only a subset of page components. Narrow targeting makes dashboards easier to explain and avoids unnecessary refresh work.
 
 Test combinations, not just filters in isolation. Two individually valid filters can produce an empty intersection, and users should see a deliberate empty state rather than a broken chart.
 
-## Map visual or table selections
+### Map visual or table selections
 
 Selection interactions map delivered row values back to semantic fields:
 
@@ -97,7 +101,7 @@ interaction:
 
 Point selection on supported visuals uses the same principle. Keep mapping values typed: a numeric zero, boolean false, string `"0"`, and null are not interchangeable.
 
-## Design predictable interactions
+### Design predictable interactions
 
 - Make selection state visually apparent.
 - Provide a clear way to toggle or clear it.

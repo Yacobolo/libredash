@@ -2,7 +2,9 @@
 
 Pages arrange dashboard components on a deterministic grid. Query definitions remain at dashboard scope; the page decides which reusable filters, visuals, and tables appear together and where they are placed.
 
-## Define the canvas and grid
+## Build the page structure
+
+### Define the canvas and grid
 
 ```yaml
 pages:
@@ -22,7 +24,7 @@ pages:
 
 The canvas documents the design reference size. The grid creates predictable coordinates and spans. Use a consistent column count, gap, and row height across related pages so users do not experience a different visual rhythm on each route.
 
-## Place components
+### Place components
 
 Each page component has a stable ID, a component kind, exactly the relevant reference, and placement:
 
@@ -46,7 +48,7 @@ Use `visual` for chart and KPI definitions, `table` for tabular definitions, and
 
 Coordinates are one-based. Keep `col + col_span - 1` within the configured column count. Avoid accidental overlaps unless a future component contract explicitly supports layering.
 
-## Design reading order
+### Design reading order
 
 YAML order should follow the intended document and keyboard order, not just visual coordinates. A practical report order is:
 
@@ -59,7 +61,7 @@ YAML order should follow the intended document and keyboard order, not just visu
 
 This order gives compact layouts a sensible fallback and makes the source easier to review. Coordinates still control desktop placement, but source order communicates meaning.
 
-## Size for content
+### Size for content
 
 Choose spans based on the information a component must display:
 
@@ -71,13 +73,15 @@ Choose spans based on the information a component must display:
 
 Do not solve overcrowding by shrinking every component. Split a page when users are expected to answer distinct questions or when details push the primary analysis below several screenfuls.
 
-## Keep IDs stable
+## Stabilize and test the layout
+
+### Keep IDs stable
 
 Page component IDs participate in interaction targeting and client state. Renaming `revenue-trend` can break a filter or selection target even when the referenced visual remains unchanged. Treat IDs as local API names: change them intentionally and search the dashboard for references.
 
 Visual and table definition IDs should also remain stable. Moving a component only requires a placement edit; it should not require copying or renaming its query.
 
-## Test layouts
+### Test layouts
 
 After deployment to development:
 

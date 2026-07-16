@@ -2,7 +2,9 @@
 
 Connections are project-global access definitions. Sources give individual files, objects, or tables stable logical names that workspaces can consume. This guide adds a managed CSV input; external connectors use the same resource relationship with connector-specific settings.
 
-## Choose a stable boundary
+## Design the source boundary
+
+### Choose a stable boundary
 
 Before writing YAML, decide:
 
@@ -14,7 +16,7 @@ Before writing YAML, decide:
 
 Use one connection for inputs that share access method, credentials, and operational lifecycle. Do not create a new connection merely to give every file a name; that is the source's responsibility.
 
-## Define the connection
+### Define the connection
 
 Create `dashboards/connections/commerce.yaml`:
 
@@ -39,7 +41,7 @@ spec:
 
 Never put a password, API key, or cloud secret value in this file. Use the runtime credential provider supported by the connection contract.
 
-## Define a source
+### Define a source
 
 Create `dashboards/sources/commerce.orders.yaml`:
 
@@ -63,7 +65,9 @@ spec:
 
 The source name is logical identity; `path` is a physical detail that can evolve. Declare the source fields expected by downstream transformations. Model-table SQL should still cast defensively when physical CSV values can be malformed.
 
-## Discover the resources
+## Govern discovery and access
+
+### Discover the resources
 
 Confirm the project manifest includes both directories:
 
@@ -77,7 +81,7 @@ spec:
 
 Include patterns are relative to the project manifest. A duplicate match or undiscovered resource should be corrected in the manifest rather than worked around with an absolute path.
 
-## Permit the source in a workspace
+### Permit the source in a workspace
 
 Add the logical source name to the target `workspace.yaml`:
 
@@ -90,7 +94,9 @@ spec:
 
 This makes the source eligible for that workspace's model tables. It does not stage managed data or grant every user access to the resulting workspace.
 
-## Validate and stage managed files
+## Validate ingestion
+
+### Validate and stage managed files
 
 Validate the resource graph:
 
@@ -109,7 +115,7 @@ libredash data plan \
 
 Then stage it to a target with `libredash data sync`. Staging returns an immutable revision digest; deployment activates that reviewed digest separately.
 
-## Verify before modeling
+### Verify before modeling
 
 Check that filenames match source paths exactly, source fields reflect the actual header, credentials resolve in the target environment, and the workspace lists every source its model SQL will read. Continue with [Define model tables](/docs/guides/build/model-tables).
 

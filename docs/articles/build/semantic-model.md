@@ -2,13 +2,15 @@
 
 Semantic models give dashboards and integrations a shared business vocabulary. Build one after model tables have stable fields and grain; otherwise semantic definitions will hide unresolved data-shaping problems.
 
-## Choose the model boundary
+## Design the semantic surface
+
+### Choose the model boundary
 
 A semantic model should serve a coherent analytical domain. Select the model tables needed for that domain, identify the facts on which measures aggregate, and define only relationships whose cardinality you can defend from data.
 
 For a small Sales model, `orders` is the fact and `customers` is a dimension reached through `customer_id`.
 
-## Create the resource
+### Create the resource
 
 Create `dashboards/workspaces/sales/semantic-models/sales.yaml`:
 
@@ -53,17 +55,17 @@ spec:
       format: currency
 ```
 
-## Define measures from facts
+### Define measures from facts
 
 Every measure identifies its fact table and aggregation. Choose `count_distinct` when the business question counts stable identifiers; use `count` only when the table row grain itself is the intended count. For `sum`, `avg`, `min`, and `max`, provide a compatible input field.
 
 Set empty-result behavior intentionally. `zero` is appropriate for additive counts and sums when no rows match; `null` may better represent an undefined average. Formatting is presentation metadata and does not turn a numeric result into a formatted string at the semantic boundary.
 
-## Add metrics for derived values
+### Add metrics for derived values
 
 Metrics compose named semantic values. `safe_divide` makes the denominator-zero case explicit and keeps the formula out of each dashboard. If a formula needs row-level conditionals or complex source parsing, move that logic into a model table first.
 
-## Validate relationships
+### Validate relationships
 
 For `many_to_one`, confirm the `to` field is unique and type-compatible with the `from` field. Sample the data, not just the schema. A duplicate customer key can multiply order rows and inflate every order measure that traverses the relationship.
 

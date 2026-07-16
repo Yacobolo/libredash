@@ -5,7 +5,9 @@ LibreDash authoring follows the dependency direction of the project. Start with 
 > [!TIP]
 > Treat this sequence as a diagnostic boundary as well as a build order. Verify each layer before moving upward so a dashboard never has to compensate for an ambiguous source, grain, or measure.
 
-## Authoring sequence
+## Author dashboards in layers
+
+### Authoring sequence
 
 Use this sequence for a new analytical surface:
 
@@ -19,7 +21,7 @@ Use this sequence for a new analytical surface:
 
 The sequence is also a debugging tool. If a chart returns the wrong total, first determine whether the model-table grain is correct, then test the semantic measure, and only then inspect dashboard filters and presentation.
 
-## Keep each layer focused
+### Keep each layer focused
 
 Project sources document physical input identity and shape. Model tables parse, normalize, join, and materialize reusable analytical rows. Semantic models define business meaning and valid relationships. Dashboards select and present that meaning.
 
@@ -32,7 +34,9 @@ Avoid these common shortcuts:
 - using page placement entries as the definition of a query;
 - loading unbounded chart or table results.
 
-## Work in small validated steps
+## Validate as you build
+
+### Work in small validated steps
 
 Validate after adding each resource layer:
 
@@ -52,7 +56,7 @@ libredash plan \
 
 The local plan is useful even without a target; a target-aware plan adds active deployment differences. Use `--json` in automation and keep human-readable output for review.
 
-## Test below the dashboard
+### Test below the dashboard
 
 Before debugging a report component, inspect the semantic surface directly:
 
@@ -65,7 +69,7 @@ libredash semantic-models describe sales \
 
 The generated [`semantic-models` command reference](/docs/cli/semantic-models) includes dataset discovery, field listing, preview, explain, and query operations. These commands help distinguish semantic or data failures from rendering problems.
 
-## Review checklist
+### Review checklist
 
 Before deployment, confirm:
 

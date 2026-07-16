@@ -221,7 +221,23 @@ if (!customElements.get('ld-site-mobile-menu')) {
   customElements.define('ld-site-mobile-menu', SiteMobileMenu)
 }
 
-class SiteSearch extends LitElement {
+type SiteSearchResult = {
+  href: string
+  summary: string
+  title: string
+}
+
+type SiteSearchState = {
+  loading?: boolean
+  query: string
+  resultQuery?: string
+  results: SiteSearchResult[]
+  total: number
+}
+
+const emptySiteSearch: SiteSearchState = { query: '', results: [], total: 0 }
+
+class SiteSearch extends DatastarLit(LitElement) {
   private readonly handleGlobalKeydown = (event: KeyboardEvent): void => {
     const target = event.target as HTMLElement | null
     const editing = target?.matches('input, textarea, select, [contenteditable="true"]') ?? false
@@ -238,7 +254,7 @@ class SiteSearch extends LitElement {
       display: block;
     }
 
-    slot {
+    slot:not([name]) {
       display: none;
     }
 
@@ -269,7 +285,7 @@ class SiteSearch extends LitElement {
     }
 
     button:focus-visible,
-    input:focus-visible {
+    ::slotted(.site-search-active-input:focus-visible) {
       outline: var(--focus-outline);
       outline-offset: var(--focus-outline-offset);
     }
@@ -286,7 +302,7 @@ class SiteSearch extends LitElement {
     }
 
     dialog {
-      width: min(calc(100vw - var(--base-size-32)), calc(var(--base-size-128) * 4));
+      width: min(calc(100vw - var(--base-size-32)), calc(var(--base-size-128) * 5));
       max-width: none;
       margin: min(18vh, calc(var(--base-size-128) + var(--base-size-32))) auto auto;
       overflow: hidden;
@@ -303,7 +319,7 @@ class SiteSearch extends LitElement {
       opacity: 0.45;
     }
 
-    form {
+    .panel {
       display: grid;
       gap: var(--base-size-16);
       padding: var(--base-size-20);
@@ -344,10 +360,11 @@ class SiteSearch extends LitElement {
       gap: var(--base-size-8);
     }
 
-    input {
+    ::slotted(.site-search-active-input) {
+      display: block;
+      width: 100%;
       min-width: 0;
       min-height: var(--control-minTarget-auto);
-      flex: 1 1 auto;
       border: var(--ld-border-default);
       border-radius: var(--ld-radius-default);
       background: var(--ld-bg-control);
@@ -356,32 +373,63 @@ class SiteSearch extends LitElement {
       font: inherit;
     }
 
-    .submit {
-      min-height: var(--control-minTarget-auto);
-      flex: 0 0 auto;
-      border: var(--ld-border-default);
-      border-radius: var(--ld-radius-default);
-      background: var(--ld-button-bg-rest);
-      color: var(--ld-button-fg-rest);
-      cursor: pointer;
-      padding-inline: var(--control-medium-paddingInline-normal);
-      font-weight: var(--ld-font-weight-medium);
+    .results {
+      max-height: min(50vh, calc(var(--base-size-128) * 3));
+      overflow-y: auto;
+      border-top: var(--ld-border-muted);
+      padding-top: var(--base-size-12);
     }
 
-    .submit:hover,
-    .submit:focus-visible {
-      border-color: var(--ld-button-border-hover);
+    .status {
+      margin: 0;
+      color: var(--ld-fg-muted);
+      font-size: var(--ld-text-body-sm-size);
+    }
+
+    ul {
+      display: grid;
+      gap: var(--base-size-4);
+      margin: var(--base-size-8) 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    a {
+      display: grid;
+      gap: var(--base-size-4);
+      border-radius: var(--ld-radius-default);
+      color: var(--ld-fg-default);
+      padding: var(--base-size-12);
+      text-decoration: none;
+    }
+
+    a:hover,
+    a:focus-visible {
       background: var(--ld-button-bg-hover);
     }
 
-    @media (width < 30rem) {
-      .trigger kbd {
-        display: none;
-      }
+    a:focus-visible {
+      outline: var(--focus-outline);
+      outline-offset: calc(var(--focus-outline-offset) * -1);
+    }
 
-      .controls {
-        display: grid;
-      }
+    a strong {
+      font-size: var(--ld-text-body-md-size);
+    }
+
+    a span {
+      display: -webkit-box;
+      overflow: hidden;
+      color: var(--ld-fg-muted);
+      font-size: var(--ld-text-body-sm-size);
+      line-height: var(--ld-line-height-relaxed);
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+
+    @media (width < 30rem) {
+      .trigger kbd { display: none; }
+      .panel { padding: var(--base-size-16); }
     }
   `
 
@@ -396,6 +444,12 @@ class SiteSearch extends LitElement {
   }
 
   render() {
+    const state = this.signal<SiteSearchState>('docsSearch', emptySiteSearch)
+    const query = state.query?.trim() ?? ''
+    const results = Array.isArray(state.results) ? state.results : []
+    const total = Number.isFinite(state.total) ? state.total : 0
+    const loading = Boolean(state.loading) || (query !== '' && state.resultQuery !== query)
+
     return html`<slot></slot>
       <button class="trigger" type="button" aria-label="Search documentation" aria-keyshortcuts="/ Meta+K Control+K" @click=${this.openDialog}>
         ${lucideIcon(Search, { size: 16, strokeWidth: 2 })}
@@ -403,24 +457,38 @@ class SiteSearch extends LitElement {
         <kbd aria-hidden="true">⌘K</kbd>
       </button>
       <dialog aria-labelledby="site-search-title" @click=${this.closeFromBackdrop}>
-        <form action="/docs/search" method="get" role="search">
+        <div class="panel" role="search">
           <header>
             <h2 id="site-search-title">Search documentation</h2>
             <button class="close" type="button" aria-label="Close search" @click=${this.closeDialog}>${lucideIcon(X, { size: 18, strokeWidth: 2 })}</button>
           </header>
-          <div class="controls">
-            <input name="q" type="search" aria-label="Search documentation" placeholder="Search concepts, guides, commands, and APIs" autocomplete="off">
-            <button class="submit" type="submit">Search</button>
+          <div class="controls" @keydown=${this.handleInputKeydown}>
+            <slot name="input"></slot>
           </div>
-        </form>
+          <section class="results" aria-live="polite" aria-busy=${String(loading)}>
+            ${this.renderResults(query, results, total, loading)}
+          </section>
+        </div>
       </dialog>`
+  }
+
+  private renderResults(query: string, results: SiteSearchResult[], total: number, loading: boolean) {
+    if (!query) return html`<p class="status">Start typing to search the documentation.</p>`
+    if (loading) return html`<p class="status">Searching…</p>`
+    if (results.length === 0) return html`<p class="status">No results for “${query}”.</p>`
+    const label = `${total} ${total === 1 ? 'result' : 'results'}`
+    return html`<p class="status">${label}</p>
+      <ul>${results.map((result) => html`<li><a href=${result.href}>
+        <strong>${result.title}</strong>
+        <span>${result.summary}</span>
+      </a></li>`)}</ul>`
   }
 
   private openDialog = (): void => {
     const dialog = this.renderRoot.querySelector<HTMLDialogElement>('dialog')
     if (!dialog || dialog.open) return
     dialog.showModal()
-    requestAnimationFrame(() => this.renderRoot.querySelector<HTMLInputElement>('input')?.focus())
+    requestAnimationFrame(() => this.querySelector<HTMLInputElement>('input[slot="input"]')?.focus())
   }
 
   private closeDialog = (): void => {
@@ -429,6 +497,14 @@ class SiteSearch extends LitElement {
 
   private closeFromBackdrop = (event: MouseEvent): void => {
     if (event.target === event.currentTarget) this.closeDialog()
+  }
+
+  private handleInputKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Enter' || event.isComposing) return
+    const query = this.querySelector<HTMLInputElement>('input[slot="input"]')?.value.trim() ?? ''
+    if (!query) return
+    event.preventDefault()
+    window.location.assign(`/docs/search?q=${encodeURIComponent(query)}`)
   }
 }
 
@@ -806,6 +882,30 @@ async function writeClipboard(value: string): Promise<void> {
 enhanceDocsCodeBlocks()
 enhanceDocsCallouts()
 
+class SiteBrandMark extends LitElement {
+  static styles = css`
+    :host {
+      display: inline-grid;
+      width: var(--base-size-28);
+      height: var(--base-size-28);
+      flex: 0 0 auto;
+      place-items: center;
+      border: var(--ld-border-muted);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-bg-accent-muted);
+      color: var(--ld-fg-accent);
+    }
+  `
+
+  render() {
+    return lucideIcon(ChartNoAxesCombined, { size: 18, strokeWidth: 2.2 })
+  }
+}
+
+if (!customElements.get('ld-site-brand-mark')) {
+  customElements.define('ld-site-brand-mark', SiteBrandMark)
+}
+
 const featureIcons: Record<string, IconNode> = {
   blocks: Blocks,
 	boxes: Boxes,
@@ -890,10 +990,12 @@ class SiteArticleToc extends LitElement {
     :host { display: block; position: sticky; top: calc(var(--control-xlarge-size) + var(--base-size-32)); align-self: start; max-height: calc(100svh - var(--control-xlarge-size) - var(--base-size-64)); overflow: auto; }
     nav { display: grid; gap: var(--space-xs); border-left: var(--ld-border-muted); padding-left: var(--base-size-16); }
     h2 { margin: 0 0 var(--base-size-4); color: var(--ld-fg-muted); font-size: var(--ld-text-caption-size); font-weight: var(--ld-font-weight-strong); letter-spacing: var(--base-size-2); text-transform: uppercase; }
-    a { color: var(--ld-fg-muted); font-size: var(--ld-text-body-sm-size); line-height: var(--ld-line-height-default); text-decoration: none; }
-    a[data-level="3"] { padding-left: var(--base-size-8); }
+    a { color: var(--ld-fg-muted); line-height: var(--ld-line-height-default); text-decoration: none; }
+    a[data-level="2"] { margin-top: var(--base-size-8); color: var(--ld-fg-default); font-size: var(--ld-text-body-md-size); font-weight: var(--ld-font-weight-medium); }
+    h2 + a[data-level="2"] { margin-top: 0; }
+    a[data-level="3"] { padding-left: var(--base-size-12); font-size: var(--ld-text-body-sm-size); }
+    a[data-level="4"] { padding-left: var(--base-size-24); color: var(--ld-fg-subtle); font-size: var(--ld-text-caption-size); }
     a:hover, a:focus-visible, a.active { color: var(--ld-fg-default); font-weight: var(--ld-font-weight-strong); }
-    @media (width < 80rem) { :host { display: none; } }
   `
 
   connectedCallback() {
@@ -904,7 +1006,7 @@ class SiteArticleToc extends LitElement {
   disconnectedCallback() { this.observer?.disconnect(); super.disconnectedCallback() }
 
   private collectSections() {
-    const headings = Array.from(document.querySelectorAll<HTMLElement>('.site-docs-article h2, .site-docs-article h3'))
+    const headings = Array.from(document.querySelectorAll<HTMLElement>('.site-docs-article h2, .site-docs-article h3, .site-docs-article h4'))
     const used = new Set<string>()
     this.sections = headings.map((heading) => {
       let id = heading.id || heading.textContent?.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'section'

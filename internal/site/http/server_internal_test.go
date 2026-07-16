@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -315,6 +316,27 @@ func TestSiteDocumentationSearchFindsCatalogContent(t *testing.T) {
 	for _, want := range []string{"Search documentation", `value="semantic relationships"`, `href="/docs/concepts/semantic-models"`, "Semantic models"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("search result missing %q", want)
+		}
+	}
+}
+
+func TestSiteDocumentationActiveSearchStreamsRankedResults(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	signals := `{"docsSearch":{"query":"semantic relationships"}}`
+	response, err := server.Client().Get(server.URL + "/docs/search/active?datastar=" + url.QueryEscape(signals))
+	if err != nil {
+		t.Fatalf("active search documentation: %v", err)
+	}
+	defer response.Body.Close()
+	if got := response.Header.Get("Content-Type"); !strings.Contains(got, "text/event-stream") {
+		t.Fatalf("active search content type = %q, want text/event-stream", got)
+	}
+	body := readBody(t, response)
+	for _, want := range []string{`"docsSearch"`, `"resultQuery":"semantic relationships"`, `"title":"Semantic models"`, `"href":"/docs/concepts/semantic-models"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("active search result missing %q:\n%s", want, body)
 		}
 	}
 }

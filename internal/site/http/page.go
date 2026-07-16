@@ -1,8 +1,11 @@
 package http
 
 import (
+	"time"
+
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 	g "maragu.dev/gomponents"
+	dsattr "maragu.dev/gomponents-datastar"
 	h "maragu.dev/gomponents/html"
 )
 
@@ -155,9 +158,7 @@ func siteHead() []g.Node {
 func siteHeader(hasDocsDrawer bool) g.Node {
 	navigationLinks := []g.Node{h.A(h.Href("/docs"), g.Text("Docs"))}
 	if hasDocsDrawer {
-		navigationLinks = append(navigationLinks, g.El("ld-site-search",
-			h.A(h.Href("/docs/search"), g.Text("Search")),
-		))
+		navigationLinks = append(navigationLinks, siteActiveSearch())
 	}
 	navigationLinks = append(navigationLinks, h.A(h.Href("/#demo"), g.Text("Demo")), h.A(h.Href("/charts"), g.Text("Charts")))
 	actions := []g.Node{
@@ -171,9 +172,34 @@ func siteHeader(hasDocsDrawer bool) g.Node {
 
 	return h.Header(h.Class("site-header"),
 		h.Nav(h.Class("site-nav"),
-			h.A(h.Class("site-brand"), h.Href("/"), g.Text("LibreDash")),
+			siteBrandLink(),
 			h.Div(h.Class("site-nav-actions"), g.Group(actions)),
 		),
+	)
+}
+
+func siteActiveSearch() g.Node {
+	return g.El("ld-site-search",
+		h.A(h.Class("site-search-fallback"), h.Href("/docs/search"), g.Text("Search")),
+		h.Input(
+			h.Class("site-search-active-input"),
+			g.Attr("slot", "input"),
+			h.Type("search"),
+			h.Name("q"),
+			g.Attr("aria-label", "Search documentation"),
+			h.Placeholder("Search concepts, guides, commands, and APIs"),
+			g.Attr("autocomplete", "off"),
+			dsattr.Bind("docsSearch.query"),
+			dsattr.On("input", "@get('/docs/search/active', {filterSignals: {include: /^docsSearch\\./}})", dsattr.ModifierDebounce, dsattr.Duration(200*time.Millisecond)),
+			dsattr.Indicator("docsSearch.loading"),
+		),
+	)
+}
+
+func siteBrandLink() g.Node {
+	return h.A(h.Class("site-brand"), h.Href("/"),
+		g.El("ld-site-brand-mark", g.Attr("aria-hidden", "true")),
+		h.Span(g.Text("LibreDash")),
 	)
 }
 
@@ -201,7 +227,7 @@ func siteFooter() g.Node {
 	return h.Footer(h.Class("site-footer"), g.Attr("role", "contentinfo"),
 		h.Div(h.Class("site-footer-content"),
 			h.Div(h.Class("site-footer-brand-block"),
-				h.A(h.Class("site-brand"), h.Href("/"), g.Text("LibreDash")),
+				siteBrandLink(),
 				h.P(g.Text("A small, code-native BI workspace for teams that value trustworthy dashboards.")),
 			),
 			siteFooterGroup("Explore", []siteFooterLink{

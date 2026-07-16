@@ -2,7 +2,9 @@
 
 A dashboard chooses one workspace semantic model and composes reusable filters, visual queries, tabular queries, and report pages. Build the smallest useful page first, verify its query behavior, and add interactions only after the standalone results are correct.
 
-## Create the resource
+## Define the dashboard surface
+
+### Create the resource
 
 Create `dashboards/workspaces/sales/dashboards/executive-sales.yaml`:
 
@@ -47,13 +49,13 @@ spec:
 
 The visual definition owns semantic query and presentation settings. The page entry references it by stable ID and owns placement. This separation keeps layout edits from rewriting data logic.
 
-## Design the query result
+### Design the query result
 
 Names on the left of `dimensions` and `measures` are result aliases consumed by the visual shape. Values on the right refer to semantic fields. Choose clear aliases and keep them stable when custom options or interactions depend on them.
 
 Every chart query should have a bounded limit and deterministic sort. For time series, sort the time field ascending. For ranked bars, sort the value descending and choose a limit that users can read. Do not rely on database default order.
 
-## Add a KPI
+### Add a KPI
 
 KPI visuals use a single-value shape:
 
@@ -72,11 +74,13 @@ visuals:
 
 Place it on the page with `kind: kpi_card` and `visual: total_revenue`. The semantic measure supplies empty and formatting behavior; the dashboard supplies context-specific note and tone.
 
-## Add filters after the base query works
+### Add filters after the base query works
 
 Define filters against semantic fields and place filter-card components on the page. Exercise each filter independently before combining several. Use stable URL parameters when users should share filtered links.
 
-## Discover and validate
+## Validate the dashboard
+
+### Discover and validate
 
 Ensure the workspace manifest includes dashboard files, then run:
 
@@ -87,7 +91,7 @@ libredash plan --project dashboards/libredash.yaml
 
 Validation checks contract shape and references. The plan shows the resource-level candidate. Neither proves that a visual communicates the right result, so deploy to development and verify the rendered page with representative data.
 
-## Review the page
+### Review the page
 
 Confirm that:
 

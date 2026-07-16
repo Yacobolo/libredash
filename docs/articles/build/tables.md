@@ -2,7 +2,9 @@
 
 Use tabular surfaces when exact values, comparison across several fields, or record-level inspection matters more than visual pattern recognition. LibreDash supports data tables, matrices, and pivots through one dashboard table contract with different query shapes.
 
-## Data tables
+## Choose a table shape
+
+### Data tables
 
 A data table selects fields from a model-table grain:
 
@@ -34,7 +36,7 @@ Select only fields needed for the task. A stable default sort is essential becau
 
 Use `cardinality: bounded` unless the workflow explicitly requires exact global counts and the associated cost is acceptable. Browser tables should load windows rather than one unbounded result.
 
-## Matrices
+### Matrices
 
 Matrices group semantic measures by row and optional column dimensions:
 
@@ -55,7 +57,7 @@ tables:
 
 Use a matrix for a stable multidimensional comparison with known cardinality. High-cardinality row and column combinations create a sparse, unreadable surface and expensive result. Filter or remodel the question instead of relying on horizontal scrolling.
 
-## Pivots
+### Pivots
 
 A pivot uses the same row, column, and measure concepts but emphasizes analytical rearrangement:
 
@@ -75,13 +77,15 @@ tables:
 
 Keep the initial pivot shape useful and bounded. A pivot is not a substitute for an unconstrained query builder; its available fields still come from the dashboard and semantic contracts.
 
-## Formatting
+## Add table behavior
+
+### Formatting
 
 Semantic measure formatting supplies a good default. Table columns and measure-formatting rules can add table-specific alignment, labels, widths, badges, text colors, background scales, or data bars.
 
 Formatting must not be the only way a value is communicated. Use readable text and numeric formatting alongside color. Choose explicit scale bounds when comparable pages must use the same visual meaning; otherwise users may misread two differently scaled cells as equivalent.
 
-## Row selections
+### Row selections
 
 Data-table rows can emit semantic selections when mappings identify delivered values, semantic fields, facts, and targets. Do not send an entire record as an implicit filter. Map only the values the server needs and verify that selected rows remain identifiable when the loaded window changes.
 

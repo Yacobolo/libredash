@@ -95,7 +95,6 @@ a {
 	background: var(--ld-bg-panel);
 }
 
-.site-nav,
 .site-shell {
   width: min(calc(100% - var(--base-size-32)), var(--site-layout-width));
   margin: 0 auto;
@@ -103,13 +102,18 @@ a {
 
 .site-nav {
   display: flex;
+  width: 100%;
   min-height: var(--site-header-height);
   align-items: center;
   justify-content: space-between;
   gap: var(--site-header-gap);
+  padding-inline: var(--site-header-inline-space);
 }
 
 .site-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--base-size-8);
   color: var(--ld-fg-default);
   font-size: clamp(1.125rem, 6vw, var(--ld-text-title-sm-size));
   font-weight: var(--ld-font-weight-strong);
@@ -137,6 +141,10 @@ a {
   color: var(--ld-fg-accent);
   text-decoration: underline;
   text-underline-offset: var(--base-size-4);
+}
+
+ld-site-search:not(:defined) > .site-search-active-input {
+  display: none;
 }
 
 .site-shell {
@@ -244,28 +252,30 @@ a {
 
 .site-guide-shell {
   display: grid;
-  width: min(100%, var(--site-layout-width));
+  width: 100%;
   min-width: 0;
-  grid-template-columns: minmax(0, 1fr);
-  margin: 0 auto;
+  container: site-docs-guide / inline-size;
 }
 
 .site-docs-reading-layout {
   display: grid;
-  width: min(100%, calc(var(--site-layout-width) + var(--base-size-128) + var(--base-size-128)));
-  grid-template-columns: minmax(0, var(--site-layout-width)) minmax(var(--base-size-128), calc(var(--base-size-128) + var(--base-size-64)));
+  width: min(100%, calc(var(--site-article-width) + var(--base-size-32) + var(--site-docs-action-width) + var(--base-size-32) + var(--base-size-128) + var(--base-size-64)));
+  grid-template-columns:
+    minmax(0, calc(var(--site-article-width) + var(--base-size-32) + var(--site-docs-action-width)))
+    minmax(var(--base-size-128), calc(var(--base-size-128) + var(--base-size-64)));
   gap: var(--base-size-32);
+  justify-content: center;
   margin: 0 auto;
 }
 
-.site-docs-reading-layout .site-guide-shell {
-  width: 100%;
-  margin: 0;
-}
-
-@media (width < 80rem) {
+@container site-docs-content (width < 65rem) {
   .site-docs-reading-layout {
+    width: min(100%, calc(var(--site-article-width) + var(--base-size-32) + var(--site-docs-action-width)));
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-docs-reading-layout > ld-site-article-toc {
+    display: none;
   }
 }
 
@@ -390,6 +400,7 @@ a {
 .site-docs-content {
   min-width: 0;
   padding: var(--base-size-32) var(--base-size-32) var(--base-size-128);
+  container: site-docs-content / inline-size;
 }
 
 .site-docs-article-header {
@@ -457,9 +468,8 @@ a {
 
 .site-docs-article {
   display: grid;
-  max-width: calc(var(--site-article-width) + var(--base-size-32) + var(--site-docs-action-width));
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: var(--base-size-32);
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
   color: var(--ld-fg-default);
   font-family: var(--ld-font-family-ui);
   font-size: var(--ld-text-body-lg-size);
@@ -467,11 +477,17 @@ a {
   overflow-wrap: anywhere;
 }
 
+.site-docs-article:has(> .site-docs-article-actions) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--base-size-32);
+}
+
 .site-docs-article > * {
-  grid-column: 1;
+  grid-column: 1 / -1;
 }
 
 .site-docs-article > h1 {
+  grid-column: 1;
   grid-row: 1;
 }
 
@@ -481,13 +497,12 @@ a {
   align-self: start;
 }
 
-@media (width < 64rem) {
+@container site-docs-guide (width < 48rem) {
   .site-docs-article-header {
     margin-bottom: var(--base-size-16);
   }
 
-  .site-docs-article {
-    max-width: var(--site-article-width);
+  .site-docs-article:has(> .site-docs-article-actions) {
     grid-template-columns: minmax(0, 1fr);
     column-gap: 0;
   }
@@ -1181,10 +1196,6 @@ a {
     grid-template-columns: 1fr;
   }
 
-  .site-docs-reading-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .site-docs-sidebar {
     position: fixed;
     z-index: var(--zIndex-overlay);
@@ -1249,10 +1260,6 @@ a {
     --site-header-control-size: clamp(1.875rem, 8vw, var(--control-medium-size));
     --site-header-inline-space: clamp(var(--base-size-8), 3vw, var(--base-size-16));
     --site-header-gap: clamp(var(--base-size-4), 2vw, var(--base-size-12));
-  }
-
-  .site-nav {
-    width: min(calc(100% - (var(--site-header-inline-space) * 2)), var(--site-layout-width));
   }
 
   .site-nav {
