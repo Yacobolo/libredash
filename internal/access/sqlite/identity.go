@@ -24,30 +24,15 @@ func (r *Repository) ListPrincipals(ctx context.Context, filter access.Principal
 	}
 	email := strings.TrimSpace(filter.Email)
 	query := strings.TrimSpace(filter.Query)
-	rows, err := r.db.QueryContext(ctx, `
-SELECT id, kind, email, display_name, disabled_at, created_at, updated_at
-FROM principals
-WHERE (? = '' OR lower(email) = lower(?))
-  AND (? = '' OR lower(email) LIKE '%' || lower(?) || '%' OR lower(display_name) LIKE '%' || lower(?) || '%')
-ORDER BY email, id
-`, email, email, query, query, query)
+	rows, err := r.q.ListPrincipals(ctx, platformdb.ListPrincipalsParams{Email: email, Search: query})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	out := []access.Principal{}
-	for rows.Next() {
-		var principal access.Principal
-		var disabledAt sql.NullString
-		if err := rows.Scan(&principal.ID, &principal.Kind, &principal.Email, &principal.DisplayName, &disabledAt, &principal.CreatedAt, &principal.UpdatedAt); err != nil {
-			return nil, err
-		}
-		if disabledAt.Valid {
-			principal.DisabledAt = disabledAt.String
-		}
-		out = append(out, principal)
+	out := make([]access.Principal, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, mapPrincipal(row))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (r *Repository) principalDisabled(ctx context.Context, principalID string) (bool, error) {
@@ -187,11 +172,9 @@ func (r *Repository) ChangeLocalPassword(ctx context.Context, principalID, curre
 	if err != nil {
 		return access.LocalCredential{}, err
 	}
-	if _, err := r.db.ExecContext(ctx, `
-UPDATE local_user_credentials
-SET password_verifier = ?, must_change_password = 0, updated_at = CURRENT_TIMESTAMP, password_changed_at = CURRENT_TIMESTAMP
-WHERE principal_id = ?
-`, newVerifier, principalID); err != nil {
+	if err := r.q.ChangeLocalCredentialPassword(ctx, platformdb.ChangeLocalCredentialPasswordParams{
+		PasswordVerifier: newVerifier, PrincipalID: principalID,
+	}); err != nil {
 		return access.LocalCredential{}, err
 	}
 	credential, err = r.LocalCredential(ctx, principalID)
@@ -211,67 +194,38 @@ func (r *Repository) upsertLocalCredential(ctx context.Context, principalID, ver
 	if mustChange {
 		mustChangeValue = 1
 	}
-	_, err := r.db.ExecContext(ctx, `
-INSERT INTO local_user_credentials (principal_id, password_verifier, must_change_password, updated_at, password_changed_at)
-VALUES (?, ?, ?, CURRENT_TIMESTAMP, NULL)
-ON CONFLICT(principal_id) DO UPDATE SET
-  password_verifier = excluded.password_verifier,
-  must_change_password = excluded.must_change_password,
-  updated_at = CURRENT_TIMESTAMP,
-  password_changed_at = NULL
-`, principalID, verifier, mustChangeValue)
-	return err
+	return r.q.UpsertLocalCredential(ctx, platformdb.UpsertLocalCredentialParams{
+		PrincipalID: principalID, PasswordVerifier: verifier, MustChangePassword: int64(mustChangeValue),
+	})
 }
 
 func (r *Repository) localCredentialByEmail(ctx context.Context, email string) (access.Principal, access.LocalCredential, string, error) {
-	return r.scanLocalCredential(ctx, `
-SELECT p.id, p.kind, p.email, p.display_name, p.disabled_at, p.created_at, p.updated_at,
-       c.password_verifier, c.must_change_password, c.created_at, c.updated_at, c.password_changed_at
-FROM principals p
-JOIN local_user_credentials c ON c.principal_id = p.id
-WHERE lower(p.email) = lower(?) AND p.email <> ''
-LIMIT 1
-`, email)
-}
-
-func (r *Repository) localCredentialByPrincipalID(ctx context.Context, principalID string) (access.Principal, access.LocalCredential, string, error) {
-	return r.scanLocalCredential(ctx, `
-SELECT p.id, p.kind, p.email, p.display_name, p.disabled_at, p.created_at, p.updated_at,
-       c.password_verifier, c.must_change_password, c.created_at, c.updated_at, c.password_changed_at
-FROM principals p
-JOIN local_user_credentials c ON c.principal_id = p.id
-WHERE p.id = ?
-LIMIT 1
-`, strings.TrimSpace(principalID))
-}
-
-func (r *Repository) scanLocalCredential(ctx context.Context, query, arg string) (access.Principal, access.LocalCredential, string, error) {
-	var principal access.Principal
-	var credential access.LocalCredential
-	var disabledAt, passwordChangedAt sql.NullString
-	var verifier string
-	var mustChange int
-	err := r.db.QueryRowContext(ctx, query, arg).Scan(
-		&principal.ID,
-		&principal.Kind,
-		&principal.Email,
-		&principal.DisplayName,
-		&disabledAt,
-		&principal.CreatedAt,
-		&principal.UpdatedAt,
-		&verifier,
-		&mustChange,
-		&credential.CreatedAt,
-		&credential.UpdatedAt,
-		&passwordChangedAt,
-	)
+	row, err := r.q.GetLocalCredentialByEmail(ctx, email)
 	if err != nil {
 		return access.Principal{}, access.LocalCredential{}, "", err
 	}
+	return localCredentialValues(row.ID, row.Kind, row.Email, row.DisplayName, row.DisabledAt, row.CreatedAt, row.UpdatedAt,
+		row.PasswordVerifier, row.MustChangePassword, row.CredentialCreatedAt, row.CredentialUpdatedAt, row.PasswordChangedAt)
+}
+
+func (r *Repository) localCredentialByPrincipalID(ctx context.Context, principalID string) (access.Principal, access.LocalCredential, string, error) {
+	row, err := r.q.GetLocalCredentialByPrincipalID(ctx, strings.TrimSpace(principalID))
+	if err != nil {
+		return access.Principal{}, access.LocalCredential{}, "", err
+	}
+	return localCredentialValues(row.ID, row.Kind, row.Email, row.DisplayName, row.DisabledAt, row.CreatedAt, row.UpdatedAt,
+		row.PasswordVerifier, row.MustChangePassword, row.CredentialCreatedAt, row.CredentialUpdatedAt, row.PasswordChangedAt)
+}
+
+func localCredentialValues(id, kind, email, displayName string, disabledAt sql.NullString, createdAt, updatedAt, verifier string,
+	mustChange int64, credentialCreatedAt, credentialUpdatedAt string, passwordChangedAt sql.NullString,
+) (access.Principal, access.LocalCredential, string, error) {
+	principal := access.Principal{ID: id, Kind: access.PrincipalKind(kind), Email: email, DisplayName: displayName, CreatedAt: createdAt, UpdatedAt: updatedAt}
 	principal.DisabledAt = nullString(disabledAt)
-	credential.PrincipalID = principal.ID
-	credential.MustChangePassword = mustChange != 0
-	credential.PasswordChangedAt = nullString(passwordChangedAt)
+	credential := access.LocalCredential{
+		PrincipalID: principal.ID, MustChangePassword: mustChange != 0,
+		CreatedAt: credentialCreatedAt, UpdatedAt: credentialUpdatedAt, PasswordChangedAt: nullString(passwordChangedAt),
+	}
 	return principal, credential, verifier, nil
 }
 

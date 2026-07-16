@@ -171,7 +171,7 @@ func (r *Repository) UpsertSCIMUser(ctx context.Context, input access.SCIMUserIn
 	if !input.Active {
 		return r.DisableSCIMUser(ctx, principal.ID)
 	}
-	if _, err := r.db.ExecContext(ctx, `UPDATE principals SET disabled_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, principal.ID); err != nil {
+	if err := r.q.EnablePrincipal(ctx, principal.ID); err != nil {
 		return access.SCIMUser{}, err
 	}
 	row, err := r.q.GetPrincipal(ctx, principal.ID)
@@ -309,24 +309,15 @@ func (r *Repository) ListGroups(ctx context.Context, workspaceID string) ([]acce
 }
 
 func (r *Repository) ListAllGroups(ctx context.Context) ([]access.Group, error) {
-	rows, err := r.db.QueryContext(ctx, `
-SELECT id, workspace_id, provider, external_id, name, created_at
-FROM groups
-ORDER BY workspace_id, name, id
-`)
+	rows, err := r.q.ListAllGroups(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	groups := []access.Group{}
-	for rows.Next() {
-		var group access.Group
-		if err := rows.Scan(&group.ID, &group.WorkspaceID, &group.Provider, &group.ExternalID, &group.Name, &group.CreatedAt); err != nil {
-			return nil, err
-		}
-		groups = append(groups, group)
+	groups := make([]access.Group, 0, len(rows))
+	for _, row := range rows {
+		groups = append(groups, mapGroup(row))
 	}
-	return groups, rows.Err()
+	return groups, nil
 }
 
 func (r *Repository) DeleteGroup(ctx context.Context, workspaceID, groupID string) error {
@@ -387,27 +378,18 @@ func (r *Repository) ListGroupMembers(ctx context.Context, workspaceID, groupID 
 }
 
 func (r *Repository) ListGroupMembersByGroup(ctx context.Context, groupID string) ([]access.GroupMember, error) {
-	rows, err := r.db.QueryContext(ctx, `
-SELECT gm.group_id, g.workspace_id, gm.principal_id, p.email, p.display_name, gm.created_at
-FROM group_members gm
-JOIN groups g ON g.id = gm.group_id
-JOIN principals p ON p.id = gm.principal_id
-WHERE gm.group_id = ?
-ORDER BY p.email, p.display_name, gm.principal_id
-`, groupID)
+	rows, err := r.q.ListGroupMembersByGroup(ctx, groupID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	members := []access.GroupMember{}
-	for rows.Next() {
-		var member access.GroupMember
-		if err := rows.Scan(&member.GroupID, &member.WorkspaceID, &member.PrincipalID, &member.Email, &member.DisplayName, &member.CreatedAt); err != nil {
-			return nil, err
-		}
-		members = append(members, member)
+	members := make([]access.GroupMember, 0, len(rows))
+	for _, row := range rows {
+		members = append(members, access.GroupMember{
+			GroupID: row.GroupID, WorkspaceID: row.WorkspaceID, PrincipalID: row.PrincipalID,
+			Email: row.Email, DisplayName: row.DisplayName, CreatedAt: row.CreatedAt,
+		})
 	}
-	return members, rows.Err()
+	return members, nil
 }
 
 func (r *Repository) UpsertSCIMGroup(ctx context.Context, input access.SCIMGroupInput) (access.Group, error) {
@@ -552,15 +534,12 @@ func (r *Repository) ReconcileWorkspacePolicy(ctx context.Context, workspaceID s
 			return err
 		}
 	}
-	if _, err := r.db.ExecContext(ctx, `
-DELETE FROM grants
-WHERE object_id IN (
-  SELECT id FROM securable_objects WHERE workspace_id = ? OR id = ?
-)
-`, workspaceID, access.WorkspaceObject(workspaceID).CanonicalID()); err != nil {
+	if err := r.q.DeleteWorkspaceGrants(ctx, platformdb.DeleteWorkspaceGrantsParams{
+		WorkspaceID: workspaceID, WorkspaceObjectID: access.WorkspaceObject(workspaceID).CanonicalID(),
+	}); err != nil {
 		return err
 	}
-	if _, err := r.db.ExecContext(ctx, `DELETE FROM data_policies WHERE workspace_id = ?`, workspaceID); err != nil {
+	if err := r.q.DeleteWorkspaceDataPolicies(ctx, workspaceID); err != nil {
 		return err
 	}
 	groups, err := r.ListGroups(ctx, workspaceID)

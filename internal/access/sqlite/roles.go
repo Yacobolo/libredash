@@ -103,23 +103,15 @@ func (r *Repository) ListRoleBindings(ctx context.Context, workspaceID string) (
 }
 
 func (r *Repository) ListAllRoleBindings(ctx context.Context) ([]access.RoleBinding, error) {
-	rows, err := r.db.QueryContext(ctx, `
-SELECT rb.id, rb.workspace_id, COALESCE(p.id, ''), COALESCE(g.id, ''), COALESCE(p.email, ''), COALESCE(p.display_name, ''), COALESCE(g.name, ''), roles.name, rb.created_at
-FROM role_bindings rb
-JOIN roles ON roles.id = rb.role_id
-LEFT JOIN principals p ON p.id = rb.principal_id
-LEFT JOIN groups g ON g.id = rb.group_id
-ORDER BY rb.workspace_id, rb.created_at, rb.id
-`)
+	rows, err := r.q.ListAllRoleBindings(ctx)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	bindings := []access.RoleBinding{}
-	for rows.Next() {
-		var binding access.RoleBinding
-		if err := rows.Scan(&binding.ID, &binding.WorkspaceID, &binding.PrincipalID, &binding.GroupID, &binding.Email, &binding.DisplayName, &binding.GroupName, &binding.Role, &binding.CreatedAt); err != nil {
-			return nil, err
+	bindings := make([]access.RoleBinding, 0, len(rows))
+	for _, row := range rows {
+		binding := access.RoleBinding{
+			ID: row.ID, WorkspaceID: row.WorkspaceID, PrincipalID: row.PrincipalID, GroupID: row.GroupID,
+			Email: row.Email, DisplayName: row.DisplayName, GroupName: row.GroupName, Role: row.Role, CreatedAt: row.CreatedAt,
 		}
 		if binding.GroupID != "" {
 			binding.SubjectType = access.SubjectGroup
@@ -130,7 +122,7 @@ ORDER BY rb.workspace_id, rb.created_at, rb.id
 		}
 		bindings = append(bindings, binding)
 	}
-	return bindings, rows.Err()
+	return bindings, nil
 }
 
 func (r *Repository) ListRoles(ctx context.Context) ([]access.Role, error) {

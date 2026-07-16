@@ -398,15 +398,12 @@ func reconcileWorkspacePolicyTx(ctx context.Context, tx *sql.Tx, q *platformdb.Q
 			return err
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `
-DELETE FROM grants
-WHERE object_id IN (
-  SELECT id FROM securable_objects WHERE workspace_id = ? OR id = ?
-)
-`, workspaceID, access.WorkspaceObject(workspaceID).CanonicalID()); err != nil {
+	if err := q.DeleteWorkspaceGrants(ctx, platformdb.DeleteWorkspaceGrantsParams{
+		WorkspaceID: workspaceID, WorkspaceObjectID: access.WorkspaceObject(workspaceID).CanonicalID(),
+	}); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM data_policies WHERE workspace_id = ?`, workspaceID); err != nil {
+	if err := q.DeleteWorkspaceDataPolicies(ctx, workspaceID); err != nil {
 		return err
 	}
 
@@ -503,18 +500,10 @@ WHERE object_id IN (
 				return fmt.Errorf("workspace data policy %q: %w", name, err)
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `
-INSERT INTO data_policies (id, workspace_id, object_id, subject_type, subject_id, policy_type, expression_json)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(id) DO UPDATE SET
-  workspace_id = excluded.workspace_id,
-  object_id = excluded.object_id,
-  subject_type = excluded.subject_type,
-  subject_id = excluded.subject_id,
-  policy_type = excluded.policy_type,
-  expression_json = excluded.expression_json,
-  updated_at = CURRENT_TIMESTAMP
-`, stableAccessID("datapolicy", workspaceID, name), workspaceID, objectID, string(subjectType), subjectID, dataPolicy.PolicyType, dataPolicy.ExpressionJSON); err != nil {
+		if err := q.UpsertDataPolicy(ctx, platformdb.UpsertDataPolicyParams{
+			ID: stableAccessID("datapolicy", workspaceID, name), WorkspaceID: workspaceID, ObjectID: objectID,
+			SubjectType: string(subjectType), SubjectID: subjectID, PolicyType: dataPolicy.PolicyType, ExpressionJson: dataPolicy.ExpressionJSON,
+		}); err != nil {
 			return err
 		}
 	}
@@ -532,20 +521,8 @@ func roleBindingSubject(params platformdb.InsertRoleBindingParams) (access.Subje
 }
 
 func rolePrivilegesTx(ctx context.Context, tx *sql.Tx, roleName string) ([]string, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT privilege FROM role_grant_templates WHERE role_name = ? ORDER BY privilege`, roleName)
+	privileges, err := platformdb.New(tx).ListRolePrivileges(ctx, roleName)
 	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	privileges := []string{}
-	for rows.Next() {
-		var privilege string
-		if err := rows.Scan(&privilege); err != nil {
-			return nil, err
-		}
-		privileges = append(privileges, privilege)
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	if len(privileges) == 0 {
@@ -740,12 +717,9 @@ func upsertGrantTx(ctx context.Context, tx *sql.Tx, id string, object access.Obj
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `
-INSERT INTO grants (id, object_id, subject_type, subject_id, privilege)
-VALUES (?, ?, ?, ?, ?)
-ON CONFLICT(object_id, subject_type, subject_id, privilege) DO UPDATE SET id = excluded.id
-`, id, objectID, string(subjectType), strings.TrimSpace(subjectID), privilege)
-	return err
+	return platformdb.New(tx).UpsertGrant(ctx, platformdb.UpsertGrantParams{
+		ID: id, ObjectID: objectID, SubjectType: string(subjectType), SubjectID: strings.TrimSpace(subjectID), Privilege: privilege,
+	})
 }
 
 func ensureSecurableObjectTx(ctx context.Context, tx *sql.Tx, object access.ObjectRef, ownerPrincipalID string) (string, error) {
@@ -759,17 +733,10 @@ func ensureSecurableObjectTx(ctx context.Context, tx *sql.Tx, object access.Obje
 			return "", err
 		}
 	}
-	_, err := tx.ExecContext(ctx, `
-INSERT INTO securable_objects (id, object_type, workspace_id, parent_id, owner_principal_id, display_name)
-VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT(id) DO UPDATE SET
-  object_type = excluded.object_type,
-  workspace_id = excluded.workspace_id,
-  parent_id = excluded.parent_id,
-  owner_principal_id = COALESCE(NULLIF(securable_objects.owner_principal_id, ''), NULLIF(excluded.owner_principal_id, ''), ''),
-  display_name = COALESCE(NULLIF(excluded.display_name, ''), securable_objects.display_name),
-  updated_at = CURRENT_TIMESTAMP
-`, objectID, string(object.Type), object.WorkspaceID, parentID, strings.TrimSpace(ownerPrincipalID), securableDisplayName(object))
+	err := platformdb.New(tx).UpsertOwnedSecurableObject(ctx, platformdb.UpsertOwnedSecurableObjectParams{
+		ID: objectID, ObjectType: string(object.Type), WorkspaceID: object.WorkspaceID, ParentID: parentID,
+		OwnerPrincipalID: strings.TrimSpace(ownerPrincipalID), DisplayName: securableDisplayName(object),
+	})
 	return objectID, err
 }
 

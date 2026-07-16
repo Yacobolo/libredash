@@ -107,24 +107,9 @@ func (r *Repository) UpdateConversation(ctx context.Context, input agent.Convers
 	if title == "" {
 		return agent.Conversation{}, fmt.Errorf("conversation title is required")
 	}
-	row := platformdb.AgentConversation{ID: input.ConversationID}
-	err = r.db.QueryRowContext(ctx, `
-			UPDATE agent_conversations
-			SET title = ?, updated_at = CURRENT_TIMESTAMP
-			WHERE id = ? AND workspace_id = ? AND principal_id = ? AND status = 'active'
-			RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at
-		`, title, input.ConversationID, workspaceID, principalID).Scan(
-		&row.ID,
-		&row.WorkspaceID,
-		&row.PrincipalID,
-		&row.Title,
-		&row.Status,
-		&row.MetadataJson,
-		&row.TranscriptJson,
-		&row.CreatedAt,
-		&row.UpdatedAt,
-		&row.ArchivedAt,
-	)
+	row, err := r.q.UpdateAgentConversationTitle(ctx, platformdb.UpdateAgentConversationTitleParams{
+		Title: title, ConversationID: input.ConversationID, WorkspaceID: workspaceID, PrincipalID: principalID,
+	})
 	if err != nil {
 		return agent.Conversation{}, err
 	}
@@ -359,26 +344,9 @@ func (r *Repository) GetRun(ctx context.Context, workspaceID, principalID, conve
 	if strings.TrimSpace(runID) == "" {
 		return agent.Run{}, fmt.Errorf("run id is required")
 	}
-	var row platformdb.AgentRun
-	err = r.db.QueryRowContext(ctx, `
-		SELECT r.id, r.conversation_id, r.status, r.model, r.stop_reason, r.input_tokens, r.output_tokens, r.total_tokens, r.error, r.started_at, r.finished_at, r.metadata_json
-		FROM agent_runs r
-		JOIN agent_conversations c ON c.id = r.conversation_id
-			WHERE r.id = ? AND c.id = ? AND c.workspace_id = ? AND c.principal_id = ?
-		`, runID, conversationID, workspaceID, principalID).Scan(
-		&row.ID,
-		&row.ConversationID,
-		&row.Status,
-		&row.Model,
-		&row.StopReason,
-		&row.InputTokens,
-		&row.OutputTokens,
-		&row.TotalTokens,
-		&row.Error,
-		&row.StartedAt,
-		&row.FinishedAt,
-		&row.MetadataJson,
-	)
+	row, err := r.q.GetAgentRunInConversation(ctx, platformdb.GetAgentRunInConversationParams{
+		RunID: runID, ConversationID: conversationID, WorkspaceID: workspaceID, PrincipalID: principalID,
+	})
 	if err != nil {
 		return agent.Run{}, err
 	}
@@ -393,26 +361,9 @@ func (r *Repository) GetRunByID(ctx context.Context, workspaceID, principalID, r
 	if strings.TrimSpace(runID) == "" {
 		return agent.Run{}, fmt.Errorf("run id is required")
 	}
-	var row platformdb.AgentRun
-	err = r.db.QueryRowContext(ctx, `
-		SELECT r.id, r.conversation_id, r.status, r.model, r.stop_reason, r.input_tokens, r.output_tokens, r.total_tokens, r.error, r.started_at, r.finished_at, r.metadata_json
-		FROM agent_runs r
-		JOIN agent_conversations c ON c.id = r.conversation_id
-			WHERE r.id = ? AND c.workspace_id = ? AND c.principal_id = ?
-		`, runID, workspaceID, principalID).Scan(
-		&row.ID,
-		&row.ConversationID,
-		&row.Status,
-		&row.Model,
-		&row.StopReason,
-		&row.InputTokens,
-		&row.OutputTokens,
-		&row.TotalTokens,
-		&row.Error,
-		&row.StartedAt,
-		&row.FinishedAt,
-		&row.MetadataJson,
-	)
+	row, err := r.q.GetAgentRunForPrincipal(ctx, platformdb.GetAgentRunForPrincipalParams{
+		RunID: runID, WorkspaceID: workspaceID, PrincipalID: principalID,
+	})
 	if err != nil {
 		return agent.Run{}, err
 	}
@@ -489,16 +440,10 @@ func (r *Repository) ListEventsPage(ctx context.Context, workspaceID, principalI
 }
 
 func (r *Repository) agentRunExists(ctx context.Context, workspaceID, principalID, runID string) (bool, error) {
-	var exists bool
-	err := r.db.QueryRowContext(ctx, `
-		SELECT EXISTS (
-			SELECT 1
-			FROM agent_runs r
-			JOIN agent_conversations c ON c.id = r.conversation_id
-				WHERE r.id = ? AND c.workspace_id = ? AND c.principal_id = ?
-			)
-		`, runID, workspaceID, principalID).Scan(&exists)
-	return exists, err
+	exists, err := r.q.AgentRunExistsForPrincipal(ctx, platformdb.AgentRunExistsForPrincipalParams{
+		RunID: runID, WorkspaceID: workspaceID, PrincipalID: principalID,
+	})
+	return exists != 0, err
 }
 
 func mapConversation(row platformdb.AgentConversation) agent.Conversation {

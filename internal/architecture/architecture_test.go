@@ -71,6 +71,26 @@ func TestUIPackageIsRenderOnly(t *testing.T) {
 	}
 }
 
+func TestStaticSQLiteAdaptersUseGeneratedQueries(t *testing.T) {
+	generatedOnly := map[string]bool{
+		"internal/agent/sqlite":        true,
+		"internal/deployment/sqlite":   true,
+		"internal/manageddata/sqlite":  true,
+		"internal/servingstate/sqlite": true,
+		"internal/workspace/sqlite":    true,
+	}
+	for _, file := range productionGoFiles(t) {
+		if !generatedOnly[file.pkgDir] {
+			continue
+		}
+		for _, directCall := range []string{".QueryContext(", ".QueryRowContext(", ".ExecContext("} {
+			if strings.Contains(file.body, directCall) {
+				t.Fatalf("%s bypasses sqlc via %s", file.path, directCall)
+			}
+		}
+	}
+}
+
 func TestAppIsCompositionOnly(t *testing.T) {
 	for _, file := range productionGoFiles(t) {
 		if file.pkgDir != "internal/app" {

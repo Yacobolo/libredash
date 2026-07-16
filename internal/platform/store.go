@@ -307,18 +307,11 @@ func samePath(a, b string) bool {
 }
 
 func (s *Store) GetSetting(ctx context.Context, key string) (string, error) {
-	var value string
-	err := s.db.QueryRowContext(ctx, `SELECT value FROM platform_settings WHERE key = ?`, key).Scan(&value)
-	return value, err
+	return s.q.GetPlatformSetting(ctx, key)
 }
 
 func (s *Store) UpsertSetting(ctx context.Context, key, value string) error {
-	_, err := s.db.ExecContext(ctx, `
-INSERT INTO platform_settings (key, value)
-VALUES (?, ?)
-ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP
-`, key, value)
-	return err
+	return s.q.UpsertPlatformSetting(ctx, db.UpsertPlatformSettingParams{Key: key, Value: value})
 }
 
 func (s *Store) migrate(ctx context.Context) error {

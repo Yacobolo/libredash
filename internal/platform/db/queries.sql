@@ -1104,3 +1104,353 @@ ON CONFLICT(serving_state_id, collection_id) DO UPDATE SET
 SELECT * FROM managed_data_serving_state_bindings
 WHERE serving_state_id = ?
 ORDER BY collection_id;
+
+-- name: CreateRefreshJob :exec
+INSERT INTO refresh_jobs (id, workspace_id, serving_state_id, model_id, kind, payload_json, status, queued_at)
+VALUES (sqlc.arg(id), sqlc.arg(workspace_id), NULLIF(CAST(sqlc.arg(serving_state_id) AS TEXT), ''), sqlc.arg(model_id), sqlc.arg(kind), sqlc.arg(payload_json), sqlc.arg(status), CURRENT_TIMESTAMP);
+
+-- name: CreateRefreshJobRun :exec
+INSERT INTO refresh_job_runs (id, job_id, principal_id, target_type, target_id, trigger_type, parent_run_id, status)
+VALUES (sqlc.arg(id), sqlc.arg(job_id), NULLIF(CAST(sqlc.arg(principal_id) AS TEXT), ''), sqlc.arg(target_type), sqlc.arg(target_id), sqlc.arg(trigger_type), NULLIF(CAST(sqlc.arg(parent_run_id) AS TEXT), ''), sqlc.arg(status));
+
+-- name: NextExecutableRefreshJob :one
+SELECT j.id, j.workspace_id, COALESCE(j.serving_state_id, '') AS serving_state_id, j.model_id, j.kind, j.payload_json,
+       r.id AS run_id, r.target_type, r.target_id, r.trigger_type, j.attempt_count
+FROM refresh_jobs j
+JOIN refresh_job_runs r ON r.job_id = j.id
+WHERE COALESCE(r.parent_run_id, '') = ''
+  AND j.kind IN (sqlc.arg(refresh_kind), sqlc.arg(workspace_asset_refresh_kind))
+  AND (
+    (j.status = sqlc.arg(queued_status) AND r.status = sqlc.arg(run_queued_status))
+    OR (j.status = sqlc.arg(running_status) AND (j.lease_expires_at IS NULL OR j.lease_expires_at <= CURRENT_TIMESTAMP))
+  )
+ORDER BY COALESCE(NULLIF(j.queued_at, ''), j.created_at) ASC, j.id ASC
+LIMIT 1;
+
+-- name: ClaimRefreshJob :execresult
+UPDATE refresh_jobs
+SET status = sqlc.arg(running_status), started_at = COALESCE(started_at, CURRENT_TIMESTAMP), finished_at = NULL,
+    lease_owner = sqlc.arg(lease_owner), lease_expires_at = datetime('now', CAST(sqlc.arg(lease_modifier) AS TEXT)),
+    attempt_count = attempt_count + 1, updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id)
+  AND (
+    status = sqlc.arg(queued_status)
+    OR (status = sqlc.arg(previous_running_status) AND (lease_expires_at IS NULL OR lease_expires_at <= CURRENT_TIMESTAMP))
+  );
+
+-- name: MarkRefreshJobRunClaimed :exec
+UPDATE refresh_job_runs
+SET status = sqlc.arg(status), started_at = CURRENT_TIMESTAMP, finished_at = NULL, error = ''
+WHERE id = sqlc.arg(id);
+
+-- name: RenewRefreshJobLease :exec
+UPDATE refresh_jobs
+SET lease_expires_at = datetime('now', CAST(sqlc.arg(lease_modifier) AS TEXT)), updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id) AND lease_owner = sqlc.arg(lease_owner) AND status = sqlc.arg(status);
+
+-- name: GetRefreshJobQueueStats :one
+SELECT
+  CAST(COALESCE(SUM(CASE WHEN j.status = sqlc.arg(queued_status) THEN 1 ELSE 0 END), 0) AS INTEGER) AS queued_jobs,
+  CAST(COALESCE(SUM(CASE WHEN j.status = sqlc.arg(running_status) AND j.lease_expires_at IS NOT NULL AND j.lease_expires_at > CURRENT_TIMESTAMP THEN 1 ELSE 0 END), 0) AS INTEGER) AS running_jobs,
+  CAST(COALESCE(SUM(CASE WHEN j.status = sqlc.arg(stale_running_status) AND (j.lease_expires_at IS NULL OR j.lease_expires_at <= CURRENT_TIMESTAMP) THEN 1 ELSE 0 END), 0) AS INTEGER) AS stale_leased_jobs
+FROM refresh_jobs j
+JOIN refresh_job_runs r ON r.job_id = j.id
+WHERE COALESCE(r.parent_run_id, '') = ''
+  AND j.kind IN (sqlc.arg(refresh_kind), sqlc.arg(workspace_asset_refresh_kind));
+
+-- name: GetMaterializationRun :one
+SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id,
+       COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name,
+       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at,
+       r.started_at, r.finished_at, r.error
+FROM refresh_job_runs r
+JOIN refresh_jobs j ON j.id = r.job_id
+LEFT JOIN principals p ON p.id = r.principal_id
+WHERE r.id = sqlc.arg(run_id) AND j.workspace_id = sqlc.arg(workspace_id);
+
+-- name: ListChildMaterializationRuns :many
+SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id,
+       COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name,
+       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at,
+       r.started_at, r.finished_at, r.error
+FROM refresh_job_runs r
+JOIN refresh_jobs j ON j.id = r.job_id
+LEFT JOIN principals p ON p.id = r.principal_id
+WHERE j.workspace_id = sqlc.arg(workspace_id) AND r.parent_run_id = sqlc.arg(parent_run_id)
+ORDER BY r.rowid ASC;
+
+-- name: LatestSuccessfulMaterializationRun :one
+SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id,
+       COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name,
+       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at,
+       r.started_at, r.finished_at, r.error
+FROM refresh_job_runs r
+JOIN refresh_jobs j ON j.id = r.job_id
+LEFT JOIN principals p ON p.id = r.principal_id
+WHERE j.workspace_id = sqlc.arg(workspace_id) AND r.target_type = sqlc.arg(target_type)
+  AND r.target_id = sqlc.arg(target_id) AND r.status = sqlc.arg(status)
+ORDER BY j.created_at DESC, r.rowid DESC
+LIMIT 1;
+
+-- name: FailTerminalServingStateRuns :exec
+UPDATE refresh_job_runs
+SET status = sqlc.arg(failed_status), finished_at = CURRENT_TIMESTAMP,
+    error = CASE WHEN error <> '' THEN error ELSE sqlc.arg(error_message) END
+WHERE refresh_job_runs.status IN (sqlc.arg(queued_status), sqlc.arg(running_status))
+  AND job_id IN (
+    SELECT j.id FROM refresh_jobs j
+    JOIN serving_states d ON d.id = j.serving_state_id
+    WHERE d.status IN ('failed', 'delete_scheduled', 'deleted')
+  );
+
+-- name: FailTerminalServingStateJobs :exec
+UPDATE refresh_jobs
+SET status = sqlc.arg(failed_status), updated_at = CURRENT_TIMESTAMP
+WHERE refresh_jobs.status IN (sqlc.arg(queued_status), sqlc.arg(running_status))
+  AND serving_state_id IN (
+    SELECT id FROM serving_states WHERE status IN ('failed', 'delete_scheduled', 'deleted')
+  );
+
+-- name: MarkMaterializationRunActive :execresult
+UPDATE refresh_job_runs
+SET status = sqlc.arg(status), finished_at = finished_at, error = sqlc.arg(error_message)
+WHERE refresh_job_runs.id = sqlc.arg(run_id)
+  AND job_id IN (SELECT refresh_jobs.id FROM refresh_jobs WHERE workspace_id = sqlc.arg(workspace_id));
+
+-- name: MarkMaterializationRunTerminal :execresult
+UPDATE refresh_job_runs
+SET status = sqlc.arg(status), finished_at = CURRENT_TIMESTAMP, error = sqlc.arg(error_message)
+WHERE refresh_job_runs.id = sqlc.arg(run_id)
+  AND job_id IN (SELECT refresh_jobs.id FROM refresh_jobs WHERE workspace_id = sqlc.arg(workspace_id));
+
+-- name: UpdateRefreshJobForActiveRun :exec
+UPDATE refresh_jobs
+SET status = sqlc.arg(new_status), updated_at = CURRENT_TIMESTAMP
+WHERE refresh_jobs.id = (SELECT job_id FROM refresh_job_runs WHERE refresh_job_runs.id = sqlc.arg(run_id))
+  AND workspace_id = sqlc.arg(workspace_id);
+
+-- name: CompleteRefreshJobSucceeded :exec
+UPDATE refresh_jobs
+SET status = 'succeeded', updated_at = CURRENT_TIMESTAMP, finished_at = CURRENT_TIMESTAMP,
+    lease_owner = '', lease_expires_at = NULL
+WHERE refresh_jobs.id = (SELECT job_id FROM refresh_job_runs WHERE refresh_job_runs.id = sqlc.arg(run_id))
+  AND workspace_id = sqlc.arg(workspace_id);
+
+-- name: CompleteRefreshJobFailed :exec
+UPDATE refresh_jobs
+SET status = 'failed', updated_at = CURRENT_TIMESTAMP, finished_at = CURRENT_TIMESTAMP,
+    lease_owner = '', lease_expires_at = NULL, last_error = sqlc.arg(error_message)
+WHERE refresh_jobs.id = (SELECT job_id FROM refresh_job_runs WHERE refresh_job_runs.id = sqlc.arg(run_id))
+  AND workspace_id = sqlc.arg(workspace_id);
+
+-- name: UpdateAgentConversationTitle :one
+UPDATE agent_conversations
+SET title = sqlc.arg(title), updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(conversation_id) AND workspace_id = sqlc.arg(workspace_id)
+  AND principal_id = sqlc.arg(principal_id) AND status = 'active'
+RETURNING id, workspace_id, principal_id, title, status, metadata_json, transcript_json, created_at, updated_at, archived_at;
+
+-- name: GetAgentRunInConversation :one
+SELECT r.id, r.conversation_id, r.status, r.model, r.stop_reason, r.input_tokens, r.output_tokens,
+       r.total_tokens, r.error, r.started_at, r.finished_at, r.metadata_json
+FROM agent_runs r
+JOIN agent_conversations c ON c.id = r.conversation_id
+WHERE r.id = sqlc.arg(run_id) AND c.id = sqlc.arg(conversation_id)
+  AND c.workspace_id = sqlc.arg(workspace_id) AND c.principal_id = sqlc.arg(principal_id);
+
+-- name: GetAgentRunForPrincipal :one
+SELECT r.id, r.conversation_id, r.status, r.model, r.stop_reason, r.input_tokens, r.output_tokens,
+       r.total_tokens, r.error, r.started_at, r.finished_at, r.metadata_json
+FROM agent_runs r
+JOIN agent_conversations c ON c.id = r.conversation_id
+WHERE r.id = sqlc.arg(run_id) AND c.workspace_id = sqlc.arg(workspace_id)
+  AND c.principal_id = sqlc.arg(principal_id);
+
+-- name: AgentRunExistsForPrincipal :one
+SELECT EXISTS (
+  SELECT 1 FROM agent_runs r
+  JOIN agent_conversations c ON c.id = r.conversation_id
+  WHERE r.id = sqlc.arg(run_id) AND c.workspace_id = sqlc.arg(workspace_id)
+    AND c.principal_id = sqlc.arg(principal_id)
+);
+
+-- name: ListPrincipals :many
+WITH params AS (
+  SELECT CAST(sqlc.arg(email) AS TEXT) AS email, CAST(sqlc.arg(search) AS TEXT) AS search
+)
+SELECT principals.id, principals.kind, principals.email, principals.display_name,
+       principals.disabled_at, principals.created_at, principals.updated_at
+FROM principals CROSS JOIN params
+WHERE (params.email = '' OR lower(principals.email) = lower(params.email))
+  AND (params.search = '' OR lower(principals.email) LIKE '%' || lower(params.search) || '%'
+       OR lower(display_name) LIKE '%' || lower(params.search) || '%')
+ORDER BY principals.email, principals.id;
+
+-- name: ChangeLocalCredentialPassword :exec
+UPDATE local_user_credentials
+SET password_verifier = sqlc.arg(password_verifier), must_change_password = 0,
+    updated_at = CURRENT_TIMESTAMP, password_changed_at = CURRENT_TIMESTAMP
+WHERE principal_id = sqlc.arg(principal_id);
+
+-- name: UpsertLocalCredential :exec
+INSERT INTO local_user_credentials (principal_id, password_verifier, must_change_password, updated_at, password_changed_at)
+VALUES (sqlc.arg(principal_id), sqlc.arg(password_verifier), sqlc.arg(must_change_password), CURRENT_TIMESTAMP, NULL)
+ON CONFLICT(principal_id) DO UPDATE SET
+  password_verifier = excluded.password_verifier,
+  must_change_password = excluded.must_change_password,
+  updated_at = CURRENT_TIMESTAMP,
+  password_changed_at = NULL;
+
+-- name: GetLocalCredentialByEmail :one
+SELECT p.id, p.kind, p.email, p.display_name, p.disabled_at, p.created_at, p.updated_at,
+       c.password_verifier, c.must_change_password, c.created_at AS credential_created_at,
+       c.updated_at AS credential_updated_at, c.password_changed_at
+FROM principals p
+JOIN local_user_credentials c ON c.principal_id = p.id
+WHERE lower(p.email) = lower(sqlc.arg(email)) AND p.email <> ''
+LIMIT 1;
+
+-- name: GetLocalCredentialByPrincipalID :one
+SELECT p.id, p.kind, p.email, p.display_name, p.disabled_at, p.created_at, p.updated_at,
+       c.password_verifier, c.must_change_password, c.created_at AS credential_created_at,
+       c.updated_at AS credential_updated_at, c.password_changed_at
+FROM principals p
+JOIN local_user_credentials c ON c.principal_id = p.id
+WHERE p.id = sqlc.arg(principal_id)
+LIMIT 1;
+
+-- name: ListAllRoleBindings :many
+SELECT rb.id, rb.workspace_id, COALESCE(p.id, '') AS principal_id, COALESCE(g.id, '') AS group_id,
+       COALESCE(p.email, '') AS email, COALESCE(p.display_name, '') AS display_name,
+       COALESCE(g.name, '') AS group_name, roles.name AS role, rb.created_at
+FROM role_bindings rb
+JOIN roles ON roles.id = rb.role_id
+LEFT JOIN principals p ON p.id = rb.principal_id
+LEFT JOIN groups g ON g.id = rb.group_id
+ORDER BY rb.workspace_id, rb.created_at, rb.id;
+
+-- name: EnablePrincipal :exec
+UPDATE principals SET disabled_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = sqlc.arg(id);
+
+-- name: ListAllGroups :many
+SELECT id, workspace_id, provider, external_id, name, created_at
+FROM groups ORDER BY workspace_id, name, id;
+
+-- name: ListGroupMembersByGroup :many
+SELECT gm.group_id, g.workspace_id, gm.principal_id, p.email, p.display_name, gm.created_at
+FROM group_members gm
+JOIN groups g ON g.id = gm.group_id
+JOIN principals p ON p.id = gm.principal_id
+WHERE gm.group_id = sqlc.arg(group_id)
+ORDER BY p.email, p.display_name, gm.principal_id;
+
+-- name: DeleteWorkspaceGrants :exec
+DELETE FROM grants
+WHERE grants.object_id IN (
+  SELECT securable_objects.id FROM securable_objects
+  WHERE securable_objects.workspace_id = sqlc.arg(workspace_id) OR securable_objects.id = sqlc.arg(workspace_object_id)
+);
+
+-- name: DeleteWorkspaceDataPolicies :exec
+DELETE FROM data_policies WHERE workspace_id = sqlc.arg(workspace_id);
+
+-- name: InitializeSecurableObjectOwner :exec
+UPDATE securable_objects
+SET owner_principal_id = COALESCE(NULLIF(owner_principal_id, ''), sqlc.arg(owner_principal_id)),
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id);
+
+-- name: GetScopedGrant :one
+SELECT g.id, g.object_id, so.object_type, so.workspace_id, g.subject_type, g.subject_id, g.privilege, g.created_at
+FROM grants g
+JOIN securable_objects so ON so.id = g.object_id
+WHERE g.id = sqlc.arg(id)
+  AND (so.workspace_id = sqlc.arg(workspace_id) OR so.id = sqlc.arg(workspace_object_id));
+
+-- name: DeleteScopedGrant :exec
+DELETE FROM grants
+WHERE grants.id = sqlc.arg(id)
+  AND grants.object_id IN (
+    SELECT securable_objects.id FROM securable_objects
+    WHERE securable_objects.workspace_id = sqlc.arg(workspace_id) OR securable_objects.id = sqlc.arg(workspace_object_id)
+  );
+
+-- name: UpsertDataPolicy :exec
+INSERT INTO data_policies (id, workspace_id, object_id, subject_type, subject_id, policy_type, expression_json)
+VALUES (sqlc.arg(id), sqlc.arg(workspace_id), sqlc.arg(object_id), sqlc.arg(subject_type),
+        sqlc.arg(subject_id), sqlc.arg(policy_type), sqlc.arg(expression_json))
+ON CONFLICT(id) DO UPDATE SET
+  workspace_id = excluded.workspace_id, object_id = excluded.object_id,
+  subject_type = excluded.subject_type, subject_id = excluded.subject_id,
+  policy_type = excluded.policy_type, expression_json = excluded.expression_json,
+  updated_at = CURRENT_TIMESTAMP;
+
+-- name: GetDataPolicy :one
+SELECT id, workspace_id, object_id, subject_type, subject_id, policy_type, expression_json, created_at, updated_at
+FROM data_policies WHERE id = sqlc.arg(id) AND workspace_id = sqlc.arg(workspace_id);
+
+-- name: GroupMemberExists :one
+SELECT EXISTS (
+  SELECT 1 FROM group_members
+  WHERE group_id = sqlc.arg(group_id) AND principal_id = sqlc.arg(principal_id)
+);
+
+-- name: DeleteDataPolicy :exec
+DELETE FROM data_policies WHERE workspace_id = sqlc.arg(workspace_id) AND id = sqlc.arg(id);
+
+-- name: SetSecurableObjectOwner :exec
+UPDATE securable_objects
+SET owner_principal_id = sqlc.arg(owner_principal_id), updated_at = CURRENT_TIMESTAMP
+WHERE id = sqlc.arg(id);
+
+-- name: GetSecurableObjectID :one
+SELECT id FROM securable_objects WHERE id = sqlc.arg(id);
+
+-- name: UpsertSecurableObject :exec
+INSERT INTO securable_objects (id, object_type, workspace_id, parent_id, display_name)
+VALUES (sqlc.arg(id), sqlc.arg(object_type), sqlc.arg(workspace_id), sqlc.arg(parent_id), sqlc.arg(display_name))
+ON CONFLICT(id) DO UPDATE SET
+  object_type = excluded.object_type, workspace_id = excluded.workspace_id,
+  parent_id = excluded.parent_id,
+  display_name = COALESCE(NULLIF(excluded.display_name, ''), securable_objects.display_name),
+  updated_at = CURRENT_TIMESTAMP;
+
+-- name: UpsertOwnedSecurableObject :exec
+INSERT INTO securable_objects (id, object_type, workspace_id, parent_id, owner_principal_id, display_name)
+VALUES (sqlc.arg(id), sqlc.arg(object_type), sqlc.arg(workspace_id), sqlc.arg(parent_id),
+        sqlc.arg(owner_principal_id), sqlc.arg(display_name))
+ON CONFLICT(id) DO UPDATE SET
+  object_type = excluded.object_type, workspace_id = excluded.workspace_id,
+  parent_id = excluded.parent_id,
+  owner_principal_id = COALESCE(NULLIF(securable_objects.owner_principal_id, ''), NULLIF(excluded.owner_principal_id, ''), ''),
+  display_name = COALESCE(NULLIF(excluded.display_name, ''), securable_objects.display_name),
+  updated_at = CURRENT_TIMESTAMP;
+
+-- name: GetSecurableObjectParent :one
+SELECT parent_id FROM securable_objects WHERE id = sqlc.arg(id);
+
+-- name: GetSecurableObjectOwner :one
+SELECT owner_principal_id FROM securable_objects WHERE id = sqlc.arg(id);
+
+-- name: GetSecurableObject :one
+SELECT id, object_type, workspace_id, parent_id, owner_principal_id, display_name, created_at, updated_at
+FROM securable_objects WHERE id = sqlc.arg(id);
+
+-- name: DeleteRoleBindingGrants :exec
+DELETE FROM grants WHERE id LIKE sqlc.arg(id_pattern);
+
+-- name: ListRolePrivileges :many
+SELECT privilege FROM role_grant_templates WHERE role_name = sqlc.arg(role_name) ORDER BY privilege;
+
+-- name: UpsertGrant :exec
+INSERT INTO grants (id, object_id, subject_type, subject_id, privilege)
+VALUES (sqlc.arg(id), sqlc.arg(object_id), sqlc.arg(subject_type), sqlc.arg(subject_id), sqlc.arg(privilege))
+ON CONFLICT(object_id, subject_type, subject_id, privilege) DO UPDATE SET id = excluded.id;
+
+-- name: GetPlatformSetting :one
+SELECT value FROM platform_settings WHERE key = sqlc.arg(key);
+
+-- name: UpsertPlatformSetting :exec
+INSERT INTO platform_settings (key, value)
+VALUES (sqlc.arg(key), sqlc.arg(value))
+ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = CURRENT_TIMESTAMP;
