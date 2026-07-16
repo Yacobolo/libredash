@@ -158,6 +158,7 @@ tasks:
       - config:generate
       - schema:generate
       - cli-docs:generate
+      - node:deps
     method: checksum
     sources:
       - Taskfile.yml
@@ -178,11 +179,15 @@ tasks:
       - docs/catalog.json
       - docs/search-index.json
     cmds:
+      - bun run docs:validate-diagrams
       - go run ./internal/tools/docsitegen
 
   docs:check:
     desc: Verify the unified documentation catalog and search index are current
+    deps:
+      - node:deps
     cmds:
+      - bun run docs:validate-diagrams
       - go run ./internal/tools/docsitegen --check
 
   cli-docs:generate:
@@ -304,6 +309,7 @@ tasks:
       - build
     cmds:
       - bun run test:primer-primitives
+      - bun run test:docs-diagrams
       - bun run test:primer-alignment
       - bun run test:theme
       - bun run test:site

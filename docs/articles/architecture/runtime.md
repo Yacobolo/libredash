@@ -48,6 +48,21 @@ After successful materialization and validation, DuckLake commits a snapshot and
 
 Gomponents renders initial HTML and typed bootstrap signals. Datastar handlers receive component commands and return focused signal patches. Long-lived streams are used only where later publisher events are expected; one-shot commands complete after their bounded patches.
 
+```mermaid
+sequenceDiagram
+  accTitle: Interactive query delivery
+  accDescr: A browser command reaches the Go application, which authorizes and plans a bounded DuckDB query before Datastar patches the affected Lit components.
+  participant Browser
+  participant Go as Go application
+  participant DuckDB
+  Browser->>Go: Component command and signals
+  Go->>Go: Authorize and plan
+  Go->>DuckDB: Bounded analytical query
+  DuckDB-->>Go: Typed result
+  Go-->>Browser: Datastar signal patch
+  Browser->>Browser: Lit component render
+```
+
 Lit components read signal paths through the shared bridge. Components may show optimistic selection feedback, but canonical state from the server reconciles it.
 
 ## Background and maintenance work

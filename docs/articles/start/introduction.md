@@ -21,6 +21,13 @@ It is not intended to make every browser edit authoritative. The browser is a co
 
 A LibreDash project has three main layers:
 
+```mermaid
+flowchart LR
+  accTitle: LibreDash resource layers
+  accDescr: Connections and sources feed model tables and semantic models, which feed dashboards and report pages.
+  inputs["Connections and sources"] --> semantics["Model tables and semantic models"] --> presentation["Dashboards and report pages"]
+```
+
 1. Connections and sources identify physical inputs and give them stable project-level names.
 2. Model tables and semantic models turn those inputs into reusable analytical concepts.
 3. Dashboards compose semantic queries into filters, KPIs, charts, tables, and report pages.

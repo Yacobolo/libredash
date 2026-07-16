@@ -1410,6 +1410,13 @@
               "summary": "Extend schemas, generated references, and validation together.",
               "source": "articles/contributing/configuration.md",
               "breadcrumb": "Add a configuration resource"
+            },
+            {
+              "slug": "contributing/documentation",
+              "title": "Write documentation",
+              "summary": "Author procedural guides and accessible diagrams that remain valid with the product.",
+              "source": "articles/contributing/documentation.md",
+              "breadcrumb": "Write documentation"
             }
           ]
         }

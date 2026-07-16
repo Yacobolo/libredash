@@ -2,6 +2,14 @@
 
 The included Sales workspace is a complete example of the dashboard-as-code workflow. Make and validate a small change there before creating connections, model tables, and semantic models from scratch.
 
+```mermaid
+flowchart LR
+  accTitle: Dashboard authoring lifecycle
+  accDescr: Authors edit project resources, validate them, review a deployment plan, deploy the candidate, and verify the active dashboard.
+  edit["Edit resources"] --> validate["Validate"] --> plan["Review plan"] --> deploy["Deploy"] --> verify["Verify"]
+  verify -. "iterate" .-> edit
+```
+
 ## Start the sample project
 
 Prepare the Olist sample data and start the managed development server:

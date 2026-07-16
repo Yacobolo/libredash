@@ -366,6 +366,40 @@ test('documentation articles apply the shared Markdown treatment', async () => {
   }
 })
 
+test('documentation Mermaid fences render as accessible responsive diagrams', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  try {
+    await page.goto(`${baseURL}/docs/introduction`)
+    const diagram = page.locator('ld-site-mermaid').first()
+    await diagram.locator('svg').waitFor({ state: 'visible' })
+
+    expect(await diagram.getAttribute('aria-label')).toBe('LibreDash resource layers')
+    expect(await diagram.locator('svg').getAttribute('role')).toBe('img')
+    expect(await diagram.locator('svg title').textContent()).toBe('LibreDash resource layers')
+    expect(await page.locator('.site-docs-article ld-code-block[language="mermaid"]').count()).toBe(0)
+
+    const desktop = await diagram.evaluate((element) => {
+      const svg = element.shadowRoot?.querySelector('svg') as SVGElement
+      return {
+        diagramWidth: element.getBoundingClientRect().width,
+        articleWidth: (element.closest('.site-docs-article') as HTMLElement).getBoundingClientRect().width,
+        svgMaxWidth: getComputedStyle(svg).maxWidth,
+      }
+    })
+    expect(desktop.diagramWidth).toBe(desktop.articleWidth)
+    expect(desktop.svgMaxWidth).toBe('100%')
+
+    await page.setViewportSize({ width: 390, height: 800 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false)
+
+    await page.evaluate(() => document.dispatchEvent(new CustomEvent('libredash-theme-change', { detail: { mode: 'dark' } })))
+    await page.waitForFunction(() => document.querySelector('html')?.getAttribute('data-color-mode') === 'dark')
+    await page.waitForFunction(() => document.querySelector('ld-site-mermaid')?.getAttribute('data-rendered-theme') === 'dark')
+  } finally {
+    await page.close()
+  }
+})
+
 test('documentation articles provide a readable, navigable reference experience', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   try {

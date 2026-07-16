@@ -728,13 +728,241 @@ if (!customElements.get('ld-site-markdown-copy')) {
   customElements.define('ld-site-markdown-copy', SiteMarkdownCopy)
 }
 
+type ResolvedThemeMode = 'light' | 'dark'
+
+let mermaidModule: Promise<(typeof import('mermaid'))['default']> | undefined
+let mermaidRenderSequence = 0
+let mermaidRenderQueue: Promise<void> = Promise.resolve()
+
+function loadMermaid(): Promise<(typeof import('mermaid'))['default']> {
+  mermaidModule ??= import('mermaid').then((module) => module.default)
+  return mermaidModule
+}
+
+function resolvedThemeMode(): ResolvedThemeMode {
+  const colorScheme = document.documentElement.style.colorScheme
+  if (colorScheme === 'dark' || colorScheme === 'light') return colorScheme
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function mermaidAccessibleTitle(source: string): string {
+  const accessibilityTitle = source.match(/^\s*accTitle:\s*(.+?)\s*$/m)?.[1]
+  if (accessibilityTitle) return accessibilityTitle
+
+  const frontmatter = source.match(/^---\s*\n([\s\S]*?)\n---\s*\n/)
+  const frontmatterTitle = frontmatter?.[1].match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1]
+  return frontmatterTitle || 'Documentation diagram'
+}
+
+class SiteMermaid extends LitElement {
+  static properties = {
+    source: { type: String },
+  }
+
+  declare source: string
+  private renderGeneration = 0
+  private readonly handleThemeApplied = (event: Event): void => {
+    const detail = (event as CustomEvent<{ resolvedMode?: string }>).detail
+    const theme = detail?.resolvedMode === 'dark' ? 'dark' : 'light'
+    if (this.dataset.renderedTheme !== theme) void this.draw(theme)
+  }
+
+  static styles = css`
+    :host {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      color: var(--ld-fg-default);
+    }
+
+    figure {
+      display: grid;
+      min-width: 0;
+      margin: 0;
+      gap: var(--base-size-12);
+      border: var(--ld-border-muted);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-bg-panel);
+      padding: var(--base-size-20);
+    }
+
+    .canvas {
+      display: grid;
+      min-width: 0;
+      min-height: var(--base-size-64);
+      place-items: center;
+      overflow: auto hidden;
+    }
+
+    .canvas svg {
+      display: block;
+      width: auto;
+      max-width: 100%;
+      height: auto;
+      max-height: min(38rem, 70svh);
+    }
+
+    figcaption,
+    .error {
+      margin: 0;
+      color: var(--ld-fg-muted);
+      font-size: var(--ld-text-body-sm-size);
+      line-height: var(--ld-line-height-relaxed);
+    }
+
+    figcaption {
+      text-align: center;
+    }
+
+    .error {
+      color: var(--ld-fg-danger);
+    }
+
+    [hidden] {
+      display: none;
+    }
+
+    @media (width < 48rem) {
+      figure {
+        padding: var(--base-size-12);
+      }
+    }
+  `
+
+  connectedCallback(): void {
+    super.connectedCallback()
+    document.addEventListener('libredash-theme-applied', this.handleThemeApplied)
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    this.renderGeneration += 1
+    super.disconnectedCallback()
+  }
+
+  protected updated(changed: Map<PropertyKey, unknown>): void {
+    if (changed.has('source')) {
+      this.setAttribute('aria-label', mermaidAccessibleTitle(this.source ?? ''))
+      void this.draw(resolvedThemeMode())
+    }
+  }
+
+  render() {
+    const title = mermaidAccessibleTitle(this.source ?? '')
+    return html`<figure>
+      <div class="canvas" aria-busy="true"></div>
+      <p class="error" role="alert" hidden></p>
+      <figcaption>${title}</figcaption>
+    </figure>`
+  }
+
+  private async draw(theme: ResolvedThemeMode): Promise<void> {
+    const generation = ++this.renderGeneration
+    await this.updateComplete
+    const source = this.source?.trim()
+    const canvas = this.renderRoot.querySelector<HTMLElement>('.canvas')
+    const error = this.renderRoot.querySelector<HTMLElement>('.error')
+    if (!source || !canvas || !error) return
+
+    canvas.setAttribute('aria-busy', 'true')
+    error.hidden = true
+    const task = async (): Promise<void> => {
+      try {
+        const mermaid = await loadMermaid()
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          suppressErrorRendering: true,
+          theme: 'base',
+          fontFamily: cssToken(this, '--ld-font-family-ui'),
+          themeVariables: mermaidThemeVariables(this),
+          flowchart: { htmlLabels: false, useMaxWidth: true },
+        })
+        const id = `libredash-docs-diagram-${++mermaidRenderSequence}`
+        const result = await mermaid.render(id, source)
+        if (generation !== this.renderGeneration || !this.isConnected) return
+
+        canvas.innerHTML = result.svg
+        const svg = canvas.querySelector('svg')
+        if (svg) {
+          svg.setAttribute('role', 'img')
+          svg.style.maxWidth = '100%'
+          svg.style.height = 'auto'
+        }
+        result.bindFunctions?.(canvas)
+        canvas.setAttribute('aria-busy', 'false')
+        this.dataset.renderedTheme = theme
+      } catch (cause) {
+        if (generation !== this.renderGeneration || !this.isConnected) return
+        canvas.replaceChildren()
+        canvas.setAttribute('aria-busy', 'false')
+        error.textContent = `Diagram could not be rendered: ${cause instanceof Error ? cause.message : String(cause)}`
+        error.hidden = false
+      }
+    }
+
+    const queued = mermaidRenderQueue.then(task, task)
+    mermaidRenderQueue = queued.then(() => undefined, () => undefined)
+    await queued
+  }
+}
+
+function cssToken(element: Element, name: string): string {
+  const value = getComputedStyle(element).getPropertyValue(name).trim()
+  if (!value) throw new Error(`Required diagram token ${name} is unavailable`)
+  return value
+}
+
+function mermaidThemeVariables(element: Element): Record<string, string> {
+  const background = cssToken(element, '--ld-bg-panel')
+  const foreground = cssToken(element, '--ld-fg-default')
+  const muted = cssToken(element, '--ld-fg-muted')
+  const accent = cssToken(element, '--ld-fg-accent')
+  const accentBackground = cssToken(element, '--ld-bg-accent-muted')
+  const control = cssToken(element, '--ld-bg-control')
+  const border = cssToken(element, '--ld-line-muted')
+
+  return {
+    background,
+    primaryColor: accentBackground,
+    primaryTextColor: foreground,
+    primaryBorderColor: accent,
+    secondaryColor: control,
+    secondaryTextColor: foreground,
+    secondaryBorderColor: border,
+    tertiaryColor: background,
+    tertiaryTextColor: foreground,
+    tertiaryBorderColor: border,
+    lineColor: muted,
+    textColor: foreground,
+    mainBkg: accentBackground,
+    nodeBorder: accent,
+    clusterBkg: control,
+    clusterBorder: border,
+    edgeLabelBackground: background,
+    noteBkgColor: control,
+    noteBorderColor: border,
+    noteTextColor: foreground,
+  }
+}
+
+if (!customElements.get('ld-site-mermaid')) {
+  customElements.define('ld-site-mermaid', SiteMermaid)
+}
+
 function enhanceDocsCodeBlocks(): void {
   document.querySelectorAll<HTMLElement>('.site-docs-article pre').forEach((pre) => {
-    if (pre.closest('ld-code-block')) return
+    if (pre.closest('ld-code-block, ld-site-mermaid')) return
 
     const code = pre.querySelector('code')
     const languageClass = Array.from(code?.classList ?? []).find((name) => name.startsWith('language-'))
     const language = languageClass?.slice('language-'.length).toLowerCase() ?? ''
+    if (language === 'mermaid') {
+      const diagram = document.createElement('ld-site-mermaid') as SiteMermaid
+      diagram.source = code?.textContent ?? pre.textContent ?? ''
+      pre.replaceWith(diagram)
+      return
+    }
     const block = document.createElement('ld-code-block') as HTMLElement & {
       code: string
       copy: boolean
