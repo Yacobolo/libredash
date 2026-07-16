@@ -194,11 +194,11 @@ func TestDashboardDataCommandsUseGeneratedURLsAndBodies(t *testing.T) {
 		response any
 	}{
 		{
-			name:     "components",
-			args:     []string{"components", "executive-sales", "overview"},
+			name:     "page",
+			args:     []string{"page", "executive-sales", "overview"},
 			method:   http.MethodGet,
-			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/components",
-			response: map[string]any{"items": []map[string]any{}, "page": map[string]any{"nextCursor": ""}},
+			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview",
+			response: map[string]any{"id": "overview", "title": "Overview", "components": []map[string]any{}},
 		},
 		{
 			name:     "visual describe",
@@ -211,7 +211,7 @@ func TestDashboardDataCommandsUseGeneratedURLsAndBodies(t *testing.T) {
 			name:     "visual data",
 			args:     []string{"visual-data", "executive-sales", "overview", "orders", "--filters-json", `{"controls":{"state":{"values":["SP"]}}}`},
 			method:   http.MethodPost,
-			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/orders/data",
+			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/orders/query",
 			wantBody: []string{`"filters"`, `"state"`},
 			response: map[string]any{"id": "orders", "data": []map[string]any{}},
 		},
@@ -219,7 +219,7 @@ func TestDashboardDataCommandsUseGeneratedURLsAndBodies(t *testing.T) {
 			name:     "table data",
 			args:     []string{"table-data", "executive-sales", "overview", "orders", "--count", "7"},
 			method:   http.MethodPost,
-			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/tables/orders/data",
+			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/tables/orders/query",
 			wantBody: []string{`"count":7`},
 			response: map[string]any{"title": "Orders", "blocks": map[string]any{}},
 		},
@@ -227,7 +227,7 @@ func TestDashboardDataCommandsUseGeneratedURLsAndBodies(t *testing.T) {
 			name:     "filter options",
 			args:     []string{"filter-options", "executive-sales", "overview", "state", "--limit", "7", "--page-token", "cursor"},
 			method:   http.MethodPost,
-			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/filters/state/options",
+			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/filters/state/values",
 			wantBody: []string{},
 			response: map[string]any{"items": []map[string]any{}, "page": map[string]any{"nextCursor": ""}},
 		},
@@ -306,28 +306,12 @@ func TestSemanticModelDatasetCommandsUseGeneratedURLsAndBodies(t *testing.T) {
 			response: map[string]any{"items": []map[string]any{}, "page": map[string]any{"nextCursor": ""}},
 		},
 		{
-			name:     "query",
-			args:     []string{"query", "test", "orders", "--body-json", `{"dimensions":[{"field":"orders.status"}],"measures":[{"field":"order_count"}]}`},
-			method:   http.MethodPost,
-			path:     "/api/v1/workspaces/test/semantic-models/test/datasets/orders/query",
-			wantBody: []string{`"dimensions"`, `"order_count"`},
-			response: map[string]any{"columns": []string{"status"}, "items": []map[string]any{}, "page": map[string]any{"nextCursor": ""}},
-		},
-		{
 			name:     "preview",
 			args:     []string{"preview", "test", "orders", "--body-json", `{"dimensions":[{"field":"orders.order_id"}]}`},
 			method:   http.MethodPost,
 			path:     "/api/v1/workspaces/test/semantic-models/test/datasets/orders/preview",
 			wantBody: []string{`"orders.order_id"`},
 			response: map[string]any{"columns": []string{"order_id"}, "items": []map[string]any{}, "page": map[string]any{"nextCursor": ""}},
-		},
-		{
-			name:     "explain query",
-			args:     []string{"explain-query", "test", "orders", "--body-json", `{"dimensions":[{"field":"orders.status"}]}`},
-			method:   http.MethodPost,
-			path:     "/api/v1/workspaces/test/semantic-models/test/datasets/orders/query/explain",
-			wantBody: []string{`"orders.status"`},
-			response: map[string]any{"mode": "query", "sql": "SELECT 1", "args": []map[string]any{}, "columns": []string{"status"}, "warnings": []string{}},
 		},
 		{
 			name:     "explain preview",
@@ -389,7 +373,7 @@ func TestAgentToolsCommandListsGeneratedTools(t *testing.T) {
 			t.Fatalf("agent tools: %v", err)
 		}
 	})
-	for _, want := range []string{"NAME", "PRIVILEGE", "list_dashboards", "VIEW_ITEM", "list_assets", "describe_asset", "asset_lineage", "search_workspace", "query_dashboard_visual_data", "query_semantic_dataset", "explain_semantic_query"} {
+	for _, want := range []string{"NAME", "PRIVILEGE", "list_dashboards", "VIEW_ITEM", "list_assets", "describe_asset", "asset_lineage", "search_workspace", "query_dashboard_visual_data", "query_semantic_model", "explain_semantic_model_query"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("agent tools output missing %q:\n%s", want, output)
 		}

@@ -131,6 +131,11 @@ func (r *fakeRepository) ActivateDeployment(context.Context, string) (Deployment
 	r.deployment.Status = StatusActive
 	return r.deployment, nil
 }
+
+func (r *fakeRepository) CancelDeployment(context.Context, string) (Deployment, error) {
+	r.deployment.Status = StatusCancelled
+	return r.deployment, nil
+}
 func (r *fakeRepository) FailDeployment(_ context.Context, id string, _ error) error {
 	r.failedID = id
 	return nil

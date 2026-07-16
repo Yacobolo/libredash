@@ -9,12 +9,48 @@ import (
 	"strings"
 
 	api "github.com/Yacobolo/libredash/internal/api"
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 	"github.com/Yacobolo/libredash/internal/deployment"
 	"github.com/Yacobolo/libredash/internal/deployment/apiadapter"
 )
 
-func (h *Handler) Create(w stdhttp.ResponseWriter, r *stdhttp.Request, project string, headers apigenapi.GenCreateProjectDeploymentHeaders) {
+type CreateHeaders struct{ IdempotencyKey string }
+type ActivateHeaders struct{ IdempotencyKey string }
+type createRequest struct {
+	Environment string `json:"environment"`
+	Targets     []struct {
+		Workspace   string `json:"workspace"`
+		CandidateID string `json:"candidateId"`
+	} `json:"targets"`
+}
+type deploymentResponse struct {
+	ID            string                         `json:"id"`
+	Project       string                         `json:"project"`
+	Environment   string                         `json:"environment"`
+	RequestDigest string                         `json:"requestDigest"`
+	Status        string                         `json:"status"`
+	CreatedAt     string                         `json:"createdAt"`
+	ActivatedAt   *string                        `json:"activatedAt,omitempty"`
+	Error         *string                        `json:"error,omitempty"`
+	Targets       []deploymentTargetResponse     `json:"targets"`
+	Connections   []deploymentConnectionResponse `json:"connections"`
+}
+type deploymentTargetResponse struct {
+	Workspace        string  `json:"workspace"`
+	CandidateID      string  `json:"candidateId"`
+	PriorCandidateID *string `json:"priorCandidateId,omitempty"`
+	Status           string  `json:"status"`
+	ActivatedAt      *string `json:"activatedAt,omitempty"`
+	Error            *string `json:"error,omitempty"`
+}
+type deploymentConnectionResponse struct {
+	Connection          string  `json:"connection"`
+	RevisionID          string  `json:"revisionId"`
+	PriorRevisionID     *string `json:"priorRevisionId,omitempty"`
+	PriorGeneration     int64   `json:"priorGeneration"`
+	ActivatedGeneration *int64  `json:"activatedGeneration,omitempty"`
+}
+
+func (h *Handler) Create(w stdhttp.ResponseWriter, r *stdhttp.Request, project string, headers CreateHeaders) {
 	principal, ok := h.principal(r)
 	if !ok {
 		writeError(w, fmt.Errorf("authenticated principal is required"), stdhttp.StatusUnauthorized)
@@ -24,14 +60,14 @@ func (h *Handler) Create(w stdhttp.ResponseWriter, r *stdhttp.Request, project s
 		writeError(w, fmt.Errorf("Idempotency-Key is required"), stdhttp.StatusBadRequest)
 		return
 	}
-	var body apigenapi.ProjectDeploymentCreateRequest
+	var body createRequest
 	if err := decodeJSON(w, r, &body, h.options.MaxJSONBodyBytes); err != nil {
 		writeError(w, err, stdhttp.StatusBadRequest)
 		return
 	}
 	targets := make([]apiadapter.TargetRequest, 0, len(body.Targets))
 	for _, target := range body.Targets {
-		targets = append(targets, apiadapter.TargetRequest{Workspace: target.Workspace, CandidateID: target.CandidateId})
+		targets = append(targets, apiadapter.TargetRequest{Workspace: target.Workspace, CandidateID: target.CandidateID})
 	}
 	result, err := h.options.Coordinator.Create(r.Context(), apiadapter.CreateRequest{
 		Project: project, Environment: body.Environment, Targets: targets, Actor: principal.ID, IdempotencyKey: headers.IdempotencyKey,
@@ -52,7 +88,7 @@ func (h *Handler) Get(w stdhttp.ResponseWriter, r *stdhttp.Request, project, dep
 	writeJSON(w, stdhttp.StatusOK, response(result))
 }
 
-func (h *Handler) Activate(w stdhttp.ResponseWriter, r *stdhttp.Request, project, deploymentID string, headers apigenapi.GenActivateProjectDeploymentHeaders) {
+func (h *Handler) Activate(w stdhttp.ResponseWriter, r *stdhttp.Request, project, deploymentID string, headers ActivateHeaders) {
 	principal, ok := h.principal(r)
 	if !ok {
 		writeError(w, fmt.Errorf("authenticated principal is required"), stdhttp.StatusUnauthorized)
@@ -80,12 +116,12 @@ func (h *Handler) principal(r *stdhttp.Request) (Principal, bool) {
 	return principal, ok && strings.TrimSpace(principal.ID) != ""
 }
 
-func response(value apiadapter.Deployment) apigenapi.ProjectDeploymentResponse {
-	result := apigenapi.ProjectDeploymentResponse{
-		Id: value.ID, Project: value.Project, Environment: value.Environment, RequestDigest: value.RequestDigest,
-		Status: apigenapi.ProjectDeploymentStatus(value.Status), CreatedAt: value.CreatedAt,
-		Targets:     make([]apigenapi.ProjectDeploymentTargetResponse, 0, len(value.Targets)),
-		Connections: make([]apigenapi.ProjectDeploymentConnectionResponse, 0, len(value.Connections)),
+func response(value apiadapter.Deployment) deploymentResponse {
+	result := deploymentResponse{
+		ID: value.ID, Project: value.Project, Environment: value.Environment, RequestDigest: value.RequestDigest,
+		Status: string(value.Status), CreatedAt: value.CreatedAt,
+		Targets:     make([]deploymentTargetResponse, 0, len(value.Targets)),
+		Connections: make([]deploymentConnectionResponse, 0, len(value.Connections)),
 	}
 	if value.ActivatedAt != "" {
 		result.ActivatedAt = &value.ActivatedAt
@@ -94,9 +130,9 @@ func response(value apiadapter.Deployment) apigenapi.ProjectDeploymentResponse {
 		result.Error = &value.Error
 	}
 	for _, target := range value.Targets {
-		mapped := apigenapi.ProjectDeploymentTargetResponse{Workspace: target.Workspace, CandidateId: target.CandidateID, Status: apigenapi.ProjectDeploymentTargetStatus(target.Status)}
+		mapped := deploymentTargetResponse{Workspace: target.Workspace, CandidateID: target.CandidateID, Status: string(target.Status)}
 		if target.PriorCandidateID != "" {
-			mapped.PriorCandidateId = &target.PriorCandidateID
+			mapped.PriorCandidateID = &target.PriorCandidateID
 		}
 		if target.ActivatedAt != "" {
 			mapped.ActivatedAt = &target.ActivatedAt
@@ -107,11 +143,11 @@ func response(value apiadapter.Deployment) apigenapi.ProjectDeploymentResponse {
 		result.Targets = append(result.Targets, mapped)
 	}
 	for _, connection := range value.Connections {
-		mapped := apigenapi.ProjectDeploymentConnectionResponse{
-			Connection: connection.Connection, RevisionId: connection.RevisionID, PriorGeneration: connection.PriorGeneration,
+		mapped := deploymentConnectionResponse{
+			Connection: connection.Connection, RevisionID: connection.RevisionID, PriorGeneration: connection.PriorGeneration,
 		}
 		if connection.PriorRevisionID != "" {
-			mapped.PriorRevisionId = &connection.PriorRevisionID
+			mapped.PriorRevisionID = &connection.PriorRevisionID
 		}
 		if connection.ActivatedGeneration != 0 {
 			generation := connection.ActivatedGeneration

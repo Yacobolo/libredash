@@ -195,41 +195,98 @@ func (s *Service) RecoverUpload(ctx context.Context, request UploadRequest) (Upl
 }
 
 func (s *Service) FinalizeUpload(ctx context.Context, request UploadRequest) (FinalizeResult, error) {
+	started, err := s.BeginFinalizeUpload(ctx, request)
+	if err != nil {
+		return FinalizeResult{Upload: started}, err
+	}
+	if started.Status == manageddata.UploadStatusComplete {
+		collection, session, scopedErr := s.scopedSession(ctx, request)
+		if scopedErr != nil {
+			return FinalizeResult{Upload: started}, scopedErr
+		}
+		return s.finalizedResult(ctx, collection, session, started)
+	}
+	return s.CompleteFinalizeUpload(ctx, request)
+}
+
+func (s *Service) BeginFinalizeUpload(ctx context.Context, request UploadRequest) (UploadResult, error) {
 	collection, session, err := s.scopedSession(ctx, request)
 	if err != nil {
-		return FinalizeResult{}, err
+		return UploadResult{}, err
 	}
 	if session.Status == manageddata.UploadStatusOpen && s.expired(session) {
 		upload, recoverErr := s.RecoverUpload(ctx, request)
 		if recoverErr != nil {
-			return FinalizeResult{Upload: upload}, recoverErr
+			return upload, recoverErr
 		}
-		return FinalizeResult{Upload: upload}, ErrExpired
+		return upload, ErrExpired
+	}
+	if session.Status == manageddata.UploadStatusComplete {
+		upload, inspectErr := s.inspectUpload(ctx, collection, session, false)
+		if inspectErr != nil {
+			return upload, inspectErr
+		}
+		if len(upload.MissingBlobs) > 0 {
+			return upload, ErrIntegrity
+		}
+		return upload, nil
+	}
+	if session.Status == manageddata.UploadStatusCommitting {
+		upload, _, inspectErr := s.inspect(ctx, collection, session, true)
+		if inspectErr != nil {
+			return upload, inspectErr
+		}
+		upload.Status = manageddata.UploadStatusCommitting
+		return upload, nil
+	}
+	if session.Status != manageddata.UploadStatusOpen {
+		manifest, decodeErr := decodeManifest(session.ManifestJSON)
+		if decodeErr != nil {
+			return UploadResult{}, decodeErr
+		}
+		return terminalUpload(collection, session, manifest),
+			fmt.Errorf("%w: upload session has status %q", ErrConflict, session.Status)
+	}
+	upload, _, err := s.inspect(ctx, collection, session, true)
+	if err != nil {
+		return upload, err
+	}
+	if len(upload.MissingBlobs) > 0 {
+		return upload, ErrIncomplete
+	}
+	session, err = s.repo.BeginUploadFinalization(ctx, session.ID)
+	if err != nil {
+		return upload, repositoryError(err)
+	}
+	upload.Status = session.Status
+	return upload, nil
+}
+
+func (s *Service) CompleteFinalizeUpload(ctx context.Context, request UploadRequest) (FinalizeResult, error) {
+	collection, session, err := s.scopedSession(ctx, request)
+	if err != nil {
+		return FinalizeResult{}, err
 	}
 	if session.Status == manageddata.UploadStatusComplete {
 		upload, inspectErr := s.inspectUpload(ctx, collection, session, false)
 		if inspectErr != nil {
 			return FinalizeResult{Upload: upload}, inspectErr
 		}
-		if len(upload.MissingBlobs) > 0 {
-			return FinalizeResult{Upload: upload}, ErrIntegrity
-		}
 		return s.finalizedResult(ctx, collection, session, upload)
 	}
-	if session.Status != manageddata.UploadStatusOpen {
+	if session.Status != manageddata.UploadStatusCommitting {
 		manifest, decodeErr := decodeManifest(session.ManifestJSON)
 		if decodeErr != nil {
 			return FinalizeResult{}, decodeErr
 		}
-		return FinalizeResult{Upload: terminalUpload(collection, session, manifest)},
-			fmt.Errorf("%w: upload session has status %q", ErrConflict, session.Status)
+		return FinalizeResult{Upload: terminalUpload(collection, session, manifest)}, fmt.Errorf("%w: upload session has status %q", ErrConflict, session.Status)
 	}
 	upload, inspection, err := s.inspect(ctx, collection, session, true)
 	if err != nil {
-		return FinalizeResult{Upload: upload}, err
+		return s.failFinalizeUpload(ctx, session.ID, upload, err)
 	}
 	if len(upload.MissingBlobs) > 0 {
-		return FinalizeResult{Upload: upload}, ErrIncomplete
+		return s.failFinalizeUpload(ctx, session.ID, upload, ErrIntegrity)
 	}
 	stored := make([]manageddata.StoredFile, 0, len(upload.Manifest.Files))
 	for _, file := range upload.Manifest.Files {
@@ -248,13 +305,23 @@ func (s *Service) FinalizeUpload(ctx context.Context, request UploadRequest) (Fi
 				return s.finalizedResult(ctx, collection, session, upload)
 			}
 		}
-		return FinalizeResult{Upload: upload}, repositoryError(err)
+		return s.failFinalizeUpload(ctx, session.ID, upload, repositoryError(err))
 	}
 	session, err = s.repo.UploadSessionByID(ctx, session.ID)
 	if err != nil {
 		return FinalizeResult{Upload: upload}, repositoryError(err)
 	}
 	return s.finalizedResultWithRevision(ctx, collection, session, upload, revision)
+}
+
+func (s *Service) failFinalizeUpload(ctx context.Context, sessionID string, upload UploadResult, finalizationErr error) (FinalizeResult, error) {
+	failed, persistErr := s.repo.FailUploadFinalization(ctx, sessionID, finalizationErr.Error())
+	if persistErr == nil {
+		upload.Status = failed.Status
+		upload.Error = failed.Error
+		return FinalizeResult{Upload: upload}, finalizationErr
+	}
+	return FinalizeResult{Upload: upload}, errors.Join(finalizationErr, repositoryError(persistErr))
 }
 
 func (s *Service) AbortUpload(ctx context.Context, request UploadRequest) (UploadResult, error) {

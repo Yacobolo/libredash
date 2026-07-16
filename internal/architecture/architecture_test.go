@@ -114,7 +114,6 @@ func TestRequiredCapabilityAdaptersExist(t *testing.T) {
 		"internal/analytics/materialize/http",
 		"internal/analytics/query/http",
 		"internal/dashboard/http",
-		"internal/servingstate/http",
 		"internal/workspace/datastar",
 		"internal/workspace/http",
 	} {

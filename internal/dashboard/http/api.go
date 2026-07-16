@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	nethttp "net/http"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const maxAPIRows = 50
+const maxAPIVisualDatums = 1000
 
 func (h Handler) ListDashboards(w nethttp.ResponseWriter, r *nethttp.Request) {
 	metrics, ok := h.biMetrics(w, r)
@@ -62,6 +63,71 @@ func (h Handler) ListDashboardComponents(w nethttp.ResponseWriter, r *nethttp.Re
 	writeJSON(w, nethttp.StatusOK, api.DashboardComponentListResponse{Items: items, Page: api.PageInfo{NextCursor: nextCursor}})
 }
 
+func (h Handler) GetDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request) {
+	report, page, ok := h.dashboardReportPage(w, r)
+	if !ok {
+		return
+	}
+	components := make([]api.DashboardComponentResponse, 0, len(page.Visuals))
+	for _, component := range page.PlacedVisuals() {
+		components = append(components, dashboardComponentDTO(component, report))
+	}
+	writeJSON(w, nethttp.StatusOK, api.DashboardPageResponse{
+		ID: page.ID, Title: page.Title, Description: page.Description, Components: components,
+	})
+}
+
+func (h Handler) GetDashboardTable(w nethttp.ResponseWriter, r *nethttp.Request) {
+	report, page, ok := h.dashboardReportPage(w, r)
+	if !ok {
+		return
+	}
+	tableID := chi.URLParam(r, "table")
+	table, exists := report.Tables[tableID]
+	if !exists {
+		writeJSONError(w, fmt.Errorf("table %q not found", tableID), nethttp.StatusNotFound)
+		return
+	}
+	component, exists := pageComponentForTable(page, tableID)
+	if !exists {
+		writeJSONError(w, fmt.Errorf("table %q not found on page %q", tableID, page.ID), nethttp.StatusNotFound)
+		return
+	}
+	columns := make([]api.DashboardTableColumn, 0, len(table.Columns))
+	for _, column := range table.Columns {
+		columns = append(columns, api.DashboardTableColumn{Key: column.Key, Label: column.Label})
+	}
+	writeJSON(w, nethttp.StatusOK, api.DashboardTableDescribeResponse{
+		ID: tableID, ComponentID: component.ID, Title: firstNonEmpty(component.Title, table.Title),
+		Description: firstNonEmpty(component.Description, table.Description), Columns: columns,
+		Query: jsonMap(table.Query), Placement: componentPlacement(component),
+	})
+}
+
+func (h Handler) GetDashboardFilter(w nethttp.ResponseWriter, r *nethttp.Request) {
+	report, page, ok := h.dashboardReportPage(w, r)
+	if !ok {
+		return
+	}
+	filterID := chi.URLParam(r, "filter")
+	filter, exists := report.Filters[filterID]
+	if !exists {
+		writeJSONError(w, fmt.Errorf("filter %q not found", filterID), nethttp.StatusNotFound)
+		return
+	}
+	component, exists := pageComponentForFilter(page, filterID)
+	if !exists {
+		writeJSONError(w, fmt.Errorf("filter %q not found on page %q", filterID, page.ID), nethttp.StatusNotFound)
+		return
+	}
+	multiSelect := filter.Type == "multi_select"
+	writeJSON(w, nethttp.StatusOK, api.DashboardFilterDescribeResponse{
+		ID: filterID, ComponentID: component.ID, Title: firstNonEmpty(component.Title, filter.Label),
+		Description: firstNonEmpty(component.Description, filter.Description), Field: filter.Dimension,
+		MultiSelect: multiSelect, Placement: componentPlacement(component),
+	})
+}
+
 func (h Handler) GetDashboardVisual(w nethttp.ResponseWriter, r *nethttp.Request) {
 	report, page, ok := h.dashboardReportPage(w, r)
 	if !ok {
@@ -104,36 +170,6 @@ func (h Handler) QueryDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request
 		return
 	}
 	writeJSON(w, nethttp.StatusOK, boundedPatch(patch))
-}
-
-func (h Handler) QueryDashboardTable(w nethttp.ResponseWriter, r *nethttp.Request) {
-	metrics, ok := h.biMetrics(w, r)
-	if !ok {
-		return
-	}
-	var input api.DashboardTableQueryRequest
-	if err := decodeOptionalJSONBody(r, &input); err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
-		return
-	}
-	dashboardID := chi.URLParam(r, "dashboard")
-	count := input.Count
-	if count <= 0 || count > maxAPIRows {
-		count = maxAPIRows
-	}
-	filters := dashboardFilters(input.Filters)
-	if filters.Controls == nil && filters.Selections == nil {
-		filters = metrics.DefaultFilters(dashboardID)
-	}
-	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: chi.URLParam(r, "table"), Block: "a", Count: count})
-	request.Count = count
-	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_table", dashboardID+":"+chi.URLParam(r, "table")))
-	table, err := metrics.QueryTablePage(ctx, dashboardID, input.PageID, filters, request)
-	if err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
-		return
-	}
-	writeJSON(w, nethttp.StatusOK, boundedTable(table))
 }
 
 func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -201,24 +237,39 @@ func (h Handler) QueryDashboardTableData(w nethttp.ResponseWriter, r *nethttp.Re
 		writeJSONError(w, fmt.Errorf("table %q not found on page %q", tableID, page.ID), nethttp.StatusNotFound)
 		return
 	}
-	count := input.Count
-	if count <= 0 || count > maxAPIRows {
-		count = maxAPIRows
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > dashboard.TableMaxRequestCount {
+		limit = dashboard.TableMaxRequestCount
+	}
+	cursorInput := input
+	cursorInput.PageToken = ""
+	scope, snapshot := dashboardRequestCursorScope(r, cursorInput), dashboardServingSnapshot(r)
+	start, err := decodeIndexCursor(input.PageToken, scope, snapshot)
+	if err != nil {
+		status := nethttp.StatusBadRequest
+		if errors.Is(err, errDashboardCursorSnapshot) {
+			status = nethttp.StatusConflict
+		}
+		writeJSONError(w, err, status)
+		return
 	}
 	dashboardID := chi.URLParam(r, "dashboard")
 	filters := dashboardFilters(input.Filters)
 	if filters.Controls == nil && filters.Selections == nil {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
-	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: tableID, Block: "a", Count: count})
-	request.Count = count
+	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: tableID, Block: "a", Start: start, Count: limit})
+	request.Start, request.Count = start, limit
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_table", dashboardID+":"+tableID))
 	table, err := metrics.QueryTablePage(ctx, dashboardID, page.ID, filters, request)
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, boundedTable(table))
+	writeDashboardTableRowset(w, r, dashboardTableRowset(table, request.Block, start, limit, scope, snapshot))
 }
 
 func (h Handler) ListDashboardFilterOptions(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -380,23 +431,10 @@ func boundedPatch(patch dashboard.Patch) dashboard.Patch {
 }
 
 func boundedVisual(visual dashboard.Visual) dashboard.Visual {
-	if len(visual.Data) > maxAPIRows {
-		visual.Data = visual.Data[:maxAPIRows]
+	if len(visual.Data) > maxAPIVisualDatums {
+		visual.Data = visual.Data[:maxAPIVisualDatums]
 	}
 	return visual
-}
-
-func boundedTable(table dashboard.Table) dashboard.Table {
-	for key, block := range table.Blocks {
-		if len(block.Rows) > maxAPIRows {
-			block.Rows = block.Rows[:maxAPIRows]
-		}
-		table.Blocks[key] = block
-	}
-	if table.AvailableRows > maxAPIRows {
-		table.AvailableRows = maxAPIRows
-	}
-	return table
 }
 
 func dashboardSummaryDTO(row dashboard.CatalogDashboard) api.DashboardSummary {
@@ -432,6 +470,16 @@ func dashboardComponentDTO(component dashboard.PageVisual, report reportdef.Dash
 		}
 	}
 	return out
+}
+
+func componentPlacement(component dashboard.PageVisual) *api.DashboardComponentPlacement {
+	if component.Placement.IsZero() {
+		return nil
+	}
+	return &api.DashboardComponentPlacement{
+		Col: component.Placement.Col, Row: component.Placement.Row,
+		ColSpan: component.Placement.ColSpan, RowSpan: component.Placement.RowSpan,
+	}
 }
 
 func dashboardVisualDTO(visualID string, visual reportdef.Visual, component dashboard.PageVisual) api.DashboardVisualDescribeResponse {

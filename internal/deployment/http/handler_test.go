@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 	"github.com/Yacobolo/libredash/internal/deployment/apiadapter"
 )
 
@@ -25,7 +24,7 @@ func TestCreateResponseUsesProjectDeploymentWireContract(t *testing.T) {
 	request := httptest.NewRequest(stdhttp.MethodPost, "/api/v1/projects/project/deployments", strings.NewReader(`{"environment":"prod","targets":[{"workspace":"sales","candidateId":"state_2"}]}`))
 	request.Header.Set("Content-Type", "application/json")
 
-	handler.Create(recorder, request, "project", apigenapi.GenCreateProjectDeploymentHeaders{IdempotencyKey: "deploy-1"})
+	handler.Create(recorder, request, "project", CreateHeaders{IdempotencyKey: "deploy-1"})
 	if recorder.Code != stdhttp.StatusCreated {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
@@ -87,5 +86,8 @@ func (c *fakeCoordinator) Get(context.Context, apiadapter.Scope) (apiadapter.Dep
 	return c.response, c.err
 }
 func (c *fakeCoordinator) Activate(context.Context, apiadapter.ActivateRequest) (apiadapter.Deployment, error) {
+	return c.response, c.err
+}
+func (c *fakeCoordinator) Cancel(context.Context, apiadapter.Scope) (apiadapter.Deployment, error) {
 	return c.response, c.err
 }

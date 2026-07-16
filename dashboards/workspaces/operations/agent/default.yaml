@@ -14,21 +14,20 @@ spec:
       - list_workspace_asset_edges
       - list_dashboards
       - describe_dashboard
-      - list_dashboard_components
-      - list_dashboard_filter_options
+      - describe_dashboard_page
+      - list_dashboard_filter_values
       - query_dashboard_page
       - query_dashboard_visual_data
-      - query_dashboard_table_data
-      - query_table
+      - query_dashboard_table
       - list_semantic_models
       - describe_model
       - list_semantic_datasets
       - describe_semantic_dataset
       - list_semantic_fields
       - preview_semantic_dataset
-      - query_semantic_dataset
+      - query_semantic_model
       - explain_semantic_preview
-      - explain_semantic_query
+      - explain_semantic_model_query
       - query_visual
     deny: []
   instructions: "Use operations workspace dashboards and semantic models for fulfillment, delivery, review, and geography questions."

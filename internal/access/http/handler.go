@@ -1,11 +1,15 @@
 package http
 
 import (
+	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	stdhttp "net/http"
 	"strconv"
 	"strings"
@@ -298,6 +302,27 @@ func (h Handler) GetPrincipal(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	writeJSON(w, stdhttp.StatusOK, principalDTO(principal))
 }
 
+func (h Handler) DeletePrincipal(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	deleter, ok := repo.(interface {
+		DeletePrincipal(context.Context, string) error
+	})
+	if !ok {
+		writeJSONError(w, fmt.Errorf("principal deletion is unavailable"), stdhttp.StatusServiceUnavailable)
+		return
+	}
+	id := chi.URLParam(r, "principal")
+	if err := deleter.DeletePrincipal(r.Context(), id); err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	w.WriteHeader(stdhttp.StatusNoContent)
+}
+
 func (h Handler) ResetPrincipalPassword(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	repo, err := h.repository()
 	if err != nil {
@@ -317,7 +342,7 @@ func (h Handler) UpdatePrincipal(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	var input struct {
 		DisplayName string `json:"displayName"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := decodeStrictJSON(r, &input); err != nil {
 		writeJSONError(w, err, stdhttp.StatusBadRequest)
 		return
 	}
@@ -329,6 +354,9 @@ func (h Handler) UpdatePrincipal(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	existing, err := repo.PrincipalByID(r.Context(), chi.URLParam(r, "principal"))
 	if err != nil {
 		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	if !requireIfMatch(w, r, resourceETag(principalDTO(existing))) {
 		return
 	}
 	if strings.TrimSpace(input.DisplayName) != "" {
@@ -424,6 +452,20 @@ func (h Handler) ListServicePrincipals(w stdhttp.ResponseWriter, r *stdhttp.Requ
 	_ = writePagedJSON(w, r, out)
 }
 
+func (h Handler) GetServicePrincipal(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	row, err := repo.PrincipalByID(r.Context(), chi.URLParam(r, "servicePrincipal"))
+	if err != nil || row.Kind != access.PrincipalKindServicePrincipal {
+		writeJSONError(w, sql.ErrNoRows, stdhttp.StatusNotFound)
+		return
+	}
+	writeJSON(w, stdhttp.StatusOK, principalDTO(row))
+}
+
 func (h Handler) CreateServicePrincipal(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	principal, _ := h.currentPrincipal(r)
 	var input struct {
@@ -453,13 +495,21 @@ func (h Handler) UpdateServicePrincipal(w stdhttp.ResponseWriter, r *stdhttp.Req
 	var input struct {
 		DisplayName string `json:"displayName"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := decodeStrictJSON(r, &input); err != nil {
 		writeJSONError(w, err, stdhttp.StatusBadRequest)
 		return
 	}
 	repo, err := h.repository()
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	existing, err := repo.PrincipalByID(r.Context(), chi.URLParam(r, "servicePrincipal"))
+	if err != nil || existing.Kind != access.PrincipalKindServicePrincipal {
+		writeJSONError(w, sql.ErrNoRows, stdhttp.StatusNotFound)
+		return
+	}
+	if !requireIfMatch(w, r, resourceETag(principalDTO(existing))) {
 		return
 	}
 	row, err := repo.UpdateServicePrincipal(r.Context(), chi.URLParam(r, "servicePrincipal"), access.ServicePrincipalInput{DisplayName: input.DisplayName})
@@ -521,6 +571,52 @@ func (h Handler) CreateServicePrincipalSecret(w stdhttp.ResponseWriter, r *stdht
 	}
 	recordAccessAudit(r, repo, "service_principal_secret.created", principal.ID, "", "service_principal", row.ServicePrincipalID, access.PrivilegeManagePlatform, "success", map[string]any{"secretId": row.ID})
 	writeSecretJSON(w, stdhttp.StatusCreated, map[string]any{"secret": rawSecret, "clientSecret": servicePrincipalSecretDTO(row, "")})
+}
+
+func (h Handler) ListServicePrincipalSecrets(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	reader, ok := repo.(interface {
+		ListServicePrincipalSecrets(context.Context, string) ([]access.ServicePrincipalSecret, error)
+	})
+	if !ok {
+		writeJSONError(w, fmt.Errorf("secret metadata is unavailable"), stdhttp.StatusServiceUnavailable)
+		return
+	}
+	rows, err := reader.ListServicePrincipalSecrets(r.Context(), chi.URLParam(r, "servicePrincipal"))
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	items := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, servicePrincipalSecretDTO(row, ""))
+	}
+	_ = writePagedJSON(w, r, items)
+}
+
+func (h Handler) GetServicePrincipalSecret(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	reader, ok := repo.(interface {
+		GetServicePrincipalSecret(context.Context, string, string) (access.ServicePrincipalSecret, error)
+	})
+	if !ok {
+		writeJSONError(w, fmt.Errorf("secret metadata is unavailable"), stdhttp.StatusServiceUnavailable)
+		return
+	}
+	row, err := reader.GetServicePrincipalSecret(r.Context(), chi.URLParam(r, "servicePrincipal"), chi.URLParam(r, "secret"))
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	writeJSON(w, stdhttp.StatusOK, servicePrincipalSecretDTO(row, ""))
 }
 
 func (h Handler) RevokeServicePrincipalSecret(w stdhttp.ResponseWriter, r *stdhttp.Request) {
@@ -594,12 +690,15 @@ func (h Handler) UpdateGroup(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	var input struct {
 		DisplayName string `json:"displayName"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	if err := decodeStrictJSON(r, &input); err != nil {
 		writeJSONError(w, err, stdhttp.StatusBadRequest)
 		return
 	}
 	group, ok := h.groupByID(w, r)
 	if !ok {
+		return
+	}
+	if !requireIfMatch(w, r, resourceETag(groupDTO(group))) {
 		return
 	}
 	repo, err := h.repository()
@@ -724,6 +823,20 @@ func (h Handler) ListRoleBindings(w stdhttp.ResponseWriter, r *stdhttp.Request) 
 		out = append(out, apiRoleBindingDTO(binding))
 	}
 	_ = writePagedJSON(w, r, out)
+}
+
+func (h Handler) GetRoleBinding(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	row, err := repo.GetRoleBinding(r.Context(), h.workspaceID(chi.URLParam(r, "workspace")), chi.URLParam(r, "binding"))
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	writeJSON(w, stdhttp.StatusOK, apiRoleBindingDTO(row))
 }
 
 func (h Handler) CreateRoleBinding(w stdhttp.ResponseWriter, r *stdhttp.Request) {
@@ -853,6 +966,83 @@ func (h Handler) CreateGrant(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	writeJSON(w, stdhttp.StatusCreated, grantDTO(grant))
 }
 
+func (h Handler) GetGrant(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	row, err := repo.GetGrant(r.Context(), h.workspaceID(chi.URLParam(r, "workspace")), chi.URLParam(r, "grant"))
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	if !h.authorizeCurrentObject(w, r, access.PrivilegeManageGrants, objectRefFromGrant(row)) {
+		return
+	}
+	dto := grantDTO(row)
+	w.Header().Set("ETag", resourceETag(dto))
+	writeJSON(w, stdhttp.StatusOK, dto)
+}
+
+func (h Handler) UpdateGrant(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	principal, _ := h.currentPrincipal(r)
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	workspaceID := h.workspaceID(chi.URLParam(r, "workspace"))
+	id := chi.URLParam(r, "grant")
+	current, err := repo.GetGrant(r.Context(), workspaceID, id)
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	if !h.authorizeCurrentObject(w, r, access.PrivilegeManageGrants, objectRefFromGrant(current)) {
+		return
+	}
+	if !requireIfMatch(w, r, resourceETag(grantDTO(current))) {
+		return
+	}
+	var input struct {
+		ObjectType, ObjectID, SubjectType, SubjectID, Privilege string
+	}
+	if err := decodeStrictJSON(r, &input); err != nil {
+		writeJSONError(w, err, stdhttp.StatusBadRequest)
+		return
+	}
+	object, ok := objectRefFromValues(w, r, input.ObjectType, input.ObjectID)
+	if !ok {
+		return
+	}
+	if !h.authorizeCurrentObject(w, r, access.PrivilegeManageGrants, object) {
+		return
+	}
+	subjectType := access.SubjectType(strings.TrimSpace(input.SubjectType))
+	privilege := access.Privilege(strings.TrimSpace(input.Privilege))
+	if !knownSubjectType(subjectType) || !knownPrivilege(privilege) {
+		writeJSONError(w, fmt.Errorf("unsupported grant subject or privilege"), stdhttp.StatusUnprocessableEntity)
+		return
+	}
+	updater, ok := repo.(interface {
+		UpdateGrant(context.Context, string, string, access.GrantInput) (access.Grant, error)
+	})
+	if !ok {
+		writeJSONError(w, fmt.Errorf("grant updates are unavailable"), stdhttp.StatusServiceUnavailable)
+		return
+	}
+	updated, err := updater.UpdateGrant(r.Context(), workspaceID, id, access.GrantInput{Object: object, SubjectType: subjectType, SubjectID: input.SubjectID, Privilege: privilege})
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusUnprocessableEntity)
+		return
+	}
+	recordGrantAudit(r, repo, "grant.updated", principal.ID, updated)
+	dto := grantDTO(updated)
+	w.Header().Set("ETag", resourceETag(dto))
+	writeJSON(w, stdhttp.StatusOK, dto)
+}
+
 func (h Handler) DeleteGrant(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	principal, _ := h.currentPrincipal(r)
 	repo, err := h.repository()
@@ -960,6 +1150,137 @@ func (h Handler) CreateDataPolicy(w stdhttp.ResponseWriter, r *stdhttp.Request) 
 	writeJSON(w, stdhttp.StatusCreated, dataPolicyDTO(row))
 }
 
+func (h Handler) GetDataPolicy(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	row, err := repo.GetDataPolicy(r.Context(), h.workspaceID(chi.URLParam(r, "workspace")), chi.URLParam(r, "policy"))
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	if !h.authorizeCurrentObject(w, r, access.PrivilegeManageGrants, objectRefFromCanonical(row.WorkspaceID, row.ObjectID)) {
+		return
+	}
+	dto := dataPolicyDTO(row)
+	w.Header().Set("ETag", resourceETag(dto))
+	writeJSON(w, stdhttp.StatusOK, dto)
+}
+
+func (h Handler) UpdateDataPolicy(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	principal, _ := h.currentPrincipal(r)
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	workspaceID := h.workspaceID(chi.URLParam(r, "workspace"))
+	id := chi.URLParam(r, "policy")
+	current, err := repo.GetDataPolicy(r.Context(), workspaceID, id)
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	if !h.authorizeCurrentObject(w, r, access.PrivilegeManageGrants, objectRefFromCanonical(current.WorkspaceID, current.ObjectID)) {
+		return
+	}
+	if !requireIfMatch(w, r, resourceETag(dataPolicyDTO(current))) {
+		return
+	}
+	var input struct {
+		ObjectType  string         `json:"objectType"`
+		ObjectID    string         `json:"objectId"`
+		SubjectType string         `json:"subjectType"`
+		SubjectID   string         `json:"subjectId"`
+		PolicyType  string         `json:"policyType"`
+		Expression  map[string]any `json:"expression"`
+	}
+	if err := decodeStrictJSON(r, &input); err != nil {
+		writeJSONError(w, err, stdhttp.StatusBadRequest)
+		return
+	}
+	object, ok := objectRefFromValues(w, r, input.ObjectType, input.ObjectID)
+	if !ok {
+		return
+	}
+	if !knownDataPolicyType(input.PolicyType) {
+		writeJSONError(w, fmt.Errorf("unsupported policyType %q", input.PolicyType), stdhttp.StatusUnprocessableEntity)
+		return
+	}
+	subjectType := access.SubjectType(strings.TrimSpace(input.SubjectType))
+	if subjectType != "" && (!knownSubjectType(subjectType) || strings.TrimSpace(input.SubjectID) == "") {
+		writeJSONError(w, fmt.Errorf("invalid data policy subject"), stdhttp.StatusUnprocessableEntity)
+		return
+	}
+	expression, err := json.Marshal(input.Expression)
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusBadRequest)
+		return
+	}
+	updated, err := repo.UpsertDataPolicy(r.Context(), access.DataPolicyInput{ID: id, Object: object, SubjectType: subjectType, SubjectID: input.SubjectID, PolicyType: input.PolicyType, ExpressionJSON: string(expression)})
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusUnprocessableEntity)
+		return
+	}
+	recordAccessAudit(r, repo, "data_policy.updated", principal.ID, updated.WorkspaceID, "data_policy", updated.ID, access.PrivilegeManageGrants, "success", map[string]any{"objectId": updated.ObjectID, "policyType": updated.PolicyType})
+	dto := dataPolicyDTO(updated)
+	w.Header().Set("ETag", resourceETag(dto))
+	writeJSON(w, stdhttp.StatusOK, dto)
+}
+
+func (h Handler) CheckAuthorizationBatch(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	principal, ok := h.currentPrincipal(r)
+	if !ok {
+		writeJSONError(w, fmt.Errorf("authentication required"), stdhttp.StatusUnauthorized)
+		return
+	}
+	var input struct {
+		Checks []struct{ Privilege, ObjectType, ObjectID string } `json:"checks"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeJSONError(w, err, stdhttp.StatusBadRequest)
+		return
+	}
+	if len(input.Checks) == 0 || len(input.Checks) > 200 {
+		writeJSONError(w, fmt.Errorf("checks must contain 1 to 200 items"), stdhttp.StatusUnprocessableEntity)
+		return
+	}
+	workspaceID := h.workspaceID(chi.URLParam(r, "workspace"))
+	checks := make([]access.AuthorizationCheck, 0, len(input.Checks))
+	for _, item := range input.Checks {
+		privilege := access.Privilege(strings.TrimSpace(item.Privilege))
+		if !knownPrivilege(privilege) {
+			writeJSONError(w, fmt.Errorf("unsupported privilege %q", item.Privilege), stdhttp.StatusUnprocessableEntity)
+			return
+		}
+		object, valid := objectRefFromValues(w, r, item.ObjectType, item.ObjectID)
+		if !valid {
+			return
+		}
+		object.WorkspaceID = workspaceID
+		checks = append(checks, access.AuthorizationCheck{Privilege: privilege, Object: object})
+	}
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	decisions, err := repo.AuthorizeBatch(r.Context(), principal.ID, checks)
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	out := make([]map[string]any, 0, len(decisions))
+	for _, decision := range decisions {
+		item := authorizationDecisionDTO(decision)
+		item["allowed"] = decision.Allowed
+		out = append(out, item)
+	}
+	writeJSON(w, stdhttp.StatusOK, map[string]any{"decisions": out})
+}
+
 func (h Handler) DeleteDataPolicy(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	principal, _ := h.currentPrincipal(r)
 	repo, err := h.repository()
@@ -1017,13 +1338,22 @@ func (h Handler) TransferOwnership(w stdhttp.ResponseWriter, r *stdhttp.Request)
 }
 
 func (h Handler) UpdateRoleBinding(w stdhttp.ResponseWriter, r *stdhttp.Request) {
-	input, ok := decodeRoleBindingInput(w, r)
-	if !ok {
-		return
-	}
 	repo, err := h.repository()
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	workspaceID := h.workspaceID(chi.URLParam(r, "workspace"))
+	current, err := repo.GetRoleBinding(r.Context(), workspaceID, chi.URLParam(r, "binding"))
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	if !requireIfMatch(w, r, resourceETag(apiRoleBindingDTO(current))) {
+		return
+	}
+	input, ok := decodeRoleBindingInput(w, r)
+	if !ok {
 		return
 	}
 	row, err := repo.UpdateRoleBinding(r.Context(), input.WorkspaceID, chi.URLParam(r, "binding"), input)
@@ -1906,6 +2236,38 @@ func writeJSONError(w stdhttp.ResponseWriter, err error, status int) {
 		Details:   map[string]any{},
 		RequestID: "",
 	})
+}
+
+func decodeStrictJSON(r *stdhttp.Request, target any) error {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return fmt.Errorf("request body must contain exactly one JSON value")
+		}
+		return err
+	}
+	return nil
+}
+
+func resourceETag(value any) string {
+	encoded, _ := json.Marshal(value)
+	digest := sha256.Sum256(encoded)
+	return `"` + hex.EncodeToString(digest[:]) + `"`
+}
+
+func requireIfMatch(w stdhttp.ResponseWriter, r *stdhttp.Request, current string) bool {
+	value := strings.TrimSpace(r.Header.Get("If-Match"))
+	if value == "*" || value == current {
+		return true
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	writeJSONError(w, fmt.Errorf("If-Match does not match the current resource"), stdhttp.StatusPreconditionFailed)
+	return false
 }
 
 func statusForNotFound(err error) int {

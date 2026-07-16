@@ -36,6 +36,8 @@ type StartedPrompt struct {
 	service      *Service
 	systemPrompt string
 	initial      []agentcore.Message
+	runContext   context.Context
+	cancel       context.CancelFunc
 	mu           sync.Mutex
 	closed       bool
 }
@@ -112,6 +114,8 @@ func (s *Service) StartPrompt(ctx context.Context, input PromptInput) (*StartedP
 		_ = s.finishRun(ctx, input, run.ID, RunStatusFailed, "", agentcore.Usage{}, err)
 		return nil, err
 	}
+	runContext, cancel := context.WithCancel(context.Background())
+	s.attachRun(input.ConversationID, run.ID, cancel)
 	release = false
 	return &StartedPrompt{
 		Scope:          input.Scope,
@@ -122,6 +126,8 @@ func (s *Service) StartPrompt(ctx context.Context, input PromptInput) (*StartedP
 		service:        s,
 		systemPrompt:   systemPrompt,
 		initial:        initial,
+		runContext:     runContext,
+		cancel:         cancel,
 	}, nil
 }
 
@@ -137,6 +143,14 @@ func (p *StartedPrompt) Complete(ctx context.Context, onEvent func(EventEnvelope
 		return PromptResult{}, err
 	}
 	defer p.release()
+	executionContext := p.runContext
+	if executionContext == nil {
+		executionContext = ctx
+	}
+	if p.cancel != nil {
+		stop := context.AfterFunc(ctx, p.cancel)
+		defer stop()
+	}
 	s := p.service
 	input := PromptInput{
 		Scope:          p.Scope,
@@ -158,10 +172,10 @@ func (p *StartedPrompt) Complete(ctx context.Context, onEvent func(EventEnvelope
 	}
 	harness, err := agentcore.New(def)
 	if err != nil {
-		_ = s.finishRun(ctx, input, p.RunID, RunStatusFailed, "", sink.usage, err)
+		_ = s.finishRun(context.WithoutCancel(executionContext), input, p.RunID, RunStatusFailed, "", sink.usage, err)
 		return PromptResult{}, err
 	}
-	result, promptErr := promptFromPersistedUser(ctx, harness, input)
+	result, promptErr := promptFromPersistedUser(executionContext, harness, input)
 	transcript := harness.Transcript()
 	if err := s.persistNewMessages(ctx, input, p.RunID, p.initial, transcript); err != nil && promptErr == nil {
 		promptErr = err
@@ -176,7 +190,7 @@ func (p *StartedPrompt) Complete(ctx context.Context, onEvent func(EventEnvelope
 			status = RunStatusCanceled
 		}
 	}
-	if err := s.finishRun(ctx, input, p.RunID, status, result.StopReason, sink.usage, promptErr); err != nil && promptErr == nil {
+	if err := s.finishRun(context.WithoutCancel(executionContext), input, p.RunID, status, result.StopReason, sink.usage, promptErr); err != nil && promptErr == nil {
 		promptErr = err
 	}
 	if promptErr != nil {
@@ -236,13 +250,24 @@ func (s *Service) acquire(conversationID string) error {
 	if _, ok := s.running[conversationID]; ok {
 		return ErrBusy
 	}
-	s.running[conversationID] = struct{}{}
+	s.running[conversationID] = runningPrompt{}
 	return nil
+}
+
+func (s *Service) attachRun(conversationID, runID string, cancel context.CancelFunc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.running[conversationID]; ok {
+		s.running[conversationID] = runningPrompt{runID: runID, cancel: cancel}
+	}
 }
 
 func (s *Service) release(conversationID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if active, ok := s.running[conversationID]; ok && active.cancel != nil {
+		active.cancel()
+	}
 	delete(s.running, conversationID)
 }
 

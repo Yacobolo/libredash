@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -80,7 +81,7 @@ func TestAuthSpecItemManagerCanShareAndRevokeDashboardAccess(t *testing.T) {
 	}
 
 	status, body = h.authSpecDo(t, http.MethodDelete, "/api/v1/workspaces/sales/grants/"+createdGrant.ID, managerToken, "")
-	if status != http.StatusOK {
+	if status != http.StatusNoContent {
 		t.Fatalf("item manager delete grant status=%d body=%s", status, body)
 	}
 	status, body = h.authSpecDo(t, http.MethodGet, "/api/v1/workspaces/sales/dashboards/executive-sales", viewerToken, "")
@@ -122,7 +123,7 @@ func TestAuthSpecGroupSharingFollowsMembershipChanges(t *testing.T) {
 		t.Fatalf("group member dashboard status=%d body=%s", status, body)
 	}
 	status, body = h.authSpecDo(t, http.MethodDelete, "/api/v1/workspaces/sales/groups/"+group.ID+"/members/"+member.ID, adminToken, "")
-	if status != http.StatusOK {
+	if status != http.StatusNoContent {
 		t.Fatalf("remove group member status=%d body=%s", status, body)
 	}
 	status, body = h.authSpecDo(t, http.MethodGet, "/api/v1/workspaces/sales/dashboards/executive-sales", memberToken, "")
@@ -169,7 +170,7 @@ func TestAuthSpecWorkspaceRoleSharingCompilesToGrants(t *testing.T) {
 	}
 
 	status, body = h.authSpecDo(t, http.MethodDelete, "/api/v1/workspaces/sales/role-bindings/"+binding.ID, adminToken, "")
-	if status != http.StatusOK {
+	if status != http.StatusNoContent {
 		t.Fatalf("delete viewer role binding status=%d body=%s", status, body)
 	}
 	status, body = h.authSpecDo(t, http.MethodGet, "/api/v1/workspaces/sales/dashboards", viewerToken, "")
@@ -293,7 +294,7 @@ func TestAuthSpecDataPolicyAPIRowFilterAppliesAndDeletes(t *testing.T) {
 		t.Fatalf("list data policies missing created policy %q: %s", created.ID, body)
 	}
 	status, body = h.authSpecDo(t, http.MethodDelete, "/api/v1/workspaces/sales/data-policies/"+created.ID, token, "")
-	if status != http.StatusOK {
+	if status != http.StatusNoContent {
 		t.Fatalf("delete data policy status=%d body=%s", status, body)
 	}
 	if got := h.authSpecQueryRevenue(t, token); got != 165 {
@@ -343,7 +344,7 @@ func TestAuthSpecAPITokenAllowlistReducesEffectiveDataPrivileges(t *testing.T) {
 		Privileges:  []access.Privilege{access.PrivilegeQueryData},
 	})
 
-	status, body := h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/datasets/orders/query", token, `{"measures":[{"field":"revenue"}],"limit":1}`)
+	status, body := h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/query", token, `{"measures":[{"field":"revenue"}],"limit":1}`)
 	if status != http.StatusOK {
 		t.Fatalf("query with QUERY_DATA token status=%d body=%s", status, body)
 	}
@@ -427,7 +428,7 @@ func TestAuthSpecServicePrincipalOAuthAndTokenAllowlist(t *testing.T) {
 	if err := json.Unmarshal([]byte(body), &tokenResponse); err != nil {
 		t.Fatalf("decode oauth token: %v body=%s", err, body)
 	}
-	status, body = h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/datasets/orders/query", tokenResponse.AccessToken, `{"measures":[{"field":"revenue"}],"limit":1}`)
+	status, body = h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/query", tokenResponse.AccessToken, `{"measures":[{"field":"revenue"}],"limit":1}`)
 	if status != http.StatusOK {
 		t.Fatalf("service principal query status=%d body=%s", status, body)
 	}
@@ -437,7 +438,7 @@ func TestAuthSpecServicePrincipalOAuthAndTokenAllowlist(t *testing.T) {
 	}
 
 	status, body = h.authSpecDo(t, http.MethodDelete, "/api/v1/service-principals/sp_ci/secrets/"+secretResponse.ClientSecret.ID, adminToken, "")
-	if status != http.StatusOK {
+	if status != http.StatusNoContent {
 		t.Fatalf("revoke service principal secret status=%d body=%s", status, body)
 	}
 	status, body = h.authSpecForm(t, "/oauth/token", form)
@@ -464,6 +465,7 @@ func TestAuthSpecAuditIncludesGrantRequestMetadata(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Request-ID", "auth-spec-request")
 	req.Header.Set("X-Correlation-ID", "auth-spec-correlation")
+	req.Header.Set("Idempotency-Key", "auth-spec-audited-grant")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("create grant: %v", err)
@@ -516,7 +518,7 @@ func TestAuthSpecAuditCoversLocalAccessMutations(t *testing.T) {
 		t.Fatalf("add group member status=%d body=%s", status, body)
 	}
 	status, body = h.authSpecDo(t, http.MethodDelete, "/api/v1/workspaces/sales/groups/"+group.ID+"/members/"+member.ID, token, "")
-	if status != http.StatusOK {
+	if status != http.StatusNoContent {
 		t.Fatalf("remove group member status=%d body=%s", status, body)
 	}
 
@@ -535,7 +537,7 @@ func TestAuthSpecAuditCoversLocalAccessMutations(t *testing.T) {
 		t.Fatalf("update role binding status=%d body=%s", status, body)
 	}
 	status, body = h.authSpecDo(t, http.MethodDelete, "/api/v1/workspaces/sales/role-bindings/"+binding.ID, token, "")
-	if status != http.StatusOK {
+	if status != http.StatusNoContent {
 		t.Fatalf("delete role binding status=%d body=%s", status, body)
 	}
 
@@ -550,7 +552,7 @@ func TestAuthSpecAuditCoversLocalAccessMutations(t *testing.T) {
 		t.Fatalf("decode grant: %v body=%s", err, body)
 	}
 	status, body = h.authSpecDo(t, http.MethodDelete, "/api/v1/workspaces/sales/grants/"+grant.ID, token, "")
-	if status != http.StatusOK {
+	if status != http.StatusNoContent {
 		t.Fatalf("delete grant status=%d body=%s", status, body)
 	}
 
@@ -678,6 +680,12 @@ func (h *harness) authSpecDo(t *testing.T, method, path, token, body string) (in
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if method == http.MethodPatch {
+		req.Header.Set("If-Match", "*")
+	}
+	if method == http.MethodPost && strings.HasPrefix(path, "/api/v1/") {
+		req.Header.Set("Idempotency-Key", "auth-spec-"+strings.ReplaceAll(path, "/", "-"))
+	}
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
@@ -689,20 +697,24 @@ func (h *harness) authSpecDo(t *testing.T, method, path, token, body string) (in
 
 func (h *harness) authSpecQueryRevenue(t *testing.T, token string) float64 {
 	t.Helper()
-	status, body := h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/datasets/orders/query", token, `{"measures":[{"field":"revenue"}],"limit":1}`)
+	status, body := h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/query", token, `{"measures":[{"field":"revenue"}],"limit":1}`)
 	if status != http.StatusOK {
 		t.Fatalf("semantic revenue query status=%d body=%s", status, body)
 	}
 	var decoded struct {
-		Items []map[string]any `json:"items"`
+		Rows [][]string `json:"rows"`
 	}
 	if err := json.Unmarshal([]byte(body), &decoded); err != nil {
 		t.Fatalf("decode semantic revenue query: %v body=%s", err, body)
 	}
-	if len(decoded.Items) != 1 {
-		t.Fatalf("semantic revenue items = %#v, want one", decoded.Items)
+	if len(decoded.Rows) != 1 || len(decoded.Rows[0]) != 1 {
+		t.Fatalf("semantic revenue rows = %#v, want one cell", decoded.Rows)
 	}
-	return integrationNumberValue(t, decoded.Items[0]["revenue"])
+	value, err := strconv.ParseFloat(decoded.Rows[0][0], 64)
+	if err != nil {
+		t.Fatalf("parse semantic revenue %q: %v", decoded.Rows[0][0], err)
+	}
+	return value
 }
 
 func (h *harness) authSpecForm(t *testing.T, path string, form url.Values) (int, string) {

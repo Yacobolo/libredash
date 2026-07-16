@@ -339,6 +339,45 @@ func TestServiceStartedPromptAbortReleasesRunningAndFailsRun(t *testing.T) {
 	}
 }
 
+func TestServiceCancelsAnActiveRun(t *testing.T) {
+	ctx := context.Background()
+	store := openAgentAppStore(t, ctx)
+	defer store.Close()
+	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
+	scope := Scope{WorkspaceID: "test", PrincipalID: principal.ID}
+	model := newRecordingAgentModel()
+	model.delay = time.Minute
+	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", Model: "fake-model"}, WithModel(model))
+	conversation, err := service.CreateConversation(ctx, scope, "Draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	started, err := service.StartPrompt(ctx, PromptInput{Scope: scope, ConversationID: conversation.ID, Input: "Cancel me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, completeErr := service.CompletePrompt(ctx, started, nil)
+		done <- completeErr
+	}()
+	if err := service.CancelRun(ctx, scope, conversation.ID, started.RunID); err != nil {
+		t.Fatalf("cancel run: %v", err)
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("completion error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("agent completion did not stop after cancellation")
+	}
+	run, err := service.GetRun(ctx, scope, conversation.ID, started.RunID)
+	if err != nil || run.Status != RunStatusCanceled {
+		t.Fatalf("run = %#v, error = %v", run, err)
+	}
+}
+
 func TestServicePromptPersistsDisplayContentButSendsCompactToolResult(t *testing.T) {
 	ctx := context.Background()
 	store := openAgentAppStore(t, ctx)

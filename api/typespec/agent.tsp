@@ -68,16 +68,9 @@ model AgentMessageListResponse {
   page: PageInfo;
 }
 
-model AgentTurnRequest {
+model AgentRunCreateRequest {
   input: string;
   correlationId?: string;
-}
-
-model AgentTurnResponse {
-  conversationId: string;
-  runId: string;
-  stopReason: string;
-  content: string;
 }
 
 model AgentEventResponse {
@@ -131,7 +124,7 @@ alias UpdateAdminAgentConfigOK = OkJson<AdminAgentResponse>;
 @route("/admin/agent/config")
 @patch
 @apigen.authz(#{ mode: "privilege", privilege: "MANAGE_GRANTS" })
-op updateAdminAgentConfig(@body body: AdminAgentConfigPatchRequest): UpdateAdminAgentConfigOK | CommonErrors;
+op updateAdminAgentConfig(@header("If-Match") ifMatch: string, @body body: AdminAgentConfigPatchRequest): UpdateAdminAgentConfigOK | CommonErrors;
 
 alias ListAgentConversationsOK = OkJson<AgentConversationListResponse>;
 
@@ -150,7 +143,7 @@ alias CreateAgentConversationCreated = CreatedJson<AgentConversationResponse>;
 @route("/workspaces/{workspace}/agent/conversations")
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "USE_AGENT" })
-op createAgentConversation(@path workspace: string, @body body: AgentConversationCreateRequest): CreateAgentConversationCreated | CommonErrors;
+op createAgentConversation(@path workspace: string, @header("Idempotency-Key") idempotencyKey: string, @body body: AgentConversationCreateRequest): CreateAgentConversationCreated | CommonErrors;
 
 alias ArchiveAgentConversationOK = OkJson<AgentConversationResponse>;
 
@@ -177,7 +170,7 @@ alias UpdateAgentConversationOK = OkJson<AgentConversationResponse>;
 @route("/workspaces/{workspace}/agent/conversations/{conversation}")
 @patch
 @apigen.authz(#{ mode: "privilege", privilege: "USE_AGENT" })
-op updateAgentConversation(@path workspace: string, @path conversation: string, @body body: AgentConversationPatchRequest): UpdateAgentConversationOK | CommonErrors;
+op updateAgentConversation(@path workspace: string, @path conversation: string, @header("If-Match") ifMatch: string, @body body: AgentConversationPatchRequest): UpdateAgentConversationOK | CommonErrors;
 
 alias ListAgentMessagesOK = OkJson<AgentMessageListResponse>;
 
@@ -213,13 +206,18 @@ alias ListAgentEventsOK = OkJson<AgentEventListResponse>;
 @route("/workspaces/{workspace}/agent/conversations/{conversation}/runs/{run}/events")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_AGENT" })
-op listAgentEvents(@path workspace: string, @path conversation: string, @path run: string, @query limit?: int32, @query pageToken?: string): ListAgentEventsOK | CommonErrors;
-
-alias CreateAgentTurnOK = OkJson<AgentTurnResponse>;
+op listAgentEvents(@path workspace: string, @path conversation: string, @path run: string, @header accept?: string, @header("Last-Event-ID") lastEventId?: string, @query limit?: int32, @query pageToken?: string): EventHistoryResponse<AgentEventListResponse> | CommonErrors;
 
 @tag("Agent")
-@summary("Create an agent turn")
-@route("/workspaces/{workspace}/agent/conversations/{conversation}/turns")
+@summary("Create an asynchronous agent run")
+@route("/workspaces/{workspace}/agent/conversations/{conversation}/runs")
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "USE_AGENT" })
-op createAgentTurn(@path workspace: string, @path conversation: string, @body body: AgentTurnRequest): CreateAgentTurnOK | CommonErrors;
+op createAgentRun(@path workspace: string, @path conversation: string, @header("Idempotency-Key") idempotencyKey: string, @body body: AgentRunCreateRequest): AcceptedJson<AgentRunResponse> | CommonErrors;
+
+@tag("Agent")
+@summary("Cancel an agent run")
+@route("/workspaces/{workspace}/agent/conversations/{conversation}/runs/{run}/cancel")
+@post
+@apigen.authz(#{ mode: "privilege", privilege: "USE_AGENT" })
+op cancelAgentRun(@path workspace: string, @path conversation: string, @path run: string, @header("Idempotency-Key") idempotencyKey: string): AcceptedJson<AgentRunResponse> | CommonErrors;

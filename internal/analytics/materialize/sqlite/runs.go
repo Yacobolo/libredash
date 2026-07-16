@@ -43,9 +43,9 @@ func (r *SQLRunRepository) CreateRun(ctx context.Context, input materialize.RunI
 		return materialize.RunRecord{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO refresh_job_runs (id, job_id, principal_id, target_type, target_id, trigger_type, parent_run_id, status)
-		VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''), ?)
-	`, runID, jobID, normalized.PrincipalID, normalized.TargetType, normalized.TargetID, normalized.TriggerType, normalized.ParentRunID, materialize.RunStatusQueued); err != nil {
+		INSERT INTO refresh_job_runs (id, job_id, principal_id, target_type, target_id, trigger_type, parent_run_id, retry_of, status)
+		VALUES (?, ?, NULLIF(?, ''), ?, ?, ?, NULLIF(?, ''), NULLIF(?, ''), ?)
+	`, runID, jobID, normalized.PrincipalID, normalized.TargetType, normalized.TargetID, normalized.TriggerType, normalized.ParentRunID, normalized.RetryOf, materialize.RunStatusQueued); err != nil {
 		return materialize.RunRecord{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -332,6 +332,52 @@ func (r *SQLRunRepository) MarkRunFailed(ctx context.Context, workspaceID, runID
 	return r.markRun(ctx, workspaceID, runID, materialize.RunStatusFailed, message)
 }
 
+func (r *SQLRunRepository) CancelRun(ctx context.Context, workspaceID, runID string) (materialize.RunRecord, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	runID = strings.TrimSpace(runID)
+	if workspaceID == "" || runID == "" {
+		return materialize.RunRecord{}, fmt.Errorf("workspace id and run id are required")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return materialize.RunRecord{}, err
+	}
+	defer tx.Rollback()
+	result, err := tx.ExecContext(ctx, `
+		UPDATE refresh_job_runs
+		SET status = ?, finished_at = CURRENT_TIMESTAMP, error = ''
+		WHERE id = ? AND status = ?
+		  AND job_id IN (SELECT id FROM refresh_jobs WHERE workspace_id = ?)
+	`, materialize.RunStatusCancelled, runID, materialize.RunStatusQueued, workspaceID)
+	if err != nil {
+		return materialize.RunRecord{}, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return materialize.RunRecord{}, err
+	}
+	if affected == 0 {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return materialize.RunRecord{}, rollbackErr
+		}
+		if _, getErr := r.GetRun(ctx, workspaceID, runID); getErr != nil {
+			return materialize.RunRecord{}, getErr
+		}
+		return materialize.RunRecord{}, materialize.ErrRunNotCancellable
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE refresh_jobs
+		SET status = ?, finished_at = CURRENT_TIMESTAMP, lease_owner = '', lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+		WHERE id = (SELECT job_id FROM refresh_job_runs WHERE id = ?) AND workspace_id = ? AND status = ?
+	`, materialize.RunStatusCancelled, runID, workspaceID, materialize.RunStatusQueued); err != nil {
+		return materialize.RunRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return materialize.RunRecord{}, err
+	}
+	return r.GetRun(ctx, workspaceID, runID)
+}
+
 func (r *SQLRunRepository) FailRunsForTerminalServingStates(ctx context.Context, message string) error {
 	if r == nil || r.db == nil {
 		return fmt.Errorf("refresh run database is required")
@@ -479,7 +525,7 @@ func scanRunRows(rows runRows) ([]materialize.RunRecord, error) {
 
 func scanRun(row runScanner) (materialize.RunRecord, error) {
 	var run materialize.RunRecord
-	var servingStateID, principalID, principalDisplayName, parentRunID, finishedAt sql.NullString
+	var servingStateID, principalID, principalDisplayName, parentRunID, retryOf, finishedAt sql.NullString
 	if err := row.Scan(
 		&run.ID,
 		&run.WorkspaceID,
@@ -491,6 +537,7 @@ func scanRun(row runScanner) (materialize.RunRecord, error) {
 		&run.TargetID,
 		&run.TriggerType,
 		&parentRunID,
+		&retryOf,
 		&run.Status,
 		&run.CreatedAt,
 		&run.UpdatedAt,
@@ -512,6 +559,9 @@ func scanRun(row runScanner) (materialize.RunRecord, error) {
 	if parentRunID.Valid {
 		run.ParentRunID = parentRunID.String
 	}
+	if retryOf.Valid {
+		run.RetryOf = retryOf.String
+	}
 	if finishedAt.Valid {
 		run.FinishedAt = finishedAt.String
 	}
@@ -523,7 +573,7 @@ func scanRun(row runScanner) (materialize.RunRecord, error) {
 
 func refreshRunSelect() string {
 	return `
-		SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id, COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name, r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at, r.started_at, r.finished_at, r.error
+		SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id, COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name, r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.retry_of, r.status, j.created_at, j.updated_at, r.started_at, r.finished_at, r.error
 		FROM refresh_job_runs r
 		JOIN refresh_jobs j ON j.id = r.job_id
 		LEFT JOIN principals p ON p.id = r.principal_id
@@ -539,6 +589,7 @@ type normalizedRunInput struct {
 	TargetID       string
 	TriggerType    string
 	ParentRunID    string
+	RetryOf        string
 	JobKind        string
 	PayloadJSON    string
 }
@@ -552,6 +603,7 @@ func normalizeRunInput(input materialize.RunInput) (normalizedRunInput, error) {
 	targetID := strings.TrimSpace(input.TargetID)
 	triggerType := strings.TrimSpace(input.TriggerType)
 	parentRunID := strings.TrimSpace(input.ParentRunID)
+	retryOf := strings.TrimSpace(input.RetryOf)
 	jobKind := strings.TrimSpace(input.JobKind)
 	payloadJSON := strings.TrimSpace(input.PayloadJSON)
 	if workspaceID == "" {
@@ -597,6 +649,7 @@ func normalizeRunInput(input materialize.RunInput) (normalizedRunInput, error) {
 		TargetID:       targetID,
 		TriggerType:    triggerType,
 		ParentRunID:    parentRunID,
+		RetryOf:        retryOf,
 		JobKind:        jobKind,
 		PayloadJSON:    payloadJSON,
 	}, nil

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -33,35 +34,36 @@ func TestDeployPreparesCompleteProjectBeforeOneAtomicActivation(t *testing.T) {
 		mu.Unlock()
 		workspaceID := workspaceIDFromAPIPath(r.URL.Path)
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/capabilities":
+			writeCLIJSON(t, w, apigenapi.CapabilitiesResponse{ApiVersion: "v1", BuildVersion: "test", Environment: "prod", Authentication: []apigenapi.AuthenticationMode{apigenapi.AuthenticationModeBearer}, QueryFormats: []apigenapi.QueryFormat{apigenapi.QueryFormatApplicationJson}, UploadProtocols: []apigenapi.UploadProtocol{apigenapi.UploadProtocolTus}, VisualShapes: []apigenapi.VisualShape{apigenapi.VisualShapeCategoryValue}})
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/active-asset-graph"):
 			writeCLIJSON(t, w, activeGraphResponse(nil, nil))
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/workspaces/"+workspaceID+"/deployment-candidates"):
-			writeCLIJSON(t, w, apigenapi.DeploymentCandidateResponse{Id: "state-" + workspaceID, Project: "libredash-showcase", Workspace: workspaceID, Environment: "prod", Status: "pending"})
+		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/projects/libredash-showcase/releases":
+			var request apigenapi.ReleaseCreateRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Fatal(err)
+			}
+			writeCLIJSON(t, w, apigenapi.ReleaseResponse{Id: "release-1", ProjectId: "libredash-showcase", ProjectDigest: request.ProjectDigest, Status: apigenapi.ReleaseStatusDraft, CreatedBy: "test", CreatedAt: "2026-01-01T00:00:00Z", Workspaces: request.Workspaces, Connections: request.Connections})
 		case r.Method == http.MethodPut && strings.HasSuffix(r.URL.Path, "/artifact"):
 			pins, digest := readManagedDataPinsFromUpload(t, r.Body)
 			if len(pins) != 1 || pins["olist"] != revision {
 				t.Fatalf("%s managed pins = %#v", workspaceID, pins)
 			}
 			artifactDigests[workspaceID] = digest
-			w.WriteHeader(http.StatusNoContent)
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/validate"):
-			writeCLIJSON(t, w, apigenapi.DeploymentCandidateResponse{Id: "state-" + workspaceID, Project: "libredash-showcase", Workspace: workspaceID, Environment: "prod", Status: "validated", Digest: artifactDigests[workspaceID]})
-		case r.Method == http.MethodPost && strings.Contains(r.URL.Path, "/deployment-candidates/") && strings.HasSuffix(r.URL.Path, "/activate"):
-			t.Fatalf("deploy activated an individual workspace: %s", r.URL.Path)
+			writeCLIJSON(t, w, apigenapi.ReleaseArtifactResponse{ReleaseId: "release-1", WorkspaceId: workspaceID, Digest: digest, SizeBytes: 1})
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/releases/release-1/finalize"):
+			writeCLIJSON(t, w, apigenapi.ReleaseResponse{Id: "release-1", ProjectId: "libredash-showcase", ProjectDigest: "ready", Status: apigenapi.ReleaseStatusValidating, CreatedBy: "test", CreatedAt: "2026-01-01T00:00:00Z", Workspaces: []apigenapi.ReleaseWorkspaceManifest{}, Connections: []apigenapi.ReleaseConnectionPin{}})
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/projects/libredash-showcase/releases/release-1":
+			writeCLIJSON(t, w, apigenapi.ReleaseResponse{Id: "release-1", ProjectId: "libredash-showcase", ProjectDigest: "ready", Status: apigenapi.ReleaseStatusReady, CreatedBy: "test", CreatedAt: "2026-01-01T00:00:00Z", Workspaces: []apigenapi.ReleaseWorkspaceManifest{}, Connections: []apigenapi.ReleaseConnectionPin{}})
 		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/projects/libredash-showcase/deployments":
-			assertRequestsBefore(t, sequence, r.Method+" "+r.URL.Path, []string{
-				"POST /api/v1/projects/libredash-showcase/workspaces/operations/deployment-candidates/state-operations/validate",
-				"POST /api/v1/projects/libredash-showcase/workspaces/sales/deployment-candidates/state-sales/validate",
-				"POST /api/v1/projects/libredash-showcase/workspaces/visuals/deployment-candidates/state-visuals/validate",
-			})
 			writeCLIJSON(t, w, map[string]any{
-				"id": "deployment-1", "project": "libredash-showcase", "environment": "prod", "status": "pending",
-				"targets": []map[string]string{{"workspace": "operations", "candidateId": "state-operations", "status": "pending"}, {"workspace": "sales", "candidateId": "state-sales", "status": "pending"}, {"workspace": "visuals", "candidateId": "state-visuals", "status": "pending"}},
+				"id": "deployment-1", "projectId": "libredash-showcase", "releaseId": "release-1", "environment": "prod", "status": "queued", "createdBy": "test", "createdAt": "2026-01-01T00:00:00Z",
+				"targets": []any{}, "connections": []any{},
 			})
-		case r.Method == http.MethodPost && r.URL.Path == "/api/v1/projects/libredash-showcase/deployments/deployment-1/activate":
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/projects/libredash-showcase/deployments/deployment-1":
 			writeCLIJSON(t, w, map[string]any{
-				"id": "deployment-1", "project": "libredash-showcase", "environment": "prod", "status": "active",
-				"targets": []map[string]string{{"workspace": "operations", "candidateId": "state-operations", "status": "active"}, {"workspace": "sales", "candidateId": "state-sales", "status": "active"}, {"workspace": "visuals", "candidateId": "state-visuals", "status": "active"}},
+				"id": "deployment-1", "projectId": "libredash-showcase", "releaseId": "release-1", "environment": "prod", "status": "active", "createdBy": "test", "createdAt": "2026-01-01T00:00:00Z",
+				"targets": []any{}, "connections": []any{},
 			})
 		default:
 			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
@@ -72,7 +74,6 @@ func TestDeployPreparesCompleteProjectBeforeOneAtomicActivation(t *testing.T) {
 	var out bytes.Buffer
 	err := runDeploy(context.Background(), deployRequest{
 		ProjectPath: projectPath,
-		Environment: "prod",
 		Revisions:   map[string]string{"olist": revision},
 		Target:      server.URL,
 		Token:       "secret-token",
@@ -83,17 +84,19 @@ func TestDeployPreparesCompleteProjectBeforeOneAtomicActivation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runDeploy() error = %v", err)
 	}
-	if strings.Contains(out.String(), "secret-token") || !strings.Contains(out.String(), "deployed libredash-showcase deployment=deployment-1 environment=prod status=active") {
+	if strings.Contains(out.String(), "secret-token") || !strings.Contains(out.String(), "deployed libredash-showcase release=release-1 deployment=deployment-1 environment=prod status=active") {
 		t.Fatalf("output = %q", out.String())
 	}
 	assertSequenceContainsInOrder(t, sequence, []string{
+		"GET /api/v1/capabilities",
 		"GET /api/v1/workspaces/operations/active-asset-graph",
 		"GET /api/v1/workspaces/sales/active-asset-graph",
-		"POST /api/v1/projects/libredash-showcase/workspaces/operations/deployment-candidates",
-		"POST /api/v1/projects/libredash-showcase/workspaces/sales/deployment-candidates",
-		"POST /api/v1/projects/libredash-showcase/workspaces/visuals/deployment-candidates",
+		"POST /api/v1/projects/libredash-showcase/releases",
+		"PUT /api/v1/projects/libredash-showcase/releases/release-1/workspaces/operations/artifact",
+		"POST /api/v1/projects/libredash-showcase/releases/release-1/finalize",
+		"GET /api/v1/projects/libredash-showcase/releases/release-1",
 		"POST /api/v1/projects/libredash-showcase/deployments",
-		"POST /api/v1/projects/libredash-showcase/deployments/deployment-1/activate",
+		"GET /api/v1/projects/libredash-showcase/deployments/deployment-1",
 	})
 	for _, workspaceID := range workspaces {
 		if artifactDigests[workspaceID] == "" {
@@ -110,7 +113,6 @@ func TestDeployRejectsIncompleteManagedRevisionSetBeforeNetworkAccess(t *testing
 
 	err := runDeploy(context.Background(), deployRequest{
 		ProjectPath: filepath.Join("..", "..", "dashboards", "libredash.yaml"),
-		Environment: "prod",
 		Revisions:   map[string]string{},
 		Target:      server.URL,
 		Token:       "token",

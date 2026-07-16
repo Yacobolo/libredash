@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 	"github.com/Yacobolo/libredash/internal/manageddata"
@@ -32,18 +34,19 @@ var (
 	digestPattern   = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
-func (h *Handler) GetManagedDataEnvironmentRevision(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, environment string) {
+func (h *Handler) GetActiveManagedDataRevision(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection string) {
 	collection, ok := h.collection(w, r, project, connection)
 	if !ok {
 		return
 	}
+	environment := h.options.Environment
 	if !validScopeID(environment) {
 		h.writeError(w, r, ErrInvalid)
 		return
 	}
 	pointer, err := h.options.Repository.EnvironmentPointer(r.Context(), collection.ID, manageddata.Environment(environment))
 	if errors.Is(err, manageddata.ErrNotFound) || errors.Is(err, ErrNotFound) {
-		h.writeJSON(w, stdhttp.StatusOK, apigenapi.ManagedDataEnvironmentRevisionResponse{Environment: environment})
+		h.writeJSON(w, stdhttp.StatusOK, apigenapi.ManagedDataActiveRevisionResponse{})
 		return
 	}
 	if err != nil {
@@ -64,7 +67,7 @@ func (h *Handler) GetManagedDataEnvironmentRevision(w stdhttp.ResponseWriter, r 
 		h.writeError(w, r, err)
 		return
 	}
-	response := apigenapi.ManagedDataEnvironmentRevisionResponse{Environment: environment, Revision: &summary}
+	response := apigenapi.ManagedDataActiveRevisionResponse{Revision: &summary}
 	response.DeploymentId = stringPointer(pointer.DeploymentID)
 	response.ActivatedAt = stringPointer(pointer.UpdatedAt)
 	h.writeJSON(w, stdhttp.StatusOK, response)
@@ -179,7 +182,43 @@ func (h *Handler) GetManagedDataUploadSession(w stdhttp.ResponseWriter, r *stdht
 	h.writeJSON(w, stdhttp.StatusOK, response)
 }
 
-func (h *Handler) AbortManagedDataUploadSession(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession string, headers apigenapi.GenAbortManagedDataUploadSessionHeaders) {
+func (h *Handler) ListManagedDataUploadSessions(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection string, params apigenapi.GenListManagedDataUploadSessionsParams) {
+	if h.options.Uploads == nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	collection, ok := h.collection(w, r, project, connection)
+	if !ok {
+		return
+	}
+	rows, err := h.options.Repository.ListUploadSessions(r.Context(), collection.ID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	page, next, err := pageSlice(rows, params.Limit, params.PageToken, "upload-sessions\x00"+collection.ID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	items := make([]apigenapi.ManagedDataUploadSessionResponse, 0, len(page))
+	for _, row := range page {
+		result, recoverErr := h.options.Uploads.RecoverUpload(r.Context(), control.UploadRequest{Project: project, Connection: connection, UploadID: row.ID})
+		if recoverErr != nil {
+			h.writeError(w, r, recoverErr)
+			return
+		}
+		item, mapErr := uploadResponse(result, project, connection, row.ID)
+		if mapErr != nil {
+			h.writeError(w, r, mapErr)
+			return
+		}
+		items = append(items, item)
+	}
+	h.writeJSON(w, stdhttp.StatusOK, apigenapi.ManagedDataUploadSessionListResponse{Items: items, Page: apigenapi.PageInfo{NextCursor: next}})
+}
+
+func (h *Handler) CancelManagedDataUploadSession(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession string, headers apigenapi.GenCancelManagedDataUploadSessionHeaders) {
 	if h.options.Uploads == nil {
 		h.writeUnavailable(w, r)
 		return
@@ -210,17 +249,24 @@ func (h *Handler) FinalizeManagedDataUploadSession(w stdhttp.ResponseWriter, r *
 		h.writeError(w, r, ErrInvalid)
 		return
 	}
-	result, err := h.options.Uploads.FinalizeUpload(r.Context(), control.UploadRequest{Project: project, Connection: connection, UploadID: uploadSession})
+	request := control.UploadRequest{Project: project, Connection: connection, UploadID: uploadSession}
+	result, err := h.options.Uploads.BeginFinalizeUpload(r.Context(), request)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
 	}
-	response, err := uploadResponse(result.Upload, project, connection, uploadSession)
+	response, err := uploadResponse(result, project, connection, uploadSession)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
 	}
+	w.Header().Set("Location", "/api/v1/projects/"+project+"/connections/"+connection+"/upload-sessions/"+uploadSession)
 	h.writeJSON(w, stdhttp.StatusAccepted, response)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		_, _ = h.options.Uploads.CompleteFinalizeUpload(ctx, request)
+	}()
 }
 
 func (h *Handler) CreateManagedDataS3MultipartUpload(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession string, headers apigenapi.GenCreateManagedDataS3MultipartUploadHeaders) {
@@ -491,7 +537,9 @@ func (h *Handler) decodeJSON(w stdhttp.ResponseWriter, r *stdhttp.Request, targe
 }
 
 func (h *Handler) writeJSON(w stdhttp.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
@@ -521,7 +569,13 @@ func (h *Handler) writeError(w stdhttp.ResponseWriter, r *stdhttp.Request, err e
 func (h *Handler) writePublicError(w stdhttp.ResponseWriter, r *stdhttp.Request, status int, message string) {
 	details := map[string]any{}
 	requestID := r.Header.Get("X-Request-Id")
-	h.writeJSON(w, status, apigenapi.Error{Code: int32(status), Message: message, Details: &details, RequestId: stringPointer(requestID)})
+	_ = details
+	w.Header().Set("Content-Type", "application/problem+json")
+	h.writeJSON(w, status, apigenapi.ProblemDetails{
+		Type: "https://libredash.dev/problems/managed-data", Title: stdhttp.StatusText(status), Status: int32(status),
+		Detail: message, Instance: r.URL.Path, Code: fmt.Sprintf("MANAGED_DATA_%d", status), RequestId: requestID,
+		Errors: []apigenapi.ProblemFieldError{},
+	})
 }
 
 func statusForError(err error) int {
@@ -657,7 +711,7 @@ func uploadStatus(status manageddata.UploadStatus) (apigenapi.ManagedDataUploadS
 	case manageddata.UploadStatusComplete:
 		return apigenapi.ManagedDataUploadSessionStatusCompleted, true
 	case manageddata.UploadStatusAborted:
-		return apigenapi.ManagedDataUploadSessionStatusAborted, true
+		return apigenapi.ManagedDataUploadSessionStatusCancelled, true
 	case manageddata.UploadStatusFailed:
 		return apigenapi.ManagedDataUploadSessionStatusFailed, true
 	case manageddata.UploadStatusExpired:

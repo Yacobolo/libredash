@@ -10,53 +10,46 @@ func TestProjectDeploymentAPIContract(t *testing.T) {
 	paths := openAPIMap(t, spec, "paths")
 	base := "/api/v1/projects/{project}/deployments"
 
+	list := openAPIOperation(t, paths, base, "get")
+	if list["operationId"] != "listDeployments" {
+		t.Fatalf("list deployment operation = %#v", list)
+	}
 	create := openAPIOperation(t, paths, base, "post")
-	if create["operationId"] != "createProjectDeployment" || !operationHasParameter(create, "path", "project") || !operationHasParameter(create, "header", "Idempotency-Key") {
+	if create["operationId"] != "createDeployment" || !operationHasParameter(create, "path", "project") || !operationHasParameter(create, "header", "Idempotency-Key") {
 		t.Fatalf("create deployment operation = %#v", create)
 	}
-	if _, ok := openAPIMap(t, create, "responses")["201"]; !ok {
-		t.Fatal("create deployment must return 201")
+	if _, ok := openAPIMap(t, create, "responses")["202"]; !ok {
+		t.Fatal("create deployment must return 202")
 	}
-
-	get := openAPIOperation(t, paths, base+"/{deployment}", "get")
-	if get["operationId"] != "getProjectDeployment" {
-		t.Fatalf("get deployment operationId = %#v", get["operationId"])
+	if privilege := openAPIMap(t, create, "x-authz")["privilege"]; privilege != "ACTIVATE_DEPLOYMENT" {
+		t.Fatalf("deployment privilege = %#v", privilege)
 	}
-	activate := openAPIOperation(t, paths, base+"/{deployment}/activate", "post")
-	if activate["operationId"] != "activateProjectDeployment" || !operationHasParameter(activate, "header", "Idempotency-Key") {
-		t.Fatalf("activate deployment operation = %#v", activate)
+	for suffix, operationID := range map[string]string{
+		"": "getDeployment", "/events": "listDeploymentEvents", "/cancel": "cancelDeployment", "/rollback": "rollbackDeployment",
+	} {
+		method := "get"
+		if suffix == "/cancel" || suffix == "/rollback" {
+			method = "post"
+		}
+		operation := openAPIOperation(t, paths, base+"/{deployment}"+suffix, method)
+		if operation["operationId"] != operationID {
+			t.Fatalf("%s operation = %#v", operationID, operation)
+		}
 	}
-	if _, ok := openAPIMap(t, activate, "responses")["200"]; !ok {
-		t.Fatal("activate deployment must return 200")
-	}
-	if privilege := openAPIMap(t, activate, "x-authz")["privilege"]; privilege != "ACTIVATE_DEPLOYMENT" {
-		t.Fatalf("activate deployment privilege = %#v, want ACTIVATE_DEPLOYMENT", privilege)
+	if _, exists := paths[base+"/{deployment}/activate"]; exists {
+		t.Fatal("separate deployment activation route remains public")
 	}
 
 	schemas := openAPIMap(t, openAPIMap(t, spec, "components"), "schemas")
-	response := openAPISchema(t, schemas, "ProjectDeploymentResponse")
-	for _, field := range []string{"id", "project", "environment", "requestDigest", "status", "targets", "connections", "createdAt"} {
+	response := openAPISchema(t, schemas, "DeploymentResponse")
+	for _, field := range []string{"id", "projectId", "releaseId", "environment", "status", "targets", "connections", "createdAt"} {
 		_ = schemaProperty(t, response, field)
 	}
-	target := openAPISchema(t, schemas, "ProjectDeploymentTargetResponse")
-	for _, field := range []string{"workspace", "candidateId", "status"} {
-		_ = schemaProperty(t, target, field)
-	}
-	assertEnum(t, openAPISchema(t, schemas, "ProjectDeploymentStatus"), "pending", "active", "failed", "superseded")
-	assertEnum(t, openAPISchema(t, schemas, "ProjectDeploymentTargetStatus"), "pending", "active", "failed")
+	assertEnum(t, openAPISchema(t, schemas, "DeploymentStatus"), "queued", "running", "active", "failed", "cancelled", "superseded")
 
 	for path := range paths {
-		if strings.Contains(path, "/data-connections/") && strings.Contains(path, "/rollouts") {
-			t.Fatalf("connection-scoped rollout route remains: %s", path)
-		}
-	}
-	if _, exists := paths["/api/v1/workspaces/{workspace}/publishes/{publish}/activate"]; exists {
-		t.Fatal("single-publish activation route remains public")
-	}
-	encoded := string(mustJSON(t, spec))
-	for _, removed := range []string{"ACTIVATE_PUBLISH", "ACTIVATE_DATA"} {
-		if strings.Contains(encoded, removed) {
-			t.Fatalf("removed privilege %s remains in generated API", removed)
+		if strings.Contains(path, "/rollouts") || strings.Contains(path, "/deployment-candidates") {
+			t.Fatalf("legacy deployment route remains: %s", path)
 		}
 	}
 }

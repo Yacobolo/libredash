@@ -23,6 +23,7 @@ const (
 	StatusPending    Status = "pending"
 	StatusActive     Status = "active"
 	StatusFailed     Status = "failed"
+	StatusCancelled  Status = "cancelled"
 	StatusSuperseded Status = "superseded"
 )
 
@@ -92,6 +93,15 @@ type Service interface {
 	Create(context.Context, deployment.CreateInput) (deployment.Deployment, error)
 	Get(context.Context, deployment.Scope) (deployment.Deployment, error)
 	Activate(context.Context, deployment.Scope) (deployment.Deployment, error)
+	Cancel(context.Context, deployment.Scope) (deployment.Deployment, error)
+}
+
+func (a *Adapter) Cancel(ctx context.Context, scope Scope) (Deployment, error) {
+	row, err := a.service.Cancel(ctx, deployment.Scope{ProjectID: strings.TrimSpace(scope.Project), DeploymentID: strings.TrimSpace(scope.DeploymentID)})
+	if err != nil {
+		return Deployment{}, err
+	}
+	return a.mapDeployment(ctx, row)
 }
 
 type Metadata interface {

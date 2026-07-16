@@ -96,6 +96,10 @@ func (s *fakeService) Get(context.Context, deployment.Scope) (deployment.Deploym
 func (s *fakeService) Activate(context.Context, deployment.Scope) (deployment.Deployment, error) {
 	return s.row, nil
 }
+func (s *fakeService) Cancel(context.Context, deployment.Scope) (deployment.Deployment, error) {
+	s.row.Status = deployment.StatusCancelled
+	return s.row, nil
+}
 
 type fakeMetadata struct {
 	collections map[string]manageddata.Collection

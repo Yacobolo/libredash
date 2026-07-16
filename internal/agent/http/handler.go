@@ -2,12 +2,14 @@ package http
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	stdhttp "net/http"
 	"strings"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/agent"
@@ -110,7 +112,9 @@ func (h *Handler) GetConversation(w stdhttp.ResponseWriter, r *stdhttp.Request) 
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	writeJSON(w, stdhttp.StatusOK, agentConversationDTO(conversation))
+	response := agentConversationDTO(conversation)
+	w.Header().Set("ETag", agentResourceETag(response))
+	writeJSON(w, stdhttp.StatusOK, response)
 }
 
 func (h *Handler) UpdateConversation(w stdhttp.ResponseWriter, r *stdhttp.Request) {
@@ -118,8 +122,19 @@ func (h *Handler) UpdateConversation(w stdhttp.ResponseWriter, r *stdhttp.Reques
 	if !ok {
 		return
 	}
+	existing, err := service.GetConversation(r.Context(), scope, chi.URLParam(r, "conversation"))
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	if !agentIfMatch(r.Header.Get("If-Match"), agentResourceETag(agentConversationDTO(existing))) {
+		writeJSONError(w, fmt.Errorf("If-Match does not match the current conversation"), stdhttp.StatusPreconditionFailed)
+		return
+	}
 	var input api.AgentConversationUpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
 		writeJSONError(w, err, stdhttp.StatusBadRequest)
 		return
 	}
@@ -128,7 +143,9 @@ func (h *Handler) UpdateConversation(w stdhttp.ResponseWriter, r *stdhttp.Reques
 		writeJSONError(w, err, statusForBadRequestOrNotFound(err))
 		return
 	}
-	writeJSON(w, stdhttp.StatusOK, agentConversationDTO(conversation))
+	response := agentConversationDTO(conversation)
+	w.Header().Set("ETag", agentResourceETag(response))
+	writeJSON(w, stdhttp.StatusOK, response)
 }
 
 func (h *Handler) ArchiveConversation(w stdhttp.ResponseWriter, r *stdhttp.Request) {
@@ -191,7 +208,7 @@ func (h *Handler) ListRuns(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	}
 	out := make([]api.AgentRunResponse, 0, len(runs))
 	for _, run := range runs {
-		out = append(out, agentRunDTO(run))
+		out = append(out, agentRunDTO(run, scope))
 	}
 	writeJSON(w, stdhttp.StatusOK, pagedResponseWithCursor(out, nextCursor))
 }
@@ -209,7 +226,7 @@ func (h *Handler) GetRun(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 			writeJSONError(w, err, statusForNotFound(err))
 			return
 		}
-		writeJSON(w, stdhttp.StatusOK, agentRunDTO(run))
+		writeJSON(w, stdhttp.StatusOK, agentRunDTO(run, scope))
 		return
 	}
 	run, err := service.GetRun(r.Context(), scope, conversationID, runID)
@@ -217,7 +234,7 @@ func (h *Handler) GetRun(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	writeJSON(w, stdhttp.StatusOK, agentRunDTO(run))
+	writeJSON(w, stdhttp.StatusOK, agentRunDTO(run, scope))
 }
 
 func (h *Handler) CreateTurn(w stdhttp.ResponseWriter, r *stdhttp.Request) {
@@ -260,9 +277,87 @@ func (h *Handler) CreateTurn(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	})
 }
 
+// CreateRun starts an agent prompt and returns the persisted run before model
+// execution begins. The public API is intentionally asynchronous; the private
+// browser chat transport may continue to use its richer streaming workflow.
+func (h *Handler) CreateRun(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	service, scope, ok := h.agentRequest(w, r)
+	if !ok {
+		return
+	}
+	var input apigenapi.AgentRunCreateRequest
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		writeJSONError(w, err, stdhttp.StatusBadRequest)
+		return
+	}
+	correlationID := ""
+	if input.CorrelationId != nil {
+		correlationID = *input.CorrelationId
+	}
+	started, err := service.StartPrompt(r.Context(), agent.PromptInput{
+		Scope: scope, ConversationID: chi.URLParam(r, "conversation"), Input: input.Input, CorrelationID: correlationID,
+	})
+	if err != nil {
+		status := stdhttp.StatusInternalServerError
+		switch {
+		case errors.Is(err, agent.ErrDisabled), errors.Is(err, agent.ErrPolicyDisabled):
+			status = stdhttp.StatusServiceUnavailable
+		case agent.IsBusy(err):
+			status = stdhttp.StatusConflict
+		case errors.Is(err, sql.ErrNoRows):
+			status = stdhttp.StatusNotFound
+		case strings.Contains(err.Error(), "required"):
+			status = stdhttp.StatusUnprocessableEntity
+		}
+		writeJSONError(w, err, status)
+		return
+	}
+	run, err := service.GetRun(r.Context(), scope, started.ConversationID, started.RunID)
+	if err != nil {
+		_ = started.Abort(context.Background(), err)
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Location", "/api/v1/workspaces/"+scope.WorkspaceID+"/agent/conversations/"+started.ConversationID+"/runs/"+started.RunID)
+	writeJSON(w, stdhttp.StatusAccepted, agentRunDTO(run, scope))
+	go func() {
+		_, _ = started.Complete(context.Background(), nil)
+	}()
+}
+
+func (h *Handler) CancelRun(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	service, scope, ok := h.agentRequest(w, r)
+	if !ok {
+		return
+	}
+	conversationID := chi.URLParam(r, "conversation")
+	runID := chi.URLParam(r, "run")
+	if err := service.CancelRun(r.Context(), scope, conversationID, runID); err != nil {
+		status := stdhttp.StatusConflict
+		if errors.Is(err, agent.ErrNotFound) || errors.Is(err, sql.ErrNoRows) {
+			status = stdhttp.StatusNotFound
+		}
+		writeJSONError(w, err, status)
+		return
+	}
+	run, err := service.GetRun(r.Context(), scope, conversationID, runID)
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Location", "/api/v1/workspaces/"+scope.WorkspaceID+"/agent/conversations/"+conversationID+"/runs/"+runID)
+	writeJSON(w, stdhttp.StatusAccepted, agentRunDTO(run, scope))
+}
+
 func (h *Handler) ListEvents(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	service, scope, ok := h.agentRequest(w, r)
 	if !ok {
+		return
+	}
+	if agentAcceptsEventStream(r.Header.Get("Accept")) {
+		h.streamRunEvents(w, r, service, scope, chi.URLParam(r, "conversation"), chi.URLParam(r, "run"))
 		return
 	}
 	var (
@@ -297,16 +392,121 @@ func (h *Handler) ListEvents(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	writeJSON(w, stdhttp.StatusOK, pagedResponseWithCursor(out, nextCursor))
 }
 
+func (h *Handler) streamRunEvents(w stdhttp.ResponseWriter, r *stdhttp.Request, service *agent.Service, scope agent.Scope, conversationID, runID string) {
+	load := func() ([]agent.Event, agent.Run, error) {
+		var run agent.Run
+		var err error
+		if conversationID == "" {
+			run, err = service.GetRunByID(r.Context(), scope, runID)
+		} else {
+			run, err = service.GetRun(r.Context(), scope, conversationID, runID)
+		}
+		if err != nil {
+			return nil, agent.Run{}, err
+		}
+		events, err := service.ListEvents(r.Context(), scope, runID)
+		return events, run, err
+	}
+	events, run, err := load()
+	if err != nil {
+		writeJSONError(w, err, statusForNotFound(err))
+		return
+	}
+	lastID := strings.TrimSpace(r.Header.Get("Last-Event-ID"))
+	if _, ok := agentEventsAfter(events, lastID); !ok {
+		writeJSONError(w, fmt.Errorf("Last-Event-ID does not identify an event in this run"), stdhttp.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(stdhttp.StatusOK)
+	flusher, _ := w.(stdhttp.Flusher)
+	heartbeat := time.NewTicker(15 * time.Second)
+	poll := time.NewTicker(time.Second)
+	defer heartbeat.Stop()
+	defer poll.Stop()
+
+	for {
+		pending, ok := agentEventsAfter(events, lastID)
+		if !ok {
+			return
+		}
+		for _, event := range pending {
+			payload, _ := json.Marshal(agentEventDTO(event))
+			_, _ = fmt.Fprintf(w, "id: %s\nevent: %s\ndata: %s\n\n", event.ID, event.EventType, payload)
+			lastID = event.ID
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+		if agentRunTerminal(run.Status) {
+			return
+		}
+		select {
+		case <-r.Context().Done():
+			return
+		case <-heartbeat.C:
+			_, _ = fmt.Fprint(w, ": heartbeat\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+		case <-poll.C:
+			events, run, err = load()
+			if err != nil {
+				return
+			}
+		}
+	}
+}
+
+func agentAcceptsEventStream(value string) bool {
+	for _, item := range strings.Split(value, ",") {
+		if strings.EqualFold(strings.TrimSpace(strings.SplitN(item, ";", 2)[0]), "text/event-stream") {
+			return true
+		}
+	}
+	return false
+}
+
+func agentEventsAfter(events []agent.Event, lastID string) ([]agent.Event, bool) {
+	if lastID == "" {
+		return events, true
+	}
+	for index, event := range events {
+		if event.ID == lastID {
+			return events[index+1:], true
+		}
+	}
+	return nil, false
+}
+
+func agentRunTerminal(status string) bool {
+	return status == agent.RunStatusCompleted || status == agent.RunStatusFailed || status == agent.RunStatusCanceled
+}
+
 func (h *Handler) GetAdminConfig(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	details, err := h.AdminDetails(r.Context())
 	if err != nil {
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("ETag", agentResourceETag(details))
 	writeJSON(w, stdhttp.StatusOK, details)
 }
 
 func (h *Handler) UpdateAdminConfig(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	current, err := h.AdminDetails(r.Context())
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	if !agentIfMatch(r.Header.Get("If-Match"), agentResourceETag(current)) {
+		writeJSONError(w, fmt.Errorf("If-Match does not match the current agent configuration"), stdhttp.StatusPreconditionFailed)
+		return
+	}
 	var signals adminAgentCommandSignals
 	if err := pagestream.ReadSignals(r, &signals); err != nil {
 		writeJSONError(w, err, stdhttp.StatusBadRequest)
@@ -334,7 +534,24 @@ func (h *Handler) UpdateAdminConfig(w stdhttp.ResponseWriter, r *stdhttp.Request
 		writeJSONError(w, err, stdhttp.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("ETag", agentResourceETag(details))
 	writeJSON(w, stdhttp.StatusOK, details)
+}
+
+func agentResourceETag(value any) string {
+	payload, _ := json.Marshal(value)
+	digest := sha256.Sum256(payload)
+	return fmt.Sprintf("\"%x\"", digest[:])
+}
+
+func agentIfMatch(value, current string) bool {
+	for _, candidate := range strings.Split(value, ",") {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "*" || candidate == current {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) AdminDetails(ctx context.Context) (api.AdminAgentResponse, error) {
@@ -442,10 +659,12 @@ func agentConversationDTO(row agent.Conversation) api.AgentConversationResponse 
 	return out
 }
 
-func agentRunDTO(row agent.Run) api.AgentRunResponse {
+func agentRunDTO(row agent.Run, scope agent.Scope) api.AgentRunResponse {
 	return api.AgentRunResponse{
 		ID:             row.ID,
 		ConversationID: row.ConversationID,
+		WorkspaceID:    scope.WorkspaceID,
+		PrincipalID:    scope.PrincipalID,
 		Status:         row.Status,
 		Model:          row.Model,
 		StopReason:     row.StopReason,
@@ -454,7 +673,7 @@ func agentRunDTO(row agent.Run) api.AgentRunResponse {
 		TotalTokens:    row.TotalTokens,
 		Error:          row.Error,
 		StartedAt:      row.StartedAt,
-		FinishedAt:     row.FinishedAt,
+		CompletedAt:    row.FinishedAt,
 		CreatedAt:      row.CreatedAt,
 	}
 }

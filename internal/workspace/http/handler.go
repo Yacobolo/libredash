@@ -1301,17 +1301,19 @@ func encodeIndexCursor(offset int) string {
 }
 
 func writeJSON(w nethttp.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
 
 func writeJSONError(w nethttp.ResponseWriter, err error, status int) {
-	writeJSON(w, status, api.ErrorResponse{
-		Code:      status,
-		Message:   err.Error(),
-		Details:   map[string]any{},
-		RequestID: "",
+	w.Header().Set("Content-Type", "application/problem+json")
+	writeJSON(w, status, map[string]any{
+		"type": "https://libredash.dev/problems/http-error", "title": nethttp.StatusText(status),
+		"status": status, "detail": err.Error(), "instance": "", "code": fmt.Sprintf("HTTP_%d", status),
+		"requestId": w.Header().Get("X-Request-ID"), "errors": []any{},
 	})
 }
 

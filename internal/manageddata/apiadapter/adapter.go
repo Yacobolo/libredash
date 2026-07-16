@@ -19,8 +19,32 @@ type Repository interface {
 	CollectionByProjectConnection(context.Context, string, string) (manageddata.Collection, error)
 	RevisionByID(context.Context, string) (manageddata.Revision, error)
 	ListRevisions(context.Context, string) ([]manageddata.Revision, error)
+	ListUploadSessions(context.Context, string) ([]manageddata.UploadSession, error)
 	UploadSessionIDByRevisionID(context.Context, string) (string, error)
 	EnvironmentPointer(context.Context, string, manageddata.Environment) (manageddata.EnvironmentPointer, error)
+}
+
+func (a *Adapter) ListUploadSessions(ctx context.Context, collectionID string) ([]manageddata.UploadSession, error) {
+	collectionID = strings.TrimSpace(collectionID)
+	if collectionID == "" {
+		return nil, control.ErrInvalid
+	}
+	rows, err := a.repository.ListUploadSessions(ctx, collectionID)
+	if err != nil {
+		return nil, publicError(err)
+	}
+	for _, row := range rows {
+		if row.CollectionID != collectionID {
+			return nil, control.ErrBackend
+		}
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt == rows[j].CreatedAt {
+			return rows[i].ID > rows[j].ID
+		}
+		return rows[i].CreatedAt > rows[j].CreatedAt
+	})
+	return rows, nil
 }
 
 type Adapter struct {

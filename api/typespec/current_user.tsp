@@ -74,7 +74,7 @@ alias CreateCurrentAPITokenCreated = CreatedJson<APITokenCreateResponse>;
 @route("/me/api-tokens")
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "MANAGE_GRANTS" })
-op createCurrentAPIToken(@body body: APITokenCreateRequest): CreateCurrentAPITokenCreated | CommonErrors;
+op createCurrentAPIToken(@header("Idempotency-Key") idempotencyKey: string, @body body: APITokenCreateRequest): CreateCurrentAPITokenCreated | CommonErrors;
 
 alias RevokeCurrentAPITokenOK = OkJson<StatusResponse>;
 

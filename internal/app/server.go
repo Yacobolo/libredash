@@ -25,6 +25,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/platform"
 	queryauditsqlite "github.com/Yacobolo/libredash/internal/queryaudit/sqlite"
 	"github.com/Yacobolo/libredash/internal/queryruntime"
+	releasesqlite "github.com/Yacobolo/libredash/internal/release/sqlite"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	"github.com/Yacobolo/libredash/internal/staticasset"
@@ -116,6 +117,8 @@ type Server struct {
 	managedDataExpirer            managedDataUploadExpirer
 	managedDataExpireInterval     time.Duration
 	managedDataMaintenanceStarted bool
+	apiIdempotencyMu              sync.Mutex
+	apiIdempotency                map[string]*apiIdempotencyRecord
 }
 
 func New(metrics QueryMetrics) *Server {
@@ -137,6 +140,7 @@ func New(metrics QueryMetrics) *Server {
 		telemetry:          newHTTPTelemetry(),
 		logger:             logger,
 		pendingChatTitles:  map[string]struct{}{},
+		apiIdempotency:     map[string]*apiIdempotencyRecord{},
 	}
 }
 
@@ -396,6 +400,13 @@ func (s *Server) accessRepository() (access.Repository, error) {
 	}
 	s.accessRepo = accesssqlite.NewRepository(s.store.SQLDB())
 	return s.accessRepo, nil
+}
+
+func (s *Server) releaseRepository() *releasesqlite.Repository {
+	if s.store == nil {
+		return nil
+	}
+	return releasesqlite.NewRepository(s.store.SQLDB())
 }
 
 func (s *Server) registerDefaultWorkspaceSecurable(ctx context.Context) error {

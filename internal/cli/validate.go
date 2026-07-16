@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,7 +59,6 @@ func planCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
 	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL for active deployment diff")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
-	cmd.Flags().StringVar(&opts.environment, "environment", "dev", "deployment environment for active diff")
 	cmd.Flags().StringVar(&opts.workspaceID, "workspace", opts.workspaceID, "workspace id for active diff")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "emit JSON plan")
 	return cmd
@@ -189,8 +187,7 @@ func fetchActiveWorkspaceGraphFor(ctx context.Context, opts *rootOptions, worksp
 	if err != nil {
 		return workspace.AssetGraph{}, err
 	}
-	query := url.Values{}
-	endpoint, err := apiOperationURL(target, "getWorkspaceActiveAssetGraph", map[string]string{"workspace": workspaceID}, withEnvironmentQuery(cliEnvironment(opts), query))
+	endpoint, err := apiOperationURL(target, "getWorkspaceActiveAssetGraph", map[string]string{"workspace": workspaceID}, nil)
 	if err != nil {
 		return workspace.AssetGraph{}, err
 	}
@@ -241,21 +238,6 @@ func assetPayloadJSON(payload map[string]any) string {
 		return ""
 	}
 	return string(bytes)
-}
-
-func environmentQuery(opts *rootOptions, values url.Values) url.Values {
-	return withEnvironmentQuery(cliEnvironment(opts), values)
-}
-
-func withEnvironmentQuery(environment string, values url.Values) url.Values {
-	if values == nil {
-		values = url.Values{}
-	}
-	if environment == "" {
-		environment = "dev"
-	}
-	values.Set("environment", environment)
-	return values
 }
 
 func planChangeAnnotations(change workspacecompiler.ProjectPlanChange) string {

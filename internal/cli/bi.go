@@ -51,16 +51,15 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	}
 	addTargetTokenFlags(describe, opts)
 
-	components := &cobra.Command{
-		Use:   "components <dashboard> <page>",
-		Short: "List dashboard page components",
+	page := &cobra.Command{
+		Use:   "page <dashboard> <page>",
+		Short: "Describe a dashboard page",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRawAPI(ctx, opts, "listDashboardComponents", map[string]string{"workspace": opts.workspaceID, "dashboard": args[0], "page": args[1]}, paginationQuery(opts), nil)
+			return runRawAPI(ctx, opts, "getDashboardPage", map[string]string{"workspace": opts.workspaceID, "dashboard": args[0], "page": args[1]}, nil, nil)
 		},
 	}
-	addTargetTokenFlags(components, opts)
-	addPaginationFlags(components, opts)
+	addTargetTokenFlags(page, opts)
 
 	visual := &cobra.Command{
 		Use:   "visual <dashboard> <page> <visual>",
@@ -102,23 +101,6 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	addTargetTokenFlags(queryPage, opts)
 	queryPage.Flags().StringVar(&opts.filtersJSON, "filters-json", "", "dashboard filters JSON")
 
-	queryTable := &cobra.Command{
-		Use:   "query-table <dashboard> <table>",
-		Short: "Query a dashboard table",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			body, err := tableQueryBody(opts.pageID, opts.count, opts.filtersJSON)
-			if err != nil {
-				return err
-			}
-			return runRawAPI(ctx, opts, "queryDashboardTable", map[string]string{"workspace": opts.workspaceID, "dashboard": args[0], "table": args[1]}, nil, postBody(body))
-		},
-	}
-	addTargetTokenFlags(queryTable, opts)
-	queryTable.Flags().StringVar(&opts.pageID, "page", "", "dashboard page id")
-	queryTable.Flags().IntVar(&opts.count, "count", 0, "row count")
-	queryTable.Flags().StringVar(&opts.filtersJSON, "filters-json", "", "dashboard filters JSON")
-
 	tableData := &cobra.Command{
 		Use:   "table-data <dashboard> <page> <table>",
 		Short: "Query dashboard table data",
@@ -128,7 +110,7 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return runRawAPI(ctx, opts, "queryDashboardTableData", map[string]string{"workspace": opts.workspaceID, "dashboard": args[0], "page": args[1], "table": args[2]}, nil, postBody(body))
+			return runRawAPI(ctx, opts, "queryDashboardTable", map[string]string{"workspace": opts.workspaceID, "dashboard": args[0], "page": args[1], "table": args[2]}, nil, postBody(body))
 		},
 	}
 	addTargetTokenFlags(tableData, opts)
@@ -144,14 +126,14 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return runRawAPI(ctx, opts, "listDashboardFilterOptions", map[string]string{"workspace": opts.workspaceID, "dashboard": args[0], "page": args[1], "filter": args[2]}, paginationQuery(opts), postBody(body))
+			return runRawAPI(ctx, opts, "listDashboardFilterValues", map[string]string{"workspace": opts.workspaceID, "dashboard": args[0], "page": args[1], "filter": args[2]}, paginationQuery(opts), postBody(body))
 		},
 	}
 	addTargetTokenFlags(filterOptions, opts)
 	addPaginationFlags(filterOptions, opts)
 	filterOptions.Flags().StringVar(&opts.filtersJSON, "filters-json", "", "dashboard filters JSON")
 
-	parent.AddCommand(list, describe, components, visual, visualData, queryPage, queryTable, tableData, filterOptions)
+	parent.AddCommand(list, describe, page, visual, visualData, queryPage, tableData, filterOptions)
 	return parent
 }
 

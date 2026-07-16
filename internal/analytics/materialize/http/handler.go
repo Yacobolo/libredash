@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	nethttp "net/http"
+	"strings"
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	"github.com/Yacobolo/libredash/internal/api"
@@ -31,6 +32,7 @@ type materializationRunRequest struct {
 	TargetID       string `json:"targetId,omitempty"`
 	TriggerType    string `json:"triggerType,omitempty"`
 	ParentRunID    string `json:"parentRunId,omitempty"`
+	RetryOf        string `json:"retryOf,omitempty"`
 }
 
 func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -53,6 +55,29 @@ func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
 			principalID = principal.ID
 		}
 	}
+	if input.RetryOf != "" {
+		prior, err := repo.GetRun(r.Context(), workspaceID, input.RetryOf)
+		if err != nil {
+			writeJSONError(w, fmt.Errorf("retryOf does not identify a refresh run in this workspace"), nethttp.StatusUnprocessableEntity)
+			return
+		}
+		if prior.Status == materialize.RunStatusQueued || prior.Status == materialize.RunStatusRunning {
+			writeJSONError(w, fmt.Errorf("retryOf refresh run is not terminal"), nethttp.StatusConflict)
+			return
+		}
+		if input.ModelID == "" {
+			input.ModelID = prior.ModelID
+		}
+		if input.ServingStateID == "" {
+			input.ServingStateID = prior.ServingStateID
+		}
+		if input.TargetType == "" {
+			input.TargetType = prior.TargetType
+		}
+		if input.TargetID == "" {
+			input.TargetID = prior.TargetID
+		}
+	}
 	run, err := repo.CreateRun(r.Context(), materialize.RunInput{
 		WorkspaceID:    workspaceID,
 		ModelID:        input.ModelID,
@@ -62,6 +87,7 @@ func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
 		TargetID:       input.TargetID,
 		TriggerType:    input.TriggerType,
 		ParentRunID:    input.ParentRunID,
+		RetryOf:        input.RetryOf,
 	})
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
@@ -70,6 +96,7 @@ func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
 	if h.DispatchQueued != nil {
 		h.DispatchQueued()
 	}
+	w.Header().Set("Location", strings.TrimSuffix(r.URL.Path, "/")+"/"+run.ID)
 	writeJSON(w, nethttp.StatusAccepted, run)
 }
 

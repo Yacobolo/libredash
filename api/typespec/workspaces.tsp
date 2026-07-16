@@ -115,7 +115,14 @@ alias ListWorkspacesOK = OkJson<WorkspaceListResponse>;
     cursor: #{ source: "/page/nextCursor" },
   },
 })
-op listWorkspaces(@query environment?: string, @query limit?: int32, @query pageToken?: string): ListWorkspacesOK | CommonErrors;
+op listWorkspaces(@query limit?: int32, @query pageToken?: string): ListWorkspacesOK | CommonErrors;
+
+@tag("Workspaces")
+@summary("Get a workspace")
+@route("/workspaces/{workspace}")
+@get
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
+op getWorkspace(@path workspace: string): OkJson<WorkspaceResponse> | CommonErrors;
 
 alias ListWorkspaceAssetEdgesOK = OkJson<AssetEdgeListResponse>;
 
@@ -170,7 +177,7 @@ op listWorkspaceAssets(@path workspace: string, @query type?: string, @query q?:
 @route("/workspaces/{workspace}/active-asset-graph")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
-op getWorkspaceActiveAssetGraph(@path workspace: string, @query environment?: string): OkJson<WorkspaceAssetGraphResponse> | CommonErrors;
+op getWorkspaceActiveAssetGraph(@path workspace: string): OkJson<WorkspaceAssetGraphResponse> | CommonErrors;
 
 @tag("Workspaces")
 @summary("Describe a workspace asset")

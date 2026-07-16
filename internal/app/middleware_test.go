@@ -845,8 +845,7 @@ func TestLocalPasswordMustChangeBlocksProtectedRoutesUntilChanged(t *testing.T) 
 		t.Fatalf("create session: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
-	req.Header.Set("Accept", "application/json")
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.AddCookie(auth.sessionCookie(sessionSecret, time.Now().Add(time.Hour)))
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -866,8 +865,7 @@ func TestLocalPasswordMustChangeBlocksProtectedRoutesUntilChanged(t *testing.T) 
 		t.Fatalf("password change status = %d, want 302 body=%s", passwordRec.Code, passwordRec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
-	req.Header.Set("Accept", "application/json")
+	req = httptest.NewRequest(http.MethodGet, "/", nil)
 	req.AddCookie(auth.sessionCookie(sessionSecret, time.Now().Add(time.Hour)))
 	rec = httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)

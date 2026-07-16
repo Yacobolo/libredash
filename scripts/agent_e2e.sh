@@ -72,7 +72,7 @@ REVISION="$(awk '$1 == "staged" { print $2 }' <<<"$SYNC_OUTPUT")"
   echo "managed data sync did not return a canonical revision" >&2
   exit 1
 }
-"$BIN" deploy --target "$TARGET" --token "$TOKEN" --project dashboards/libredash.yaml --revision "olist=$REVISION" --environment dev --auto-approve
+"$BIN" deploy --target "$TARGET" --token "$TOKEN" --project dashboards/libredash.yaml --revision "olist=$REVISION" --auto-approve
 
 OUTPUT="$("$BIN" agent ask "List the dashboards I can use in this workspace and mention the Olist context." --target "$TARGET" --token "$TOKEN" --workspace sales --json)"
 echo "$OUTPUT"

@@ -14,7 +14,19 @@ type Repository interface {
 	CreateDeployment(context.Context, CreateInput) (Deployment, error)
 	DeploymentByID(context.Context, string) (Deployment, error)
 	ActivateDeployment(context.Context, string) (Deployment, error)
+	CancelDeployment(context.Context, string) (Deployment, error)
 	FailDeployment(context.Context, string, error) error
+}
+
+func (s *Service) Cancel(ctx context.Context, scope Scope) (Deployment, error) {
+	row, err := s.Get(ctx, scope)
+	if err != nil {
+		return Deployment{}, err
+	}
+	if row.Status != StatusPending {
+		return Deployment{}, fmt.Errorf("%w: deployment is %s", ErrConflict, row.Status)
+	}
+	return s.repository.CancelDeployment(ctx, row.ID)
 }
 
 type ServingStateRepository interface {

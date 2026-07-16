@@ -8,6 +8,7 @@ import (
 
 func (s *Server) managedDataHTTPHandler() *manageddatahttp.Handler {
 	options := s.managedDataOptions
+	options.Environment = s.defaultEnvironment
 	options.CurrentPrincipal = func(r *http.Request) (manageddatahttp.Principal, bool) {
 		if s.auth == nil {
 			return manageddatahttp.Principal{}, false

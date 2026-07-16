@@ -211,7 +211,7 @@ func TestValidateArtifactIsDataLocationIndependent(t *testing.T) {
 	}
 }
 
-func TestValidateArtifactRejectsWrongDeploymentCompiledGraph(t *testing.T) {
+func TestValidateArtifactRetargetsPortableCompiledGraph(t *testing.T) {
 	projectPath := filepath.Join("..", "..", "..", "dashboards", ProjectFile)
 	var bundle bytes.Buffer
 	if _, _, err := PackProject(projectPath, PackProjectOptions{WorkspaceID: "operations", ServingStateID: "dep_ops", ManagedDataRevisions: olistManagedDataRevisions()}, &bundle); err != nil {
@@ -221,9 +221,14 @@ func TestValidateArtifactRejectsWrongDeploymentCompiledGraph(t *testing.T) {
 	if err := os.WriteFile(path, bundle.Bytes(), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := ValidateArtifact(path, servingstate.WorkspaceID("operations"), servingstate.ID("dep_other"))
-	if err == nil {
-		t.Fatal("ValidateArtifact() error = nil, want deployment mismatch")
+	validation, err := ValidateArtifact(path, servingstate.WorkspaceID("operations"), servingstate.ID("dep_other"))
+	if err != nil {
+		t.Fatalf("ValidateArtifact() error = %v", err)
+	}
+	for _, asset := range validation.Graph.Assets {
+		if asset.ServingStateID != "dep_other" {
+			t.Fatalf("asset serving state = %q, want dep_other", asset.ServingStateID)
+		}
 	}
 }
 

@@ -26,6 +26,8 @@ type Repository interface {
 	CreateUploadSession(context.Context, manageddata.CreateUploadSessionInput) (manageddata.UploadSession, error)
 	UploadSessionByID(context.Context, string) (manageddata.UploadSession, error)
 	UpdateUploadProgress(context.Context, string, manageddata.UploadProgress) error
+	BeginUploadFinalization(context.Context, string) (manageddata.UploadSession, error)
+	FailUploadFinalization(context.Context, string, string) (manageddata.UploadSession, error)
 	AbortUploadSession(context.Context, string) error
 	ExpireUploadSessions(context.Context, time.Time) (int64, error)
 	CompleteUpload(context.Context, manageddata.CompleteUploadInput) (manageddata.Revision, error)

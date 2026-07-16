@@ -26,6 +26,7 @@ type Manifest struct {
 	WorkspaceID    string         `json:"workspaceId"`
 	WorkspaceTitle string         `json:"workspaceTitle"`
 	Environment    string         `json:"environment"`
+	ProjectDigest  string         `json:"projectDigest"`
 	CatalogPath    string         `json:"catalogPath"`
 	CompiledPath   string         `json:"compiledPath"`
 	GraphHash      string         `json:"graphHash"`
@@ -161,6 +162,7 @@ func PackProject(projectPath string, options PackProjectOptions, out io.Writer) 
 		WorkspaceID:    options.WorkspaceID,
 		WorkspaceTitle: compiledWorkspace.Workspace.Title,
 		Environment:    string(environment),
+		ProjectDigest:  projectDigest,
 		CatalogPath:    ProjectFile,
 		CompiledPath:   CompiledProjectFile,
 		GraphHash:      digestBytes(compiledBytes),
@@ -371,15 +373,12 @@ func ValidateArtifactWithOptions(path string, workspaceID servingstate.Workspace
 			return servingstate.Validation{}, fmt.Errorf("compiled artifact environment = %q, want %q", compiled.Environment, expectedEnvironment)
 		}
 	}
-	if compiled.ServingStateID != string(servingStateID) {
-		os.RemoveAll(root)
-		return servingstate.Validation{}, fmt.Errorf("compiled artifact serving state = %q, want %q", compiled.ServingStateID, servingStateID)
-	}
-	if err := workspace.ValidateAssetGraphForServingState(compiled.Graph, workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID)); err != nil {
+	if err := ValidateCompiledWorkspaceArtifact(compiled); err != nil {
 		os.RemoveAll(root)
 		return servingstate.Validation{}, err
 	}
-	if err := ValidateCompiledWorkspaceArtifact(compiled); err != nil {
+	compiled.Graph = retargetArtifactGraph(compiled.Graph, workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID))
+	if err := workspace.ValidateAssetGraphForServingState(compiled.Graph, workspace.WorkspaceID(workspaceID), workspace.ServingStateID(servingStateID)); err != nil {
 		os.RemoveAll(root)
 		return servingstate.Validation{}, err
 	}
@@ -399,6 +398,23 @@ func ValidateArtifactWithOptions(path string, workspaceID servingstate.Workspace
 		ManagedDataRevisions: cloneStringMap(compiled.ManagedDataRevisions),
 		Graph:                compiled.Graph,
 	}, nil
+}
+
+func retargetArtifactGraph(graph workspace.AssetGraph, workspaceID workspace.WorkspaceID, servingStateID workspace.ServingStateID) workspace.AssetGraph {
+	out := workspace.AssetGraph{Assets: make([]workspace.Asset, 0, len(graph.Assets)), Edges: make([]workspace.AssetEdge, 0, len(graph.Edges))}
+	for _, asset := range graph.Assets {
+		asset.WorkspaceID = workspaceID
+		asset.ServingStateID = servingStateID
+		asset.SnapshotID = workspace.NewAssetSnapshotID(servingStateID, asset.ID)
+		out.Assets = append(out.Assets, asset)
+	}
+	for _, edge := range graph.Edges {
+		edge.WorkspaceID = workspaceID
+		edge.ServingStateID = servingStateID
+		edge.ID = workspace.NewAssetEdgeID(servingStateID, edge.FromAssetID, edge.ToAssetID, edge.Type)
+		out.Edges = append(out.Edges, edge)
+	}
+	return out
 }
 
 func cloneStringMap(values map[string]string) map[string]string {

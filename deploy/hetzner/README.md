@@ -63,7 +63,6 @@ libredash deploy \
   --project ../../dashboards/libredash.yaml \
   --revision "olist=sha256:<64-lowercase-hex>" \
   --target "$(terraform output -raw url)" \
-  --environment prod \
   --auto-approve
 ```
 

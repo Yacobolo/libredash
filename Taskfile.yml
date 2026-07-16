@@ -63,7 +63,7 @@ tasks:
         printf '%s\n' "$SYNC_OUTPUT"
         REVISION="$(printf '%s\n' "$SYNC_OUTPUT" | awk '$1 == "staged" { print $2 }')"
         printf '%s\n' "$REVISION" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "Managed data sync did not return a canonical revision."; exit 1; }
-        go run ./cmd/libredash deploy --project dashboards/libredash.yaml --revision "olist=$REVISION" --target "http://localhost:${PORT}" --token dev --environment dev --auto-approve
+        go run ./cmd/libredash deploy --project dashboards/libredash.yaml --revision "olist=$REVISION" --target "http://localhost:${PORT}" --token dev --auto-approve
 
   dev:quack:status:
     desc: Show managed LibreDash dev server status with the local Quack profile

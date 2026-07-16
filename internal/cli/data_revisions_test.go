@@ -20,8 +20,8 @@ func TestDataRevisionsListAndCurrent(t *testing.T) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/revisions"):
 			writeJSONTest(t, w, http.StatusOK, apigenapi.ManagedDataRevisionListResponse{Items: []apigenapi.ManagedDataRevisionSummaryResponse{{Id: digest, Status: apigenapi.ManagedDataRevisionStatusAvailable, FileCount: 2, Size: 12, CreatedAt: "2026-01-01T00:00:00Z", UploadSessionId: "upload-1"}}, Page: apigenapi.PageInfo{}})
-		case strings.HasSuffix(r.URL.Path, "/environments/prod/revision"):
-			writeJSONTest(t, w, http.StatusOK, apigenapi.ManagedDataEnvironmentRevisionResponse{Environment: "prod", Revision: &apigenapi.ManagedDataRevisionSummaryResponse{Id: digest, Status: apigenapi.ManagedDataRevisionStatusAvailable, FileCount: 2, Size: 12, CreatedAt: "2026-01-01T00:00:00Z", UploadSessionId: "upload-1"}})
+		case strings.HasSuffix(r.URL.Path, "/active-revision"):
+			writeJSONTest(t, w, http.StatusOK, apigenapi.ManagedDataActiveRevisionResponse{Revision: &apigenapi.ManagedDataRevisionSummaryResponse{Id: digest, Status: apigenapi.ManagedDataRevisionStatusAvailable, FileCount: 2, Size: 12, CreatedAt: "2026-01-01T00:00:00Z", UploadSessionId: "upload-1"}})
 		default:
 			t.Fatalf("request path = %s", r.URL.Path)
 		}
@@ -40,7 +40,7 @@ func TestDataRevisionsListAndCurrent(t *testing.T) {
 	}
 
 	var currentOut bytes.Buffer
-	if err := runDataRevisionCurrent(context.Background(), opts, dataRevisionOptions{project: "demo", connection: "orders", environment: "prod"}, client, &currentOut); err != nil {
+	if err := runDataRevisionCurrent(context.Background(), opts, dataRevisionOptions{project: "demo", connection: "orders"}, client, &currentOut); err != nil {
 		t.Fatalf("runDataRevisionCurrent() error = %v", err)
 	}
 	if got, want := strings.TrimSpace(currentOut.String()), digest; got != want {
@@ -50,12 +50,12 @@ func TestDataRevisionsListAndCurrent(t *testing.T) {
 
 func TestDataRevisionCurrentPrintsNone(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		writeJSONTest(t, w, http.StatusOK, apigenapi.ManagedDataEnvironmentRevisionResponse{Environment: "dev"})
+		writeJSONTest(t, w, http.StatusOK, apigenapi.ManagedDataActiveRevisionResponse{})
 	}))
 	defer server.Close()
 	var out bytes.Buffer
 	client := newManagedDataCLIClient(server.Client(), server.URL, "token")
-	if err := runDataRevisionCurrent(context.Background(), &rootOptions{}, dataRevisionOptions{project: "demo", connection: "orders", environment: "dev"}, client, &out); err != nil {
+	if err := runDataRevisionCurrent(context.Background(), &rootOptions{}, dataRevisionOptions{project: "demo", connection: "orders"}, client, &out); err != nil {
 		t.Fatal(err)
 	}
 	if got := out.String(); got != "none\n" {

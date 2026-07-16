@@ -1,8 +1,38 @@
 using Http;
 using TypeSpec.OpenAPI;
 
-@route("/projects/{project}/data-connections/{connection}")
-namespace LibreDashAPI.ManagedData;
+@route("/api/v1")
+namespace LibreDashAPI;
+
+model ManagedConnectionResponse {
+  id: string;
+  projectId: string;
+  title: string;
+  description?: string;
+  activeRevisionId?: string;
+}
+
+model ManagedConnectionListResponse {
+  items: ManagedConnectionResponse[];
+  page: PageInfo;
+}
+
+@tag("Managed Data")
+@summary("List project managed connections")
+@route("/projects/{project}/connections")
+@get
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_DATA" })
+op listManagedConnections(@path project: string, @query limit?: int32, @query pageToken?: string): OkJson<ManagedConnectionListResponse> | CommonErrors;
+
+@tag("Managed Data")
+@summary("Describe a project managed connection")
+@route("/projects/{project}/connections/{connection}")
+@get
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_DATA" })
+op getManagedConnection(@path project: string, @path connection: string): OkJson<ManagedConnectionResponse> | CommonErrors;
+
+@route("/projects/{project}/connections/{connection}")
+namespace ManagedData {
 
 @minLength(1)
 @maxLength(128)
@@ -107,7 +137,7 @@ enum ManagedDataUploadSessionStatus {
   open;
   finalizing;
   completed;
-  aborted;
+  cancelled;
   failed;
   expired;
 }
@@ -186,10 +216,9 @@ model ManagedDataRevisionListResponse {
   page: PageInfo;
 }
 
-model ManagedDataEnvironmentRevisionResponse {
-  environment: ManagedDataEnvironmentId;
+model ManagedDataActiveRevisionResponse {
   revision?: ManagedDataRevisionSummaryResponse;
-  deploymentId?: ProjectDeploymentId;
+  deploymentId?: string;
   activatedAt?: utcDateTime;
 }
 
@@ -247,6 +276,11 @@ model ManagedDataUploadSessionResponse {
   error?: ManagedDataErrorMessage;
 }
 
+model ManagedDataUploadSessionListResponse {
+  items: ManagedDataUploadSessionResponse[];
+  page: PageInfo;
+}
+
 model ManagedDataS3MultipartCreateRequest {
   path: ManagedDataLogicalPath;
 }
@@ -291,16 +325,15 @@ model ManagedDataS3MultipartCompleteRequest {
 }
 
 @tag("Managed Data")
-@summary("Get the current managed-data revision for an environment")
-@route("/environments/{environment}/revision")
+@summary("Get the active managed-data revision")
+@route("/active-revision")
 @get
-@operationId("getManagedDataEnvironmentRevision")
+@operationId("getActiveManagedDataRevision")
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_DATA" })
-op getManagedDataEnvironmentRevision(
+op getActiveManagedDataRevision(
   @path project: ManagedDataProjectId,
   @path connection: ManagedDataConnectionId,
-  @path environment: ManagedDataEnvironmentId,
-): OkJson<ManagedDataEnvironmentRevisionResponse> | CommonErrors;
+): OkJson<ManagedDataActiveRevisionResponse> | CommonErrors;
 
 @tag("Managed Data")
 @summary("List immutable managed-data revisions")
@@ -341,6 +374,19 @@ op createManagedDataUploadSession(
 ): CreatedJson<ManagedDataUploadSessionResponse> | CommonErrors;
 
 @tag("Managed Data")
+@summary("List managed-data upload sessions")
+@route("/upload-sessions")
+@get
+@operationId("listManagedDataUploadSessions")
+@apigen.authz(#{ mode: "privilege", privilege: "INGEST_DATA" })
+op listManagedDataUploadSessions(
+  @path project: ManagedDataProjectId,
+  @path connection: ManagedDataConnectionId,
+  @query limit?: ManagedDataPageLimit,
+  @query pageToken?: ManagedDataPageToken,
+): OkJson<ManagedDataUploadSessionListResponse> | CommonErrors;
+
+@tag("Managed Data")
 @summary("Get a managed-data upload session")
 @route("/upload-sessions/{uploadSession}")
 @get
@@ -353,12 +399,12 @@ op getManagedDataUploadSession(
 ): OkJson<ManagedDataUploadSessionResponse> | CommonErrors;
 
 @tag("Managed Data")
-@summary("Abort a managed-data upload session")
-@route("/upload-sessions/{uploadSession}/abort")
+@summary("Cancel a managed-data upload session")
+@route("/upload-sessions/{uploadSession}/cancel")
 @post
-@operationId("abortManagedDataUploadSession")
+@operationId("cancelManagedDataUploadSession")
 @apigen.authz(#{ mode: "privilege", privilege: "INGEST_DATA" })
-op abortManagedDataUploadSession(
+op cancelManagedDataUploadSession(
   @path project: ManagedDataProjectId,
   @path connection: ManagedDataConnectionId,
   @path uploadSession: ManagedDataUploadSessionId,
@@ -377,6 +423,22 @@ op finalizeManagedDataUploadSession(
   @path uploadSession: ManagedDataUploadSessionId,
   @header("Idempotency-Key") idempotencyKey: ManagedDataIdempotencyKey,
 ): AcceptedJson<ManagedDataUploadSessionResponse> | CommonErrors;
+
+@tag("Managed Data")
+@summary("List or stream upload-session events")
+@route("/upload-sessions/{uploadSession}/events")
+@get
+@operationId("listManagedDataUploadSessionEvents")
+@apigen.authz(#{ mode: "privilege", privilege: "INGEST_DATA" })
+op listManagedDataUploadSessionEvents(
+  @path project: ManagedDataProjectId,
+  @path connection: ManagedDataConnectionId,
+  @path uploadSession: ManagedDataUploadSessionId,
+  @header accept?: string,
+  @header("Last-Event-ID") lastEventId?: string,
+  @query limit?: ManagedDataPageLimit,
+  @query pageToken?: ManagedDataPageToken,
+): EventHistoryResponse<AsyncEventListResponse> | CommonErrors;
 
 @tag("Managed Data")
 @summary("Create an S3 multipart upload for a session file")
@@ -404,6 +466,7 @@ op signManagedDataS3MultipartPart(
   @path uploadSession: ManagedDataUploadSessionId,
   @path multipartUpload: ManagedDataMultipartUploadId,
   @path partNumber: ManagedDataS3PartNumber,
+  @header("Idempotency-Key") idempotencyKey: ManagedDataIdempotencyKey,
   @body body: ManagedDataS3MultipartSignPartRequest,
 ): OkJson<ManagedDataS3MultipartSignedPartResponse> | CommonErrors;
 
@@ -435,3 +498,5 @@ op abortManagedDataS3MultipartUpload(
   @path multipartUpload: ManagedDataMultipartUploadId,
   @header("Idempotency-Key") idempotencyKey: ManagedDataIdempotencyKey,
 ): OkJson<ManagedDataS3MultipartUploadResponse> | CommonErrors;
+
+}
