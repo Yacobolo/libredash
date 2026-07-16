@@ -93,6 +93,38 @@ test('site brand pairs the LibreDash wordmark with a Lucide dashboard mark', asy
   }
 })
 
+test('documentation header keeps only search and theme actions', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  try {
+    await page.goto(`${baseURL}/docs/introduction`)
+    const header = page.locator('.site-header')
+    const actions = header.locator('.site-nav-actions')
+    expect(await header.getByRole('link', { name: 'LibreDash', exact: true }).count()).toBe(1)
+    expect(await actions.locator('ld-site-search').count()).toBe(1)
+    expect(await actions.locator('ld-site-theme-toggle').count()).toBe(1)
+    expect(await actions.locator('ld-site-docs-drawer-toggle').count()).toBe(0)
+    expect(await actions.locator('ld-site-mobile-menu').count()).toBe(0)
+    expect(await actions.getByRole('link', { name: 'Docs', exact: true }).count()).toBe(0)
+    expect(await actions.getByRole('link', { name: 'Demo', exact: true }).count()).toBe(0)
+    expect(await actions.getByRole('link', { name: 'Charts', exact: true }).count()).toBe(0)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    expect(await actions.getByRole('button', { name: 'Search documentation' }).isVisible()).toBe(true)
+    const docsMenu = page.locator('.site-docs-article-header ld-site-docs-drawer-toggle:not([placement])')
+    expect(await docsMenu.count()).toBe(1)
+    expect(await docsMenu.getByRole('button', { name: 'Open documentation menu' }).isVisible()).toBe(true)
+
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(baseURL)
+    const siteActions = page.locator('.site-header .site-nav-actions')
+    expect(await siteActions.getByRole('link', { name: 'Docs', exact: true }).count()).toBe(1)
+    expect(await siteActions.getByRole('link', { name: 'Demo', exact: true }).count()).toBe(1)
+    expect(await siteActions.getByRole('link', { name: 'Charts', exact: true }).count()).toBe(1)
+  } finally {
+    await page.close()
+  }
+})
+
 test('site supports system, light, and dark color modes', async () => {
   const page = await browser.newPage()
   try {
@@ -333,10 +365,17 @@ test('documentation articles provide a readable, navigable reference experience'
       const unorderedList = article.querySelector('ul') as HTMLElement
       const heading = article.querySelector('h1') as HTMLElement
       const action = article.querySelector('ld-site-markdown-copy') as HTMLElement
+      const code = article.querySelector('pre code') as HTMLElement
+      const navigation = document.querySelector('.site-docs-link') as HTMLElement
       return {
         articleWidth: article.getBoundingClientRect().width,
+        codeFontSize: Number.parseFloat(getComputedStyle(code).fontSize),
+        headingFontSize: Number.parseFloat(getComputedStyle(heading).fontSize),
+        headingLineHeight: Number.parseFloat(getComputedStyle(heading).lineHeight),
+        navigationFontSize: Number.parseFloat(getComputedStyle(navigation).fontSize),
         paragraphWidth: paragraph.getBoundingClientRect().width,
         paragraphFontSize: Number.parseFloat(getComputedStyle(paragraph).fontSize),
+        paragraphLineHeight: Number.parseFloat(getComputedStyle(paragraph).lineHeight),
         paragraphColor: getComputedStyle(paragraph).color,
         articleColor: getComputedStyle(article).color,
         orderedListStyle: getComputedStyle(orderedList).listStyleType,
@@ -345,7 +384,12 @@ test('documentation articles provide a readable, navigable reference experience'
         actionLeft: action.getBoundingClientRect().left,
       }
     })
-    expect(typography.paragraphFontSize).toBeGreaterThanOrEqual(16)
+    expect(typography.headingFontSize).toBe(36)
+    expect(typography.headingLineHeight / typography.headingFontSize).toBeCloseTo(1.2, 2)
+    expect(typography.paragraphFontSize).toBe(15)
+    expect(typography.paragraphLineHeight / typography.paragraphFontSize).toBeCloseTo(1.65, 2)
+    expect(typography.codeFontSize).toBe(14)
+    expect(typography.navigationFontSize).toBe(13)
     expect(typography.paragraphColor).toBe(typography.articleColor)
     expect(typography.orderedListStyle).toBe('decimal')
     expect(typography.unorderedListStyle).toBe('disc')
@@ -391,11 +435,17 @@ test('documentation articles provide a readable, navigable reference experience'
   }
 })
 
-test('documentation navigation collapses before the prose becomes cramped', async () => {
-  const page = await browser.newPage({ viewport: { width: 837, height: 900 } })
+test('documentation navigation follows DuckDBs 900px drawer breakpoint', async () => {
+  const page = await browser.newPage({ viewport: { width: 901, height: 900 } })
   try {
     await page.goto(`${baseURL}/docs/guides/build`)
     const sidebar = page.locator('.site-docs-sidebar')
+    expect(await sidebar.evaluate((element) => getComputedStyle(element).position)).toBe('sticky')
+    expect(await sidebar.getAttribute('aria-hidden')).toBe('false')
+    expect(await page.getByRole('button', { name: 'Open documentation menu' }).isVisible()).toBe(false)
+
+    await page.setViewportSize({ width: 900, height: 900 })
+    await page.waitForFunction(() => document.querySelector('.site-docs-sidebar')?.getAttribute('aria-hidden') === 'true')
     expect(await sidebar.evaluate((element) => getComputedStyle(element).position)).toBe('fixed')
     expect(await sidebar.getAttribute('aria-hidden')).toBe('true')
     expect(await page.getByRole('button', { name: 'Open documentation menu' }).isVisible()).toBe(true)
@@ -433,6 +483,8 @@ test('documentation reading columns stay centered and readable at every layout t
       const articleRect = article.getBoundingClientRect()
       const paragraphRect = paragraph.getBoundingClientRect()
       const shellRect = shell.getBoundingClientRect()
+      const sectionHeading = article.querySelector('h2') as HTMLElement
+      const precedingBlock = sectionHeading.previousElementSibling as HTMLElement
       return {
         articleLeftSpace: articleRect.left - shellRect.left,
         articleRightSpace: shellRect.right - articleRect.right,
@@ -441,6 +493,7 @@ test('documentation reading columns stay centered and readable at every layout t
         paragraphWidth: paragraphRect.width,
         readingLeftSpace: readingRect.left - (contentRect.left + Number.parseFloat(contentStyle.paddingLeft)),
         readingRightSpace: contentRect.right - Number.parseFloat(contentStyle.paddingRight) - readingRect.right,
+        sectionGap: sectionHeading.getBoundingClientRect().top - precedingBlock.getBoundingClientRect().bottom,
         shellWidth: shellRect.width,
       }
     })
@@ -448,14 +501,26 @@ test('documentation reading columns stay centered and readable at every layout t
     const wide = await measure()
     expect(wide.outlineVisible).toBe(true)
     expect(Math.abs(wide.readingLeftSpace - wide.readingRightSpace)).toBeLessThanOrEqual(1)
-    expect(wide.articleWidth).toBeLessThanOrEqual(816)
+    expect(wide.articleWidth).toBeGreaterThanOrEqual(1000)
+    expect(wide.articleWidth).toBeLessThanOrEqual(1024)
     expect(Math.abs(wide.paragraphWidth - wide.articleWidth)).toBeLessThanOrEqual(1)
+    expect(wide.sectionGap).toBeGreaterThanOrEqual(40)
+    expect(wide.sectionGap).toBeLessThanOrEqual(60)
+
+    await page.setViewportSize({ width: 1201, height: 900 })
+    const withOutline = await measure()
+    expect(withOutline.outlineVisible).toBe(true)
+    expect(Math.abs(withOutline.readingLeftSpace - withOutline.readingRightSpace)).toBeLessThanOrEqual(1)
+    expect(withOutline.articleWidth).toBeGreaterThan(600)
+    expect(withOutline.articleWidth).toBeLessThan(800)
+    expect(Math.abs(withOutline.paragraphWidth - withOutline.articleWidth)).toBeLessThanOrEqual(1)
 
     await page.setViewportSize({ width: 1200, height: 900 })
     const desktop = await measure()
     expect(desktop.outlineVisible).toBe(false)
     expect(Math.abs(desktop.articleLeftSpace - desktop.articleRightSpace)).toBeLessThanOrEqual(1)
-    expect(desktop.articleWidth).toBeLessThanOrEqual(816)
+    expect(desktop.articleWidth).toBeGreaterThan(816)
+    expect(desktop.articleWidth).toBeLessThanOrEqual(1024)
     expect(Math.abs(desktop.paragraphWidth - desktop.articleWidth)).toBeLessThanOrEqual(1)
 
     await page.setViewportSize({ width: 768, height: 900 })
@@ -487,7 +552,7 @@ test('documentation CSS keeps site tokens available and fragment targets below t
     }))
     expect(runtimeStyles.readingWidth).not.toBe('')
     expect(Math.abs(runtimeStyles.articleWidth - runtimeStyles.shellWidth)).toBeLessThanOrEqual(1)
-    expect(runtimeStyles.articleWidth).toBeLessThanOrEqual(816)
+    expect(runtimeStyles.articleWidth).toBeLessThanOrEqual(1024)
 
     await page.getByRole('navigation', { name: 'In this article' }).getByRole('link', { name: 'Run LibreDash' }).click()
     await page.waitForFunction(() => location.hash === '#run-libredash')
@@ -512,25 +577,104 @@ test('site disables smooth scrolling for reduced motion', async () => {
   }
 })
 
-test('documentation header keeps the Markdown copy action in the viewport', async () => {
-  const page = await browser.newPage()
+test('documentation header keeps the Markdown copy action beside the title at every width', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   try {
-    await page.setViewportSize({ width: 559, height: 793 })
     await page.goto(`${baseURL}/docs/configuration`)
-    const layout = await page.locator('.site-docs-article').evaluate((article) => {
+
+    const measure = () => page.locator('.site-docs-article').evaluate((article) => {
       const button = document.querySelector('ld-site-markdown-copy')?.shadowRoot?.querySelector('button')
       const title = article.querySelector('h1')
+      const action = article.querySelector('.site-docs-article-actions')
+      const buttonStyle = button ? getComputedStyle(button) : null
+      const titleRect = title?.getBoundingClientRect()
+      const actionRect = action?.getBoundingClientRect()
+      const buttonRect = button?.getBoundingClientRect()
       return {
-        buttonLeft: button?.getBoundingClientRect().left ?? 0,
-        buttonRight: button?.getBoundingClientRect().right ?? 0,
+        actionTop: actionRect?.top ?? 0,
+        buttonFontSize: Number.parseFloat(buttonStyle?.fontSize ?? '0'),
+        buttonHeight: buttonRect?.height ?? 0,
+        buttonLeft: buttonRect?.left ?? 0,
+        buttonRight: buttonRect?.right ?? 0,
         pageWidth: document.documentElement.scrollWidth,
-        titleLeft: title?.getBoundingClientRect().left ?? 0,
+        titleBottom: titleRect?.bottom ?? 0,
+        titleLeft: titleRect?.left ?? 0,
+        titleRight: titleRect?.right ?? 0,
+        titleTop: titleRect?.top ?? 0,
         viewportWidth: window.innerWidth,
       }
     })
-    expect(layout.buttonLeft).toBe(layout.titleLeft)
-    expect(layout.buttonRight).toBeLessThanOrEqual(layout.viewportWidth)
-    expect(layout.pageWidth).toBeLessThanOrEqual(layout.viewportWidth)
+
+    for (const width of [1440, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 })
+      const layout = await measure()
+      expect(layout.buttonFontSize).toBe(12)
+      expect(layout.buttonHeight).toBe(33)
+      expect(layout.buttonLeft).toBeGreaterThanOrEqual(layout.titleRight)
+      expect(layout.actionTop).toBeGreaterThanOrEqual(layout.titleTop)
+      expect(layout.actionTop).toBeLessThan(layout.titleBottom)
+      expect(layout.buttonRight).toBeLessThanOrEqual(layout.viewportWidth)
+      expect(layout.pageWidth).toBeLessThanOrEqual(layout.viewportWidth)
+    }
+  } finally {
+    await page.close()
+  }
+})
+
+test('documentation articles end with a DuckDB-style About this page panel', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+  try {
+    await page.goto(`${baseURL}/docs/getting-started`)
+    const article = page.locator('.site-docs-article')
+    const panel = article.locator('.site-docs-page-meta')
+    expect(await panel.getByRole('heading', { name: 'About this page', exact: true }).count()).toBe(1)
+    expect(await panel.getByRole('link', { name: 'Report content issue', exact: true }).getAttribute('href')).toContain('github.com/Yacobolo/libredash/issues/new?')
+    expect(await panel.getByRole('link', { name: 'See this page as Markdown', exact: true }).getAttribute('href')).toBe('https://raw.githubusercontent.com/Yacobolo/libredash/main/docs/getting-started.md')
+    expect(await panel.getByRole('link', { name: 'Edit this page on GitHub', exact: true }).getAttribute('href')).toBe('https://github.com/Yacobolo/libredash/edit/main/docs/getting-started.md')
+
+    const measure = () => panel.evaluate((element) => {
+      const article = element.closest('.site-docs-article') as HTMLElement
+      const heading = element.querySelector('h2') as HTMLElement
+      const list = element.querySelector('ul') as HTMLElement
+      const item = element.querySelector('li') as HTMLElement
+      const panelStyle = getComputedStyle(element)
+      const headingStyle = getComputedStyle(heading)
+      const listStyle = getComputedStyle(list)
+      const itemStyle = getComputedStyle(item)
+      return {
+        articleWidth: article.getBoundingClientRect().width,
+        background: panelStyle.backgroundColor,
+        borderRadius: Number.parseFloat(panelStyle.borderRadius),
+        headingFontSize: Number.parseFloat(headingStyle.fontSize),
+        headingLineHeight: Number.parseFloat(headingStyle.lineHeight),
+        headingMarginBottom: Number.parseFloat(headingStyle.marginBottom),
+        itemFontSize: Number.parseFloat(itemStyle.fontSize),
+        itemLineHeight: Number.parseFloat(itemStyle.lineHeight),
+        listStyle: listStyle.listStyleType,
+        padding: Number.parseFloat(panelStyle.paddingTop),
+        paddingLeft: Number.parseFloat(listStyle.paddingLeft),
+        panelWidth: element.getBoundingClientRect().width,
+      }
+    })
+
+    const desktop = await measure()
+    expect(desktop.background).not.toBe('rgba(0, 0, 0, 0)')
+    expect(desktop.borderRadius).toBe(6)
+    expect(desktop.padding).toBe(20)
+    expect(desktop.headingFontSize).toBe(14)
+    expect(desktop.headingLineHeight / desktop.headingFontSize).toBeCloseTo(1.2, 2)
+    expect(desktop.headingMarginBottom).toBe(7)
+    expect(desktop.itemFontSize).toBe(14)
+    expect(desktop.itemLineHeight / desktop.itemFontSize).toBeCloseTo(1.4, 2)
+    expect(desktop.listStyle).toBe('disc')
+    expect(desktop.paddingLeft).toBe(20)
+    expect(Math.abs(desktop.panelWidth - desktop.articleWidth)).toBeLessThanOrEqual(1)
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    const mobile = await measure()
+    expect(mobile.padding).toBe(20)
+    expect(Math.abs(mobile.panelWidth - mobile.articleWidth)).toBeLessThanOrEqual(1)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   } finally {
     await page.close()
   }
@@ -546,7 +690,7 @@ test('compact documentation navigation opens in a drawer', async () => {
     await page.goto(`${baseURL}/docs/getting-started`)
 
     const sidebar = page.locator('.site-docs-sidebar')
-    const headerDrawerToggle = page.locator('ld-site-docs-drawer-toggle').first()
+    const headerDrawerToggle = page.locator('ld-site-docs-drawer-toggle:not([placement])')
     const toggle = page.getByRole('button', { name: 'Open documentation menu' })
     expect(await toggle.isVisible()).toBe(true)
     expect(await toggle.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44)
@@ -560,7 +704,7 @@ test('compact documentation navigation opens in a drawer', async () => {
     expect(await sidebar.locator('.site-docs-link').first().evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44)
     expect(await sidebar.evaluate((element) => getComputedStyle(element).transitionDuration)).not.toBe('0s')
 
-    await page.getByRole('button', { name: 'Close documentation menu' }).last().click()
+    await page.locator('ld-site-docs-drawer-toggle[placement="drawer"]').getByRole('button', { name: 'Close documentation menu' }).click()
     await page.waitForFunction(() => !document.querySelector('.site-docs-layout')?.classList.contains('site-docs-drawer-open'))
     expect(await headerDrawerToggle.evaluate((element) => element.shadowRoot?.querySelector('button')?.getAttribute('aria-expanded'))).toBe('false')
   } finally {
@@ -568,29 +712,96 @@ test('compact documentation navigation opens in a drawer', async () => {
   }
 })
 
-test('documentation outlines distinguish major sections from subsections', async () => {
+test('documentation outlines match the compact DuckDB article navigation treatment', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   try {
     await page.goto(`${baseURL}/docs/guides/build/model-tables`)
     const toc = page.locator('ld-site-article-toc')
-    const major = toc.locator('a[data-level="2"]').first()
-    const subsection = toc.locator('a[data-level="3"]').first()
     expect(await toc.locator('a[data-level="2"]').count()).toBeGreaterThanOrEqual(2)
     expect(await toc.locator('a[data-level="3"]').count()).toBeGreaterThanOrEqual(2)
-    const tocHierarchy = await major.evaluate((majorLink, subsectionLink) => ({
-      majorFontSize: Number.parseFloat(getComputedStyle(majorLink).fontSize),
-      majorPadding: Number.parseFloat(getComputedStyle(majorLink).paddingLeft),
-      subsectionFontSize: Number.parseFloat(getComputedStyle(subsectionLink as Element).fontSize),
-      subsectionPadding: Number.parseFloat(getComputedStyle(subsectionLink as Element).paddingLeft),
-    }), await subsection.elementHandle())
-    expect(tocHierarchy.majorFontSize).toBeGreaterThan(tocHierarchy.subsectionFontSize)
-    expect(tocHierarchy.subsectionPadding).toBeGreaterThan(tocHierarchy.majorPadding)
+    const tocTreatment = await toc.evaluate((element) => {
+      const root = element.shadowRoot?.querySelector<HTMLElement>('ul#toc')
+      const nested = root?.querySelector<HTMLElement>(':scope > li > ul')
+      const heading = element.shadowRoot?.querySelector<HTMLElement>('nav > h2')
+      const major = root?.querySelector<HTMLElement>(':scope > li > a[data-level="2"]')
+      const subsection = nested?.querySelector<HTMLElement>(':scope > li > a[data-level="3"]')
+      const active = root?.querySelector<HTMLElement>('a.active')
+      const inactive = root?.querySelector<HTMLElement>('a:not(.active)')
+      const headingStyle = heading ? getComputedStyle(heading) : null
+      const rootStyle = root ? getComputedStyle(root) : null
+      const nestedStyle = nested ? getComputedStyle(nested) : null
+      const majorStyle = major ? getComputedStyle(major) : null
+      const subsectionStyle = subsection ? getComputedStyle(subsection) : null
+      const activeStyle = active ? getComputedStyle(active) : null
+      const inactiveStyle = inactive ? getComputedStyle(inactive) : null
+      return {
+        activeColor: activeStyle?.color,
+        activeWeight: activeStyle?.fontWeight,
+        headingFontSize: Number.parseFloat(headingStyle?.fontSize ?? '0'),
+        headingLetterSpacing: Number.parseFloat(headingStyle?.letterSpacing ?? '0'),
+        headingLineHeight: Number.parseFloat(headingStyle?.lineHeight ?? '0'),
+        headingMarginLeft: Number.parseFloat(headingStyle?.marginLeft ?? '0'),
+        headingTransform: headingStyle?.textTransform,
+        hostOverflow: getComputedStyle(element).overflow,
+        hostPosition: getComputedStyle(element).position,
+        inactiveColor: inactiveStyle?.color,
+        inactiveWeight: inactiveStyle?.fontWeight,
+        majorBorderRadius: Number.parseFloat(majorStyle?.borderRadius ?? '0'),
+        majorFontSize: Number.parseFloat(majorStyle?.fontSize ?? '0'),
+        majorLineHeight: Number.parseFloat(majorStyle?.lineHeight ?? '0'),
+        majorPaddingBlock: Number.parseFloat(majorStyle?.paddingTop ?? '0'),
+        majorPaddingInline: Number.parseFloat(majorStyle?.paddingLeft ?? '0'),
+        nestedBorderLeftWidth: nestedStyle?.borderLeftWidth,
+        nestedIndent: nested && root ? nested.getBoundingClientRect().left - root.getBoundingClientRect().left : 0,
+        rootListStyle: rootStyle?.listStyleType,
+        rootMarginTop: Number.parseFloat(rootStyle?.marginTop ?? '0'),
+        subsectionFontSize: Number.parseFloat(subsectionStyle?.fontSize ?? '0'),
+        subsectionOffset: subsection && major ? subsection.getBoundingClientRect().left - major.getBoundingClientRect().left : 0,
+      }
+    })
+    expect(tocTreatment.hostPosition).toBe('sticky')
+    expect(tocTreatment.hostOverflow).toBe('auto')
+    expect(tocTreatment.headingFontSize).toBe(12)
+    expect(tocTreatment.headingLineHeight / tocTreatment.headingFontSize).toBeCloseTo(1.2, 2)
+    expect(tocTreatment.headingLetterSpacing).toBeCloseTo(0.36, 2)
+    expect(tocTreatment.headingMarginLeft).toBe(12)
+    expect(tocTreatment.headingTransform).toBe('uppercase')
+    expect(tocTreatment.rootListStyle).toBe('none')
+    expect(tocTreatment.rootMarginTop).toBe(15)
+    expect(tocTreatment.majorFontSize).toBe(12)
+    expect(tocTreatment.subsectionFontSize).toBe(12)
+    expect(tocTreatment.majorLineHeight).toBe(12)
+    expect(tocTreatment.majorPaddingBlock).toBe(6)
+    expect(tocTreatment.majorPaddingInline).toBe(12)
+    expect(tocTreatment.majorBorderRadius).toBeGreaterThan(1000)
+    expect(tocTreatment.nestedBorderLeftWidth).toBe('1px')
+    expect(tocTreatment.nestedIndent).toBe(15)
+    expect(tocTreatment.subsectionOffset).toBe(16)
+    expect(tocTreatment.activeColor).not.toBe(tocTreatment.inactiveColor)
+    expect(tocTreatment.activeWeight).toBe(tocTreatment.inactiveWeight)
 
-    const articleHierarchy = await page.locator('.site-docs-article').evaluate((article) => ({
-      h2: Number.parseFloat(getComputedStyle(article.querySelector('h2') as Element).fontSize),
-      h3: Number.parseFloat(getComputedStyle(article.querySelector('h3') as Element).fontSize),
-    }))
-    expect(articleHierarchy.h2).toBeGreaterThan(articleHierarchy.h3)
+    const articleHierarchy = await page.locator('.site-docs-article').evaluate((article) => {
+      const generatedHeadings = ['h4', 'h5', 'h6'].map((tagName) => {
+        const heading = document.createElement(tagName)
+        heading.textContent = tagName
+        article.append(heading)
+        return heading
+      })
+      const sizes = {
+        h2: Number.parseFloat(getComputedStyle(article.querySelector('h2') as Element).fontSize),
+        h3: Number.parseFloat(getComputedStyle(article.querySelector('h3') as Element).fontSize),
+        h4: Number.parseFloat(getComputedStyle(generatedHeadings[0]).fontSize),
+        h5: Number.parseFloat(getComputedStyle(generatedHeadings[1]).fontSize),
+        h6: Number.parseFloat(getComputedStyle(generatedHeadings[2]).fontSize),
+      }
+      generatedHeadings.forEach((heading) => heading.remove())
+      return sizes
+    })
+    expect(articleHierarchy.h2).toBe(28)
+    expect(articleHierarchy.h3).toBe(24)
+    expect(articleHierarchy.h4).toBe(18)
+    expect(articleHierarchy.h5).toBe(16)
+    expect(articleHierarchy.h6).toBe(14)
   } finally {
     await page.close()
   }

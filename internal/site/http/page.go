@@ -155,20 +155,21 @@ func siteHead() []g.Node {
 	}
 }
 
-func siteHeader(hasDocsDrawer bool) g.Node {
-	navigationLinks := []g.Node{h.A(h.Href("/docs"), g.Text("Docs"))}
-	if hasDocsDrawer {
-		navigationLinks = append(navigationLinks, siteActiveSearch())
-	}
-	navigationLinks = append(navigationLinks, h.A(h.Href("/#demo"), g.Text("Demo")), h.A(h.Href("/charts"), g.Text("Charts")))
-	actions := []g.Node{
-		h.Div(h.Class("site-nav-links"), g.Group(navigationLinks)),
-	}
-	if hasDocsDrawer {
-		actions = append(actions, g.El("ld-site-docs-drawer-toggle"))
+func siteHeader(isDocs bool) g.Node {
+	var actions []g.Node
+	if isDocs {
+		actions = append(actions, h.Div(h.Class("site-nav-links site-nav-links-docs"), siteActiveSearch()))
+	} else {
+		actions = append(actions, h.Div(h.Class("site-nav-links"),
+			h.A(h.Href("/docs"), g.Text("Docs")),
+			h.A(h.Href("/#demo"), g.Text("Demo")),
+			h.A(h.Href("/charts"), g.Text("Charts")),
+		))
 	}
 	actions = append(actions, g.El("ld-site-theme-toggle"))
-	actions = append(actions, g.El("ld-site-mobile-menu"))
+	if !isDocs {
+		actions = append(actions, g.El("ld-site-mobile-menu"))
+	}
 
 	return h.Header(h.Class("site-header"),
 		h.Nav(h.Class("site-nav"),
@@ -293,6 +294,7 @@ func siteDocsArticleHeader(document *siteDocument) g.Node {
 	}
 
 	return h.Header(h.Class("site-docs-article-header"),
+		g.El("ld-site-docs-drawer-toggle"),
 		h.Nav(h.Class("site-docs-breadcrumb"), g.Attr("aria-label", "Breadcrumb"), h.Ol(g.Group(breadcrumb))),
 	)
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -280,28 +281,47 @@ func siteDocsArticleFooter(document siteDocument) g.Node {
 	if next != nil {
 		links = append(links, h.A(h.Class("site-docs-pagination-link site-docs-pagination-next"), h.Href("/docs/"+next.slug), h.Span(g.Text("Next")), h.Strong(g.Text(next.title))))
 	}
-	label, href := documentationSourceLink(document)
+	sourceLabel, sourceHref := documentationSourceLink(document)
 	return h.Footer(h.Class("site-docs-article-footer"),
 		h.Nav(h.Class("site-docs-pagination"), g.Attr("aria-label", "Documentation pagination"), g.Group(links)),
-		h.P(h.A(h.Href(href), g.Attr("rel", "external"), g.Text(label))),
+		h.Section(h.Class("site-docs-page-meta"), g.Attr("aria-labelledby", "site-docs-about-this-page"),
+			h.H2(h.ID("site-docs-about-this-page"), g.Text("About this page")),
+			h.Ul(
+				h.Li(h.A(h.Href(documentationIssueLink(document)), g.Attr("rel", "external"), g.Text("Report content issue"))),
+				h.Li(h.A(h.Href(documentationMarkdownLink(document)), g.Attr("rel", "external"), g.Text("See this page as Markdown"))),
+				h.Li(h.A(h.Href(sourceHref), g.Attr("rel", "external"), g.Text(sourceLabel))),
+			),
+		),
 	)
+}
+
+func documentationIssueLink(document siteDocument) string {
+	query := url.Values{}
+	query.Set("title", "Docs: "+document.title)
+	query.Set("labels", "documentation")
+	query.Set("body", "Page: /docs/"+document.slug+"\n\nDescribe the content issue or suggested improvement.")
+	return "https://github.com/Yacobolo/libredash/issues/new?" + query.Encode()
+}
+
+func documentationMarkdownLink(document siteDocument) string {
+	return "https://raw.githubusercontent.com/Yacobolo/libredash/main/docs/" + document.source
 }
 
 func documentationSourceLink(document siteDocument) (string, string) {
 	const repository = "https://github.com/Yacobolo/libredash/"
 	if !strings.HasPrefix(document.markdown, "<!-- Code generated") {
-		return "Edit this page", repository + "edit/main/docs/" + document.source
+		return "Edit this page on GitHub", repository + "edit/main/docs/" + document.source
 	}
 	switch {
 	case document.source == "configuration.md":
-		return "View source contract", repository + "blob/main/internal/configspec/spec.go"
+		return "View source contract on GitHub", repository + "blob/main/internal/configspec/spec.go"
 	case strings.HasPrefix(document.source, "reference/config/"):
-		return "View source contract", repository + "blob/main/internal/configschema/contracts/contracts.cue"
+		return "View source contract on GitHub", repository + "blob/main/internal/configschema/contracts/contracts.cue"
 	case strings.HasPrefix(document.source, "reference/cli/"):
-		return "View source contract", repository + "tree/main/internal/cli"
+		return "View source contract on GitHub", repository + "tree/main/internal/cli"
 	case strings.HasPrefix(document.source, "api/"):
-		return "View source contract", repository + "tree/main/api/typespec"
+		return "View source contract on GitHub", repository + "tree/main/api/typespec"
 	default:
-		return "View source", repository + "blob/main/docs/" + document.source
+		return "View source on GitHub", repository + "blob/main/docs/" + document.source
 	}
 }

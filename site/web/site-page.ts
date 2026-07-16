@@ -530,7 +530,7 @@ class SiteDocsDrawerToggle extends LitElement {
       display: none;
     }
 
-    @media (width < 63.25rem) {
+    @media (max-width: 56.25rem) {
       :host {
         display: block;
       }
@@ -601,7 +601,7 @@ function syncDocsDrawer(open = false): void {
   const sidebar = document.querySelector<HTMLElement>('.site-docs-sidebar')
   if (!layout || !sidebar) return
 
-  const compact = window.matchMedia('(width < 63.25rem)').matches
+  const compact = window.matchMedia('(max-width: 56.25rem)').matches
   const nextOpen = compact && open
   const wasOpen = layout.classList.contains('site-docs-drawer-open')
   layout.classList.toggle('site-docs-drawer-open', nextOpen)
@@ -648,29 +648,37 @@ class SiteMarkdownCopy extends LitElement {
 
     button {
       display: inline-flex;
-      min-height: max(var(--control-medium-size), var(--control-minTarget-auto));
+      box-sizing: border-box;
+      height: 33px;
       align-items: center;
-      gap: var(--base-size-8);
+      flex-shrink: 0;
+      gap: var(--base-size-6);
       border: var(--ld-border-default);
       border-radius: var(--ld-radius-default);
-      background: var(--ld-bg-control);
-      color: var(--ld-fg-default);
+      background: transparent;
+      color: var(--ld-fg-muted);
       cursor: pointer;
       font: inherit;
       font-size: var(--ld-text-body-sm-size);
-      font-weight: var(--ld-font-weight-medium);
+      line-height: 1.3;
       padding: 0 var(--base-size-12);
+      transition: border-color var(--motion-duration-medium);
     }
 
     button:hover,
     button:focus-visible {
       border-color: var(--ld-button-border-hover);
-      background: var(--ld-button-bg-hover);
     }
 
     button:focus-visible {
       outline: var(--focus-outline);
       outline-offset: var(--focus-outline-offset);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      button {
+        transition: none;
+      }
     }
   `
 
@@ -980,6 +988,7 @@ if (!customElements.get('ld-site-chart-demo')) {
 }
 
 type ArticleSection = { id: string; label: string; level: number }
+type ArticleSectionNode = ArticleSection & { children: ArticleSectionNode[] }
 
 class SiteArticleToc extends LitElement {
   private sections: ArticleSection[] = []
@@ -987,15 +996,80 @@ class SiteArticleToc extends LitElement {
   private observer?: IntersectionObserver
 
   static styles = css`
-    :host { display: block; position: sticky; top: calc(var(--control-xlarge-size) + var(--base-size-32)); align-self: start; max-height: calc(100svh - var(--control-xlarge-size) - var(--base-size-64)); overflow: auto; }
-    nav { display: grid; gap: var(--space-xs); border-left: var(--ld-border-muted); padding-left: var(--base-size-16); }
-    h2 { margin: 0 0 var(--base-size-4); color: var(--ld-fg-muted); font-size: var(--ld-text-caption-size); font-weight: var(--ld-font-weight-strong); letter-spacing: var(--base-size-2); text-transform: uppercase; }
-    a { color: var(--ld-fg-muted); line-height: var(--ld-line-height-default); text-decoration: none; }
-    a[data-level="2"] { margin-top: var(--base-size-8); color: var(--ld-fg-default); font-size: var(--ld-text-body-md-size); font-weight: var(--ld-font-weight-medium); }
-    h2 + a[data-level="2"] { margin-top: 0; }
-    a[data-level="3"] { padding-left: var(--base-size-12); font-size: var(--ld-text-body-sm-size); }
-    a[data-level="4"] { padding-left: var(--base-size-24); color: var(--ld-fg-subtle); font-size: var(--ld-text-caption-size); }
-    a:hover, a:focus-visible, a.active { color: var(--ld-fg-default); font-weight: var(--ld-font-weight-strong); }
+    :host {
+      display: block;
+      position: sticky;
+      top: calc(var(--site-header-height) + var(--base-size-32));
+      align-self: start;
+      height: calc(100svh - var(--site-header-height) - var(--base-size-32));
+      overflow: auto;
+      scrollbar-width: none;
+    }
+
+    :host::-webkit-scrollbar {
+      display: none;
+    }
+
+    h2 {
+      margin: 0 0 0 var(--base-size-12);
+      color: var(--ld-fg-subtle);
+      font-size: var(--ld-text-body-sm-size);
+      font-weight: var(--ld-font-weight-normal);
+      letter-spacing: 0.03em;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    ul {
+      padding: 0;
+      list-style: none;
+    }
+
+    ul#toc {
+      position: relative;
+      margin: 15px 0 0;
+    }
+
+    ul ul {
+      margin: var(--base-size-2) 0 var(--base-size-2) 15px;
+      border-left: var(--ld-border-muted);
+    }
+
+    ul ul ul {
+      display: none;
+    }
+
+    li {
+      font-size: var(--ld-text-body-sm-size);
+      font-weight: var(--ld-font-weight-normal);
+      letter-spacing: 0.005em;
+      line-height: 1;
+      list-style: none;
+    }
+
+    a {
+      display: inline-block;
+      overflow: hidden;
+      max-width: 100%;
+      border-radius: var(--ld-radius-full);
+      padding: var(--base-size-6) var(--base-size-12);
+      color: var(--ld-fg-subtle);
+      line-height: 1;
+      text-decoration: none;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    a:hover,
+    a:focus-visible,
+    li.current > a {
+      color: var(--ld-fg-default);
+    }
+
+    a:focus-visible {
+      outline: var(--focus-outline);
+      outline-offset: calc(-1 * var(--focus-outline-offset));
+    }
   `
 
   connectedCallback() {
@@ -1024,7 +1098,35 @@ class SiteArticleToc extends LitElement {
     this.requestUpdate()
   }
 
-  render() { return this.sections.length ? html`<nav aria-label="In this article"><h2>In this article</h2>${this.sections.map((section) => html`<a class=${section.id === this.activeId ? 'active' : ''} data-level=${section.level} href=${`#${section.id}`}>${section.label}</a>`)}</nav>` : null }
+  private sectionTree(): ArticleSectionNode[] {
+    const roots: ArticleSectionNode[] = []
+    const stack: ArticleSectionNode[] = []
+
+    for (const section of this.sections) {
+      const node: ArticleSectionNode = { ...section, children: [] }
+      while (stack.length && stack[stack.length - 1].level >= node.level) stack.pop()
+      const parent = stack[stack.length - 1]
+      if (parent) parent.children.push(node)
+      else roots.push(node)
+      stack.push(node)
+    }
+
+    return roots
+  }
+
+  private renderSections(sections: ArticleSectionNode[]): Array<ReturnType<typeof html>> {
+    return sections.map((section) => html`
+      <li class=${section.id === this.activeId ? 'current' : ''}>
+        <a class=${section.id === this.activeId ? 'active' : ''} data-level=${section.level} href=${`#${section.id}`}>${section.label}</a>
+        ${section.children.length ? html`<ul>${this.renderSections(section.children)}</ul>` : null}
+      </li>
+    `)
+  }
+
+  render() {
+    if (!this.sections.length) return null
+    return html`<nav aria-label="In this article"><h2>In this article</h2><ul id="toc">${this.renderSections(this.sectionTree())}</ul></nav>`
+  }
 }
 
 if (!customElements.get('ld-site-article-toc')) customElements.define('ld-site-article-toc', SiteArticleToc)
