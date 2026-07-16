@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	uiactions "github.com/Yacobolo/libredash/internal/ui/actions"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 	g "maragu.dev/gomponents"
@@ -15,7 +16,8 @@ func DataExplorerPage(catalog dashboard.Catalog, page uisignals.DataExplorerPage
 	explorerUpdatesURL := updatesURL(uisignals.RouteData, "workspace", uisignals.ValueOrZero(explorer.Command.WorkspaceID), "object", uisignals.ValueOrZero(explorer.Command.ObjectKey))
 	_ = chrome
 	return pagestream.RenderPage(pagestream.PageSpec{
-		Title: page.Title,
+		Title:             page.Title,
+		DatastarScriptURL: datastarScriptURL(),
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
 			g.Attr("data-light-theme", "light"),
@@ -33,7 +35,7 @@ func DataExplorerPage(catalog dashboard.Catalog, page uisignals.DataExplorerPage
 			g.El("ld-app-shell",
 				g.El("ld-data-explorer",
 					g.Attr("slot", "page"),
-					g.Attr("data-on:ld-data-explorer-command", "$dataExplorerCommand = evt.detail; "+pagestream.PostAction("/data/command")),
+					g.Attr("data-on:ld-data-explorer-command", "$dataExplorerCommand = evt.detail; "+uiactions.Post("/data/command")),
 				),
 			),
 			inspectorElement(),

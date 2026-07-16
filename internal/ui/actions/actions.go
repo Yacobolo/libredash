@@ -1,19 +1,19 @@
-package pagestream
+package actions
 
 import (
 	"regexp"
 	"strings"
 )
 
-func PostAction(path string, signalPaths ...string) string {
-	return requestAction("post", path, signalPaths)
+func Post(path string, signalPaths ...string) string {
+	return request("post", path, signalPaths)
 }
 
-func PatchAction(path string, signalPaths ...string) string {
-	return requestAction("patch", path, signalPaths)
+func Patch(path string, signalPaths ...string) string {
+	return request("patch", path, signalPaths)
 }
 
-func requestAction(method, path string, signalPaths []string) string {
+func request(method, path string, signalPaths []string) string {
 	options := "headers: window.LibreDashCommand.headers()"
 	if len(signalPaths) > 0 {
 		patterns := make([]string, 0, len(signalPaths))
@@ -24,4 +24,8 @@ func requestAction(method, path string, signalPaths []string) string {
 		options = "filterSignals: {include: " + include + "}, " + options
 	}
 	return "@" + method + "('" + jsSingleQuoted(path) + "', {" + options + "})"
+}
+
+func jsSingleQuoted(value string) string {
+	return strings.NewReplacer(`\`, `\\`, `'`, `\'`, "\n", `\n`, "\r", `\r`).Replace(value)
 }

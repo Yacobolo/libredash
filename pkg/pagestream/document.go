@@ -5,35 +5,35 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Yacobolo/libredash/internal/staticasset"
 	g "maragu.dev/gomponents"
 	dsattr "maragu.dev/gomponents-datastar"
 	c "maragu.dev/gomponents/components"
 	h "maragu.dev/gomponents/html"
 )
 
-const datastarScriptPath = "/static/vendor/datastar-1.0.2.js"
-
 type PageSpec struct {
-	Title      string
-	Language   string
-	HTMLAttrs  []g.Node
-	Head       []g.Node
-	MainAttrs  []g.Node
-	UpdatesURL string
-	Body       []g.Node
+	Title             string
+	Language          string
+	HTMLAttrs         []g.Node
+	Head              []g.Node
+	MainAttrs         []g.Node
+	DatastarScriptURL string
+	UpdatesURL        string
+	Body              []g.Node
 }
 
 func RenderPage(spec PageSpec) g.Node {
 	updatesURL := validateUpdatesURL(spec.UpdatesURL)
+	datastarScriptURL := validateDatastarScriptURL(spec.DatastarScriptURL)
 	return renderDocument(documentSpec{
-		Title:     spec.Title,
-		Language:  spec.Language,
-		HTMLAttrs: spec.HTMLAttrs,
-		Head:      spec.Head,
-		MainAttrs: spec.MainAttrs,
-		Init:      []string{openUpdatesAction(updatesURL)},
-		Body:      spec.Body,
+		Title:             spec.Title,
+		Language:          spec.Language,
+		HTMLAttrs:         spec.HTMLAttrs,
+		Head:              spec.Head,
+		MainAttrs:         spec.MainAttrs,
+		DatastarScriptURL: datastarScriptURL,
+		Init:              []string{openUpdatesAction(updatesURL)},
+		Body:              spec.Body,
 	})
 }
 
@@ -46,13 +46,14 @@ func jsSingleQuoted(value string) string {
 }
 
 type documentSpec struct {
-	Title     string
-	Language  string
-	HTMLAttrs []g.Node
-	Head      []g.Node
-	MainAttrs []g.Node
-	Init      []string
-	Body      []g.Node
+	Title             string
+	Language          string
+	HTMLAttrs         []g.Node
+	Head              []g.Node
+	MainAttrs         []g.Node
+	DatastarScriptURL string
+	Init              []string
+	Body              []g.Node
 }
 
 func renderDocument(spec documentSpec) g.Node {
@@ -60,7 +61,7 @@ func renderDocument(spec documentSpec) g.Node {
 	if language == "" {
 		language = "en"
 	}
-	head := []g.Node{datastarScript()}
+	head := []g.Node{datastarScript(spec.DatastarScriptURL)}
 	head = append(head, spec.Head...)
 	mainChildren := []g.Node{}
 	if init := initExpression(spec.Init...); init != "" {
@@ -78,8 +79,8 @@ func renderDocument(spec documentSpec) g.Node {
 	})
 }
 
-func datastarScript() g.Node {
-	return h.Script(h.Type("module"), h.Src(staticasset.URL(datastarScriptPath)))
+func datastarScript(scriptURL string) g.Node {
+	return h.Script(h.Type("module"), h.Src(scriptURL))
 }
 
 func initExpression(expressions ...string) string {
@@ -104,6 +105,14 @@ func validateUpdatesURL(raw string) string {
 	parsed, err := url.Parse(trimmed)
 	if err != nil || parsed.IsAbs() || parsed.Path != "/updates" {
 		panic(fmt.Sprintf("pagestream: UpdatesURL must be a relative /updates URL, got %q", raw))
+	}
+	return trimmed
+}
+
+func validateDatastarScriptURL(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		panic("pagestream: DatastarScriptURL is required")
 	}
 	return trimmed
 }

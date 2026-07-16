@@ -10,6 +10,7 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/assetnav"
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	uiactions "github.com/Yacobolo/libredash/internal/ui/actions"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
@@ -136,8 +137,8 @@ func workspaceAccessRouteBridge(workspaceID string, access WorkspaceAccessRespon
 		return nil, workspaceDocumentExtras{}
 	}
 	accessSignal := WorkspaceAccessSignals(access)
-	upsert := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + pagestream.PostAction("/workspaces/"+workspaceID+"/access/upsert")
-	remove := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + pagestream.PostAction("/workspaces/"+workspaceID+"/access/remove")
+	upsert := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + uiactions.Post("/workspaces/"+workspaceID+"/access/upsert")
+	remove := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + uiactions.Post("/workspaces/"+workspaceID+"/access/remove")
 	return []g.Node{
 			g.Attr("data-on:ld-workspace-access-search__debounce.200ms", "$workspaceAccess.search = evt.detail.search"),
 			g.Attr("data-on:ld-workspace-access-upsert", upsert),
@@ -516,7 +517,7 @@ func WorkspaceAssetPageWithRefreshAndVersionsForEnvironment(catalog dashboard.Ca
 		refreshPath := "/workspaces/" + workspace.ID + "/assets/" + asset.ID + "/refresh"
 		extras.CSRFToken = refresh.CSRFToken
 		attrs = append(attrs,
-			g.Attr("data-on:ld-refresh-materializations", pagestream.PostAction(refreshPath)),
+			g.Attr("data-on:ld-refresh-materializations", uiactions.Post(refreshPath)),
 		)
 		if activeSection == "versions" {
 			return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extras, activeSection, chromeOptions)
@@ -699,7 +700,8 @@ func workspaceRouteDocumentWithBodyExtras(title string, catalog dashboard.Catalo
 		inspectorElement(),
 	)
 	return pagestream.RenderPage(pagestream.PageSpec{
-		Title: title,
+		Title:             title,
+		DatastarScriptURL: datastarScriptURL(),
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
 			g.Attr("data-light-theme", "light"),

@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	uiactions "github.com/Yacobolo/libredash/internal/ui/actions"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 	g "maragu.dev/gomponents"
@@ -12,7 +13,8 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 	chatUpdatesURL := updatesURL(uisignals.RouteChat, "workspace", workspaceID, "view", view, "conversation", state.Agent.ActiveConversationID)
 	chatBasePath := "/chat"
 	return pagestream.RenderPage(pagestream.PageSpec{
-		Title: "LibreDash Chat",
+		Title:             "LibreDash Chat",
+		DatastarScriptURL: datastarScriptURL(),
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
 			g.Attr("data-light-theme", "light"),
@@ -33,7 +35,7 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 					g.Attr("workspace-id", workspaceID),
 					g.Attr("view", view),
 					g.Attr("data-indicator", "agentTurnPending"),
-					g.Attr("data-on:ld-chat-submit", "$agent.composer.value = evt.detail.input; "+pagestream.PostAction(chatBasePath+"/turns")),
+					g.Attr("data-on:ld-chat-submit", "$agent.composer.value = evt.detail.input; "+uiactions.Post(chatBasePath+"/turns")),
 				),
 			),
 			inspectorElement(),

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	uiactions "github.com/Yacobolo/libredash/internal/ui/actions"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	workspaceview "github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
@@ -158,21 +159,22 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 	}
 	if active == "storage" {
 		adminAttrs = append(adminAttrs,
-			g.Attr("data-on:ld-storage-table-select", "$adminStorageCommand = evt.detail; "+pagestream.PostAction("/admin/storage/select-table")),
+			g.Attr("data-on:ld-storage-table-select", "$adminStorageCommand = evt.detail; "+uiactions.Post("/admin/storage/select-table")),
 		)
 	}
 	if active == "agent" {
 		adminAttrs = append(adminAttrs,
-			g.Attr("data-on:ld-agent-system-prompt-save", "$adminAgentCommand = evt.detail; "+pagestream.PatchAction("/api/v1/admin/agent/config")),
+			g.Attr("data-on:ld-agent-system-prompt-save", "$adminAgentCommand = evt.detail; "+uiactions.Patch("/api/v1/admin/agent/config")),
 		)
 	}
 	if active == "queries" {
 		adminAttrs = append(adminAttrs,
-			g.Attr("data-on:ld-query-history-command", "$adminQueryHistoryCommand = evt.detail; evt.detail.action == 'select_detail' ? ($adminQueryDetail = {eventId: evt.detail.eventId, loading: true, error: ''}) : evt.detail.action == 'close_detail' ? ($adminQueryDetail = {eventId: '', loading: false, error: ''}) : ($adminQueryHistory.loading = true, $adminQueryHistory.error = ''); "+pagestream.PostAction("/admin/queries/command")),
+			g.Attr("data-on:ld-query-history-command", "$adminQueryHistoryCommand = evt.detail; evt.detail.action == 'select_detail' ? ($adminQueryDetail = {eventId: evt.detail.eventId, loading: true, error: ''}) : evt.detail.action == 'close_detail' ? ($adminQueryDetail = {eventId: '', loading: false, error: ''}) : ($adminQueryHistory.loading = true, $adminQueryHistory.error = ''); "+uiactions.Post("/admin/queries/command")),
 		)
 	}
 	return pagestream.RenderPage(pagestream.PageSpec{
-		Title: "Admin - " + title,
+		Title:             "Admin - " + title,
+		DatastarScriptURL: datastarScriptURL(),
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
 			g.Attr("data-light-theme", "light"),

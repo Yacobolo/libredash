@@ -69,6 +69,9 @@ func TestTraceStoreRecordsPublishedAndDeliveredSanitizedEnvelopes(t *testing.T) 
 	if got := delivered.Payload["password"]; got != "[REDACTED]" {
 		t.Fatalf("sanitized password = %#v", got)
 	}
+	waitFor(t, time.Second, func() bool {
+		return strings.Contains(logs.String(), `"stage":"delivered"`)
+	})
 	if strings.Contains(logs.String(), "do-not-record") || !strings.Contains(logs.String(), `"stage":"delivered"`) {
 		t.Fatalf("trace logs = %s", logs.String())
 	}

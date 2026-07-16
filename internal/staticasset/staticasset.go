@@ -12,6 +12,8 @@ import (
 const versionEnv = configspec.EnvLIBREDASH_ASSET_VERSION
 const generatedVersionPath = "static/asset-version.txt"
 
+const DatastarScriptPath = "/static/vendor/datastar-1.0.2.js"
+
 func URL(path string) string {
 	version := Version()
 	return path + "?v=" + url.QueryEscape(version)

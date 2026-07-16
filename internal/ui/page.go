@@ -17,6 +17,10 @@ func staticAsset(path string) string {
 	return staticasset.URL(path)
 }
 
+func datastarScriptURL() string {
+	return staticAsset(staticasset.DatastarScriptPath)
+}
+
 const appRootClass = "min-h-svh bg-app text-fg-default"
 
 func updatesURL(route uisignals.RouteKind, pairs ...string) string {
@@ -86,7 +90,8 @@ func LoginPage(options ...LoginPageOptions) g.Node {
 	favicon := "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%230969da'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-family='Arial,sans-serif' font-size='20' font-weight='700' fill='white'%3ELD%3C/text%3E%3C/svg%3E"
 	loginUpdatesURL := updatesURL(uisignals.RouteLogin)
 	return pagestream.RenderPage(pagestream.PageSpec{
-		Title: "LibreDash Login",
+		Title:             "LibreDash Login",
+		DatastarScriptURL: datastarScriptURL(),
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
 			g.Attr("data-light-theme", "light"),
@@ -170,7 +175,8 @@ func catalogPageDocument(catalog dashboard.Catalog, page uisignals.CatalogPageSi
 	applyChromeOptions(&chrome, chromeOptions)
 	catalogUpdatesURL := updatesURL(uisignals.RouteCatalog)
 	return pagestream.RenderPage(pagestream.PageSpec{
-		Title: "LibreDash Dashboards",
+		Title:             "LibreDash Dashboards",
+		DatastarScriptURL: datastarScriptURL(),
 		HTMLAttrs: []g.Node{
 			g.Attr("data-color-mode", "auto"),
 			g.Attr("data-light-theme", "light"),

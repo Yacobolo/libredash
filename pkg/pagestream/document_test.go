@@ -12,12 +12,13 @@ import (
 func TestRenderPageIncludesLiteralUpdatesInitMainAttrsAndBody(t *testing.T) {
 	var body bytes.Buffer
 	err := RenderPage(PageSpec{
-		Title:      "Test Page",
-		HTMLAttrs:  []g.Node{g.Attr("data-color-mode", "auto")},
-		Head:       []g.Node{h.Meta(g.Attr("name", "test-head")), h.Script(h.Type("module"), h.Src("/static/route.js?v=dev"))},
-		MainAttrs:  []g.Node{h.ID("root"), h.Class("app-shell")},
-		UpdatesURL: "/updates?route=test",
-		Body:       []g.Node{h.Div(h.ID("content"), g.Text("Hello"))},
+		Title:             "Test Page",
+		HTMLAttrs:         []g.Node{g.Attr("data-color-mode", "auto")},
+		Head:              []g.Node{h.Meta(g.Attr("name", "test-head")), h.Script(h.Type("module"), h.Src("/static/route.js?v=dev"))},
+		MainAttrs:         []g.Node{h.ID("root"), h.Class("app-shell")},
+		DatastarScriptURL: "/assets/datastar.js?v=test",
+		UpdatesURL:        "/updates?route=test",
+		Body:              []g.Node{h.Div(h.ID("content"), g.Text("Hello"))},
 	}).Render(&body)
 	if err != nil {
 		t.Fatalf("render document: %v", err)
@@ -31,7 +32,7 @@ func TestRenderPageIncludesLiteralUpdatesInitMainAttrsAndBody(t *testing.T) {
 		`data-color-mode="auto"`,
 		`<main id="root" class="app-shell"`,
 		`/updates?route=test`,
-		`/static/vendor/datastar-1.0.2.js?v=dev`,
+		`/assets/datastar.js?v=test`,
 		`data-init="@get(&#39;/updates?route=test&#39;, {openWhenHidden: true})"`,
 		`<div id="content">Hello</div>`,
 	} {
@@ -42,7 +43,7 @@ func TestRenderPageIncludesLiteralUpdatesInitMainAttrsAndBody(t *testing.T) {
 	if strings.Contains(html, "data-signals=") || strings.Contains(html, "updatesUrl") {
 		t.Fatalf("rendered document included initial signals:\n%s", html)
 	}
-	if strings.Index(html, "/static/vendor/datastar-1.0.2.js?v=dev") > strings.Index(html, "/static/route.js?v=dev") {
+	if strings.Index(html, "/assets/datastar.js?v=test") > strings.Index(html, "/static/route.js?v=dev") {
 		t.Fatalf("rendered document loaded Datastar after route modules:\n%s", html)
 	}
 }
@@ -64,16 +65,26 @@ func TestRenderPageRequiresCanonicalUpdatesPath(t *testing.T) {
 					t.Fatalf("RenderPage did not panic for %q", updatesURL)
 				}
 			}()
-			_ = RenderPage(PageSpec{UpdatesURL: updatesURL})
+			_ = RenderPage(PageSpec{DatastarScriptURL: "/datastar.js", UpdatesURL: updatesURL})
 		})
 	}
+}
+
+func TestRenderPageRequiresDatastarScriptURL(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("RenderPage did not panic for missing DatastarScriptURL")
+		}
+	}()
+	_ = RenderPage(PageSpec{UpdatesURL: "/updates?route=test"})
 }
 
 func TestRenderPageEscapesUpdatesURLInInitExpression(t *testing.T) {
 	var body bytes.Buffer
 	err := RenderPage(PageSpec{
-		Title:      "Escaped URL",
-		UpdatesURL: "/updates?route=test&q=%22quoted%22",
+		Title:             "Escaped URL",
+		DatastarScriptURL: "/datastar.js",
+		UpdatesURL:        "/updates?route=test&q=%22quoted%22",
 	}).Render(&body)
 	if err != nil {
 		t.Fatalf("render page: %v", err)
