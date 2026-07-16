@@ -329,7 +329,7 @@ func (m Metrics) recordDataAccessAudit(ctx context.Context, request dataquery.Qu
 		metadata["error"] = cause.Error()
 	}
 	bytes, _ := json.Marshal(metadata)
-	_ = m.repo.RecordAuditEvent(ctx, access.AuditEventInput{
+	_ = access.PersistAuditEvent(ctx, m.repo, access.AuditEventInput{
 		WorkspaceID:   request.WorkspaceID,
 		PrincipalID:   request.PrincipalID,
 		Action:        action,

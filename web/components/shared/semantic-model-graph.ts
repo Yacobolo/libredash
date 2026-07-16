@@ -25,19 +25,21 @@ import type {
   SemanticModelGraphSignal,
 } from '../../generated/signals'
 
-type ModelNodeData = SemanticModelGraphNodeSignal & {
+type ModelNodeData = SemanticModelGraphNodeSignal & Record<string, unknown> & {
   selected: boolean
   dimmed: boolean
   onSelect: (id: string) => void
 }
 
-type ModelEdgeData = SemanticModelGraphEdgeSignal & {
+type ModelEdgeData = SemanticModelGraphEdgeSignal & Record<string, unknown> & {
   selected: boolean
   sourceMarker: string
   targetMarker: string
 }
 
 type NodePosition = { x: number; y: number }
+type ModelNode = Node<ModelNodeData, 'modelTable'>
+type ModelEdge = Edge<ModelEdgeData, 'relationship'>
 
 const NODE_WIDTH = 280
 const HEADER_HEIGHT = 40
@@ -132,7 +134,7 @@ function SemanticModelGraphFlow({
   onLayoutReset: () => void
 }) {
   const [selectedID, setSelectedID] = React.useState<string | undefined>(() => selectedNodeID(graph.nodes))
-  const [nodes, setNodes, onNodesChange] = useNodesState<ModelNodeData>([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<ModelNode>([])
 
   const selectedEdges = React.useMemo(() => relatedEdgeIDs(graph.edges, selectedID), [graph.edges, selectedID])
 
@@ -157,7 +159,7 @@ function SemanticModelGraphFlow({
 
   const edges = React.useMemo(() => graph.edges.map((edge) => toFlowEdge(edge, selectedEdges)), [graph.edges, selectedEdges])
 
-  const saveDraggedLayout = React.useCallback((_event: unknown, node: Node<ModelNodeData>) => {
+  const saveDraggedLayout = React.useCallback((_event: unknown, node: ModelNode) => {
     const next = new Map(nodes.map((current) => [current.id, current.position] as [string, NodePosition]))
     next.set(node.id, node.position)
     onLayoutChange(next)
@@ -171,7 +173,7 @@ function SemanticModelGraphFlow({
   return React.createElement(
     'div',
     { className: 'semantic-model-graph-layout' },
-    React.createElement(ReactFlow, {
+    React.createElement(ReactFlow<ModelNode, ModelEdge>, {
       key: layoutKey,
       nodes,
       edges,
@@ -227,7 +229,7 @@ function toFlowNode(
   selectedEdges: Set<string>,
   manualPositions: Map<string, NodePosition>,
   onSelect: (id: string) => void,
-): Node<ModelNodeData> {
+): ModelNode {
   const position = manualPositions.get(node.id) ?? modelNodePosition(node, graph)
   return {
     id: node.id,
@@ -296,7 +298,7 @@ function nodeHeight(node: SemanticModelGraphNodeSignal): number {
   return HEADER_HEIGHT + BADGE_HEIGHT + Math.max(1, node.fields.length) * FIELD_HEIGHT + 12
 }
 
-function toFlowEdge(edge: SemanticModelGraphEdgeSignal, selectedEdges: Set<string>): Edge {
+function toFlowEdge(edge: SemanticModelGraphEdgeSignal, selectedEdges: Set<string>): ModelEdge {
   const selected = selectedEdges.size === 0 || selectedEdges.has(edge.id)
   const [sourceMarker, targetMarker] = relationshipEndpointMarkers(edge.cardinality)
   return {
@@ -316,7 +318,7 @@ function toFlowEdge(edge: SemanticModelGraphEdgeSignal, selectedEdges: Set<strin
   }
 }
 
-function RelationshipEdge(props: EdgeProps<Edge<ModelEdgeData>>) {
+function RelationshipEdge(props: EdgeProps<ModelEdge>) {
   const [path, labelX, labelY] = getBezierPath(props)
   const data = props.data
   const style = props.style ?? {}

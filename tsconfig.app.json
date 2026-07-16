@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "web/components/**/*.ts",
+    "web/generated/**/*.ts",
+    "web/types/**/*.d.ts"
+  ],
+  "exclude": [
+    "web/**/*.test.ts",
+    "web/**/*.dom.test.ts",
+    "web/benchmarks/**"
+  ]
+}

@@ -1,55 +1,51 @@
 # LibreDash Project Overview
 
-LibreDash is a lightweight BI monolith for dashboards-as-code. It combines file-backed catalog/dashboard YAML, semantic model YAML, DuckDB import-mode cache/compute, gomponents-rendered Go pages, Datastar SSE signal streaming, and Lit web components for the interactive dashboard surface.
-
-The current product goal is to feel like a small Power BI-style workspace: dashboard discovery, semantic models, report pages, filter panes/cards, chart visuals, and BI tables all defined from code.
+LibreDash is a dashboards-as-code BI monolith. Go owns configuration compilation, security, deployments, managed data, DuckDB/DuckLake execution, and the Datastar SSE command loop. Gomponents renders page shells; Lit components render typed signal payloads in the browser.
 
 ## Architecture
 
-- `dashboards/catalog.yaml` is the workspace/catalog entrypoint. It discovers semantic models and dashboards.
-- Semantic model YAML defines reusable data concepts: sources, cache tables, datasets, dimensions, measures, and relationships.
-- Dashboard YAML defines presentation: filters, KPIs, visuals, tables, pages, layout, and interactions.
-- DuckDB is the backend BI engine. It reads local Olist CSVs, materializes cache tables, and runs filtered/aggregated queries.
-- Go owns routing, YAML loading/validation, DuckDB query services, cache refresh, and Datastar SSE patches.
-- Datastar signals are the data transport between backend and browser. `/updates` streams page-scoped signal patches.
-- Lit web components render the interactive client surface: report canvas, filters, charts, tables, model graph, sidebars, footer, and inspector.
-- Components bind to Datastar signal payloads through attributes, usually by signal path, and emit small command/events back to Go.
-- Visuals use a plugin-style architecture: LibreDash defines renderer-neutral visual shapes and payloads, then renderer plugins adapt those shapes to concrete libraries.
-- ECharts is the first built-in chart renderer plugin behind LibreDash visual shape contracts.
-- TanStack is the internal interaction engine for BI tables; LibreDash keeps the table signal/query contract.
+- `dashboards/libredash.yaml` is the project entrypoint. It references global connections and sources plus workspace-scoped models, semantic models, dashboards, access policy, and agent policy.
+- `internal/workspace/compiler/` loads, validates, and compiles the project into deployable serving-state artifacts.
+- `internal/deployment/`, `internal/servingstate/`, and `internal/runtimehost/` prepare immutable serving-state generations, activate them per workspace/environment, lease DuckLake snapshots, and drain readers safely during cutover.
+- `internal/manageddata/` implements local and S3-backed ingestion, revisions, upload protocols, runtime views, retention, and binding resolution.
+- `internal/analytics/model/` defines semantic models. `internal/analytics/query/` plans governed single- and multi-fact queries. `internal/analytics/materialize/` and `internal/analytics/duckdb/` execute and cache them.
+- `internal/access/` owns principals, authentication credentials, RBAC, grants, data policies, groups, SCIM, sessions, service principals, and access auditing.
+- `internal/app/` is the composition root and top-level HTTP router. Feature handlers live beside their domains under packages such as `internal/dashboard/http`, `internal/workspace/http`, and `internal/agent/http`.
+- `pkg/pagestream/` owns the shared page/SSE transport, signal history, broker, tracing, and escaped Datastar action construction.
+- `api/signals/main.tsp` is the source of truth for browser signal contracts. Generation produces Go models in `internal/ui/signals/models.gen.go` and TypeScript types in `web/generated/signals/index.ts`.
+- `internal/ui/` and `internal/dashboard/ui/` render gomponents document shells. `web/components/` contains Lit route and visual components.
+- ECharts is the built-in chart renderer. TanStack powers table state and virtualization behind LibreDash-owned signal/query contracts.
 
 ## Runtime Flow
 
-1. `GET /` renders the dashboard catalog.
-2. `GET /dashboards/{dashboard}/pages/{page}` renders a report page shell from dashboard YAML.
-3. The page opens `/updates?dashboard={dashboard}&page={page}`.
-4. The Go service reads current Datastar signals, resolves dashboard filters/selections, queries DuckDB, and patches KPI/chart/table/filter-option signals.
-5. Lit components receive signal payloads through `data-*`/attribute bindings and re-render from those signal paths.
-6. Components emit commands/events for filters, visual interactions, table windows, and refreshes; Go responds through Datastar patches rather than ad hoc REST data fetches.
+1. `GET /workspaces` or `GET /workspaces/{workspace}` renders a pagestream document shell.
+2. Dashboard routes are `GET /workspaces/{workspace}/dashboards/{dashboard}` and `/pages/{page}`.
+3. Each page opens the canonical `GET /updates?...` Datastar SSE stream from `data-init`.
+4. Browser components emit small domain events. Gomponents attributes translate them into CSRF-protected Datastar commands.
+5. Domain handlers authorize the request, update stream state, execute governed DuckDB queries where needed, and publish typed signal patches through `pkg/pagestream`.
+6. Lit components subscribe to signal paths and render without ad hoc data-fetch APIs.
 
 ## Important Files
 
-- `cmd/libredash/main.go` starts the app.
-- `internal/app/` contains HTTP routes, Datastar command handlers, SSE broker logic, and refresh/update orchestration.
-- `internal/data/service.go` is the DuckDB query/cache service for KPIs, charts, tables, filter options, and model graph data.
-- `internal/semantic/` loads and validates catalog, model, and dashboard YAML contracts.
-- `internal/dashboard/types.go` defines runtime signal payloads for filters, visuals, tables, pages, and status.
-- `internal/ui/page.go` renders gomponents HTML shells and initial Datastar signal state.
-- `dashboards/olist/model.yaml` is the Olist semantic model.
-- `dashboards/olist/executive-sales.yaml` is the main demo dashboard and report-page definition.
-- `web/components/` contains Lit source components; `web/components/chart/` contains the visual renderer registry, ECharts renderer, adapters, maps, and shared chart types/utilities.
-- `static/` contains the built browser assets served by Go.
-- `internal/tools/bootstrapolist` downloads the Olist CSV dataset to the explicit `--out` directory before managed-data plan/sync.
+- `cmd/libredash/main.go` and `internal/cli/serve.go`: process startup and lifecycle.
+- `internal/app/router.go`: canonical page, command, auth, admin, and API routes.
+- `internal/workspace/compiler/compiler.go`: project compilation entrypoint.
+- `internal/runtimehost/manager.go`: serving-generation and snapshot-lease lifecycle.
+- `internal/analytics/materialize/runtime.go`: query execution, coalescing, and cache integration.
+- `internal/analytics/query/planner.go`: semantic query planning.
+- `internal/dashboard/runtime/`: dashboard query orchestration and signal payload construction.
+- `internal/ui/page.go` and `internal/dashboard/ui/page.go`: gomponents page shells.
+- `web/components/dashboard/dashboard-page.ts`: interactive report surface.
+- `web/components/dashboard/table/report-table.ts`: BI table component.
+- `.github/workflows/ci.yml`: canonical parallel CI workflow.
 
-## Useful Commands
+## Development
 
-- `task dev`
-- `task bootstrap`
-- `task ci`
-- `task test`
-- `task build`
-- `task dev:stop`
-- `task dev:status`
-- `task dev:logs`
+- `task dev` builds, bootstraps, deploys, and starts the managed development server.
+- `task test` generates required sources/assets and runs the complete Go and browser test suite.
+- `task ci` adds generated-artifact checks, static/race analysis, route QA, and deployment validation.
+- `task generate` regenerates sqlc, configuration, API, signal, and JSON Schema artifacts.
+- `task generated:check` verifies committed generated contracts are current.
+- `task dev:status`, `task dev:logs`, and `task dev:stop` manage the worktree-local server.
 
-Use `task ci` as the default full verification command before handing off substantial changes.
+Use `task ci` before handing off substantial changes. Follow red-green-refactor for features and fixes. Prefer long-term correctness, simplicity, robustness, and scalability over minimizing implementation cost.

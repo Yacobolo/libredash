@@ -33,7 +33,7 @@ func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view
 					g.Attr("workspace-id", workspaceID),
 					g.Attr("view", view),
 					g.Attr("data-indicator", "agentTurnPending"),
-					g.Attr("data-on:ld-chat-submit", "$agent.composer.value = evt.detail.input; "+postAction(chatBasePath+"/turns")),
+					g.Attr("data-on:ld-chat-submit", "$agent.composer.value = evt.detail.input; "+pagestream.PostAction(chatBasePath+"/turns")),
 				),
 			),
 			inspectorElement(),

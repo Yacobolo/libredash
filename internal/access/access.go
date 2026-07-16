@@ -4,9 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"strings"
 	"time"
 )
+
+var ErrAuditTransaction = errors.New("audit transaction failed")
 
 type Privilege string
 
@@ -667,6 +670,17 @@ type Repository interface {
 	RevokeAPITokenForPrincipal(ctx context.Context, principalID, id string) error
 	RecordAuditEvent(ctx context.Context, input AuditEventInput) error
 	ListAuditEvents(ctx context.Context, filter AuditEventFilter) ([]AuditEvent, error)
+}
+
+// AuditedMutationRepository commits a privileged mutation and its audit event
+// as one unit. Production repositories should implement this so a successful
+// mutation can never exist without its corresponding audit record.
+type AuditedMutationRepository interface {
+	RunAuditedMutation(context.Context, func(Repository) (AuditEventInput, error)) error
+}
+
+type AuditedMutationBatchRepository interface {
+	RunAuditedMutationBatch(context.Context, func(Repository) ([]AuditEventInput, error)) error
 }
 
 func DefaultRoles() []Role {

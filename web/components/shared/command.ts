@@ -18,3 +18,5 @@ declare global {
 }
 
 window.LibreDashCommand = { headers }
+
+export {}

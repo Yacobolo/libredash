@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "web/generated/**/*.ts",
+    "web/components/shared/datastar-runtime.ts",
+    "web/components/shared/datastar-lit.ts",
+    "web/components/dashboard/charts/interactions.ts",
+    "web/components/dashboard/filters/url-sync.ts",
+    "web/components/dashboard/table/selection.ts"
+  ]
+}

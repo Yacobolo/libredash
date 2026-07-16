@@ -7,6 +7,8 @@ import (
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
+var ErrSnapshotLeaseLost = errors.New("snapshot lease is no longer active")
+
 var ErrNotFound = errors.New("serving state not found")
 
 type ID string

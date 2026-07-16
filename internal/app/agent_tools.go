@@ -165,7 +165,7 @@ func recordAgentToolAudit(ctx context.Context, repo access.Repository, scope age
 		payload["error"] = cause.Error()
 	}
 	bytes, _ := json.Marshal(payload)
-	_ = repo.RecordAuditEvent(ctx, access.AuditEventInput{
+	_ = access.PersistAuditEvent(ctx, repo, access.AuditEventInput{
 		WorkspaceID:   scope.WorkspaceID,
 		PrincipalID:   scope.PrincipalID,
 		Action:        "agent_tool.called",

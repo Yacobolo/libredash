@@ -25,7 +25,7 @@ const emptyStorage: AdminStorageSignal = {
   snapshots: [],
   servingStates: [],
   selectedKey: '',
-  selectedTable: null,
+  selectedTable: undefined,
 }
 
 type SchemaGroup = {

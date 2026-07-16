@@ -1183,7 +1183,7 @@ class ReportTable extends LitElement {
     return segments
   }
 
-  private tanstackColumnDefs(): Array<ColumnDef<TanStackTableRow, unknown>> {
+  private tanstackColumnDefs(): Array<ColumnDef<typeof reportTableFeatures, TanStackTableRow, unknown>> {
     return this.columnsForTanStack().map((column) => ({
       id: column.key,
       accessorKey: column.key,
@@ -1193,7 +1193,7 @@ class ReportTable extends LitElement {
       minSize: this.minColumnSize(column),
       enableResizing: true,
       meta: { align: column.align, column },
-    })) as Array<ColumnDef<TanStackTableRow, unknown>>
+    })) as Array<ColumnDef<typeof reportTableFeatures, TanStackTableRow, unknown>>
   }
 
   private tanstackTable(rows: TanStackTableRow[]) {
@@ -1206,7 +1206,7 @@ class ReportTable extends LitElement {
         features: reportTableFeatures,
         columns: this.tanstackColumnDefs(),
         data: rows,
-        getRowId: (row) => row.__rowKey,
+        getRowId: (row: TanStackTableRow) => row.__rowKey,
         getCoreRowModel: createCoreRowModel(),
         manualSorting: true,
         manualFiltering: true,

@@ -13,14 +13,6 @@ import (
 	h "maragu.dev/gomponents/html"
 )
 
-func postAction(path string) string {
-	return "@post('" + path + "', {headers: window.LibreDashCommand.headers()})"
-}
-
-func patchAction(path string) string {
-	return "@patch('" + path + "', {headers: window.LibreDashCommand.headers()})"
-}
-
 func staticAsset(path string) string {
 	return staticasset.URL(path)
 }

@@ -83,7 +83,7 @@ class DataPreviewTable extends LitElement {
       sort: {
         key: preview.sort?.column ?? command.sort?.column ?? '',
         column: preview.sort?.column ?? command.sort?.column ?? '',
-        direction: preview.sort?.direction ?? command.sort?.direction ?? '',
+        direction: normalizeSortDirection(preview.sort?.direction ?? command.sort?.direction),
       },
       blocks: preview.blocks ?? {},
       loadingBlock: preview.loadingBlock ?? '',
@@ -163,6 +163,10 @@ class DataPreviewTable extends LitElement {
       },
     }))
   }
+}
+
+function normalizeSortDirection(value: string | undefined): '' | 'asc' | 'desc' {
+  return value === 'asc' || value === 'desc' ? value : ''
 }
 
 function parseTotalRows(label: string | undefined): number | undefined {

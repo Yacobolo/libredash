@@ -96,7 +96,8 @@ func TestRedirectSendsDatastarRedirectEvent(t *testing.T) {
 }
 
 func TestSignalStreamForwardRelaysBrokerPatchesAndCleansUp(t *testing.T) {
-	broker := NewBroker()
+	trace := NewTraceStore(TraceOptions{CapacityPerStream: 8, MaxStreams: 1})
+	broker := NewBroker(WithTraceStore(trace))
 	ctx, cancel := context.WithCancel(context.Background())
 	req := httptest.NewRequest(http.MethodGet, "/updates", nil).WithContext(ctx)
 	rec := httptest.NewRecorder()
@@ -115,7 +116,7 @@ func TestSignalStreamForwardRelaysBrokerPatchesAndCleansUp(t *testing.T) {
 	})
 	broker.Publish("client:page", SignalPatch{"status": "broker"})
 	waitFor(t, time.Second, func() bool {
-		return len(ssetest.PatchSignals(t, rec.Body.String())) >= 1
+		return len(trace.Events(TraceQuery{StreamID: "client:page", Limit: 8})) >= 2
 	})
 
 	cancel()

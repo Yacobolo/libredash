@@ -129,9 +129,10 @@ func TestServiceCanceledQueuedReadDoesNotExecute(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	errCh := make(chan error, 1)
+	executed := make(chan struct{}, 1)
 	go func() {
 		_, err := service.SubmitRead(ctx, dataquery.Query{}, func(context.Context) (dataquery.Result, error) {
-			t.Fatal("canceled queued read should not execute")
+			executed <- struct{}{}
 			return dataquery.Result{}, nil
 		})
 		errCh <- err
@@ -139,6 +140,11 @@ func TestServiceCanceledQueuedReadDoesNotExecute(t *testing.T) {
 	cancel()
 	if err := <-errCh; !errors.Is(err, context.Canceled) {
 		t.Fatalf("queued read error = %v, want context.Canceled", err)
+	}
+	select {
+	case <-executed:
+		t.Fatal("canceled queued read executed")
+	default:
 	}
 	close(releaseFirst)
 }

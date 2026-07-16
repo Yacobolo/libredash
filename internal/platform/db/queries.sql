@@ -166,7 +166,7 @@ UPDATE query_snapshot_leases
 SET released_at = COALESCE(released_at, CURRENT_TIMESTAMP)
 WHERE id = ?;
 
--- name: ExtendQuerySnapshotLease :exec
+-- name: ExtendQuerySnapshotLease :execrows
 UPDATE query_snapshot_leases
 SET expires_at = ?
 WHERE id = ?

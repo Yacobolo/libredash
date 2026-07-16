@@ -359,6 +359,41 @@ func TestManagerPersistsOneSnapshotLeaseForRuntimeGeneration(t *testing.T) {
 	}
 }
 
+func TestRenewSnapshotLeaseRetriesTransientFailure(t *testing.T) {
+	repo := &fakeRepo{extendFailures: 2, extendFailureErr: errors.New("database busy")}
+	err := renewSnapshotLease(t.Context(), repo, "lease_1", time.Now().Add(time.Minute), 3, time.Millisecond)
+	if err != nil {
+		t.Fatalf("renew snapshot lease: %v", err)
+	}
+	if got := len(repo.extendedLeases); got != 3 {
+		t.Fatalf("extension attempts = %d, want 3", got)
+	}
+}
+
+func TestRenewSnapshotLeaseReportsPersistentFailure(t *testing.T) {
+	repo := &fakeRepo{extendFailures: 3, extendFailureErr: errors.New("database unavailable")}
+	err := renewSnapshotLease(t.Context(), repo, "lease_1", time.Now().Add(time.Minute), 3, time.Millisecond)
+	if err == nil || !strings.Contains(err.Error(), "database unavailable") {
+		t.Fatalf("renew snapshot lease error = %v, want database failure", err)
+	}
+	if got := len(repo.extendedLeases); got != 3 {
+		t.Fatalf("extension attempts = %d, want 3", got)
+	}
+}
+
+func TestManagerTracksLeaseRenewalFailuresPerGeneration(t *testing.T) {
+	manager := NewManagerWithFactory(ManagerOptions{})
+	manager.setLeaseRenewalError("lease_1", errors.New("first failed"))
+	manager.setLeaseRenewalError("lease_2", errors.New("second failed"))
+	if err := manager.LeaseRenewalError(); err == nil || !strings.Contains(err.Error(), "first failed") || !strings.Contains(err.Error(), "second failed") {
+		t.Fatalf("lease renewal error = %v, want both generation failures", err)
+	}
+	manager.setLeaseRenewalError("lease_1", nil)
+	if err := manager.LeaseRenewalError(); err == nil || strings.Contains(err.Error(), "first failed") || !strings.Contains(err.Error(), "second failed") {
+		t.Fatalf("lease renewal error after recovery = %v, want only second failure", err)
+	}
+}
+
 func TestManagerRetiredGenerationKeepsSnapshotLeaseUntilReadersDrain(t *testing.T) {
 	ctx := context.Background()
 	repo := &fakeRepo{
@@ -1101,6 +1136,8 @@ type fakeRepo struct {
 	createdLeases          []servingstate.SnapshotLeaseInput
 	releasedLeases         []string
 	extendedLeases         []string
+	extendFailures         int
+	extendFailureErr       error
 	releaseFailures        int
 	releaseFailureErr      error
 	createLeaseErr         error
@@ -1157,6 +1194,13 @@ func (r *fakeRepo) ReleaseQuerySnapshotLease(_ context.Context, id string) error
 
 func (r *fakeRepo) ExtendQuerySnapshotLease(_ context.Context, id string, _ time.Time) error {
 	r.extendedLeases = append(r.extendedLeases, id)
+	if r.extendFailures > 0 {
+		r.extendFailures--
+		if r.extendFailureErr != nil {
+			return r.extendFailureErr
+		}
+		return errors.New("extension failed")
+	}
 	return nil
 }
 

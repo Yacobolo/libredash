@@ -158,17 +158,17 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 	}
 	if active == "storage" {
 		adminAttrs = append(adminAttrs,
-			g.Attr("data-on:ld-storage-table-select", "$adminStorageCommand = evt.detail; "+postAction("/admin/storage/select-table")),
+			g.Attr("data-on:ld-storage-table-select", "$adminStorageCommand = evt.detail; "+pagestream.PostAction("/admin/storage/select-table")),
 		)
 	}
 	if active == "agent" {
 		adminAttrs = append(adminAttrs,
-			g.Attr("data-on:ld-agent-system-prompt-save", "$adminAgentCommand = evt.detail; "+patchAction("/api/v1/admin/agent/config")),
+			g.Attr("data-on:ld-agent-system-prompt-save", "$adminAgentCommand = evt.detail; "+pagestream.PatchAction("/api/v1/admin/agent/config")),
 		)
 	}
 	if active == "queries" {
 		adminAttrs = append(adminAttrs,
-			g.Attr("data-on:ld-query-history-command", "$adminQueryHistoryCommand = evt.detail; evt.detail.action == 'select_detail' ? ($adminQueryDetail = {eventId: evt.detail.eventId, loading: true, error: ''}) : evt.detail.action == 'close_detail' ? ($adminQueryDetail = {eventId: '', loading: false, error: ''}) : ($adminQueryHistory.loading = true, $adminQueryHistory.error = ''); "+postAction("/admin/queries/command")),
+			g.Attr("data-on:ld-query-history-command", "$adminQueryHistoryCommand = evt.detail; evt.detail.action == 'select_detail' ? ($adminQueryDetail = {eventId: evt.detail.eventId, loading: true, error: ''}) : evt.detail.action == 'close_detail' ? ($adminQueryDetail = {eventId: '', loading: false, error: ''}) : ($adminQueryHistory.loading = true, $adminQueryHistory.error = ''); "+pagestream.PostAction("/admin/queries/command")),
 		)
 	}
 	return pagestream.RenderPage(pagestream.PageSpec{

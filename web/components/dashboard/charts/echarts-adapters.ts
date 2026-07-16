@@ -1,11 +1,31 @@
-import type { EChartsOption } from 'echarts'
+import type {
+  BarSeriesOption,
+  EChartsOption,
+  FunnelSeriesOption,
+  GaugeSeriesOption,
+  GraphSeriesOption,
+  HeatmapSeriesOption,
+  LineSeriesOption,
+  MapSeriesOption,
+  PieSeriesOption,
+  SankeySeriesOption,
+  ScatterSeriesOption,
+  SeriesOption,
+  SunburstSeriesOption,
+  TreeSeriesOption,
+} from 'echarts'
 import type { ChartDatum, ChartPayload, ChartTokens, ChartType } from './types'
 import { booleanValue, colorWithAlpha, formatValue, normalizeShape, normalizeType, numberValue, selectedRows, stringValue, unique, withPayloadRowIndex } from './utils'
 
 const chartFontWeightMedium = 500
 const chartFontWeightStrong = 600
+type AdapterOption = EChartsOption
 
 export function buildEChartsOption(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+  return buildAdapterOption(payload, tokens)
+}
+
+function buildAdapterOption(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   switch (normalizeShape(payload.shape, payload.type, Boolean(payload.series?.length))) {
     case 'single_value':
       return singleValueAdapter(payload, tokens)
@@ -36,18 +56,18 @@ export function buildEChartsOption(payload: ChartPayload, tokens: ChartTokens): 
   }
 }
 
-function baseOption(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function baseOption(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
 	const type = normalizeType(payload.type)
 	return {
 		backgroundColor: 'transparent',
 		color: tokens.palette,
-		aria: { show: true },
+		aria: { enabled: true },
 		animationDuration: 220,
 		animationDurationUpdate: 260,
 		legend: legendOption(payload, tokens),
 		tooltip: {
 			trigger: ['line', 'area', 'bar', 'column', 'scatter', 'heatmap', 'candlestick', 'boxplot'].includes(type) ? 'axis' : 'item',
-			valueFormatter: (value) => formatValue(Number(value), payload.unit),
+			valueFormatter: (value: unknown) => formatValue(Number(value), payload.unit),
 			borderColor: tokens.border,
       backgroundColor: tokens.surface,
       textStyle: { color: tokens.text },
@@ -109,14 +129,20 @@ function dataZoomOption(payload: ChartPayload) {
 	]
 }
 
-function labelOption(payload: ChartPayload, tokens: ChartTokens, fallbackPosition = 'top', fallbackShow = false) {
+type ChartLabelPosition = 'top' | 'bottom' | 'left' | 'right' | 'inside' | 'outside'
+
+function labelOption(payload: ChartPayload, tokens: ChartTokens, fallbackPosition: ChartLabelPosition = 'top', fallbackShow = false) {
 	return {
 		show: boolOption(payload, 'show_labels', fallbackShow),
-		position: stringOption(payload, 'label_position', fallbackPosition),
+		position: labelPosition(stringOption(payload, 'label_position'), fallbackPosition),
 		color: tokens.text,
 		fontSize: 10,
 		fontWeight: chartFontWeightMedium,
 	}
+}
+
+function labelPosition(value: string, fallback: ChartLabelPosition): ChartLabelPosition {
+	return value === 'top' || value === 'bottom' || value === 'left' || value === 'right' || value === 'inside' || value === 'outside' ? value : fallback
 }
 
 function thresholdColors(payload: ChartPayload, tokens: ChartTokens, maxValue: number) {
@@ -150,7 +176,7 @@ function itemDataFor(payload: ChartPayload, tokens: ChartTokens) {
   })
 }
 
-function partToWholeAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function partToWholeAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   const type = normalizeType(payload.type)
   const itemData = itemDataFor(payload, tokens)
   const base = baseOption(payload, tokens)
@@ -182,9 +208,9 @@ function partToWholeAdapter(payload: ChartPayload, tokens: ChartTokens): ECharts
 					data: itemData,
 					selectedMode: 'multiple',
 					roseType: stringOption(payload, 'rose_type') || undefined,
-					label: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium, ...labelOption(payload, tokens, type === 'donut' ? 'outside' : 'outside', true) },
+					label: { ...labelOption(payload, tokens, type === 'donut' ? 'outside' : 'outside', true), color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium },
 					universalTransition: true,
-				},
+				} as PieSeriesOption,
 			],
     }
   }
@@ -204,8 +230,8 @@ function partToWholeAdapter(payload: ChartPayload, tokens: ChartTokens): ECharts
 					sort: stringOption(payload, 'sort', 'descending'),
 					funnelAlign: stringOption(payload, 'funnel_align', 'center'),
 					data: itemData,
-					label: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium, ...labelOption(payload, tokens, 'inside', true) },
-				},
+					label: { ...labelOption(payload, tokens, 'inside', true), color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium },
+				} as FunnelSeriesOption,
 			],
 		}
   }
@@ -224,14 +250,14 @@ function partToWholeAdapter(payload: ChartPayload, tokens: ChartTokens): ECharts
 					data: itemData,
 					label: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium },
           upperLabel: { show: false },
-        },
+	      },
       ],
     }
   }
   return categoryAdapter(payload, tokens)
 }
 
-function singleValueAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function singleValueAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
 	const point = payload.data?.[0]
 	const value = numberValue(point, 'value')
 	const maxValue = numberOption(payload, 'max', Math.max(100, Math.ceil(value * 1.2)))
@@ -261,20 +287,20 @@ function singleValueAdapter(payload: ChartPayload, tokens: ChartTokens): ECharts
           formatter: (next: number) => formatValue(next, payload.unit),
         },
         data: [withPayloadRowIndex({ name: stringValue(point, 'label') || payload.title, value, itemStyle: { color: tokens.palette[0] } }, 0)],
-      },
+      } as GaugeSeriesOption,
     ],
   }
 }
 
-function categoryAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function categoryAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   const type = normalizeType(payload.type)
   const data = payload.data ?? []
   const selection = selectedRows(payload)
 	const stacked = Boolean(payload.options?.stacked)
 	const horizontal = type === 'bar'
-	const seriesType = type === 'area' ? 'line' : type === 'column' ? 'bar' : type
+	const seriesType: 'line' | 'bar' | 'scatter' = type === 'bar' || type === 'column' ? 'bar' : type === 'scatter' ? 'scatter' : 'line'
 	const smooth = boolOption(payload, 'smooth', type === 'line' || type === 'area')
-	const step = payload.options?.step === true ? 'middle' : stringOption(payload, 'step')
+	const step = chartStep(payload.options?.step)
 	const showSymbols = boolOption(payload, 'show_symbols', true)
 	const symbolSize = numberOption(payload, 'symbol_size', type === 'scatter' ? 9 : 7)
 	const seriesNames = unique(data.map((row) => stringValue(row, 'series') || payload.title || 'Value'))
@@ -303,19 +329,8 @@ function categoryAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOpt
             interval: Math.ceil(labels.length / 6),
           },
         },
-    series: seriesNames.map((seriesName, seriesIndex) => ({
-      id: `${payload.id || 'chart'}:${seriesName}`,
-      name: multiSeries ? seriesName : payload.title,
-      type: seriesType,
-      stack: stacked ? payload.id || 'chart' : undefined,
-			smooth,
-			step: step || undefined,
-			showSymbol: showSymbols,
-			areaStyle: type === 'area' ? { color: colorWithAlpha(tokens.palette[seriesIndex % tokens.palette.length], 0.24) } : undefined,
-			symbolSize,
-			barMaxWidth: 18,
-			label: labelOption(payload, tokens, horizontal ? 'right' : 'top'),
-			data: labels.map((label, labelIndex) => {
+	    series: seriesNames.map((seriesName, seriesIndex): SeriesOption => {
+			const seriesData = labels.map((label, labelIndex) => {
         const pointIndex = multiSeries
           ? data.findIndex((candidate) => stringValue(candidate, 'label') === label && (stringValue(candidate, 'series') || payload.title || 'Value') === seriesName)
           : labelIndex
@@ -332,14 +347,33 @@ function categoryAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOpt
 	            opacity: selection.hasSelection && !isSelected ? 0.35 : 1,
           },
         }, pointIndex)
-      }),
-      lineStyle: { color: tokens.palette[seriesIndex % tokens.palette.length], width: 2.5 },
-      universalTransition: true,
-    })),
+      })
+			const common = {
+				id: `${payload.id || 'chart'}:${seriesName}`,
+				name: multiSeries ? seriesName : payload.title,
+				stack: stacked ? payload.id || 'chart' : undefined,
+				label: labelOption(payload, tokens, horizontal ? 'right' : 'top'),
+				data: seriesData,
+				universalTransition: true,
+			}
+			if (seriesType === 'bar') return { ...common, type: 'bar', barMaxWidth: 18 } as BarSeriesOption
+			if (seriesType === 'scatter') return { ...common, type: 'scatter', symbolSize } as ScatterSeriesOption
+			return {
+				...common,
+				type: 'line', smooth, step, showSymbol: showSymbols, symbolSize,
+				areaStyle: type === 'area' ? { color: colorWithAlpha(tokens.palette[seriesIndex % tokens.palette.length], 0.24) } : undefined,
+				lineStyle: { color: tokens.palette[seriesIndex % tokens.palette.length], width: 2.5 },
+			} as LineSeriesOption
+		}),
   }
 }
 
-function comboAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function chartStep(value: unknown): 'start' | 'middle' | 'end' | undefined {
+	if (value === true) return 'middle'
+	return value === 'start' || value === 'middle' || value === 'end' ? value : undefined
+}
+
+function comboAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   const data = payload.data ?? []
   const labels = unique(data.map((row) => stringValue(row, 'label')))
 	const seriesNames = unique(data.map((row) => stringValue(row, 'series') || 'Value'))
@@ -351,9 +385,9 @@ function comboAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption
 		grid: { top: 28, right: 24, bottom: 32, left: 48, containLabel: true },
 		xAxis: { ...axis('category', tokens), data: labels, axisLabel: { color: tokens.muted, fontWeight: chartFontWeightMedium, fontSize: 10, interval: Math.ceil(labels.length / 6) } },
 		yAxis: dualAxis ? [axis('value', tokens), { ...axis('value', tokens), splitLine: { show: false } }] : axis('value', tokens),
-		series: seriesNames.map((seriesName, seriesIndex) => {
+			series: seriesNames.map((seriesName, seriesIndex): SeriesOption => {
       const configuredType = seriesTypes[seriesName] ?? seriesTypes[measureKeyForSeries(payload, seriesName)] ?? (seriesIndex === 0 ? 'bar' : 'line')
-      const echartsType = configuredType === 'column' ? 'bar' : configuredType
+	      const echartsType: 'bar' | 'line' = configuredType === 'bar' || configuredType === 'column' ? 'bar' : 'line'
       return {
         id: `${payload.id || 'chart'}:${seriesName}`,
 				name: seriesName,
@@ -373,7 +407,7 @@ function comboAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption
   }
 }
 
-function waterfallAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function waterfallAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   const data = payload.data ?? []
   const labels = data.map((row) => stringValue(row, 'label'))
   return {
@@ -390,7 +424,7 @@ function waterfallAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOp
         itemStyle: { color: 'transparent' },
         emphasis: { itemStyle: { color: 'transparent' } },
         data: data.map((row) => numberValue(row, 'start')),
-      },
+	      } as BarSeriesOption,
       {
         id: `${payload.id || 'chart'}:delta`,
 				name: payload.title,
@@ -406,12 +440,12 @@ function waterfallAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOp
             itemStyle: { color: value >= 0 ? tokens.palette[1] : tokens.palette[3] },
           }, index)
         }),
-      },
+	      } as BarSeriesOption,
     ],
   }
 }
 
-function histogramAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function histogramAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   const data = payload.data ?? []
   const labels = data.map((row) => stringValue(row, 'label'))
   return {
@@ -432,12 +466,12 @@ function histogramAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOp
           value: numberValue(row, 'value'),
           itemStyle: { color: tokens.palette[index % tokens.palette.length] },
         }, index)),
-      },
+	      } as BarSeriesOption,
     ],
   }
 }
 
-function radarAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function radarAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
 	const data = payload.data ?? []
 	const maxValue = Math.max(1, ...data.map((row) => numberValue(row, 'value')))
 	const area = boolOption(payload, 'area', true)
@@ -450,7 +484,7 @@ function radarAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption
       splitLine: { lineStyle: { color: tokens.grid } },
       splitArea: { areaStyle: { color: ['transparent', colorWithAlpha(tokens.palette[0], 0.04)] } },
       axisLine: { lineStyle: { color: tokens.border } },
-    },
+	      },
     series: [
       {
         id: payload.id || 'chart',
@@ -459,12 +493,12 @@ function radarAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption
 				areaStyle: area ? { color: colorWithAlpha(tokens.palette[0], 0.24) } : undefined,
 				lineStyle: { color: tokens.palette[0], width: 2 },
         data: [{ value: data.map((row) => numberValue(row, 'value')), name: payload.title }],
-      },
+					},
     ],
   }
 }
 
-function matrixAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function matrixAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   const data = payload.data ?? []
   const rows = unique(data.map((row) => stringValue(row, 'row')))
   const columns = unique(data.map((row) => stringValue(row, 'column')))
@@ -503,12 +537,12 @@ function matrixAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOptio
         }),
 				label: labelOption(payload, tokens, 'inside'),
 				emphasis: { itemStyle: { borderColor: tokens.text, borderWidth: 1 } },
-      },
+	      } as HeatmapSeriesOption,
     ],
   }
 }
 
-function graphAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function graphAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   const type = normalizeType(payload.type)
   const data = payload.data ?? []
   const nodeNames = unique(data.flatMap((row) => [stringValue(row, 'source'), stringValue(row, 'target')]).filter(Boolean))
@@ -530,7 +564,7 @@ function graphAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption
 					links: data.map((row, index) => withPayloadRowIndex({ source: stringValue(row, 'source'), target: stringValue(row, 'target'), value: numberValue(row, 'value') }, index)),
 					lineStyle: { color: tokens.border, curveness: numberOption(payload, 'curveness', 0.18) },
 					emphasis: { focus: stringOption(payload, 'focus', 'adjacency') },
-				},
+				} as GraphSeriesOption,
 			],
 		}
   }
@@ -553,12 +587,12 @@ function graphAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption
 				label: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium },
 				lineStyle: { color: 'gradient', curveness: numberOption(payload, 'curveness', 0.5) },
 				emphasis: { focus: stringOption(payload, 'focus', 'adjacency') },
-			},
+				} as SankeySeriesOption,
 		],
   }
 }
 
-function geoAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function geoAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   return {
     ...baseOption(payload, tokens),
     tooltip: { trigger: 'item', borderColor: tokens.border, backgroundColor: tokens.surface, textStyle: { color: tokens.text } },
@@ -569,7 +603,7 @@ function geoAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
       bottom: 8,
       textStyle: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium },
       inRange: { color: [colorWithAlpha(tokens.palette[0], 0.18), tokens.palette[0]] },
-    },
+	        },
     series: [
       {
         id: payload.id || 'chart',
@@ -580,12 +614,12 @@ function geoAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
 				data: (payload.data ?? []).map((row, index) => withPayloadRowIndex({ name: stringValue(row, 'name'), value: numberValue(row, 'value'), selected: booleanValue(row, 'selected') }, index)),
 				label: labelOption(payload, tokens, 'inside', true),
 				itemStyle: { borderColor: tokens.border },
-      },
+	      } as MapSeriesOption,
     ],
   }
 }
 
-function ohlcAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function ohlcAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   const data = payload.data ?? []
   const labels = data.map((row) => stringValue(row, 'label'))
   return {
@@ -600,12 +634,12 @@ function ohlcAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption 
         type: 'candlestick',
         data: data.map((row, index) => withPayloadRowIndex({ value: [numberValue(row, 'open'), numberValue(row, 'close'), numberValue(row, 'low'), numberValue(row, 'high')] }, index)),
         itemStyle: { color: tokens.palette[1], color0: tokens.palette[3], borderColor: tokens.palette[1], borderColor0: tokens.palette[3] },
-      },
+	        },
     ],
   }
 }
 
-function distributionAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function distributionAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   const data = payload.data ?? []
   const labels = data.map((row) => stringValue(row, 'label'))
   return {
@@ -620,12 +654,12 @@ function distributionAdapter(payload: ChartPayload, tokens: ChartTokens): EChart
         type: 'boxplot',
         data: data.map((row, index) => withPayloadRowIndex({ value: [numberValue(row, 'min'), numberValue(row, 'q1'), numberValue(row, 'median'), numberValue(row, 'q3'), numberValue(row, 'max')] }, index)),
         itemStyle: { color: colorWithAlpha(tokens.palette[0], 0.28), borderColor: tokens.palette[0] },
-      },
+	      },
     ],
   }
 }
 
-function hierarchyAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOption {
+function hierarchyAdapter(payload: ChartPayload, tokens: ChartTokens): AdapterOption {
   const type = normalizeType(payload.type)
   const data = buildHierarchy(payload.data ?? [])
   if (type === 'tree') {
@@ -649,8 +683,8 @@ function hierarchyAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOp
           label: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium },
           leaves: { label: { color: tokens.muted, fontSize: 10, fontWeight: chartFontWeightMedium } },
           lineStyle: { color: tokens.border },
-				emphasis: { focus: stringOption(payload, 'focus', 'descendant') },
-        },
+					emphasis: { focus: stringOption(payload, 'focus', 'descendant') },
+	        } as TreeSeriesOption,
       ],
     }
   }
@@ -668,8 +702,8 @@ function hierarchyAdapter(payload: ChartPayload, tokens: ChartTokens): EChartsOp
 				nodeClick: boolOption(payload, 'roam') ? 'rootToNode' : false,
 				initialTreeDepth: numberOption(payload, 'initial_depth', -1),
 				label: { color: tokens.text, fontSize: 10, fontWeight: chartFontWeightMedium, rotate: 'radial' },
-				itemStyle: { borderColor: tokens.surface, borderWidth: 1 },
-      },
+					itemStyle: { borderColor: tokens.surface, borderWidth: 1 },
+	      } as SunburstSeriesOption,
     ],
   }
 }
@@ -699,29 +733,32 @@ function measureKeyForSeries(payload: ChartPayload, seriesName: string): string 
   return payload.measures?.[Math.max(0, index)] ?? seriesName
 }
 
-function buildHierarchy(rows: ChartDatum[]) {
-  const root = { name: 'All', value: 0, children: [] as Array<Record<string, unknown>> }
+type HierarchyNode = { name: string; value: number; children?: HierarchyNode[] }
+
+function buildHierarchy(rows: ChartDatum[]): HierarchyNode[] {
+	const root: HierarchyNode = { name: 'All', value: 0, children: [] }
   for (const row of rows) {
     const path = Array.isArray(row.path) ? row.path.map(String).filter(Boolean) : String(row.path ?? '').split('/').map((item) => item.trim()).filter(Boolean)
     if (path.length === 0) continue
     const value = numberValue(row, 'value')
     root.value += value
-    let parent = root
-    for (const part of path) {
-      let child = parent.children.find((candidate) => candidate.name === part) as typeof root | undefined
-      if (!child) {
-        child = { name: part, value: 0, children: [] }
-        parent.children.push(child)
-      }
-      child.value = numberValue(child as ChartDatum, 'value') + value
+		let parent: HierarchyNode = root
+		for (const part of path) {
+			parent.children ??= []
+			let child = parent.children.find((candidate) => candidate.name === part)
+			if (!child) {
+				child = { name: part, value: 0, children: [] }
+				parent.children.push(child)
+			}
+			child.value += value
       parent = child
     }
   }
   return [pruneEmptyChildren(root)]
 }
 
-function pruneEmptyChildren(node: Record<string, unknown>): Record<string, unknown> {
-  const children = Array.isArray(node.children) ? node.children.map((child) => pruneEmptyChildren(child as Record<string, unknown>)) : []
+function pruneEmptyChildren(node: HierarchyNode): HierarchyNode {
+	const children = node.children?.map(pruneEmptyChildren) ?? []
   if (children.length === 0) {
     const { children: _children, ...leaf } = node
     return leaf

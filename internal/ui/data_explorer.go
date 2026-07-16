@@ -33,7 +33,7 @@ func DataExplorerPage(catalog dashboard.Catalog, page uisignals.DataExplorerPage
 			g.El("ld-app-shell",
 				g.El("ld-data-explorer",
 					g.Attr("slot", "page"),
-					g.Attr("data-on:ld-data-explorer-command", "$dataExplorerCommand = evt.detail; "+postAction("/data/command")),
+					g.Attr("data-on:ld-data-explorer-command", "$dataExplorerCommand = evt.detail; "+pagestream.PostAction("/data/command")),
 				),
 			),
 			inspectorElement(),

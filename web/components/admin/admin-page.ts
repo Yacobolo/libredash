@@ -32,7 +32,7 @@ const emptyStorage: AdminStorageSignal = {
   snapshots: [],
   servingStates: [],
   selectedKey: '',
-  selectedTable: null,
+  selectedTable: undefined,
 }
 
 class LibreDashAdminPage extends DatastarLit(LitElement) {
@@ -975,6 +975,11 @@ const emptyQueryDetail: AdminQueryDetailSignal = {
   eventId: '',
   loading: false,
   error: '',
+  connectionWaitMs: 0,
+  durationMs: 0,
+  databaseMs: 0,
+  planningMs: 0,
+  rowsReturned: 0,
 }
 
 function tableRows(table: RecordTableSignal | undefined | null): Array<Record<string, unknown>> {

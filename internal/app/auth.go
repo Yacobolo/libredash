@@ -227,23 +227,22 @@ func (a *Auth) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	email := oidcEmail(claims)
 	issuer := firstNonEmpty(claims.Issuer, providerConfig.IssuerURL, provider)
-	principal, err := a.repo.ResolveExternalPrincipal(r.Context(), access.ExternalIdentityInput{
-		Provider:    "oidc",
-		TenantID:    issuer,
-		Subject:     stableSubject(claims.Subject, email),
-		Email:       email,
-		DisplayName: oidcDisplayName(claims),
+	var principal access.Principal
+	var token string
+	err = runAuthAuditedMutation(r, a.repo, func(txRepo access.Repository) (access.AuditEventInput, error) {
+		var mutationErr error
+		principal, mutationErr = txRepo.ResolveExternalPrincipal(r.Context(), access.ExternalIdentityInput{
+			Provider: "oidc", TenantID: issuer, Subject: stableSubject(claims.Subject, email), Email: email, DisplayName: oidcDisplayName(claims),
+		})
+		if mutationErr == nil {
+			token, mutationErr = txRepo.CreateSession(r.Context(), principal.ID, 8*time.Hour)
+		}
+		return authAuditInput(r, "session.created", principal.ID, "", "session", "", "", "success", map[string]any{"provider": provider}), mutationErr
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	token, err := a.sessions.CreateSession(r.Context(), principal.ID, 8*time.Hour)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	recordAccessAudit(r, a.repo, "session.created", principal.ID, "", "session", "", "", "success", map[string]any{"provider": provider})
 	recordAccessAudit(r, a.repo, "sign_in", principal.ID, "", "principal", principal.ID, "", "success", map[string]any{"provider": provider})
 	http.SetCookie(w, a.sessionCookie(token, time.Now().Add(8*time.Hour)))
 	http.Redirect(w, r, "/", http.StatusFound)
@@ -252,8 +251,10 @@ func (a *Auth) Callback(w http.ResponseWriter, r *http.Request) {
 func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie("ld_session"); err == nil {
 		principal, _ := a.sessions.PrincipalForToken(r.Context(), cookie.Value)
-		_ = a.sessions.DeleteSession(r.Context(), cookie.Value)
-		recordAccessAudit(r, a.repo, "session.revoked", principal.ID, "", "session", "", "", "success", nil)
+		_ = runAuthAuditedMutation(r, a.repo, func(txRepo access.Repository) (access.AuditEventInput, error) {
+			mutationErr := txRepo.DeleteSession(r.Context(), cookie.Value)
+			return authAuditInput(r, "session.revoked", principal.ID, "", "session", "", "", "success", nil), mutationErr
+		})
 		recordAccessAudit(r, a.repo, "sign_out", principal.ID, "", "principal", principal.ID, "", "success", nil)
 	}
 	http.SetCookie(w, &http.Cookie{Name: "ld_session", Value: "", Path: "/", MaxAge: -1, HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: a.cookieSecure})
@@ -286,12 +287,16 @@ func (a *Auth) LocalLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errUnauthorized.Error(), http.StatusUnauthorized)
 		return
 	}
-	token, err := a.sessions.CreateSession(r.Context(), principal.ID, 8*time.Hour)
+	var token string
+	err = runAuthAuditedMutation(r, a.repo, func(txRepo access.Repository) (access.AuditEventInput, error) {
+		var mutationErr error
+		token, mutationErr = txRepo.CreateSession(r.Context(), principal.ID, 8*time.Hour)
+		return authAuditInput(r, "session.created", principal.ID, "", "session", "", "", "success", map[string]any{"provider": "local"}), mutationErr
+	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	recordAccessAudit(r, a.repo, "session.created", principal.ID, "", "session", "", "", "success", map[string]any{"provider": "local"})
 	recordAccessAudit(r, a.repo, "sign_in", principal.ID, "", "principal", principal.ID, "", "success", map[string]any{"provider": "local"})
 	http.SetCookie(w, a.sessionCookie(token, time.Now().Add(8*time.Hour)))
 	if credential.MustChangePassword {
@@ -319,12 +324,16 @@ func (a *Auth) LocalPassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	local, ok := a.repo.(localCredentialManager)
+	_, ok = a.repo.(localCredentialManager)
 	if !ok {
 		http.Error(w, "local auth repository is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	if _, err := local.ChangeLocalPassword(r.Context(), principal.ID, firstNonEmpty(r.Form.Get("currentPassword"), r.Form.Get("current_password")), firstNonEmpty(r.Form.Get("newPassword"), r.Form.Get("new_password"))); err != nil {
+	err := runAuthAuditedMutation(r, a.repo, func(txRepo access.Repository) (access.AuditEventInput, error) {
+		_, mutationErr := txRepo.ChangeLocalPassword(r.Context(), principal.ID, firstNonEmpty(r.Form.Get("currentPassword"), r.Form.Get("current_password")), firstNonEmpty(r.Form.Get("newPassword"), r.Form.Get("new_password")))
+		return authAuditInput(r, "password.changed", principal.ID, "", "principal", principal.ID, "", "success", map[string]any{"provider": "local"}), mutationErr
+	})
+	if err != nil {
 		if wantsJSON(r) {
 			writeJSONError(w, errUnauthorized, http.StatusUnauthorized)
 			return
@@ -332,7 +341,6 @@ func (a *Auth) LocalPassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, errUnauthorized.Error(), http.StatusUnauthorized)
 		return
 	}
-	recordAccessAudit(r, a.repo, "password.changed", principal.ID, "", "principal", principal.ID, "", "success", map[string]any{"provider": "local"})
 	if wantsJSON(r) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "changed"})
 		return
@@ -481,11 +489,15 @@ func recordAccessAudit(r *http.Request, repo access.Repository, action, principa
 	if repo == nil {
 		return
 	}
+	_ = access.PersistAuditEvent(r.Context(), repo, authAuditInput(r, action, principalID, workspaceID, targetType, targetID, privilege, status, metadata))
+}
+
+func authAuditInput(r *http.Request, action, principalID, workspaceID, targetType, targetID string, privilege access.Privilege, status string, metadata map[string]any) access.AuditEventInput {
 	if metadata == nil {
 		metadata = map[string]any{}
 	}
 	bytes, _ := json.Marshal(metadata)
-	_ = repo.RecordAuditEvent(r.Context(), access.AuditEventInput{
+	return access.AuditEventInput{
 		WorkspaceID:   workspaceID,
 		PrincipalID:   principalID,
 		Action:        action,
@@ -496,7 +508,18 @@ func recordAccessAudit(r *http.Request, repo access.Repository, action, principa
 		RequestID:     firstNonEmpty(r.Header.Get("X-Request-Id"), r.Header.Get("X-Request-ID")),
 		CorrelationID: firstNonEmpty(r.Header.Get("X-Correlation-Id"), r.Header.Get("X-Correlation-ID"), r.Header.Get("X-Request-Id"), r.Header.Get("X-Request-ID")),
 		MetadataJSON:  string(bytes),
-	})
+	}
+}
+
+func runAuthAuditedMutation(r *http.Request, repo access.Repository, mutation func(access.Repository) (access.AuditEventInput, error)) error {
+	if transactional, ok := repo.(access.AuditedMutationRepository); ok {
+		return transactional.RunAuditedMutation(r.Context(), mutation)
+	}
+	input, err := mutation(repo)
+	if err != nil {
+		return err
+	}
+	return access.PersistAuditEvent(r.Context(), repo, input)
 }
 
 func (a *Auth) privilegeWorkspaceID(r *http.Request) string {

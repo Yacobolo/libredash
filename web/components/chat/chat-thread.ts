@@ -45,7 +45,7 @@ class ChatThread extends LitElement {
   @property({ attribute: 'visuals', converter: jsonConverter<Record<string, DashboardVisual>>({}) }) visualsAttribute: Record<string, DashboardVisual> = {}
   @property({ attribute: false }) tables: Record<string, DashboardTable> = {}
   @property({ attribute: 'tables', converter: jsonConverter<Record<string, DashboardTable>>({}) }) tablesAttribute: Record<string, DashboardTable> = {}
-  @property({ attribute: 'status', converter: jsonConverter<ChatStatus>({}) }) status: ChatStatus = {}
+  @property({ attribute: 'status', converter: jsonConverter<ChatStatus>({ enabled: false, running: false }) }) status: ChatStatus = { enabled: false, running: false }
   @property({ attribute: 'conversation-id' }) conversationId = ''
   @state() private expandedToolCalls = new Set<string>()
   private scrollFrame = 0
@@ -551,7 +551,7 @@ function hasKeys(value: Record<string, unknown> | undefined): boolean {
 
 function groupTranscript(transcript: ChatTranscriptItemSignal[]): ChatRenderUnit[] {
   const units: ChatRenderUnit[] = []
-  let agentItems: ChatTranscriptItem[] = []
+  let agentItems: ChatTranscriptItemSignal[] = []
   const flushAgent = () => {
     if (agentItems.length === 0) return
     units.push({ kind: 'agent', items: agentItems })

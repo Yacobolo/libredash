@@ -132,10 +132,17 @@ func (r *Repository) ExtendQuerySnapshotLease(ctx context.Context, id string, ex
 	if expiresAt.IsZero() {
 		return fmt.Errorf("lease expiry is required")
 	}
-	return r.q.ExtendQuerySnapshotLease(ctx, platformdb.ExtendQuerySnapshotLeaseParams{
+	updated, err := r.q.ExtendQuerySnapshotLease(ctx, platformdb.ExtendQuerySnapshotLeaseParams{
 		ID:        id,
 		ExpiresAt: sqliteTimestamp(expiresAt),
 	})
+	if err != nil {
+		return err
+	}
+	if updated != 1 {
+		return servingstate.ErrSnapshotLeaseLost
+	}
+	return nil
 }
 
 func (r *Repository) ReleaseExpiredQuerySnapshotLeases(ctx context.Context) error {

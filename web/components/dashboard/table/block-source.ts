@@ -99,7 +99,7 @@ export function preserveCardinality(previous: TableSignal, incoming: TableSignal
 function normalizeCardinality(value: Partial<TableSignal['cardinality']> | undefined): TableSignal['cardinality'] {
 	const kind = value?.kind
 	if (kind !== 'lower_bound' && kind !== 'estimated' && kind !== 'exact') return { kind: 'unknown', value: 0 }
-	return { kind, value: positiveNumber(value.value, 0) }
+	return { kind, value: positiveNumber(value?.value, 0) }
 }
 
 function cardinalityRank(kind: TableSignal['cardinality']['kind']): number {

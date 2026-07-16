@@ -136,8 +136,8 @@ func workspaceAccessRouteBridge(workspaceID string, access WorkspaceAccessRespon
 		return nil, workspaceDocumentExtras{}
 	}
 	accessSignal := WorkspaceAccessSignals(access)
-	upsert := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + postAction("/workspaces/"+workspaceID+"/access/upsert")
-	remove := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + postAction("/workspaces/"+workspaceID+"/access/remove")
+	upsert := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + pagestream.PostAction("/workspaces/"+workspaceID+"/access/upsert")
+	remove := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + pagestream.PostAction("/workspaces/"+workspaceID+"/access/remove")
 	return []g.Node{
 			g.Attr("data-on:ld-workspace-access-search__debounce.200ms", "$workspaceAccess.search = evt.detail.search"),
 			g.Attr("data-on:ld-workspace-access-upsert", upsert),
@@ -516,7 +516,7 @@ func WorkspaceAssetPageWithRefreshAndVersionsForEnvironment(catalog dashboard.Ca
 		refreshPath := "/workspaces/" + workspace.ID + "/assets/" + asset.ID + "/refresh"
 		extras.CSRFToken = refresh.CSRFToken
 		attrs = append(attrs,
-			g.Attr("data-on:ld-refresh-materializations", postAction(refreshPath)),
+			g.Attr("data-on:ld-refresh-materializations", pagestream.PostAction(refreshPath)),
 		)
 		if activeSection == "versions" {
 			return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extras, activeSection, chromeOptions)

@@ -537,7 +537,7 @@ class SubSidebar extends LitElement {
       this.syncCollapsedStorage(config.storageKey)
     }
     this.toggleAttribute('data-collapsed', this.isCollapsed(config))
-    if (changed.has('config') || changed.has('collapsed')) {
+    if (changed.has('config')) {
       this.scrollActiveItemIntoView()
     }
   }

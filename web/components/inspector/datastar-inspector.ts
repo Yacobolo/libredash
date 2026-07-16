@@ -3,7 +3,7 @@
  *
  * A development-only view of effective Datastar signal state and history.
  */
-import { LitElement, css, html, nothing } from 'lit'
+import { LitElement, css, html, nothing, type TemplateResult } from 'lit'
 import { customElement, state } from 'lit/decorators.js'
 import { ChevronDown, ChevronRight, X } from 'lucide'
 
@@ -859,7 +859,7 @@ export class DatastarInspector extends LitElement {
     `
   }
 
-  private renderTreeNode(key: string, value: unknown, path: string, depth: number, hasFilter: boolean) {
+  private renderTreeNode(key: string, value: unknown, path: string, depth: number, hasFilter: boolean): TemplateResult {
     const changed = this.isChanged(path)
     const rowClass = changed ? ' changed' : ''
     const rowStyle = this.treeRowStyle(depth)

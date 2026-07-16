@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
 	"sync"
 	"time"
@@ -76,6 +77,9 @@ type Manager struct {
 	onDrained             func(servingstate.ID, int64)
 	leaseTTL              time.Duration
 	leaseOwner            string
+	logger                *slog.Logger
+	onLeaseRenewalFailure func(error)
+	leaseRenewalErrors    map[string]error
 	activeServingStateID  servingstate.ID
 	activeDigest          string
 	activeManagedRevision string
@@ -85,14 +89,16 @@ type Manager struct {
 }
 
 type ManagerOptions struct {
-	Repo        ServingStateRepository
-	WorkspaceID servingstate.WorkspaceID
-	Environment servingstate.Environment
-	Factory     RuntimeFactory
-	ManagedData ManagedDataResolver
-	OnDrained   func(servingstate.ID, int64)
-	LeaseTTL    time.Duration
-	LeaseOwner  string
+	Repo                  ServingStateRepository
+	WorkspaceID           servingstate.WorkspaceID
+	Environment           servingstate.Environment
+	Factory               RuntimeFactory
+	ManagedData           ManagedDataResolver
+	OnDrained             func(servingstate.ID, int64)
+	LeaseTTL              time.Duration
+	LeaseOwner            string
+	Logger                *slog.Logger
+	OnLeaseRenewalFailure func(error)
 }
 
 type Prepared struct {
@@ -130,16 +136,43 @@ func (p *Prepared) DuckLakeSnapshotID() int64 {
 }
 
 func NewManagerWithFactory(options ManagerOptions) *Manager {
-	return &Manager{
-		repo:        options.Repo,
-		workspaceID: options.WorkspaceID,
-		environment: servingstate.NormalizeEnvironment(options.Environment),
-		factory:     options.Factory,
-		managedData: options.ManagedData,
-		onDrained:   options.OnDrained,
-		leaseTTL:    normalizedLeaseTTL(options.LeaseTTL),
-		leaseOwner:  firstNonEmpty(options.LeaseOwner, "runtimehost"),
+	logger := options.Logger
+	if logger == nil {
+		logger = slog.Default()
 	}
+	return &Manager{
+		repo:                  options.Repo,
+		workspaceID:           options.WorkspaceID,
+		environment:           servingstate.NormalizeEnvironment(options.Environment),
+		factory:               options.Factory,
+		managedData:           options.ManagedData,
+		onDrained:             options.OnDrained,
+		leaseTTL:              normalizedLeaseTTL(options.LeaseTTL),
+		logger:                logger,
+		onLeaseRenewalFailure: options.OnLeaseRenewalFailure,
+		leaseRenewalErrors:    map[string]error{},
+		leaseOwner:            firstNonEmpty(options.LeaseOwner, "runtimehost"),
+	}
+}
+
+func (m *Manager) LeaseRenewalError() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	errs := make([]error, 0, len(m.leaseRenewalErrors))
+	for _, err := range m.leaseRenewalErrors {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
+}
+
+func (m *Manager) setLeaseRenewalError(leaseID string, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if err == nil {
+		delete(m.leaseRenewalErrors, leaseID)
+		return
+	}
+	m.leaseRenewalErrors[leaseID] = err
 }
 
 func (m *Manager) Reload(ctx context.Context) error {
@@ -527,6 +560,7 @@ func (m *Manager) createPersistentLease(ctx context.Context, servingStateID serv
 }
 
 func (m *Manager) heartbeatLease(ctx context.Context, repo SnapshotLeaseRepository, leaseID string) {
+	defer m.setLeaseRenewalError(leaseID, nil)
 	interval := m.leaseTTL / 2
 	if interval <= 0 {
 		interval = time.Minute
@@ -538,9 +572,43 @@ func (m *Manager) heartbeatLease(ctx context.Context, repo SnapshotLeaseReposito
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_ = repo.ExtendQuerySnapshotLease(context.Background(), leaseID, time.Now().Add(m.leaseTTL))
+			err := renewSnapshotLease(ctx, repo, leaseID, time.Now().Add(m.leaseTTL), 3, 100*time.Millisecond)
+			m.setLeaseRenewalError(leaseID, err)
+			if err != nil {
+				m.logger.Error("snapshot lease renewal failed", "lease_id", leaseID, "workspace_id", m.workspaceID, "error", err)
+				if m.onLeaseRenewalFailure != nil {
+					m.onLeaseRenewalFailure(err)
+				}
+			}
 		}
 	}
+}
+
+func renewSnapshotLease(ctx context.Context, repo SnapshotLeaseRepository, leaseID string, expiresAt time.Time, attempts int, backoff time.Duration) error {
+	if attempts < 1 {
+		attempts = 1
+	}
+	var lastErr error
+	for attempt := 0; attempt < attempts; attempt++ {
+		requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		lastErr = repo.ExtendQuerySnapshotLease(requestCtx, leaseID, expiresAt)
+		cancel()
+		if lastErr == nil {
+			return nil
+		}
+		if attempt == attempts-1 {
+			break
+		}
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+		backoff *= 2
+	}
+	return fmt.Errorf("extend snapshot lease %q after %d attempts: %w", leaseID, attempts, lastErr)
 }
 
 func normalizedLeaseTTL(value time.Duration) time.Duration {

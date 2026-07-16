@@ -442,6 +442,31 @@ func TestRepositoryPersistsQuerySnapshotLeaseLifecycle(t *testing.T) {
 	}
 }
 
+func TestRepositoryRejectsExtensionOfReleasedSnapshotLease(t *testing.T) {
+	ctx := t.Context()
+	store, repo := openRepo(t, ctx)
+	if err := workspacesqlite.NewRepository(store.SQLDB()).Ensure(ctx, workspace.EnsureInput{ID: "sales", Title: "Sales"}); err != nil {
+		t.Fatal(err)
+	}
+	state, err := repo.Create(ctx, servingstate.CreateInput{WorkspaceID: "sales", CreatedBy: "tester"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	leaseID, err := repo.CreateQuerySnapshotLease(ctx, servingstate.SnapshotLeaseInput{
+		WorkspaceID: "sales", ServingStateID: state.ID, DuckLakeSnapshotID: 42,
+		ExpiresAt: time.Now().Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.ReleaseQuerySnapshotLease(ctx, leaseID); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.ExtendQuerySnapshotLease(ctx, leaseID, time.Now().Add(time.Minute)); !errors.Is(err, servingstate.ErrSnapshotLeaseLost) {
+		t.Fatalf("extend released lease error = %v, want ErrSnapshotLeaseLost", err)
+	}
+}
+
 func TestRepositoryActivationMarksPreviousActiveDeploymentDraining(t *testing.T) {
 	ctx := context.Background()
 	store, repo := openRepo(t, ctx)

@@ -165,6 +165,16 @@ tasks:
     cmds:
       - go run ./internal/tools/configgen --check
 
+  generated:check:
+    desc: Verify every committed generated artifact is current
+    deps:
+      - generate
+    cmds:
+      - task: config:check
+      - |
+        changed="$(git status --porcelain -- .env.example docs/configuration.md internal/config/config_gen.go internal/configspec/names_gen.go schemas web/generated)"
+        test -z "$changed" || { printf 'committed generated artifacts are stale:\n%s\n' "$changed" >&2; exit 1; }
+
   api:generate:
     desc: Generate headless API contract artifacts and APIGen Go surfaces
     method: checksum
@@ -255,6 +265,8 @@ tasks:
       - bun run test:production-assets
       - bun run test:asset-lineage
       - bun run test:semantic-model-graph
+      - bun run typecheck:app
+      - bun run typecheck:contracts
       - go test ./...
 
   ci:
@@ -262,6 +274,9 @@ tasks:
     deps:
       - test
     cmds:
+      - task: generated:check
+      - go vet ./...
+      - go test -race ./pkg/... ./internal/access ./internal/runtimehost
       - task: qa:ui-framework
       - task: deploy:check
 

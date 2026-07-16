@@ -49,7 +49,7 @@ const emptyWorkspaceAccess: WorkspaceAccessSignal = {
   bindings: [],
   canManage: false,
   status: { loading: false, error: '', message: '' },
-  command: { email: '', role: '', principalId: '' },
+  command: { bindingId: '', email: '', principalId: '', privilege: '', role: '', subjectId: '', subjectType: '' },
   search: '',
 }
 
@@ -104,7 +104,7 @@ class LibreDashWorkspacePage extends DatastarLit(LitElement) {
                 <p class="muted">${card.description}</p>
               </div>
               <footer>
-                ${card.deploymentLabel ? html`<span>${card.deploymentLabel}</span>` : html`<span></span>`}
+                ${card.servingLabel ? html`<span>${card.servingLabel}</span>` : html`<span></span>`}
                 <a class="primary-link" href=${card.href}>${lucideIcon(ExternalLink)}<span>Open</span></a>
               </footer>
             </article>
@@ -145,7 +145,7 @@ class LibreDashWorkspacePage extends DatastarLit(LitElement) {
     `
   }
 
-  private renderHeader(eyebrow: string, title: string, detail = '', actions = nothing) {
+  private renderHeader(eyebrow: string, title: string, detail = '', actions: unknown = nothing) {
     return html`
       <header class="header">
         <div class="title-block">

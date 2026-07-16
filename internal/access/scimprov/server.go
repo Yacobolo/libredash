@@ -114,12 +114,16 @@ type userHandler struct {
 
 func (h userHandler) Create(r *http.Request, attrs scimpkg.ResourceAttributes) (scimpkg.Resource, error) {
 	input := scimUserInput("", attrs)
-	user, err := h.repo.UpsertSCIMUser(r.Context(), input)
+	var user access.SCIMUser
+	err := runAuditedMutation(r, h.repo, func(txRepo Repository) (access.AuditEventInput, error) {
+		var mutationErr error
+		user, mutationErr = txRepo.UpsertSCIMUser(r.Context(), input)
+		return scimAuditInput(r, "scim.user.create", "principal", user.Principal.ID, "success", nil), mutationErr
+	})
 	if err != nil {
 		recordAudit(r.Context(), h.repo, r, "scim.user.create", "principal", input.ExternalID, "error", err)
 		return scimpkg.Resource{}, err
 	}
-	recordAudit(r.Context(), h.repo, r, "scim.user.create", "principal", user.Principal.ID, "success", nil)
 	return userResource(user.Principal, user.ExternalID), nil
 }
 
@@ -157,17 +161,26 @@ func (h userHandler) GetAll(r *http.Request, params scimpkg.ListRequestParams) (
 
 func (h userHandler) Replace(r *http.Request, id string, attrs scimpkg.ResourceAttributes) (scimpkg.Resource, error) {
 	input := scimUserInput(id, attrs)
-	user, err := h.repo.UpsertSCIMUser(r.Context(), input)
+	var user access.SCIMUser
+	err := runAuditedMutation(r, h.repo, func(txRepo Repository) (access.AuditEventInput, error) {
+		var mutationErr error
+		user, mutationErr = txRepo.UpsertSCIMUser(r.Context(), input)
+		return scimAuditInput(r, "scim.user.update", "principal", user.Principal.ID, "success", nil), mutationErr
+	})
 	if err != nil {
 		recordAudit(r.Context(), h.repo, r, "scim.user.update", "principal", id, "error", err)
 		return scimpkg.Resource{}, err
 	}
-	recordAudit(r.Context(), h.repo, r, "scim.user.update", "principal", user.Principal.ID, "success", nil)
 	return userResource(user.Principal, user.ExternalID), nil
 }
 
 func (h userHandler) Delete(r *http.Request, id string) error {
-	user, err := h.repo.DisableSCIMUser(r.Context(), id)
+	var user access.SCIMUser
+	err := runAuditedMutation(r, h.repo, func(txRepo Repository) (access.AuditEventInput, error) {
+		var mutationErr error
+		user, mutationErr = txRepo.DisableSCIMUser(r.Context(), id)
+		return scimAuditInput(r, "scim.user.delete", "principal", user.Principal.ID, "success", nil), mutationErr
+	})
 	if err != nil {
 		recordAudit(r.Context(), h.repo, r, "scim.user.delete", "principal", id, "error", err)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -175,7 +188,6 @@ func (h userHandler) Delete(r *http.Request, id string) error {
 		}
 		return err
 	}
-	recordAudit(r.Context(), h.repo, r, "scim.user.delete", "principal", user.Principal.ID, "success", nil)
 	return nil
 }
 
@@ -189,16 +201,20 @@ func (h userHandler) Patch(r *http.Request, id string, ops []scimpkg.PatchOperat
 		applyUserPatch(attrs, op)
 	}
 	input := scimUserInput(id, attrs)
-	user, err := h.repo.UpsertSCIMUser(r.Context(), input)
-	if err != nil {
-		recordAudit(r.Context(), h.repo, r, "scim.user.update", "principal", id, "error", err)
-		return scimpkg.Resource{}, err
-	}
 	action := "scim.user.update"
 	if !input.Active {
 		action = "scim.user.disable"
 	}
-	recordAudit(r.Context(), h.repo, r, action, "principal", user.Principal.ID, "success", nil)
+	var user access.SCIMUser
+	err = runAuditedMutation(r, h.repo, func(txRepo Repository) (access.AuditEventInput, error) {
+		var mutationErr error
+		user, mutationErr = txRepo.UpsertSCIMUser(r.Context(), input)
+		return scimAuditInput(r, action, "principal", user.Principal.ID, "success", nil), mutationErr
+	})
+	if err != nil {
+		recordAudit(r.Context(), h.repo, r, "scim.user.update", "principal", id, "error", err)
+		return scimpkg.Resource{}, err
+	}
 	return userResource(user.Principal, user.ExternalID), nil
 }
 
@@ -208,12 +224,16 @@ type groupHandler struct {
 
 func (h groupHandler) Create(r *http.Request, attrs scimpkg.ResourceAttributes) (scimpkg.Resource, error) {
 	input := scimGroupInput("", attrs)
-	group, err := h.repo.UpsertSCIMGroup(r.Context(), input)
+	var group access.Group
+	err := runAuditedMutation(r, h.repo, func(txRepo Repository) (access.AuditEventInput, error) {
+		var mutationErr error
+		group, mutationErr = txRepo.UpsertSCIMGroup(r.Context(), input)
+		return scimAuditInput(r, "scim.group.create", "group", group.ID, "success", nil), mutationErr
+	})
 	if err != nil {
 		recordAudit(r.Context(), h.repo, r, "scim.group.create", "group", input.ExternalID, "error", err)
 		return scimpkg.Resource{}, err
 	}
-	recordAudit(r.Context(), h.repo, r, "scim.group.create", "group", group.ID, "success", nil)
 	return h.groupResource(r.Context(), group, input.ExternalID)
 }
 
@@ -255,21 +275,28 @@ func (h groupHandler) GetAll(r *http.Request, params scimpkg.ListRequestParams) 
 
 func (h groupHandler) Replace(r *http.Request, id string, attrs scimpkg.ResourceAttributes) (scimpkg.Resource, error) {
 	input := scimGroupInput(id, attrs)
-	group, err := h.repo.UpsertSCIMGroup(r.Context(), input)
+	var group access.Group
+	err := runAuditedMutation(r, h.repo, func(txRepo Repository) (access.AuditEventInput, error) {
+		var mutationErr error
+		group, mutationErr = txRepo.UpsertSCIMGroup(r.Context(), input)
+		return scimAuditInput(r, "scim.group.update", "group", group.ID, "success", nil), mutationErr
+	})
 	if err != nil {
 		recordAudit(r.Context(), h.repo, r, "scim.group.update", "group", id, "error", err)
 		return scimpkg.Resource{}, err
 	}
-	recordAudit(r.Context(), h.repo, r, "scim.group.update", "group", group.ID, "success", nil)
 	return h.groupResource(r.Context(), group, input.ExternalID)
 }
 
 func (h groupHandler) Delete(r *http.Request, id string) error {
-	if err := h.repo.DeleteSCIMGroup(r.Context(), id); err != nil {
+	err := runAuditedMutation(r, h.repo, func(txRepo Repository) (access.AuditEventInput, error) {
+		mutationErr := txRepo.DeleteSCIMGroup(r.Context(), id)
+		return scimAuditInput(r, "scim.group.delete", "group", id, "success", nil), mutationErr
+	})
+	if err != nil {
 		recordAudit(r.Context(), h.repo, r, "scim.group.delete", "group", id, "error", err)
 		return err
 	}
-	recordAudit(r.Context(), h.repo, r, "scim.group.delete", "group", id, "success", nil)
 	return nil
 }
 
@@ -375,15 +402,24 @@ func (h groupHandler) Patch(r *http.Request, id string, ops []scimpkg.PatchOpera
 			memberList = append(memberList, memberID)
 		}
 	}
-	group, err := h.repo.UpsertSCIMGroup(r.Context(), access.SCIMGroupInput{ID: id, ExternalID: externalID, Name: displayName, MemberIDs: memberList})
+	var group access.Group
+	err = runAuditedMutationBatch(r, h.repo, func(txRepo Repository) ([]access.AuditEventInput, error) {
+		var mutationErr error
+		group, mutationErr = txRepo.UpsertSCIMGroup(r.Context(), access.SCIMGroupInput{ID: id, ExternalID: externalID, Name: displayName, MemberIDs: memberList})
+		if mutationErr != nil {
+			return nil, mutationErr
+		}
+		events := make([]access.AuditEventInput, 0, len(memberAudits)+1)
+		for _, action := range memberAudits {
+			events = append(events, scimAuditInput(r, action, "group", group.ID, "success", nil))
+		}
+		events = append(events, scimAuditInput(r, "scim.group.update", "group", group.ID, "success", nil))
+		return events, nil
+	})
 	if err != nil {
 		recordAudit(r.Context(), h.repo, r, "scim.group.update", "group", id, "error", err)
 		return scimpkg.Resource{}, err
 	}
-	for _, action := range memberAudits {
-		recordAudit(r.Context(), h.repo, r, action, "group", group.ID, "success", nil)
-	}
-	recordAudit(r.Context(), h.repo, r, "scim.group.update", "group", group.ID, "success", nil)
 	return h.groupResource(r.Context(), group, "")
 }
 
@@ -724,6 +760,10 @@ func recordAudit(ctx context.Context, repo Repository, r *http.Request, action, 
 	if repo == nil {
 		return
 	}
+	_ = access.PersistAuditEvent(ctx, repo, scimAuditInput(r, action, targetType, targetID, status, cause))
+}
+
+func scimAuditInput(r *http.Request, action, targetType, targetID, status string, cause error) access.AuditEventInput {
 	metadata := map[string]any{
 		"actor":  "scim",
 		"path":   r.URL.Path,
@@ -733,7 +773,7 @@ func recordAudit(ctx context.Context, repo Repository, r *http.Request, action, 
 		metadata["error"] = cause.Error()
 	}
 	bytes, _ := json.Marshal(metadata)
-	_ = repo.RecordAuditEvent(ctx, access.AuditEventInput{
+	return access.AuditEventInput{
 		WorkspaceID:   directoryWorkspace,
 		Action:        action,
 		TargetType:    targetType,
@@ -742,7 +782,46 @@ func recordAudit(ctx context.Context, repo Repository, r *http.Request, action, 
 		RequestID:     requestIDFromRequest(r),
 		CorrelationID: correlationIDFromRequest(r),
 		MetadataJSON:  string(bytes),
-	})
+	}
+}
+
+func runAuditedMutation(r *http.Request, repo Repository, mutation func(Repository) (access.AuditEventInput, error)) error {
+	if transactional, ok := repo.(access.AuditedMutationRepository); ok {
+		return transactional.RunAuditedMutation(r.Context(), func(txAccessRepo access.Repository) (access.AuditEventInput, error) {
+			txRepo, ok := txAccessRepo.(Repository)
+			if !ok {
+				return access.AuditEventInput{}, fmt.Errorf("transactional access repository does not support SCIM")
+			}
+			return mutation(txRepo)
+		})
+	}
+	input, err := mutation(repo)
+	if err != nil {
+		return err
+	}
+	return access.PersistAuditEvent(r.Context(), repo, input)
+}
+
+func runAuditedMutationBatch(r *http.Request, repo Repository, mutation func(Repository) ([]access.AuditEventInput, error)) error {
+	if transactional, ok := repo.(access.AuditedMutationBatchRepository); ok {
+		return transactional.RunAuditedMutationBatch(r.Context(), func(txAccessRepo access.Repository) ([]access.AuditEventInput, error) {
+			txRepo, ok := txAccessRepo.(Repository)
+			if !ok {
+				return nil, fmt.Errorf("transactional access repository does not support SCIM")
+			}
+			return mutation(txRepo)
+		})
+	}
+	inputs, err := mutation(repo)
+	if err != nil {
+		return err
+	}
+	for _, input := range inputs {
+		if err := access.PersistAuditEvent(r.Context(), repo, input); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func requestIDFromRequest(r *http.Request) string {

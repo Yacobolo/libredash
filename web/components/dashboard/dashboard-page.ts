@@ -6,6 +6,7 @@ import type {
   DashboardComponentStatus,
   DashboardFilters,
   DashboardInteractionSelection,
+  DashboardInteractionSelectionEntry,
   DashboardPageNavSignal,
   DashboardPageSignal,
   DashboardStatus,
@@ -573,7 +574,7 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
     const visuals = this.renderSnapshot?.visuals ?? this.visuals
     const visual = component.visual ? visuals[component.visual] : undefined
     if (!visual) return undefined
-    const selection = canonicalSelectionEntriesForSource(this.effectiveFilters.selections, 'visual', component.visual ?? '')
+    const selection = generatedSelectionEntries(canonicalSelectionEntriesForSource(this.effectiveFilters.selections, 'visual', component.visual ?? ''))
     const signature = stableSignature([visual, selection])
     const cached = this.visualProjectionCache.get(component.visual ?? '')
     if (cached?.signature === signature) return cached.value
@@ -589,7 +590,7 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
     const tables = this.renderSnapshot?.tables ?? this.tables
     const table = component.table ? tables[component.table] : undefined
     if (!table) return undefined
-    const selection = canonicalSelectionEntriesForSource(this.effectiveFilters.selections, 'table', component.table ?? '')
+    const selection = generatedSelectionEntries(canonicalSelectionEntriesForSource(this.effectiveFilters.selections, 'table', component.table ?? ''))
     const signature = stableSignature([table, selection])
     const cached = this.tableProjectionCache.get(component.table ?? '')
     if (cached?.signature === signature) return cached.value
@@ -690,6 +691,13 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
       })
     }
   }
+}
+
+function generatedSelectionEntries(entries: ReturnType<typeof canonicalSelectionEntriesForSource>): DashboardInteractionSelectionEntry[] {
+  return entries.map((entry) => ({
+    ...entry,
+    mappings: entry.mappings ?? [],
+  }))
 }
 
 function optimisticCommand(value: unknown): OptimisticInteractionCommand | undefined {

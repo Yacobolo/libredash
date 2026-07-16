@@ -90,12 +90,15 @@ type RecordTablePayload = {
   density?: RecordTableDensity
   rowAction?: string
 }
+type NormalizedRecordTable = Omit<Required<RecordTablePayload>, 'columnSelector'> & {
+  columnSelector: Required<RecordColumnSelector>
+}
 
 type RecordTableVariant = 'minimal' | 'primary' | 'compact'
 
 const recordTableFeatures = tableFeatures({ rowSortingFeature, sortedRowModel: createSortedRowModel() })
 
-const emptyRecordTable: Required<RecordTablePayload> = {
+const emptyRecordTable: NormalizedRecordTable = {
   columns: [],
   rows: [],
   empty: 'No rows to show.',
@@ -163,7 +166,7 @@ function sortPrimitive(value: unknown): string | number {
   return cellLabel(value).toLowerCase()
 }
 
-function normalizeTable(table: RecordTablePayload): Required<RecordTablePayload> {
+function normalizeTable(table: RecordTablePayload): NormalizedRecordTable {
   return {
     columns: table.columns ?? [],
     rows: table.rows ?? [],
@@ -211,7 +214,7 @@ class RecordTable extends LitElement {
     this.syncColumnVisibility(table)
     const columns = this.visibleColumns(table)
     const model = this.tanstackTable({ ...table, columns })
-    const rows = model.getRowModel().rows.map((row: any) => row.original as RecordRow)
+    const rows: RecordRow[] = model.getRowModel().rows.map((row: any) => row.original as RecordRow)
 
     if (table.rows.length === 0) {
       return html`
@@ -258,7 +261,7 @@ class RecordTable extends LitElement {
     `
   }
 
-  private get resolvedTable(): Required<RecordTablePayload> {
+  private get resolvedTable(): NormalizedRecordTable {
     if (this.table) return normalizeTable(this.table)
     if (this.tableAttribute) {
       try {
@@ -270,7 +273,7 @@ class RecordTable extends LitElement {
     return emptyRecordTable
   }
 
-  private renderColumnSelector(table: Required<RecordTablePayload>, visibleColumns: RecordColumn[]) {
+  private renderColumnSelector(table: NormalizedRecordTable, visibleColumns: RecordColumn[]) {
     const toggleableColumns = table.columns.filter(isToggleableColumn)
     const visibleToggleableIDs = new Set(visibleColumns.filter(isToggleableColumn).map((column) => column.id))
     const label = table.columnSelector.label || 'Columns'
@@ -299,11 +302,11 @@ class RecordTable extends LitElement {
     `
   }
 
-  private hasColumnSelector(table: Required<RecordTablePayload>): boolean {
+  private hasColumnSelector(table: NormalizedRecordTable): boolean {
     return table.columnSelector.enabled && table.columns.some(isToggleableColumn)
   }
 
-  private syncColumnVisibility(table: Required<RecordTablePayload>): void {
+  private syncColumnVisibility(table: NormalizedRecordTable): void {
     if (!table.columnSelector.enabled) {
       this.columnVisibilityKey = ''
       this.columnVisibilityFingerprint = ''
@@ -318,7 +321,7 @@ class RecordTable extends LitElement {
     this.visibleColumnIDs = this.initialVisibleColumnIDs(table)
   }
 
-  private initialVisibleColumnIDs(table: Required<RecordTablePayload>): string[] {
+  private initialVisibleColumnIDs(table: NormalizedRecordTable): string[] {
     const toggleableIDs = table.columns.filter(isToggleableColumn).map((column) => column.id)
     const stored = this.storedVisibleColumnIDs(table.columnSelector.storageKey)
     const configured = stored.length ? stored : table.columnSelector.defaultColumns
@@ -336,13 +339,13 @@ class RecordTable extends LitElement {
     }
   }
 
-  private visibleColumns(table: Required<RecordTablePayload>): RecordColumn[] {
+  private visibleColumns(table: NormalizedRecordTable): RecordColumn[] {
     if (!table.columnSelector.enabled) return table.columns
     const visible = new Set(this.visibleColumnIDs)
     return table.columns.filter((column) => !isToggleableColumn(column) || visible.has(column.id))
   }
 
-  private toggleColumn(table: Required<RecordTablePayload>, columnID: string, checked: boolean): void {
+  private toggleColumn(table: NormalizedRecordTable, columnID: string, checked: boolean): void {
     const toggleableIDs = table.columns.filter(isToggleableColumn).map((column) => column.id)
     const current = sanitizeVisibleColumnIDs(this.visibleColumnIDs, toggleableIDs)
     const currentSet = new Set(current.length ? current : toggleableIDs)
@@ -362,7 +365,7 @@ class RecordTable extends LitElement {
     this.columnSelectorOpen = (event.currentTarget as HTMLDetailsElement).open
   }
 
-  private tanstackTable(table: Required<RecordTablePayload>) {
+  private tanstackTable(table: NormalizedRecordTable) {
     return this.tableController.table({
       features: recordTableFeatures,
       columns: this.columnDefs(table.columns),
@@ -377,7 +380,7 @@ class RecordTable extends LitElement {
     } as any) as any
   }
 
-  private columnDefs(columns: RecordColumn[]): Array<ColumnDef<RecordRow, unknown>> {
+  private columnDefs(columns: RecordColumn[]): Array<ColumnDef<typeof recordTableFeatures, RecordRow, unknown>> {
     return columns.map((column) => ({
       id: column.id,
       accessorFn: (row: RecordRow) => row[column.id],
@@ -392,7 +395,7 @@ class RecordTable extends LitElement {
           : String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true })
       },
       meta: { column },
-    })) as Array<ColumnDef<RecordRow, unknown>>
+    })) as Array<ColumnDef<typeof recordTableFeatures, RecordRow, unknown>>
   }
 
   private sortDirection(columnID: string): false | 'asc' | 'desc' {

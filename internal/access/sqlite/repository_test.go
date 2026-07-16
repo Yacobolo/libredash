@@ -38,6 +38,84 @@ func TestRepositoryChecksGrantPrivileges(t *testing.T) {
 	}
 }
 
+func TestRepositoryRunAuditedMutationRollsBackMutationWhenAuditFails(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+	object := access.ItemObject(access.SecurableDashboard, "test", "audit-rollback")
+	var grant access.Grant
+
+	err := repo.RunAuditedMutation(ctx, func(txRepo access.Repository) (access.AuditEventInput, error) {
+		var createErr error
+		grant, createErr = txRepo.CreateGrant(ctx, access.GrantInput{
+			Object: object, SubjectType: access.SubjectPrincipal, SubjectID: "dev", Privilege: access.PrivilegeViewItem,
+		})
+		return access.AuditEventInput{}, createErr
+	})
+	if err == nil {
+		t.Fatal("audited mutation error = nil, want invalid audit event failure")
+	}
+	if grant.ID == "" {
+		t.Fatal("mutation did not run before the audit failure")
+	}
+	if _, err := repo.GetGrant(ctx, "test", grant.ID); !errors.Is(err, sql.ErrNoRows) {
+		t.Fatalf("get rolled-back grant error = %v, want sql.ErrNoRows", err)
+	}
+}
+
+func TestRepositoryRunAuditedMutationCommitsMutationAndAuditTogether(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+	object := access.ItemObject(access.SecurableDashboard, "test", "audit-commit")
+	var grant access.Grant
+
+	err := repo.RunAuditedMutation(ctx, func(txRepo access.Repository) (access.AuditEventInput, error) {
+		var createErr error
+		grant, createErr = txRepo.CreateGrant(ctx, access.GrantInput{
+			Object: object, SubjectType: access.SubjectPrincipal, SubjectID: "dev", Privilege: access.PrivilegeViewItem,
+		})
+		return access.AuditEventInput{Action: "grant.created", WorkspaceID: "test"}, createErr
+	})
+	if err != nil {
+		t.Fatalf("run audited mutation: %v", err)
+	}
+	if _, err := repo.GetGrant(ctx, "test", grant.ID); err != nil {
+		t.Fatalf("get committed grant: %v", err)
+	}
+	events, err := repo.ListAuditEvents(ctx, access.AuditEventFilter{WorkspaceID: "test", Action: "grant.created"})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("audit event count = %d, want 1", len(events))
+	}
+}
+
+func TestRepositoryRunAuditedMutationBatchCommitsEveryAuditEvent(t *testing.T) {
+	ctx := context.Background()
+	_, repo := openAccessRepo(t, ctx)
+	object := access.ItemObject(access.SecurableDashboard, "test", "audit-batch")
+
+	err := repo.RunAuditedMutationBatch(ctx, func(txRepo access.Repository) ([]access.AuditEventInput, error) {
+		_, mutationErr := txRepo.CreateGrant(ctx, access.GrantInput{
+			Object: object, SubjectType: access.SubjectPrincipal, SubjectID: "dev", Privilege: access.PrivilegeViewItem,
+		})
+		return []access.AuditEventInput{
+			{Action: "grant.created", WorkspaceID: "test"},
+			{Action: "access.changed", WorkspaceID: "test"},
+		}, mutationErr
+	})
+	if err != nil {
+		t.Fatalf("run audited mutation batch: %v", err)
+	}
+	events, err := repo.ListAuditEvents(ctx, access.AuditEventFilter{WorkspaceID: "test"})
+	if err != nil {
+		t.Fatalf("list audit events: %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("audit event count = %d, want 2", len(events))
+	}
+}
+
 func TestRepositoryLocalUserPasswordLifecycle(t *testing.T) {
 	ctx := context.Background()
 	_, repo := openAccessRepo(t, ctx)

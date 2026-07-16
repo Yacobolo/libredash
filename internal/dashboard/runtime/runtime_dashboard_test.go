@@ -625,7 +625,12 @@ relogios_presentes,watches_gifts
 		t.Fatal(err)
 	}
 	assertVisualKeys(t, unknownDefaultPagePatch, overviewVisualKeys())
-	return
+	// These legacy showcase assertions require the full Olist fixture rather
+	// than the compact service fixture used above. Keep them opt-in until they
+	// are migrated to the dedicated integration harness.
+	if os.Getenv("LIBREDASH_EXTENDED_FIXTURE_ASSERTIONS") == "" {
+		return
+	}
 
 	selectedFilters := dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{

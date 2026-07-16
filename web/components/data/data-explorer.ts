@@ -29,7 +29,7 @@ const emptyPreview: DataPreviewSignal = {
 const emptyExplorer: DataExplorerSignal = {
   objects: [],
   selectedKey: '',
-  selectedObject: null,
+  selectedObject: undefined,
   selectedWorkspaceId: '',
   preview: emptyPreview,
   command: { workspaceId: '', objectKey: '', offset: 0, limit: 100, block: 'all', start: 0, count: 100, requestSeq: 0, resetVersion: 0, sort: {}, visibleColumns: [], columnWidths: {} },

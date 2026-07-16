@@ -4,12 +4,30 @@ import (
 	"bytes"
 	"log/slog"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
 
+type synchronizedBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (b *synchronizedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.Write(p)
+}
+
+func (b *synchronizedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.String()
+}
+
 func TestTraceStoreRecordsPublishedAndDeliveredSanitizedEnvelopes(t *testing.T) {
-	var logs bytes.Buffer
+	var logs synchronizedBuffer
 	store := NewTraceStore(TraceOptions{
 		CapacityPerStream: 16,
 		MaxStreams:        2,
