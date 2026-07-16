@@ -8,12 +8,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	agentconfig "github.com/Yacobolo/libredash/internal/agent/config"
 	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
 )
 
@@ -62,6 +64,79 @@ func TestStoreMigratesAndSeedsRoles(t *testing.T) {
 		if roles[i] != want[i] {
 			t.Fatalf("roles = %#v, want %#v", roles, want)
 		}
+	}
+}
+
+func TestStoreReconcilesDefaultSeedDataWithoutOverwritingSettings(t *testing.T) {
+	ctx := t.Context()
+	dbPath := filepath.Join(t.TempDir(), "libredash.db")
+	store, err := Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	const customPrompt = "Keep this customized prompt."
+	if err := store.UpsertSetting(ctx, agentconfig.SystemPromptSettingKey, customPrompt); err != nil {
+		t.Fatalf("customize system prompt: %v", err)
+	}
+	defaultRole := access.DefaultRoles()[0]
+	if _, err := store.SQLDB().ExecContext(ctx, `DELETE FROM role_grant_templates WHERE role_name = ?`, defaultRole.Name); err != nil {
+		t.Fatalf("remove default role templates: %v", err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, `INSERT INTO role_grant_templates (role_name, privilege) VALUES (?, 'STALE_PRIVILEGE')`, defaultRole.Name); err != nil {
+		t.Fatalf("insert stale role template: %v", err)
+	}
+	if _, err := store.SQLDB().ExecContext(ctx, `UPDATE securable_objects SET object_type = 'stale', display_name = 'Stale' WHERE id = 'platform'`); err != nil {
+		t.Fatalf("corrupt platform object: %v", err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatalf("close store: %v", err)
+	}
+
+	store, err = Open(ctx, dbPath)
+	if err != nil {
+		t.Fatalf("reopen store: %v", err)
+	}
+	defer store.Close()
+
+	prompt, err := store.GetSetting(ctx, agentconfig.SystemPromptSettingKey)
+	if err != nil {
+		t.Fatalf("get customized system prompt: %v", err)
+	}
+	if prompt != customPrompt {
+		t.Fatalf("system prompt = %q, want %q", prompt, customPrompt)
+	}
+
+	rows, err := store.SQLDB().QueryContext(ctx, `SELECT privilege FROM role_grant_templates WHERE role_name = ? ORDER BY privilege`, defaultRole.Name)
+	if err != nil {
+		t.Fatalf("list default role templates: %v", err)
+	}
+	defer rows.Close()
+	var privileges []string
+	for rows.Next() {
+		var privilege string
+		if err := rows.Scan(&privilege); err != nil {
+			t.Fatalf("scan default role template: %v", err)
+		}
+		privileges = append(privileges, privilege)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("iterate default role templates: %v", err)
+	}
+	wantPrivileges := make([]string, len(defaultRole.Privileges))
+	for i, privilege := range defaultRole.Privileges {
+		wantPrivileges[i] = string(privilege)
+	}
+	sort.Strings(wantPrivileges)
+	if !slices.Equal(privileges, wantPrivileges) {
+		t.Fatalf("default role privileges = %#v, want %#v", privileges, wantPrivileges)
+	}
+
+	var objectType, workspaceID, parentID, displayName string
+	if err := store.SQLDB().QueryRowContext(ctx, `SELECT object_type, workspace_id, parent_id, display_name FROM securable_objects WHERE id = 'platform'`).Scan(&objectType, &workspaceID, &parentID, &displayName); err != nil {
+		t.Fatalf("get platform object: %v", err)
+	}
+	if objectType != "platform" || workspaceID != "" || parentID != "" || displayName != "Platform" {
+		t.Fatalf("platform object = (%q, %q, %q, %q), want (platform, empty, empty, Platform)", objectType, workspaceID, parentID, displayName)
 	}
 }
 

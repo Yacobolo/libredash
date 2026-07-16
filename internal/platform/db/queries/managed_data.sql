@@ -178,6 +178,33 @@ SELECT * FROM managed_data_revisions
 WHERE collection_id = ?
 ORDER BY sequence DESC;
 
+-- name: ListManagedDataReachabilitySources :many
+SELECT source_type, source_id, source_status, revision_digest, manifest_json, file_count, size_bytes
+FROM (
+  SELECT
+    'revision' AS source_type,
+    id AS source_id,
+    status AS source_status,
+    digest AS revision_digest,
+    manifest_json,
+    file_count,
+    size_bytes
+  FROM managed_data_revisions
+  WHERE status = 'ready'
+  UNION ALL
+  SELECT
+    'upload' AS source_type,
+    id AS source_id,
+    status AS source_status,
+    '' AS revision_digest,
+    manifest_json,
+    expected_file_count AS file_count,
+    expected_size_bytes AS size_bytes
+  FROM managed_data_upload_sessions
+  WHERE status IN ('open', 'committing')
+)
+ORDER BY source_type, source_id;
+
 -- name: GetManagedDataUploadSessionIDByRevision :one
 SELECT id FROM managed_data_upload_sessions
 WHERE revision_id = ? AND status = 'complete';
@@ -186,4 +213,3 @@ WHERE revision_id = ? AND status = 'complete';
 SELECT * FROM managed_data_revision_files
 WHERE revision_id = ?
 ORDER BY logical_path;
-

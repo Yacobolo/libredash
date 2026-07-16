@@ -64,6 +64,15 @@ INSERT INTO roles (id, name, privileges_json)
 VALUES (?, ?, ?)
 ON CONFLICT(name) DO UPDATE SET privileges_json = excluded.privileges_json;
 
+-- name: DeleteRoleGrantTemplates :exec
+DELETE FROM role_grant_templates
+WHERE role_name = sqlc.arg(role_name);
+
+-- name: InsertRoleGrantTemplate :exec
+INSERT INTO role_grant_templates (role_name, privilege)
+VALUES (sqlc.arg(role_name), sqlc.arg(privilege))
+ON CONFLICT(role_name, privilege) DO NOTHING;
+
 -- name: GetRoleByName :one
 SELECT * FROM roles WHERE name = ?;
 

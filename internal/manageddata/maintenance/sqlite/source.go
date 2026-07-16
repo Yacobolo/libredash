@@ -19,34 +19,8 @@ import (
 	"github.com/Yacobolo/libredash/internal/manageddata"
 	"github.com/Yacobolo/libredash/internal/manageddata/maintenance"
 	"github.com/Yacobolo/libredash/internal/manageddata/storage"
+	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
 )
-
-const reachabilityQuery = `
-SELECT source_type, source_id, source_status, revision_digest, manifest_json, file_count, size_bytes
-FROM (
-  SELECT
-    'revision' AS source_type,
-    id AS source_id,
-    status AS source_status,
-    digest AS revision_digest,
-    manifest_json,
-    file_count,
-    size_bytes
-  FROM managed_data_revisions
-  WHERE status = 'ready'
-  UNION ALL
-  SELECT
-    'upload' AS source_type,
-    id AS source_id,
-    status AS source_status,
-    '' AS revision_digest,
-    manifest_json,
-    expected_file_count AS file_count,
-    expected_size_bytes AS size_bytes
-  FROM managed_data_upload_sessions
-  WHERE status IN ('open', 'committing')
-)
-ORDER BY source_type, source_id`
 
 const transactionCleanupTimeout = 5 * time.Second
 
@@ -70,7 +44,7 @@ func (s *Source) Snapshot(ctx context.Context) (maintenance.ReachabilitySnapshot
 		return maintenance.ReachabilitySnapshot{}, sourceError(ctx, "acquire SQLite connection", err)
 	}
 	defer conn.Close()
-	return readSnapshot(ctx, conn)
+	return readSnapshot(ctx, platformdb.New(conn))
 }
 
 func (s *Source) WithStableSnapshot(
@@ -103,7 +77,7 @@ func (s *Source) WithStableSnapshot(
 		}
 	}()
 
-	snapshot, err := readSnapshot(ctx, conn)
+	snapshot, err := readSnapshot(ctx, platformdb.New(conn))
 	if err != nil {
 		return err
 	}
@@ -123,10 +97,6 @@ func (s *Source) WithStableSnapshot(
 	return nil
 }
 
-type queryer interface {
-	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
-}
-
 type durableManifest struct {
 	sourceType     string
 	id             string
@@ -137,27 +107,23 @@ type durableManifest struct {
 	sizeBytes      int64
 }
 
-func readSnapshot(ctx context.Context, query queryer) (maintenance.ReachabilitySnapshot, error) {
-	rows, err := query.QueryContext(ctx, reachabilityQuery)
+func readSnapshot(ctx context.Context, queries *platformdb.Queries) (maintenance.ReachabilitySnapshot, error) {
+	rows, err := queries.ListManagedDataReachabilitySources(ctx)
 	if err != nil {
 		return maintenance.ReachabilitySnapshot{}, sourceError(ctx, "query managed-data reachability", err)
 	}
-	defer rows.Close()
 
 	digests := make(map[string]struct{})
 	generation := sha256.New()
-	for rows.Next() {
-		var row durableManifest
-		if err := rows.Scan(
-			&row.sourceType,
-			&row.id,
-			&row.status,
-			&row.revisionDigest,
-			&row.manifestJSON,
-			&row.fileCount,
-			&row.sizeBytes,
-		); err != nil {
-			return maintenance.ReachabilitySnapshot{}, sourceError(ctx, "scan managed-data reachability", err)
+	for _, source := range rows {
+		row := durableManifest{
+			sourceType:     source.SourceType,
+			id:             source.SourceID,
+			status:         source.SourceStatus,
+			revisionDigest: source.RevisionDigest,
+			manifestJSON:   source.ManifestJson,
+			fileCount:      source.FileCount,
+			sizeBytes:      source.SizeBytes,
 		}
 		manifest, canonical, err := validateDurableManifest(row)
 		if err != nil {
@@ -168,10 +134,6 @@ func readSnapshot(ctx context.Context, query queryer) (maintenance.ReachabilityS
 			digests[file.SHA256] = struct{}{}
 		}
 	}
-	if err := rows.Err(); err != nil {
-		return maintenance.ReachabilitySnapshot{}, sourceError(ctx, "iterate managed-data reachability", err)
-	}
-
 	sha256s := make([]string, 0, len(digests))
 	for digest := range digests {
 		sha256s = append(sha256s, digest)

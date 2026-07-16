@@ -648,6 +648,57 @@ func TestSQLCOutputsAreGeneratedBuildInputs(t *testing.T) {
 	}
 }
 
+func TestFixedPlatformSQLiteQueriesUseSQLC(t *testing.T) {
+	root := repoRoot(t)
+	queryContracts := map[string][]string{
+		filepath.Join("internal", "platform", "db", "queries", "access.sql"): {
+			"-- name: DeleteRoleGrantTemplates :exec",
+			"-- name: InsertRoleGrantTemplate :exec",
+		},
+		filepath.Join("internal", "platform", "db", "queries", "platform.sql"): {
+			"-- name: InsertPlatformSettingIfMissing :exec",
+		},
+		filepath.Join("internal", "platform", "db", "queries", "managed_data.sql"): {
+			"-- name: ListManagedDataReachabilitySources :many",
+		},
+	}
+	for name, markers := range queryContracts {
+		body, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		for _, marker := range markers {
+			if !strings.Contains(string(body), marker) {
+				t.Errorf("%s missing sqlc query %q", name, marker)
+			}
+		}
+	}
+
+	handwrittenSQL := map[string][]string{
+		filepath.Join("internal", "platform", "store.go"): {
+			"DELETE FROM role_grant_templates",
+			"INSERT INTO role_grant_templates",
+			"INSERT INTO securable_objects",
+			"INSERT INTO platform_settings",
+		},
+		filepath.Join("internal", "manageddata", "maintenance", "sqlite", "source.go"): {
+			"const reachabilityQuery",
+			"QueryContext(ctx, reachabilityQuery)",
+		},
+	}
+	for name, fragments := range handwrittenSQL {
+		body, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		for _, fragment := range fragments {
+			if strings.Contains(string(body), fragment) {
+				t.Errorf("%s retains fixed-shape SQLite query %q instead of using sqlc", name, fragment)
+			}
+		}
+	}
+}
+
 func TestStorageArchitectureSpecDocumentsGlobalDuckLakeCatalog(t *testing.T) {
 	root := repoRoot(t)
 	spec, err := os.ReadFile(filepath.Join(root, "docs", "storage-architecture-spec.md"))
