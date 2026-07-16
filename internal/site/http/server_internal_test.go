@@ -1,4 +1,4 @@
-package main
+package http
 
 import (
 	"bufio"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestSiteHomeRendersPageStreamDocument(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/")
@@ -54,7 +54,7 @@ func TestSiteHomeRendersPageStreamDocument(t *testing.T) {
 }
 
 func TestSiteChartsRendersPageStreamShowcase(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/charts")
@@ -79,7 +79,7 @@ func TestSiteChartsRendersPageStreamShowcase(t *testing.T) {
 }
 
 func TestSiteGettingStartedRendersGuide(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/docs/getting-started")
@@ -132,7 +132,7 @@ func TestSiteGettingStartedRendersGuide(t *testing.T) {
 }
 
 func TestSiteDocsIndexListsEveryArticle(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/docs")
@@ -165,7 +165,7 @@ func TestSiteDocsIndexListsEveryArticle(t *testing.T) {
 }
 
 func TestSiteChartsDocumentationParentPathIsNotAnArticle(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/docs/charts")
@@ -179,7 +179,7 @@ func TestSiteChartsDocumentationParentPathIsNotAnArticle(t *testing.T) {
 }
 
 func TestSiteAPIReferenceIsGeneratedFromOpenAPI(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/docs/api/workspaces")
@@ -211,7 +211,7 @@ func TestSiteAPIReferenceIsGeneratedFromOpenAPI(t *testing.T) {
 }
 
 func TestSiteChartDocumentationArticleRendersConfiguration(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/docs/charts/line")
@@ -247,7 +247,7 @@ func TestSiteEveryChartTypeHasDocumentation(t *testing.T) {
 		t.Fatalf("documented chart types = %d, want %d", got, want)
 	}
 
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 	for _, document := range visualDocuments {
 		response, err := server.Client().Get(server.URL + "/docs/" + document.slug)
@@ -270,7 +270,7 @@ func TestSiteEveryChartTypeHasDocumentation(t *testing.T) {
 }
 
 func TestSiteServesGeneratedConfigurationReferenceAndSchema(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	article, err := server.Client().Get(server.URL + "/docs/config/project")
@@ -305,7 +305,7 @@ func TestSiteServesGeneratedConfigurationReferenceAndSchema(t *testing.T) {
 }
 
 func TestSiteGettingStartedRedirectsToDocumentation(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	client := server.Client()
@@ -326,7 +326,7 @@ func TestSiteGettingStartedRedirectsToDocumentation(t *testing.T) {
 }
 
 func TestSiteUpdatesSendInitialDemoSignal(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/updates")
@@ -347,7 +347,7 @@ func TestSiteUpdatesSendInitialDemoSignal(t *testing.T) {
 }
 
 func TestSiteChartShowcaseUpdatesIncludeEveryChartType(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Get(server.URL + "/updates?view=charts")
@@ -365,7 +365,7 @@ func TestSiteChartShowcaseUpdatesIncludeEveryChartType(t *testing.T) {
 }
 
 func TestSiteDemoCommandPatchesRequestedMetric(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Post(server.URL+"/demo", "application/json", strings.NewReader(`{"demo":{"metric":"orders"}}`))
@@ -385,7 +385,7 @@ func TestSiteDemoCommandPatchesRequestedMetric(t *testing.T) {
 }
 
 func TestSiteDemoCommandRejectsUnknownMetric(t *testing.T) {
-	server := httptest.NewServer(newHandler())
+	server := httptest.NewServer(NewHandler())
 	defer server.Close()
 
 	response, err := server.Client().Post(server.URL+"/demo", "application/json", strings.NewReader(`{"demo":{"metric":"unknown"}}`))

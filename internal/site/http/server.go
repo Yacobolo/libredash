@@ -1,9 +1,8 @@
-package main
+// Package http serves the public LibreDash website and documentation portal.
+package http
 
 import (
-	"flag"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -11,16 +10,8 @@ import (
 	"github.com/starfederation/datastar-go/datastar"
 )
 
-func main() {
-	address := flag.String("addr", ":8081", "listen address")
-	flag.Parse()
-	log.Printf("LibreDash site listening on http://localhost%s", *address)
-	if err := http.ListenAndServe(*address, newHandler()); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func newHandler() http.Handler {
+// NewHandler builds the public site HTTP handler without starting a server.
+func NewHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", home)
 	mux.HandleFunc("GET /charts", charts)

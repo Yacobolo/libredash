@@ -7,7 +7,7 @@ let browser: Browser
 let siteProcess: ReturnType<typeof Bun.spawn>
 
 beforeAll(async () => {
-  siteProcess = Bun.spawn(['go', 'run', './site', '-addr', `127.0.0.1:${sitePort}`], {
+  siteProcess = Bun.spawn(['go', 'run', './cmd/libredash-site', '-addr', `127.0.0.1:${sitePort}`], {
     cwd: process.cwd(),
     env: process.env,
     stdout: 'ignore',

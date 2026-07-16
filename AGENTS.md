@@ -30,7 +30,9 @@ The current product goal is to feel like a small Power BI-style workspace: dashb
 ## Important Files
 
 - `cmd/libredash/main.go` starts the app.
+- `cmd/libredash-site/main.go` starts the independently deployable public site.
 - `internal/app/` contains HTTP routes, Datastar command handlers, SSE broker logic, and refresh/update orchestration.
+- `internal/site/http/` contains the public site's HTTP adapter and server-rendered pages.
 - `internal/data/service.go` is the DuckDB query/cache service for KPIs, charts, tables, filter options, and model graph data.
 - `internal/semantic/` loads and validates catalog, model, and dashboard YAML contracts.
 - `internal/dashboard/types.go` defines runtime signal payloads for filters, visuals, tables, pages, and status.
@@ -38,6 +40,7 @@ The current product goal is to feel like a small Power BI-style workspace: dashb
 - `dashboards/olist/model.yaml` is the Olist semantic model.
 - `dashboards/olist/executive-sales.yaml` is the main demo dashboard and report-page definition.
 - `web/components/` contains Lit source components; `web/components/chart/` contains the visual renderer registry, ECharts renderer, adapters, maps, and shared chart types/utilities.
+- `docs/` owns authored and generated public documentation; `site/` owns site-specific browser source and static assets.
 - `static/` contains the built browser assets served by Go.
 - `internal/tools/bootstrapolist` downloads/syncs the Olist CSV dataset into `.data/olist` unless `LIBREDASH_DATA_DIR` is set.
 

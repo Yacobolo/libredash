@@ -100,7 +100,7 @@ tasks:
     deps:
       - site:build
     cmds:
-      - go run ./site
+      - go run ./cmd/libredash-site
 
   bench:datastar-bridge:
     desc: Benchmark legacy, Ignition, and DatastarLit bridges in Chromium

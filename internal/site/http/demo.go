@@ -1,4 +1,4 @@
-package main
+package http
 
 import "github.com/Yacobolo/libredash/pkg/pagestream"
 
