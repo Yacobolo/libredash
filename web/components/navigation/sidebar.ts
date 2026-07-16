@@ -5,6 +5,7 @@ import {
   Database,
   Layers,
   LayoutDashboard,
+  Menu,
   MessagesSquare,
   Monitor,
   Moon,
@@ -15,6 +16,7 @@ import {
   Settings,
   Sun,
   TableProperties,
+  X,
   type IconNode,
 } from 'lucide'
 import { lucideIcon } from '../shared/lucide-icons'
@@ -90,6 +92,8 @@ type IconName =
   | 'activity'
   | 'collapse'
   | 'expand'
+  | 'menu'
+  | 'close'
   | 'plus'
 
 const defaultConfig: SidebarConfig = {
@@ -133,6 +137,8 @@ class LibreDashSidebar extends LitElement {
   @property({ attribute: 'status', converter: statusConverter }) status: SidebarStatus = {}
   @state() private mode: ThemeMode = storedThemeMode()
   @state() private collapsed = storedCollapsed()
+  @state() private mobileOpen = false
+  private mobileMediaQuery?: MediaQueryList
 
   static styles = css`
     :host {
@@ -216,6 +222,13 @@ class LibreDashSidebar extends LitElement {
     .collapse-button:disabled:hover {
       border-color: var(--ld-button-invisible-border-rest);
       color: var(--fgColor-disabled);
+    }
+
+    .mobile-menu-button,
+    .mobile-close-button,
+    .mobile-backdrop,
+    .mobile-drawer-header {
+      display: none;
     }
 
     nav {
@@ -587,31 +600,150 @@ class LibreDashSidebar extends LitElement {
       :host([data-collapsed]) {
         --ld-sidebar-width: 100%;
         width: 100%;
-        min-height: auto;
+        min-height: var(--control-large-size);
       }
 
       aside {
-        position: static;
+        position: relative;
+        display: block;
         width: 100%;
-        min-height: auto;
-        grid-template-rows: auto;
+        min-height: var(--control-large-size);
       }
 
       .brand {
-        padding: var(--base-size-12);
-      }
-
-      nav {
-        display: flex;
-        overflow-x: auto;
-      }
-
-      .history {
         display: none;
       }
 
-      .nav-group {
-        min-width: max-content;
+      .mobile-menu-button,
+      .mobile-close-button {
+        display: inline-grid;
+        width: var(--ld-button-height-xs);
+        height: var(--ld-button-height-xs);
+        place-items: center;
+        border: var(--ld-border-transparent);
+        border-radius: var(--ld-button-radius);
+        background: transparent;
+        color: var(--ld-fg-muted);
+        cursor: pointer;
+        padding: 0;
+      }
+
+      .mobile-menu-button {
+        margin: var(--base-size-8);
+      }
+
+      .mobile-menu-button:hover,
+      .mobile-menu-button:focus-visible,
+      .mobile-close-button:hover,
+      .mobile-close-button:focus-visible {
+        background: var(--control-bgColor-hover);
+        color: var(--ld-fg-default);
+        outline: var(--focus-outline);
+        outline-offset: var(--focus-outline-offset);
+      }
+
+      .collapse-button,
+      :host([data-collapsed]) .collapse-button {
+        display: none;
+      }
+
+      .mobile-backdrop {
+        position: fixed;
+        z-index: var(--z-index-report-sidebar);
+        inset: 0;
+        display: block;
+        border: 0;
+        background: var(--ld-modal-backdrop);
+        cursor: pointer;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--motion-transition-stateChange), visibility var(--motion-transition-stateChange);
+        visibility: hidden;
+      }
+
+      nav {
+        position: fixed;
+        z-index: var(--z-index-sidebar);
+        top: 0;
+        bottom: 0;
+        left: 0;
+        box-sizing: border-box;
+        display: grid;
+        width: min(20rem, calc(100vw - var(--base-size-32)));
+        min-height: 100svh;
+        align-content: start;
+        overflow-y: auto;
+        border: 0;
+        border-right: var(--ld-border-default);
+        background: var(--ld-sidebar-bg);
+        box-shadow: var(--ld-shadow-floating, var(--shadow-floating-small, 0 8px 24px rgb(0 0 0 / 12%)));
+        padding: var(--base-size-12);
+        pointer-events: none;
+        transform: translateX(-100%);
+        transition: transform var(--motion-transition-stateChange), visibility var(--motion-transition-stateChange);
+        visibility: hidden;
+      }
+
+      aside[data-mobile-open] nav {
+        pointer-events: auto;
+        transform: translateX(0);
+        visibility: visible;
+      }
+
+      aside[data-mobile-open] .mobile-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+        visibility: visible;
+      }
+
+      .mobile-drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--base-size-8);
+        border-bottom: var(--ld-border-muted, 1px solid var(--borderColor-muted, currentColor));
+        padding-bottom: var(--base-size-8);
+      }
+
+      .mobile-drawer-title {
+        font-size: var(--ld-font-size-body-lg);
+        font-weight: var(--ld-font-weight-strong);
+      }
+
+      .history,
+      :host([data-collapsed]) .history {
+        display: grid;
+      }
+
+      .nav-group,
+      :host([data-collapsed]) .nav-group {
+        display: grid;
+        gap: var(--base-size-2);
+        min-width: 0;
+      }
+
+      :host([data-collapsed]) nav {
+        gap: var(--base-size-8);
+        padding: var(--base-size-12);
+      }
+
+      .nav-item,
+      :host([data-collapsed]) .nav-item {
+        width: 100%;
+        min-height: var(--control-medium-size);
+        grid-template-columns: calc(var(--control-xsmall-size) + var(--base-size-2)) minmax(0, 1fr) auto;
+        justify-items: stretch;
+        gap: var(--base-size-8);
+        padding: 0 var(--control-xsmall-paddingInline-normal);
+      }
+
+      :host([data-collapsed]) .nav-text {
+        display: grid;
+      }
+
+      :host([data-collapsed]) .nav-icon {
+        width: var(--control-xsmall-size);
+        height: var(--control-xsmall-size);
       }
 
       .footer {
@@ -629,12 +761,18 @@ class LibreDashSidebar extends LitElement {
   connectedCallback(): void {
     super.connectedCallback()
     document.addEventListener('libredash-theme-applied', this.onThemeApplied as EventListener)
+    document.addEventListener('keydown', this.onKeyDown)
+    this.mobileMediaQuery = window.matchMedia('(max-width: 640px)')
+    this.mobileMediaQuery.addEventListener('change', this.onMobileViewportChange)
     this.mode = storedThemeMode()
     this.syncCollapsedState()
   }
 
   disconnectedCallback(): void {
     document.removeEventListener('libredash-theme-applied', this.onThemeApplied as EventListener)
+    document.removeEventListener('keydown', this.onKeyDown)
+    this.mobileMediaQuery?.removeEventListener('change', this.onMobileViewportChange)
+    this.mobileMediaQuery = undefined
     super.disconnectedCallback()
   }
 
@@ -679,10 +817,40 @@ class LibreDashSidebar extends LitElement {
     }))
   }
 
+  private get isMobileViewport(): boolean {
+    return this.mobileMediaQuery?.matches ?? (typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches)
+  }
+
+  private onMobileViewportChange = (event: MediaQueryListEvent): void => {
+    if (!event.matches) this.mobileOpen = false
+    this.requestUpdate()
+  }
+
+  private toggleMobileNavigation(): void {
+    this.mobileOpen = !this.mobileOpen
+    if (!this.mobileOpen) return
+    void this.updateComplete.then(() => this.shadowRoot?.querySelector<HTMLElement>('nav a')?.focus())
+  }
+
+  private closeMobileNavigation(restoreFocus = false): void {
+    if (!this.mobileOpen) return
+    this.mobileOpen = false
+    if (restoreFocus) {
+      void this.updateComplete.then(() => this.shadowRoot?.querySelector<HTMLButtonElement>('.mobile-menu-button')?.focus())
+    }
+  }
+
+  private onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Escape' || !this.mobileOpen) return
+    event.preventDefault()
+    this.closeMobileNavigation(true)
+  }
+
   render() {
     const collapsed = this.effectiveCollapsed
+    const mobileNavigationClosed = this.isMobileViewport && !this.mobileOpen
     return html`
-      <aside aria-label="LibreDash workspace">
+      <aside aria-label="LibreDash workspace" ?data-mobile-open=${this.mobileOpen}>
         <header class="brand">
           <div class="brand-row">
             <span class="name">LibreDash</span>
@@ -700,7 +868,27 @@ class LibreDashSidebar extends LitElement {
           </div>
         </header>
 
-        <nav aria-label="Primary">
+        <button
+          class="mobile-menu-button"
+          type="button"
+          aria-label=${this.mobileOpen ? 'Close navigation' : 'Open navigation'}
+          aria-controls="mobile-navigation"
+          aria-expanded=${String(this.mobileOpen)}
+          title=${this.mobileOpen ? 'Close navigation' : 'Open navigation'}
+          @click=${this.toggleMobileNavigation}
+        >
+          ${icon(this.mobileOpen ? 'close' : 'menu')}
+        </button>
+
+        <button class="mobile-backdrop" type="button" aria-label="Close navigation" @click=${() => this.closeMobileNavigation(true)}></button>
+
+        <nav id="mobile-navigation" aria-label="Primary" aria-hidden=${String(mobileNavigationClosed)} ?inert=${mobileNavigationClosed}>
+          <div class="mobile-drawer-header">
+            <strong class="mobile-drawer-title">LibreDash</strong>
+            <button class="mobile-close-button" type="button" aria-label="Close navigation" title="Close navigation" @click=${() => this.closeMobileNavigation(true)}>
+              ${icon('close')}
+            </button>
+          </div>
           ${this.config.primaryAction ? html`
             <section class="nav-group primary-action" aria-label="Chat action">
               ${this.renderLink({
@@ -818,6 +1006,7 @@ class LibreDashSidebar extends LitElement {
     const target = new URL(href, window.location.href)
     if (target.origin !== window.location.origin || target.href === window.location.href) return
     event.preventDefault()
+    this.closeMobileNavigation()
     window.location.assign(target.href)
   }
 }
@@ -837,6 +1026,8 @@ function icon(name: string) {
     activity: Activity,
     collapse: PanelLeftClose,
     expand: PanelLeftOpen,
+    menu: Menu,
+    close: X,
     plus: Plus,
   }
 

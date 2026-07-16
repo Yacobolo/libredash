@@ -144,6 +144,118 @@ test('upgraded compact app shell does not keep the fallback route grid column', 
   }
 })
 
+test('mobile navigation opens in an accessible drawer', async () => {
+  const page = await browser.newPage({ viewport: { width: 553, height: 793 } })
+  try {
+    await page.goto(`${baseURL}/sidebar-history`)
+    await page.evaluate(() => localStorage.setItem('libredash-sidebar-collapsed', 'true'))
+    await page.reload()
+    await page.waitForFunction(() => customElements.get('ld-app-shell') && customElements.get('ld-sidebar'))
+    await page.locator('ld-app-shell').evaluate((element: any) => element.updateComplete)
+
+    const state = await page.locator('ld-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+      const root = sidebar.shadowRoot
+      const nav = root.querySelector('nav') as HTMLElement
+      const main = element.shadowRoot.querySelector('main') as HTMLElement
+      const menuButton = root.querySelector('.mobile-menu-button') as HTMLButtonElement
+      const sidebarBox = sidebar.getBoundingClientRect()
+      const mainBox = main.getBoundingClientRect()
+      return {
+        sidebarWidth: Math.round(sidebarBox.width),
+        mainX: Math.round(mainBox.x),
+        mainY: Math.round(mainBox.y),
+        sidebarBottom: Math.round(sidebarBox.bottom),
+        menu: {
+          display: getComputedStyle(menuButton).display,
+          expanded: menuButton.getAttribute('aria-expanded'),
+        },
+        navVisibility: getComputedStyle(nav).visibility,
+        navInert: nav.inert,
+      }
+    })
+
+    expect(state.sidebarWidth).toBe(553)
+    expect(state.mainX).toBe(0)
+    expect(state.mainY).toBe(state.sidebarBottom)
+    expect(state.menu.display).not.toBe('none')
+    expect(state.menu.expanded).toBe('false')
+    expect(state.navVisibility).toBe('hidden')
+    expect(state.navInert).toBe(true)
+
+    await page.locator('ld-app-shell').evaluate(async (element: any) => {
+      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+      const root = sidebar.shadowRoot
+      ;(root.querySelector('.mobile-menu-button') as HTMLButtonElement).click()
+      await sidebar.updateComplete
+    })
+    await page.waitForFunction(() => {
+      const shell = document.querySelector('ld-app-shell') as HTMLElement
+      const sidebar = shell.shadowRoot?.querySelector('ld-sidebar') as HTMLElement
+      const nav = sidebar.shadowRoot?.querySelector('nav') as HTMLElement
+      return getComputedStyle(nav).visibility === 'visible'
+    })
+
+    const openState = await page.locator('ld-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+      const root = sidebar.shadowRoot
+      const nav = root.querySelector('nav') as HTMLElement
+      const menuButton = root.querySelector('.mobile-menu-button') as HTMLButtonElement
+      const backdrop = root.querySelector('.mobile-backdrop') as HTMLButtonElement
+      const drawerHeader = root.querySelector('.mobile-drawer-header') as HTMLElement
+      const drawer = root.querySelector('aside') as HTMLElement
+      return {
+        drawerOpen: root.querySelector('aside')?.hasAttribute('data-mobile-open'),
+        expanded: menuButton.getAttribute('aria-expanded'),
+        navVisibility: getComputedStyle(nav).visibility,
+        navInert: nav.inert,
+        backdropVisibility: getComputedStyle(backdrop).visibility,
+        drawerBackground: getComputedStyle(drawer).backgroundColor,
+        navBackground: getComputedStyle(nav).backgroundColor,
+        headerBorderBottomWidth: getComputedStyle(drawerHeader).borderBottomWidth,
+        navBoxShadow: getComputedStyle(nav).boxShadow,
+      }
+    })
+
+    expect(openState.drawerOpen).toBe(true)
+    expect(openState.expanded).toBe('true')
+    expect(openState.navVisibility).toBe('visible')
+    expect(openState.navInert).toBe(false)
+    expect(openState.backdropVisibility).toBe('visible')
+    expect(openState.navBackground).toBe(openState.drawerBackground)
+    expect(openState.headerBorderBottomWidth).not.toBe('0px')
+    expect(openState.navBoxShadow).not.toBe('none')
+
+    await page.locator('ld-app-shell').evaluate(async (element: any) => {
+      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+      await sidebar.updateComplete
+    })
+    await page.waitForFunction(() => {
+      const shell = document.querySelector('ld-app-shell') as HTMLElement
+      const sidebar = shell.shadowRoot?.querySelector('ld-sidebar') as HTMLElement
+      const nav = sidebar.shadowRoot?.querySelector('nav') as HTMLElement
+      return getComputedStyle(nav).visibility === 'hidden'
+    })
+
+    const closedState = await page.locator('ld-app-shell').evaluate((element: any) => {
+      const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
+      const root = sidebar.shadowRoot
+      const nav = root.querySelector('nav') as HTMLElement
+      const menuButton = root.querySelector('.mobile-menu-button') as HTMLButtonElement
+      return {
+        expanded: menuButton.getAttribute('aria-expanded'),
+        navInert: nav.inert,
+      }
+    })
+
+    expect(closedState.expanded).toBe('false')
+    expect(closedState.navInert).toBe(true)
+  } finally {
+    await page.close()
+  }
+})
+
 test('sidebar renders global chat action and recent history', async () => {
   const page = await browser.newPage({ viewport: { width: 1320, height: 900 } })
   try {
