@@ -323,12 +323,11 @@ func (r *SQLRunRepository) CancelRun(ctx context.Context, workspaceID, runID str
 		return materialize.RunRecord{}, err
 	}
 	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, `
-		UPDATE refresh_job_runs
-		SET status = ?, finished_at = CURRENT_TIMESTAMP, error = ''
-		WHERE id = ? AND status = ?
-		  AND job_id IN (SELECT id FROM refresh_jobs WHERE workspace_id = ?)
-	`, materialize.RunStatusCancelled, runID, materialize.RunStatusQueued, workspaceID)
+	q := r.q.WithTx(tx)
+	result, err := q.CancelQueuedMaterializationRun(ctx, platformdb.CancelQueuedMaterializationRunParams{
+		CancelledStatus: materialize.RunStatusCancelled, RunID: runID,
+		QueuedStatus: materialize.RunStatusQueued, WorkspaceID: workspaceID,
+	})
 	if err != nil {
 		return materialize.RunRecord{}, err
 	}
@@ -345,11 +344,10 @@ func (r *SQLRunRepository) CancelRun(ctx context.Context, workspaceID, runID str
 		}
 		return materialize.RunRecord{}, materialize.ErrRunNotCancellable
 	}
-	if _, err := tx.ExecContext(ctx, `
-		UPDATE refresh_jobs
-		SET status = ?, finished_at = CURRENT_TIMESTAMP, lease_owner = '', lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
-		WHERE id = (SELECT job_id FROM refresh_job_runs WHERE id = ?) AND workspace_id = ? AND status = ?
-	`, materialize.RunStatusCancelled, runID, workspaceID, materialize.RunStatusQueued); err != nil {
+	if err := q.CancelQueuedRefreshJobForRun(ctx, platformdb.CancelQueuedRefreshJobForRunParams{
+		CancelledStatus: materialize.RunStatusCancelled, RunID: runID,
+		WorkspaceID: workspaceID, QueuedStatus: materialize.RunStatusQueued,
+	}); err != nil {
 		return materialize.RunRecord{}, err
 	}
 	if err := tx.Commit(); err != nil {

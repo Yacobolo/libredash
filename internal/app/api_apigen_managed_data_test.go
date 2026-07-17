@@ -72,7 +72,7 @@ func TestManagedDataAPIGenPrivilegesArePlatformGlobal(t *testing.T) {
 		"rollbackDeployment":                   access.PrivilegeActivateDeployment,
 	}
 	for operation, privilege := range want {
-		if got := apigenOperationPrivileges[operation]; got != privilege {
+		if got, ok := apigenOperationPrivilege(operation); !ok || got != privilege {
 			t.Errorf("%s privilege = %q, want %q", operation, got, privilege)
 		}
 		if resolver, exists := apigenOperationObjectResolvers[operation]; exists || resolver != nil {
@@ -80,7 +80,7 @@ func TestManagedDataAPIGenPrivilegesArePlatformGlobal(t *testing.T) {
 		}
 	}
 	for _, removed := range []string{"listManagedDataRollouts", "createManagedDataRollout", "getManagedDataRollout", "activateManagedDataRollout", "rollbackManagedDataRollout", "activatePublish"} {
-		if _, exists := apigenOperationPrivileges[removed]; exists {
+		if _, exists := apigenOperationPrivilege(removed); exists {
 			t.Errorf("removed operation %s retains a privilege", removed)
 		}
 	}

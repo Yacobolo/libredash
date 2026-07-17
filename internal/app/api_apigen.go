@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/go-chi/chi/v5"
@@ -23,7 +24,7 @@ type apiGenAdapter struct {
 }
 
 func (a apiGenAdapter) HandleAPIGen(operationID string, w http.ResponseWriter, r *http.Request) {
-	privilege, ok := apigenOperationPrivileges[operationID]
+	privilege, ok := apigenOperationPrivilege(operationID)
 	if !ok {
 		http.NotFound(w, r)
 		return
@@ -36,6 +37,22 @@ func (a apiGenAdapter) HandleAPIGen(operationID string, w http.ResponseWriter, r
 		}
 		buffered.flush()
 	})).ServeHTTP(w, r)
+}
+
+func apigenOperationPrivilege(operationID string) (access.Privilege, bool) {
+	contract, ok := apigenapi.GetAPIGenOperationContract(operationID)
+	if !ok || !contract.Protected || contract.AuthzMode != "privilege" {
+		return "", false
+	}
+	authz, ok := contract.Extensions["x-authz"].(map[string]any)
+	if !ok || authz["mode"] != "privilege" {
+		return "", false
+	}
+	value, ok := authz["privilege"].(string)
+	if !ok {
+		return "", false
+	}
+	return access.ParsePrivilege(value)
 }
 
 type apiGenTransportErrorResponder struct {

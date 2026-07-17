@@ -135,3 +135,20 @@ SET status = 'failed', updated_at = CURRENT_TIMESTAMP, finished_at = CURRENT_TIM
     lease_owner = '', lease_expires_at = NULL, last_error = sqlc.arg(error_message)
 WHERE refresh_jobs.id = (SELECT job_id FROM refresh_job_runs WHERE refresh_job_runs.id = sqlc.arg(run_id))
   AND workspace_id = sqlc.arg(workspace_id);
+
+-- name: CancelQueuedMaterializationRun :execresult
+UPDATE refresh_job_runs
+SET status = sqlc.arg(cancelled_status), finished_at = CURRENT_TIMESTAMP, error = ''
+WHERE refresh_job_runs.id = sqlc.arg(run_id)
+  AND refresh_job_runs.status = sqlc.arg(queued_status)
+  AND refresh_job_runs.job_id IN (
+    SELECT refresh_jobs.id FROM refresh_jobs WHERE refresh_jobs.workspace_id = sqlc.arg(workspace_id)
+  );
+
+-- name: CancelQueuedRefreshJobForRun :exec
+UPDATE refresh_jobs
+SET status = sqlc.arg(cancelled_status), finished_at = CURRENT_TIMESTAMP,
+    lease_owner = '', lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+WHERE refresh_jobs.id = (SELECT refresh_job_runs.job_id FROM refresh_job_runs WHERE refresh_job_runs.id = sqlc.arg(run_id))
+  AND refresh_jobs.workspace_id = sqlc.arg(workspace_id)
+  AND refresh_jobs.status = sqlc.arg(queued_status);

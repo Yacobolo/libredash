@@ -331,17 +331,15 @@ func TestAPIGenOperationAuthCoverage(t *testing.T) {
 		if contract.AuthzMode != "privilege" || !contract.Protected {
 			t.Fatalf("%s auth contract = mode %q protected %t, want privilege/protected", operationID, contract.AuthzMode, contract.Protected)
 		}
-		if _, ok := apigenOperationPrivileges[operationID]; !ok {
-			t.Fatalf("%s missing app privilege mapping", operationID)
+		if _, ok := apigenOperationPrivilege(operationID); !ok {
+			t.Fatalf("%s missing generated privilege metadata", operationID)
 		}
 	}
-	for operationID := range apigenOperationPrivileges {
-		if _, ok := contracts[operationID]; !ok {
-			t.Fatalf("%s has app privilege mapping but no generated contract", operationID)
-		}
-	}
-	if got := apigenOperationPrivileges["uploadReleaseArtifact"]; got != access.PrivilegeDeploy {
+	if got, _ := apigenOperationPrivilege("uploadReleaseArtifact"); got != access.PrivilegeDeploy {
 		t.Fatalf("uploadReleaseArtifact privilege = %q, want %q", got, access.PrivilegeDeploy)
+	}
+	if _, ok := apigenOperationPrivilege("unknownOperation"); ok {
+		t.Fatal("unknown operation unexpectedly resolved a privilege")
 	}
 }
 
@@ -382,8 +380,8 @@ func TestAPIGenOperationObjectResolverCoverage(t *testing.T) {
 		if _, ok := contracts[operationID]; !ok {
 			t.Fatalf("%s missing generated contract", operationID)
 		}
-		if _, ok := apigenOperationPrivileges[operationID]; !ok {
-			t.Fatalf("%s missing privilege mapping", operationID)
+		if _, ok := apigenOperationPrivilege(operationID); !ok {
+			t.Fatalf("%s missing generated privilege metadata", operationID)
 		}
 		if apigenOperationObjectResolvers[operationID] == nil {
 			t.Fatalf("%s missing exact object resolver", operationID)
@@ -393,8 +391,8 @@ func TestAPIGenOperationObjectResolverCoverage(t *testing.T) {
 		if _, ok := contracts[operationID]; !ok {
 			t.Fatalf("%s has object resolver but no generated contract", operationID)
 		}
-		if _, ok := apigenOperationPrivileges[operationID]; !ok {
-			t.Fatalf("%s has object resolver but no privilege mapping", operationID)
+		if _, ok := apigenOperationPrivilege(operationID); !ok {
+			t.Fatalf("%s has object resolver but no generated privilege metadata", operationID)
 		}
 	}
 	for _, operationID := range []string{
@@ -457,8 +455,12 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		if got := authz["mode"]; got != "privilege" {
 			t.Fatalf("%s x-authz mode = %#v, want privilege", operationID, got)
 		}
-		if got := authz["privilege"]; got != string(apigenOperationPrivileges[operationID]) {
-			t.Fatalf("%s x-authz privilege = %#v, want %q", operationID, got, apigenOperationPrivileges[operationID])
+		privilege, ok := apigenOperationPrivilege(operationID)
+		if !ok {
+			t.Fatalf("%s missing generated privilege metadata", operationID)
+		}
+		if got := authz["privilege"]; got != string(privilege) {
+			t.Fatalf("%s x-authz privilege = %#v, want %q", operationID, got, privilege)
 		}
 		if wantName, ok := agentTools[operationID]; ok {
 			if got := toolsByOperation[operationID]; got != wantName {

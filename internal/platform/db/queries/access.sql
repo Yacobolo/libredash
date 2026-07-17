@@ -10,6 +10,9 @@ ON CONFLICT(id) DO UPDATE SET
 -- name: GetPrincipal :one
 SELECT * FROM principals WHERE id = ?;
 
+-- name: DeletePrincipalByID :execresult
+DELETE FROM principals WHERE id = sqlc.arg(id);
+
 -- name: GetPrincipalByEmail :one
 SELECT * FROM principals WHERE lower(email) = lower(?) AND email <> '' LIMIT 1;
 
@@ -329,6 +332,16 @@ UPDATE service_principal_secrets
 SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
 WHERE service_principal_id = ? AND id = ?;
 
+-- name: ListServicePrincipalSecretsByPrincipal :many
+SELECT * FROM service_principal_secrets
+WHERE service_principal_id = sqlc.arg(service_principal_id)
+ORDER BY created_at DESC, id DESC;
+
+-- name: GetServicePrincipalSecretByID :one
+SELECT * FROM service_principal_secrets
+WHERE service_principal_id = sqlc.arg(service_principal_id)
+  AND id = sqlc.arg(id);
+
 -- name: InsertAuditEvent :exec
 INSERT INTO audit_events (id, workspace_id, principal_id, action, target_type, target_id, privilege, status, request_id, correlation_id, metadata_json)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -446,6 +459,14 @@ WHERE grants.id = sqlc.arg(id)
     SELECT securable_objects.id FROM securable_objects
     WHERE securable_objects.workspace_id = sqlc.arg(workspace_id) OR securable_objects.id = sqlc.arg(workspace_object_id)
   );
+
+-- name: UpdateGrantByID :execresult
+UPDATE grants
+SET object_id = sqlc.arg(object_id),
+    subject_type = sqlc.arg(subject_type),
+    subject_id = sqlc.arg(subject_id),
+    privilege = sqlc.arg(privilege)
+WHERE id = sqlc.arg(id);
 
 -- name: UpsertDataPolicy :exec
 INSERT INTO data_policies (id, workspace_id, object_id, subject_type, subject_id, policy_type, expression_json)

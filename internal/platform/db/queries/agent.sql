@@ -148,3 +148,14 @@ SELECT EXISTS (
   WHERE r.id = sqlc.arg(run_id) AND c.workspace_id = sqlc.arg(workspace_id)
     AND c.principal_id = sqlc.arg(principal_id)
 );
+
+-- name: DeleteAsyncEventsForArchivedAgentRuns :exec
+DELETE FROM api_async_events
+WHERE resource_kind = 'agent_run'
+  AND resource_id IN (
+    SELECT r.id FROM agent_runs r
+    JOIN agent_conversations c ON c.id = r.conversation_id
+    WHERE c.archived_at IS NOT NULL
+      AND c.archived_at <> ''
+      AND c.archived_at < sqlc.arg(cutoff)
+  );

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
 )
 
 func (r *Repository) UpdateGrant(ctx context.Context, workspaceID, id string, input access.GrantInput) (access.Grant, error) {
@@ -16,8 +17,10 @@ func (r *Repository) UpdateGrant(ctx context.Context, workspaceID, id string, in
 	if err != nil {
 		return access.Grant{}, err
 	}
-	result, err := r.db.ExecContext(ctx, `UPDATE grants SET object_id = ?, subject_type = ?, subject_id = ?, privilege = ? WHERE id = ?`,
-		objectID, string(input.SubjectType), input.SubjectID, string(input.Privilege), id)
+	result, err := r.q.UpdateGrantByID(ctx, platformdb.UpdateGrantByIDParams{
+		ObjectID: objectID, SubjectType: string(input.SubjectType), SubjectID: input.SubjectID,
+		Privilege: string(input.Privilege), ID: id,
+	})
 	if err != nil {
 		return access.Grant{}, err
 	}
@@ -31,7 +34,7 @@ func (r *Repository) UpdateGrant(ctx context.Context, workspaceID, id string, in
 }
 
 func (r *Repository) DeletePrincipal(ctx context.Context, id string) error {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM principals WHERE id = ?`, id)
+	result, err := r.q.DeletePrincipalByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -46,27 +49,30 @@ func (r *Repository) DeletePrincipal(ctx context.Context, id string) error {
 }
 
 func (r *Repository) ListServicePrincipalSecrets(ctx context.Context, principalID string) ([]access.ServicePrincipalSecret, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT id, service_principal_id, name, COALESCE(expires_at, ''), created_at, COALESCE(revoked_at, '')
-      FROM service_principal_secrets WHERE service_principal_id = ? ORDER BY created_at DESC, id DESC`, principalID)
+	rows, err := r.q.ListServicePrincipalSecretsByPrincipal(ctx, principalID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	result := []access.ServicePrincipalSecret{}
-	for rows.Next() {
-		var item access.ServicePrincipalSecret
-		if err := rows.Scan(&item.ID, &item.ServicePrincipalID, &item.Name, &item.ExpiresAt, &item.CreatedAt, &item.RevokedAt); err != nil {
-			return nil, err
-		}
-		result = append(result, item)
+	result := make([]access.ServicePrincipalSecret, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, mapServicePrincipalSecret(row))
 	}
-	return result, rows.Err()
+	return result, nil
 }
 
 func (r *Repository) GetServicePrincipalSecret(ctx context.Context, principalID, secretID string) (access.ServicePrincipalSecret, error) {
-	var item access.ServicePrincipalSecret
-	err := r.db.QueryRowContext(ctx, `SELECT id, service_principal_id, name, COALESCE(expires_at, ''), created_at, COALESCE(revoked_at, '')
-      FROM service_principal_secrets WHERE service_principal_id = ? AND id = ?`, principalID, secretID).
-		Scan(&item.ID, &item.ServicePrincipalID, &item.Name, &item.ExpiresAt, &item.CreatedAt, &item.RevokedAt)
-	return item, err
+	row, err := r.q.GetServicePrincipalSecretByID(ctx, platformdb.GetServicePrincipalSecretByIDParams{
+		ServicePrincipalID: principalID, ID: secretID,
+	})
+	if err != nil {
+		return access.ServicePrincipalSecret{}, err
+	}
+	return mapServicePrincipalSecret(row), nil
+}
+
+func mapServicePrincipalSecret(row platformdb.ServicePrincipalSecret) access.ServicePrincipalSecret {
+	return access.ServicePrincipalSecret{
+		ID: row.ID, ServicePrincipalID: row.ServicePrincipalID, Name: row.Name,
+		ExpiresAt: row.ExpiresAt.String, CreatedAt: row.CreatedAt, RevokedAt: row.RevokedAt.String,
+	}
 }

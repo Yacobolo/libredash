@@ -79,14 +79,49 @@ func TestStaticSQLiteAdaptersUseGeneratedQueries(t *testing.T) {
 		"internal/servingstate/sqlite": true,
 		"internal/workspace/sqlite":    true,
 	}
+	generatedOnlyFiles := map[string]bool{
+		"internal/access/sqlite/api_symmetry.go": true,
+	}
 	for _, file := range productionGoFiles(t) {
-		if !generatedOnly[file.pkgDir] {
+		if !generatedOnly[file.pkgDir] && !generatedOnlyFiles[file.path] {
 			continue
 		}
 		for _, directCall := range []string{".QueryContext(", ".QueryRowContext(", ".ExecContext("} {
 			if strings.Contains(file.body, directCall) {
 				t.Fatalf("%s bypasses sqlc via %s", file.path, directCall)
 			}
+		}
+	}
+}
+
+func TestRefreshCancellationUsesGeneratedQueries(t *testing.T) {
+	for _, file := range productionGoFiles(t) {
+		if file.path != "internal/analytics/materialize/sqlite/runs.go" {
+			continue
+		}
+		start := strings.Index(file.body, "func (r *SQLRunRepository) CancelRun")
+		if start < 0 {
+			t.Fatalf("%s has no CancelRun implementation", file.path)
+		}
+		body := file.body[start:]
+		if end := strings.Index(body[1:], "\nfunc "); end >= 0 {
+			body = body[:end+1]
+		}
+		for _, directCall := range []string{".QueryContext(", ".QueryRowContext(", ".ExecContext("} {
+			if strings.Contains(body, directCall) {
+				t.Fatalf("%s CancelRun bypasses sqlc via %s", file.path, directCall)
+			}
+		}
+	}
+}
+
+func TestFixedOperationalRetentionQueriesUseSQLC(t *testing.T) {
+	for _, file := range productionGoFiles(t) {
+		if file.path != "internal/platform/maintenance.go" {
+			continue
+		}
+		if strings.Contains(file.body, "DELETE FROM api_async_events") {
+			t.Fatalf("%s embeds the fixed async-event retention query instead of using sqlc", file.path)
 		}
 	}
 }

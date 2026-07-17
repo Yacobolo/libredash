@@ -118,9 +118,9 @@ func agentScopeFromTools(scope agenttools.Scope) agentcap.Scope {
 }
 
 func (s *Server) authorizeAPIGenAgentOperation(ctx context.Context, scope agentcap.Scope, operationID string) (agentcore.ToolResult, bool) {
-	privilege := apigenOperationPrivileges[operationID]
-	if privilege == "" {
-		return agenttools.ToolError("forbidden", "operation has no LibreDash privilege mapping"), false
+	privilege, ok := apigenOperationPrivilege(operationID)
+	if !ok {
+		return agenttools.ToolError("forbidden", "operation has no generated LibreDash privilege metadata"), false
 	}
 	return s.authorizeAgentPrivilege(ctx, scope, privilege, []access.ObjectRef{access.WorkspaceObject(scope.WorkspaceID)}, "agent_tool", operationID)
 }

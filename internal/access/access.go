@@ -33,6 +33,20 @@ const (
 	PrivilegeIngestData         Privilege = "INGEST_DATA"
 )
 
+func ParsePrivilege(value string) (Privilege, bool) {
+	privilege := Privilege(strings.TrimSpace(value))
+	switch privilege {
+	case PrivilegeUseWorkspace, PrivilegeViewItem, PrivilegeEditItem, PrivilegeManageItem,
+		PrivilegeQueryData, PrivilegePreviewData, PrivilegeRefreshData, PrivilegeDeploy,
+		PrivilegeActivateDeployment, PrivilegeUseAgent, PrivilegeViewAgent,
+		PrivilegeManageGrants, PrivilegeViewAudit, PrivilegeManageWorkspace,
+		PrivilegeManagePlatform, PrivilegeViewData, PrivilegeIngestData:
+		return privilege, true
+	default:
+		return "", false
+	}
+}
+
 const (
 	RoleOwner         = "owner"
 	RoleAdmin         = "admin"
