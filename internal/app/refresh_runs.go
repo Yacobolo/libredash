@@ -27,6 +27,9 @@ func (s *Server) refreshRunHTTP() materializehttp.Handler {
 			return materializehttp.Principal{ID: principal.ID}, ok
 		},
 		WorkspaceID: s.workspaceID,
+		RunCreated: func(ctx context.Context, run materialize.RunRecord) error {
+			return s.appendAsyncEvent(ctx, "refresh", run.ID, "refresh.queued", run)
+		},
 	}
 }
 

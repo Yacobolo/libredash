@@ -25,6 +25,8 @@ type AgentConversationResponse struct {
 type AgentRunResponse struct {
 	ID             string `json:"id"`
 	ConversationID string `json:"conversationId"`
+	WorkspaceID    string `json:"workspaceId"`
+	PrincipalID    string `json:"principalId"`
 	Status         string `json:"status"`
 	Model          string `json:"model,omitempty"`
 	StopReason     string `json:"stopReason,omitempty"`
@@ -33,7 +35,7 @@ type AgentRunResponse struct {
 	TotalTokens    int64  `json:"totalTokens,omitempty"`
 	Error          string `json:"error,omitempty"`
 	StartedAt      string `json:"startedAt"`
-	FinishedAt     string `json:"finishedAt,omitempty"`
+	CompletedAt    string `json:"completedAt,omitempty"`
 	CreatedAt      string `json:"createdAt"`
 }
 
@@ -63,13 +65,12 @@ type AgentTurnResponse struct {
 }
 
 type AgentEventResponse struct {
-	ID        string         `json:"id"`
-	RunID     string         `json:"runId"`
-	Seq       int64          `json:"seq"`
-	EventType string         `json:"eventType"`
-	Severity  string         `json:"severity"`
-	Payload   map[string]any `json:"payload"`
-	CreatedAt string         `json:"createdAt"`
+	ID           string         `json:"id"`
+	Event        string         `json:"event"`
+	ResourceType string         `json:"resourceType"`
+	ResourceID   string         `json:"resourceId"`
+	Data         map[string]any `json:"data"`
+	CreatedAt    string         `json:"createdAt"`
 }
 
 type AdminAgentToolResponse struct {

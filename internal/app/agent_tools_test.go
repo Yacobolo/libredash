@@ -51,8 +51,8 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		"get_refresh_run",
 		"asset_lineage",
 		"describe_asset",
-		"list_dashboard_components",
-		"list_dashboard_filter_options",
+		"describe_dashboard_page",
+		"list_dashboard_filter_values",
 		"list_assets",
 		"list_dashboards",
 		"list_refresh_runs",
@@ -63,13 +63,12 @@ func TestAPIGenAgentToolsExposeTaggedReadOperationsOnly(t *testing.T) {
 		"list_workspaces",
 		"preview_semantic_dataset",
 		"query_dashboard_page",
-		"query_dashboard_table_data",
+		"query_dashboard_table",
 		"query_dashboard_visual_data",
-		"query_semantic_dataset",
+		"query_semantic_model",
 		"search_workspace",
-		"query_table",
+		"explain_semantic_model_query",
 		"explain_semantic_preview",
-		"explain_semantic_query",
 	} {
 		if _, ok := names[want]; !ok {
 			t.Fatalf("missing APIGen agent tool %q in %#v", want, toolNames(tools))
@@ -141,31 +140,30 @@ func TestAgentAPIGenQueryAuditSurface(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
 	var queryTool agentcore.ToolDefinition
 	for _, tool := range agentAPIGenToolsForTest(server, agentcap.Scope{WorkspaceID: "test", PrincipalID: "principal", DevAuthBypass: true}) {
-		if tool.Name == "query_semantic_dataset" {
+		if tool.Name == "query_semantic_model" {
 			queryTool = tool
 			break
 		}
 	}
 	if queryTool.Handler == nil {
-		t.Fatal("query_semantic_dataset tool not found")
+		t.Fatal("query_semantic_model tool not found")
 	}
 
 	result, err := queryTool.Handler.Run(context.Background(), agentcore.ToolCall{
 		ID:   "call_agent_query",
-		Name: "query_semantic_dataset",
+		Name: "query_semantic_model",
 		Arguments: json.RawMessage(`{
 			"model":"test",
-			"dataset":"orders",
 			"dimensions":[{"field":"orders.status","alias":"status"}],
 			"measures":[{"field":"order_count"}],
 			"limit":1
 		}`),
 	})
 	if err != nil {
-		t.Fatalf("run query_semantic_dataset: %v", err)
+		t.Fatalf("run query_semantic_model: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("query_semantic_dataset returned error: %#v", result.Content)
+		t.Fatalf("query_semantic_model returned error: %#v", result.Content)
 	}
 
 	events := queryEventsForTest(t, server, queryaudit.Filter{WorkspaceID: "test", Surface: dataquery.SurfaceAgent})
@@ -589,18 +587,17 @@ func TestAPIGenAgentToolsExposeTypeSpecArgumentNamesAndBodyFields(t *testing.T) 
 		}
 	}
 	for toolName, wantProps := range map[string][]string{
-		"describe_dashboard":            {"dashboard"},
-		"describe_dashboard_visual":     {"dashboard", "page", "visual"},
-		"describe_asset":                {"assetId"},
-		"asset_lineage":                 {"assetId"},
-		"describe_model":                {"model"},
-		"list_dashboard_components":     {"dashboard", "page", "limit", "pageToken"},
-		"list_dashboard_filter_options": {"dashboard", "page", "filter", "filters", "limit", "pageToken"},
-		"query_dashboard_page":          {"dashboard", "page", "filters"},
-		"query_dashboard_table_data":    {"dashboard", "page", "table", "count", "filters"},
-		"query_dashboard_visual_data":   {"dashboard", "page", "visual", "filters"},
-		"query_semantic_dataset":        {"model", "dataset", "dimensions", "measures", "filters", "sort", "limit", "pageToken"},
-		"query_table":                   {"dashboard", "table", "count", "filters", "pageId"},
+		"describe_dashboard":           {"dashboard"},
+		"describe_dashboard_visual":    {"dashboard", "page", "visual"},
+		"describe_asset":               {"assetId"},
+		"asset_lineage":                {"assetId"},
+		"describe_model":               {"model"},
+		"describe_dashboard_page":      {"dashboard", "page"},
+		"list_dashboard_filter_values": {"dashboard", "page", "filter", "filters", "limit", "pageToken"},
+		"query_dashboard_page":         {"dashboard", "page", "filters"},
+		"query_dashboard_table":        {"dashboard", "page", "table", "limit", "pageToken", "filters"},
+		"query_dashboard_visual_data":  {"dashboard", "page", "visual", "filters"},
+		"query_semantic_model":         {"model", "dimensions", "measures", "filters", "sort", "limit", "pageToken"},
 	} {
 		var schema struct {
 			Properties map[string]any `json:"properties"`
@@ -626,7 +623,48 @@ func TestAPIGenAgentOperationsDeclareOutputMetadata(t *testing.T) {
 		if operation.Tool.Output.Mode == "" || len(operation.Tool.OutputSchema) == 0 {
 			t.Fatalf("agent operation %s (%s) has no typed output contract", operation.Contract.OperationID, operation.Tool.Name)
 		}
+		if operation.Tool.ResponseContentType != "application/json" {
+			t.Fatalf("agent operation %s (%s) response content type = %q, want application/json", operation.Contract.OperationID, operation.Tool.Name, operation.Tool.ResponseContentType)
+		}
 	}
+}
+
+func TestAPIGenVisualToolUsesGeneratedUnionProjection(t *testing.T) {
+	for _, operation := range agenttools.APIGenOperations() {
+		if operation.Tool.Name != "query_dashboard_visual_data" {
+			continue
+		}
+		if operation.Tool.Output.Mode != "project" {
+			t.Fatalf("visual tool output mode = %q, want project", operation.Tool.Output.Mode)
+		}
+		foundDataCount := false
+		for _, projection := range operation.Tool.Output.Select {
+			if projection.Source == "/data" && projection.CountAs == "count" {
+				foundDataCount = true
+				break
+			}
+		}
+		if !foundDataCount {
+			t.Fatalf("visual tool projections lack generated data count: %#v", operation.Tool.Output.Select)
+		}
+		var schema struct {
+			Properties map[string]any `json:"properties"`
+			Required   []string       `json:"required"`
+		}
+		if err := json.Unmarshal(operation.Tool.OutputSchema, &schema); err != nil {
+			t.Fatalf("decode visual output schema: %v", err)
+		}
+		for _, field := range []string{"title", "shape", "data", "count"} {
+			if _, ok := schema.Properties[field]; !ok {
+				t.Fatalf("visual output schema lacks projected property %q: %#v", field, schema.Properties)
+			}
+		}
+		if !stringSliceHas(schema.Required, "data") || !stringSliceHas(schema.Required, "count") {
+			t.Fatalf("visual output required = %#v, want data and count", schema.Required)
+		}
+		return
+	}
+	t.Fatal("query_dashboard_visual_data tool missing")
 }
 
 func TestAPIGenAgentToolDispatchesThroughGeneratedOperation(t *testing.T) {
@@ -929,18 +967,18 @@ func TestAPIGenAgentToolDispatchesJSONBodyOperation(t *testing.T) {
 	tools := agentAPIGenToolsForTest(server, agentcap.Scope{WorkspaceID: "test", PrincipalID: "principal"})
 	var queryTable agentcore.ToolDefinition
 	for _, tool := range tools {
-		if tool.Name == "query_table" {
+		if tool.Name == "query_dashboard_table" {
 			queryTable = tool
 			break
 		}
 	}
 	if queryTable.Handler == nil {
-		t.Fatal("query_table tool missing")
+		t.Fatal("query_dashboard_table tool missing")
 	}
 	result, err := queryTable.Handler.Run(context.Background(), agentcore.ToolCall{
 		ID:        "call_1",
-		Name:      "query_table",
-		Arguments: json.RawMessage(`{"dashboard":"executive-sales","pageId":"overview","table":"orders","count":500}`),
+		Name:      "query_dashboard_table",
+		Arguments: json.RawMessage(`{"dashboard":"executive-sales","page":"overview","table":"orders","limit":500}`),
 	})
 	if err != nil {
 		t.Fatalf("run tool: %v", err)
@@ -957,13 +995,13 @@ func TestAPIGenAgentToolDispatchesJSONBodyOperation(t *testing.T) {
 		Count         int              `json:"count"`
 		HasMore       bool             `json:"hasMore"`
 		Columns       []map[string]any `json:"columns"`
-		Rows          []map[string]any `json:"rows"`
+		Rows          [][]string       `json:"rows"`
 	}
 	if err := json.Unmarshal(body, &table); err != nil {
 		t.Fatalf("decode table result: %v\n%s", err, body)
 	}
-	if table.AvailableRows != 50 || table.Count != 50 || len(table.Rows) != 50 || len(table.Columns) == 0 {
-		t.Fatalf("table result was not capped to 50: %#v", table)
+	if table.AvailableRows != 500 || table.Count != 500 || len(table.Rows) != 500 || len(table.Columns) == 0 {
+		t.Fatalf("table result did not honor the bounded query limit: %#v", table)
 	}
 	var tableMap map[string]any
 	if err := json.Unmarshal(body, &tableMap); err != nil {
@@ -1031,18 +1069,18 @@ func TestAPIGenAgentSemanticQueryToolInjectsBodyDefaultLimit(t *testing.T) {
 	tools := agentAPIGenToolsForTest(server, agentcap.Scope{WorkspaceID: "test", PrincipalID: "principal"})
 	var querySemantic agentcore.ToolDefinition
 	for _, tool := range tools {
-		if tool.Name == "query_semantic_dataset" {
+		if tool.Name == "query_semantic_model" {
 			querySemantic = tool
 			break
 		}
 	}
 	if querySemantic.Handler == nil {
-		t.Fatal("query_semantic_dataset tool missing")
+		t.Fatal("query_semantic_model tool missing")
 	}
 	result, err := querySemantic.Handler.Run(context.Background(), agentcore.ToolCall{
 		ID:        "call_1",
-		Name:      "query_semantic_dataset",
-		Arguments: json.RawMessage(`{"model":"test","dataset":"orders","dimensions":[{"field":"orders.status","alias":"status"}],"measures":[{"field":"order_count"}],"sort":[{"field":"status","direction":"asc"}]}`),
+		Name:      "query_semantic_model",
+		Arguments: json.RawMessage(`{"model":"test","dimensions":[{"field":"orders.status","alias":"status"}],"measures":[{"field":"order_count"}],"sort":[{"field":"status","direction":"asc"}]}`),
 	})
 	if err != nil {
 		t.Fatalf("run tool: %v", err)
@@ -1055,16 +1093,19 @@ func TestAPIGenAgentSemanticQueryToolInjectsBodyDefaultLimit(t *testing.T) {
 		t.Fatalf("marshal result content: %v", err)
 	}
 	var decoded struct {
-		Columns    []string         `json:"columns"`
-		Items      []map[string]any `json:"items"`
-		Count      int              `json:"count"`
-		HasMore    bool             `json:"hasMore"`
-		NextCursor string           `json:"nextCursor"`
+		Columns []struct {
+			Name string `json:"name"`
+			Type string `json:"type"`
+		} `json:"columns"`
+		Rows       [][]string `json:"rows"`
+		Count      int        `json:"count"`
+		HasMore    bool       `json:"hasMore"`
+		NextCursor string     `json:"nextCursor"`
 	}
 	if err := json.Unmarshal(body, &decoded); err != nil {
 		t.Fatalf("decode semantic result: %v body=%s", err, body)
 	}
-	if len(decoded.Columns) == 0 || len(decoded.Items) != 25 || decoded.Count != 25 || !decoded.HasMore || decoded.NextCursor == "" {
+	if len(decoded.Columns) == 0 || len(decoded.Rows) != 25 || decoded.Count != 25 || !decoded.HasMore || decoded.NextCursor == "" {
 		t.Fatalf("semantic default-limited result = %#v", decoded)
 	}
 	var decodedMap map[string]any

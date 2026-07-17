@@ -34,12 +34,12 @@ func TestRevisionOperationsAreScopedAndPaginated(t *testing.T) {
 	handler := newHandler(repo, nil, nil)
 
 	recorder := call(t, ``, func(w http.ResponseWriter, r *http.Request) {
-		handler.GetManagedDataEnvironmentRevision(w, r, "project-a", "orders", "prod")
+		handler.GetActiveManagedDataRevision(w, r, "project-a", "orders")
 	})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("environment status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
-	var current apigenapi.ManagedDataEnvironmentRevisionResponse
+	var current apigenapi.ManagedDataActiveRevisionResponse
 	decodeResponse(t, recorder, &current)
 	if current.Revision == nil || current.Revision.Id != revisionA || current.Revision.UploadSessionId != "upload-a" || current.DeploymentId == nil || *current.DeploymentId != "deployment-a" {
 		t.Fatalf("environment response = %#v", current)
@@ -90,7 +90,7 @@ func TestUploadSessionOperationsUseControlServiceAndPrincipal(t *testing.T) {
 	}
 	var session apigenapi.ManagedDataUploadSessionResponse
 	decodeResponse(t, created, &session)
-	if session.RevisionId != uploads.result.Manifest.RevisionID() || session.Files[0].Negotiation.Tus == nil || session.Files[0].Negotiation.Tus.Endpoint != "/api/v1/managed-data/tus" {
+	if session.RevisionId != uploads.result.Manifest.RevisionID() || session.Files[0].Negotiation.Tus == nil || session.Files[0].Negotiation.Tus.Endpoint != "/upload-protocols/tus" {
 		t.Fatalf("created session = %#v", session)
 	}
 
@@ -102,8 +102,8 @@ func TestUploadSessionOperationsUseControlServiceAndPrincipal(t *testing.T) {
 		{"get", http.StatusOK, func(w http.ResponseWriter, r *http.Request) {
 			handler.GetManagedDataUploadSession(w, r, "project-a", "orders", "upload-a")
 		}},
-		{"abort", http.StatusOK, func(w http.ResponseWriter, r *http.Request) {
-			handler.AbortManagedDataUploadSession(w, r, "project-a", "orders", "upload-a", apigenapi.GenAbortManagedDataUploadSessionHeaders{IdempotencyKey: "abort-key"})
+		{"cancel", http.StatusOK, func(w http.ResponseWriter, r *http.Request) {
+			handler.CancelManagedDataUploadSession(w, r, "project-a", "orders", "upload-a", apigenapi.GenCancelManagedDataUploadSessionHeaders{IdempotencyKey: "cancel-key"})
 		}},
 		{"finalize", http.StatusAccepted, func(w http.ResponseWriter, r *http.Request) {
 			handler.FinalizeManagedDataUploadSession(w, r, "project-a", "orders", "upload-a", apigenapi.GenFinalizeManagedDataUploadSessionHeaders{IdempotencyKey: "finalize-key"})
@@ -119,6 +119,22 @@ func TestUploadSessionOperationsUseControlServiceAndPrincipal(t *testing.T) {
 	}
 	if uploads.recoverCalls != 1 || uploads.abortCalls != 1 || uploads.finalizeCalls != 1 {
 		t.Fatalf("upload calls = recover %d, abort %d, finalize %d", uploads.recoverCalls, uploads.abortCalls, uploads.finalizeCalls)
+	}
+}
+
+func TestUploadSessionsAreListedFromCollectionMetadata(t *testing.T) {
+	repo := metadataFixture()
+	repo.uploadSessions = []manageddata.UploadSession{{ID: "upload-a", CollectionID: "collection-a", CreatedAt: "2026-01-01T00:00:00Z"}}
+	uploads := &fakeUploads{result: uploadFixture()}
+	handler := newHandler(repo, uploads, nil)
+
+	recorder := call(t, ``, func(w http.ResponseWriter, r *http.Request) {
+		handler.ListManagedDataUploadSessions(w, r, "project-a", "orders", apigenapi.GenListManagedDataUploadSessionsParams{})
+	})
+	var response apigenapi.ManagedDataUploadSessionListResponse
+	decodeResponse(t, recorder, &response)
+	if len(response.Items) != 1 || response.Items[0].Id != "upload-a" || uploads.recoverCalls != 1 {
+		t.Fatalf("upload sessions = %#v, recover calls = %d", response.Items, uploads.recoverCalls)
 	}
 }
 
@@ -228,7 +244,7 @@ func TestMutationResponsesCannotCrossRequestedIDs(t *testing.T) {
 		uploads.result.ID = "upload-other"
 		handler := newHandler(metadataFixture(), uploads, nil)
 		recorder := call(t, ``, func(w http.ResponseWriter, r *http.Request) {
-			handler.AbortManagedDataUploadSession(w, r, "project-a", "orders", "upload-a", apigenapi.GenAbortManagedDataUploadSessionHeaders{IdempotencyKey: "key"})
+			handler.CancelManagedDataUploadSession(w, r, "project-a", "orders", "upload-a", apigenapi.GenCancelManagedDataUploadSessionHeaders{IdempotencyKey: "key"})
 		})
 		assertPublicError(t, recorder, http.StatusNotFound, "orders.csv")
 	})
@@ -246,10 +262,11 @@ func TestMutationResponsesCannotCrossRequestedIDs(t *testing.T) {
 }
 
 type fakeRepository struct {
-	collection  manageddata.Collection
-	revisions   map[string]managedhttp.RevisionMetadata
-	pointer     manageddata.EnvironmentPointer
-	revisionErr error
+	collection     manageddata.Collection
+	revisions      map[string]managedhttp.RevisionMetadata
+	uploadSessions []manageddata.UploadSession
+	pointer        manageddata.EnvironmentPointer
+	revisionErr    error
 }
 
 func metadataFixture() *fakeRepository {
@@ -287,6 +304,10 @@ func (r *fakeRepository) ListRevisions(context.Context, string) ([]managedhttp.R
 	return []managedhttp.RevisionMetadata{r.revisions[revisionA], r.revisions[revisionB]}, nil
 }
 
+func (r *fakeRepository) ListUploadSessions(context.Context, string) ([]manageddata.UploadSession, error) {
+	return append([]manageddata.UploadSession(nil), r.uploadSessions...), nil
+}
+
 func (r *fakeRepository) EnvironmentPointer(context.Context, string, manageddata.Environment) (manageddata.EnvironmentPointer, error) {
 	return r.pointer, nil
 }
@@ -319,12 +340,23 @@ func (u *fakeUploads) FinalizeUpload(context.Context, control.UploadRequest) (co
 	return control.FinalizeResult{Upload: u.result}, nil
 }
 
+func (u *fakeUploads) BeginFinalizeUpload(context.Context, control.UploadRequest) (control.UploadResult, error) {
+	u.finalizeCalls++
+	result := u.result
+	result.Status = manageddata.UploadStatusCommitting
+	return result, nil
+}
+
+func (u *fakeUploads) CompleteFinalizeUpload(context.Context, control.UploadRequest) (control.FinalizeResult, error) {
+	return control.FinalizeResult{Upload: u.result}, nil
+}
+
 func uploadFixture() control.UploadResult {
 	file := manageddata.File{Path: "orders.csv", Size: 3, SHA256: digestA}
 	return control.UploadResult{
 		ID: "upload-a", RevisionID: "internal-revision-a", Collection: control.CollectionResult{ID: "collection-a", Project: "project-a", Connection: "orders"},
 		Status: manageddata.UploadStatusOpen, Manifest: manageddata.Manifest{Files: []manageddata.File{file}}, CreatedAt: "2026-01-01T00:00:00Z", ExpiresAt: "2026-01-01T01:00:00Z",
-		Files: []control.UploadFile{{File: file, Status: control.FileStatusPending, Transport: control.TransportDescription{Protocol: control.ProtocolTus, Tus: &control.TusDescription{Endpoint: "/api/v1/managed-data/tus", UploadID: "tus-a", Offset: 0, ExpiresAt: "2026-01-01T01:00:00Z", Metadata: map[string]string{"secret": "do-not-return"}}}}},
+		Files: []control.UploadFile{{File: file, Status: control.FileStatusPending, Transport: control.TransportDescription{Protocol: control.ProtocolTus, Tus: &control.TusDescription{Endpoint: "/upload-protocols/tus", UploadID: "tus-a", Offset: 0, ExpiresAt: "2026-01-01T01:00:00Z", Metadata: map[string]string{"secret": "do-not-return"}}}}},
 	}
 }
 
@@ -364,7 +396,8 @@ func newHandler(repo managedhttp.Repository, uploads managedhttp.UploadCoordinat
 
 func handlerOptions(repo managedhttp.Repository, uploads managedhttp.UploadCoordinator, multipart s3multipart.Coordinator) managedhttp.Options {
 	return managedhttp.Options{
-		Repository: repo, Uploads: uploads, Multipart: multipart,
+		Repository: repo, Uploads: uploads, Multipart: multipart, Environment: "prod",
+		EnqueueFinalize: func(context.Context, control.UploadRequest) error { return nil },
 		CurrentPrincipal: func(*http.Request) (managedhttp.Principal, bool) {
 			return managedhttp.Principal{ID: "principal-a"}, true
 		},
@@ -397,8 +430,8 @@ func assertPublicError(t *testing.T, recorder *httptest.ResponseRecorder, wantSt
 	if strings.Contains(recorder.Body.String(), forbidden) || strings.Contains(recorder.Body.String(), "signed.example") || strings.Contains(recorder.Body.String(), "s3://") {
 		t.Fatalf("error response leaked sensitive value: %s", recorder.Body.String())
 	}
-	var response apigenapi.Error
-	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil || response.Code != int32(wantStatus) || response.Message == "" {
+	var response apigenapi.ProblemDetails
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil || response.Status != int32(wantStatus) || response.Code == "" || response.Detail == "" {
 		t.Fatalf("error response = %#v, error = %v", response, err)
 	}
 }

@@ -35,6 +35,7 @@ Run `libredash config validate` to validate the active environment, or add `--pr
 | `LIBREDASH_AZURE_CLIENT_ID` | string | serve | supported | Azure AD or Entra ID OAuth client identifier. |
 | `LIBREDASH_AZURE_CLIENT_SECRET` | string / secret | serve | supported | Azure AD or Entra ID OAuth client secret. |
 | `LIBREDASH_AZURE_TENANT` | string | serve | supported | Optional Azure AD or Entra ID tenant identifier. |
+| `LIBREDASH_DEV_API_TOKEN` | string / `dev` / secret | serve | development | Static bearer credential accepted by the public API in development; replace the development default on shared machines. |
 | `LIBREDASH_DEV_AUTH_BYPASS` | boolean / `false` | serve | development | Bypass authentication in development; forbidden in production. |
 | `LIBREDASH_LOCAL_AUTH` | boolean | serve | supported | Enable administrator-managed local browser authentication. |
 | `LIBREDASH_OIDC_CALLBACK_URL` | string | serve | supported | HTTPS callback URL registered with the generic OIDC provider. |

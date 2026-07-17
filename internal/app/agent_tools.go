@@ -83,7 +83,7 @@ func (s *Server) agentAPIGenToolProvider() agenttools.APIGenProvider {
 		},
 		Dispatch: func(operationID string, request *http.Request) (*http.Response, bool) {
 			recorder := httptest.NewRecorder()
-			if ok := apigenapi.DispatchAPIGenOperation(operationID, apiGenAdapter{server: s}, recorder, request); !ok {
+			if ok := apigenapi.DispatchAPIGenOperation(operationID, apiGenAdapter{server: s}, apiGenTransportErrorResponder{server: s}, recorder, request); !ok {
 				return nil, false
 			}
 			return recorder.Result(), true
@@ -118,9 +118,9 @@ func agentScopeFromTools(scope agenttools.Scope) agentcap.Scope {
 }
 
 func (s *Server) authorizeAPIGenAgentOperation(ctx context.Context, scope agentcap.Scope, operationID string) (agentcore.ToolResult, bool) {
-	privilege := apigenOperationPrivileges[operationID]
-	if privilege == "" {
-		return agenttools.ToolError("forbidden", "operation has no LibreDash privilege mapping"), false
+	privilege, ok := apigenOperationPrivilege(operationID)
+	if !ok {
+		return agenttools.ToolError("forbidden", "operation has no generated LibreDash privilege metadata"), false
 	}
 	return s.authorizeAgentPrivilege(ctx, scope, privilege, []access.ObjectRef{access.WorkspaceObject(scope.WorkspaceID)}, "agent_tool", operationID)
 }

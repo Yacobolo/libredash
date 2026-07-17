@@ -19,17 +19,18 @@ func TestManagedDataAPIContractIsProjectGlobalAndComplete(t *testing.T) {
 		method      string
 		operationID string
 	}{
-		"/api/v1/projects/{project}/data-connections/{connection}/environments/{environment}/revision":                                                            {"get", "getManagedDataEnvironmentRevision"},
-		"/api/v1/projects/{project}/data-connections/{connection}/revisions":                                                                                      {"get", "listManagedDataRevisions"},
-		"/api/v1/projects/{project}/data-connections/{connection}/revisions/{revision}":                                                                           {"get", "getManagedDataRevision"},
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions":                                                                                {"post", "createManagedDataUploadSession"},
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}":                                                                {"get", "getManagedDataUploadSession"},
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/abort":                                                          {"post", "abortManagedDataUploadSession"},
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/finalize":                                                       {"post", "finalizeManagedDataUploadSession"},
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads":                                           {"post", "createManagedDataS3MultipartUpload"},
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads/{multipartUpload}/parts/{partNumber}/sign": {"post", "signManagedDataS3MultipartPart"},
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads/{multipartUpload}/complete":                {"post", "completeManagedDataS3MultipartUpload"},
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads/{multipartUpload}/abort":                   {"post", "abortManagedDataS3MultipartUpload"},
+		"/api/v1/projects/{project}/connections/{connection}/active-revision":                                                                                {"get", "getActiveManagedDataRevision"},
+		"/api/v1/projects/{project}/connections/{connection}/revisions":                                                                                      {"get", "listManagedDataRevisions"},
+		"/api/v1/projects/{project}/connections/{connection}/revisions/{revision}":                                                                           {"get", "getManagedDataRevision"},
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions":                                                                                {"post", "createManagedDataUploadSession"},
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}":                                                                {"get", "getManagedDataUploadSession"},
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/cancel":                                                         {"post", "cancelManagedDataUploadSession"},
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/events":                                                         {"get", "listManagedDataUploadSessionEvents"},
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/finalize":                                                       {"post", "finalizeManagedDataUploadSession"},
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads":                                           {"post", "createManagedDataS3MultipartUpload"},
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads/{multipartUpload}/parts/{partNumber}/sign": {"post", "signManagedDataS3MultipartPart"},
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads/{multipartUpload}/complete":                {"post", "completeManagedDataS3MultipartUpload"},
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads/{multipartUpload}/abort":                   {"post", "abortManagedDataS3MultipartUpload"},
 	}
 
 	for path, want := range operations {
@@ -51,9 +52,9 @@ func TestManagedDataAPIContractIsProjectGlobalAndComplete(t *testing.T) {
 		path   string
 		status string
 	}{
-		{"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions", "201"},
-		{"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/finalize", "202"},
-		{"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads", "201"},
+		{"/api/v1/projects/{project}/connections/{connection}/upload-sessions", "201"},
+		{"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/finalize", "202"},
+		{"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads", "201"},
 	} {
 		operation := openAPIOperation(t, paths, tc.path, "post")
 		responses := openAPIMap(t, operation, "responses")
@@ -62,7 +63,7 @@ func TestManagedDataAPIContractIsProjectGlobalAndComplete(t *testing.T) {
 		}
 	}
 
-	for _, path := range []string{"/api/v1/projects/{project}/data-connections/{connection}/revisions"} {
+	for _, path := range []string{"/api/v1/projects/{project}/connections/{connection}/revisions"} {
 		operation := openAPIOperation(t, paths, path, "get")
 		for _, parameter := range []string{"limit", "pageToken"} {
 			if !operationHasParameter(operation, "query", parameter) {
@@ -88,12 +89,12 @@ func TestManagedDataAPIMutationsDeclareIdempotency(t *testing.T) {
 	paths := openAPIMap(t, spec, "paths")
 
 	for _, path := range []string{
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions",
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/abort",
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/finalize",
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads",
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads/{multipartUpload}/complete",
-		"/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads/{multipartUpload}/abort",
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions",
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/cancel",
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/finalize",
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads",
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads/{multipartUpload}/complete",
+		"/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads/{multipartUpload}/abort",
 	} {
 		operation := openAPIOperation(t, paths, path, "post")
 		if !operationHasParameter(operation, "header", "Idempotency-Key") {
@@ -137,9 +138,13 @@ func TestManagedDataAPIModelsAreBoundedAndBackendNeutral(t *testing.T) {
 		}
 	}
 
-	typespec, err := os.ReadFile(filepath.Join("..", "..", "api", "typespec", "managed_data.tsp"))
-	if err != nil {
-		t.Fatalf("read managed-data TypeSpec: %v", err)
+	var typespec []byte
+	for _, name := range []string{"managed_data.tsp", "upload_tus.tsp", "upload_s3_multipart.tsp"} {
+		raw, err := os.ReadFile(filepath.Join("..", "..", "api", "typespec", name))
+		if err != nil {
+			t.Fatalf("read %s TypeSpec: %v", name, err)
+		}
+		typespec = append(typespec, raw...)
 	}
 	for _, bounds := range []string{
 		"@minItems(1)\n  @maxItems(10000)\n  files:",
@@ -153,7 +158,7 @@ func TestManagedDataAPIModelsAreBoundedAndBackendNeutral(t *testing.T) {
 	protocol := openAPISchema(t, schemas, "ManagedDataUploadProtocol")
 	assertEnum(t, protocol, "tus", "s3_multipart", "already_present")
 	assertEnum(t, openAPISchema(t, schemas, "ManagedDataRevisionStatus"), "available")
-	assertEnum(t, openAPISchema(t, schemas, "ManagedDataUploadSessionStatus"), "open", "finalizing", "completed", "aborted", "failed", "expired")
+	assertEnum(t, openAPISchema(t, schemas, "ManagedDataUploadSessionStatus"), "open", "finalizing", "completed", "cancelled", "failed", "expired")
 	assertEnum(t, openAPISchema(t, schemas, "ManagedDataFileUploadStatus"), "pending", "uploading", "uploaded", "verified", "skipped", "failed")
 	assertEnum(t, openAPISchema(t, schemas, "ManagedDataS3MultipartStatus"), "open", "completed", "aborted")
 
@@ -176,8 +181,8 @@ func TestManagedDataAPIDoesNotGenerateHighLevelCLICommands(t *testing.T) {
 			managedOperationIDs[operationID] = true
 		}
 	}
-	if len(managedOperationIDs) != 11 {
-		t.Fatalf("managed-data generated operations = %d, want 11", len(managedOperationIDs))
+	if len(managedOperationIDs) != 13 {
+		t.Fatalf("managed-data generated operations = %d, want 13", len(managedOperationIDs))
 	}
 	for _, command := range cligen.APIGeneratedCommandSpecs {
 		if managedOperationIDs[command.OperationID] {

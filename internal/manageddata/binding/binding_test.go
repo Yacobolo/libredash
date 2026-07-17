@@ -59,6 +59,24 @@ func TestBinderCanPinBootstrapRevisionWithoutEnvironmentPointer(t *testing.T) {
 	}
 }
 
+func TestBinderValidatesServingStatePinsAgainstReleaseManifest(t *testing.T) {
+	repo := validFakeRepository()
+	repo.storedBindings = map[string][]manageddata.ServingStateBinding{
+		"state-1": {{ServingStateID: "state-1", CollectionID: "orders", RevisionID: "revision-1", Environment: "prod"}},
+	}
+	binder := binderForRepository(repo)
+
+	if err := binder.ValidateServingStatePins(t.Context(), "state-1", "project-a", map[string]string{"orders": digestA}); err != nil {
+		t.Fatalf("ValidateServingStatePins() error = %v", err)
+	}
+	if err := binder.ValidateServingStatePins(t.Context(), "state-1", "project-a", map[string]string{"orders": digestB}); !errors.Is(err, ErrPinnedRevisionUnavailable) {
+		t.Fatalf("mismatched manifest error = %v, want %v", err, ErrPinnedRevisionUnavailable)
+	}
+	if err := binder.ValidateServingStatePins(t.Context(), "state-1", "project-a", map[string]string{}); !errors.Is(err, ErrArtifactMetadata) {
+		t.Fatalf("extra artifact binding error = %v, want %v", err, ErrArtifactMetadata)
+	}
+}
+
 func TestBinderReplacesFullBindingSetWithoutManagedConnections(t *testing.T) {
 	repo := &fakeRepository{replaced: []manageddata.ServingStateBinding{{CollectionID: "stale"}}}
 	binder := binderForRepository(repo)
@@ -194,6 +212,7 @@ type fakeRepository struct {
 	collectionErr     error
 	listErr           error
 	replaceErr        error
+	storedBindings    map[string][]manageddata.ServingStateBinding
 	collectionLookups []string
 	replaced          []manageddata.ServingStateBinding
 	listCalls         int
@@ -225,4 +244,8 @@ func (r *fakeRepository) ReplaceServingStateBindings(_ context.Context, _ string
 	r.replaceCalls++
 	r.replaced = append([]manageddata.ServingStateBinding(nil), bindings...)
 	return r.replaceErr
+}
+
+func (r *fakeRepository) ListServingStateBindings(_ context.Context, servingStateID string) ([]manageddata.ServingStateBinding, error) {
+	return append([]manageddata.ServingStateBinding(nil), r.storedBindings[servingStateID]...), nil
 }

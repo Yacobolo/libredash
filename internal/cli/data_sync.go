@@ -109,6 +109,15 @@ func runDataSync(ctx context.Context, request dataSyncRequest) error {
 	if err := validateSyncSession(session, request.ProjectID, request.Connection, request.Plan.Manifest); err != nil {
 		return err
 	}
+	if session.Status == apigenapi.ManagedDataUploadSessionStatusFinalizing {
+		session, err = waitForUploadFinalization(ctx, client, request.ProjectID, request.Connection, session.Id, request.Plan.Manifest, session)
+		if err != nil {
+			return err
+		}
+	}
+	if session.Status != apigenapi.ManagedDataUploadSessionStatusOpen && session.Status != apigenapi.ManagedDataUploadSessionStatusCompleted {
+		return fmt.Errorf("upload session is not usable: status %q", session.Status)
+	}
 	if session.Status != apigenapi.ManagedDataUploadSessionStatusCompleted {
 		for _, file := range request.Plan.Manifest.Files {
 			upload := uploadForPath(session.Files, file.Path)
@@ -129,7 +138,10 @@ func runDataSync(ctx context.Context, request dataSyncRequest) error {
 			return err
 		}
 		if finalized.Status != apigenapi.ManagedDataUploadSessionStatusCompleted {
-			return fmt.Errorf("managed data upload did not complete")
+			finalized, err = waitForUploadFinalization(ctx, client, request.ProjectID, request.Connection, session.Id, request.Plan.Manifest, finalized)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	out := request.Out
@@ -138,6 +150,50 @@ func runDataSync(ctx context.Context, request dataSyncRequest) error {
 	}
 	_, err = fmt.Fprintf(out, "staged %s\n", revisionID)
 	return err
+}
+
+func waitForUploadFinalization(ctx context.Context, client *managedDataCLIClient, project, connection, uploadID string, manifest manageddata.Manifest, current apigenapi.ManagedDataUploadSessionResponse) (apigenapi.ManagedDataUploadSessionResponse, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Minute)
+		defer cancel()
+	}
+	delay := 100 * time.Millisecond
+	for {
+		switch current.Status {
+		case apigenapi.ManagedDataUploadSessionStatusCompleted:
+			return current, nil
+		case apigenapi.ManagedDataUploadSessionStatusFinalizing:
+		case apigenapi.ManagedDataUploadSessionStatusFailed, apigenapi.ManagedDataUploadSessionStatusCancelled, apigenapi.ManagedDataUploadSessionStatusExpired:
+			return current, fmt.Errorf("managed data upload finalization ended with status %q", current.Status)
+		default:
+			return current, fmt.Errorf("managed data upload finalization returned unexpected status %q", current.Status)
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return current, fmt.Errorf("wait for managed data upload finalization: %w", ctx.Err())
+		case <-timer.C:
+		}
+		next, err := client.getUploadSession(ctx, project, connection, uploadID)
+		if err != nil {
+			return current, err
+		}
+		if err := validateSyncSession(next, project, connection, manifest); err != nil {
+			return current, err
+		}
+		current = next
+		if delay < time.Second {
+			delay *= 2
+			if delay > time.Second {
+				delay = time.Second
+			}
+		}
+	}
 }
 
 func transferManagedDataFile(ctx context.Context, client *managedDataCLIClient, request dataSyncRequest, uploadID string, file manageddata.File, upload apigenapi.ManagedDataFileUploadResponse) error {
@@ -557,7 +613,7 @@ func validateSyncSession(session apigenapi.ManagedDataUploadSessionResponse, pro
 			return fmt.Errorf("upload session manifest does not match the planned revision")
 		}
 	}
-	if session.Status != apigenapi.ManagedDataUploadSessionStatusOpen && session.Status != apigenapi.ManagedDataUploadSessionStatusCompleted {
+	if session.Status != apigenapi.ManagedDataUploadSessionStatusOpen && session.Status != apigenapi.ManagedDataUploadSessionStatusFinalizing && session.Status != apigenapi.ManagedDataUploadSessionStatusCompleted {
 		return fmt.Errorf("upload session is not usable")
 	}
 	if len(session.Files) != len(manifest.Files) {

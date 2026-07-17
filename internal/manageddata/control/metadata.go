@@ -19,5 +19,6 @@ type MetadataRepository interface {
 	CollectionByProjectConnection(context.Context, string, string) (manageddata.Collection, error)
 	RevisionByID(context.Context, string, string) (RevisionMetadata, error)
 	ListRevisions(context.Context, string) ([]RevisionMetadata, error)
+	ListUploadSessions(context.Context, string) ([]manageddata.UploadSession, error)
 	EnvironmentPointer(context.Context, string, manageddata.Environment) (manageddata.EnvironmentPointer, error)
 }

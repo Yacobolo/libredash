@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	"github.com/Yacobolo/libredash/internal/execution"
 	"github.com/Yacobolo/libredash/internal/workspace/refresh"
 )
@@ -77,6 +78,14 @@ func (s *Server) runRefreshJobDispatcher(ctx context.Context) {
 		Owner:        fmt.Sprintf("libredash-%d", time.Now().UnixNano()),
 		ExecutionStats: func() execution.Stats {
 			return s.executionService().Stats()
+		},
+		RunFinished: func(ctx context.Context, job materialize.JobRecord) {
+			run, err := repo.GetRun(ctx, job.WorkspaceID, job.RunID)
+			if err != nil {
+				return
+			}
+			eventType := "refresh." + string(run.Status)
+			_ = s.appendAsyncEvent(ctx, "refresh", run.ID, eventType, run)
 		},
 	}
 	dispatcher.Run(ctx)

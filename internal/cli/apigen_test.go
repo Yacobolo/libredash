@@ -7,19 +7,19 @@ import (
 )
 
 func TestAPIGenOperationURLUsesGeneratedContracts(t *testing.T) {
-	u, err := apiOperationURL("https://libredash.example/", "activateProjectDeployment", map[string]string{"project": "sales project", "deployment": "deploy 1"}, nil)
+	u, err := apiOperationURL("https://libredash.example/", "rollbackDeployment", map[string]string{"project": "sales project", "deployment": "deploy 1"}, nil)
 	if err != nil {
 		t.Fatalf("operation URL: %v", err)
 	}
-	if u != "https://libredash.example/api/v1/projects/sales%20project/deployments/deploy%201/activate" {
+	if u != "https://libredash.example/api/v1/projects/sales%20project/deployments/deploy%201/rollback" {
 		t.Fatalf("url = %q", u)
 	}
 
-	u, err = apiOperationURL("https://libredash.example", "validateDeploymentCandidate", map[string]string{"project": "demo project", "workspace": "demo", "candidate": "candidate 1"}, nil)
+	u, err = apiOperationURL("https://libredash.example", "finalizeRelease", map[string]string{"project": "demo project", "release": "release 1"}, nil)
 	if err != nil {
 		t.Fatalf("operation URL: %v", err)
 	}
-	if u != "https://libredash.example/api/v1/projects/demo%20project/workspaces/demo/deployment-candidates/candidate%201/validate" {
+	if u != "https://libredash.example/api/v1/projects/demo%20project/releases/release%201/finalize" {
 		t.Fatalf("url = %q", u)
 	}
 
@@ -42,4 +42,17 @@ func TestGeneratedCLIRegistryContainsCoreCommands(t *testing.T) {
 			t.Fatalf("generated CLI registry missing %s", operationID)
 		}
 	}
+}
+
+func TestGeneratedVisualCLIUsesUnionCollectionMetadata(t *testing.T) {
+	for _, spec := range cligen.APIGeneratedCommandSpecs {
+		if spec.OperationID != "queryDashboardVisualData" {
+			continue
+		}
+		if spec.Output.Mode != "collection" || spec.Pagination == nil || spec.Pagination.ItemsField != "data" {
+			t.Fatalf("visual CLI metadata = output %#v pagination %#v, want data collection", spec.Output, spec.Pagination)
+		}
+		return
+	}
+	t.Fatal("queryDashboardVisualData CLI metadata missing")
 }

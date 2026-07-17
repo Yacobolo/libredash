@@ -44,7 +44,7 @@ func TestLocalAuthBrowserEndToEnd(t *testing.T) {
 		t.Fatal("temporary-password login did not create ld_session")
 	}
 
-	status, _, body = browser.get("/api/v1/workspaces/sales/dashboards")
+	status, _, body = browser.get("/")
 	if status != http.StatusForbidden {
 		t.Fatalf("must-change protected API status=%d want=403 body=%s", status, body)
 	}
@@ -57,17 +57,14 @@ func TestLocalAuthBrowserEndToEnd(t *testing.T) {
 		t.Fatalf("password change status=%d location=%q body=%s", status, location, body)
 	}
 
-	status, _, body = browser.get("/api/v1/workspaces/sales/dashboards")
+	status, _, body = browser.get("/")
 	if status != http.StatusOK {
 		t.Fatalf("dashboard list with local session status=%d body=%s", status, body)
 	}
-	if !strings.Contains(body, `"id":"executive-sales"`) {
-		t.Fatalf("dashboard list missing expected dashboard: %s", body)
-	}
 
 	status, _, body = browser.get("/api/v1/me/sessions")
-	if status != http.StatusOK || !strings.Contains(body, `"items"`) {
-		t.Fatalf("session list status=%d body=%s", status, body)
+	if status != http.StatusUnauthorized {
+		t.Fatalf("public API accepted browser session status=%d body=%s", status, body)
 	}
 
 	events, err := repo.ListAuditEvents(ctx, access.AuditEventFilter{PrincipalID: created.Principal.ID, Limit: 20})
@@ -133,7 +130,7 @@ func TestLocalAuthPasswordResetEndToEnd(t *testing.T) {
 	if status != http.StatusFound || location != "/login" {
 		t.Fatalf("reset-password login status=%d location=%q body=%s", status, location, body)
 	}
-	status, _, body = resetBrowser.get("/api/v1/workspaces/sales/dashboards")
+	status, _, body = resetBrowser.get("/")
 	if status != http.StatusForbidden {
 		t.Fatalf("reset must-change protected API status=%d want=403 body=%s", status, body)
 	}

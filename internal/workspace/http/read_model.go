@@ -269,6 +269,22 @@ func (m ReadModel) CanReadWorkspace(r *nethttp.Request, workspaceID string) bool
 	return err == nil && decision.Allowed
 }
 
+func (m ReadModel) CanReadObject(r *nethttp.Request, object access.ObjectRef) (bool, error) {
+	if !m.AuthConfigured {
+		return true, nil
+	}
+	repo, err := m.accessRepository()
+	if err != nil || repo == nil {
+		return false, err
+	}
+	principal, ok := m.currentPrincipal(r)
+	if !ok {
+		return false, nil
+	}
+	decision, err := repo.Authorize(r.Context(), principal.ID, access.PrivilegeViewItem, object)
+	return decision.Allowed, err
+}
+
 func (m ReadModel) activeAssetCatalog(ctx context.Context, workspaceID, environment string) (workspace.AssetCatalog, bool, error) {
 	reader, err := m.assetCatalogReader()
 	if err != nil || reader == nil {

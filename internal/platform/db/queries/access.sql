@@ -10,6 +10,9 @@ ON CONFLICT(id) DO UPDATE SET
 -- name: GetPrincipal :one
 SELECT * FROM principals WHERE id = ?;
 
+-- name: DeletePrincipalByID :execresult
+DELETE FROM principals WHERE id = sqlc.arg(id);
+
 -- name: GetPrincipalByEmail :one
 SELECT * FROM principals WHERE lower(email) = lower(?) AND email <> '' LIMIT 1;
 
@@ -329,6 +332,16 @@ UPDATE service_principal_secrets
 SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP)
 WHERE service_principal_id = ? AND id = ?;
 
+-- name: ListServicePrincipalSecretsByPrincipal :many
+SELECT * FROM service_principal_secrets
+WHERE service_principal_id = sqlc.arg(service_principal_id)
+ORDER BY created_at DESC, id DESC;
+
+-- name: GetServicePrincipalSecretByID :one
+SELECT * FROM service_principal_secrets
+WHERE service_principal_id = sqlc.arg(service_principal_id)
+  AND id = sqlc.arg(id);
+
 -- name: InsertAuditEvent :exec
 INSERT INTO audit_events (id, workspace_id, principal_id, action, target_type, target_id, privilege, status, request_id, correlation_id, metadata_json)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
@@ -447,6 +460,14 @@ WHERE grants.id = sqlc.arg(id)
     WHERE securable_objects.workspace_id = sqlc.arg(workspace_id) OR securable_objects.id = sqlc.arg(workspace_object_id)
   );
 
+-- name: UpdateGrantByID :execresult
+UPDATE grants
+SET object_id = sqlc.arg(object_id),
+    subject_type = sqlc.arg(subject_type),
+    subject_id = sqlc.arg(subject_id),
+    privilege = sqlc.arg(privilege)
+WHERE id = sqlc.arg(id);
+
 -- name: UpsertDataPolicy :exec
 INSERT INTO data_policies (id, workspace_id, object_id, subject_type, subject_id, policy_type, expression_json)
 VALUES (sqlc.arg(id), sqlc.arg(workspace_id), sqlc.arg(object_id), sqlc.arg(subject_type),
@@ -518,3 +539,54 @@ SELECT privilege FROM role_grant_templates WHERE role_name = sqlc.arg(role_name)
 INSERT INTO grants (id, object_id, subject_type, subject_id, privilege)
 VALUES (sqlc.arg(id), sqlc.arg(object_id), sqlc.arg(subject_type), sqlc.arg(subject_id), sqlc.arg(privilege))
 ON CONFLICT(object_id, subject_type, subject_id, privilege) DO UPDATE SET id = excluded.id;
+
+-- name: ListDataPoliciesByObjectScope :many
+WITH params AS (
+  SELECT CAST(sqlc.arg(object_ids_json) AS TEXT) AS object_ids_json
+), object_scope AS (
+  SELECT CAST(key AS INTEGER) AS ordinal, CAST(value AS TEXT) AS object_id
+  FROM params, json_each(params.object_ids_json)
+)
+SELECT dp.id, dp.workspace_id, dp.object_id, dp.subject_type, dp.subject_id,
+       dp.policy_type, dp.expression_json, dp.created_at, dp.updated_at
+FROM object_scope scope
+JOIN data_policies dp ON dp.object_id = scope.object_id
+ORDER BY scope.ordinal, dp.policy_type, dp.id;
+
+-- name: ListGrantsByObjectScope :many
+WITH params AS (
+  SELECT CAST(sqlc.arg(object_ids_json) AS TEXT) AS object_ids_json
+), object_scope AS (
+  SELECT CAST(key AS INTEGER) AS ordinal, CAST(value AS TEXT) AS object_id
+  FROM params, json_each(params.object_ids_json)
+)
+SELECT g.id, g.object_id, so.object_type, so.workspace_id, so.parent_id,
+       parent.object_type AS parent_type, parent.id AS parent_id,
+       g.subject_type, g.subject_id, g.privilege, g.created_at
+FROM object_scope scope
+JOIN grants g ON g.object_id = scope.object_id
+JOIN securable_objects so ON so.id = g.object_id
+LEFT JOIN securable_objects parent ON parent.id = so.parent_id
+ORDER BY scope.ordinal, g.subject_type, g.subject_id, g.privilege;
+
+-- name: FindAuthorizingGrant :one
+WITH params AS (
+  SELECT CAST(sqlc.arg(object_ids_json) AS TEXT) AS object_ids_json
+), object_scope AS (
+  SELECT CAST(key AS INTEGER) AS ordinal, CAST(value AS TEXT) AS object_id
+  FROM params, json_each(params.object_ids_json)
+)
+SELECT g.id, g.object_id, g.subject_type, g.subject_id
+FROM object_scope scope
+JOIN grants g ON g.object_id = scope.object_id
+LEFT JOIN group_members gm
+  ON g.subject_type = 'group'
+ AND gm.group_id = g.subject_id
+ AND gm.principal_id = sqlc.arg(principal_id)
+WHERE g.privilege = sqlc.arg(privilege)
+  AND (
+    g.subject_type IN ('principal', 'service_principal') AND g.subject_id = sqlc.arg(principal_id)
+    OR gm.principal_id IS NOT NULL
+  )
+ORDER BY scope.ordinal
+LIMIT 1;

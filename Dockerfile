@@ -19,11 +19,10 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate && \
     go run ./internal/tools/configgen && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 typespec-compile -manifest api/apigen.yaml -target libredash-v1 && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 all -manifest api/apigen.yaml -target libredash-v1 && \
-    go run ./internal/tools/apigenpostprocess && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 typespec-compile -manifest api/apigen.yaml -target ui-signals && \
-    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 all -manifest api/apigen.yaml -target ui-signals && \
+    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target libredash-v1 && \
+    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target libredash-v1 && \
+    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target ui-signals && \
+    go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target ui-signals && \
     go run ./internal/tools/uisignalspostprocess && \
     go run ./cmd/libredash schema export --format json-schema --out schemas/json
 

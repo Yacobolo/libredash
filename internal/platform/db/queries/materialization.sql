@@ -3,8 +3,16 @@ INSERT INTO refresh_jobs (id, workspace_id, serving_state_id, model_id, kind, pa
 VALUES (sqlc.arg(id), sqlc.arg(workspace_id), NULLIF(CAST(sqlc.arg(serving_state_id) AS TEXT), ''), sqlc.arg(model_id), sqlc.arg(kind), sqlc.arg(payload_json), sqlc.arg(status), CURRENT_TIMESTAMP);
 
 -- name: CreateRefreshJobRun :exec
-INSERT INTO refresh_job_runs (id, job_id, principal_id, target_type, target_id, trigger_type, parent_run_id, status)
-VALUES (sqlc.arg(id), sqlc.arg(job_id), NULLIF(CAST(sqlc.arg(principal_id) AS TEXT), ''), sqlc.arg(target_type), sqlc.arg(target_id), sqlc.arg(trigger_type), NULLIF(CAST(sqlc.arg(parent_run_id) AS TEXT), ''), sqlc.arg(status));
+INSERT INTO refresh_job_runs (
+  id, job_id, principal_id, target_type, target_id, trigger_type,
+  parent_run_id, retry_of, status, created_sequence
+)
+VALUES (
+  sqlc.arg(id), sqlc.arg(job_id), NULLIF(CAST(sqlc.arg(principal_id) AS TEXT), ''),
+  sqlc.arg(target_type), sqlc.arg(target_id), sqlc.arg(trigger_type),
+  NULLIF(CAST(sqlc.arg(parent_run_id) AS TEXT), ''), NULLIF(CAST(sqlc.arg(retry_of) AS TEXT), ''),
+  sqlc.arg(status), COALESCE((SELECT MAX(created_sequence) + 1 FROM refresh_job_runs), 1)
+);
 
 -- name: NextExecutableRefreshJob :one
 SELECT j.id, j.workspace_id, COALESCE(j.serving_state_id, '') AS serving_state_id, j.model_id, j.kind, j.payload_json,
@@ -54,7 +62,7 @@ WHERE COALESCE(r.parent_run_id, '') = ''
 -- name: GetMaterializationRun :one
 SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id,
        COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name,
-       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at,
+       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.retry_of, r.status, j.created_at, j.updated_at,
        r.started_at, r.finished_at, r.error
 FROM refresh_job_runs r
 JOIN refresh_jobs j ON j.id = r.job_id
@@ -64,7 +72,7 @@ WHERE r.id = sqlc.arg(run_id) AND j.workspace_id = sqlc.arg(workspace_id);
 -- name: ListChildMaterializationRuns :many
 SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id,
        COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name,
-       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at,
+       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.retry_of, r.status, j.created_at, j.updated_at,
        r.started_at, r.finished_at, r.error
 FROM refresh_job_runs r
 JOIN refresh_jobs j ON j.id = r.job_id
@@ -75,7 +83,7 @@ ORDER BY r.rowid ASC;
 -- name: LatestSuccessfulMaterializationRun :one
 SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id,
        COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name,
-       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at,
+       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.retry_of, r.status, j.created_at, j.updated_at,
        r.started_at, r.finished_at, r.error
 FROM refresh_job_runs r
 JOIN refresh_jobs j ON j.id = r.job_id
@@ -136,3 +144,66 @@ SET status = 'failed', updated_at = CURRENT_TIMESTAMP, finished_at = CURRENT_TIM
 WHERE refresh_jobs.id = (SELECT job_id FROM refresh_job_runs WHERE refresh_job_runs.id = sqlc.arg(run_id))
   AND workspace_id = sqlc.arg(workspace_id);
 
+-- name: CancelQueuedMaterializationRun :execresult
+UPDATE refresh_job_runs
+SET status = sqlc.arg(cancelled_status), finished_at = CURRENT_TIMESTAMP, error = ''
+WHERE refresh_job_runs.id = sqlc.arg(run_id)
+  AND refresh_job_runs.status = sqlc.arg(queued_status)
+  AND refresh_job_runs.job_id IN (
+    SELECT refresh_jobs.id FROM refresh_jobs WHERE refresh_jobs.workspace_id = sqlc.arg(workspace_id)
+  );
+
+-- name: CancelQueuedRefreshJobForRun :exec
+UPDATE refresh_jobs
+SET status = sqlc.arg(cancelled_status), finished_at = CURRENT_TIMESTAMP,
+    lease_owner = '', lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+WHERE refresh_jobs.id = (SELECT refresh_job_runs.job_id FROM refresh_job_runs WHERE refresh_job_runs.id = sqlc.arg(run_id))
+  AND refresh_jobs.workspace_id = sqlc.arg(workspace_id)
+  AND refresh_jobs.status = sqlc.arg(queued_status);
+
+-- name: ListMaterializationRuns :many
+SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id,
+       COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name,
+       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.retry_of, r.status,
+       j.created_at, j.updated_at, r.started_at, r.finished_at, r.error
+FROM refresh_job_runs r
+JOIN refresh_jobs j ON j.id = r.job_id
+LEFT JOIN principals p ON p.id = r.principal_id
+WHERE j.workspace_id = sqlc.arg(workspace_id)
+  AND (
+    CAST(sqlc.arg(cursor_created_at) AS TEXT) = ''
+    OR j.created_at < CAST(sqlc.arg(cursor_created_at) AS TEXT)
+    OR (j.created_at = CAST(sqlc.arg(cursor_created_at) AS TEXT) AND r.created_sequence < sqlc.arg(cursor_sequence))
+  )
+ORDER BY j.created_at DESC, r.created_sequence DESC
+LIMIT sqlc.arg(limit);
+
+-- name: ListTargetMaterializationRuns :many
+SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id,
+       COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name,
+       r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.retry_of, r.status,
+       j.created_at, j.updated_at, r.started_at, r.finished_at, r.error
+FROM refresh_job_runs r
+JOIN refresh_jobs j ON j.id = r.job_id
+LEFT JOIN principals p ON p.id = r.principal_id
+WHERE j.workspace_id = sqlc.arg(workspace_id)
+  AND r.target_type = sqlc.arg(target_type)
+  AND r.target_id = sqlc.arg(target_id)
+  AND (
+    CAST(sqlc.arg(cursor_created_at) AS TEXT) = ''
+    OR j.created_at < CAST(sqlc.arg(cursor_created_at) AS TEXT)
+    OR (j.created_at = CAST(sqlc.arg(cursor_created_at) AS TEXT) AND r.created_sequence < sqlc.arg(cursor_sequence))
+  )
+ORDER BY j.created_at DESC, r.created_sequence DESC
+LIMIT sqlc.arg(limit);
+
+-- name: GetMaterializationRunCursor :one
+SELECT j.created_at, r.created_sequence
+FROM refresh_job_runs r
+JOIN refresh_jobs j ON j.id = r.job_id
+WHERE r.id = sqlc.arg(run_id)
+  AND j.workspace_id = sqlc.arg(workspace_id)
+  AND (
+    CAST(sqlc.arg(target_type) AS TEXT) = ''
+    OR (r.target_type = CAST(sqlc.arg(target_type) AS TEXT) AND r.target_id = sqlc.arg(target_id))
+  );

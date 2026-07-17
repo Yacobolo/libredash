@@ -1,11 +1,13 @@
 package http
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	nethttp "net/http"
+	"strings"
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	"github.com/Yacobolo/libredash/internal/api"
@@ -22,6 +24,7 @@ type Handler struct {
 	DispatchQueued   func()
 	CurrentPrincipal func(*nethttp.Request) (Principal, bool)
 	WorkspaceID      func(string) string
+	RunCreated       func(context.Context, materialize.RunRecord) error
 }
 
 type materializationRunRequest struct {
@@ -31,6 +34,7 @@ type materializationRunRequest struct {
 	TargetID       string `json:"targetId,omitempty"`
 	TriggerType    string `json:"triggerType,omitempty"`
 	ParentRunID    string `json:"parentRunId,omitempty"`
+	RetryOf        string `json:"retryOf,omitempty"`
 }
 
 func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -43,7 +47,9 @@ func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 	var input materializationRunRequest
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
 	}
@@ -51,6 +57,29 @@ func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
 	if h.CurrentPrincipal != nil {
 		if principal, ok := h.CurrentPrincipal(r); ok {
 			principalID = principal.ID
+		}
+	}
+	if input.RetryOf != "" {
+		prior, err := repo.GetRun(r.Context(), workspaceID, input.RetryOf)
+		if err != nil {
+			writeJSONError(w, fmt.Errorf("retryOf does not identify a refresh run in this workspace"), nethttp.StatusUnprocessableEntity)
+			return
+		}
+		if prior.Status == materialize.RunStatusQueued || prior.Status == materialize.RunStatusRunning {
+			writeJSONError(w, fmt.Errorf("retryOf refresh run is not terminal"), nethttp.StatusConflict)
+			return
+		}
+		if input.ModelID == "" {
+			input.ModelID = prior.ModelID
+		}
+		if input.ServingStateID == "" {
+			input.ServingStateID = prior.ServingStateID
+		}
+		if input.TargetType == "" {
+			input.TargetType = prior.TargetType
+		}
+		if input.TargetID == "" {
+			input.TargetID = prior.TargetID
 		}
 	}
 	run, err := repo.CreateRun(r.Context(), materialize.RunInput{
@@ -62,14 +91,22 @@ func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
 		TargetID:       input.TargetID,
 		TriggerType:    input.TriggerType,
 		ParentRunID:    input.ParentRunID,
+		RetryOf:        input.RetryOf,
 	})
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
 	}
+	if h.RunCreated != nil {
+		if err := h.RunCreated(r.Context(), run); err != nil {
+			writeJSONError(w, err, nethttp.StatusServiceUnavailable)
+			return
+		}
+	}
 	if h.DispatchQueued != nil {
 		h.DispatchQueued()
 	}
+	w.Header().Set("Location", strings.TrimSuffix(r.URL.Path, "/")+"/"+run.ID)
 	writeJSON(w, nethttp.StatusAccepted, run)
 }
 

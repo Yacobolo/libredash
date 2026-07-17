@@ -13,11 +13,10 @@ import (
 )
 
 type dataRevisionOptions struct {
-	project     string
-	connection  string
-	environment string
-	limit       int
-	pageToken   string
+	project    string
+	connection string
+	limit      int
+	pageToken  string
 }
 
 func dataRevisionsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
@@ -40,7 +39,7 @@ func dataRevisionsCommand(ctx context.Context, opts *rootOptions) *cobra.Command
 	}
 	addDataRevisionFlags(list, opts, &listOptions, false)
 
-	currentOptions := dataRevisionOptions{environment: "dev"}
+	currentOptions := dataRevisionOptions{}
 	current := &cobra.Command{
 		Use:   "current",
 		Short: "Print the active managed data revision",
@@ -64,9 +63,7 @@ func dataRevisionsCommand(ctx context.Context, opts *rootOptions) *cobra.Command
 func addDataRevisionFlags(command *cobra.Command, opts *rootOptions, values *dataRevisionOptions, current bool) {
 	command.Flags().StringVar(&values.project, "project", "", "server project id")
 	command.Flags().StringVar(&values.connection, "connection", "", "project-global managed connection")
-	if current {
-		command.Flags().StringVar(&values.environment, "environment", "dev", "serving environment")
-	} else {
+	if !current {
 		command.Flags().IntVar(&values.limit, "limit", 0, "maximum revisions to return")
 		command.Flags().StringVar(&values.pageToken, "page-token", "", "opaque page token")
 	}
@@ -79,9 +76,6 @@ func validateDataRevisionOptions(values dataRevisionOptions, current bool) error
 	}
 	if strings.TrimSpace(values.connection) == "" {
 		return fmt.Errorf("connection is required")
-	}
-	if current && strings.TrimSpace(values.environment) == "" {
-		return fmt.Errorf("environment is required")
 	}
 	if values.limit < 0 {
 		return fmt.Errorf("limit must not be negative")
@@ -114,7 +108,7 @@ func runDataRevisionsList(ctx context.Context, _ *rootOptions, values dataRevisi
 }
 
 func runDataRevisionCurrent(ctx context.Context, _ *rootOptions, values dataRevisionOptions, client *managedDataCLIClient, out io.Writer) error {
-	response, err := client.currentRevision(ctx, values.project, values.connection, values.environment)
+	response, err := client.currentRevision(ctx, values.project, values.connection, "")
 	if err != nil {
 		return err
 	}

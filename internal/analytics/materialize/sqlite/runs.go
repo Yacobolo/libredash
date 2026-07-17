@@ -47,7 +47,8 @@ func (r *SQLRunRepository) CreateRun(ctx context.Context, input materialize.RunI
 	}
 	if err := q.CreateRefreshJobRun(ctx, platformdb.CreateRefreshJobRunParams{
 		ID: runID, JobID: jobID, PrincipalID: normalized.PrincipalID, TargetType: normalized.TargetType,
-		TargetID: normalized.TargetID, TriggerType: normalized.TriggerType, ParentRunID: normalized.ParentRunID, Status: materialize.RunStatusQueued,
+		TargetID: normalized.TargetID, TriggerType: normalized.TriggerType, ParentRunID: normalized.ParentRunID,
+		RetryOf: normalized.RetryOf, Status: materialize.RunStatusQueued,
 	}); err != nil {
 		return materialize.RunRecord{}, err
 	}
@@ -161,31 +162,29 @@ func (r *SQLRunRepository) ListRuns(ctx context.Context, workspaceID string, pag
 		return nil, fmt.Errorf("workspace id is required")
 	}
 	limit := runPageLimit(page)
-	args := []any{workspaceID}
+	cursor := runPageCursor{}
 	after := strings.TrimSpace(page.After)
-	cursorClause := ""
 	if after != "" {
-		cursor, ok, err := r.runPageCursor(ctx, workspaceID, "", "", after)
+		resolved, ok, err := r.runPageCursor(ctx, workspaceID, "", "", after)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
 			return []materialize.RunRecord{}, nil
 		}
-		cursorClause = " AND (j.created_at < ? OR (j.created_at = ? AND r.rowid < ?))"
-		args = append(args, cursor.CreatedAt, cursor.CreatedAt, cursor.RowID)
+		cursor = resolved
 	}
-	args = append(args, limit)
-	rows, err := r.db.QueryContext(ctx, refreshRunSelect()+`
-		WHERE j.workspace_id = ?`+cursorClause+`
-		ORDER BY j.created_at DESC, r.rowid DESC
-		LIMIT ?
-	`, args...)
+	rows, err := r.q.ListMaterializationRuns(ctx, platformdb.ListMaterializationRunsParams{
+		WorkspaceID: workspaceID, CursorCreatedAt: cursor.CreatedAt, CursorSequence: cursor.Sequence, Limit: int64(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	return scanRunRows(rows)
+	out := make([]materialize.RunRecord, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, materializationRunFromListRow(row))
+	}
+	return out, nil
 }
 
 func (r *SQLRunRepository) ListModelRuns(ctx context.Context, workspaceID, modelID string, page materialize.RunPage) ([]materialize.RunRecord, error) {
@@ -206,31 +205,30 @@ func (r *SQLRunRepository) ListTargetRuns(ctx context.Context, workspaceID, targ
 		return nil, fmt.Errorf("target id is required")
 	}
 	limit := runPageLimit(page)
-	args := []any{workspaceID, targetType, targetID}
+	cursor := runPageCursor{}
 	after := strings.TrimSpace(page.After)
-	cursorClause := ""
 	if after != "" {
-		cursor, ok, err := r.runPageCursor(ctx, workspaceID, targetType, targetID, after)
+		resolved, ok, err := r.runPageCursor(ctx, workspaceID, targetType, targetID, after)
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
 			return []materialize.RunRecord{}, nil
 		}
-		cursorClause = " AND (j.created_at < ? OR (j.created_at = ? AND r.rowid < ?))"
-		args = append(args, cursor.CreatedAt, cursor.CreatedAt, cursor.RowID)
+		cursor = resolved
 	}
-	args = append(args, limit)
-	rows, err := r.db.QueryContext(ctx, refreshRunSelect()+`
-		WHERE j.workspace_id = ? AND r.target_type = ? AND r.target_id = ?`+cursorClause+`
-		ORDER BY j.created_at DESC, r.rowid DESC
-		LIMIT ?
-	`, args...)
+	rows, err := r.q.ListTargetMaterializationRuns(ctx, platformdb.ListTargetMaterializationRunsParams{
+		WorkspaceID: workspaceID, TargetType: targetType, TargetID: targetID,
+		CursorCreatedAt: cursor.CreatedAt, CursorSequence: cursor.Sequence, Limit: int64(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	return scanRunRows(rows)
+	out := make([]materialize.RunRecord, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, materializationRunFromTargetListRow(row))
+	}
+	return out, nil
 }
 
 func (r *SQLRunRepository) ListChildRuns(ctx context.Context, workspaceID, parentRunID string) ([]materialize.RunRecord, error) {
@@ -311,6 +309,50 @@ func (r *SQLRunRepository) MarkRunFailed(ctx context.Context, workspaceID, runID
 	return r.markRun(ctx, workspaceID, runID, materialize.RunStatusFailed, message)
 }
 
+func (r *SQLRunRepository) CancelRun(ctx context.Context, workspaceID, runID string) (materialize.RunRecord, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	runID = strings.TrimSpace(runID)
+	if workspaceID == "" || runID == "" {
+		return materialize.RunRecord{}, fmt.Errorf("workspace id and run id are required")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return materialize.RunRecord{}, err
+	}
+	defer tx.Rollback()
+	q := r.q.WithTx(tx)
+	result, err := q.CancelQueuedMaterializationRun(ctx, platformdb.CancelQueuedMaterializationRunParams{
+		CancelledStatus: materialize.RunStatusCancelled, RunID: runID,
+		QueuedStatus: materialize.RunStatusQueued, WorkspaceID: workspaceID,
+	})
+	if err != nil {
+		return materialize.RunRecord{}, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return materialize.RunRecord{}, err
+	}
+	if affected == 0 {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return materialize.RunRecord{}, rollbackErr
+		}
+		if _, getErr := r.GetRun(ctx, workspaceID, runID); getErr != nil {
+			return materialize.RunRecord{}, getErr
+		}
+		return materialize.RunRecord{}, materialize.ErrRunNotCancellable
+	}
+	if err := q.CancelQueuedRefreshJobForRun(ctx, platformdb.CancelQueuedRefreshJobForRunParams{
+		CancelledStatus: materialize.RunStatusCancelled, RunID: runID,
+		WorkspaceID: workspaceID, QueuedStatus: materialize.RunStatusQueued,
+	}); err != nil {
+		return materialize.RunRecord{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return materialize.RunRecord{}, err
+	}
+	return r.GetRun(ctx, workspaceID, runID)
+}
+
 func (r *SQLRunRepository) FailRunsForTerminalServingStates(ctx context.Context, message string) error {
 	if r == nil || r.db == nil {
 		return fmt.Errorf("refresh run database is required")
@@ -388,10 +430,6 @@ func (r *SQLRunRepository) markRun(ctx context.Context, workspaceID, runID, stat
 	return r.GetRun(ctx, workspaceID, runID)
 }
 
-type runScanner interface {
-	Scan(dest ...any) error
-}
-
 type materializationRunDBRow struct {
 	ID                   string
 	WorkspaceID          string
@@ -403,6 +441,7 @@ type materializationRunDBRow struct {
 	TargetID             string
 	TriggerType          string
 	ParentRunID          sql.NullString
+	RetryOf              sql.NullString
 	Status               string
 	CreatedAt            string
 	UpdatedAt            string
@@ -415,7 +454,7 @@ func materializationRunFromGetRow(row platformdb.GetMaterializationRunRow) mater
 	return materializationRunFromDB(materializationRunDBRow{
 		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
 		PrincipalID: row.PrincipalID, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
-		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, Status: row.Status,
+		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, RetryOf: row.RetryOf, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, Error: row.Error,
 	})
 }
@@ -424,7 +463,7 @@ func materializationRunFromChildRow(row platformdb.ListChildMaterializationRunsR
 	return materializationRunFromDB(materializationRunDBRow{
 		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
 		PrincipalID: row.PrincipalID, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
-		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, Status: row.Status,
+		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, RetryOf: row.RetryOf, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, Error: row.Error,
 	})
 }
@@ -433,7 +472,25 @@ func materializationRunFromLatestRow(row platformdb.LatestSuccessfulMaterializat
 	return materializationRunFromDB(materializationRunDBRow{
 		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
 		PrincipalID: row.PrincipalID, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
-		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, Status: row.Status,
+		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, RetryOf: row.RetryOf, Status: row.Status,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, Error: row.Error,
+	})
+}
+
+func materializationRunFromListRow(row platformdb.ListMaterializationRunsRow) materialize.RunRecord {
+	return materializationRunFromDB(materializationRunDBRow{
+		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
+		PrincipalID: row.PrincipalID, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
+		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, RetryOf: row.RetryOf, Status: row.Status,
+		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, Error: row.Error,
+	})
+}
+
+func materializationRunFromTargetListRow(row platformdb.ListTargetMaterializationRunsRow) materialize.RunRecord {
+	return materializationRunFromDB(materializationRunDBRow{
+		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
+		PrincipalID: row.PrincipalID, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
+		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, RetryOf: row.RetryOf, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, Error: row.Error,
 	})
 }
@@ -442,7 +499,7 @@ func materializationRunFromDB(row materializationRunDBRow) materialize.RunRecord
 	run := materialize.RunRecord{
 		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID.String, ModelID: row.ModelID,
 		PrincipalID: row.PrincipalID.String, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
-		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID.String, Status: row.Status,
+		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID.String, RetryOf: row.RetryOf.String, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt.String, Error: row.Error,
 	}
 	if run.Status == materialize.RunStatusQueued {
@@ -451,106 +508,22 @@ func materializationRunFromDB(row materializationRunDBRow) materialize.RunRecord
 	return run
 }
 
-type runRows interface {
-	Next() bool
-	Err() error
-	runScanner
-}
-
 type runPageCursor struct {
 	CreatedAt string
-	RowID     int64
+	Sequence  int64
 }
 
 func (r *SQLRunRepository) runPageCursor(ctx context.Context, workspaceID, targetType, targetID, runID string) (runPageCursor, bool, error) {
-	args := []any{runID, workspaceID}
-	targetClause := ""
-	if targetType != "" || targetID != "" {
-		targetClause = " AND r.target_type = ? AND r.target_id = ?"
-		args = append(args, targetType, targetID)
-	}
-	row := r.db.QueryRowContext(ctx, `
-		SELECT j.created_at, r.rowid
-		FROM refresh_job_runs r
-		JOIN refresh_jobs j ON j.id = r.job_id
-		WHERE r.id = ? AND j.workspace_id = ?`+targetClause+`
-	`, args...)
-	var cursor runPageCursor
-	if err := row.Scan(&cursor.CreatedAt, &cursor.RowID); err != nil {
+	row, err := r.q.GetMaterializationRunCursor(ctx, platformdb.GetMaterializationRunCursorParams{
+		RunID: runID, WorkspaceID: workspaceID, TargetType: targetType, TargetID: targetID,
+	})
+	if err != nil {
 		if err == sql.ErrNoRows {
 			return runPageCursor{}, false, nil
 		}
 		return runPageCursor{}, false, err
 	}
-	return cursor, true, nil
-}
-
-func scanRunRows(rows runRows) ([]materialize.RunRecord, error) {
-	var out []materialize.RunRecord
-	for rows.Next() {
-		run, err := scanRun(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, run)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func scanRun(row runScanner) (materialize.RunRecord, error) {
-	var run materialize.RunRecord
-	var servingStateID, principalID, principalDisplayName, parentRunID, finishedAt sql.NullString
-	if err := row.Scan(
-		&run.ID,
-		&run.WorkspaceID,
-		&servingStateID,
-		&run.ModelID,
-		&principalID,
-		&principalDisplayName,
-		&run.TargetType,
-		&run.TargetID,
-		&run.TriggerType,
-		&parentRunID,
-		&run.Status,
-		&run.CreatedAt,
-		&run.UpdatedAt,
-		&run.StartedAt,
-		&finishedAt,
-		&run.Error,
-	); err != nil {
-		return materialize.RunRecord{}, err
-	}
-	if servingStateID.Valid {
-		run.ServingStateID = servingStateID.String
-	}
-	if principalID.Valid {
-		run.PrincipalID = principalID.String
-	}
-	if principalDisplayName.Valid {
-		run.PrincipalDisplayName = principalDisplayName.String
-	}
-	if parentRunID.Valid {
-		run.ParentRunID = parentRunID.String
-	}
-	if finishedAt.Valid {
-		run.FinishedAt = finishedAt.String
-	}
-	if run.Status == materialize.RunStatusQueued {
-		run.StartedAt = ""
-	}
-	return run, nil
-}
-
-func refreshRunSelect() string {
-	return `
-		SELECT r.id, j.workspace_id, j.serving_state_id, j.model_id, r.principal_id, COALESCE(NULLIF(p.display_name, ''), NULLIF(p.email, ''), r.principal_id, '') AS principal_display_name, r.target_type, r.target_id, r.trigger_type, r.parent_run_id, r.status, j.created_at, j.updated_at, r.started_at, r.finished_at, r.error
-		FROM refresh_job_runs r
-		JOIN refresh_jobs j ON j.id = r.job_id
-		LEFT JOIN principals p ON p.id = r.principal_id
-	`
+	return runPageCursor{CreatedAt: row.CreatedAt, Sequence: row.CreatedSequence}, true, nil
 }
 
 type normalizedRunInput struct {
@@ -562,6 +535,7 @@ type normalizedRunInput struct {
 	TargetID       string
 	TriggerType    string
 	ParentRunID    string
+	RetryOf        string
 	JobKind        string
 	PayloadJSON    string
 }
@@ -575,6 +549,7 @@ func normalizeRunInput(input materialize.RunInput) (normalizedRunInput, error) {
 	targetID := strings.TrimSpace(input.TargetID)
 	triggerType := strings.TrimSpace(input.TriggerType)
 	parentRunID := strings.TrimSpace(input.ParentRunID)
+	retryOf := strings.TrimSpace(input.RetryOf)
 	jobKind := strings.TrimSpace(input.JobKind)
 	payloadJSON := strings.TrimSpace(input.PayloadJSON)
 	if workspaceID == "" {
@@ -620,6 +595,7 @@ func normalizeRunInput(input materialize.RunInput) (normalizedRunInput, error) {
 		TargetID:       targetID,
 		TriggerType:    triggerType,
 		ParentRunID:    parentRunID,
+		RetryOf:        retryOf,
 		JobKind:        jobKind,
 		PayloadJSON:    payloadJSON,
 	}, nil

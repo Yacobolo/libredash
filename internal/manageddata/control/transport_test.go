@@ -13,7 +13,7 @@ import (
 
 func TestTusTransportDescribesResumableStateAndAborts(t *testing.T) {
 	engine := &fakeUploadEngine{uploads: make(map[string]storage.Upload)}
-	transport, err := control.NewTusTransport("local", "/api/v1/managed-data/tus", engine)
+	transport, err := control.NewTusTransport("local", "/upload-protocols/tus", engine)
 	if err != nil {
 		t.Fatal(err)
 	}

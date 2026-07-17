@@ -252,7 +252,7 @@ deploy_project() {
     }
 		revision_args=(--revision "$connection=$revision")
 	fi
-  go run ./cmd/libredash deploy --project "$project" "${revision_args[@]}" --target "http://localhost:${port}" --token dev --environment dev --auto-approve
+  go run ./cmd/libredash deploy --project "$project" "${revision_args[@]}" --target "http://localhost:${port}" --token dev --auto-approve
 }
 
 attach_server() {

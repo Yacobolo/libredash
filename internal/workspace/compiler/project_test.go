@@ -127,7 +127,7 @@ func TestCompileProjectCompilesWorkspaceAgentPolicy(t *testing.T) {
 		"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
 		"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
 		"workspaces/sales/workspace.yaml":                  workspaceYAMLWithAgentPolicy("sales"),
-		"workspaces/sales/agent/default.yaml":              workspaceAgentPolicyYAML("sales", "default", true, []string{"search_workspace", "query_visual"}, []string{"query_table"}, "Prefer concise BI answers."),
+		"workspaces/sales/agent/default.yaml":              workspaceAgentPolicyYAML("sales", "default", true, []string{"search_workspace", "query_visual"}, []string{"query_dashboard_table"}, "Prefer concise BI answers."),
 		"workspaces/sales/models/orders.yaml":              modelTableYAML("sales", "orders", "olist.orders", "order_id", "SELECT order_id, order_status AS status FROM source.\"olist.orders\""),
 		"workspaces/sales/semantic-models/sales.yaml":      semanticModelYAML("sales", "orders", "order_count"),
 		"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
@@ -144,8 +144,8 @@ func TestCompileProjectCompilesWorkspaceAgentPolicy(t *testing.T) {
 	if !reflect.DeepEqual(definition.AgentPolicy.Tools.Allow, []string{"query_visual", "search_workspace"}) {
 		t.Fatalf("allow = %#v, want sorted query_visual/search_workspace", definition.AgentPolicy.Tools.Allow)
 	}
-	if !reflect.DeepEqual(definition.AgentPolicy.Tools.Deny, []string{"query_table"}) {
-		t.Fatalf("deny = %#v, want query_table", definition.AgentPolicy.Tools.Deny)
+	if !reflect.DeepEqual(definition.AgentPolicy.Tools.Deny, []string{"query_dashboard_table"}) {
+		t.Fatalf("deny = %#v, want query_dashboard_table", definition.AgentPolicy.Tools.Deny)
 	}
 	if definition.AgentPolicy.Instructions != "Prefer concise BI answers." {
 		t.Fatalf("instructions = %q", definition.AgentPolicy.Instructions)

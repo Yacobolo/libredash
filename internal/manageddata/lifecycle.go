@@ -269,6 +269,8 @@ type Repository interface {
 	CreateUploadSession(context.Context, CreateUploadSessionInput) (UploadSession, error)
 	UploadSessionByID(context.Context, string) (UploadSession, error)
 	UpdateUploadProgress(context.Context, string, UploadProgress) error
+	BeginUploadFinalization(context.Context, string) (UploadSession, error)
+	FailUploadFinalization(context.Context, string, string) (UploadSession, error)
 	AbortUploadSession(context.Context, string) error
 	ExpireUploadSessions(context.Context, time.Time) (int64, error)
 	CreateS3MultipartUpload(context.Context, CreateS3MultipartUploadInput) (S3MultipartUpload, error)

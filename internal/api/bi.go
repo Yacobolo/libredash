@@ -80,6 +80,9 @@ type DashboardComponentResponse struct {
 	Y           float64                      `json:"y,omitempty"`
 	Width       float64                      `json:"width,omitempty"`
 	Height      float64                      `json:"height,omitempty"`
+	VisualID    string                       `json:"visualId,omitempty"`
+	TableID     string                       `json:"tableId,omitempty"`
+	FilterID    string                       `json:"filterId,omitempty"`
 }
 
 type DashboardComponentListResponse struct {
@@ -87,24 +90,57 @@ type DashboardComponentListResponse struct {
 	Page  PageInfo                     `json:"page"`
 }
 
+type DashboardPageResponse struct {
+	ID          string                       `json:"id"`
+	Title       string                       `json:"title"`
+	Description string                       `json:"description,omitempty"`
+	Components  []DashboardComponentResponse `json:"components"`
+}
+
+type DashboardTableColumn struct {
+	Key    string `json:"key"`
+	Label  string `json:"label"`
+	Role   string `json:"role,omitempty"`
+	Format string `json:"format,omitempty"`
+}
+
+type DashboardTableDescribeResponse struct {
+	ID          string                       `json:"id"`
+	ComponentID string                       `json:"componentId,omitempty"`
+	Title       string                       `json:"title,omitempty"`
+	Description string                       `json:"description,omitempty"`
+	Columns     []DashboardTableColumn       `json:"columns"`
+	Query       map[string]any               `json:"query,omitempty"`
+	Placement   *DashboardComponentPlacement `json:"placement,omitempty"`
+}
+
+type DashboardFilterDescribeResponse struct {
+	ID          string                       `json:"id"`
+	ComponentID string                       `json:"componentId,omitempty"`
+	Title       string                       `json:"title,omitempty"`
+	Description string                       `json:"description,omitempty"`
+	Field       string                       `json:"field,omitempty"`
+	MultiSelect bool                         `json:"multiSelect"`
+	Placement   *DashboardComponentPlacement `json:"placement,omitempty"`
+}
+
 type DashboardVisualDescribeResponse struct {
-	ID              string                       `json:"id"`
-	ComponentID     string                       `json:"componentId,omitempty"`
-	Kind            string                       `json:"kind,omitempty"`
-	Shape           string                       `json:"shape,omitempty"`
-	Renderer        string                       `json:"renderer,omitempty"`
-	Type            string                       `json:"type,omitempty"`
-	Title           string                       `json:"title,omitempty"`
-	Description     string                       `json:"description,omitempty"`
-	Query           map[string]any               `json:"query,omitempty"`
-	Options         map[string]any               `json:"options,omitempty"`
-	RendererOptions map[string]any               `json:"rendererOptions,omitempty"`
-	Interaction     map[string]any               `json:"interaction,omitempty"`
-	Placement       *DashboardComponentPlacement `json:"placement,omitempty"`
-	X               float64                      `json:"x,omitempty"`
-	Y               float64                      `json:"y,omitempty"`
-	Width           float64                      `json:"width,omitempty"`
-	Height          float64                      `json:"height,omitempty"`
+	ID          string                       `json:"id"`
+	ComponentID string                       `json:"componentId,omitempty"`
+	Kind        string                       `json:"kind,omitempty"`
+	Shape       string                       `json:"shape,omitempty"`
+	Renderer    string                       `json:"renderer,omitempty"`
+	Type        string                       `json:"type,omitempty"`
+	Title       string                       `json:"title,omitempty"`
+	Description string                       `json:"description,omitempty"`
+	Query       map[string]any               `json:"query,omitempty"`
+	Extensions  map[string]map[string]any    `json:"extensions,omitempty"`
+	Interaction map[string]any               `json:"interaction,omitempty"`
+	Placement   *DashboardComponentPlacement `json:"placement,omitempty"`
+	X           float64                      `json:"x,omitempty"`
+	Y           float64                      `json:"y,omitempty"`
+	Width       float64                      `json:"width,omitempty"`
+	Height      float64                      `json:"height,omitempty"`
 }
 
 type SemanticModelDescriptionResponse struct {
@@ -181,6 +217,35 @@ type SemanticFieldListResponse struct {
 	Page  PageInfo                `json:"page"`
 }
 
+type SemanticRelationshipResponse struct {
+	ID          string `json:"id"`
+	FromDataset string `json:"fromDataset"`
+	FromField   string `json:"fromField"`
+	ToDataset   string `json:"toDataset"`
+	ToField     string `json:"toField"`
+	Cardinality string `json:"cardinality"`
+	Active      bool   `json:"active"`
+}
+
+type SemanticRelationshipListResponse struct {
+	Items []SemanticRelationshipResponse `json:"items"`
+	Page  PageInfo                       `json:"page"`
+}
+
+type SemanticSourceResponse struct {
+	ID          string `json:"id"`
+	Kind        string `json:"kind"`
+	Connection  string `json:"connection,omitempty"`
+	Table       string `json:"table,omitempty"`
+	Path        string `json:"path,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+type SemanticSourceListResponse struct {
+	Items []SemanticSourceResponse `json:"items"`
+	Page  PageInfo                 `json:"page"`
+}
+
 type SemanticFieldRef struct {
 	Field string `json:"field"`
 	Alias string `json:"alias,omitempty"`
@@ -228,10 +293,18 @@ type SemanticPreviewRequest struct {
 	PageToken  string             `json:"pageToken,omitempty"`
 }
 
+type QueryColumn struct {
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Nullable bool   `json:"nullable"`
+}
+
 type SemanticQueryResponse struct {
-	Columns []string         `json:"columns"`
-	Items   []map[string]any `json:"items"`
-	Page    PageInfo         `json:"page"`
+	QueryID         string        `json:"queryId"`
+	ServingSnapshot string        `json:"servingSnapshot"`
+	Columns         []QueryColumn `json:"columns"`
+	Rows            [][]string    `json:"rows"`
+	Page            PageInfo      `json:"page"`
 }
 
 type SemanticExplainResponse struct {
@@ -264,8 +337,19 @@ type DashboardTableQueryRequest struct {
 }
 
 type DashboardTableDataRequest struct {
-	Count   int            `json:"count"`
-	Filters map[string]any `json:"filters"`
+	Limit     int            `json:"limit"`
+	PageToken string         `json:"pageToken"`
+	Filters   map[string]any `json:"filters"`
+}
+
+type DashboardTableQueryResponse struct {
+	QueryID         string        `json:"queryId"`
+	ServingSnapshot string        `json:"servingSnapshot"`
+	Title           string        `json:"title"`
+	Columns         []QueryColumn `json:"columns"`
+	Rows            [][]string    `json:"rows"`
+	AvailableRows   int           `json:"availableRows"`
+	Page            PageInfo      `json:"page"`
 }
 
 type DashboardFilterOptionResponse struct {

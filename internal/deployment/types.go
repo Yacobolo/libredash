@@ -18,6 +18,7 @@ const (
 	StatusPending    Status = "pending"
 	StatusActive     Status = "active"
 	StatusFailed     Status = "failed"
+	StatusCancelled  Status = "cancelled"
 	StatusSuperseded Status = "superseded"
 )
 

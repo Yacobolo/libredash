@@ -1,7 +1,10 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,9 +12,45 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/access"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
+	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
-func TestAPIGenUsesTypeSpecV040(t *testing.T) {
+func TestServingSnapshotIsOwnedByServer(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{
+		Store: testStore(t),
+		WorkspaceRepo: apiSnapshotWorkspaceRepository{summary: workspace.Summary{
+			ID: "sales", ActiveServingStateID: "state-current",
+		}},
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/workspaces/sales/semantic-models/orders/query", nil)
+	request.Header.Set("X-Serving-Snapshot", "state-attacker-controlled")
+
+	apiGenAdapter{server: server}.setServingSnapshot(request, "sales")
+
+	if got := request.Header.Get("X-Serving-Snapshot"); got != "state-current" {
+		t.Fatalf("serving snapshot = %q, want server-owned state-current", got)
+	}
+}
+
+type apiSnapshotWorkspaceRepository struct{ summary workspace.Summary }
+
+func (r apiSnapshotWorkspaceRepository) Ensure(context.Context, workspace.EnsureInput) error {
+	return nil
+}
+func (r apiSnapshotWorkspaceRepository) ByID(context.Context, workspace.WorkspaceID) (workspace.Summary, error) {
+	return r.summary, nil
+}
+func (r apiSnapshotWorkspaceRepository) List(context.Context) ([]workspace.Summary, error) {
+	return []workspace.Summary{r.summary}, nil
+}
+func (r apiSnapshotWorkspaceRepository) ActiveServingStateGraph(context.Context, workspace.WorkspaceID, string) (workspace.AssetGraph, bool, error) {
+	return workspace.AssetGraph{}, false, nil
+}
+func (r apiSnapshotWorkspaceRepository) AssetVersions(context.Context, workspace.WorkspaceID, string, workspace.AssetID) ([]workspace.AssetVersion, error) {
+	return nil, nil
+}
+
+func TestAPIGenUsesTypeSpecV053(t *testing.T) {
 	root := projectRoot(t)
 	manifest, err := os.ReadFile(filepath.Join(root, "api", "apigen.yaml"))
 	if err != nil {
@@ -39,16 +78,16 @@ func TestAPIGenUsesTypeSpecV040(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 typespec-compile",
-		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0 all",
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile",
+		"github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all",
 	} {
 		if !strings.Contains(taskText, want) {
 			t.Fatalf("Taskfile.yml missing generation command %q", want)
 		}
 	}
-	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0", "apigen@v0.3.0", "apigen@v0.3.2", "apigen@v0.3.3"} {
+	for _, forbidden := range []string{"cue-compile", "apigen@v0.2.0", "apigen@v0.3.0", "apigen@v0.3.2", "apigen@v0.3.3", "apigen@v0.4.0", "apigen@v0.5.0", "apigen@v0.5.1", "apigen@v0.5.2", "apigenpostprocess"} {
 		if strings.Contains(taskText, forbidden) {
-			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.4.0 migration", forbidden)
+			t.Fatalf("Taskfile.yml should not contain %q after APIGen v0.5.3 migration", forbidden)
 		}
 	}
 
@@ -60,8 +99,24 @@ func TestAPIGenUsesTypeSpecV040(t *testing.T) {
 	if err := json.Unmarshal(ir, &irDoc); err != nil {
 		t.Fatalf("decode APIGen IR: %v", err)
 	}
-	if got := irDoc["schema_version"]; got != "v3" {
-		t.Fatalf("APIGen IR schema_version = %#v, want v3", got)
+	if got := irDoc["schema_version"]; got != "v4" {
+		t.Fatalf("APIGen IR schema_version = %#v, want v4", got)
+	}
+
+	if _, err := os.Stat(filepath.Join(root, "internal", "tools", "apigenpostprocess")); !os.IsNotExist(err) {
+		t.Fatalf("APIGen v0.5.3 should not require a postprocessor, stat error = %v", err)
+	}
+	for path, forbidden := range map[string]string{
+		filepath.Join(root, "api", "typespec", "bi.tsp"):                        "toolbelt#34",
+		filepath.Join(root, "internal", "agent", "tools", "apigen_provider.go"): "projectUnionToolResult",
+	} {
+		content, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", path, err)
+		}
+		if strings.Contains(string(content), forbidden) {
+			t.Fatalf("APIGen v0.5.3 superseded workaround %q in %s", forbidden, path)
+		}
 	}
 }
 
@@ -166,8 +221,8 @@ func TestAPIGenOwnsUISignalContracts(t *testing.T) {
 	if err := json.Unmarshal(ir, &irDoc); err != nil {
 		t.Fatalf("decode UI signal contract IR: %v", err)
 	}
-	if irDoc.SchemaVersion != "v3" {
-		t.Fatalf("UI signal IR schema_version = %q, want v3", irDoc.SchemaVersion)
+	if irDoc.SchemaVersion != "v4" {
+		t.Fatalf("UI signal IR schema_version = %q, want v4", irDoc.SchemaVersion)
 	}
 	if len(irDoc.Contracts) != 75 {
 		t.Fatalf("UI signal IR contracts = %d, want 75", len(irDoc.Contracts))
@@ -204,40 +259,42 @@ func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 		"/api/v1/principals",
 		"/api/v1/principals/{principal}",
 		"/api/v1/workspaces",
+		"/api/v1/workspaces/{workspace}",
 		"/api/v1/workspaces/{workspace}/search",
 		"/api/v1/workspaces/{workspace}/assets",
 		"/api/v1/workspaces/{workspace}/asset-edges",
 		"/api/v1/workspaces/{workspace}/dashboards",
 		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}",
-		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/components",
+		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}",
 		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/visuals/{visual}",
-		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/visuals/{visual}/data",
-		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}/data",
-		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}/options",
+		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/visuals/{visual}/query",
+		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}",
+		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}/query",
+		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}",
+		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}/values",
 		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/query",
-		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/tables/{table}/query",
 		"/api/v1/workspaces/{workspace}/semantic-models",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/fields",
-		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/query",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/preview",
-		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/query/explain",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/preview/explain",
-		"/api/v1/projects/{project}/workspaces/{workspace}/deployment-candidates",
-		"/api/v1/projects/{project}/workspaces/{workspace}/deployment-candidates/{candidate}/artifact",
-		"/api/v1/projects/{project}/workspaces/{workspace}/deployment-candidates/{candidate}/validate",
+		"/api/v1/workspaces/{workspace}/semantic-models/{model}/relationships",
+		"/api/v1/workspaces/{workspace}/semantic-models/{model}/query",
+		"/api/v1/workspaces/{workspace}/semantic-models/{model}/query/explain",
+		"/api/v1/projects/{project}/releases",
+		"/api/v1/projects/{project}/releases/{release}/workspaces/{workspace}/artifact",
+		"/api/v1/projects/{project}/releases/{release}/finalize",
+		"/api/v1/projects/{project}/deployments",
 		"/api/v1/workspaces/{workspace}/refresh-runs",
 		"/api/v1/workspaces/{workspace}/refresh-runs/{run}",
 		"/api/v1/workspaces/{workspace}/agent/conversations",
 		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}",
 		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/messages",
-		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/turns",
 		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/runs",
 		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/runs/{run}",
 		"/api/v1/workspaces/{workspace}/agent/conversations/{conversation}/runs/{run}/events",
-		"/api/v1/admin/agent/config",
 		"/api/v1/principals",
 		"/api/v1/principals/{principal}",
 		"/api/v1/principals/{principal}/password-reset",
@@ -255,7 +312,7 @@ func TestAPIGenRoutesCoverHeadlessAPINotUITransports(t *testing.T) {
 		}
 	}
 
-	for _, path := range []string{"/api/workspaces", "/api/publishes", "/api/v1/workspaces/{workspace}/publishes", "/api/v1/workspaces/{workspace}/publishes/{publish}", "/updates", "/commands/select", "/workspaces/{workspace}/chat/updates", "/dashboards/{dashboard}"} {
+	for _, path := range []string{"/api/workspaces", "/api/publishes", "/api/v1/workspaces/{workspace}/publishes", "/api/v1/workspaces/{workspace}/publishes/{publish}", "/api/v1/admin/agent/config", "/updates", "/commands/select", "/workspaces/{workspace}/chat/updates", "/dashboards/{dashboard}"} {
 		if _, ok := paths[path]; ok {
 			t.Fatalf("generated OpenAPI should not include UI transport path %s", path)
 		}
@@ -274,17 +331,15 @@ func TestAPIGenOperationAuthCoverage(t *testing.T) {
 		if contract.AuthzMode != "privilege" || !contract.Protected {
 			t.Fatalf("%s auth contract = mode %q protected %t, want privilege/protected", operationID, contract.AuthzMode, contract.Protected)
 		}
-		if _, ok := apigenOperationPrivileges[operationID]; !ok {
-			t.Fatalf("%s missing app privilege mapping", operationID)
+		if _, ok := apigenOperationPrivilege(operationID); !ok {
+			t.Fatalf("%s missing generated privilege metadata", operationID)
 		}
 	}
-	for operationID := range apigenOperationPrivileges {
-		if _, ok := contracts[operationID]; !ok {
-			t.Fatalf("%s has app privilege mapping but no generated contract", operationID)
-		}
+	if got, _ := apigenOperationPrivilege("uploadReleaseArtifact"); got != access.PrivilegeDeploy {
+		t.Fatalf("uploadReleaseArtifact privilege = %q, want %q", got, access.PrivilegeDeploy)
 	}
-	if got := apigenOperationPrivileges["uploadDeploymentCandidateArtifact"]; got != access.PrivilegeDeploy {
-		t.Fatalf("uploadDeploymentCandidateArtifact privilege = %q, want %q", got, access.PrivilegeDeploy)
+	if _, ok := apigenOperationPrivilege("unknownOperation"); ok {
+		t.Fatal("unknown operation unexpectedly resolved a privilege")
 	}
 }
 
@@ -293,15 +348,15 @@ func TestAPIGenOperationObjectResolverCoverage(t *testing.T) {
 	objectScopedOperations := []string{
 		"getWorkspaceAsset",
 		"getWorkspaceAssetLineage",
-		"listWorkspaceAssetEdges",
 		"getDashboard",
-		"listDashboardComponents",
+		"getDashboardPage",
+		"getDashboardTable",
+		"getDashboardFilter",
 		"getDashboardVisual",
 		"queryDashboardPage",
 		"queryDashboardVisualData",
 		"queryDashboardTable",
-		"queryDashboardTableData",
-		"listDashboardFilterOptions",
+		"listDashboardFilterValues",
 		"getSemanticModel",
 		"listSemanticModelFields",
 		"querySemanticModel",
@@ -309,15 +364,14 @@ func TestAPIGenOperationObjectResolverCoverage(t *testing.T) {
 		"listSemanticDatasets",
 		"getSemanticDataset",
 		"listSemanticFields",
-		"querySemanticDataset",
 		"previewSemanticDataset",
-		"explainSemanticQuery",
 		"explainSemanticPreview",
+		"listSemanticRelationships",
 		"getAgentConversation",
 		"updateAgentConversation",
 		"archiveAgentConversation",
 		"listAgentMessages",
-		"createAgentTurn",
+		"createAgentRun",
 		"listAgentRuns",
 		"getAgentRun",
 		"listAgentEvents",
@@ -326,8 +380,8 @@ func TestAPIGenOperationObjectResolverCoverage(t *testing.T) {
 		if _, ok := contracts[operationID]; !ok {
 			t.Fatalf("%s missing generated contract", operationID)
 		}
-		if _, ok := apigenOperationPrivileges[operationID]; !ok {
-			t.Fatalf("%s missing privilege mapping", operationID)
+		if _, ok := apigenOperationPrivilege(operationID); !ok {
+			t.Fatalf("%s missing generated privilege metadata", operationID)
 		}
 		if apigenOperationObjectResolvers[operationID] == nil {
 			t.Fatalf("%s missing exact object resolver", operationID)
@@ -337,8 +391,8 @@ func TestAPIGenOperationObjectResolverCoverage(t *testing.T) {
 		if _, ok := contracts[operationID]; !ok {
 			t.Fatalf("%s has object resolver but no generated contract", operationID)
 		}
-		if _, ok := apigenOperationPrivileges[operationID]; !ok {
-			t.Fatalf("%s has object resolver but no privilege mapping", operationID)
+		if _, ok := apigenOperationPrivilege(operationID); !ok {
+			t.Fatalf("%s has object resolver but no generated privilege metadata", operationID)
 		}
 	}
 	for _, operationID := range []string{
@@ -347,7 +401,8 @@ func TestAPIGenOperationObjectResolverCoverage(t *testing.T) {
 		"listSemanticModels",
 		"createAgentConversation",
 		"listAgentConversations",
-		"createDeploymentCandidate",
+		"createRelease",
+		"createDeployment",
 		"createRefreshRun",
 		"listRefreshRuns",
 	} {
@@ -365,35 +420,32 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		toolsByOperation[tool.OperationID] = name
 	}
 	agentTools := map[string]string{
-		"getDashboard":               "describe_dashboard",
-		"getDashboardVisual":         "describe_dashboard_visual",
-		"getWorkspaceAsset":          "describe_asset",
-		"getWorkspaceAssetLineage":   "asset_lineage",
-		"getSemanticModel":           "describe_model",
-		"listSemanticModelFields":    "list_semantic_model_fields",
-		"querySemanticModel":         "query_semantic_model",
-		"explainSemanticModelQuery":  "explain_semantic_model_query",
-		"getSemanticDataset":         "describe_semantic_dataset",
-		"getRefreshRun":              "get_refresh_run",
-		"listDashboardComponents":    "list_dashboard_components",
-		"listDashboards":             "list_dashboards",
-		"listDashboardFilterOptions": "list_dashboard_filter_options",
-		"listRefreshRuns":            "list_refresh_runs",
-		"listSemanticDatasets":       "list_semantic_datasets",
-		"listSemanticFields":         "list_semantic_fields",
-		"listSemanticModels":         "list_semantic_models",
-		"listWorkspaceAssetEdges":    "list_workspace_asset_edges",
-		"listWorkspaceAssets":        "list_assets",
-		"listWorkspaces":             "list_workspaces",
-		"searchWorkspace":            "search_workspace",
-		"queryDashboardTableData":    "query_dashboard_table_data",
-		"queryDashboardVisualData":   "query_dashboard_visual_data",
-		"queryDashboardPage":         "query_dashboard_page",
-		"queryDashboardTable":        "query_table",
-		"querySemanticDataset":       "query_semantic_dataset",
-		"previewSemanticDataset":     "preview_semantic_dataset",
-		"explainSemanticQuery":       "explain_semantic_query",
-		"explainSemanticPreview":     "explain_semantic_preview",
+		"getDashboard":              "describe_dashboard",
+		"getDashboardVisual":        "describe_dashboard_visual",
+		"getWorkspaceAsset":         "describe_asset",
+		"getWorkspaceAssetLineage":  "asset_lineage",
+		"getSemanticModel":          "describe_model",
+		"listSemanticModelFields":   "list_semantic_model_fields",
+		"querySemanticModel":        "query_semantic_model",
+		"explainSemanticModelQuery": "explain_semantic_model_query",
+		"getSemanticDataset":        "describe_semantic_dataset",
+		"getRefreshRun":             "get_refresh_run",
+		"getDashboardPage":          "describe_dashboard_page",
+		"listDashboards":            "list_dashboards",
+		"listDashboardFilterValues": "list_dashboard_filter_values",
+		"listRefreshRuns":           "list_refresh_runs",
+		"listSemanticDatasets":      "list_semantic_datasets",
+		"listSemanticFields":        "list_semantic_fields",
+		"listSemanticModels":        "list_semantic_models",
+		"listWorkspaceAssetEdges":   "list_workspace_asset_edges",
+		"listWorkspaceAssets":       "list_assets",
+		"listWorkspaces":            "list_workspaces",
+		"searchWorkspace":           "search_workspace",
+		"queryDashboardVisualData":  "query_dashboard_visual_data",
+		"queryDashboardPage":        "query_dashboard_page",
+		"queryDashboardTable":       "query_dashboard_table",
+		"previewSemanticDataset":    "preview_semantic_dataset",
+		"explainSemanticPreview":    "explain_semantic_preview",
 	}
 	for operationID, contract := range contracts {
 		authz, ok := contract.Extensions["x-authz"].(map[string]any)
@@ -403,8 +455,12 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		if got := authz["mode"]; got != "privilege" {
 			t.Fatalf("%s x-authz mode = %#v, want privilege", operationID, got)
 		}
-		if got := authz["privilege"]; got != string(apigenOperationPrivileges[operationID]) {
-			t.Fatalf("%s x-authz privilege = %#v, want %q", operationID, got, apigenOperationPrivileges[operationID])
+		privilege, ok := apigenOperationPrivilege(operationID)
+		if !ok {
+			t.Fatalf("%s missing generated privilege metadata", operationID)
+		}
+		if got := authz["privilege"]; got != string(privilege) {
+			t.Fatalf("%s x-authz privilege = %#v, want %q", operationID, got, privilege)
 		}
 		if wantName, ok := agentTools[operationID]; ok {
 			if got := toolsByOperation[operationID]; got != wantName {
@@ -431,7 +487,7 @@ func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
 	if !ok {
 		t.Fatalf("openapi paths missing: %#v", spec["paths"])
 	}
-	operation := mustOpenAPIOperation(t, paths, "/api/v1/projects/{project}/workspaces/{workspace}/deployment-candidates/{candidate}/artifact", "put")
+	operation := mustOpenAPIOperation(t, paths, "/api/v1/projects/{project}/releases/{release}/workspaces/{workspace}/artifact", "put")
 	if _, ok := operation["x-libredash-dispatch"]; ok {
 		t.Fatalf("upload operation should not use x-libredash-dispatch: %#v", operation["x-libredash-dispatch"])
 	}
@@ -472,7 +528,7 @@ func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
 		t.Fatalf("decode APIGen IR: %v", err)
 	}
 	for _, endpoint := range irDoc.Endpoints {
-		if endpoint.OperationID != "uploadDeploymentCandidateArtifact" {
+		if endpoint.OperationID != "uploadReleaseArtifact" {
 			continue
 		}
 		if endpoint.RequestBody == nil || len(endpoint.RequestBody.Contents) != 1 {
@@ -482,11 +538,11 @@ func TestAPIGenUploadArtifactUsesNativeOctetStreamBody(t *testing.T) {
 		if content.ContentType != "application/octet-stream" || content.BodyKind != "binary" {
 			t.Fatalf("upload IR content = %#v, want application/octet-stream binary", content)
 		}
-		var generatedBody apigenapi.GenUploadDeploymentCandidateArtifactBody
+		var generatedBody apigenapi.GenUploadReleaseArtifactBody
 		_ = []byte(generatedBody)
 		return
 	}
-	t.Fatal("uploadDeploymentCandidateArtifact missing from APIGen IR")
+	t.Fatal("uploadReleaseArtifact missing from APIGen IR")
 }
 
 func TestAPIGenListOperationsUseStandardEnvelope(t *testing.T) {
@@ -509,8 +565,7 @@ func TestAPIGenListOperationsUseStandardEnvelope(t *testing.T) {
 		{"/api/v1/workspaces/{workspace}/assets", "get"},
 		{"/api/v1/workspaces/{workspace}/asset-edges", "get"},
 		{"/api/v1/workspaces/{workspace}/dashboards", "get"},
-		{"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/components", "get"},
-		{"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}/options", "post"},
+		{"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}/values", "post"},
 		{"/api/v1/workspaces/{workspace}/semantic-models", "get"},
 		{"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets", "get"},
 		{"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/fields", "get"},

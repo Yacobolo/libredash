@@ -346,6 +346,15 @@ func (r *Repository) FailDeployment(ctx context.Context, id string, cause error)
 	return requireOne(result, err, "deployment is not pending")
 }
 
+func (r *Repository) CancelDeployment(ctx context.Context, id string) (deployment.Deployment, error) {
+	id = strings.TrimSpace(id)
+	result, err := r.q.CancelProjectDeployment(ctx, id)
+	if err := requireOne(result, err, "deployment is not pending"); err != nil {
+		return deployment.Deployment{}, err
+	}
+	return r.DeploymentByID(ctx, id)
+}
+
 func normalizeCreateInput(input deployment.CreateInput) deployment.CreateInput {
 	input.ID = strings.TrimSpace(input.ID)
 	input.ProjectID = strings.TrimSpace(input.ProjectID)

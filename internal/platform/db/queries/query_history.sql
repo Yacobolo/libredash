@@ -62,16 +62,39 @@ FROM query_events
 WHERE id = sqlc.arg(id);
 
 -- name: ListQueryEvents :many
-SELECT *
-FROM query_events
-WHERE (sqlc.arg(workspace_id) = '' OR workspace_id = sqlc.arg(workspace_id))
-  AND (sqlc.arg(principal_id) = '' OR principal_id = sqlc.arg(principal_id))
-  AND (sqlc.arg(surface) = '' OR surface = sqlc.arg(surface))
+WITH params AS (
+  SELECT
+    CAST(sqlc.arg(workspace_ids_json) AS TEXT) AS workspace_ids_json,
+    CAST(sqlc.arg(principal_ids_json) AS TEXT) AS principal_ids_json,
+    CAST(sqlc.arg(surfaces_json) AS TEXT) AS surfaces_json,
+    CAST(sqlc.arg(query_kinds_json) AS TEXT) AS query_kinds_json,
+    CAST(sqlc.arg(statuses_json) AS TEXT) AS statuses_json
+)
+SELECT query_events.*
+FROM query_events CROSS JOIN params
+WHERE (
+    NOT EXISTS (SELECT 1 FROM json_each(params.workspace_ids_json))
+    OR workspace_id IN (SELECT CAST(value AS TEXT) FROM json_each(params.workspace_ids_json))
+  )
+  AND (
+    NOT EXISTS (SELECT 1 FROM json_each(params.principal_ids_json))
+    OR principal_id IN (SELECT CAST(value AS TEXT) FROM json_each(params.principal_ids_json))
+  )
+  AND (
+    NOT EXISTS (SELECT 1 FROM json_each(params.surfaces_json))
+    OR surface IN (SELECT CAST(value AS TEXT) FROM json_each(params.surfaces_json))
+  )
   AND (sqlc.arg(operation) = '' OR operation = sqlc.arg(operation))
-  AND (sqlc.arg(query_kind) = '' OR query_kind = sqlc.arg(query_kind))
+  AND (
+    NOT EXISTS (SELECT 1 FROM json_each(params.query_kinds_json))
+    OR query_kind IN (SELECT CAST(value AS TEXT) FROM json_each(params.query_kinds_json))
+  )
   AND (sqlc.arg(model_id) = '' OR model_id = sqlc.arg(model_id))
   AND (sqlc.arg(target) = '' OR target = sqlc.arg(target))
-  AND (sqlc.arg(status) = '' OR status = sqlc.arg(status))
+  AND (
+    NOT EXISTS (SELECT 1 FROM json_each(params.statuses_json))
+    OR status IN (SELECT CAST(value AS TEXT) FROM json_each(params.statuses_json))
+  )
   AND (sqlc.arg(from_time) = '' OR created_at >= sqlc.arg(from_time))
   AND (sqlc.arg(to_time) = '' OR created_at <= sqlc.arg(to_time))
   AND (
@@ -88,3 +111,22 @@ WHERE (sqlc.arg(workspace_id) = '' OR workspace_id = sqlc.arg(workspace_id))
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(limit);
 
+-- name: ListQueryEventFilterOptions :many
+WITH option_values AS (
+  SELECT CASE CAST(sqlc.arg(field) AS TEXT)
+    WHEN 'workspace' THEN workspace_id
+    WHEN 'principal' THEN principal_id
+    WHEN 'surface' THEN surface
+    WHEN 'kind' THEN query_kind
+    WHEN 'status' THEN status
+    ELSE ''
+  END AS value
+  FROM query_events
+)
+SELECT value, COUNT(*) AS count
+FROM option_values
+WHERE value <> ''
+  AND (CAST(sqlc.arg(search) AS TEXT) = '' OR value LIKE '%' || CAST(sqlc.arg(search) AS TEXT) || '%')
+GROUP BY value
+ORDER BY count DESC, value ASC
+LIMIT sqlc.arg(limit);

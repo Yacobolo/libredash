@@ -7,11 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/Yacobolo/libredash/internal/api"
-	manageddatabinding "github.com/Yacobolo/libredash/internal/manageddata/binding"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
-	servingstatehttp "github.com/Yacobolo/libredash/internal/servingstate/http"
 	workspacerefresh "github.com/Yacobolo/libredash/internal/workspace/refresh"
 )
 
@@ -22,33 +21,7 @@ type runtimeReloader interface {
 }
 
 type servingStateRepository interface {
-	servingstatehttp.Repository
 	workspacerefresh.ServingStateRepository
-}
-
-func (s *Server) deploymentCandidateHTTPHandler() *servingstatehttp.Handler {
-	return servingstatehttp.NewHandler(servingstatehttp.Options{
-		Repository: func() (servingstatehttp.Repository, error) {
-			return s.servingStateRepository()
-		},
-		BindingRepository: func() (manageddatabinding.Repository, error) {
-			if s.managedDataBindingRepo == nil {
-				return nil, fmt.Errorf("managed data binding repository is not configured")
-			}
-			return s.managedDataBindingRepo, nil
-		},
-		WorkspaceRepository: s.workspaceRepository,
-		CurrentPrincipal: func(r *http.Request) (servingstatehttp.Principal, bool) {
-			if s.auth == nil {
-				return servingstatehttp.Principal{}, false
-			}
-			principal, ok := s.auth.Principal(r)
-			return servingstatehttp.Principal{ID: principal.ID}, ok
-		},
-		ArtifactDir:        s.artifactDir,
-		DefaultEnvironment: s.defaultEnvironment,
-		WorkspaceID:        s.workspaceID,
-	})
 }
 
 func (s *Server) servingStateRepository() (servingStateRepository, error) {
@@ -58,8 +31,8 @@ func (s *Server) servingStateRepository() (servingStateRepository, error) {
 	return nil, fmt.Errorf("serving state repository is not configured")
 }
 
-func (s *Server) workspaceID(candidate string) string {
-	return candidate
+func (s *Server) workspaceID(value string) string {
+	return value
 }
 
 func (s *Server) defaultServingEnvironment() servingstate.Environment {
@@ -67,6 +40,9 @@ func (s *Server) defaultServingEnvironment() servingstate.Environment {
 }
 
 func (s *Server) requestServingEnvironment(r *http.Request) servingstate.Environment {
+	if strings.HasPrefix(r.URL.Path, "/api/v1/") {
+		return s.defaultServingEnvironment()
+	}
 	if query := r.URL.Query().Get("environment"); query != "" {
 		return servingstate.NormalizeEnvironment(servingstate.Environment(query))
 	}

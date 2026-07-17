@@ -577,8 +577,8 @@ function testDocument(includeShellScript: boolean, compact = false, history = fa
         <style>
           :root {
             --control-bgColor-hover: #eff2f5;
-            --ld-border-muted: 1px solid #d8dee4;
             --ld-border-transparent: 1px solid transparent;
+            --ld-border-muted: 1px solid #d8dee4;
             --ld-border-width: 1px;
             --ld-fg-muted: #57606a;
             --ld-shadow-floating: 0 8px 24px rgb(0 0 0 / 12%);

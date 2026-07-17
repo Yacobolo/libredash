@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -15,12 +16,11 @@ import (
 )
 
 type Repository struct {
-	db *sql.DB
-	q  *db.Queries
+	q *db.Queries
 }
 
 func NewRepository(sqlDB *sql.DB) *Repository {
-	return &Repository{db: sqlDB, q: db.New(sqlDB)}
+	return &Repository{q: db.New(sqlDB)}
 }
 
 func (r *Repository) RecordQueryEvent(ctx context.Context, input queryaudit.EventInput) error {
@@ -82,53 +82,30 @@ func (r *Repository) ListQueryEvents(ctx context.Context, filter queryaudit.Filt
 	if filter.PageToken != "" && filter.CursorTime == "" && filter.CursorID == "" {
 		filter.CursorTime, filter.CursorID = decodePageToken(filter.PageToken)
 	}
-	query, args := listQueryEventsSQL(filter, limit)
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.q.ListQueryEvents(ctx, db.ListQueryEventsParams{
+		WorkspaceIdsJson: jsonFilterValues(filter.WorkspaceID, filter.WorkspaceIDs),
+		PrincipalIdsJson: jsonFilterValues(filter.PrincipalID, filter.PrincipalIDs),
+		SurfacesJson:     jsonFilterValues(filter.Surface, filter.Surfaces),
+		Operation:        strings.TrimSpace(filter.Operation),
+		QueryKindsJson:   jsonFilterValues(filter.QueryKind, filter.QueryKinds),
+		ModelID:          strings.TrimSpace(filter.ModelID), Target: strings.TrimSpace(filter.Target),
+		StatusesJson: jsonFilterValues(filter.Status, filter.Statuses),
+		FromTime:     sqliteTime(filter.From), ToTime: sqliteTime(filter.To), Search: strings.TrimSpace(filter.Search),
+		CursorTime: sqliteTime(filter.CursorTime), CursorID: filter.CursorID, Limit: int64(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	events := []queryaudit.Event{}
-	for rows.Next() {
-		var row db.QueryEvent
-		if err := rows.Scan(
-			&row.ID,
-			&row.WorkspaceID,
-			&row.PrincipalID,
-			&row.Surface,
-			&row.Operation,
-			&row.QueryKind,
-			&row.ModelID,
-			&row.Target,
-			&row.ObjectType,
-			&row.ObjectID,
-			&row.RequestID,
-			&row.CorrelationID,
-			&row.Status,
-			&row.DurationMs,
-			&row.QueueWaitMs,
-			&row.PlanningMs,
-			&row.ConnectionWaitMs,
-			&row.DatabaseMs,
-			&row.ExecutionMs,
-			&row.ExecutionState,
-			&row.RowsReturned,
-			&row.BytesEstimate,
-			&row.Error,
-			&row.SqlText,
-			&row.PlanText,
-			&row.QueryJson,
-			&row.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
+	events := make([]queryaudit.Event, 0, len(rows))
+	for _, row := range rows {
 		events = append(events, queryEventFromDB(row))
 	}
-	return events, rows.Err()
+	return events, nil
 }
 
 func (r *Repository) ListQueryEventFilterOptions(ctx context.Context, field, search string, limit int) ([]queryaudit.FilterOption, error) {
-	column, ok := queryEventFilterOptionColumn(strings.TrimSpace(field))
+	field = strings.TrimSpace(field)
+	_, ok := queryEventFilterOptionColumn(field)
 	if !ok {
 		return nil, fmt.Errorf("unsupported query event filter option field %q", field)
 	}
@@ -138,29 +115,17 @@ func (r *Repository) ListQueryEventFilterOptions(ctx context.Context, field, sea
 	if limit > 1000 {
 		limit = 1000
 	}
-	var where []string
-	var args []any
-	where = append(where, column+" <> ''")
-	if search = strings.TrimSpace(search); search != "" {
-		where = append(where, column+" LIKE '%' || ? || '%'")
-		args = append(args, search)
-	}
-	query := fmt.Sprintf("SELECT %s, COUNT(*) FROM query_events WHERE %s GROUP BY %s ORDER BY COUNT(*) DESC, %s ASC LIMIT ?", column, strings.Join(where, " AND "), column, column)
-	args = append(args, int64(limit))
-	rows, err := r.db.QueryContext(ctx, query, args...)
+	rows, err := r.q.ListQueryEventFilterOptions(ctx, db.ListQueryEventFilterOptionsParams{
+		Field: field, Search: strings.TrimSpace(search), Limit: int64(limit),
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	options := []queryaudit.FilterOption{}
-	for rows.Next() {
-		var option queryaudit.FilterOption
-		if err := rows.Scan(&option.Value, &option.Count); err != nil {
-			return nil, err
-		}
-		options = append(options, option)
+	options := make([]queryaudit.FilterOption, 0, len(rows))
+	for _, row := range rows {
+		options = append(options, queryaudit.FilterOption{Value: row.Value, Count: int(row.Count)})
 	}
-	return options, rows.Err()
+	return options, nil
 }
 
 func queryEventFilterOptionColumn(field string) (string, bool) {
@@ -178,68 +143,6 @@ func queryEventFilterOptionColumn(field string) (string, bool) {
 	default:
 		return "", false
 	}
-}
-
-func listQueryEventsSQL(filter queryaudit.Filter, limit int) (string, []any) {
-	var where []string
-	var args []any
-	addExact := func(column string, value string) {
-		if strings.TrimSpace(value) == "" {
-			return
-		}
-		where = append(where, column+" = ?")
-		args = append(args, strings.TrimSpace(value))
-	}
-	addIn := func(column string, values []string) {
-		values = cleanValues(values)
-		if len(values) == 0 {
-			return
-		}
-		placeholders := make([]string, len(values))
-		for i, value := range values {
-			placeholders[i] = "?"
-			args = append(args, value)
-		}
-		where = append(where, fmt.Sprintf("%s IN (%s)", column, strings.Join(placeholders, ",")))
-	}
-	addInOrExact := func(column, value string, values []string) {
-		if len(cleanValues(values)) > 0 {
-			addIn(column, values)
-			return
-		}
-		addExact(column, value)
-	}
-	addInOrExact("workspace_id", filter.WorkspaceID, filter.WorkspaceIDs)
-	addInOrExact("principal_id", filter.PrincipalID, filter.PrincipalIDs)
-	addInOrExact("surface", filter.Surface, filter.Surfaces)
-	addExact("operation", filter.Operation)
-	addInOrExact("query_kind", filter.QueryKind, filter.QueryKinds)
-	addExact("model_id", filter.ModelID)
-	addExact("target", filter.Target)
-	addInOrExact("status", filter.Status, filter.Statuses)
-	if from := sqliteTime(filter.From); from != "" {
-		where = append(where, "created_at >= ?")
-		args = append(args, from)
-	}
-	if to := sqliteTime(filter.To); to != "" {
-		where = append(where, "created_at <= ?")
-		args = append(args, to)
-	}
-	if search := strings.TrimSpace(filter.Search); search != "" {
-		where = append(where, "(target LIKE '%' || ? || '%' OR sql_text LIKE '%' || ? || '%' OR query_json LIKE '%' || ? || '%')")
-		args = append(args, search, search, search)
-	}
-	if cursorTime := sqliteTime(filter.CursorTime); cursorTime != "" {
-		where = append(where, "(created_at < ? OR (created_at = ? AND id < ?))")
-		args = append(args, cursorTime, cursorTime, filter.CursorID)
-	}
-	query := "SELECT id, workspace_id, principal_id, surface, operation, query_kind, model_id, target, object_type, object_id, request_id, correlation_id, status, duration_ms, queue_wait_ms, planning_ms, connection_wait_ms, database_ms, execution_ms, execution_state, rows_returned, bytes_estimate, error, sql_text, plan_text, query_json, created_at FROM query_events"
-	if len(where) > 0 {
-		query += " WHERE " + strings.Join(where, " AND ")
-	}
-	query += " ORDER BY created_at DESC, id DESC LIMIT ?"
-	args = append(args, int64(limit))
-	return query, args
 }
 
 func cleanValues(values []string) []string {
@@ -260,6 +163,15 @@ func cleanValues(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func jsonFilterValues(exact string, values []string) string {
+	values = cleanValues(values)
+	if len(values) == 0 {
+		values = cleanValues([]string{exact})
+	}
+	encoded, _ := json.Marshal(values)
+	return string(encoded)
 }
 
 func queryEventFromDB(row db.QueryEvent) queryaudit.Event {

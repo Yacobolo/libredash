@@ -79,14 +79,31 @@ func TestStaticSQLiteAdaptersUseGeneratedQueries(t *testing.T) {
 		"internal/servingstate/sqlite": true,
 		"internal/workspace/sqlite":    true,
 	}
+	generatedOnlyFiles := map[string]bool{
+		"internal/access/sqlite/api_symmetry.go":        true,
+		"internal/access/sqlite/authorization.go":       true,
+		"internal/analytics/materialize/sqlite/runs.go": true,
+		"internal/queryaudit/sqlite/repository.go":      true,
+	}
 	for _, file := range productionGoFiles(t) {
-		if !generatedOnly[file.pkgDir] {
+		if !generatedOnly[file.pkgDir] && !generatedOnlyFiles[file.path] {
 			continue
 		}
 		for _, directCall := range []string{".QueryContext(", ".QueryRowContext(", ".ExecContext("} {
 			if strings.Contains(file.body, directCall) {
 				t.Fatalf("%s bypasses sqlc via %s", file.path, directCall)
 			}
+		}
+	}
+}
+
+func TestFixedOperationalRetentionQueriesUseSQLC(t *testing.T) {
+	for _, file := range productionGoFiles(t) {
+		if file.path != "internal/platform/maintenance.go" {
+			continue
+		}
+		if strings.Contains(file.body, "DELETE FROM api_async_events") {
+			t.Fatalf("%s embeds the fixed async-event retention query instead of using sqlc", file.path)
 		}
 	}
 }
@@ -175,7 +192,6 @@ func TestRequiredCapabilityAdaptersExist(t *testing.T) {
 		"internal/analytics/materialize/http",
 		"internal/analytics/query/http",
 		"internal/dashboard/http",
-		"internal/servingstate/http",
 		"internal/workspace/datastar",
 		"internal/workspace/http",
 	} {
@@ -435,7 +451,7 @@ func TestProductionContainerContractExists(t *testing.T) {
 		"COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules",
 		"ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm",
 		"go run ./internal/tools/configgen",
-		"go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.4.0",
+		"go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3",
 		"typespec-compile -manifest api/apigen.yaml -target ui-signals",
 		"all -manifest api/apigen.yaml -target ui-signals",
 		"go run ./internal/tools/uisignalspostprocess",
@@ -501,6 +517,14 @@ func TestDevelopmentServerTracksCompiledFallbackProcess(t *testing.T) {
 	if !strings.Contains(qaText, "const managedServerReadyAttempts = 1800") ||
 		!strings.Contains(qaText, "attempt < managedServerReadyAttempts") {
 		t.Fatal("UI framework QA must allow a cold Go build before checking server readiness")
+	}
+	for _, want := range []string{
+		"LIBREDASH_MANAGED_DATA_DIR: `${qaHome}/managed-data`",
+		"['chmod', '-R', 'u+w', qaHome]",
+	} {
+		if !strings.Contains(qaText, want) {
+			t.Fatalf("UI framework QA must isolate and clean managed-data state: missing %q", want)
+		}
 	}
 }
 
@@ -694,6 +718,25 @@ func TestFixedPlatformSQLiteQueriesUseSQLC(t *testing.T) {
 		for _, fragment := range fragments {
 			if strings.Contains(string(body), fragment) {
 				t.Errorf("%s retains fixed-shape SQLite query %q instead of using sqlc", name, fragment)
+			}
+		}
+	}
+}
+
+func TestAPIv1SQLiteAdaptersUseSQLC(t *testing.T) {
+	packages := map[string]struct{}{
+		"internal/apiidempotency/sqlite": {},
+		"internal/asyncjob/sqlite":       {},
+		"internal/cursorsigning/sqlite":  {},
+		"internal/release/sqlite":        {},
+	}
+	for _, file := range productionGoFiles(t) {
+		if _, ok := packages[file.pkgDir]; !ok {
+			continue
+		}
+		for _, forbidden := range []string{".ExecContext(", ".QueryContext(", ".QueryRowContext("} {
+			if strings.Contains(file.body, forbidden) {
+				t.Errorf("%s bypasses sqlc via %s", file.path, forbidden)
 			}
 		}
 	}

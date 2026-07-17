@@ -1,8 +1,10 @@
 package app
 
 import (
+	"context"
 	"net/http"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	queryhttp "github.com/Yacobolo/libredash/internal/analytics/query/http"
 )
 
@@ -18,6 +20,9 @@ func (s *Server) semanticQueryHTTP() queryhttp.Handler {
 				return ""
 			}
 			return principal.ID
+		},
+		AuthorizeListObject: func(ctx context.Context, principalID string, object access.ObjectRef) (bool, error) {
+			return s.authorizeListObject(ctx, principalID, object)
 		},
 	}
 }

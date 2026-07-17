@@ -157,6 +157,18 @@ func (r *Repository) UploadSessionByID(ctx context.Context, id string) (managedd
 	return mapUploadSession(row), nil
 }
 
+func (r *Repository) ListUploadSessions(ctx context.Context, collectionID string) ([]manageddata.UploadSession, error) {
+	rows, err := r.q.ListManagedDataUploadSessions(ctx, strings.TrimSpace(collectionID))
+	if err != nil {
+		return nil, mapError(err)
+	}
+	out := make([]manageddata.UploadSession, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, mapUploadSession(row))
+	}
+	return out, nil
+}
+
 func (r *Repository) UpdateUploadProgress(ctx context.Context, id string, progress manageddata.UploadProgress) error {
 	if progress.UploadedFileCount < 0 || progress.UploadedSizeBytes < 0 {
 		return fmt.Errorf("upload progress cannot be negative")
@@ -166,6 +178,29 @@ func (r *Repository) UpdateUploadProgress(ctx context.Context, id string, progre
 		ExpectedFileCount: progress.UploadedFileCount, ExpectedSizeBytes: progress.UploadedSizeBytes,
 	})
 	return expectOne(result, err, "upload session is not open or progress exceeds its manifest")
+}
+
+func (r *Repository) BeginUploadFinalization(ctx context.Context, id string) (manageddata.UploadSession, error) {
+	id = strings.TrimSpace(id)
+	result, err := r.q.BeginManagedDataUploadFinalization(ctx, id)
+	if err := expectOne(result, err, "upload session changed while beginning finalization"); err != nil {
+		return manageddata.UploadSession{}, err
+	}
+	row, err := r.q.GetManagedDataUploadSession(ctx, id)
+	return mapUploadSession(row), mapError(err)
+}
+
+func (r *Repository) FailUploadFinalization(ctx context.Context, id, message string) (manageddata.UploadSession, error) {
+	id, message = strings.TrimSpace(id), strings.TrimSpace(message)
+	if message == "" {
+		message = "upload finalization failed"
+	}
+	result, err := r.q.FailManagedDataUploadFinalization(ctx, platformdb.FailManagedDataUploadFinalizationParams{Error: message, ID: id})
+	if err := expectOne(result, err, "upload session changed while failing finalization"); err != nil {
+		return manageddata.UploadSession{}, err
+	}
+	row, err := r.q.GetManagedDataUploadSession(ctx, id)
+	return mapUploadSession(row), mapError(err)
 }
 
 func (r *Repository) AbortUploadSession(ctx context.Context, id string) error {

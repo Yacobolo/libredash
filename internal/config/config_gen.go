@@ -41,6 +41,8 @@ type Config struct {
 	CookieSecureRaw string `env:"LIBREDASH_COOKIE_SECURE"`
 	// CSRFKey Key used for CSRF protection and OAuth state cookies; production requires at least 32 characters.
 	CSRFKey string `env:"LIBREDASH_CSRF_KEY"`
+	// DevAPIToken Static bearer credential accepted by the public API in development; replace the development default on shared machines.
+	DevAPIToken string `env:"LIBREDASH_DEV_API_TOKEN" envDefault:"dev"`
 	// DevAuthBypass Bypass authentication in development; forbidden in production.
 	DevAuthBypass bool `env:"LIBREDASH_DEV_AUTH_BYPASS" envDefault:"false"`
 	// DuckDBDir Directory containing workspace DuckDB runtime files.
@@ -149,6 +151,7 @@ func (c Config) catalogValues() map[string]any {
 		configspec.EnvLIBREDASH_CLI_CONFIG:                        c.CLIConfig,
 		configspec.EnvLIBREDASH_COOKIE_SECURE:                     c.CookieSecureRaw,
 		configspec.EnvLIBREDASH_CSRF_KEY:                          c.CSRFKey,
+		configspec.EnvLIBREDASH_DEV_API_TOKEN:                     c.DevAPIToken,
 		configspec.EnvLIBREDASH_DEV_AUTH_BYPASS:                   c.DevAuthBypass,
 		configspec.EnvLIBREDASH_DUCKDB_DIR:                        c.DuckDBDir,
 		configspec.EnvLIBREDASH_DUCKLAKE_CATALOG_PATH:             c.DuckLakeCatalog,

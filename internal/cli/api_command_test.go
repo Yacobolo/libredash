@@ -34,7 +34,7 @@ func TestAPICommandCallUsesGeneratedContract(t *testing.T) {
 		if r.Method != http.MethodPost {
 			t.Fatalf("method = %s", r.Method)
 		}
-		if r.URL.Path != "/api/v1/workspaces/test/agent/conversations/conv_1/turns" {
+		if r.URL.Path != "/api/v1/workspaces/test/agent/conversations/conv_1/runs" {
 			t.Fatalf("path = %s", r.URL.Path)
 		}
 		if got := r.URL.Query().Get("trace"); got != "1" {
@@ -63,7 +63,7 @@ func TestAPICommandCallUsesGeneratedContract(t *testing.T) {
 	output := captureStdout(t, func() {
 		cmd := apiCommand(context.Background(), &rootOptions{target: server.URL, token: "token", workspaceID: "test"})
 		cmd.SetArgs([]string{
-			"call", "createAgentTurn",
+			"call", "createAgentRun",
 			"--target", server.URL,
 			"--token", "token",
 			"--path", "conversation=conv_1",
@@ -95,7 +95,7 @@ func TestAPICommandCallDefaultsJSONBodyFileContentTypeFromGeneratedContract(t *t
 	captureStdout(t, func() {
 		cmd := apiCommand(context.Background(), &rootOptions{target: server.URL, token: "token", workspaceID: "test"})
 		cmd.SetArgs([]string{
-			"call", "createAgentTurn",
+			"call", "createAgentRun",
 			"--target", server.URL,
 			"--token", "token",
 			"--path", "conversation=conv_1",
@@ -116,7 +116,7 @@ func TestAPICommandCallDefaultsBinaryBodyFileContentTypeFromGeneratedContract(t 
 		if r.Method != http.MethodPut {
 			t.Fatalf("method = %s", r.Method)
 		}
-		if r.URL.Path != "/api/v1/projects/project/workspaces/test/deployment-candidates/dep_1/artifact" {
+		if r.URL.Path != "/api/v1/projects/project/releases/release_1/workspaces/test/artifact" {
 			t.Fatalf("path = %s", r.URL.Path)
 		}
 		if got := r.Header.Get("Content-Type"); got != "application/octet-stream" {
@@ -129,11 +129,11 @@ func TestAPICommandCallDefaultsBinaryBodyFileContentTypeFromGeneratedContract(t 
 	captureStdout(t, func() {
 		cmd := apiCommand(context.Background(), &rootOptions{target: server.URL, token: "token", workspaceID: "test"})
 		cmd.SetArgs([]string{
-			"call", "uploadDeploymentCandidateArtifact",
+			"call", "uploadReleaseArtifact",
 			"--target", server.URL,
 			"--token", "token",
 			"--path", "project=project",
-			"--path", "candidate=dep_1",
+			"--path", "release=release_1",
 			"--body-file", bodyPath,
 		})
 		if err := cmd.Execute(); err != nil {

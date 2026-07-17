@@ -20,7 +20,8 @@ func TestManagedDataTusRouteRejectsClientCreatedUploads(t *testing.T) {
 		}),
 	})
 
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/managed-data/tus", nil)
+	request := httptest.NewRequest(http.MethodPost, "/upload-protocols/tus", nil)
+	request.Header.Set("Authorization", "Bearer dev")
 	recorder := httptest.NewRecorder()
 	server.Routes().ServeHTTP(recorder, request)
 
@@ -71,11 +72,12 @@ func TestManagedDataTusRouteForwardsResumableOperations(t *testing.T) {
 		}),
 	})
 
-	request := httptest.NewRequest(http.MethodPatch, "/api/v1/managed-data/tus/tus_abc", nil)
+	request := httptest.NewRequest(http.MethodPatch, "/upload-protocols/tus/tus_abc", nil)
+	request.Header.Set("Authorization", "Bearer dev")
 	recorder := httptest.NewRecorder()
 	server.Routes().ServeHTTP(recorder, request)
 
-	if recorder.Code != http.StatusNoContent || method != http.MethodPatch || path != "/api/v1/managed-data/tus/tus_abc" {
+	if recorder.Code != http.StatusNoContent || method != http.MethodPatch || path != "/upload-protocols/tus/tus_abc" {
 		t.Fatalf("status = %d, method = %q, path = %q", recorder.Code, method, path)
 	}
 }
@@ -87,7 +89,7 @@ func TestManagedDataTusMethodsAreClosedByDefault(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodConnect, http.MethodTrace} {
 		t.Run(method, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
-			handler.ServeHTTP(recorder, httptest.NewRequest(method, "/api/v1/managed-data/tus/tus_abc", nil))
+			handler.ServeHTTP(recorder, httptest.NewRequest(method, "/upload-protocols/tus/tus_abc", nil))
 			if recorder.Code != http.StatusMethodNotAllowed {
 				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
 			}

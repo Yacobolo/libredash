@@ -34,7 +34,7 @@ func TestPruneOperationalHistoryDryRunCountsWithoutDeleting(t *testing.T) {
 	requireTableCount(t, ctx, store, "agent_conversations", 3)
 	requireTableCount(t, ctx, store, "agent_runs", 2)
 	requireTableCount(t, ctx, store, "agent_messages", 2)
-	requireTableCount(t, ctx, store, "agent_events", 2)
+	requireAgentEventCount(t, ctx, store, 2)
 }
 
 func TestPruneOperationalHistoryDeletesOnlyExpiredOperationalRows(t *testing.T) {
@@ -63,7 +63,7 @@ func TestPruneOperationalHistoryDeletesOnlyExpiredOperationalRows(t *testing.T) 
 	requireTableCount(t, ctx, store, "agent_conversations", 2)
 	requireTableCount(t, ctx, store, "agent_runs", 1)
 	requireTableCount(t, ctx, store, "agent_messages", 1)
-	requireTableCount(t, ctx, store, "agent_events", 1)
+	requireAgentEventCount(t, ctx, store, 1)
 	requireRowExists(t, ctx, store, "agent_conversations", "agent_active_old")
 	requireRowExists(t, ctx, store, "agent_conversations", "agent_archived_recent")
 }
@@ -260,10 +260,21 @@ func seedOperationalHistory(t *testing.T, ctx context.Context, store *Store, now
 		('message_recent', 'agent_archived_recent', 'run_recent', 1, 'user')`); err != nil {
 		t.Fatalf("seed agent messages: %v", err)
 	}
-	if _, err := db.ExecContext(ctx, `INSERT INTO agent_events (id, run_id, seq, event_type, severity) VALUES
-		('event_old', 'run_old', 1, 'step', 'info'),
-		('event_recent', 'run_recent', 1, 'step', 'info')`); err != nil {
+	if _, err := db.ExecContext(ctx, `INSERT INTO api_async_events (resource_kind, resource_id, event_id, event_type, data_json) VALUES
+		('agent_run', 'run_old', 1, 'step', '{"severity":"info","payload":{}}'),
+		('agent_run', 'run_recent', 1, 'step', '{"severity":"info","payload":{}}')`); err != nil {
 		t.Fatalf("seed agent events: %v", err)
+	}
+}
+
+func requireAgentEventCount(t *testing.T, ctx context.Context, store *Store, want int64) {
+	t.Helper()
+	var got int64
+	if err := store.SQLDB().QueryRowContext(ctx, `SELECT COUNT(*) FROM api_async_events WHERE resource_kind = 'agent_run'`).Scan(&got); err != nil {
+		t.Fatalf("count agent events: %v", err)
+	}
+	if got != want {
+		t.Fatalf("agent event count = %d, want %d", got, want)
 	}
 }
 

@@ -81,7 +81,7 @@ func TestAdminPagesRenderReadOnlyAccessData(t *testing.T) {
 		{path: "/admin/principals/" + analyst.ID, want: []string{"<ld-admin-page", `section="principal-detail"`, `/updates?principal=` + analyst.ID + `&amp;route=admin&amp;section=principal-detail`}},
 		{path: "/admin/groups", want: []string{"<ld-admin-page", `section="groups"`, `/updates?route=admin&amp;section=groups`}},
 		{path: "/admin/groups/group_finance", want: []string{"<ld-admin-page", `section="group-detail"`, `/updates?group=group_finance&amp;route=admin&amp;section=group-detail`}},
-		{path: "/admin/agent", want: []string{"<ld-admin-page", `section="agent"`, `/updates?route=admin&amp;section=agent`, "/api/v1/admin/agent/config"}},
+		{path: "/admin/agent", want: []string{"<ld-admin-page", `section="agent"`, `/updates?route=admin&amp;section=agent`, "/admin/agent/config"}},
 		{path: "/admin/storage", want: []string{"<ld-admin-page", `section="storage"`, `/updates?route=admin&amp;section=storage`, "/admin/storage/select-table"}},
 		{path: "/admin/queries", want: []string{"<ld-admin-page", `section="queries"`, `/updates?route=admin&amp;section=queries`, "/admin/queries/command"}},
 	}

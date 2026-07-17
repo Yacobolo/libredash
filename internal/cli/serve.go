@@ -322,7 +322,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, production
 		return registry.ProviderForWorkspace(servingstate.WorkspaceID(workspaceID))
 	})
 	assetCatalog := workspace.NewAssetCatalogService(workspaceRepo)
-	authConfig := app.AuthConfig{DevBypass: true, CSRFKey: cfg.CSRFKey, CookieSecure: false}
+	authConfig := app.AuthConfig{DevBypass: true, DevAPIToken: cfg.DevAPIToken, CSRFKey: cfg.CSRFKey, CookieSecure: false}
 	if production {
 		oidcProviders := []oidcauth.Config{}
 		if cfg.OIDCConfigured() {
@@ -337,6 +337,7 @@ func servingStateBackedServer(ctx context.Context, cfg config.Config, production
 		}
 		authConfig = app.AuthConfig{
 			DevBypass:       cfg.DevAuthBypass,
+			DevAPIToken:     cfg.DevAPIToken,
 			APITokenOnly:    cfg.APITokenOnlyAuth,
 			LocalAuth:       cfg.LocalAuth,
 			AzureClientID:   cfg.AzureClientID,

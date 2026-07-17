@@ -2,20 +2,25 @@ package http
 
 import (
 	"context"
-	"encoding/base64"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	nethttp "net/http"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	semanticquery "github.com/Yacobolo/libredash/internal/analytics/query"
 	queryauthz "github.com/Yacobolo/libredash/internal/analytics/query/authz"
 	"github.com/Yacobolo/libredash/internal/api"
+	"github.com/Yacobolo/libredash/internal/cursorsigning"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/dataquery"
@@ -34,6 +39,28 @@ type Handler struct {
 	Metrics             Metrics
 	MetricsForWorkspace func(workspaceID string) (Metrics, bool)
 	CurrentPrincipalID  func(r *nethttp.Request) string
+	AuthorizeListObject func(ctx context.Context, principalID string, object access.ObjectRef) (bool, error)
+}
+
+func filterAuthorized[T any](h Handler, r *nethttp.Request, objectFor func(T) access.ObjectRef, rows []T) ([]T, error) {
+	if h.AuthorizeListObject == nil {
+		return rows, nil
+	}
+	principalID := ""
+	if h.CurrentPrincipalID != nil {
+		principalID = h.CurrentPrincipalID(r)
+	}
+	out := make([]T, 0, len(rows))
+	for _, row := range rows {
+		allowed, err := h.AuthorizeListObject(r.Context(), principalID, objectFor(row))
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
+			out = append(out, row)
+		}
+	}
+	return out, nil
 }
 
 func SemanticDatasetObjectRefs(r *nethttp.Request, workspaceID string) []access.ObjectRef {
@@ -61,6 +88,17 @@ func (h Handler) ListSemanticModels(w nethttp.ResponseWriter, r *nethttp.Request
 	out := make([]api.SemanticModelSummary, 0, len(catalog.Models))
 	for _, row := range catalog.Models {
 		out = append(out, semanticModelSummaryDTO(row))
+	}
+	workspaceID := chi.URLParam(r, "workspace")
+	if workspaceID == "" {
+		workspaceID = catalog.Workspace.ID
+	}
+	out, err := filterAuthorized(h, r, func(row api.SemanticModelSummary) access.ObjectRef {
+		return access.ItemObjectWithParent(access.SecurableSemanticModel, workspaceID, row.ID, access.WorkspaceObject(workspaceID))
+	}, out)
+	if err != nil {
+		writeJSONError(w, err, nethttp.StatusInternalServerError)
+		return
 	}
 	page, nextCursor, ok := pageSliceForRequest(w, r, out)
 	if !ok {
@@ -96,6 +134,53 @@ func (h Handler) ListSemanticModelFields(w nethttp.ResponseWriter, r *nethttp.Re
 	writeJSON(w, nethttp.StatusOK, api.SemanticFieldListResponse{Items: items, Page: api.PageInfo{NextCursor: nextCursor}})
 }
 
+func (h Handler) ListSemanticRelationships(w nethttp.ResponseWriter, r *nethttp.Request) {
+	model, ok := h.semanticModelForRequest(w, r)
+	if !ok {
+		return
+	}
+	items := make([]api.SemanticRelationshipResponse, 0, len(model.Relationships))
+	for _, relationship := range model.Relationships {
+		item, err := semanticRelationshipDTO(relationship)
+		if err != nil {
+			writeJSONError(w, err, nethttp.StatusInternalServerError)
+			return
+		}
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].ID < items[j].ID })
+	page, nextCursor, ok := pageSliceForRequest(w, r, items)
+	if !ok {
+		return
+	}
+	writeJSON(w, nethttp.StatusOK, api.SemanticRelationshipListResponse{Items: page, Page: api.PageInfo{NextCursor: nextCursor}})
+}
+
+func (h Handler) ListSemanticSources(w nethttp.ResponseWriter, r *nethttp.Request) {
+	model, ok := h.semanticModelForRequest(w, r)
+	if !ok {
+		return
+	}
+	names := make([]string, 0, len(model.Sources))
+	for name := range model.Sources {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	items := make([]api.SemanticSourceResponse, 0, len(names))
+	for _, name := range names {
+		source := model.Sources[name]
+		items = append(items, api.SemanticSourceResponse{
+			ID: name, Kind: source.Format, Connection: source.Connection,
+			Table: source.Object, Description: source.Description,
+		})
+	}
+	page, nextCursor, ok := pageSliceForRequest(w, r, items)
+	if !ok {
+		return
+	}
+	writeJSON(w, nethttp.StatusOK, api.SemanticSourceListResponse{Items: page, Page: api.PageInfo{NextCursor: nextCursor}})
+}
+
 func (h Handler) QuerySemanticModel(w nethttp.ResponseWriter, r *nethttp.Request) {
 	metrics, ok := h.biMetrics(w, r)
 	if !ok {
@@ -111,9 +196,10 @@ func (h Handler) QuerySemanticModel(w nethttp.ResponseWriter, r *nethttp.Request
 		writeJSONError(w, fmt.Errorf("model %q not found", modelID), nethttp.StatusNotFound)
 		return
 	}
-	request, limit, err := semanticAggregateRequest("", input, true)
+	scope, snapshot := semanticAggregateCursorScope(r, input), servingSnapshotForRequest(r)
+	request, limit, err := semanticAggregateRequest("", input, true, scope, snapshot)
 	if err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
+		writeJSONError(w, err, statusForCursorError(err))
 		return
 	}
 	plan, err := semanticExplainAggregate(metrics, modelID, request)
@@ -127,7 +213,7 @@ func (h Handler) QuerySemanticModel(w nethttp.ResponseWriter, r *nethttp.Request
 		writeJSONError(w, err, statusForDataExecutionError(err))
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, semanticQueryResponse(plan.Columns, rows, limit, request.Offset))
+	writeSemanticQueryResponse(w, r, semanticQueryResponse(plan.Columns, rows, limit, request.Offset, queryIDForRequest(r), snapshot, scope))
 }
 
 func (h Handler) ExplainSemanticModelQuery(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -145,7 +231,7 @@ func (h Handler) ExplainSemanticModelQuery(w nethttp.ResponseWriter, r *nethttp.
 		writeJSONError(w, fmt.Errorf("model %q not found", modelID), nethttp.StatusNotFound)
 		return
 	}
-	request, _, err := semanticAggregateRequest("", input, false)
+	request, _, err := semanticAggregateRequest("", input, false, semanticAggregateCursorScope(r, input), servingSnapshotForRequest(r))
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
@@ -174,6 +260,15 @@ func (h Handler) ListSemanticDatasets(w nethttp.ResponseWriter, r *nethttp.Reque
 			FieldCount:   len(table.Dimensions),
 			MeasureCount: semanticDatasetMeasureCount(model, datasetID),
 		})
+	}
+	workspaceID, modelID := chi.URLParam(r, "workspace"), chi.URLParam(r, "model")
+	parent := access.ItemObjectWithParent(access.SecurableSemanticModel, workspaceID, modelID, access.WorkspaceObject(workspaceID))
+	out, err := filterAuthorized(h, r, func(row api.SemanticDatasetSummary) access.ObjectRef {
+		return access.ItemObjectWithParent(access.SecurableDataset, workspaceID, modelID+"/"+row.ID, parent)
+	}, out)
+	if err != nil {
+		writeJSONError(w, err, nethttp.StatusInternalServerError)
+		return
 	}
 	items, nextCursor, ok := pageSliceForRequest(w, r, out)
 	if !ok {
@@ -217,9 +312,10 @@ func (h Handler) QuerySemanticDataset(w nethttp.ResponseWriter, r *nethttp.Reque
 	if _, _, _, ok := h.semanticDatasetForRequest(w, r); !ok {
 		return
 	}
-	request, limit, err := semanticAggregateRequest(datasetID, input, true)
+	scope, snapshot := semanticAggregateCursorScope(r, input), servingSnapshotForRequest(r)
+	request, limit, err := semanticAggregateRequest(datasetID, input, true, scope, snapshot)
 	if err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
+		writeJSONError(w, err, statusForCursorError(err))
 		return
 	}
 	plan, err := semanticExplainAggregate(metrics, modelID, request)
@@ -233,7 +329,7 @@ func (h Handler) QuerySemanticDataset(w nethttp.ResponseWriter, r *nethttp.Reque
 		writeJSONError(w, err, statusForDataExecutionError(err))
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, semanticQueryResponse(plan.Columns, rows, limit, request.Offset))
+	writeSemanticQueryResponse(w, r, semanticQueryResponse(plan.Columns, rows, limit, request.Offset, queryIDForRequest(r), snapshot, scope))
 }
 
 func (h Handler) PreviewSemanticDataset(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -250,9 +346,10 @@ func (h Handler) PreviewSemanticDataset(w nethttp.ResponseWriter, r *nethttp.Req
 	if _, _, _, ok := h.semanticDatasetForRequest(w, r); !ok {
 		return
 	}
-	request, limit, err := semanticRowRequest(datasetID, input, true)
+	scope, snapshot := semanticPreviewCursorScope(r, input), servingSnapshotForRequest(r)
+	request, limit, err := semanticRowRequest(datasetID, input, true, scope, snapshot)
 	if err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
+		writeJSONError(w, err, statusForCursorError(err))
 		return
 	}
 	plan, err := semanticExplainRows(metrics, modelID, request)
@@ -266,7 +363,7 @@ func (h Handler) PreviewSemanticDataset(w nethttp.ResponseWriter, r *nethttp.Req
 		writeJSONError(w, err, statusForDataExecutionError(err))
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, semanticQueryResponse(plan.Columns, rows, limit, request.Offset))
+	writeSemanticQueryResponse(w, r, semanticQueryResponse(plan.Columns, rows, limit, request.Offset, queryIDForRequest(r), snapshot, scope))
 }
 
 func (h Handler) ExplainSemanticQuery(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -283,7 +380,7 @@ func (h Handler) ExplainSemanticQuery(w nethttp.ResponseWriter, r *nethttp.Reque
 	if _, _, _, ok := h.semanticDatasetForRequest(w, r); !ok {
 		return
 	}
-	request, _, err := semanticAggregateRequest(datasetID, input, false)
+	request, _, err := semanticAggregateRequest(datasetID, input, false, semanticAggregateCursorScope(r, input), servingSnapshotForRequest(r))
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
@@ -310,7 +407,7 @@ func (h Handler) ExplainSemanticPreview(w nethttp.ResponseWriter, r *nethttp.Req
 	if _, _, _, ok := h.semanticDatasetForRequest(w, r); !ok {
 		return
 	}
-	request, _, err := semanticRowRequest(datasetID, input, false)
+	request, _, err := semanticRowRequest(datasetID, input, false, semanticPreviewCursorScope(r, input), servingSnapshotForRequest(r))
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
@@ -479,6 +576,29 @@ func semanticMeasureFieldDTO(id, datasetID, name string, measure semanticmodel.M
 	}
 }
 
+func semanticRelationshipDTO(relationship semanticmodel.Relationship) (api.SemanticRelationshipResponse, error) {
+	fromDataset, fromField, err := semanticRelationshipEndpoint(relationship.From)
+	if err != nil {
+		return api.SemanticRelationshipResponse{}, fmt.Errorf("relationship %q from endpoint: %w", relationship.ID, err)
+	}
+	toDataset, toField, err := semanticRelationshipEndpoint(relationship.To)
+	if err != nil {
+		return api.SemanticRelationshipResponse{}, fmt.Errorf("relationship %q to endpoint: %w", relationship.ID, err)
+	}
+	return api.SemanticRelationshipResponse{
+		ID: relationship.ID, FromDataset: fromDataset, FromField: fromField,
+		ToDataset: toDataset, ToField: toField, Cardinality: relationship.Cardinality, Active: true,
+	}, nil
+}
+
+func semanticRelationshipEndpoint(value string) (string, string, error) {
+	parts := strings.Split(value, ".")
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+		return "", "", fmt.Errorf("must be dataset.field")
+	}
+	return parts[0], parts[1], nil
+}
+
 func modelDescription(metrics Metrics, id string) (api.SemanticModelDescriptionResponse, bool) {
 	catalog := metrics.Catalog()
 	var catalogModel dashboard.CatalogModel
@@ -557,8 +677,8 @@ func semanticModelForID(metrics Metrics, modelID string) *semanticmodel.Model {
 	return nil
 }
 
-func semanticAggregateRequest(datasetID string, input api.SemanticQueryRequest, includeExtraRow bool) (reportdef.AggregateQuery, int, error) {
-	limit, offset, err := semanticLimitAndOffset(input.Limit, input.PageToken)
+func semanticAggregateRequest(datasetID string, input api.SemanticQueryRequest, includeExtraRow bool, cursorScope ...string) (reportdef.AggregateQuery, int, error) {
+	limit, offset, err := semanticLimitAndOffset(input.Limit, input.PageToken, cursorScope...)
 	if err != nil {
 		return reportdef.AggregateQuery{}, 0, err
 	}
@@ -581,8 +701,8 @@ func semanticAggregateRequest(datasetID string, input api.SemanticQueryRequest, 
 	return request, limit, nil
 }
 
-func semanticRowRequest(datasetID string, input api.SemanticPreviewRequest, includeExtraRow bool) (reportdef.RowQuery, int, error) {
-	limit, offset, err := semanticLimitAndOffset(input.Limit, input.PageToken)
+func semanticRowRequest(datasetID string, input api.SemanticPreviewRequest, includeExtraRow bool, cursorScope ...string) (reportdef.RowQuery, int, error) {
+	limit, offset, err := semanticLimitAndOffset(input.Limit, input.PageToken, cursorScope...)
 	if err != nil {
 		return reportdef.RowQuery{}, 0, err
 	}
@@ -601,15 +721,15 @@ func semanticRowRequest(datasetID string, input api.SemanticPreviewRequest, incl
 	}, limit, nil
 }
 
-func semanticLimitAndOffset(limitValue int, pageToken string) (int, int, error) {
+func semanticLimitAndOffset(limitValue int, pageToken string, cursorScope ...string) (int, int, error) {
 	limit := limitValue
 	if limit <= 0 {
-		limit = defaultAPILimit
+		limit = defaultQueryLimit
 	}
-	if limit > maxAPILimit {
-		limit = maxAPILimit
+	if limit > maxQueryLimit {
+		limit = maxQueryLimit
 	}
-	offset, err := decodeIndexCursor(pageToken)
+	offset, err := decodeIndexCursor(pageToken, cursorScope...)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -670,23 +790,122 @@ func semanticSorts(sorts []api.SemanticSort) []reportdef.QuerySort {
 	return out
 }
 
-func semanticQueryResponse(columns []string, rows reportdef.QueryRows, limit, offset int) api.SemanticQueryResponse {
-	items := make([]map[string]any, 0, min(len(rows), limit))
+func semanticQueryResponse(columns []string, rows reportdef.QueryRows, limit, offset int, queryID, snapshot string, cursorScope ...string) api.SemanticQueryResponse {
+	encodedRows := make([][]string, 0, min(len(rows), limit))
+	descriptors := make([]api.QueryColumn, len(columns))
+	for index, name := range columns {
+		descriptors[index] = api.QueryColumn{Name: name, Type: queryColumnType(rows, name), Nullable: queryColumnNullable(rows, name)}
+	}
 	for i, row := range rows {
 		if i >= limit {
 			break
 		}
-		item := make(map[string]any, len(row))
-		for key, value := range row {
-			item[key] = value
+		values := make([]string, len(columns))
+		for index, column := range columns {
+			values[index] = queryCellString(row[column])
 		}
-		items = append(items, item)
+		encodedRows = append(encodedRows, values)
 	}
 	nextCursor := ""
 	if len(rows) > limit {
-		nextCursor = encodeIndexCursor(offset + limit)
+		scopes := append(append([]string{}, cursorScope...), snapshot)
+		nextCursor = encodeIndexCursor(offset+limit, scopes...)
 	}
-	return api.SemanticQueryResponse{Columns: columns, Items: items, Page: api.PageInfo{NextCursor: nextCursor}}
+	return api.SemanticQueryResponse{QueryID: queryID, ServingSnapshot: snapshot, Columns: descriptors, Rows: encodedRows, Page: api.PageInfo{NextCursor: nextCursor}}
+}
+
+func queryColumnType(rows reportdef.QueryRows, column string) string {
+	for _, row := range rows {
+		value, ok := row[column]
+		if !ok || value == nil {
+			continue
+		}
+		switch value.(type) {
+		case bool:
+			return "boolean"
+		case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+			return "int64"
+		case float32, float64:
+			return "float64"
+		case time.Time:
+			return "timestamp"
+		case json.RawMessage, map[string]any, []any:
+			return "json"
+		default:
+			return "string"
+		}
+	}
+	return "string"
+}
+
+func queryColumnNullable(rows reportdef.QueryRows, column string) bool {
+	for _, row := range rows {
+		if value, ok := row[column]; !ok || value == nil {
+			return true
+		}
+	}
+	return len(rows) == 0
+}
+
+func queryCellString(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case []byte:
+		return string(typed)
+	case bool:
+		return strconv.FormatBool(typed)
+	case int:
+		return strconv.FormatInt(int64(typed), 10)
+	case int8:
+		return strconv.FormatInt(int64(typed), 10)
+	case int16:
+		return strconv.FormatInt(int64(typed), 10)
+	case int32:
+		return strconv.FormatInt(int64(typed), 10)
+	case int64:
+		return strconv.FormatInt(typed, 10)
+	case uint:
+		return strconv.FormatUint(uint64(typed), 10)
+	case uint8:
+		return strconv.FormatUint(uint64(typed), 10)
+	case uint16:
+		return strconv.FormatUint(uint64(typed), 10)
+	case uint32:
+		return strconv.FormatUint(uint64(typed), 10)
+	case uint64:
+		return strconv.FormatUint(typed, 10)
+	case float32:
+		return strconv.FormatFloat(float64(typed), 'g', -1, 32)
+	case float64:
+		return strconv.FormatFloat(typed, 'g', -1, 64)
+	case time.Time:
+		return typed.UTC().Format(time.RFC3339Nano)
+	default:
+		encoded, err := json.Marshal(value)
+		if err == nil && (strings.HasPrefix(string(encoded), "{") || strings.HasPrefix(string(encoded), "[")) {
+			return string(encoded)
+		}
+		return fmt.Sprint(value)
+	}
+}
+
+func queryIDForRequest(r *nethttp.Request) string {
+	if value := strings.TrimSpace(r.Header.Get("X-Request-ID")); value != "" {
+		return value
+	}
+	var random [12]byte
+	_, _ = rand.Read(random[:])
+	return "query_" + hex.EncodeToString(random[:])
+}
+
+func servingSnapshotForRequest(r *nethttp.Request) string {
+	if value := strings.TrimSpace(r.Header.Get("X-Serving-Snapshot")); value != "" {
+		return value
+	}
+	return "unversioned"
 }
 
 func semanticExplainResponse(mode string, plan semanticquery.Plan, warnings []string) api.SemanticExplainResponse {
@@ -757,7 +976,9 @@ func statusForDataExecutionError(err error) int {
 		return nethttp.StatusOK
 	}
 	if queryauthz.IsDenied(err) {
-		return nethttp.StatusForbidden
+		// Query routes identify a concrete semantic model or dataset. Conceal
+		// inaccessible IDs consistently with metadata handlers.
+		return nethttp.StatusNotFound
 	}
 	return nethttp.StatusBadRequest
 }
@@ -881,12 +1102,25 @@ func pageSliceForRequest[T any](w nethttp.ResponseWriter, r *nethttp.Request, it
 	if !ok {
 		return nil, "", false
 	}
-	start, ok := apiCursorOffsetForRequest(w, r)
-	if !ok {
+	scope, snapshot := requestCursorScope(r, nil), servingSnapshotForRequest(r)
+	lastKey, err := decodeListKeysetCursor(r.URL.Query().Get("pageToken"), scope, snapshot)
+	if err != nil {
+		writeJSONError(w, err, statusForCursorError(err))
 		return nil, "", false
 	}
-	if start > len(items) {
-		start = len(items)
+	start := 0
+	if lastKey != "" {
+		start = -1
+		for index, item := range items {
+			if listPageItemKey(item) == lastKey {
+				start = index + 1
+				break
+			}
+		}
+		if start < 0 {
+			writeJSONError(w, errCursorSnapshotUnavailable, nethttp.StatusConflict)
+			return nil, "", false
+		}
 	}
 	end := start + limit
 	if end > len(items) {
@@ -894,14 +1128,55 @@ func pageSliceForRequest[T any](w nethttp.ResponseWriter, r *nethttp.Request, it
 	}
 	nextCursor := ""
 	if end < len(items) {
-		nextCursor = encodeIndexCursor(end)
+		nextCursor = encodeListKeysetCursor(listPageItemKey(items[end-1]), scope, snapshot)
 	}
 	return append([]T(nil), items[start:end]...), nextCursor, true
 }
 
+type listKeysetCursor struct {
+	Key      string `json:"key"`
+	Scope    string `json:"scope"`
+	Snapshot string `json:"snapshot,omitempty"`
+	Expires  int64  `json:"expires"`
+}
+
+func listPageItemKey(value any) string {
+	payload, _ := json.Marshal(value)
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:])
+}
+
+func encodeListKeysetCursor(key, scope, snapshot string) string {
+	payload, _ := json.Marshal(listKeysetCursor{Key: key, Scope: scope, Snapshot: snapshot, Expires: time.Now().Add(indexCursorLifetime).Unix()})
+	return cursorsigning.Sign("q2", payload)
+}
+
+func decodeListKeysetCursor(token, scope, snapshot string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	if !strings.HasPrefix(token, "q2.") {
+		return "", fmt.Errorf("invalid page token")
+	}
+	payload, err := cursorsigning.Verify("q2", token)
+	if err != nil {
+		return "", fmt.Errorf("invalid page token")
+	}
+	var cursor listKeysetCursor
+	if json.Unmarshal(payload, &cursor) != nil || cursor.Key == "" || cursor.Expires < time.Now().Unix() || cursor.Scope != scope {
+		return "", fmt.Errorf("invalid page token")
+	}
+	if cursor.Snapshot != snapshot {
+		return "", errCursorSnapshotUnavailable
+	}
+	return cursor.Key, nil
+}
+
 const (
-	defaultAPILimit = 50
-	maxAPILimit     = 100
+	defaultAPILimit   = 50
+	maxAPILimit       = 200
+	defaultQueryLimit = 100
+	maxQueryLimit     = 1000
 )
 
 func apiLimitForRequest(w nethttp.ResponseWriter, r *nethttp.Request) (int, bool) {
@@ -925,37 +1200,100 @@ func parseAPILimit(value string) (int, error) {
 		return 0, fmt.Errorf("limit must be at least 1")
 	}
 	if limit > maxAPILimit {
-		return maxAPILimit, nil
+		return 0, fmt.Errorf("limit must not exceed %d", maxAPILimit)
 	}
 	return limit, nil
 }
 
-func apiCursorOffsetForRequest(w nethttp.ResponseWriter, r *nethttp.Request) (int, bool) {
-	offset, err := decodeIndexCursor(r.URL.Query().Get("pageToken"))
+func apiCursorOffsetForRequest(w nethttp.ResponseWriter, r *nethttp.Request, scopes ...string) (int, bool) {
+	offset, err := decodeIndexCursor(r.URL.Query().Get("pageToken"), scopes...)
 	if err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
+		writeJSONError(w, err, statusForCursorError(err))
 		return 0, false
 	}
 	return offset, true
 }
 
-func decodeIndexCursor(token string) (int, error) {
+const indexCursorLifetime = 15 * time.Minute
+
+type indexCursor struct {
+	Offset   int    `json:"offset"`
+	Scope    string `json:"scope"`
+	Snapshot string `json:"snapshot,omitempty"`
+	Expires  int64  `json:"expires"`
+}
+
+var errCursorSnapshotUnavailable = errors.New("cursor serving snapshot is unavailable")
+
+func decodeIndexCursor(token string, scopes ...string) (int, error) {
 	if token == "" {
 		return 0, nil
 	}
-	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if !strings.HasPrefix(token, "q1.") {
+		return 0, fmt.Errorf("invalid page token")
+	}
+	payload, err := cursorsigning.Verify("q1", token)
 	if err != nil {
 		return 0, fmt.Errorf("invalid page token")
 	}
-	var offset int
-	if _, err := fmt.Sscanf(string(raw), "offset:%d", &offset); err != nil || offset < 0 {
+	var cursor indexCursor
+	if json.Unmarshal(payload, &cursor) != nil || cursor.Offset < 0 || cursor.Expires < time.Now().Unix() {
 		return 0, fmt.Errorf("invalid page token")
 	}
-	return offset, nil
+	expectedScope, expectedSnapshot := cursorScopeParts(scopes...)
+	if cursor.Snapshot != expectedSnapshot {
+		return 0, errCursorSnapshotUnavailable
+	}
+	if cursor.Scope != expectedScope {
+		return 0, fmt.Errorf("invalid page token")
+	}
+	return cursor.Offset, nil
 }
 
-func encodeIndexCursor(offset int) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("offset:%d", offset)))
+func encodeIndexCursor(offset int, scopes ...string) string {
+	scope, snapshot := cursorScopeParts(scopes...)
+	return encodeIndexCursorValue(indexCursor{Offset: offset, Scope: scope, Snapshot: snapshot, Expires: time.Now().Add(indexCursorLifetime).Unix()})
+}
+
+func encodeIndexCursorValue(cursor indexCursor) string {
+	payload, _ := json.Marshal(cursor)
+	return cursorsigning.Sign("q1", payload)
+}
+
+func cursorScopeParts(scopes ...string) (string, string) {
+	if len(scopes) == 0 || strings.TrimSpace(scopes[0]) == "" {
+		return "list", ""
+	}
+	snapshot := ""
+	if len(scopes) > 1 {
+		snapshot = scopes[1]
+	}
+	return scopes[0], snapshot
+}
+
+func statusForCursorError(err error) int {
+	if errors.Is(err, errCursorSnapshotUnavailable) {
+		return nethttp.StatusConflict
+	}
+	return nethttp.StatusBadRequest
+}
+
+func semanticAggregateCursorScope(r *nethttp.Request, input api.SemanticQueryRequest) string {
+	input.PageToken = ""
+	return requestCursorScope(r, input)
+}
+
+func semanticPreviewCursorScope(r *nethttp.Request, input api.SemanticPreviewRequest) string {
+	input.PageToken = ""
+	return requestCursorScope(r, input)
+}
+
+func requestCursorScope(r *nethttp.Request, payload any) string {
+	query := r.URL.Query()
+	query.Del("pageToken")
+	body, _ := json.Marshal(payload)
+	digest := sha256.Sum256([]byte(r.Method + "\n" + r.URL.Path + "\n" + query.Encode() + "\n" + string(body)))
+	return hex.EncodeToString(digest[:])
 }
 
 func writeJSON(w nethttp.ResponseWriter, status int, value any) {

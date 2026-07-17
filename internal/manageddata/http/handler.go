@@ -32,18 +32,19 @@ var (
 	digestPattern   = regexp.MustCompile(`^[0-9a-f]{64}$`)
 )
 
-func (h *Handler) GetManagedDataEnvironmentRevision(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, environment string) {
+func (h *Handler) GetActiveManagedDataRevision(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection string) {
 	collection, ok := h.collection(w, r, project, connection)
 	if !ok {
 		return
 	}
+	environment := h.options.Environment
 	if !validScopeID(environment) {
 		h.writeError(w, r, ErrInvalid)
 		return
 	}
 	pointer, err := h.options.Repository.EnvironmentPointer(r.Context(), collection.ID, manageddata.Environment(environment))
 	if errors.Is(err, manageddata.ErrNotFound) || errors.Is(err, ErrNotFound) {
-		h.writeJSON(w, stdhttp.StatusOK, apigenapi.ManagedDataEnvironmentRevisionResponse{Environment: environment})
+		h.writeJSON(w, stdhttp.StatusOK, apigenapi.ManagedDataActiveRevisionResponse{})
 		return
 	}
 	if err != nil {
@@ -64,7 +65,7 @@ func (h *Handler) GetManagedDataEnvironmentRevision(w stdhttp.ResponseWriter, r 
 		h.writeError(w, r, err)
 		return
 	}
-	response := apigenapi.ManagedDataEnvironmentRevisionResponse{Environment: environment, Revision: &summary}
+	response := apigenapi.ManagedDataActiveRevisionResponse{Revision: &summary}
 	response.DeploymentId = stringPointer(pointer.DeploymentID)
 	response.ActivatedAt = stringPointer(pointer.UpdatedAt)
 	h.writeJSON(w, stdhttp.StatusOK, response)
@@ -98,7 +99,9 @@ func (h *Handler) ListManagedDataRevisions(w stdhttp.ResponseWriter, r *stdhttp.
 		}
 		items = append(items, item)
 	}
-	page, next, err := pageSlice(items, params.Limit, params.PageToken, "revisions\x00"+collection.ID)
+	page, next, err := pageSlice(items, params.Limit, params.PageToken, "revisions\x00"+collection.ID, func(item apigenapi.ManagedDataRevisionSummaryResponse) string {
+		return item.CreatedAt + "\x00" + item.Id
+	})
 	if err != nil {
 		h.writeError(w, r, err)
 		return
@@ -158,6 +161,12 @@ func (h *Handler) CreateManagedDataUploadSession(w stdhttp.ResponseWriter, r *st
 		h.writeError(w, r, err)
 		return
 	}
+	if h.options.RecordUploadCreated != nil {
+		if err := h.options.RecordUploadCreated(r.Context(), result); err != nil {
+			h.writeUnavailable(w, r)
+			return
+		}
+	}
 	response, err := uploadResponse(result, project, connection, "")
 	if err != nil {
 		h.writeError(w, r, err)
@@ -179,7 +188,49 @@ func (h *Handler) GetManagedDataUploadSession(w stdhttp.ResponseWriter, r *stdht
 	h.writeJSON(w, stdhttp.StatusOK, response)
 }
 
-func (h *Handler) AbortManagedDataUploadSession(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession string, headers apigenapi.GenAbortManagedDataUploadSessionHeaders) {
+func (h *Handler) ListManagedDataUploadSessions(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection string, params apigenapi.GenListManagedDataUploadSessionsParams) {
+	if h.options.Uploads == nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	collection, ok := h.collection(w, r, project, connection)
+	if !ok {
+		return
+	}
+	rows, err := h.options.Repository.ListUploadSessions(r.Context(), collection.ID)
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt == rows[j].CreatedAt {
+			return rows[i].ID > rows[j].ID
+		}
+		return rows[i].CreatedAt > rows[j].CreatedAt
+	})
+	page, next, err := pageSlice(rows, params.Limit, params.PageToken, "upload-sessions\x00"+collection.ID, func(item manageddata.UploadSession) string { return item.CreatedAt + "\x00" + item.ID })
+	if err != nil {
+		h.writeError(w, r, err)
+		return
+	}
+	items := make([]apigenapi.ManagedDataUploadSessionResponse, 0, len(page))
+	for _, row := range page {
+		result, recoverErr := h.options.Uploads.RecoverUpload(r.Context(), control.UploadRequest{Project: project, Connection: connection, UploadID: row.ID})
+		if recoverErr != nil {
+			h.writeError(w, r, recoverErr)
+			return
+		}
+		item, mapErr := uploadResponse(result, project, connection, row.ID)
+		if mapErr != nil {
+			h.writeError(w, r, mapErr)
+			return
+		}
+		items = append(items, item)
+	}
+	h.writeJSON(w, stdhttp.StatusOK, apigenapi.ManagedDataUploadSessionListResponse{Items: items, Page: apigenapi.PageInfo{NextCursor: next}})
+}
+
+func (h *Handler) CancelManagedDataUploadSession(w stdhttp.ResponseWriter, r *stdhttp.Request, project, connection, uploadSession string, headers apigenapi.GenCancelManagedDataUploadSessionHeaders) {
 	if h.options.Uploads == nil {
 		h.writeUnavailable(w, r)
 		return
@@ -210,16 +261,26 @@ func (h *Handler) FinalizeManagedDataUploadSession(w stdhttp.ResponseWriter, r *
 		h.writeError(w, r, ErrInvalid)
 		return
 	}
-	result, err := h.options.Uploads.FinalizeUpload(r.Context(), control.UploadRequest{Project: project, Connection: connection, UploadID: uploadSession})
+	request := control.UploadRequest{Project: project, Connection: connection, UploadID: uploadSession}
+	result, err := h.options.Uploads.BeginFinalizeUpload(r.Context(), request)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
 	}
-	response, err := uploadResponse(result.Upload, project, connection, uploadSession)
+	response, err := uploadResponse(result, project, connection, uploadSession)
 	if err != nil {
 		h.writeError(w, r, err)
 		return
 	}
+	if h.options.EnqueueFinalize == nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	if err := h.options.EnqueueFinalize(r.Context(), request); err != nil {
+		h.writeUnavailable(w, r)
+		return
+	}
+	w.Header().Set("Location", "/api/v1/projects/"+project+"/connections/"+connection+"/upload-sessions/"+uploadSession)
 	h.writeJSON(w, stdhttp.StatusAccepted, response)
 }
 
@@ -491,7 +552,9 @@ func (h *Handler) decodeJSON(w stdhttp.ResponseWriter, r *stdhttp.Request, targe
 }
 
 func (h *Handler) writeJSON(w stdhttp.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
+	if w.Header().Get("Content-Type") == "" {
+		w.Header().Set("Content-Type", "application/json")
+	}
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
@@ -521,7 +584,13 @@ func (h *Handler) writeError(w stdhttp.ResponseWriter, r *stdhttp.Request, err e
 func (h *Handler) writePublicError(w stdhttp.ResponseWriter, r *stdhttp.Request, status int, message string) {
 	details := map[string]any{}
 	requestID := r.Header.Get("X-Request-Id")
-	h.writeJSON(w, status, apigenapi.Error{Code: int32(status), Message: message, Details: &details, RequestId: stringPointer(requestID)})
+	_ = details
+	w.Header().Set("Content-Type", "application/problem+json")
+	h.writeJSON(w, status, apigenapi.ProblemDetails{
+		Type: "https://libredash.dev/problems/managed-data", Title: stdhttp.StatusText(status), Status: int32(status),
+		Detail: message, Instance: r.URL.Path, Code: fmt.Sprintf("MANAGED_DATA_%d", status), RequestId: requestID,
+		Errors: []apigenapi.ProblemFieldError{},
+	})
 }
 
 func statusForError(err error) int {
@@ -657,7 +726,7 @@ func uploadStatus(status manageddata.UploadStatus) (apigenapi.ManagedDataUploadS
 	case manageddata.UploadStatusComplete:
 		return apigenapi.ManagedDataUploadSessionStatusCompleted, true
 	case manageddata.UploadStatusAborted:
-		return apigenapi.ManagedDataUploadSessionStatusAborted, true
+		return apigenapi.ManagedDataUploadSessionStatusCancelled, true
 	case manageddata.UploadStatusFailed:
 		return apigenapi.ManagedDataUploadSessionStatusFailed, true
 	case manageddata.UploadStatusExpired:
@@ -744,7 +813,7 @@ func fileToWire(file manageddata.File) (apigenapi.ManagedDataFileMetadata, error
 	return apigenapi.ManagedDataFileMetadata{Path: file.Path, Size: file.Size, Sha256: file.SHA256}, nil
 }
 
-func pageSlice[T any](items []T, limitValue *int32, tokenValue *string, scope string) ([]T, *string, error) {
+func pageSlice[T any](items []T, limitValue *int32, tokenValue *string, scope string, key func(T) string) ([]T, *string, error) {
 	limit := defaultPageLimit
 	if limitValue != nil {
 		if *limitValue < 1 || *limitValue > maxPageLimit {
@@ -752,55 +821,65 @@ func pageSlice[T any](items []T, limitValue *int32, tokenValue *string, scope st
 		}
 		limit = int(*limitValue)
 	}
-	offset, err := decodePageToken(valueOrEmpty(tokenValue), scope)
+	cursorKey, err := decodePageToken(valueOrEmpty(tokenValue), scope)
 	if err != nil {
 		return nil, nil, err
 	}
-	if offset > len(items) {
-		return nil, nil, ErrInvalid
+	start := 0
+	if cursorKey != "" {
+		start = -1
+		for index, item := range items {
+			if key(item) == cursorKey {
+				start = index + 1
+				break
+			}
+		}
+		if start < 0 {
+			return nil, nil, ErrInvalid
+		}
 	}
-	end := offset + limit
+	end := start + limit
 	if end > len(items) {
 		end = len(items)
 	}
 	var next *string
 	if end < len(items) {
-		next = stringPointer(encodePageToken(scope, end))
+		next = stringPointer(encodePageToken(scope, key(items[end-1])))
 	}
-	return append([]T(nil), items[offset:end]...), next, nil
+	return append([]T(nil), items[start:end]...), next, nil
 }
 
 type pageToken struct {
-	Scope  string `json:"scope"`
-	Offset int    `json:"offset"`
+	Scope string `json:"scope"`
+	Key   string `json:"key"`
 }
 
-func encodePageToken(scope string, offset int) string {
-	value, _ := json.Marshal(pageToken{Scope: scope, Offset: offset})
+func encodePageToken(scope, key string) string {
+	value, _ := json.Marshal(pageToken{Scope: scope, Key: key})
 	return base64.RawURLEncoding.EncodeToString(value)
 }
 
-func decodePageToken(value, scope string) (int, error) {
+func decodePageToken(value, scope string) (string, error) {
 	if value == "" {
-		return 0, nil
+		return "", nil
 	}
 	if len(value) > 2048 {
-		return 0, ErrInvalid
+		return "", ErrInvalid
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(value)
 	if err != nil {
-		return 0, ErrInvalid
+		return "", ErrInvalid
 	}
 	var token pageToken
 	decoder := json.NewDecoder(strings.NewReader(string(raw)))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&token); err != nil || token.Scope != scope || token.Offset < 0 {
-		return 0, ErrInvalid
+	if err := decoder.Decode(&token); err != nil || token.Scope != scope || token.Key == "" {
+		return "", ErrInvalid
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return 0, ErrInvalid
+		return "", ErrInvalid
 	}
-	return token.Offset, nil
+	return token.Key, nil
 }
 
 func validScope(project, connection string) bool {

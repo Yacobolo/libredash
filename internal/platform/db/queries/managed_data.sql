@@ -34,10 +34,25 @@ VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?);
 -- name: GetManagedDataUploadSession :one
 SELECT * FROM managed_data_upload_sessions WHERE id = ?;
 
+-- name: ListManagedDataUploadSessions :many
+SELECT * FROM managed_data_upload_sessions
+WHERE collection_id = ?
+ORDER BY created_at DESC, id DESC;
+
 -- name: MarkManagedDataUploadCommitting :execresult
 UPDATE managed_data_upload_sessions
 SET status = 'committing', updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status IN ('open', 'committing');
+
+-- name: BeginManagedDataUploadFinalization :execresult
+UPDATE managed_data_upload_sessions
+SET status = 'committing', updated_at = CURRENT_TIMESTAMP
 WHERE id = ? AND status = 'open' AND expires_at > CURRENT_TIMESTAMP;
+
+-- name: FailManagedDataUploadFinalization :execresult
+UPDATE managed_data_upload_sessions
+SET status = 'failed', error = ?, updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND status = 'committing';
 
 -- name: UpdateManagedDataUploadProgress :execresult
 UPDATE managed_data_upload_sessions

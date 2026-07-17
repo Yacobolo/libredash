@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	managedDataTusPath             = "/api/v1/managed-data/tus"
-	managedDataS3MultipartTemplate = "/api/v1/projects/{project}/data-connections/{connection}/upload-sessions/{uploadSession}/s3-multipart"
+	managedDataTusPath             = "/upload-protocols/tus"
+	managedDataS3MultipartTemplate = "/api/v1/projects/{project}/connections/{connection}/upload-sessions/{uploadSession}/s3-multipart-uploads"
 )
 
 type managedDataStorage struct {

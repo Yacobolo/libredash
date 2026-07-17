@@ -43,6 +43,7 @@ async function resolveBaseURL(): Promise<string> {
     LIBREDASH_DEV_LOG_LINES: '0',
     LIBREDASH_DEV_SKIP_PUBLISH: '1',
     LIBREDASH_HOME: qaHome,
+    LIBREDASH_MANAGED_DATA_DIR: `${qaHome}/managed-data`,
     LIBREDASH_MANAGED_DATA_MIN_FREE_BYTES: '67108864',
   }, 'ignore')
   void devTask.exited.then((code) => {
@@ -56,8 +57,14 @@ async function resolveBaseURL(): Promise<string> {
 }
 
 async function prepareManagedHome(): Promise<void> {
-  await rm(qaHome, { recursive: true, force: true })
+  await removeManagedHome()
   await mkdir(qaHome, { recursive: true })
+}
+
+async function removeManagedHome(): Promise<void> {
+  const chmod = spawn(['chmod', '-R', 'u+w', qaHome], {}, 'ignore')
+  await chmod.exited
+  await rm(qaHome, { recursive: true, force: true })
 }
 
 async function deployManagedProject(): Promise<void> {
@@ -132,7 +139,7 @@ async function cleanup(): Promise<void> {
         devTask.kill()
       }
     }
-    await rm(qaHome, { recursive: true, force: true })
+    await removeManagedHome()
   }
 }
 

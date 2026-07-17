@@ -1,12 +1,18 @@
 package materialize
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var ErrRunNotCancellable = errors.New("refresh run is not cancellable")
 
 const (
 	RunStatusQueued    = "queued"
 	RunStatusRunning   = "running"
 	RunStatusSucceeded = "succeeded"
 	RunStatusFailed    = "failed"
+	RunStatusCancelled = "cancelled"
 
 	TargetSemanticModel = "semantic_model"
 	TargetModelTable    = "model_table"
@@ -31,6 +37,7 @@ type RunRecord struct {
 	TargetID             string `json:"targetId"`
 	TriggerType          string `json:"triggerType"`
 	ParentRunID          string `json:"parentRunId,omitempty"`
+	RetryOf              string `json:"retryOf,omitempty"`
 	Status               string `json:"status"`
 	CreatedAt            string `json:"createdAt"`
 	UpdatedAt            string `json:"updatedAt"`
@@ -48,6 +55,7 @@ type RunInput struct {
 	TargetID       string
 	TriggerType    string
 	ParentRunID    string
+	RetryOf        string
 	JobKind        string
 	PayloadJSON    string
 }

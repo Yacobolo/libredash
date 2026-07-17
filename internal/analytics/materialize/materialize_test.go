@@ -1053,6 +1053,51 @@ func TestRunRepositoryPersistsPrincipalAttribution(t *testing.T) {
 	}
 }
 
+func TestRunRepositoryCancelsOnlyQueuedRuns(t *testing.T) {
+	ctx := context.Background()
+	store := openMaterializationStore(t, ctx)
+	defer store.Close()
+	repo := analyticsmaterializesqlite.NewSQLRunRepository(store.SQLDB())
+
+	queued, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{WorkspaceID: "test", ModelID: "model.orders"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancelled, err := repo.CancelRun(ctx, "test", queued.ID)
+	if err != nil || cancelled.Status != analyticsmaterialize.RunStatusCancelled || cancelled.FinishedAt == "" {
+		t.Fatalf("cancelled = %#v, error = %v", cancelled, err)
+	}
+	if _, err := repo.CancelRun(ctx, "test", queued.ID); !errors.Is(err, analyticsmaterialize.ErrRunNotCancellable) {
+		t.Fatalf("second cancellation error = %v", err)
+	}
+}
+
+func TestRunRepositoryPersistsRetryLineageSeparatelyFromChildRuns(t *testing.T) {
+	ctx := context.Background()
+	store := openMaterializationStore(t, ctx)
+	defer store.Close()
+	repo := analyticsmaterializesqlite.NewSQLRunRepository(store.SQLDB())
+
+	prior, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{WorkspaceID: "test", ModelID: "model.orders"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.MarkRunFailed(ctx, "test", prior.ID, "boom"); err != nil {
+		t.Fatal(err)
+	}
+	retry, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{WorkspaceID: "test", ModelID: "model.orders", RetryOf: prior.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retry.RetryOf != prior.ID || retry.ParentRunID != "" {
+		t.Fatalf("retry lineage = %#v", retry)
+	}
+	stored, err := repo.GetRun(ctx, "test", retry.ID)
+	if err != nil || stored.RetryOf != prior.ID {
+		t.Fatalf("stored retry = %#v err=%v", stored, err)
+	}
+}
+
 func TestRunRepositoryListsAndFindsLatestByModel(t *testing.T) {
 	ctx := context.Background()
 	store := openMaterializationStore(t, ctx)

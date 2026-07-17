@@ -6,8 +6,8 @@ github.com/Acconut/go-httptest-recorder v1.0.0 h1:TAv2dfnqp/l+SUvIaMAUK4GeN4+wqb
 github.com/Acconut/go-httptest-recorder v1.0.0/go.mod h1:CwQyhTH1kq/gLyWiRieo7c0uokpu3PXeyF/nZjUNtmM=
 github.com/CAFxX/httpcompression v0.0.9 h1:0ue2X8dOLEpxTm8tt+OdHcgA+gbDge0OqFQWGKSqgrg=
 github.com/CAFxX/httpcompression v0.0.9/go.mod h1:XX8oPZA+4IDcfZ0A71Hz0mZsv/YJOgYygkFhizVPilM=
-github.com/Yacobolo/toolbelt/apigen v0.4.0 h1:v/8ezLBgDudJXTPKh18tMsgACGQYCcLzEpvH4yypHAI=
-github.com/Yacobolo/toolbelt/apigen v0.4.0/go.mod h1:iKKpG2gMSuLNegtRpL5la1z5s9YrBsZwdAHaRBsmvtE=
+github.com/Yacobolo/toolbelt/apigen v0.5.3 h1:XzCMzOKHumIoIYPs5XpKuWaIMEgDsJh9eFQgBT4YLS0=
+github.com/Yacobolo/toolbelt/apigen v0.5.3/go.mod h1:iKKpG2gMSuLNegtRpL5la1z5s9YrBsZwdAHaRBsmvtE=
 github.com/alexedwards/argon2id v1.0.0 h1:wJzDx66hqWX7siL/SRUmgz3F8YMrd/nfX/xHHcQQP0w=
 github.com/alexedwards/argon2id v1.0.0/go.mod h1:tYKkqIjzXvZdzPvADMWOEZ+l6+BD6CtBXMj5fnJppiw=
 github.com/andybalholm/brotli v1.0.5/go.mod h1:fO7iG3H7G2nSZ7m0zPUDn85XEX2GTukHGRSepvi9Eig=

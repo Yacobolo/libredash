@@ -9,20 +9,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/agent"
+	"github.com/Yacobolo/libredash/internal/asyncjob"
+	asyncjobsqlite "github.com/Yacobolo/libredash/internal/asyncjob/sqlite"
 	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
 )
 
 type Repository struct {
-	db *sql.DB
-	q  *platformdb.Queries
+	db     *sql.DB
+	q      *platformdb.Queries
+	events asyncjob.Repository
 }
 
 func NewRepository(sqlDB *sql.DB) *Repository {
-	return &Repository{db: sqlDB, q: platformdb.New(sqlDB)}
+	return &Repository{db: sqlDB, q: platformdb.New(sqlDB), events: asyncjobsqlite.NewRepository(sqlDB)}
 }
 
 func (r *Repository) CreateConversation(ctx context.Context, input agent.ConversationInput) (agent.Conversation, error) {
@@ -390,20 +394,22 @@ func (r *Repository) AppendEvent(ctx context.Context, input agent.EventInput) (a
 	if input.Sequence <= 0 {
 		return agent.Event{}, fmt.Errorf("event sequence is required")
 	}
-	row, err := r.q.AppendAgentEvent(ctx, platformdb.AppendAgentEventParams{
-		ID:          newID("agentevt"),
-		Seq:         input.Sequence,
-		EventType:   eventType,
-		Severity:    severity,
-		PayloadJson: payload,
-		RunID:       input.RunID,
-		WorkspaceID: workspaceID,
-		PrincipalID: principalID,
-	})
+	exists, err := r.agentRunExists(ctx, workspaceID, principalID, input.RunID)
 	if err != nil {
 		return agent.Event{}, err
 	}
-	return mapEvent(row), nil
+	if !exists {
+		return agent.Event{}, sql.ErrNoRows
+	}
+	data, err := json.Marshal(map[string]any{"sequence": input.Sequence, "severity": severity, "payload": json.RawMessage(payload)})
+	if err != nil {
+		return agent.Event{}, err
+	}
+	stored, err := r.events.AppendEvent(ctx, "agent_run", input.RunID, eventType, data)
+	if err != nil {
+		return agent.Event{}, err
+	}
+	return agent.Event{ID: fmt.Sprintf("%020d", stored.ID), RunID: input.RunID, Seq: input.Sequence, EventType: eventType, Severity: severity, PayloadJSON: payload, CreatedAt: stored.CreatedAt}, nil
 }
 
 func (r *Repository) ListEvents(ctx context.Context, workspaceID, principalID, runID string) ([]agent.Event, error) {
@@ -415,28 +421,50 @@ func (r *Repository) ListEventsPage(ctx context.Context, workspaceID, principalI
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.q.ListAgentEvents(ctx, platformdb.ListAgentEventsParams{
-		RunID:       runID,
-		WorkspaceID: workspaceID,
-		PrincipalID: principalID,
-	})
-	if err != nil {
+	if exists, err := r.agentRunExists(ctx, workspaceID, principalID, runID); err != nil {
 		return nil, err
+	} else if !exists {
+		return nil, sql.ErrNoRows
 	}
-	if len(rows) == 0 {
-		exists, err := r.agentRunExists(ctx, workspaceID, principalID, runID)
+	limit := page.Limit
+	if limit <= 0 {
+		limit = 10000
+	}
+	if limit > 10000 {
+		limit = 10000
+	}
+	after := int64(0)
+	if strings.TrimSpace(page.After) != "" {
+		parsed, parseErr := strconv.ParseInt(strings.TrimSpace(page.After), 10, 64)
+		if parseErr != nil || parsed < 1 {
+			return nil, fmt.Errorf("invalid event cursor")
+		}
+		after = parsed
+	}
+	out := []agent.Event{}
+	for len(out) < limit {
+		batchSize := min(200, limit-len(out))
+		rows, err := r.events.ListEvents(ctx, "agent_run", runID, after, batchSize)
 		if err != nil {
 			return nil, err
 		}
-		if !exists {
-			return nil, sql.ErrNoRows
+		for _, row := range rows {
+			var data struct {
+				Sequence int64           `json:"sequence"`
+				Severity string          `json:"severity"`
+				Payload  json.RawMessage `json:"payload"`
+			}
+			if err := json.Unmarshal(row.Data, &data); err != nil {
+				return nil, err
+			}
+			out = append(out, agent.Event{ID: fmt.Sprintf("%020d", row.ID), RunID: runID, Seq: data.Sequence, EventType: row.EventType, Severity: data.Severity, PayloadJSON: string(data.Payload), CreatedAt: row.CreatedAt})
+			after = row.ID
+		}
+		if len(rows) < batchSize {
+			break
 		}
 	}
-	out := make([]agent.Event, 0, len(rows))
-	for _, row := range rows {
-		out = append(out, mapEvent(row))
-	}
-	return pageByID(out, page, func(row agent.Event) string { return row.ID }), nil
+	return out, nil
 }
 
 func (r *Repository) agentRunExists(ctx context.Context, workspaceID, principalID, runID string) (bool, error) {
@@ -502,18 +530,6 @@ func mapRun(row platformdb.AgentRun) agent.Run {
 		out.FinishedAt = row.FinishedAt.String
 	}
 	return out
-}
-
-func mapEvent(row platformdb.AgentEvent) agent.Event {
-	return agent.Event{
-		ID:          row.ID,
-		RunID:       row.RunID,
-		Seq:         row.Seq,
-		EventType:   row.EventType,
-		Severity:    row.Severity,
-		PayloadJSON: row.PayloadJson,
-		CreatedAt:   row.CreatedAt,
-	}
 }
 
 func agentScope(workspaceID, principalID string) (string, string, error) {

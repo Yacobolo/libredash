@@ -3,11 +3,46 @@ using TypeSpec.OpenAPI;
 
 namespace LibreDashAPI;
 
-model Error {
-  code: int32;
-  message: string;
-  details?: Record<string>;
-  requestId?: string;
+@minLength(1)
+@maxLength(200)
+scalar ResourceId extends string;
+
+@minValue(1)
+@maxValue(200)
+scalar ListLimit extends int32;
+
+@minValue(1)
+@maxValue(1000)
+scalar QueryLimit extends int32;
+
+@minLength(1)
+@maxLength(2048)
+scalar PageToken extends string;
+
+@minLength(1)
+@maxLength(200)
+scalar IdempotencyKey extends string;
+
+model NoContentResponse {
+  @statusCode statusCode: 204;
+}
+
+
+model ProblemFieldError {
+  field: string;
+  code: string;
+  detail: string;
+}
+
+model ProblemDetails {
+  type: string;
+  title: string;
+  status: int32;
+  detail: string;
+  instance: string;
+  code: string;
+  requestId: string;
+  errors: ProblemFieldError[];
 }
 
 model PageInfo {
@@ -18,7 +53,35 @@ model StatusResponse {
   status: string;
 }
 
-alias JSONObject = Record<string>;
+model AsyncProgress {
+  current?: int64;
+  total?: int64;
+  percent?: float64;
+  message?: string;
+}
+
+model AsyncStructuredError {
+  code: string;
+  detail: string;
+}
+
+model AsyncEventResponse {
+  id: string;
+  event: string;
+  resourceType: string;
+  resourceId: string;
+  createdAt: utcDateTime;
+  progress?: AsyncProgress;
+  error?: AsyncStructuredError;
+  data: Record<unknown>;
+}
+
+model AsyncEventListResponse {
+  items: AsyncEventResponse[];
+  page: PageInfo;
+}
+
+alias JSONObject = Record<unknown>;
 
 model OkJson<T> {
   ...OkResponse;
@@ -27,50 +90,102 @@ model OkJson<T> {
 
 model CreatedJson<T> {
   ...CreatedResponse;
+  @header location: string;
   ...Body<T>;
 }
 
 model AcceptedJson<T> {
   ...Response<202>;
+  @header location: string;
   ...Body<T>;
 }
 
-model ErrorResponse<Status> {
+model ArrowStreamResponse {
+  ...OkResponse;
+  @header contentType: "application/vnd.apache.arrow.stream";
+  @header("X-Query-ID") queryId: string;
+  @header("X-Serving-Snapshot") servingSnapshot: string;
+  @header("X-Next-Cursor") nextCursor?: string;
+  @header cacheControl: "no-store";
+  @body body: bytes;
+}
+
+model EventStreamResponse {
+  ...OkResponse;
+  @header contentType: "text/event-stream";
+  @header cacheControl: "no-store";
+  @body body: string;
+}
+
+alias RowsetResponse<T> = OkJson<T> | ArrowStreamResponse;
+alias EventHistoryResponse<T> = OkJson<T> | EventStreamResponse;
+
+model ProblemResponse<Status> {
   ...Response<Status>;
-  ...Body<Error>;
+  @header contentType: "application/problem+json";
+  @body body: ProblemDetails;
 }
 
 model BadRequest {
   ...BadRequestResponse;
-  ...Body<Error>;
+  @header contentType: "application/problem+json";
+  @body body: ProblemDetails;
 }
 
 model Unauthorized {
   ...UnauthorizedResponse;
-  ...Body<Error>;
+  @header contentType: "application/problem+json";
+  @body body: ProblemDetails;
 }
 
 model Forbidden {
   ...ForbiddenResponse;
-  ...Body<Error>;
+  @header contentType: "application/problem+json";
+  @body body: ProblemDetails;
 }
 
 model NotFound {
   ...NotFoundResponse;
-  ...Body<Error>;
+  @header contentType: "application/problem+json";
+  @body body: ProblemDetails;
 }
 
 model Conflict {
   ...ConflictResponse;
-  ...Body<Error>;
+  @header contentType: "application/problem+json";
+  @body body: ProblemDetails;
 }
 
 model RateLimited {
-  ...ErrorResponse<429>;
+  ...ProblemResponse<429>;
 }
 
 model InternalServerError {
-  ...ErrorResponse<500>;
+  ...ProblemResponse<500>;
 }
 
-alias CommonErrors = BadRequest | Unauthorized | Forbidden | NotFound | Conflict | RateLimited | InternalServerError;
+model PreconditionFailed {
+  ...ProblemResponse<412>;
+}
+
+model ContentTooLarge {
+  ...ProblemResponse<413>;
+}
+
+model UnsupportedMediaType {
+  ...ProblemResponse<415>;
+}
+
+model UnprocessableContent {
+  ...ProblemResponse<422>;
+}
+
+model BadGateway {
+  ...ProblemResponse<502>;
+}
+
+model ServiceUnavailable {
+  ...ProblemResponse<503>;
+}
+
+alias CommonErrors = BadRequest | Unauthorized | Forbidden | NotFound | Conflict | PreconditionFailed | ContentTooLarge | UnsupportedMediaType | UnprocessableContent | RateLimited | InternalServerError | BadGateway | ServiceUnavailable;

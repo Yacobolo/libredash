@@ -1,12 +1,17 @@
 package http
 
 import (
-	"encoding/base64"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	nethttp "net/http"
+	"strings"
+	"time"
+
+	"github.com/Yacobolo/libredash/internal/cursorsigning"
 )
 
 type pageResponse struct {
@@ -22,12 +27,29 @@ func pageSliceForRequest[T any](w nethttp.ResponseWriter, r *nethttp.Request, it
 	if !ok {
 		return nil, "", false
 	}
-	start, ok := apiCursorOffsetForRequest(w, r)
-	if !ok {
+	scope, snapshot := dashboardRequestCursorScope(r, nil), dashboardServingSnapshot(r)
+	lastKey, err := decodeDashboardKeysetCursor(r.URL.Query().Get("pageToken"), scope, snapshot)
+	if err != nil {
+		status := nethttp.StatusBadRequest
+		if errors.Is(err, errDashboardCursorSnapshot) {
+			status = nethttp.StatusConflict
+		}
+		writeJSONError(w, err, status)
 		return nil, "", false
 	}
-	if start > len(items) {
-		start = len(items)
+	start := 0
+	if lastKey != "" {
+		start = -1
+		for index, item := range items {
+			if apiPageItemKey(item) == lastKey {
+				start = index + 1
+				break
+			}
+		}
+		if start < 0 {
+			writeJSONError(w, errDashboardCursorSnapshot, nethttp.StatusConflict)
+			return nil, "", false
+		}
 	}
 	end := start + limit
 	if end > len(items) {
@@ -35,14 +57,53 @@ func pageSliceForRequest[T any](w nethttp.ResponseWriter, r *nethttp.Request, it
 	}
 	nextCursor := ""
 	if end < len(items) {
-		nextCursor = encodeIndexCursor(end)
+		nextCursor = encodeDashboardKeysetCursor(apiPageItemKey(items[end-1]), scope, snapshot)
 	}
 	return append([]T(nil), items[start:end]...), nextCursor, true
 }
 
+type dashboardKeysetCursor struct {
+	Key      string `json:"key"`
+	Scope    string `json:"scope"`
+	Snapshot string `json:"snapshot,omitempty"`
+	Expires  int64  `json:"expires"`
+}
+
+func apiPageItemKey(value any) string {
+	payload, _ := json.Marshal(value)
+	digest := sha256.Sum256(payload)
+	return hex.EncodeToString(digest[:])
+}
+
+func encodeDashboardKeysetCursor(key, scope, snapshot string) string {
+	payload, _ := json.Marshal(dashboardKeysetCursor{Key: key, Scope: scope, Snapshot: snapshot, Expires: time.Now().Add(dashboardCursorLifetime).Unix()})
+	return cursorsigning.Sign("d2", payload)
+}
+
+func decodeDashboardKeysetCursor(token, scope, snapshot string) (string, error) {
+	if token == "" {
+		return "", nil
+	}
+	if !strings.HasPrefix(token, "d2.") {
+		return "", fmt.Errorf("invalid page token")
+	}
+	payload, err := cursorsigning.Verify("d2", token)
+	if err != nil {
+		return "", fmt.Errorf("invalid page token")
+	}
+	var cursor dashboardKeysetCursor
+	if json.Unmarshal(payload, &cursor) != nil || cursor.Key == "" || cursor.Expires < time.Now().Unix() || cursor.Scope != scope {
+		return "", fmt.Errorf("invalid page token")
+	}
+	if cursor.Snapshot != snapshot {
+		return "", errDashboardCursorSnapshot
+	}
+	return cursor.Key, nil
+}
+
 const (
 	defaultAPILimit = 50
-	maxAPILimit     = 100
+	maxAPILimit     = 200
 )
 
 func apiLimitForRequest(w nethttp.ResponseWriter, r *nethttp.Request) (int, bool) {
@@ -66,37 +127,90 @@ func parseAPILimit(value string) (int, error) {
 		return 0, fmt.Errorf("limit must be at least 1")
 	}
 	if limit > maxAPILimit {
-		return maxAPILimit, nil
+		return 0, fmt.Errorf("limit must not exceed %d", maxAPILimit)
 	}
 	return limit, nil
 }
 
-func apiCursorOffsetForRequest(w nethttp.ResponseWriter, r *nethttp.Request) (int, bool) {
-	offset, err := decodeIndexCursor(r.URL.Query().Get("pageToken"))
+func apiCursorOffsetForRequest(w nethttp.ResponseWriter, r *nethttp.Request, scopes ...string) (int, bool) {
+	offset, err := decodeIndexCursor(r.URL.Query().Get("pageToken"), scopes...)
 	if err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
+		status := nethttp.StatusBadRequest
+		if errors.Is(err, errDashboardCursorSnapshot) {
+			status = nethttp.StatusConflict
+		}
+		writeJSONError(w, err, status)
 		return 0, false
 	}
 	return offset, true
 }
 
-func decodeIndexCursor(token string) (int, error) {
+const dashboardCursorLifetime = 15 * time.Minute
+
+var errDashboardCursorSnapshot = errors.New("cursor serving snapshot is unavailable")
+
+type dashboardIndexCursor struct {
+	Offset   int    `json:"offset"`
+	Scope    string `json:"scope"`
+	Snapshot string `json:"snapshot,omitempty"`
+	Expires  int64  `json:"expires"`
+}
+
+func decodeIndexCursor(token string, scopes ...string) (int, error) {
 	if token == "" {
 		return 0, nil
 	}
-	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if !strings.HasPrefix(token, "d1.") {
+		return 0, fmt.Errorf("invalid page token")
+	}
+	payload, err := cursorsigning.Verify("d1", token)
 	if err != nil {
 		return 0, fmt.Errorf("invalid page token")
 	}
-	var offset int
-	if _, err := fmt.Sscanf(string(raw), "offset:%d", &offset); err != nil || offset < 0 {
+	var cursor dashboardIndexCursor
+	if json.Unmarshal(payload, &cursor) != nil || cursor.Offset < 0 || cursor.Expires < time.Now().Unix() {
 		return 0, fmt.Errorf("invalid page token")
 	}
-	return offset, nil
+	scope, snapshot := dashboardCursorScopeParts(scopes...)
+	if cursor.Snapshot != snapshot {
+		return 0, errDashboardCursorSnapshot
+	}
+	if cursor.Scope != scope {
+		return 0, fmt.Errorf("invalid page token")
+	}
+	return cursor.Offset, nil
 }
 
-func encodeIndexCursor(offset int) string {
-	return base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf("offset:%d", offset)))
+func encodeIndexCursor(offset int, scopes ...string) string {
+	scope, snapshot := dashboardCursorScopeParts(scopes...)
+	payload, _ := json.Marshal(dashboardIndexCursor{Offset: offset, Scope: scope, Snapshot: snapshot, Expires: time.Now().Add(dashboardCursorLifetime).Unix()})
+	return cursorsigning.Sign("d1", payload)
+}
+
+func dashboardCursorScopeParts(scopes ...string) (string, string) {
+	if len(scopes) == 0 || strings.TrimSpace(scopes[0]) == "" {
+		return "list", ""
+	}
+	snapshot := ""
+	if len(scopes) > 1 {
+		snapshot = scopes[1]
+	}
+	return scopes[0], snapshot
+}
+
+func dashboardRequestCursorScope(r *nethttp.Request, payload any) string {
+	query := r.URL.Query()
+	query.Del("pageToken")
+	body, _ := json.Marshal(payload)
+	digest := sha256.Sum256([]byte(r.Method + "\n" + r.URL.Path + "\n" + query.Encode() + "\n" + string(body)))
+	return hex.EncodeToString(digest[:])
+}
+
+func dashboardServingSnapshot(r *nethttp.Request) string {
+	if value := strings.TrimSpace(r.Header.Get("X-Serving-Snapshot")); value != "" {
+		return value
+	}
+	return "unversioned"
 }
 
 func writeJSON(w nethttp.ResponseWriter, status int, value any) {

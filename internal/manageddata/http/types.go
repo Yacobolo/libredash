@@ -29,15 +29,20 @@ type UploadCoordinator interface {
 	BeginUpload(context.Context, control.BeginUploadRequest) (control.UploadResult, error)
 	RecoverUpload(context.Context, control.UploadRequest) (control.UploadResult, error)
 	FinalizeUpload(context.Context, control.UploadRequest) (control.FinalizeResult, error)
+	BeginFinalizeUpload(context.Context, control.UploadRequest) (control.UploadResult, error)
+	CompleteFinalizeUpload(context.Context, control.UploadRequest) (control.FinalizeResult, error)
 	AbortUpload(context.Context, control.UploadRequest) (control.UploadResult, error)
 }
 
 type Options struct {
-	Repository       Repository
-	Uploads          UploadCoordinator
-	Multipart        s3multipart.Coordinator
-	CurrentPrincipal func(*stdhttp.Request) (Principal, bool)
-	MaxJSONBodyBytes int64
+	Repository          Repository
+	Uploads             UploadCoordinator
+	Multipart           s3multipart.Coordinator
+	CurrentPrincipal    func(*stdhttp.Request) (Principal, bool)
+	MaxJSONBodyBytes    int64
+	Environment         string
+	EnqueueFinalize     func(context.Context, control.UploadRequest) error
+	RecordUploadCreated func(context.Context, control.UploadResult) error
 }
 
 type Handler struct {
@@ -47,6 +52,9 @@ type Handler struct {
 func NewHandler(options Options) *Handler {
 	if options.MaxJSONBodyBytes <= 0 {
 		options.MaxJSONBodyBytes = 16 << 20
+	}
+	if options.Environment == "" {
+		options.Environment = "dev"
 	}
 	return &Handler{options: options}
 }

@@ -15,7 +15,7 @@ import (
 
 func TestWorkspaceSearchReturnsProgressiveDiscoveryResults(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/search?q=orders&limit=20", nil)
+	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?q=orders&limit=20", nil)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -68,7 +68,7 @@ func TestWorkspaceSearchUsesRouteWorkspaceRuntimeCatalog(t *testing.T) {
 		"operations": workspaceSearchMetrics{workspaceID: "operations", dashboardID: "fulfillment-operations", title: "Fulfillment Operations"},
 	}), Options{Store: testStore(t), DefaultWorkspaceID: "sales"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/operations/search?types=dashboard&q=fulfillment&limit=20", nil)
+	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/operations/search?types=dashboard&q=fulfillment&limit=20", nil)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -100,7 +100,7 @@ func TestWorkspaceSearchDoesNotLeakDefaultWorkspaceRuntimeDocuments(t *testing.T
 		"operations": workspaceSearchMetrics{workspaceID: "operations", dashboardID: "fulfillment-operations", title: "Fulfillment Operations"},
 	}), Options{Store: testStore(t), DefaultWorkspaceID: "sales"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/operations/search?types=dashboard,visual,table&limit=20", nil)
+	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/operations/search?types=dashboard,visual,table&limit=20", nil)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -133,7 +133,7 @@ func TestWorkspaceSearchDefaultWorkspaceStillReturnsRichRuntimeResults(t *testin
 		"operations": workspaceSearchMetrics{workspaceID: "operations", dashboardID: "fulfillment-operations", title: "Fulfillment Operations"},
 	}), Options{Store: testStore(t), DefaultWorkspaceID: "sales"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/sales/search?types=dashboard,visual,table&limit=20", nil)
+	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/sales/search?types=dashboard,visual,table&limit=20", nil)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -159,7 +159,7 @@ func TestWorkspaceSearchDefaultWorkspaceStillReturnsRichRuntimeResults(t *testin
 
 func TestWorkspaceSearchDoesNotFallbackToRuntimeCatalogForOtherWorkspaces(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/other/search?q=orders&limit=20", nil)
+	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/other/search?q=orders&limit=20", nil)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -186,7 +186,7 @@ func TestWorkspaceSearchUsesAssetGraphFallbackWithoutRuntimeDocs(t *testing.T) {
 		"sales": workspaceSearchMetrics{workspaceID: "sales", dashboardID: "executive-sales", title: "Executive Sales Dashboard"},
 	}), Options{Store: store, DefaultWorkspaceID: "sales"})
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/asset-only/search?types=asset&q=Graph%20Only&limit=20", nil)
+	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/asset-only/search?types=asset&q=Graph%20Only&limit=20", nil)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -216,7 +216,7 @@ func TestWorkspaceSearchUsesAssetGraphFallbackWithoutRuntimeDocs(t *testing.T) {
 func TestWorkspaceSearchTypeFilteringPaginationAndErrors(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
 
-	firstReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=visual,table&limit=1", nil)
+	firstReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=visual,table&limit=1", nil)
 	firstReq.Header.Set("Accept", "application/json")
 	firstRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(firstRec, firstReq)
@@ -239,7 +239,7 @@ func TestWorkspaceSearchTypeFilteringPaginationAndErrors(t *testing.T) {
 		t.Fatalf("unexpected filtered type %#v in %#v", typ, first.Items[0])
 	}
 
-	nextReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=visual,table&limit=1&pageToken="+first.Page.NextCursor, nil)
+	nextReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=visual,table&limit=1&pageToken="+first.Page.NextCursor, nil)
 	nextReq.Header.Set("Accept", "application/json")
 	nextRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(nextRec, nextReq)
@@ -250,7 +250,7 @@ func TestWorkspaceSearchTypeFilteringPaginationAndErrors(t *testing.T) {
 		t.Fatalf("next page repeated first item: first=%#v next=%s", first.Items[0], nextRec.Body.String())
 	}
 
-	badReq := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=dashboard,unknown", nil)
+	badReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=dashboard,unknown", nil)
 	badReq.Header.Set("Accept", "application/json")
 	badRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(badRec, badReq)

@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS project_deployments (
   project_id TEXT NOT NULL,
   environment TEXT NOT NULL,
   request_digest TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'failed', 'superseded')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'failed', 'cancelled', 'superseded')),
   created_by TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   activated_at TEXT,

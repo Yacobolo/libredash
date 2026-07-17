@@ -119,6 +119,43 @@ func TestDataSyncResumesTusFromHEADOffset(t *testing.T) {
 	}
 }
 
+func TestDataSyncWaitsForAsynchronousFinalization(t *testing.T) {
+	root := t.TempDir()
+	file := writeSyncFile(t, root, "orders.csv", []byte("order_id\n1\n"))
+	plan := syncPlan(root, file)
+	getCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		files := []apigenapi.ManagedDataFileUploadResponse{{
+			File: wireFile(t, file), Status: apigenapi.ManagedDataFileUploadStatusSkipped,
+			Negotiation: apigenapi.ManagedDataUploadNegotiation{Protocol: apigenapi.ManagedDataUploadProtocolAlreadyPresent},
+		}}
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/upload-sessions"):
+			writeUploadSession(t, w, plan, "upload-async", apigenapi.ManagedDataUploadSessionStatusOpen, files)
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/finalize"):
+			writeUploadSession(t, w, plan, "upload-async", apigenapi.ManagedDataUploadSessionStatusFinalizing, files)
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/upload-sessions/upload-async"):
+			getCalls++
+			status := apigenapi.ManagedDataUploadSessionStatusFinalizing
+			if getCalls == 2 {
+				status = apigenapi.ManagedDataUploadSessionStatusCompleted
+			}
+			writeUploadSession(t, w, plan, "upload-async", status, files)
+		default:
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	err := runDataSync(context.Background(), dataSyncRequest{ProjectID: "demo", Connection: "orders", Root: root, Target: server.URL, Token: "secret-token", Plan: plan, Out: io.Discard, HTTPClient: server.Client()})
+	if err != nil {
+		t.Fatalf("runDataSync() error = %v", err)
+	}
+	if getCalls != 2 {
+		t.Fatalf("upload status GET calls = %d, want 2", getCalls)
+	}
+}
+
 func TestDataSyncRetriesTusCapacityFailureAndReportsHTTPStatus(t *testing.T) {
 	root := t.TempDir()
 	body := []byte("orders")
@@ -241,9 +278,9 @@ func TestDataSyncDetectsMutationAndSanitizesSignedURL(t *testing.T) {
 		switch {
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/upload-sessions"):
 			writeUploadSession(t, w, plan, "upload-1", apigenapi.ManagedDataUploadSessionStatusOpen, []apigenapi.ManagedDataFileUploadResponse{{File: wireFile(t, file), Status: apigenapi.ManagedDataFileUploadStatusPending, Negotiation: apigenapi.ManagedDataUploadNegotiation{Protocol: apigenapi.ManagedDataUploadProtocolS3Multipart, S3Multipart: &apigenapi.ManagedDataS3MultipartNegotiation{MinimumPartSize: 4, MaximumPartSize: 6, MaximumParts: 3}}}})
-		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/abort"):
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/cancel"):
 			aborted = true
-			writeUploadSession(t, w, plan, "upload-1", apigenapi.ManagedDataUploadSessionStatusAborted, nil)
+			writeUploadSession(t, w, plan, "upload-1", apigenapi.ManagedDataUploadSessionStatusCancelled, nil)
 		default:
 			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
 		}

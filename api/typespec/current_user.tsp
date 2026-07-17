@@ -65,7 +65,7 @@ alias ListCurrentAPITokensOK = OkJson<APITokenListResponse>;
 @route("/me/api-tokens")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "MANAGE_GRANTS" })
-op listCurrentAPITokens(@query limit?: int32, @query pageToken?: string): ListCurrentAPITokensOK | CommonErrors;
+op listCurrentAPITokens(@query limit?: ListLimit, @query pageToken?: PageToken): ListCurrentAPITokensOK | CommonErrors;
 
 alias CreateCurrentAPITokenCreated = CreatedJson<APITokenCreateResponse>;
 
@@ -74,16 +74,14 @@ alias CreateCurrentAPITokenCreated = CreatedJson<APITokenCreateResponse>;
 @route("/me/api-tokens")
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "MANAGE_GRANTS" })
-op createCurrentAPIToken(@body body: APITokenCreateRequest): CreateCurrentAPITokenCreated | CommonErrors;
-
-alias RevokeCurrentAPITokenOK = OkJson<StatusResponse>;
+op createCurrentAPIToken(@header("Idempotency-Key") idempotencyKey: IdempotencyKey, @body body: APITokenCreateRequest): CreateCurrentAPITokenCreated | CommonErrors;
 
 @tag("Current User")
 @summary("Revoke current API token")
 @route("/me/api-tokens/{token}")
 @delete
 @apigen.authz(#{ mode: "privilege", privilege: "MANAGE_GRANTS" })
-op revokeCurrentAPIToken(@path token: string): RevokeCurrentAPITokenOK | CommonErrors;
+op revokeCurrentAPIToken(@path token: string): NoContentResponse | CommonErrors;
 
 alias ListCurrentEffectivePrivilegesOK = OkJson<EffectivePrivilegesResponse>;
 
@@ -101,13 +99,11 @@ alias ListCurrentSessionsOK = OkJson<SessionListResponse>;
 @route("/me/sessions")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
-op listCurrentSessions(@query limit?: int32, @query pageToken?: string): ListCurrentSessionsOK | CommonErrors;
-
-alias RevokeCurrentSessionOK = OkJson<StatusResponse>;
+op listCurrentSessions(@query limit?: ListLimit, @query pageToken?: PageToken): ListCurrentSessionsOK | CommonErrors;
 
 @tag("Current User")
 @summary("Revoke current session")
 @route("/me/sessions/{session}")
 @delete
 @apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
-op revokeCurrentSession(@path session: string): RevokeCurrentSessionOK | CommonErrors;
+op revokeCurrentSession(@path session: string): NoContentResponse | CommonErrors;

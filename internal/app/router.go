@@ -29,6 +29,8 @@ func (s *Server) Routes() http.Handler {
 	mux.Get("/favicon.ico", favicon)
 	mux.Get("/healthz", s.healthz)
 	mux.Get("/readyz", s.readyz)
+	mux.Get("/api/openapi.json", s.openAPIDescription)
+	mux.Get("/api/docs", s.publicDocs)
 	if s.pageStreamTrace != nil {
 		mux.Get("/__dev/pagestream/traces", s.pageStreamTraces)
 		mux.Get("/__dev/pagestream/signals", s.pageStreamSignals)
@@ -61,6 +63,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/admin/groups", s.protected(access.PrivilegeManageGrants, adminHTTP.Groups))
 		r.Get("/admin/groups/{group}", s.protected(access.PrivilegeManageGrants, adminHTTP.GroupDetail))
 		r.Get("/admin/agent", s.protected(access.PrivilegeManageGrants, adminHTTP.Agent))
+		r.Patch("/admin/agent/config", s.protected(access.PrivilegeManageGrants, agentHTTP.UpdateAdminConfig))
 		r.Get("/admin/storage", s.protected(access.PrivilegeManageGrants, adminHTTP.Storage))
 		r.Post("/admin/storage/select-table", s.protected(access.PrivilegeManageGrants, adminHTTP.StorageTableSelect))
 		r.Get("/admin/queries", s.protected(access.PrivilegeViewAudit, adminHTTP.Queries))
@@ -107,23 +110,12 @@ func (s *Server) Routes() http.Handler {
 		}
 		mux.Group(func(r chi.Router) {
 			r.Use(s.rateLimits.apiMiddleware())
-			r.Use(s.csrf)
+			r.Use(s.publicProtocolMiddleware)
 			if s.managedDataTus != nil {
 				tus := s.protect(access.PrivilegeIngestData, managedDataTusHandler(s.managedDataTus))
-				r.Handle("/api/v1/managed-data/tus", tus)
-				r.Handle("/api/v1/managed-data/tus/*", tus)
+				r.Handle("/upload-protocols/tus", tus)
+				r.Handle("/upload-protocols/tus/*", tus)
 			}
-			agentHTTP := s.agentHTTPHandler()
-			r.Get("/api/v1/agent/conversations", s.protected(access.PrivilegeViewAgent, agentHTTP.ListConversations))
-			r.Post("/api/v1/agent/conversations", s.protected(access.PrivilegeUseAgent, agentHTTP.CreateConversation))
-			r.Get("/api/v1/agent/conversations/{conversation}", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.GetConversation))
-			r.Patch("/api/v1/agent/conversations/{conversation}", s.protectedWithObjects(access.PrivilegeUseAgent, agenthttp.ConversationObjectRefs, agentHTTP.UpdateConversation))
-			r.Delete("/api/v1/agent/conversations/{conversation}", s.protectedWithObjects(access.PrivilegeUseAgent, agenthttp.ConversationObjectRefs, agentHTTP.ArchiveConversation))
-			r.Get("/api/v1/agent/conversations/{conversation}/messages", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.ListMessages))
-			r.Get("/api/v1/agent/conversations/{conversation}/runs", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.ListRuns))
-			r.Get("/api/v1/agent/conversations/{conversation}/runs/{run}", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.GetRun))
-			r.Get("/api/v1/agent/conversations/{conversation}/runs/{run}/events", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.ListEvents))
-			r.Post("/api/v1/agent/conversations/{conversation}/turns", s.protectedWithObjects(access.PrivilegeUseAgent, agenthttp.ConversationObjectRefs, agentHTTP.CreateTurn))
 			s.registerAPIGenRoutes(r)
 		})
 	}

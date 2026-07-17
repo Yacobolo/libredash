@@ -259,6 +259,19 @@ func TestDeploymentWithoutManagedConnectionsActivates(t *testing.T) {
 	assertActiveState(t, ctx, db, "sales", "prod", "sales_new")
 }
 
+func TestCancelDeploymentOnlyTransitionsPendingDeployment(t *testing.T) {
+	ctx, db, repository := testRepository(t)
+	insertWorkspaceCandidate(t, ctx, db, "sales", "sales_old", "sales_new", "prod")
+	created := createDeployment(t, ctx, repository, "deployment_cancel", []deployment.TargetInput{{WorkspaceID: "sales", ServingStateID: "sales_new"}})
+	cancelled, err := repository.CancelDeployment(ctx, created.ID)
+	if err != nil || cancelled.Status != deployment.StatusCancelled {
+		t.Fatalf("cancelled = %#v, error = %v", cancelled, err)
+	}
+	if _, err := repository.ActivateDeployment(ctx, created.ID); !errors.Is(err, deployment.ErrConflict) {
+		t.Fatalf("activation after cancellation error = %v", err)
+	}
+}
+
 func TestCreateDeploymentRejectsServingStateFromAnotherProject(t *testing.T) {
 	ctx, db, repository := testRepository(t)
 	insertWorkspaceCandidate(t, ctx, db, "sales", "sales_old", "sales_new", "prod")

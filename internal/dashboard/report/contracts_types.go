@@ -87,13 +87,13 @@ type Visual struct {
 }
 
 type VisualQuery struct {
-	Table      string     `yaml:"table"`
-	Dimensions []FieldRef `yaml:"dimensions"`
-	Series     FieldRef   `yaml:"series"`
-	Measures   []FieldRef `yaml:"measures"`
-	Time       QueryTime  `yaml:"time"`
-	Sort       []Sort     `yaml:"sort"`
-	Limit      int        `yaml:"limit"`
+	Table      string     `yaml:"table" json:"table,omitempty"`
+	Dimensions []FieldRef `yaml:"dimensions" json:"dimensions,omitempty"`
+	Series     FieldRef   `yaml:"series" json:"series,omitempty"`
+	Measures   []FieldRef `yaml:"measures" json:"measures,omitempty"`
+	Time       QueryTime  `yaml:"time" json:"time,omitempty"`
+	Sort       []Sort     `yaml:"sort" json:"sort,omitempty"`
+	Limit      int        `yaml:"limit" json:"limit,omitempty"`
 }
 
 type FieldRef struct {
@@ -263,9 +263,9 @@ func (f FieldRef) IsZero() bool {
 }
 
 type Sort struct {
-	Field     string `yaml:"field"`
-	Direction string `yaml:"direction"`
-	Expr      string `yaml:"expr"`
+	Field     string `yaml:"field" json:"field"`
+	Direction string `yaml:"direction" json:"direction"`
+	Expr      string `yaml:"expr" json:"expr,omitempty"`
 }
 
 type Interaction struct {

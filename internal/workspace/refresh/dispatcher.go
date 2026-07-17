@@ -30,6 +30,7 @@ type Dispatcher struct {
 	Logger         *slog.Logger
 	Owner          string
 	ExecutionStats func() execution.Stats
+	RunFinished    func(context.Context, materialize.JobRecord)
 }
 
 func (d Dispatcher) Run(ctx context.Context) {
@@ -76,8 +77,16 @@ func (d Dispatcher) Run(ctx context.Context) {
 		})
 		if err != nil {
 			_, _ = d.Runs.MarkRunFailed(context.Background(), job.WorkspaceID, job.RunID, err.Error())
+			d.notifyRunFinished(job)
 			return
 		}
+		d.notifyRunFinished(job)
+	}
+}
+
+func (d Dispatcher) notifyRunFinished(job materialize.JobRecord) {
+	if d.RunFinished != nil {
+		d.RunFinished(context.Background(), job)
 	}
 }
 

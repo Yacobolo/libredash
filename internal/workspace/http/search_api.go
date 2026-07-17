@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/dashboard"
@@ -25,11 +26,57 @@ func (h Handler) SearchWorkspace(w nethttp.ResponseWriter, r *nethttp.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
+	results, err = h.filterReadableSearchResults(r, workspaceID, results)
+	if err != nil {
+		writeJSONError(w, err, nethttp.StatusInternalServerError)
+		return
+	}
 	items, nextCursor, ok := pageSliceForRequest(w, r, results)
 	if !ok {
 		return
 	}
 	writeJSON(w, nethttp.StatusOK, api.SearchResponse{Items: items, Page: api.PageInfo{NextCursor: nextCursor}})
+}
+
+func (h Handler) filterReadableSearchResults(r *nethttp.Request, workspaceID string, rows []api.SearchResult) ([]api.SearchResult, error) {
+	out := make([]api.SearchResult, 0, len(rows))
+	for _, row := range rows {
+		object, ok := searchResultObject(workspaceID, row)
+		if !ok {
+			out = append(out, row)
+			continue
+		}
+		allowed, err := h.ReadModel.CanReadObject(r, object)
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
+			out = append(out, row)
+		}
+	}
+	return out, nil
+}
+
+func searchResultObject(workspaceID string, row api.SearchResult) (access.ObjectRef, bool) {
+	workspaceObject := access.WorkspaceObject(workspaceID)
+	if row.AssetID != "" {
+		return assetObjectForID(workspaceID, row.AssetID)
+	}
+	if row.DashboardID != "" {
+		return access.ItemObjectWithParent(access.SecurableDashboard, workspaceID, row.DashboardID, workspaceObject), true
+	}
+	if row.ModelID == "" {
+		return access.ObjectRef{}, false
+	}
+	model := access.ItemObjectWithParent(access.SecurableSemanticModel, workspaceID, row.ModelID, workspaceObject)
+	if row.DatasetID == "" {
+		return model, true
+	}
+	dataset := access.ItemObjectWithParent(access.SecurableDataset, workspaceID, row.ModelID+"/"+row.DatasetID, model)
+	if row.FieldID == "" {
+		return dataset, true
+	}
+	return access.ItemObjectWithParent(access.SecurableColumn, workspaceID, row.ModelID+"/"+row.DatasetID+"/"+row.FieldID, dataset), true
 }
 
 func (h Handler) workspaceSearchResults(r *nethttp.Request, workspaceID, query string, types search.TypeSet) ([]api.SearchResult, error) {

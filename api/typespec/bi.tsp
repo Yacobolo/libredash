@@ -55,6 +55,7 @@ model DashboardComponentPlacement {
   rowSpan?: int32;
 }
 
+@discriminator("kind")
 model DashboardComponentResponse {
   id: string;
   kind: string;
@@ -68,9 +69,92 @@ model DashboardComponentResponse {
   height?: float64;
 }
 
-model DashboardComponentListResponse {
-  items: DashboardComponentResponse[];
-  page: PageInfo;
+model DashboardVisualComponentResponse extends DashboardComponentResponse {
+  kind: "visual";
+  visualId: string;
+}
+
+model DashboardTableComponentResponse extends DashboardComponentResponse {
+  kind: "table";
+  tableId: string;
+}
+
+model DashboardFilterComponentResponse extends DashboardComponentResponse {
+  kind: "filter";
+  filterId: string;
+}
+
+model DashboardPageResponse {
+  id: string;
+  title: string;
+  description?: string;
+  components: DashboardComponentResponse[];
+}
+
+model DashboardVisualFieldRef {
+  field: string;
+  `alias`?: string;
+}
+
+model DashboardVisualQueryTime {
+  field: string;
+  grain: string;
+  `alias`?: string;
+}
+
+model DashboardVisualQuerySort {
+  field: string;
+  direction: string;
+  expr?: string;
+}
+
+model DashboardVisualQueryDefinition {
+  table?: string;
+  dimensions?: DashboardVisualFieldRef[];
+  series?: DashboardVisualFieldRef;
+  measures?: DashboardVisualFieldRef[];
+  time?: DashboardVisualQueryTime;
+  sort?: DashboardVisualQuerySort[];
+  limit?: QueryLimit;
+}
+
+model DashboardSelectionMappingDefinition {
+  field: string;
+  fact?: string;
+  grain?: string;
+  value: string;
+  label?: string;
+}
+
+model DashboardSelectionInteractionDefinition {
+  toggle?: boolean;
+  mappings?: DashboardSelectionMappingDefinition[];
+  targets?: string[];
+}
+
+model DashboardVisualInteractionDefinition {
+  pointSelection?: DashboardSelectionInteractionDefinition;
+  rowSelection?: DashboardSelectionInteractionDefinition;
+}
+
+model DashboardVisualInteractionConfig {
+  kind: string;
+  toggle: boolean;
+  mappings: DashboardSelectionMappingDefinition[];
+  targets?: string[];
+}
+
+model DashboardVisualSelectionMapping {
+  field: string;
+  fact?: string;
+  grain?: string;
+  value: DashboardVisualValue;
+  label?: string;
+}
+
+model DashboardVisualSelectionEntry {
+  mappings: DashboardVisualSelectionMapping[];
+  label?: string;
 }
 
 model DashboardVisualDescribeResponse {
@@ -82,15 +166,34 @@ model DashboardVisualDescribeResponse {
   type?: string;
   title?: string;
   description?: string;
-  query?: Record<string>;
-  options?: Record<string>;
-  rendererOptions?: Record<string>;
-  interaction?: Record<string>;
+  query?: DashboardVisualQueryDefinition;
+  extensions?: Record<Record<unknown>>;
+  interaction?: DashboardVisualInteractionDefinition;
   placement?: DashboardComponentPlacement;
   x?: float64;
   y?: float64;
   width?: float64;
   height?: float64;
+}
+
+model DashboardTableDescribeResponse {
+  id: string;
+  componentId?: string;
+  title?: string;
+  description?: string;
+  columns: DashboardTableColumn[];
+  query?: Record<unknown>;
+  placement?: DashboardComponentPlacement;
+}
+
+model DashboardFilterDescribeResponse {
+  id: string;
+  componentId?: string;
+  title?: string;
+  description?: string;
+  field?: string;
+  multiSelect?: boolean;
+  placement?: DashboardComponentPlacement;
 }
 
 model DashboardManifestPage {
@@ -182,6 +285,35 @@ model SemanticFieldListResponse {
   page: PageInfo;
 }
 
+model SemanticRelationshipResponse {
+  id: string;
+  fromDataset: string;
+  fromField: string;
+  toDataset: string;
+  toField: string;
+  cardinality: string;
+  active: boolean;
+}
+
+model SemanticRelationshipListResponse {
+  items: SemanticRelationshipResponse[];
+  page: PageInfo;
+}
+
+model SemanticSourceResponse {
+  id: string;
+  kind: string;
+  connection?: string;
+  table?: string;
+  path?: string;
+  description?: string;
+}
+
+model SemanticSourceListResponse {
+  items: SemanticSourceResponse[];
+  page: PageInfo;
+}
+
 model SemanticFieldRef {
   field: string;
   `alias`?: string;
@@ -211,29 +343,59 @@ model SemanticFilter {
 }
 
 model SemanticQueryRequest {
+  @maxItems(50)
   dimensions?: SemanticFieldRef[];
+  @maxItems(50)
   measures?: SemanticFieldRef[];
   time?: SemanticTimeRef;
+  @maxItems(100)
   filters?: SemanticFilter[];
+  @maxItems(50)
   sort?: SemanticSort[];
-  limit?: int32;
-  pageToken?: string;
+  limit?: QueryLimit;
+  pageToken?: PageToken;
 }
 
 model SemanticPreviewRequest {
+  @maxItems(50)
   dimensions?: SemanticFieldRef[];
+  @maxItems(50)
   measures?: SemanticFieldRef[];
+  @maxItems(100)
   filters?: SemanticFilter[];
+  @maxItems(50)
   sort?: SemanticSort[];
-  limit?: int32;
-  pageToken?: string;
+  limit?: QueryLimit;
+  pageToken?: PageToken;
 }
 
-model SemanticQueryRow {}
+enum QueryColumnType {
+  boolean;
+  int64;
+  decimal;
+  float64;
+  string;
+  date;
+  timestamp;
+  json;
+}
+
+model QueryColumn {
+  name: string;
+  type: QueryColumnType;
+  nullable: boolean;
+}
+
+// Cells are encoded as strings so int64 and decimal values never lose precision.
+// The typed column descriptor determines how clients interpret each position;
+// an empty string represents SQL NULL and is disambiguated by nullable metadata.
+alias SemanticQueryRow = string[];
 
 model SemanticQueryResponse {
-  columns: string[];
-  items: SemanticQueryRow[];
+  queryId: string;
+  servingSnapshot: string;
+  columns: QueryColumn[];
+  rows: SemanticQueryRow[];
   page: PageInfo;
 }
 
@@ -244,7 +406,7 @@ model SemanticExplainResponse {
   physicalDependencies: string[];
   relationshipPaths: string[];
   sql: string;
-  args: Record<string>[];
+  args: Record<unknown>[];
   columns: string[];
   warnings: string[];
 }
@@ -266,8 +428,8 @@ model SemanticModelDescriptionResponse {
 }
 
 model DashboardFilters {
-  controls?: Record<string>;
-  selections?: Record<string>[];
+  controls?: Record<unknown>;
+  selections?: Record<unknown>[];
 }
 
 model DashboardPageQueryRequest {
@@ -275,44 +437,212 @@ model DashboardPageQueryRequest {
 }
 
 model DashboardTableQueryRequest {
-  pageId?: string;
-  count?: int32;
-  filters?: DashboardFilters;
-}
-
-model DashboardTableDataRequest {
-  count?: int32;
+  limit?: QueryLimit;
+  pageToken?: PageToken;
   filters?: DashboardFilters;
 }
 
 model DashboardPageQueryResponse {
-  filters: Record<string>;
-  filterOptions?: Record<string>;
-  status?: Record<string>;
+  filters: Record<unknown>;
+  filterOptions?: Record<unknown>;
+  status?: Record<unknown>;
   visuals: Record<DashboardVisualDataResponse>;
 }
 
-model DashboardVisualDatum {}
+alias DashboardVisualValue = unknown;
 
+model CategoryValueVisualDatum {
+  label: string;
+  value: DashboardVisualValue;
+  selected?: boolean;
+}
+
+model CategorySeriesValueVisualDatum {
+  label: string;
+  series: string;
+  value: DashboardVisualValue;
+  selected?: boolean;
+}
+
+model CategoryMultiMeasureVisualDatum {
+  label: string;
+  series: string;
+  value: DashboardVisualValue;
+  selected?: boolean;
+}
+
+model CategoryDeltaVisualDatum {
+  label: string;
+  value: DashboardVisualValue;
+  start: float64;
+  end: float64;
+  positive: boolean;
+  selected?: boolean;
+}
+
+model BinnedMeasureVisualDatum {
+  label: string;
+  binStart: float64;
+  binEnd: float64;
+  value: DashboardVisualValue;
+}
+
+model HierarchyVisualDatum {
+  path: string[];
+  value: DashboardVisualValue;
+}
+
+model SingleValueVisualDatum {
+  label: string;
+  value: DashboardVisualValue;
+  series?: string;
+  selected?: boolean;
+}
+
+model MatrixVisualDatum {
+  row: string;
+  column: string;
+  value: DashboardVisualValue;
+  selected?: boolean;
+}
+
+model GraphVisualDatum {
+  source: string;
+  target: string;
+  value: DashboardVisualValue;
+}
+
+model GeoVisualDatum {
+  name: string;
+  value: DashboardVisualValue;
+  selected?: boolean;
+}
+
+model OHLCVisualDatum {
+  label: string;
+  open: DashboardVisualValue;
+  close: DashboardVisualValue;
+  low: DashboardVisualValue;
+  high: DashboardVisualValue;
+}
+
+model DistributionVisualDatum {
+  label: string;
+  min: float64;
+  q1: float64;
+  median: float64;
+  q3: float64;
+  max: float64;
+}
+
+model DashboardVisualDatum {
+  label?: string;
+  series?: string;
+  value?: DashboardVisualValue;
+  selected?: boolean;
+  start?: float64;
+  end?: float64;
+  positive?: boolean;
+  binStart?: float64;
+  binEnd?: float64;
+  path?: string[];
+  row?: string;
+  column?: string;
+  source?: string;
+  target?: string;
+  name?: string;
+  open?: DashboardVisualValue;
+  close?: DashboardVisualValue;
+  low?: DashboardVisualValue;
+  high?: DashboardVisualValue;
+  min?: float64;
+  q1?: float64;
+  median?: float64;
+  q3?: float64;
+  max?: float64;
+  extensions?: Record<Record<unknown>>;
+}
+
+@discriminator("shape")
 model DashboardVisualDataResponse {
   version?: int32;
   id?: string;
   kind?: string;
-  shape?: string;
+  shape: string;
   renderer?: string;
   type?: string;
   title?: string;
   unit?: string;
   format?: string;
-  interaction?: Record<string>;
+  interaction?: DashboardVisualInteractionConfig;
   dimensions?: string[];
   measure?: string;
   measures?: string[];
   series?: string[];
-  options?: Record<string>;
-  rendererOptions?: Record<string>;
-  selection?: Record<string>[];
+  extensions?: Record<Record<unknown>>;
+  selection?: DashboardVisualSelectionEntry[];
+  @maxItems(1000)
   data: DashboardVisualDatum[];
+}
+
+model CategoryValueVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "category_value";
+  data: CategoryValueVisualDatum[];
+}
+
+model CategorySeriesValueVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "category_series_value";
+  data: CategorySeriesValueVisualDatum[];
+}
+
+model CategoryMultiMeasureVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "category_multi_measure";
+  data: CategoryMultiMeasureVisualDatum[];
+}
+
+model CategoryDeltaVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "category_delta";
+  data: CategoryDeltaVisualDatum[];
+}
+
+model BinnedMeasureVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "binned_measure";
+  data: BinnedMeasureVisualDatum[];
+}
+
+model HierarchyVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "hierarchy";
+  data: HierarchyVisualDatum[];
+}
+
+model SingleValueVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "single_value";
+  data: SingleValueVisualDatum[];
+}
+
+model MatrixVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "matrix";
+  data: MatrixVisualDatum[];
+}
+
+model GraphVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "graph";
+  data: GraphVisualDatum[];
+}
+
+model GeoVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "geo";
+  data: GeoVisualDatum[];
+}
+
+model OHLCVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "ohlc";
+  data: OHLCVisualDatum[];
+}
+
+model DistributionVisualDataResponse extends DashboardVisualDataResponse {
+  shape: "distribution";
+  data: DistributionVisualDatum[];
 }
 
 model DashboardTableColumn {
@@ -322,17 +652,14 @@ model DashboardTableColumn {
   format?: string;
 }
 
-model DashboardTableRow {}
-
-model DashboardTableBlock {
-  rows: DashboardTableRow[];
-}
-
 model DashboardTableQueryResponse {
+  queryId: string;
+  servingSnapshot: string;
   title: string;
-  columns: DashboardTableColumn[];
+  columns: QueryColumn[];
+  rows: string[][];
   availableRows: int32;
-  blocks: Record<DashboardTableBlock>;
+  page: PageInfo;
 }
 
 model DashboardFilterOptionResponse {
@@ -356,7 +683,7 @@ model DashboardFilterOptionListResponse {
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
   output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/description" }, #{ source: "/pageCount" }] }], cursor: #{ source: "/page/nextCursor" } },
 })
-op listDashboards(@path workspace: string, @query limit?: int32, @query pageToken?: string): OkJson<DashboardListResponse> | CommonErrors;
+op listDashboards(@path workspace: string, @query limit?: ListLimit, @query pageToken?: PageToken): OkJson<DashboardListResponse> | CommonErrors;
 
 @tag("BI")
 @summary("Describe dashboard")
@@ -372,17 +699,17 @@ op listDashboards(@path workspace: string, @query limit?: int32, @query pageToke
 op getDashboard(@path workspace: string, @path dashboard: string): OkJson<DashboardManifestResponse> | CommonErrors;
 
 @tag("BI")
-@summary("List dashboard page components")
-@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/components")
+@summary("Describe dashboard page")
+@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}")
 @get
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
-@apigen.cli(#{ command: #["dashboards", "components"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }], output: #{ mode: "raw" } })
+@apigen.cli(#{ command: #["dashboards", "page"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
-  name: "list_dashboard_components", effect: "read", tags: #["dashboard", "visual"],
-  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
-  output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/kind" }, #{ source: "/ref" }, #{ source: "/title" }] }], cursor: #{ source: "/page/nextCursor" } },
+  name: "describe_dashboard_page", effect: "read", tags: #["dashboard", "page"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
+  output: #{ mode: "raw" },
 })
-op listDashboardComponents(@path workspace: string, @path dashboard: string, @path page: string, @query limit?: int32, @query pageToken?: string): OkJson<DashboardComponentListResponse> | CommonErrors;
+op getDashboardPage(@path workspace: string, @path dashboard: string, @path page: string): OkJson<DashboardPageResponse> | CommonErrors;
 
 @tag("BI")
 @summary("Describe dashboard visual")
@@ -398,6 +725,20 @@ op listDashboardComponents(@path workspace: string, @path dashboard: string, @pa
 op getDashboardVisual(@path workspace: string, @path dashboard: string, @path page: string, @path visual: string): OkJson<DashboardVisualDescribeResponse> | CommonErrors;
 
 @tag("BI")
+@summary("Describe dashboard table")
+@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}")
+@get
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
+op getDashboardTable(@path workspace: string, @path dashboard: string, @path page: string, @path table: string): OkJson<DashboardTableDescribeResponse> | CommonErrors;
+
+@tag("BI")
+@summary("Describe dashboard filter")
+@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}")
+@get
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
+op getDashboardFilter(@path workspace: string, @path dashboard: string, @path page: string, @path filter: string): OkJson<DashboardFilterDescribeResponse> | CommonErrors;
+
+@tag("BI")
 @summary("List semantic models")
 @route("/workspaces/{workspace}/semantic-models")
 @get
@@ -408,7 +749,7 @@ op getDashboardVisual(@path workspace: string, @path dashboard: string, @path pa
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
   output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/description" }] }], cursor: #{ source: "/page/nextCursor" } },
 })
-op listSemanticModels(@path workspace: string, @query limit?: int32, @query pageToken?: string): OkJson<SemanticModelListResponse> | CommonErrors;
+op listSemanticModels(@path workspace: string, @query limit?: ListLimit, @query pageToken?: PageToken): OkJson<SemanticModelListResponse> | CommonErrors;
 
 @tag("BI")
 @summary("Describe semantic model")
@@ -424,6 +765,20 @@ op listSemanticModels(@path workspace: string, @query limit?: int32, @query page
 op getSemanticModel(@path workspace: string, @path("model") modelName: string): OkJson<SemanticModelDescriptionResponse> | CommonErrors;
 
 @tag("BI")
+@summary("List semantic model relationships")
+@route("/workspaces/{workspace}/semantic-models/{model}/relationships")
+@get
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
+op listSemanticRelationships(@path workspace: string, @path("model") modelName: string, @query limit?: ListLimit, @query pageToken?: PageToken): OkJson<SemanticRelationshipListResponse> | CommonErrors;
+
+@tag("BI")
+@summary("List semantic model sources")
+@route("/workspaces/{workspace}/semantic-models/{model}/sources")
+@get
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
+op listSemanticSources(@path workspace: string, @path("model") modelName: string, @query limit?: ListLimit, @query pageToken?: PageToken): OkJson<SemanticSourceListResponse> | CommonErrors;
+
+@tag("BI")
 @summary("List semantic model fields")
 @route("/workspaces/{workspace}/semantic-models/{model}/fields")
 @get
@@ -434,7 +789,7 @@ op getSemanticModel(@path workspace: string, @path("model") modelName: string): 
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
   output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/kind" }, #{ source: "/id" }, #{ source: "/label" }, #{ source: "/description" }] }], cursor: #{ source: "/page/nextCursor" } },
 })
-op listSemanticModelFields(@path workspace: string, @path("model") modelName: string, @query limit?: int32, @query pageToken?: string): OkJson<SemanticFieldListResponse> | CommonErrors;
+op listSemanticModelFields(@path workspace: string, @path("model") modelName: string, @query limit?: ListLimit, @query pageToken?: PageToken): OkJson<SemanticFieldListResponse> | CommonErrors;
 
 @tag("BI")
 @summary("Query semantic model")
@@ -445,9 +800,9 @@ op listSemanticModelFields(@path workspace: string, @path("model") modelName: st
 @apigen.tool(#{
   name: "query_semantic_model", effect: "read", tags: #["semantic-model", "query"],
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "body", name: "limit", default: 25 }] },
-  output: #{ mode: "project", select: #[#{ source: "/columns" }, #{ source: "/items", countAs: "count" }], cursor: #{ source: "/page/nextCursor" } },
+  output: #{ mode: "project", select: #[#{ source: "/columns" }, #{ source: "/rows", countAs: "count" }], cursor: #{ source: "/page/nextCursor" } },
 })
-op querySemanticModel(@path workspace: string, @path("model") modelName: string, @body body?: SemanticQueryRequest): OkJson<SemanticQueryResponse> | CommonErrors;
+op querySemanticModel(@path workspace: string, @path("model") modelName: string, @header accept?: string, @body body?: SemanticQueryRequest): RowsetResponse<SemanticQueryResponse> | CommonErrors;
 
 @tag("BI")
 @summary("Explain semantic model query")
@@ -473,7 +828,7 @@ op explainSemanticModelQuery(@path workspace: string, @path("model") modelName: 
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
   output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/kind" }, #{ source: "/description" }] }], cursor: #{ source: "/page/nextCursor" } },
 })
-op listSemanticDatasets(@path workspace: string, @path("model") modelName: string, @query limit?: int32, @query pageToken?: string): OkJson<SemanticDatasetListResponse> | CommonErrors;
+op listSemanticDatasets(@path workspace: string, @path("model") modelName: string, @query limit?: ListLimit, @query pageToken?: PageToken): OkJson<SemanticDatasetListResponse> | CommonErrors;
 
 @tag("BI")
 @summary("Describe semantic model dataset")
@@ -499,20 +854,7 @@ op getSemanticDataset(@path workspace: string, @path("model") modelName: string,
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
   output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/kind" }, #{ source: "/id" }, #{ source: "/label" }, #{ source: "/description" }] }], cursor: #{ source: "/page/nextCursor" } },
 })
-op listSemanticFields(@path workspace: string, @path("model") modelName: string, @path dataset: string, @query limit?: int32, @query pageToken?: string): OkJson<SemanticFieldListResponse> | CommonErrors;
-
-@tag("BI")
-@summary("Query semantic model dataset")
-@route("/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/query")
-@post
-@apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
-@apigen.cli(#{ command: #["semantic-models", "query"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }, #{ source: "path", name: "dataset", displayName: "dataset" }], output: #{ mode: "raw" } })
-@apigen.tool(#{
-  name: "query_semantic_dataset", effect: "read", tags: #["semantic-model", "dataset", "query"],
-  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "body", name: "limit", default: 25 }] },
-  output: #{ mode: "project", select: #[#{ source: "/columns" }, #{ source: "/items", countAs: "count" }], cursor: #{ source: "/page/nextCursor" } },
-})
-op querySemanticDataset(@path workspace: string, @path("model") modelName: string, @path dataset: string, @body body?: SemanticQueryRequest): OkJson<SemanticQueryResponse> | CommonErrors;
+op listSemanticFields(@path workspace: string, @path("model") modelName: string, @path dataset: string, @query limit?: ListLimit, @query pageToken?: PageToken): OkJson<SemanticFieldListResponse> | CommonErrors;
 
 @tag("BI")
 @summary("Preview semantic model dataset rows")
@@ -523,22 +865,9 @@ op querySemanticDataset(@path workspace: string, @path("model") modelName: strin
 @apigen.tool(#{
   name: "preview_semantic_dataset", effect: "read", tags: #["semantic-model", "dataset", "query"],
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "body", name: "limit", default: 25 }] },
-  output: #{ mode: "project", select: #[#{ source: "/columns" }, #{ source: "/items", countAs: "count" }], cursor: #{ source: "/page/nextCursor" } },
+  output: #{ mode: "project", select: #[#{ source: "/columns" }, #{ source: "/rows", countAs: "count" }], cursor: #{ source: "/page/nextCursor" } },
 })
-op previewSemanticDataset(@path workspace: string, @path("model") modelName: string, @path dataset: string, @body body?: SemanticPreviewRequest): OkJson<SemanticQueryResponse> | CommonErrors;
-
-@tag("BI")
-@summary("Explain semantic model dataset query")
-@route("/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/query/explain")
-@post
-@apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
-@apigen.cli(#{ command: #["semantic-models", "explain-query"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "model", displayName: "model" }, #{ source: "path", name: "dataset", displayName: "dataset" }], output: #{ mode: "raw" } })
-@apigen.tool(#{
-  name: "explain_semantic_query", effect: "read", tags: #["semantic-model", "dataset", "query"],
-  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
-  output: #{ mode: "project", select: #[#{ source: "/mode" }, #{ source: "/sql" }, #{ source: "/args" }, #{ source: "/columns" }, #{ source: "/warnings" }] },
-})
-op explainSemanticQuery(@path workspace: string, @path("model") modelName: string, @path dataset: string, @body body?: SemanticQueryRequest): OkJson<SemanticExplainResponse> | CommonErrors;
+op previewSemanticDataset(@path workspace: string, @path("model") modelName: string, @path dataset: string, @header accept?: string, @body body?: SemanticPreviewRequest): RowsetResponse<SemanticQueryResponse> | CommonErrors;
 
 @tag("BI")
 @summary("Explain semantic model dataset row preview")
@@ -567,8 +896,8 @@ op explainSemanticPreview(@path workspace: string, @path("model") modelName: str
 op queryDashboardPage(@path workspace: string, @path dashboard: string, @path page: string, @body body?: DashboardPageQueryRequest): OkJson<DashboardPageQueryResponse> | CommonErrors;
 
 @tag("BI")
-@summary("Query dashboard visual data")
-@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/visuals/{visual}/data")
+@summary("Query dashboard visual")
+@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/visuals/{visual}/query")
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["dashboards", "visual-data"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "visual", displayName: "visual" }], output: #{ mode: "collection" }, pagination: #{ itemsField: "data" } })
@@ -581,39 +910,26 @@ op queryDashboardVisualData(@path workspace: string, @path dashboard: string, @p
 
 @tag("BI")
 @summary("Query dashboard table")
-@route("/workspaces/{workspace}/dashboards/{dashboard}/tables/{table}/query")
-@post
-@apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
-@apigen.cli(#{ command: #["dashboards", "query-table"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "table", displayName: "table" }], output: #{ mode: "raw" } })
-@apigen.tool(#{
-  name: "query_table", effect: "read", tags: #["dashboard", "query", "table"],
-  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
-  output: #{ mode: "project", select: #[#{ source: "/title" }, #{ source: "/availableRows" }, #{ source: "/columns", select: #[#{ source: "/key" }, #{ source: "/label" }, #{ source: "/role" }, #{ source: "/format" }] }, #{ source: "/blocks/a/rows", target: "rows", countAs: "count" }] },
-})
-op queryDashboardTable(@path workspace: string, @path dashboard: string, @path table: string, @body body?: DashboardTableQueryRequest): OkJson<DashboardTableQueryResponse> | CommonErrors;
-
-@tag("BI")
-@summary("Query dashboard table data")
-@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}/data")
+@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}/query")
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["dashboards", "table-data"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "table", displayName: "table" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
-  name: "query_dashboard_table_data", effect: "read", tags: #["dashboard", "query", "table"],
-  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
-  output: #{ mode: "project", select: #[#{ source: "/title" }, #{ source: "/availableRows" }, #{ source: "/columns", select: #[#{ source: "/key" }, #{ source: "/label" }, #{ source: "/role" }, #{ source: "/format" }] }, #{ source: "/blocks/a/rows", target: "rows", countAs: "count" }] },
+  name: "query_dashboard_table", effect: "read", tags: #["dashboard", "query", "table"],
+  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "body", name: "limit", default: 25 }] },
+  output: #{ mode: "project", select: #[#{ source: "/title" }, #{ source: "/availableRows" }, #{ source: "/columns" }, #{ source: "/rows", countAs: "count" }], cursor: #{ source: "/page/nextCursor" } },
 })
-op queryDashboardTableData(@path workspace: string, @path dashboard: string, @path page: string, @path table: string, @body body?: DashboardTableDataRequest): OkJson<DashboardTableQueryResponse> | CommonErrors;
+op queryDashboardTable(@path workspace: string, @path dashboard: string, @path page: string, @path table: string, @header accept?: string, @body body?: DashboardTableQueryRequest): RowsetResponse<DashboardTableQueryResponse> | CommonErrors;
 
 @tag("BI")
-@summary("List dashboard filter options")
-@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}/options")
+@summary("List dashboard filter values")
+@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}/values")
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @apigen.cli(#{ command: #["dashboards", "filter-options"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "filter", displayName: "filter" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
-  name: "list_dashboard_filter_options", effect: "read", tags: #["dashboard", "filter"],
+  name: "list_dashboard_filter_values", effect: "read", tags: #["dashboard", "filter"],
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "query", name: "limit", default: 25 }] },
   output: #{ mode: "project", select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/value" }, #{ source: "/label" }] }], cursor: #{ source: "/page/nextCursor" } },
 })
-op listDashboardFilterOptions(@path workspace: string, @path dashboard: string, @path page: string, @path filter: string, @query limit?: int32, @query pageToken?: string, @body body?: DashboardPageQueryRequest): OkJson<DashboardFilterOptionListResponse> | CommonErrors;
+op listDashboardFilterValues(@path workspace: string, @path dashboard: string, @path page: string, @path filter: string, @query limit?: ListLimit, @query pageToken?: PageToken, @body body?: DashboardPageQueryRequest): OkJson<DashboardFilterOptionListResponse> | CommonErrors;

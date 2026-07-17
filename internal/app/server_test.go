@@ -1641,6 +1641,7 @@ func TestMaterializationRunAPICanExecuteModelTableTargetWithLocalDevRuntimeShape
 	server := NewWithOptions(metrics, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 
 	createReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/refresh-runs", token, `{"modelId":"olist","targetType":"model_table","targetId":"olist.orders"}`)
+	createReq.Header.Set("Idempotency-Key", "refresh-model-table")
 	createRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusAccepted {
@@ -1757,6 +1758,7 @@ func TestMaterializationRunAPIMalformedModelTableTargetFailsPersistedRun(t *test
 	server := NewWithOptions(&localDevStyleModelTableMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
 
 	createReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/refresh-runs", token, `{"modelId":"olist","targetType":"model_table","targetId":"other.orders"}`)
+	createReq.Header.Set("Idempotency-Key", "refresh-malformed-model-table")
 	createRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusAccepted {

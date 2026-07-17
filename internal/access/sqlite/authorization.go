@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -316,32 +317,24 @@ func (r *Repository) ListDataPoliciesWithOptions(ctx context.Context, object acc
 			return nil, err
 		}
 	}
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(objectIDs)), ",")
-	args := make([]any, 0, len(objectIDs)*2)
-	for _, id := range objectIDs {
-		args = append(args, id)
-	}
-	rows, err := r.db.QueryContext(ctx, `
-SELECT id, workspace_id, object_id, subject_type, subject_id, policy_type, expression_json, created_at, updated_at
-FROM data_policies
-WHERE object_id IN (`+placeholders+`)
-ORDER BY CASE object_id`+grantOrderCase(objectIDs)+` ELSE 999 END, policy_type, id
-`, args...)
+	objectIDsJSON, err := jsonStringList(objectIDs)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	policies := []access.DataPolicy{}
-	for rows.Next() {
-		var policy access.DataPolicy
-		var subjectType string
-		if err := rows.Scan(&policy.ID, &policy.WorkspaceID, &policy.ObjectID, &subjectType, &policy.SubjectID, &policy.PolicyType, &policy.ExpressionJSON, &policy.CreatedAt, &policy.UpdatedAt); err != nil {
-			return nil, err
-		}
-		policy.SubjectType = access.SubjectType(subjectType)
-		policies = append(policies, policy)
+	rows, err := r.q.ListDataPoliciesByObjectScope(ctx, objectIDsJSON)
+	if err != nil {
+		return nil, err
 	}
-	return policies, rows.Err()
+	policies := make([]access.DataPolicy, 0, len(rows))
+	for _, row := range rows {
+		policies = append(policies, access.DataPolicy{
+			ID: row.ID, WorkspaceID: row.WorkspaceID, ObjectID: row.ObjectID,
+			SubjectType: access.SubjectType(row.SubjectType), SubjectID: row.SubjectID,
+			PolicyType: row.PolicyType, ExpressionJSON: row.ExpressionJson,
+			CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		})
+	}
+	return policies, nil
 }
 
 func (r *Repository) ListEffectiveDataPolicies(ctx context.Context, principalID string, object access.ObjectRef, includeInherited bool) ([]access.DataPolicy, error) {
@@ -424,42 +417,27 @@ func (r *Repository) ListGrantsWithOptions(ctx context.Context, object access.Ob
 			return nil, err
 		}
 	}
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(objectIDs)), ",")
-	args := make([]any, 0, len(objectIDs)*2)
-	for _, id := range objectIDs {
-		args = append(args, id)
-	}
-	rows, err := r.db.QueryContext(ctx, `
-SELECT g.id, g.object_id, so.object_type, so.workspace_id, so.parent_id,
-       parent.object_type, parent.id,
-       g.subject_type, g.subject_id, g.privilege, g.created_at
-FROM grants g
-JOIN securable_objects so ON so.id = g.object_id
-LEFT JOIN securable_objects parent ON parent.id = so.parent_id
-WHERE g.object_id IN (`+placeholders+`)
-ORDER BY CASE g.object_id`+grantOrderCase(objectIDs)+` ELSE 999 END, g.subject_type, g.subject_id, g.privilege
-`, args...)
+	objectIDsJSON, err := jsonStringList(objectIDs)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	grants := []access.GrantView{}
-	for rows.Next() {
-		var grant access.GrantView
-		var objectType, subjectType, privilege string
-		var parentType, parentID sql.NullString
-		if err := rows.Scan(&grant.ID, &grant.ObjectID, &objectType, &grant.WorkspaceID, &grant.ParentID, &parentType, &parentID, &subjectType, &grant.SubjectID, &privilege, &grant.CreatedAt); err != nil {
-			return nil, err
-		}
-		grant.ObjectType = access.SecurableType(objectType)
-		grant.SubjectType = access.SubjectType(subjectType)
-		grant.Privilege = access.Privilege(privilege)
-		grant.Inherited = grant.ObjectID != objectID
-		grant.ParentType = access.SecurableType(nullString(parentType))
-		grant.ParentObject = nullString(parentID)
-		grants = append(grants, grant)
+	rows, err := r.q.ListGrantsByObjectScope(ctx, objectIDsJSON)
+	if err != nil {
+		return nil, err
 	}
-	return grants, rows.Err()
+	grants := make([]access.GrantView, 0, len(rows))
+	for _, row := range rows {
+		grants = append(grants, access.GrantView{
+			Grant: access.Grant{
+				ID: row.ID, ObjectID: row.ObjectID, ObjectType: access.SecurableType(row.ObjectType),
+				WorkspaceID: row.WorkspaceID, SubjectType: access.SubjectType(row.SubjectType),
+				SubjectID: row.SubjectID, Privilege: access.Privilege(row.Privilege), CreatedAt: row.CreatedAt,
+			},
+			ParentID: row.ParentID, ParentType: access.SecurableType(nullString(row.ParentType)),
+			ParentObject: nullString(row.ParentID_2), Inherited: row.ObjectID != objectID,
+		})
+	}
+	return grants, nil
 }
 
 func (r *Repository) authorizeByGrant(ctx context.Context, principalID string, privilege access.Privilege, objectIDs []string) (access.AuthorizationDecision, error) {
@@ -467,29 +445,13 @@ func (r *Repository) authorizeByGrant(ctx context.Context, principalID string, p
 	if len(objectIDs) == 0 {
 		return decision, nil
 	}
-	placeholders := strings.TrimRight(strings.Repeat("?,", len(objectIDs)), ",")
-	args := []any{principalID, string(privilege), principalID}
-	for _, id := range objectIDs {
-		args = append(args, id)
+	objectIDsJSON, err := jsonStringList(objectIDs)
+	if err != nil {
+		return decision, err
 	}
-	query := `
-SELECT g.id, g.object_id, g.subject_type, g.subject_id
-FROM grants g
-LEFT JOIN group_members gm
-  ON g.subject_type = 'group'
- AND gm.group_id = g.subject_id
- AND gm.principal_id = ?
-WHERE g.privilege = ?
-  AND (g.subject_type IN ('principal', 'service_principal') AND g.subject_id = ? OR gm.principal_id IS NOT NULL)
-  AND g.object_id IN (` + placeholders + `)
-ORDER BY CASE g.object_id`
-	for i, id := range objectIDs {
-		query += fmt.Sprintf(" WHEN ? THEN %d", i)
-		args = append(args, id)
-	}
-	query += " ELSE 999 END LIMIT 1"
-	var grantID, objectID, subjectType, subjectID string
-	err := r.db.QueryRowContext(ctx, query, args...).Scan(&grantID, &objectID, &subjectType, &subjectID)
+	row, err := r.q.FindAuthorizingGrant(ctx, platformdb.FindAuthorizingGrantParams{
+		PrincipalID: principalID, Privilege: string(privilege), ObjectIdsJson: objectIDsJSON,
+	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return decision, nil
@@ -497,11 +459,11 @@ ORDER BY CASE g.object_id`
 		return decision, err
 	}
 	decision.Allowed = true
-	decision.GrantID = grantID
-	decision.GrantObjectID = objectID
-	decision.SubjectType = access.SubjectType(subjectType)
-	decision.SubjectID = subjectID
-	decision.Inherited = len(objectIDs) > 0 && objectID != objectIDs[0]
+	decision.GrantID = row.ID
+	decision.GrantObjectID = row.ObjectID
+	decision.SubjectType = access.SubjectType(row.SubjectType)
+	decision.SubjectID = row.SubjectID
+	decision.Inherited = len(objectIDs) > 0 && row.ObjectID != objectIDs[0]
 	decision.Reason = access.ReasonGrant
 	return decision, nil
 }
@@ -564,12 +526,12 @@ func (r *Repository) objectAncestry(ctx context.Context, objectID string) ([]str
 	return ids, nil
 }
 
-func grantOrderCase(objectIDs []string) string {
-	out := ""
-	for i, id := range objectIDs {
-		out += fmt.Sprintf(" WHEN '%s' THEN %d", strings.ReplaceAll(id, "'", "''"), i)
+func jsonStringList(values []string) (string, error) {
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return "", fmt.Errorf("encode SQL string list: %w", err)
 	}
-	return out
+	return string(encoded), nil
 }
 
 func objectDisplayName(object access.ObjectRef) string {

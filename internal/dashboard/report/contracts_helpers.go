@@ -1,6 +1,24 @@
 package report
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
+
+var supportedVisualShapes = map[string]struct{}{
+	"category_value": {}, "category_series_value": {}, "category_multi_measure": {}, "category_delta": {},
+	"single_value": {}, "matrix": {}, "graph": {}, "geo": {}, "ohlc": {}, "distribution": {},
+	"binned_measure": {}, "hierarchy": {},
+}
+
+func SupportedVisualShapes() []string {
+	shapes := make([]string, 0, len(supportedVisualShapes))
+	for shape := range supportedVisualShapes {
+		shapes = append(shapes, shape)
+	}
+	slices.Sort(shapes)
+	return shapes
+}
 
 func defaultString(value, fallback string) string {
 	if value != "" {
@@ -22,12 +40,8 @@ func supportsVisualKind(kind string) bool {
 }
 
 func supportsVisualShape(shape string) bool {
-	switch shape {
-	case "category_value", "category_series_value", "category_multi_measure", "category_delta", "single_value", "matrix", "graph", "geo", "ohlc", "distribution", "binned_measure", "hierarchy":
-		return true
-	default:
-		return false
-	}
+	_, ok := supportedVisualShapes[shape]
+	return ok
 }
 
 func supportsRenderer(renderer string) bool {

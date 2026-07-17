@@ -1,134 +1,101 @@
 using Http;
 using TypeSpec.OpenAPI;
 
+@route("/api/v1")
 namespace LibreDashAPI;
 
-@minLength(1)
-@maxLength(160)
-scalar ProjectDeploymentId extends string;
-
-@minLength(1)
-@maxLength(128)
-@pattern("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-scalar ProjectDeploymentProjectId extends string;
-
-@minLength(1)
-@maxLength(128)
-@pattern("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-scalar ProjectDeploymentEnvironmentId extends string;
-
-@minLength(1)
-@maxLength(128)
-@pattern("^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-scalar ProjectDeploymentWorkspaceId extends string;
-
-@minLength(1)
-@maxLength(160)
-scalar DeploymentCandidateId extends string;
-
-@minLength(1)
-@maxLength(255)
-scalar ProjectDeploymentIdempotencyKey extends string;
-
-@pattern("^sha256:[0-9a-f]{64}$")
-@minLength(71)
-@maxLength(71)
-scalar ProjectDeploymentRequestDigest extends string;
-
-enum ProjectDeploymentStatus {
-  pending;
+enum DeploymentStatus {
+  queued;
+  running;
   active;
   failed;
+  cancelled;
   superseded;
 }
 
-enum ProjectDeploymentTargetStatus {
-  pending;
-  active;
-  failed;
+model DeploymentCreateRequest {
+  releaseId: string;
 }
 
-model ProjectDeploymentTargetRequest {
-  workspace: ProjectDeploymentWorkspaceId;
-  candidateId: DeploymentCandidateId;
-}
-
-model ProjectDeploymentCreateRequest {
-  environment: ProjectDeploymentEnvironmentId;
-  @minItems(1)
-  @maxItems(1000)
-  targets: ProjectDeploymentTargetRequest[];
-}
-
-model ProjectDeploymentTargetResponse {
-  workspace: ProjectDeploymentWorkspaceId;
-  candidateId: DeploymentCandidateId;
-  priorCandidateId?: DeploymentCandidateId;
-  status: ProjectDeploymentTargetStatus;
-  activatedAt?: utcDateTime;
+model DeploymentTargetResponse {
+  workspaceId: string;
+  servingStateId?: string;
+  priorServingStateId?: string;
+  status: string;
   error?: string;
 }
 
-model ProjectDeploymentConnectionResponse {
-  connection: string;
-  @pattern("^sha256:[0-9a-f]{64}$")
+model DeploymentConnectionResponse {
+  connectionId: string;
   revisionId: string;
-  @pattern("^sha256:[0-9a-f]{64}$")
   priorRevisionId?: string;
-  priorGeneration: int64;
-  activatedGeneration?: int64;
 }
 
-model ProjectDeploymentResponse {
-  id: ProjectDeploymentId;
-  project: ProjectDeploymentProjectId;
-  environment: ProjectDeploymentEnvironmentId;
-  requestDigest: ProjectDeploymentRequestDigest;
-  status: ProjectDeploymentStatus;
-  @minItems(1)
-  @maxItems(1000)
-  targets: ProjectDeploymentTargetResponse[];
-  @maxItems(1000)
-  connections: ProjectDeploymentConnectionResponse[];
+model DeploymentProgress {
+  current: int32;
+  total: int32;
+  unit: string;
+}
+
+model DeploymentResponse {
+  id: string;
+  projectId: string;
+  releaseId: string;
+  environment: string;
+  status: DeploymentStatus;
+  progress?: DeploymentProgress;
+  targets: DeploymentTargetResponse[];
+  connections: DeploymentConnectionResponse[];
+  createdBy: string;
   createdAt: utcDateTime;
-  activatedAt?: utcDateTime;
+  startedAt?: utcDateTime;
+  finishedAt?: utcDateTime;
   error?: string;
+}
+
+model DeploymentListResponse {
+  items: DeploymentResponse[];
+  page: PageInfo;
 }
 
 @tag("Deployments")
-@summary("Create an atomic project deployment")
+@summary("List project deployments")
+@route("/projects/{project}/deployments")
+@get
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
+op listDeployments(@path project: string, @query limit?: ListLimit, @query pageToken?: PageToken): OkJson<DeploymentListResponse> | CommonErrors;
+
+@tag("Deployments")
+@summary("Deploy a ready project release")
 @route("/projects/{project}/deployments")
 @post
-@operationId("createProjectDeployment")
-@apigen.authz(#{ mode: "privilege", privilege: "DEPLOY" })
-@apigen.cli(#{ command: #["deployments", "create"], args: #[#{ source: "path", name: "project", displayName: "project" }], output: #{ mode: "raw" } })
-op createProjectDeployment(
-  @path project: ProjectDeploymentProjectId,
-  @header("Idempotency-Key") idempotencyKey: ProjectDeploymentIdempotencyKey,
-  @body body: ProjectDeploymentCreateRequest,
-): CreatedJson<ProjectDeploymentResponse> | CommonErrors;
+@apigen.authz(#{ mode: "privilege", privilege: "ACTIVATE_DEPLOYMENT" })
+op createDeployment(@path project: string, @header("Idempotency-Key") idempotencyKey: IdempotencyKey, @body body: DeploymentCreateRequest): AcceptedJson<DeploymentResponse> | CommonErrors;
 
 @tag("Deployments")
-@summary("Get an atomic project deployment")
+@summary("Get a project deployment")
 @route("/projects/{project}/deployments/{deployment}")
 @get
-@operationId("getProjectDeployment")
 @apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
-@apigen.cli(#{ command: #["deployments", "get"], args: #[#{ source: "path", name: "project", displayName: "project" }, #{ source: "path", name: "deployment", displayName: "deployment" }], output: #{ mode: "raw" } })
-op getProjectDeployment(
-  @path project: ProjectDeploymentProjectId,
-  @path deployment: ProjectDeploymentId,
-): OkJson<ProjectDeploymentResponse> | CommonErrors;
+op getDeployment(@path project: string, @path deployment: string): OkJson<DeploymentResponse> | CommonErrors;
 
 @tag("Deployments")
-@summary("Atomically activate a project deployment")
-@route("/projects/{project}/deployments/{deployment}/activate")
+@summary("List or stream deployment events")
+@route("/projects/{project}/deployments/{deployment}/events")
+@get
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
+op listDeploymentEvents(@path project: string, @path deployment: string, @header accept?: string, @header("Last-Event-ID") lastEventId?: string, @query limit?: ListLimit, @query pageToken?: PageToken): EventHistoryResponse<AsyncEventListResponse> | CommonErrors;
+
+@tag("Deployments")
+@summary("Cancel a deployment before cutover")
+@route("/projects/{project}/deployments/{deployment}/cancel")
 @post
-@operationId("activateProjectDeployment")
 @apigen.authz(#{ mode: "privilege", privilege: "ACTIVATE_DEPLOYMENT" })
-@apigen.cli(#{ command: #["deployments", "activate"], args: #[#{ source: "path", name: "project", displayName: "project" }, #{ source: "path", name: "deployment", displayName: "deployment" }], output: #{ mode: "raw" } })
-op activateProjectDeployment(
-  @path project: ProjectDeploymentProjectId,
-  @path deployment: ProjectDeploymentId,
-  @header("Idempotency-Key") idempotencyKey: ProjectDeploymentIdempotencyKey,
-): OkJson<ProjectDeploymentResponse> | CommonErrors;
+op cancelDeployment(@path project: string, @path deployment: string, @header("Idempotency-Key") idempotencyKey: IdempotencyKey): AcceptedJson<DeploymentResponse> | CommonErrors;
+
+@tag("Deployments")
+@summary("Roll back by creating a deployment of the prior release")
+@route("/projects/{project}/deployments/{deployment}/rollback")
+@post
+@apigen.authz(#{ mode: "privilege", privilege: "ACTIVATE_DEPLOYMENT" })
+op rollbackDeployment(@path project: string, @path deployment: string, @header("Idempotency-Key") idempotencyKey: IdempotencyKey): AcceptedJson<DeploymentResponse> | CommonErrors;

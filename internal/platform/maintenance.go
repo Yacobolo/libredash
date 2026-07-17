@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"time"
+
+	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
 )
 
 type OperationalRetentionOptions struct {
@@ -50,7 +52,7 @@ func (s *Store) PruneOperationalHistory(ctx context.Context, options Operational
 	if err != nil {
 		return result, err
 	}
-	result.ArchivedAgentConversationsDeleted, err = pruneArchivedAgentConversations(ctx, tx, now, options.ArchivedAgentConversationsAge, options.DryRun)
+	result.ArchivedAgentConversationsDeleted, err = pruneArchivedAgentConversations(ctx, tx, s.q.WithTx(tx), now, options.ArchivedAgentConversationsAge, options.DryRun)
 	if err != nil {
 		return result, err
 	}
@@ -96,7 +98,7 @@ func pruneByCreatedAt(ctx context.Context, tx *sql.Tx, table string, now time.Ti
 	return result.RowsAffected()
 }
 
-func pruneArchivedAgentConversations(ctx context.Context, tx *sql.Tx, now time.Time, maxAge time.Duration, dryRun bool) (int64, error) {
+func pruneArchivedAgentConversations(ctx context.Context, tx *sql.Tx, q *platformdb.Queries, now time.Time, maxAge time.Duration, dryRun bool) (int64, error) {
 	if maxAge <= 0 {
 		return 0, nil
 	}
@@ -104,6 +106,9 @@ func pruneArchivedAgentConversations(ctx context.Context, tx *sql.Tx, now time.T
 	query := "FROM agent_conversations WHERE archived_at IS NOT NULL AND archived_at <> '' AND archived_at < ?"
 	if dryRun {
 		return countWhere(ctx, tx, "SELECT COUNT(*) "+query, cutoff)
+	}
+	if err := q.DeleteAsyncEventsForArchivedAgentRuns(ctx, sql.NullString{String: cutoff, Valid: true}); err != nil {
+		return 0, err
 	}
 	result, err := tx.ExecContext(ctx, "DELETE "+query, cutoff)
 	if err != nil {

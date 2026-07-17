@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	nethttp "net/http"
 
@@ -13,7 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const maxAPIRows = 50
+const maxAPIVisualDatums = 1000
 
 func (h Handler) ListDashboards(w nethttp.ResponseWriter, r *nethttp.Request) {
 	metrics, ok := h.biMetrics(w, r)
@@ -24,6 +25,19 @@ func (h Handler) ListDashboards(w nethttp.ResponseWriter, r *nethttp.Request) {
 	out := make([]api.DashboardSummary, 0, len(catalog.Dashboards))
 	for _, row := range catalog.Dashboards {
 		out = append(out, dashboardSummaryDTO(row))
+	}
+	workspaceID := chi.URLParam(r, "workspace")
+	if workspaceID == "" {
+		workspaceID = catalog.Workspace.ID
+	}
+	principalID := ""
+	if h.CurrentPrincipalID != nil {
+		principalID = h.CurrentPrincipalID(r)
+	}
+	out, err := h.filterAuthorizedDashboards(r.Context(), principalID, workspaceID, out)
+	if err != nil {
+		writeJSONError(w, err, nethttp.StatusInternalServerError)
+		return
 	}
 	page, nextCursor, ok := pageSliceForRequest(w, r, out)
 	if !ok {
@@ -60,6 +74,71 @@ func (h Handler) ListDashboardComponents(w nethttp.ResponseWriter, r *nethttp.Re
 		return
 	}
 	writeJSON(w, nethttp.StatusOK, api.DashboardComponentListResponse{Items: items, Page: api.PageInfo{NextCursor: nextCursor}})
+}
+
+func (h Handler) GetDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request) {
+	report, page, ok := h.dashboardReportPage(w, r)
+	if !ok {
+		return
+	}
+	components := make([]api.DashboardComponentResponse, 0, len(page.Visuals))
+	for _, component := range page.PlacedVisuals() {
+		components = append(components, dashboardComponentDTO(component, report))
+	}
+	writeJSON(w, nethttp.StatusOK, api.DashboardPageResponse{
+		ID: page.ID, Title: page.Title, Description: page.Description, Components: components,
+	})
+}
+
+func (h Handler) GetDashboardTable(w nethttp.ResponseWriter, r *nethttp.Request) {
+	report, page, ok := h.dashboardReportPage(w, r)
+	if !ok {
+		return
+	}
+	tableID := chi.URLParam(r, "table")
+	table, exists := report.Tables[tableID]
+	if !exists {
+		writeJSONError(w, fmt.Errorf("table %q not found", tableID), nethttp.StatusNotFound)
+		return
+	}
+	component, exists := pageComponentForTable(page, tableID)
+	if !exists {
+		writeJSONError(w, fmt.Errorf("table %q not found on page %q", tableID, page.ID), nethttp.StatusNotFound)
+		return
+	}
+	columns := make([]api.DashboardTableColumn, 0, len(table.Columns))
+	for _, column := range table.Columns {
+		columns = append(columns, api.DashboardTableColumn{Key: column.Key, Label: column.Label})
+	}
+	writeJSON(w, nethttp.StatusOK, api.DashboardTableDescribeResponse{
+		ID: tableID, ComponentID: component.ID, Title: firstNonEmpty(component.Title, table.Title),
+		Description: firstNonEmpty(component.Description, table.Description), Columns: columns,
+		Query: jsonMap(table.Query), Placement: componentPlacement(component),
+	})
+}
+
+func (h Handler) GetDashboardFilter(w nethttp.ResponseWriter, r *nethttp.Request) {
+	report, page, ok := h.dashboardReportPage(w, r)
+	if !ok {
+		return
+	}
+	filterID := chi.URLParam(r, "filter")
+	filter, exists := report.Filters[filterID]
+	if !exists {
+		writeJSONError(w, fmt.Errorf("filter %q not found", filterID), nethttp.StatusNotFound)
+		return
+	}
+	component, exists := pageComponentForFilter(page, filterID)
+	if !exists {
+		writeJSONError(w, fmt.Errorf("filter %q not found on page %q", filterID, page.ID), nethttp.StatusNotFound)
+		return
+	}
+	multiSelect := filter.Type == "multi_select"
+	writeJSON(w, nethttp.StatusOK, api.DashboardFilterDescribeResponse{
+		ID: filterID, ComponentID: component.ID, Title: firstNonEmpty(component.Title, filter.Label),
+		Description: firstNonEmpty(component.Description, filter.Description), Field: filter.Dimension,
+		MultiSelect: multiSelect, Placement: componentPlacement(component),
+	})
 }
 
 func (h Handler) GetDashboardVisual(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -103,37 +182,7 @@ func (h Handler) QueryDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, boundedPatch(patch))
-}
-
-func (h Handler) QueryDashboardTable(w nethttp.ResponseWriter, r *nethttp.Request) {
-	metrics, ok := h.biMetrics(w, r)
-	if !ok {
-		return
-	}
-	var input api.DashboardTableQueryRequest
-	if err := decodeOptionalJSONBody(r, &input); err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
-		return
-	}
-	dashboardID := chi.URLParam(r, "dashboard")
-	count := input.Count
-	if count <= 0 || count > maxAPIRows {
-		count = maxAPIRows
-	}
-	filters := dashboardFilters(input.Filters)
-	if filters.Controls == nil && filters.Selections == nil {
-		filters = metrics.DefaultFilters(dashboardID)
-	}
-	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: chi.URLParam(r, "table"), Block: "a", Count: count})
-	request.Count = count
-	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_table", dashboardID+":"+chi.URLParam(r, "table")))
-	table, err := metrics.QueryTablePage(ctx, dashboardID, input.PageID, filters, request)
-	if err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
-		return
-	}
-	writeJSON(w, nethttp.StatusOK, boundedTable(table))
+	writeJSON(w, nethttp.StatusOK, publicDashboardPatch(patch))
 }
 
 func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -175,7 +224,7 @@ func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.R
 		writeJSONError(w, fmt.Errorf("visual %q data not found", visualID), nethttp.StatusNotFound)
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, boundedVisual(visual))
+	writeJSON(w, nethttp.StatusOK, publicDashboardVisual(boundedVisual(visual)))
 }
 
 func (h Handler) QueryDashboardTableData(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -201,24 +250,39 @@ func (h Handler) QueryDashboardTableData(w nethttp.ResponseWriter, r *nethttp.Re
 		writeJSONError(w, fmt.Errorf("table %q not found on page %q", tableID, page.ID), nethttp.StatusNotFound)
 		return
 	}
-	count := input.Count
-	if count <= 0 || count > maxAPIRows {
-		count = maxAPIRows
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > dashboard.TableMaxRequestCount {
+		limit = dashboard.TableMaxRequestCount
+	}
+	cursorInput := input
+	cursorInput.PageToken = ""
+	scope, snapshot := dashboardRequestCursorScope(r, cursorInput), dashboardServingSnapshot(r)
+	start, err := decodeIndexCursor(input.PageToken, scope, snapshot)
+	if err != nil {
+		status := nethttp.StatusBadRequest
+		if errors.Is(err, errDashboardCursorSnapshot) {
+			status = nethttp.StatusConflict
+		}
+		writeJSONError(w, err, status)
+		return
 	}
 	dashboardID := chi.URLParam(r, "dashboard")
 	filters := dashboardFilters(input.Filters)
 	if filters.Controls == nil && filters.Selections == nil {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
-	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: tableID, Block: "a", Count: count})
-	request.Count = count
+	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: tableID, Block: "a", Start: start, Count: limit})
+	request.Start, request.Count = start, limit
 	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_table", dashboardID+":"+tableID))
 	table, err := metrics.QueryTablePage(ctx, dashboardID, page.ID, filters, request)
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, boundedTable(table))
+	writeDashboardTableRowset(w, r, dashboardTableRowset(table, request.Block, start, limit, scope, snapshot))
 }
 
 func (h Handler) ListDashboardFilterOptions(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -380,23 +444,58 @@ func boundedPatch(patch dashboard.Patch) dashboard.Patch {
 }
 
 func boundedVisual(visual dashboard.Visual) dashboard.Visual {
-	if len(visual.Data) > maxAPIRows {
-		visual.Data = visual.Data[:maxAPIRows]
+	if len(visual.Data) > maxAPIVisualDatums {
+		visual.Data = visual.Data[:maxAPIVisualDatums]
 	}
 	return visual
 }
 
-func boundedTable(table dashboard.Table) dashboard.Table {
-	for key, block := range table.Blocks {
-		if len(block.Rows) > maxAPIRows {
-			block.Rows = block.Rows[:maxAPIRows]
+func publicDashboardPatch(patch dashboard.Patch) map[string]any {
+	visuals := make(map[string]any, len(patch.Visuals))
+	for key, visual := range patch.Visuals {
+		visuals[key] = publicDashboardVisual(boundedVisual(visual))
+	}
+	return map[string]any{"filters": patch.Filters, "filterOptions": patch.FilterOptions, "status": patch.Status, "visuals": visuals}
+}
+
+func publicDashboardVisual(visual dashboard.Visual) map[string]any {
+	extensions := map[string]map[string]any{}
+	if len(visual.Options) > 0 {
+		extensions["libredash"] = visual.Options
+	}
+	for namespace, options := range visual.RendererOptions {
+		extensions[namespace] = options
+	}
+	data := make([]map[string]any, 0, len(visual.Data))
+	known := map[string]struct{}{
+		"label": {}, "series": {}, "value": {}, "selected": {}, "start": {}, "end": {}, "positive": {},
+		"binStart": {}, "binEnd": {}, "path": {}, "row": {}, "column": {}, "source": {}, "target": {},
+		"name": {}, "open": {}, "close": {}, "low": {}, "high": {}, "min": {}, "q1": {}, "median": {}, "q3": {}, "max": {},
+	}
+	for _, datum := range visual.Data {
+		item, plugin := map[string]any{}, map[string]any{}
+		for key, value := range datum {
+			if _, ok := known[key]; ok || key == "extensions" {
+				item[key] = value
+			} else {
+				plugin[key] = value
+			}
 		}
-		table.Blocks[key] = block
+		if len(plugin) > 0 {
+			item["extensions"] = map[string]any{visual.Renderer: plugin}
+		}
+		data = append(data, item)
 	}
-	if table.AvailableRows > maxAPIRows {
-		table.AvailableRows = maxAPIRows
+	out := map[string]any{
+		"version": visual.Version, "id": visual.ID, "kind": visual.Kind, "shape": visual.Shape, "renderer": visual.Renderer,
+		"type": visual.Type, "title": visual.Title, "unit": visual.Unit, "format": visual.Format, "interaction": visual.Interaction,
+		"dimensions": visual.Dimensions, "measure": visual.Measure, "measures": visual.Measures, "series": visual.Series,
+		"selection": visual.Selection, "data": data,
 	}
-	return table
+	if len(extensions) > 0 {
+		out["extensions"] = extensions
+	}
+	return out
 }
 
 func dashboardSummaryDTO(row dashboard.CatalogDashboard) api.DashboardSummary {
@@ -431,27 +530,52 @@ func dashboardComponentDTO(component dashboard.PageVisual, report reportdef.Dash
 			RowSpan: component.Placement.RowSpan,
 		}
 	}
+	switch out.Kind {
+	case "visual":
+		out.VisualID = out.Ref
+	case "table":
+		out.TableID = out.Ref
+	case "filter":
+		out.FilterID = out.Ref
+	}
 	return out
+}
+
+func componentPlacement(component dashboard.PageVisual) *api.DashboardComponentPlacement {
+	if component.Placement.IsZero() {
+		return nil
+	}
+	return &api.DashboardComponentPlacement{
+		Col: component.Placement.Col, Row: component.Placement.Row,
+		ColSpan: component.Placement.ColSpan, RowSpan: component.Placement.RowSpan,
+	}
 }
 
 func dashboardVisualDTO(visualID string, visual reportdef.Visual, component dashboard.PageVisual) api.DashboardVisualDescribeResponse {
 	out := api.DashboardVisualDescribeResponse{
-		ID:              visualID,
-		ComponentID:     component.ID,
-		Kind:            firstNonEmpty(visual.Kind, component.Kind),
-		Shape:           visual.Shape,
-		Renderer:        visual.Renderer,
-		Type:            visual.Type,
-		Title:           firstNonEmpty(component.Title, visual.Title),
-		Description:     firstNonEmpty(component.Description, visual.Description),
-		Query:           jsonMap(visual.Query),
-		Options:         visual.Options,
-		RendererOptions: visual.RendererOptions,
-		Interaction:     jsonMap(visual.Interaction),
-		X:               component.X,
-		Y:               component.Y,
-		Width:           component.Width,
-		Height:          component.Height,
+		ID:          visualID,
+		ComponentID: component.ID,
+		Kind:        firstNonEmpty(visual.Kind, component.Kind),
+		Shape:       visual.Shape,
+		Renderer:    visual.Renderer,
+		Type:        visual.Type,
+		Title:       firstNonEmpty(component.Title, visual.Title),
+		Description: firstNonEmpty(component.Description, visual.Description),
+		Query:       jsonMap(visual.Query),
+		Interaction: jsonMap(visual.Interaction),
+		X:           component.X,
+		Y:           component.Y,
+		Width:       component.Width,
+		Height:      component.Height,
+	}
+	if len(visual.Options) > 0 || len(visual.RendererOptions) > 0 {
+		out.Extensions = map[string]map[string]any{}
+		if len(visual.Options) > 0 {
+			out.Extensions["libredash"] = visual.Options
+		}
+		if len(visual.RendererOptions) > 0 {
+			out.Extensions[firstNonEmpty(visual.Renderer, "plugin")] = visual.RendererOptions
+		}
 	}
 	if !component.Placement.IsZero() {
 		out.Placement = &api.DashboardComponentPlacement{

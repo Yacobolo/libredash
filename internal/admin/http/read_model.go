@@ -107,7 +107,7 @@ func (m ReadModel) agentData(r *http.Request) (ui.AdminAgentData, error) {
 		Model:        details.Model,
 		SystemPrompt: details.SystemPrompt,
 		CSRFToken:    m.csrfToken(r),
-		UpdatePath:   "/api/v1/admin/agent/config",
+		UpdatePath:   "/admin/agent/config",
 		CanWrite:     true,
 	}
 	for _, tool := range details.Tools {

@@ -73,7 +73,6 @@ func (p APIGenProvider) Run(ctx context.Context, scope Scope, operation APIGenOp
 		return agentToolRuntimeError(err)
 	}
 	request = request.WithContext(ctx)
-	request.Header.Set("Accept", "application/json")
 	request = withAPIGenRouteContext(request, operation.Tool.Path)
 	if p.Dispatch == nil {
 		return apigenAgentToolError("operation_not_found", "APIGen operation dispatcher is not configured")

@@ -403,6 +403,36 @@ func (r *fakeRepository) UpdateUploadProgress(_ context.Context, id string, prog
 	return nil
 }
 
+func (r *fakeRepository) BeginUploadFinalization(_ context.Context, id string) (manageddata.UploadSession, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	session, ok := r.sessions[id]
+	if !ok {
+		return manageddata.UploadSession{}, manageddata.ErrNotFound
+	}
+	if session.Status != manageddata.UploadStatusOpen {
+		return manageddata.UploadSession{}, manageddata.ErrConflict
+	}
+	session.Status = manageddata.UploadStatusCommitting
+	r.sessions[id] = session
+	return session, nil
+}
+
+func (r *fakeRepository) FailUploadFinalization(_ context.Context, id, message string) (manageddata.UploadSession, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	session, ok := r.sessions[id]
+	if !ok {
+		return manageddata.UploadSession{}, manageddata.ErrNotFound
+	}
+	if session.Status != manageddata.UploadStatusCommitting {
+		return manageddata.UploadSession{}, manageddata.ErrConflict
+	}
+	session.Status, session.Error = manageddata.UploadStatusFailed, message
+	r.sessions[id] = session
+	return session, nil
+}
+
 func (r *fakeRepository) AbortUploadSession(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -410,7 +440,7 @@ func (r *fakeRepository) AbortUploadSession(_ context.Context, id string) error 
 	if !ok {
 		return manageddata.ErrNotFound
 	}
-	if session.Status != manageddata.UploadStatusOpen {
+	if session.Status != manageddata.UploadStatusOpen && session.Status != manageddata.UploadStatusCommitting {
 		return manageddata.ErrConflict
 	}
 	session.Status = manageddata.UploadStatusAborted

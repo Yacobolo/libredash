@@ -27,9 +27,11 @@ func TestAPITokenWorkspaceAndPrivilegeAllowlistAreEnforced(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	publishesReq := httptest.NewRequest(http.MethodPost, "/api/v1/projects/project/workspaces/test/deployment-candidates", strings.NewReader(`{"environment":"dev"}`))
+	publishesReq := httptest.NewRequest(http.MethodPost, "/api/v1/projects/project/releases", strings.NewReader(`{"projectDigest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","workspaces":[],"connections":[]}`))
 	publishesReq.Header.Set("Authorization", "Bearer "+token)
 	publishesReq.Header.Set("Accept", "application/json")
+	publishesReq.Header.Set("Content-Type", "application/json")
+	publishesReq.Header.Set("Idempotency-Key", "denied-release")
 	publishesRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(publishesRec, publishesReq)
 	if publishesRec.Code != http.StatusForbidden {
@@ -100,6 +102,7 @@ func TestCreateAndResetLocalPrincipalAPI(t *testing.T) {
 	createReq.Header.Set("Authorization", "Bearer "+token)
 	createReq.Header.Set("Accept", "application/json")
 	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Idempotency-Key", "create-local-user")
 	createRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusCreated {
@@ -125,6 +128,7 @@ func TestCreateAndResetLocalPrincipalAPI(t *testing.T) {
 	resetReq := httptest.NewRequest(http.MethodPost, "/api/v1/principals/"+created.Principal.ID+"/password-reset", nil)
 	resetReq.Header.Set("Authorization", "Bearer "+token)
 	resetReq.Header.Set("Accept", "application/json")
+	resetReq.Header.Set("Idempotency-Key", "reset-local-user-password")
 	resetRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(resetRec, resetReq)
 	if resetRec.Code != http.StatusOK {
@@ -182,8 +186,8 @@ func TestCurrentAPITokenRevocationIsScopedToAuthenticatedPrincipal(t *testing.T)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("revoke owned api token status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("revoke owned api token status = %d, want %d body=%s", rec.Code, http.StatusNoContent, rec.Body.String())
 	}
 	revokedReq := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
 	revokedReq.Header.Set("Authorization", "Bearer "+ownerSecret)
@@ -213,6 +217,7 @@ func TestCurrentAPITokenCreateAndRevokeRecordsAudit(t *testing.T) {
 	createReq.Header.Set("Authorization", "Bearer "+authSecret)
 	createReq.Header.Set("Accept", "application/json")
 	createReq.Header.Set("Content-Type", "application/json")
+	createReq.Header.Set("Idempotency-Key", "create-audited-api-token")
 	createRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(createRec, createReq)
 	if createRec.Code != http.StatusCreated {
@@ -242,8 +247,8 @@ func TestCurrentAPITokenCreateAndRevokeRecordsAudit(t *testing.T) {
 	revokeReq.Header.Set("Accept", "application/json")
 	revokeRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(revokeRec, revokeReq)
-	if revokeRec.Code != http.StatusOK {
-		t.Fatalf("revoke api token status = %d, want %d body=%s", revokeRec.Code, http.StatusOK, revokeRec.Body.String())
+	if revokeRec.Code != http.StatusNoContent {
+		t.Fatalf("revoke api token status = %d, want %d body=%s", revokeRec.Code, http.StatusNoContent, revokeRec.Body.String())
 	}
 	revokedEvents, err := repo.ListAuditEvents(ctx, access.AuditEventFilter{WorkspaceID: "test", Action: "api_token.revoked"})
 	if err != nil {
@@ -272,6 +277,7 @@ func TestCurrentAPITokenCreateRejectsExpiredExpiry(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+authSecret)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "reject-expired-api-token")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -301,6 +307,7 @@ func TestServicePrincipalSecretCreateReturnsExpiry(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+authSecret)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "create-service-principal-secret")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusCreated {
@@ -452,8 +459,8 @@ func TestCurrentSessionRevocationIsScopedToAuthenticatedPrincipal(t *testing.T) 
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("revoke owned session status = %d, want %d body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("revoke owned session status = %d, want %d body=%s", rec.Code, http.StatusNoContent, rec.Body.String())
 	}
 	if _, err := repo.PrincipalForToken(ctx, ownerSessionSecret); err == nil {
 		t.Fatal("owner session still resolves after revocation")
@@ -483,6 +490,9 @@ func secretCacheJSONRequest(method, path, token, body string) *http.Request {
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Content-Type", "application/json")
+	if method == http.MethodPost && strings.HasPrefix(path, "/api/v1/") {
+		req.Header.Set("Idempotency-Key", "secret-cache-"+strings.ReplaceAll(path, "/", "-"))
+	}
 	return req
 }
 

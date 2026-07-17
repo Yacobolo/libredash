@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	ErrDisabled       = errors.New("agent is not configured")
-	ErrPolicyDisabled = errors.New("agent is disabled by workspace policy")
-	ErrBusy           = errors.New("agent conversation already has a running turn")
+	ErrDisabled          = errors.New("agent is not configured")
+	ErrPolicyDisabled    = errors.New("agent is disabled by workspace policy")
+	ErrBusy              = errors.New("agent conversation already has a running turn")
+	ErrRunNotCancellable = errors.New("agent run is not cancellable")
 )
 
 const (
@@ -58,7 +59,12 @@ type Service struct {
 	systemPromptProvider SystemPromptProvider
 
 	mu      sync.Mutex
-	running map[string]struct{}
+	running map[string]runningPrompt
+}
+
+type runningPrompt struct {
+	runID  string
+	cancel context.CancelFunc
 }
 
 type ServiceOption func(*Service)
@@ -74,7 +80,7 @@ func NewService(metrics any, repo Repository, config Config, options ...ServiceO
 		metrics: metrics,
 		repo:    repo,
 		config:  config,
-		running: map[string]struct{}{},
+		running: map[string]runningPrompt{},
 	}
 	for _, option := range options {
 		option(s)
@@ -181,6 +187,38 @@ func (s *Service) ListRunsPage(ctx context.Context, scope Scope, conversationID 
 
 func (s *Service) GetRun(ctx context.Context, scope Scope, conversationID, runID string) (Run, error) {
 	return s.repo.GetRun(ctx, scope.WorkspaceID, scope.PrincipalID, conversationID, runID)
+}
+
+func (s *Service) CancelRun(ctx context.Context, scope Scope, conversationID, runID string) error {
+	run, err := s.GetRun(ctx, scope, conversationID, runID)
+	if err != nil {
+		return err
+	}
+	if run.Status != RunStatusRunning {
+		return ErrRunNotCancellable
+	}
+	s.mu.Lock()
+	active, ok := s.running[conversationID]
+	if !ok || active.runID != runID || active.cancel == nil {
+		s.mu.Unlock()
+		return ErrRunNotCancellable
+	}
+	cancel := active.cancel
+	s.mu.Unlock()
+	cancel()
+	return nil
+}
+
+func (s *Service) CancelPersistedRun(ctx context.Context, scope Scope, conversationID, runID string) error {
+	run, err := s.GetRun(ctx, scope, conversationID, runID)
+	if err != nil {
+		return err
+	}
+	if run.Status != RunStatusRunning {
+		return ErrRunNotCancellable
+	}
+	s.release(conversationID)
+	return s.finishRun(ctx, PromptInput{Scope: scope, ConversationID: conversationID}, runID, RunStatusCanceled, "", agentcore.Usage{}, context.Canceled)
 }
 
 func (s *Service) GetRunByID(ctx context.Context, scope Scope, runID string) (Run, error) {

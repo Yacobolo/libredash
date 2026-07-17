@@ -14,6 +14,10 @@ import (
 	agentopenai "github.com/Yacobolo/libredash/internal/agent/openai"
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	queryauthz "github.com/Yacobolo/libredash/internal/analytics/query/authz"
+	apiidempotencysqlite "github.com/Yacobolo/libredash/internal/apiidempotency/sqlite"
+	"github.com/Yacobolo/libredash/internal/asyncjob"
+	asyncjobsqlite "github.com/Yacobolo/libredash/internal/asyncjob/sqlite"
+	cursorsigningsqlite "github.com/Yacobolo/libredash/internal/cursorsigning/sqlite"
 	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
 	deploymenthttp "github.com/Yacobolo/libredash/internal/deployment/http"
@@ -25,6 +29,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/platform"
 	queryauditsqlite "github.com/Yacobolo/libredash/internal/queryaudit/sqlite"
 	"github.com/Yacobolo/libredash/internal/queryruntime"
+	releasesqlite "github.com/Yacobolo/libredash/internal/release/sqlite"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	"github.com/Yacobolo/libredash/internal/staticasset"
@@ -82,6 +87,7 @@ type Server struct {
 	workspaceRepo                 workspace.Repository
 	assetCatalog                  workspace.AssetCatalogReader
 	accessRepo                    access.Repository
+	asyncJobs                     asyncjob.Repository
 	agent                         *agent.Service
 	auth                          *Auth
 	reloader                      runtimeReloader
@@ -103,6 +109,7 @@ type Server struct {
 	jobLeaseTimeout               time.Duration
 	jobDispatchMu                 sync.Mutex
 	jobDispatching                bool
+	apiJobDispatching             bool
 	jobDispatchWG                 sync.WaitGroup
 	backgroundMu                  sync.Mutex
 	backgroundCtx                 context.Context
@@ -116,6 +123,9 @@ type Server struct {
 	managedDataExpirer            managedDataUploadExpirer
 	managedDataExpireInterval     time.Duration
 	managedDataMaintenanceStarted bool
+	apiIdempotencyMu              sync.Mutex
+	apiIdempotency                map[string]*apiIdempotencyRecord
+	apiIdempotencyStore           *apiidempotencysqlite.Store
 }
 
 func New(metrics QueryMetrics) *Server {
@@ -137,6 +147,7 @@ func New(metrics QueryMetrics) *Server {
 		telemetry:          newHTTPTelemetry(),
 		logger:             logger,
 		pendingChatTitles:  map[string]struct{}{},
+		apiIdempotency:     map[string]*apiIdempotencyRecord{},
 	}
 }
 
@@ -217,6 +228,13 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 	server := New(metrics)
 	server.executor = executor
 	server.store = options.Store
+	if options.Store != nil {
+		server.asyncJobs = asyncjobsqlite.NewRepository(options.Store.SQLDB())
+		server.apiIdempotencyStore = apiidempotencysqlite.NewStore(options.Store.SQLDB())
+		if err := cursorsigningsqlite.Configure(context.Background(), options.Store.SQLDB()); err != nil {
+			server.logger.ErrorContext(context.Background(), "configure cursor signing failed", "error", err)
+		}
+	}
 	server.servingStateRepo = servingStateRepo
 	server.managedDataBindingRepo = managedDataBindingRepo
 	server.workspaceRepo = options.WorkspaceRepo
@@ -293,6 +311,7 @@ func (s *Server) StartBackgroundJobs(ctx context.Context) {
 	}
 	s.backgroundMu.Unlock()
 	s.dispatchQueuedRefreshJobs(backgroundCtx)
+	s.dispatchQueuedAsyncJobs(backgroundCtx)
 	if startManagedDataMaintenance {
 		s.startManagedDataMaintenance(backgroundCtx)
 	}
@@ -396,6 +415,31 @@ func (s *Server) accessRepository() (access.Repository, error) {
 	}
 	s.accessRepo = accesssqlite.NewRepository(s.store.SQLDB())
 	return s.accessRepo, nil
+}
+
+func (s *Server) authorizeListObject(ctx context.Context, principalID string, object access.ObjectRef) (bool, error) {
+	if s.auth == nil {
+		return true, nil
+	}
+	repo, err := s.accessRepository()
+	if err != nil {
+		return false, err
+	}
+	if repo == nil || strings.TrimSpace(principalID) == "" {
+		return false, nil
+	}
+	decision, err := repo.Authorize(ctx, principalID, access.PrivilegeViewItem, object)
+	if err != nil {
+		return false, err
+	}
+	return decision.Allowed, nil
+}
+
+func (s *Server) releaseRepository() *releasesqlite.Repository {
+	if s.store == nil {
+		return nil
+	}
+	return releasesqlite.NewRepository(s.store.SQLDB())
 }
 
 func (s *Server) registerDefaultWorkspaceSecurable(ctx context.Context) error {
@@ -543,6 +587,7 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 			}
 			return principal.ID
 		},
+		AuthorizeListObject: s.authorizeListObject,
 		CSRFToken: func(r *http.Request) string {
 			if s.auth == nil {
 				return ""

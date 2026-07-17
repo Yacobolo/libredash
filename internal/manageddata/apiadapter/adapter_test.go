@@ -92,6 +92,10 @@ type fakeRepository struct {
 	pointer     manageddata.EnvironmentPointer
 }
 
+func (r *fakeRepository) ListUploadSessions(_ context.Context, collectionID string) ([]manageddata.UploadSession, error) {
+	return []manageddata.UploadSession{{ID: "upload_a", CollectionID: collectionID, CreatedAt: "2026-01-01T00:00:00Z"}}, nil
+}
+
 func (r *fakeRepository) CollectionByProjectConnection(_ context.Context, project, connection string) (manageddata.Collection, error) {
 	value, ok := r.collections[project+"\x00"+connection]
 	if !ok {

@@ -24,6 +24,7 @@ type Repository interface {
 	CollectionByProjectConnection(context.Context, string, string) (manageddata.Collection, error)
 	ListRevisions(context.Context, string) ([]manageddata.Revision, error)
 	ReplaceServingStateBindings(context.Context, string, []manageddata.ServingStateBinding) error
+	ListServingStateBindings(context.Context, string) ([]manageddata.ServingStateBinding, error)
 }
 
 // Binder resolves project-global revision pins during publish validation.
@@ -76,6 +77,52 @@ func (b *Binder) AfterArtifactValidation(ctx context.Context, candidate servings
 	})
 	if err := b.repository.ReplaceServingStateBindings(ctx, string(candidate.ID), bindings); err != nil {
 		return repositoryError(err)
+	}
+	return nil
+}
+
+// ValidateServingStatePins proves that the artifact-owned bindings written by
+// AfterArtifactValidation exactly match the release manifest. Release pins are
+// content digests, while serving-state bindings use internal revision IDs, so
+// each expected digest must first be resolved within its project connection.
+func (b *Binder) ValidateServingStatePins(ctx context.Context, servingStateID, projectID string, expected map[string]string) error {
+	servingStateID = strings.TrimSpace(servingStateID)
+	projectID = strings.TrimSpace(projectID)
+	if b == nil || b.repository == nil {
+		return ErrRepository
+	}
+	if servingStateID == "" || projectID == "" || expected == nil {
+		return ErrArtifactMetadata
+	}
+	actual, err := b.repository.ListServingStateBindings(ctx, servingStateID)
+	if err != nil {
+		return repositoryError(err)
+	}
+	if len(actual) != len(expected) {
+		return ErrArtifactMetadata
+	}
+	actualByCollection := make(map[string]manageddata.ServingStateBinding, len(actual))
+	for _, binding := range actual {
+		if binding.ServingStateID != servingStateID || binding.CollectionID == "" || binding.RevisionID == "" {
+			return ErrArtifactMetadata
+		}
+		if _, duplicate := actualByCollection[binding.CollectionID]; duplicate {
+			return ErrArtifactMetadata
+		}
+		actualByCollection[binding.CollectionID] = binding
+	}
+	for connection, digest := range expected {
+		if connection == "" || connection != strings.TrimSpace(connection) || manageddata.ValidateRevisionID(digest) != nil {
+			return ErrArtifactMetadata
+		}
+		resolved, resolveErr := b.pinnedBinding(ctx, servingstate.ID(servingStateID), projectID, connection, digest, manageddata.Environment("dev"))
+		if resolveErr != nil {
+			return resolveErr
+		}
+		binding, ok := actualByCollection[resolved.CollectionID]
+		if !ok || binding.RevisionID != resolved.RevisionID {
+			return ErrArtifactMetadata
+		}
 	}
 	return nil
 }

@@ -164,7 +164,7 @@ func AdminPage(catalog dashboard.Catalog, active, roleLabel string, data AdminDa
 	}
 	if active == "agent" {
 		adminAttrs = append(adminAttrs,
-			g.Attr("data-on:ld-agent-system-prompt-save", "$adminAgentCommand = evt.detail; "+uiactions.Patch("/api/v1/admin/agent/config")),
+			g.Attr("data-on:ld-agent-system-prompt-save", "$adminAgentCommand = evt.detail; "+uiactions.Patch("/admin/agent/config")),
 		)
 	}
 	if active == "queries" {

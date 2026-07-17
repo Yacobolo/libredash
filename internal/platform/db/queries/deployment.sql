@@ -73,6 +73,11 @@ UPDATE project_deployments
 SET status = 'failed', error = ?
 WHERE id = ? AND status = 'pending';
 
+-- name: CancelProjectDeployment :execresult
+UPDATE project_deployments
+SET status = 'cancelled'
+WHERE id = ? AND status = 'pending';
+
 -- name: DeleteManagedDataServingStateBindings :exec
 DELETE FROM managed_data_serving_state_bindings
 WHERE serving_state_id = ?;
@@ -91,4 +96,3 @@ ON CONFLICT(serving_state_id, collection_id) DO UPDATE SET
 SELECT * FROM managed_data_serving_state_bindings
 WHERE serving_state_id = ?
 ORDER BY collection_id;
-

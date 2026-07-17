@@ -47,4 +47,4 @@ alias SearchWorkspaceOK = OkJson<SearchResponse>;
     cursor: #{ source: "/page/nextCursor" },
   },
 })
-op searchWorkspace(@path workspace: string, @query q?: string, @query types?: string, @query limit?: int32, @query pageToken?: string): SearchWorkspaceOK | CommonErrors;
+op searchWorkspace(@path workspace: string, @query q?: string, @query types?: string, @query limit?: ListLimit, @query pageToken?: PageToken): SearchWorkspaceOK | CommonErrors;

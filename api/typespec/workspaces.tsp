@@ -115,7 +115,14 @@ alias ListWorkspacesOK = OkJson<WorkspaceListResponse>;
     cursor: #{ source: "/page/nextCursor" },
   },
 })
-op listWorkspaces(@query environment?: string, @query limit?: int32, @query pageToken?: string): ListWorkspacesOK | CommonErrors;
+op listWorkspaces(@query limit?: ListLimit, @query pageToken?: PageToken): ListWorkspacesOK | CommonErrors;
+
+@tag("Workspaces")
+@summary("Get a workspace")
+@route("/workspaces/{workspace}")
+@get
+@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
+op getWorkspace(@path workspace: string): OkJson<WorkspaceResponse> | CommonErrors;
 
 alias ListWorkspaceAssetEdgesOK = OkJson<AssetEdgeListResponse>;
 
@@ -123,7 +130,7 @@ alias ListWorkspaceAssetEdgesOK = OkJson<AssetEdgeListResponse>;
 @summary("List workspace asset edges")
 @route("/workspaces/{workspace}/asset-edges")
 @get
-@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
 @apigen.cli(#{ command: #["assets", "edges"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
   name: "list_workspace_asset_edges",
@@ -139,7 +146,7 @@ alias ListWorkspaceAssetEdgesOK = OkJson<AssetEdgeListResponse>;
     cursor: #{ source: "/page/nextCursor" },
   },
 })
-op listWorkspaceAssetEdges(@path workspace: string, @query limit?: int32, @query pageToken?: string): ListWorkspaceAssetEdgesOK | CommonErrors;
+op listWorkspaceAssetEdges(@path workspace: string, @query limit?: ListLimit, @query pageToken?: PageToken): ListWorkspaceAssetEdgesOK | CommonErrors;
 
 alias ListWorkspaceAssetsOK = OkJson<AssetListResponse>;
 
@@ -147,7 +154,7 @@ alias ListWorkspaceAssetsOK = OkJson<AssetListResponse>;
 @summary("List workspace assets")
 @route("/workspaces/{workspace}/assets")
 @get
-@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
 @apigen.cli(#{ command: #["assets", "list"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
   name: "list_assets",
@@ -163,14 +170,14 @@ alias ListWorkspaceAssetsOK = OkJson<AssetListResponse>;
     cursor: #{ source: "/page/nextCursor" },
   },
 })
-op listWorkspaceAssets(@path workspace: string, @query type?: string, @query q?: string, @query limit?: int32, @query pageToken?: string): ListWorkspaceAssetsOK | CommonErrors;
+op listWorkspaceAssets(@path workspace: string, @query type?: string, @query q?: string, @query limit?: ListLimit, @query pageToken?: PageToken): ListWorkspaceAssetsOK | CommonErrors;
 
 @tag("Workspaces")
 @summary("Get the active asset graph")
 @route("/workspaces/{workspace}/active-asset-graph")
 @get
-@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
-op getWorkspaceActiveAssetGraph(@path workspace: string, @query environment?: string): OkJson<WorkspaceAssetGraphResponse> | CommonErrors;
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
+op getWorkspaceActiveAssetGraph(@path workspace: string): OkJson<WorkspaceAssetGraphResponse> | CommonErrors;
 
 @tag("Workspaces")
 @summary("Describe a workspace asset")

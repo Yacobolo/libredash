@@ -28,20 +28,11 @@ func TestManagedDataGeneratedByteCountsAreInt64(t *testing.T) {
 	}
 }
 
-func TestProjectDeploymentGeneratedGenerationsAreInt64(t *testing.T) {
-	typeOf := reflect.TypeOf(apigenapi.ProjectDeploymentConnectionResponse{})
-	for _, fieldName := range []string{"PriorGeneration", "ActivatedGeneration"} {
-		field, ok := typeOf.FieldByName(fieldName)
-		if !ok {
-			t.Fatalf("missing %s.%s", typeOf.Name(), fieldName)
-		}
-		kind := field.Type.Kind()
-		if kind == reflect.Pointer {
-			kind = field.Type.Elem().Kind()
-		}
-		if kind != reflect.Int64 {
-			t.Fatalf("%s.%s type = %s, want int64", typeOf.Name(), fieldName, field.Type)
-		}
+func TestReleaseArtifactGeneratedSizeIsInt64(t *testing.T) {
+	typeOf := reflect.TypeOf(apigenapi.ReleaseArtifactResponse{})
+	field, ok := typeOf.FieldByName("SizeBytes")
+	if !ok || field.Type.Kind() != reflect.Int64 {
+		t.Fatalf("%s.SizeBytes type = %v, want int64", typeOf.Name(), field.Type)
 	}
 }
 
@@ -59,23 +50,29 @@ func TestManagedDataAPIGenAdapterImplementsEveryGeneratedOperation(t *testing.T)
 
 func TestManagedDataAPIGenPrivilegesArePlatformGlobal(t *testing.T) {
 	want := map[string]access.Privilege{
-		"getManagedDataEnvironmentRevision":    access.PrivilegeViewData,
+		"getActiveManagedDataRevision":         access.PrivilegeViewData,
+		"listManagedConnections":               access.PrivilegeViewData,
+		"getManagedConnection":                 access.PrivilegeViewData,
 		"listManagedDataRevisions":             access.PrivilegeViewData,
 		"getManagedDataRevision":               access.PrivilegeViewData,
 		"createManagedDataUploadSession":       access.PrivilegeIngestData,
 		"getManagedDataUploadSession":          access.PrivilegeIngestData,
-		"abortManagedDataUploadSession":        access.PrivilegeIngestData,
+		"listManagedDataUploadSessions":        access.PrivilegeIngestData,
+		"cancelManagedDataUploadSession":       access.PrivilegeIngestData,
+		"listManagedDataUploadSessionEvents":   access.PrivilegeIngestData,
 		"finalizeManagedDataUploadSession":     access.PrivilegeIngestData,
 		"createManagedDataS3MultipartUpload":   access.PrivilegeIngestData,
 		"signManagedDataS3MultipartPart":       access.PrivilegeIngestData,
 		"completeManagedDataS3MultipartUpload": access.PrivilegeIngestData,
 		"abortManagedDataS3MultipartUpload":    access.PrivilegeIngestData,
-		"createProjectDeployment":              access.PrivilegeDeploy,
-		"getProjectDeployment":                 access.PrivilegeViewItem,
-		"activateProjectDeployment":            access.PrivilegeActivateDeployment,
+		"createDeployment":                     access.PrivilegeActivateDeployment,
+		"getDeployment":                        access.PrivilegeViewItem,
+		"listDeployments":                      access.PrivilegeViewItem,
+		"cancelDeployment":                     access.PrivilegeActivateDeployment,
+		"rollbackDeployment":                   access.PrivilegeActivateDeployment,
 	}
 	for operation, privilege := range want {
-		if got := apigenOperationPrivileges[operation]; got != privilege {
+		if got, ok := apigenOperationPrivilege(operation); !ok || got != privilege {
 			t.Errorf("%s privilege = %q, want %q", operation, got, privilege)
 		}
 		if resolver, exists := apigenOperationObjectResolvers[operation]; exists || resolver != nil {
@@ -83,7 +80,7 @@ func TestManagedDataAPIGenPrivilegesArePlatformGlobal(t *testing.T) {
 		}
 	}
 	for _, removed := range []string{"listManagedDataRollouts", "createManagedDataRollout", "getManagedDataRollout", "activateManagedDataRollout", "rollbackManagedDataRollout", "activatePublish"} {
-		if _, exists := apigenOperationPrivileges[removed]; exists {
+		if _, exists := apigenOperationPrivilege(removed); exists {
 			t.Errorf("removed operation %s retains a privilege", removed)
 		}
 	}

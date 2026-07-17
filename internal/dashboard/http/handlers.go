@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/access"
+	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
@@ -44,8 +45,27 @@ type Handler struct {
 	RefreshEventObserved dashboardstream.EventPublisher
 	CacheObserved        dataquery.CacheOutcomeObserver
 	CurrentPrincipalID   func(r *nethttp.Request) string
+	AuthorizeListObject  func(ctx context.Context, principalID string, object access.ObjectRef) (bool, error)
 	CSRFToken            func(r *nethttp.Request) string
 	ChromeDecorators     func(r *nethttp.Request) []reportui.ChromeDecorator
+}
+
+func (h Handler) filterAuthorizedDashboards(ctx context.Context, principalID, workspaceID string, rows []api.DashboardSummary) ([]api.DashboardSummary, error) {
+	if h.AuthorizeListObject == nil {
+		return rows, nil
+	}
+	out := make([]api.DashboardSummary, 0, len(rows))
+	for _, row := range rows {
+		object := access.ItemObjectWithParent(access.SecurableDashboard, workspaceID, row.ID, access.WorkspaceObject(workspaceID))
+		allowed, err := h.AuthorizeListObject(ctx, principalID, object)
+		if err != nil {
+			return nil, err
+		}
+		if allowed {
+			out = append(out, row)
+		}
+	}
+	return out, nil
 }
 
 func DashboardObjectRefs(r *nethttp.Request, workspaceID string) []access.ObjectRef {

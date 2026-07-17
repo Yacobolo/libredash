@@ -2,11 +2,16 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
-	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
+	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -19,14 +24,14 @@ type apiGenAdapter struct {
 }
 
 func (a apiGenAdapter) HandleAPIGen(operationID string, w http.ResponseWriter, r *http.Request) {
-	privilege, ok := apigenOperationPrivileges[operationID]
+	privilege, ok := apigenOperationPrivilege(operationID)
 	if !ok {
 		http.NotFound(w, r)
 		return
 	}
 	a.server.protectWithObjects(privilege, apigenOperationObjectResolvers[operationID], http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		buffered := newAPIGenResponseBuffer(w)
-		if ok := apigenapi.DispatchAPIGenOperation(operationID, a, buffered, r); !ok {
+		buffered := newAPIGenResponseBuffer(w, r)
+		if ok := apigenapi.DispatchAPIGenOperation(operationID, a, apiGenTransportErrorResponder{server: a.server}, buffered, r); !ok {
 			http.NotFound(w, r)
 			return
 		}
@@ -34,15 +39,97 @@ func (a apiGenAdapter) HandleAPIGen(operationID string, w http.ResponseWriter, r
 	})).ServeHTTP(w, r)
 }
 
+func apigenOperationPrivilege(operationID string) (access.Privilege, bool) {
+	contract, ok := apigenapi.GetAPIGenOperationContract(operationID)
+	if !ok || !contract.Protected || contract.AuthzMode != "privilege" {
+		return "", false
+	}
+	authz, ok := contract.Extensions["x-authz"].(map[string]any)
+	if !ok || authz["mode"] != "privilege" {
+		return "", false
+	}
+	value, ok := authz["privilege"].(string)
+	if !ok {
+		return "", false
+	}
+	return access.ParsePrivilege(value)
+}
+
+type apiGenTransportErrorResponder struct {
+	server *Server
+}
+
+func (responder apiGenTransportErrorResponder) RespondTransportError(ctx context.Context, w http.ResponseWriter, r *http.Request, failure apigenapi.GenTransportError) {
+	if responder.server != nil && responder.server.logger != nil && failure.Cause != nil {
+		log := responder.server.logger.DebugContext
+		if failure.StatusCode >= http.StatusInternalServerError {
+			log = responder.server.logger.ErrorContext
+		}
+		log(ctx, "APIGen transport error", "operation", failure.OperationID, "kind", failure.Kind, "status", failure.StatusCode, "error", failure.Cause)
+	}
+	requestID := ""
+	instance := ""
+	if r != nil {
+		requestID = r.Header.Get("X-Request-ID")
+		instance = r.URL.Path
+	}
+	problem := apigenapi.ProblemDetails{
+		Type:      "https://libredash.dev/problems/" + strings.ToLower(strings.ReplaceAll(failure.Code, "_", "-")),
+		Title:     http.StatusText(failure.StatusCode),
+		Status:    int32(failure.StatusCode),
+		Detail:    failure.PublicDetail,
+		Instance:  instance,
+		Code:      failure.Code,
+		RequestId: requestID,
+		Errors:    []apigenapi.ProblemFieldError{},
+	}
+	if field := transportErrorField(failure); field != "" {
+		problem.Detail = strings.TrimSuffix(failure.PublicDetail, ".") + " \"" + field + "\"."
+		problem.Errors = append(problem.Errors, apigenapi.ProblemFieldError{
+			Code:   failure.Code,
+			Detail: failure.PublicDetail,
+			Field:  field,
+		})
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(failure.StatusCode)
+	_ = json.NewEncoder(w).Encode(problem)
+}
+
+func transportErrorField(failure apigenapi.GenTransportError) string {
+	if failure.Cause == nil {
+		return ""
+	}
+	switch failure.Kind {
+	case "path_parameter", "query_parameter", "header_parameter":
+	default:
+		return ""
+	}
+	message := failure.Cause.Error()
+	marker := "parameter \""
+	start := strings.Index(message, marker)
+	if start < 0 {
+		return ""
+	}
+	start += len(marker)
+	end := strings.IndexByte(message[start:], '"')
+	if end < 0 {
+		return ""
+	}
+	return message[start : start+end]
+}
+
 type apiGenResponseBuffer struct {
 	downstream http.ResponseWriter
+	request    *http.Request
 	header     http.Header
 	body       bytes.Buffer
 	status     int
 }
 
-func newAPIGenResponseBuffer(w http.ResponseWriter) *apiGenResponseBuffer {
-	return &apiGenResponseBuffer{downstream: w, header: http.Header{}}
+func newAPIGenResponseBuffer(w http.ResponseWriter, r *http.Request) *apiGenResponseBuffer {
+	return &apiGenResponseBuffer{downstream: w, request: r, header: http.Header{}}
 }
 
 func (w *apiGenResponseBuffer) Header() http.Header {
@@ -67,14 +154,76 @@ func (w *apiGenResponseBuffer) flush() {
 	if status == 0 {
 		status = http.StatusOK
 	}
+	body := w.normalizedBody(status)
+	if status >= 200 && status < 300 && strings.HasPrefix(w.header.Get("Content-Type"), "application/json") {
+		body = signAPIResponseCursor(w.request, body)
+	}
+	if (status == http.StatusCreated || status == http.StatusAccepted) && w.header.Get("Location") == "" {
+		if location := responseLocation(w.request, body); location != "" {
+			w.header.Set("Location", location)
+		}
+	}
+	if w.request.Method == http.MethodDelete && status >= 200 && status < 300 {
+		status = http.StatusNoContent
+		body = nil
+		w.header.Del("Content-Type")
+		w.header.Del("Content-Length")
+	}
+	if status == http.StatusOK && w.request.Method == http.MethodGet && strings.HasPrefix(w.header.Get("Content-Type"), "application/json") {
+		etag := w.header.Get("ETag")
+		if etag == "" {
+			etag = strongETag(strings.TrimSpace(string(body)))
+			w.header.Set("ETag", etag)
+		}
+		if etagMatches(w.request.Header.Get("If-None-Match"), etag) {
+			status = http.StatusNotModified
+			body = nil
+			w.header.Del("Content-Type")
+			w.header.Del("Content-Length")
+		}
+	}
+	if isQueryRequest(w.request) {
+		w.header.Set("Cache-Control", "no-store")
+	}
 	for key, values := range w.header {
 		for _, value := range values {
 			w.downstream.Header().Add(key, value)
 		}
 	}
-	body := w.normalizedBody(status)
 	w.downstream.WriteHeader(status)
-	_, _ = w.downstream.Write(body)
+	if len(body) != 0 {
+		_, _ = w.downstream.Write(body)
+	}
+}
+
+func responseLocation(r *http.Request, body []byte) string {
+	if r == nil {
+		return ""
+	}
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	for _, suffix := range []string{"/cancel", "/finalize"} {
+		if strings.HasSuffix(path, suffix) {
+			return strings.TrimSuffix(path, suffix)
+		}
+	}
+	var value map[string]any
+	if json.Unmarshal(body, &value) != nil {
+		return ""
+	}
+	id, _ := value["id"].(string)
+	if id == "" {
+		for _, key := range []string{"principal", "apiToken", "clientSecret"} {
+			nested, _ := value[key].(map[string]any)
+			if candidate, _ := nested["id"].(string); candidate != "" {
+				id = candidate
+				break
+			}
+		}
+	}
+	if id == "" {
+		return ""
+	}
+	return path + "/" + url.PathEscape(id)
 }
 
 func (w *apiGenResponseBuffer) normalizedBody(status int) []byte {
@@ -88,20 +237,49 @@ func (w *apiGenResponseBuffer) normalizedBody(status int) []byte {
 	if _, ok := value["code"]; !ok {
 		return w.body.Bytes()
 	}
-	if _, ok := value["message"]; !ok {
+	message, ok := value["message"].(string)
+	if !ok {
 		return w.body.Bytes()
 	}
-	if _, ok := value["details"]; !ok {
-		value["details"] = map[string]any{}
+	requestID := w.request.Header.Get("X-Request-ID")
+	code := fmt.Sprintf("HTTP_%d", status)
+	if raw, ok := value["code"].(string); ok && raw != "" {
+		code = raw
 	}
-	if _, ok := value["requestId"]; !ok {
-		value["requestId"] = ""
+	errors := []apigenapi.ProblemFieldError{}
+	if details, ok := value["details"].(map[string]any); ok {
+		if field, ok := details["field"].(string); ok && field != "" {
+			errors = append(errors, apigenapi.ProblemFieldError{Field: field, Code: code, Detail: message})
+		}
 	}
-	out, err := json.Marshal(value)
+	problem := apigenapi.ProblemDetails{
+		Type: "https://libredash.dev/problems/" + strings.ToLower(code), Title: http.StatusText(status), Status: int32(status),
+		Detail: message, Instance: w.request.URL.Path, Code: code, RequestId: requestID, Errors: errors,
+	}
+	w.header.Set("Content-Type", "application/problem+json")
+	out, err := json.Marshal(problem)
 	if err != nil {
 		return w.body.Bytes()
 	}
 	return append(out, '\n')
+}
+
+func etagMatches(raw, current string) bool {
+	for _, value := range strings.Split(raw, ",") {
+		value = strings.TrimSpace(value)
+		if value == "*" || value == current {
+			return true
+		}
+	}
+	return false
+}
+
+func isQueryRequest(r *http.Request) bool {
+	if r == nil || r.Method != http.MethodPost {
+		return false
+	}
+	path := r.URL.Path
+	return strings.HasSuffix(path, "/query") || strings.HasSuffix(path, "/query/explain") || strings.HasSuffix(path, "/preview") || strings.HasSuffix(path, "/preview/explain") || strings.HasSuffix(path, "/values") || strings.HasSuffix(path, "/authorization-checks")
 }
 
 func (a apiGenAdapter) GetCurrentPrincipal(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +294,7 @@ func (a apiGenAdapter) ListCurrentAPITokens(w http.ResponseWriter, r *http.Reque
 	a.server.accessHTTPHandler().ListCurrentAPITokens(w, r)
 }
 
-func (a apiGenAdapter) CreateCurrentAPIToken(w http.ResponseWriter, r *http.Request) {
+func (a apiGenAdapter) CreateCurrentAPIToken(w http.ResponseWriter, r *http.Request, _ apigenapi.GenCreateCurrentAPITokenHeaders) {
 	a.server.accessHTTPHandler().CreateCurrentAPIToken(w, r)
 }
 
@@ -128,8 +306,8 @@ func (a apiGenAdapter) ListCurrentSessions(w http.ResponseWriter, r *http.Reques
 	a.server.accessHTTPHandler().ListCurrentSessions(w, r)
 }
 
-func (a apiGenAdapter) GetManagedDataEnvironmentRevision(w http.ResponseWriter, r *http.Request, project, connection, environment string) {
-	a.server.managedDataHTTPHandler().GetManagedDataEnvironmentRevision(w, r, project, connection, environment)
+func (a apiGenAdapter) GetActiveManagedDataRevision(w http.ResponseWriter, r *http.Request, project, connection string) {
+	a.server.managedDataHTTPHandler().GetActiveManagedDataRevision(w, r, project, connection)
 }
 
 func (a apiGenAdapter) ListManagedDataRevisions(w http.ResponseWriter, r *http.Request, project, connection string, params apigenapi.GenListManagedDataRevisionsParams) {
@@ -148,8 +326,12 @@ func (a apiGenAdapter) GetManagedDataUploadSession(w http.ResponseWriter, r *htt
 	a.server.managedDataHTTPHandler().GetManagedDataUploadSession(w, r, project, connection, uploadSession)
 }
 
-func (a apiGenAdapter) AbortManagedDataUploadSession(w http.ResponseWriter, r *http.Request, project, connection, uploadSession string, headers apigenapi.GenAbortManagedDataUploadSessionHeaders) {
-	a.server.managedDataHTTPHandler().AbortManagedDataUploadSession(w, r, project, connection, uploadSession, headers)
+func (a apiGenAdapter) ListManagedDataUploadSessions(w http.ResponseWriter, r *http.Request, project, connection string, params apigenapi.GenListManagedDataUploadSessionsParams) {
+	a.server.managedDataHTTPHandler().ListManagedDataUploadSessions(w, r, project, connection, params)
+}
+
+func (a apiGenAdapter) CancelManagedDataUploadSession(w http.ResponseWriter, r *http.Request, project, connection, uploadSession string, headers apigenapi.GenCancelManagedDataUploadSessionHeaders) {
+	a.server.managedDataHTTPHandler().CancelManagedDataUploadSession(w, r, project, connection, uploadSession, headers)
 }
 
 func (a apiGenAdapter) FinalizeManagedDataUploadSession(w http.ResponseWriter, r *http.Request, project, connection, uploadSession string, headers apigenapi.GenFinalizeManagedDataUploadSessionHeaders) {
@@ -168,20 +350,8 @@ func (a apiGenAdapter) CompleteManagedDataS3MultipartUpload(w http.ResponseWrite
 	a.server.managedDataHTTPHandler().CompleteManagedDataS3MultipartUpload(w, r, project, connection, uploadSession, multipartUpload, headers)
 }
 
-func (a apiGenAdapter) SignManagedDataS3MultipartPart(w http.ResponseWriter, r *http.Request, project, connection, uploadSession, multipartUpload string, partNumber int32) {
+func (a apiGenAdapter) SignManagedDataS3MultipartPart(w http.ResponseWriter, r *http.Request, project, connection, uploadSession, multipartUpload string, partNumber int32, _ apigenapi.GenSignManagedDataS3MultipartPartHeaders) {
 	a.server.managedDataHTTPHandler().SignManagedDataS3MultipartPart(w, r, project, connection, uploadSession, multipartUpload, partNumber)
-}
-
-func (a apiGenAdapter) CreateProjectDeployment(w http.ResponseWriter, r *http.Request, project string, headers apigenapi.GenCreateProjectDeploymentHeaders) {
-	a.server.deploymentHTTPHandler().Create(w, r, project, headers)
-}
-
-func (a apiGenAdapter) GetProjectDeployment(w http.ResponseWriter, r *http.Request, project, deployment string) {
-	a.server.deploymentHTTPHandler().Get(w, r, project, deployment)
-}
-
-func (a apiGenAdapter) ActivateProjectDeployment(w http.ResponseWriter, r *http.Request, project, deployment string, headers apigenapi.GenActivateProjectDeploymentHeaders) {
-	a.server.deploymentHTTPHandler().Activate(w, r, project, deployment, headers)
 }
 
 func (a apiGenAdapter) RevokeCurrentSession(w http.ResponseWriter, r *http.Request, _ string) {
@@ -200,7 +370,7 @@ func (a apiGenAdapter) ListWorkspaceAssets(w http.ResponseWriter, r *http.Reques
 	a.server.workspaceHTTPHandler().Assets(w, r)
 }
 
-func (a apiGenAdapter) GetWorkspaceActiveAssetGraph(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenGetWorkspaceActiveAssetGraphParams) {
+func (a apiGenAdapter) GetWorkspaceActiveAssetGraph(w http.ResponseWriter, r *http.Request, _ string) {
 	a.server.workspaceHTTPHandler().ActiveDeploymentGraph(w, r)
 }
 
@@ -224,8 +394,16 @@ func (a apiGenAdapter) GetDashboard(w http.ResponseWriter, r *http.Request, _, _
 	a.server.dashboardHTTP().GetDashboard(w, r)
 }
 
-func (a apiGenAdapter) ListDashboardComponents(w http.ResponseWriter, r *http.Request, _, _, _ string, _ apigenapi.GenListDashboardComponentsParams) {
-	a.server.dashboardHTTP().ListDashboardComponents(w, r)
+func (a apiGenAdapter) GetDashboardPage(w http.ResponseWriter, r *http.Request, _, _, _ string) {
+	a.server.dashboardHTTP().GetDashboardPage(w, r)
+}
+
+func (a apiGenAdapter) GetDashboardTable(w http.ResponseWriter, r *http.Request, _, _, _, _ string) {
+	a.server.dashboardHTTP().GetDashboardTable(w, r)
+}
+
+func (a apiGenAdapter) GetDashboardFilter(w http.ResponseWriter, r *http.Request, _, _, _, _ string) {
+	a.server.dashboardHTTP().GetDashboardFilter(w, r)
 }
 
 func (a apiGenAdapter) GetDashboardVisual(w http.ResponseWriter, r *http.Request, _, _, _, _ string) {
@@ -244,7 +422,16 @@ func (a apiGenAdapter) ListSemanticModelFields(w http.ResponseWriter, r *http.Re
 	a.server.semanticQueryHTTP().ListSemanticModelFields(w, r)
 }
 
-func (a apiGenAdapter) QuerySemanticModel(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) ListSemanticRelationships(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenListSemanticRelationshipsParams) {
+	a.server.semanticQueryHTTP().ListSemanticRelationships(w, r)
+}
+
+func (a apiGenAdapter) ListSemanticSources(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenListSemanticSourcesParams) {
+	a.server.semanticQueryHTTP().ListSemanticSources(w, r)
+}
+
+func (a apiGenAdapter) QuerySemanticModel(w http.ResponseWriter, r *http.Request, workspaceID, _ string, _ apigenapi.GenQuerySemanticModelHeaders) {
+	a.setServingSnapshot(r, workspaceID)
 	a.server.semanticQueryHTTP().QuerySemanticModel(w, r)
 }
 
@@ -256,55 +443,48 @@ func (a apiGenAdapter) ListSemanticFields(w http.ResponseWriter, r *http.Request
 	a.server.semanticQueryHTTP().ListSemanticFields(w, r)
 }
 
-func (a apiGenAdapter) QuerySemanticDataset(w http.ResponseWriter, r *http.Request, _, _, _ string) {
-	a.server.semanticQueryHTTP().QuerySemanticDataset(w, r)
-}
-
-func (a apiGenAdapter) PreviewSemanticDataset(w http.ResponseWriter, r *http.Request, _, _, _ string) {
+func (a apiGenAdapter) PreviewSemanticDataset(w http.ResponseWriter, r *http.Request, workspaceID, _, _ string, _ apigenapi.GenPreviewSemanticDatasetHeaders) {
+	a.setServingSnapshot(r, workspaceID)
 	a.server.semanticQueryHTTP().PreviewSemanticDataset(w, r)
-}
-
-func (a apiGenAdapter) ExplainSemanticQuery(w http.ResponseWriter, r *http.Request, _, _, _ string) {
-	a.server.semanticQueryHTTP().ExplainSemanticQuery(w, r)
 }
 
 func (a apiGenAdapter) ExplainSemanticPreview(w http.ResponseWriter, r *http.Request, _, _, _ string) {
 	a.server.semanticQueryHTTP().ExplainSemanticPreview(w, r)
 }
 
-func (a apiGenAdapter) QueryDashboardPage(w http.ResponseWriter, r *http.Request, _, _, _ string) {
+func (a apiGenAdapter) QueryDashboardPage(w http.ResponseWriter, r *http.Request, workspaceID, _, _ string) {
+	a.setServingSnapshot(r, workspaceID)
 	a.server.dashboardHTTP().QueryDashboardPage(w, r)
 }
 
-func (a apiGenAdapter) QueryDashboardVisualData(w http.ResponseWriter, r *http.Request, _, _, _, _ string) {
+func (a apiGenAdapter) QueryDashboardVisualData(w http.ResponseWriter, r *http.Request, workspaceID, _, _, _ string) {
+	a.setServingSnapshot(r, workspaceID)
 	a.server.dashboardHTTP().QueryDashboardVisualData(w, r)
 }
 
-func (a apiGenAdapter) QueryDashboardTable(w http.ResponseWriter, r *http.Request, _, _, _ string) {
-	a.server.dashboardHTTP().QueryDashboardTable(w, r)
-}
-
-func (a apiGenAdapter) QueryDashboardTableData(w http.ResponseWriter, r *http.Request, _, _, _, _ string) {
+func (a apiGenAdapter) QueryDashboardTable(w http.ResponseWriter, r *http.Request, workspaceID, _, _, _ string, _ apigenapi.GenQueryDashboardTableHeaders) {
+	a.setServingSnapshot(r, workspaceID)
 	a.server.dashboardHTTP().QueryDashboardTableData(w, r)
 }
 
-func (a apiGenAdapter) ListDashboardFilterOptions(w http.ResponseWriter, r *http.Request, _, _, _, _ string, _ apigenapi.GenListDashboardFilterOptionsParams) {
+func (a apiGenAdapter) setServingSnapshot(r *http.Request, workspaceID string) {
+	r.Header.Del("X-Serving-Snapshot")
+	repo, err := a.server.workspaceRepository()
+	if err != nil || repo == nil {
+		return
+	}
+	row, err := repo.ByID(r.Context(), workspace.WorkspaceID(a.server.workspaceID(workspaceID)))
+	if err == nil && row.ActiveServingStateID != "" {
+		r.Header.Set("X-Serving-Snapshot", string(row.ActiveServingStateID))
+	}
+}
+
+func (a apiGenAdapter) ListDashboardFilterValues(w http.ResponseWriter, r *http.Request, workspaceID, _, _, _ string, _ apigenapi.GenListDashboardFilterValuesParams) {
+	a.setServingSnapshot(r, workspaceID)
 	a.server.dashboardHTTP().ListDashboardFilterOptions(w, r)
 }
 
-func (a apiGenAdapter) CreateDeploymentCandidate(w http.ResponseWriter, r *http.Request, project, workspace string) {
-	a.server.deploymentCandidateHTTPHandler().CreateCandidate(w, r, project, workspace)
-}
-
-func (a apiGenAdapter) UploadDeploymentCandidateArtifact(w http.ResponseWriter, r *http.Request, project, workspace, candidate string, _ apigenapi.GenUploadDeploymentCandidateArtifactHeaders) {
-	a.server.deploymentCandidateHTTPHandler().UploadCandidateArtifact(w, r, project, workspace, servingstate.ID(candidate))
-}
-
-func (a apiGenAdapter) ValidateDeploymentCandidate(w http.ResponseWriter, r *http.Request, project, workspace, candidate string) {
-	a.server.deploymentCandidateHTTPHandler().ValidateCandidate(w, r, project, workspace, servingstate.ID(candidate))
-}
-
-func (a apiGenAdapter) CreateRefreshRun(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) CreateRefreshRun(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenCreateRefreshRunHeaders) {
 	a.server.refreshRunHTTP().CreateRun(w, r)
 }
 
@@ -320,7 +500,7 @@ func (a apiGenAdapter) ListAgentConversations(w http.ResponseWriter, r *http.Req
 	a.server.agentHTTPHandler().ListConversations(w, r)
 }
 
-func (a apiGenAdapter) CreateAgentConversation(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) CreateAgentConversation(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenCreateAgentConversationHeaders) {
 	a.server.agentHTTPHandler().CreateConversation(w, r)
 }
 
@@ -328,7 +508,8 @@ func (a apiGenAdapter) GetAgentConversation(w http.ResponseWriter, r *http.Reque
 	a.server.agentHTTPHandler().GetConversation(w, r)
 }
 
-func (a apiGenAdapter) UpdateAgentConversation(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) UpdateAgentConversation(w http.ResponseWriter, r *http.Request, _, _ string, headers apigenapi.GenUpdateAgentConversationHeaders) {
+	r.Header.Set("If-Match", headers.IfMatch)
 	a.server.agentHTTPHandler().UpdateConversation(w, r)
 }
 
@@ -340,8 +521,8 @@ func (a apiGenAdapter) ListAgentMessages(w http.ResponseWriter, r *http.Request,
 	a.server.agentHTTPHandler().ListMessages(w, r)
 }
 
-func (a apiGenAdapter) CreateAgentTurn(w http.ResponseWriter, r *http.Request, _, _ string) {
-	a.server.agentHTTPHandler().CreateTurn(w, r)
+func (a apiGenAdapter) CreateAgentRun(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenCreateAgentRunHeaders) {
+	a.server.agentHTTPHandler().CreateRun(w, r)
 }
 
 func (a apiGenAdapter) ListAgentRuns(w http.ResponseWriter, r *http.Request, _, _ string, _ apigenapi.GenListAgentRunsParams) {
@@ -352,23 +533,19 @@ func (a apiGenAdapter) GetAgentRun(w http.ResponseWriter, r *http.Request, _, _,
 	a.server.agentHTTPHandler().GetRun(w, r)
 }
 
-func (a apiGenAdapter) ListAgentEvents(w http.ResponseWriter, r *http.Request, _, _, _ string, _ apigenapi.GenListAgentEventsParams) {
+func (a apiGenAdapter) ListAgentEvents(w http.ResponseWriter, r *http.Request, _, _, _ string, _ apigenapi.GenListAgentEventsParams, _ apigenapi.GenListAgentEventsHeaders) {
 	a.server.agentHTTPHandler().ListEvents(w, r)
 }
 
-func (a apiGenAdapter) GetAdminAgentConfig(w http.ResponseWriter, r *http.Request) {
-	a.server.agentHTTPHandler().GetAdminConfig(w, r)
-}
-
-func (a apiGenAdapter) UpdateAdminAgentConfig(w http.ResponseWriter, r *http.Request) {
-	a.server.agentHTTPHandler().UpdateAdminConfig(w, r)
+func (a apiGenAdapter) CancelAgentRun(w http.ResponseWriter, r *http.Request, _, _, _ string, _ apigenapi.GenCancelAgentRunHeaders) {
+	a.server.agentHTTPHandler().CancelRun(w, r)
 }
 
 func (a apiGenAdapter) ListPrincipals(w http.ResponseWriter, r *http.Request, _ apigenapi.GenListPrincipalsParams) {
 	a.server.accessHTTPHandler().ListPrincipals(w, r)
 }
 
-func (a apiGenAdapter) CreatePrincipal(w http.ResponseWriter, r *http.Request) {
+func (a apiGenAdapter) CreatePrincipal(w http.ResponseWriter, r *http.Request, _ apigenapi.GenCreatePrincipalHeaders) {
 	a.server.accessHTTPHandler().CreatePrincipal(w, r)
 }
 
@@ -376,11 +553,16 @@ func (a apiGenAdapter) GetPrincipal(w http.ResponseWriter, r *http.Request, _ st
 	a.server.accessHTTPHandler().GetPrincipal(w, r)
 }
 
-func (a apiGenAdapter) UpdatePrincipal(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) UpdatePrincipal(w http.ResponseWriter, r *http.Request, _ string, headers apigenapi.GenUpdatePrincipalHeaders) {
+	r.Header.Set("If-Match", headers.IfMatch)
 	a.server.accessHTTPHandler().UpdatePrincipal(w, r)
 }
 
-func (a apiGenAdapter) ResetPrincipalPassword(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) DeletePrincipal(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.accessHTTPHandler().DeletePrincipal(w, r)
+}
+
+func (a apiGenAdapter) ResetPrincipalPassword(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenResetPrincipalPasswordHeaders) {
 	a.server.accessHTTPHandler().ResetPrincipalPassword(w, r)
 }
 
@@ -388,11 +570,16 @@ func (a apiGenAdapter) ListServicePrincipals(w http.ResponseWriter, r *http.Requ
 	a.server.accessHTTPHandler().ListServicePrincipals(w, r)
 }
 
-func (a apiGenAdapter) CreateServicePrincipal(w http.ResponseWriter, r *http.Request) {
+func (a apiGenAdapter) CreateServicePrincipal(w http.ResponseWriter, r *http.Request, _ apigenapi.GenCreateServicePrincipalHeaders) {
 	a.server.accessHTTPHandler().CreateServicePrincipal(w, r)
 }
 
-func (a apiGenAdapter) UpdateServicePrincipal(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) GetServicePrincipal(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.accessHTTPHandler().GetServicePrincipal(w, r)
+}
+
+func (a apiGenAdapter) UpdateServicePrincipal(w http.ResponseWriter, r *http.Request, _ string, headers apigenapi.GenUpdateServicePrincipalHeaders) {
+	r.Header.Set("If-Match", headers.IfMatch)
 	a.server.accessHTTPHandler().UpdateServicePrincipal(w, r)
 }
 
@@ -400,8 +587,16 @@ func (a apiGenAdapter) DeleteServicePrincipal(w http.ResponseWriter, r *http.Req
 	a.server.accessHTTPHandler().DeleteServicePrincipal(w, r)
 }
 
-func (a apiGenAdapter) CreateServicePrincipalSecret(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) CreateServicePrincipalSecret(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenCreateServicePrincipalSecretHeaders) {
 	a.server.accessHTTPHandler().CreateServicePrincipalSecret(w, r)
+}
+
+func (a apiGenAdapter) ListServicePrincipalSecrets(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenListServicePrincipalSecretsParams) {
+	a.server.accessHTTPHandler().ListServicePrincipalSecrets(w, r)
+}
+
+func (a apiGenAdapter) GetServicePrincipalSecret(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.accessHTTPHandler().GetServicePrincipalSecret(w, r)
 }
 
 func (a apiGenAdapter) RevokeServicePrincipalSecret(w http.ResponseWriter, r *http.Request, _, _ string) {
@@ -420,8 +615,17 @@ func (a apiGenAdapter) ListGrants(w http.ResponseWriter, r *http.Request, _ stri
 	a.server.accessHTTPHandler().ListGrants(w, r)
 }
 
-func (a apiGenAdapter) CreateGrant(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) CreateGrant(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenCreateGrantHeaders) {
 	a.server.accessHTTPHandler().CreateGrant(w, r)
+}
+
+func (a apiGenAdapter) GetGrant(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.accessHTTPHandler().GetGrant(w, r)
+}
+
+func (a apiGenAdapter) UpdateGrant(w http.ResponseWriter, r *http.Request, _, _ string, headers apigenapi.GenUpdateGrantHeaders) {
+	r.Header.Set("If-Match", headers.IfMatch)
+	a.server.accessHTTPHandler().UpdateGrant(w, r)
 }
 
 func (a apiGenAdapter) DeleteGrant(w http.ResponseWriter, r *http.Request, _, _ string) {
@@ -432,15 +636,28 @@ func (a apiGenAdapter) ListDataPolicies(w http.ResponseWriter, r *http.Request, 
 	a.server.accessHTTPHandler().ListDataPolicies(w, r)
 }
 
-func (a apiGenAdapter) CreateDataPolicy(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) CreateDataPolicy(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenCreateDataPolicyHeaders) {
 	a.server.accessHTTPHandler().CreateDataPolicy(w, r)
+}
+
+func (a apiGenAdapter) GetDataPolicy(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.accessHTTPHandler().GetDataPolicy(w, r)
+}
+
+func (a apiGenAdapter) UpdateDataPolicy(w http.ResponseWriter, r *http.Request, _, _ string, headers apigenapi.GenUpdateDataPolicyHeaders) {
+	r.Header.Set("If-Match", headers.IfMatch)
+	a.server.accessHTTPHandler().UpdateDataPolicy(w, r)
+}
+
+func (a apiGenAdapter) CheckAuthorizationBatch(w http.ResponseWriter, r *http.Request, _ string) {
+	a.server.accessHTTPHandler().CheckAuthorizationBatch(w, r)
 }
 
 func (a apiGenAdapter) DeleteDataPolicy(w http.ResponseWriter, r *http.Request, _, _ string) {
 	a.server.accessHTTPHandler().DeleteDataPolicy(w, r)
 }
 
-func (a apiGenAdapter) TransferOwnership(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) TransferOwnership(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenTransferOwnershipHeaders) {
 	a.server.accessHTTPHandler().TransferOwnership(w, r)
 }
 
@@ -456,7 +673,7 @@ func (a apiGenAdapter) ListGroups(w http.ResponseWriter, r *http.Request, _ stri
 	a.server.accessHTTPHandler().ListGroups(w, r)
 }
 
-func (a apiGenAdapter) CreateGroup(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) CreateGroup(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenCreateGroupHeaders) {
 	a.server.accessHTTPHandler().CreateGroup(w, r)
 }
 
@@ -464,7 +681,8 @@ func (a apiGenAdapter) GetGroup(w http.ResponseWriter, r *http.Request, _, _ str
 	a.server.accessHTTPHandler().GetGroup(w, r)
 }
 
-func (a apiGenAdapter) UpdateGroup(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) UpdateGroup(w http.ResponseWriter, r *http.Request, _, _ string, headers apigenapi.GenUpdateGroupHeaders) {
+	r.Header.Set("If-Match", headers.IfMatch)
 	a.server.accessHTTPHandler().UpdateGroup(w, r)
 }
 
@@ -488,11 +706,16 @@ func (a apiGenAdapter) ListRoleBindings(w http.ResponseWriter, r *http.Request, 
 	a.server.accessHTTPHandler().ListRoleBindings(w, r)
 }
 
-func (a apiGenAdapter) CreateRoleBinding(w http.ResponseWriter, r *http.Request, _ string) {
+func (a apiGenAdapter) CreateRoleBinding(w http.ResponseWriter, r *http.Request, _ string, _ apigenapi.GenCreateRoleBindingHeaders) {
 	a.server.accessHTTPHandler().CreateRoleBinding(w, r)
 }
 
-func (a apiGenAdapter) UpdateRoleBinding(w http.ResponseWriter, r *http.Request, _, _ string) {
+func (a apiGenAdapter) GetRoleBinding(w http.ResponseWriter, r *http.Request, _, _ string) {
+	a.server.accessHTTPHandler().GetRoleBinding(w, r)
+}
+
+func (a apiGenAdapter) UpdateRoleBinding(w http.ResponseWriter, r *http.Request, _, _ string, headers apigenapi.GenUpdateRoleBindingHeaders) {
+	r.Header.Set("If-Match", headers.IfMatch)
 	a.server.accessHTTPHandler().UpdateRoleBinding(w, r)
 }
 

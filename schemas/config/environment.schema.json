@@ -1404,6 +1404,14 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
+    "LIBREDASH_DEV_API_TOKEN": {
+      "default": "dev",
+      "description": "Static bearer credential accepted by the public API in development; replace the development default on shared machines.",
+      "type": "string",
+      "writeOnly": true,
+      "x-lifecycle": "development",
+      "x-scope": "serve"
+    },
     "LIBREDASH_DEV_AUTH_BYPASS": {
       "default": "false",
       "description": "Bypass authentication in development; forbidden in production.",

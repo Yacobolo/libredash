@@ -64,7 +64,7 @@ func allowedHosts(hosts []string) func(http.Handler) http.Handler {
 		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !allowed.matches(r.Host, r.RemoteAddr) {
-				http.Error(w, http.StatusText(http.StatusMisdirectedRequest), http.StatusMisdirectedRequest)
+				writeMiddlewareError(w, r, http.StatusMisdirectedRequest, "MISDIRECTED_REQUEST", "The request host is not allowed")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -170,7 +170,12 @@ func (c RateLimitConfig) middleware(limit int, window time.Duration) func(http.H
 	if c.UseRealIP {
 		keyFunc = httprate.KeyByRealIP
 	}
-	return httprate.Limit(limit, window, httprate.WithKeyFuncs(keyFunc, httprate.KeyByEndpoint))
+	return httprate.Limit(limit, window,
+		httprate.WithKeyFuncs(keyFunc, httprate.KeyByEndpoint),
+		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
+			writeMiddlewareError(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "The request rate limit was exceeded")
+		}),
+	)
 }
 
 func requestBodyLimit(config RequestBodyLimitConfig) func(http.Handler) http.Handler {
@@ -181,7 +186,7 @@ func requestBodyLimit(config RequestBodyLimitConfig) func(http.Handler) http.Han
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Body != nil && r.Body != http.NoBody {
 				if r.ContentLength > config.MaxBytes {
-					http.Error(w, http.StatusText(http.StatusRequestEntityTooLarge), http.StatusRequestEntityTooLarge)
+					writeMiddlewareError(w, r, http.StatusRequestEntityTooLarge, "CONTENT_TOO_LARGE", "The request body exceeds the configured size limit")
 					return
 				}
 				r.Body = http.MaxBytesReader(w, r.Body, config.MaxBytes)
@@ -205,12 +210,20 @@ func panicRecovery(logger *slog.Logger) func(http.Handler) http.Handler {
 						"panic", recovered,
 						"stack", string(debug.Stack()),
 					)
-					http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+					writeMiddlewareError(w, r, http.StatusInternalServerError, "INTERNAL_SERVER_ERROR", "The server could not complete the request")
 				}
 			}()
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func writeMiddlewareError(w http.ResponseWriter, r *http.Request, status int, code, detail string) {
+	if r != nil && (strings.HasPrefix(r.URL.Path, "/api/v1/") || strings.HasPrefix(r.URL.Path, "/upload-protocols/")) {
+		writeAPIProblem(w, r, status, code, detail, nil)
+		return
+	}
+	http.Error(w, detail, status)
 }
 
 func passthrough(next http.Handler) http.Handler {

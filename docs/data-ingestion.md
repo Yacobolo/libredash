@@ -41,8 +41,9 @@ libredash data sync \
 ```
 
 `data sync` stages an immutable revision only. It does not activate the revision
-or change any serving workspace. Activation happens through the project deploy
-command so project configuration and managed data revisions move together.
+or change any serving workspace. A project release pins the revision digest
+alongside every workspace artifact digest. Deploying that ready release moves
+project configuration and managed data revisions together.
 
 Deploy the project with the staged digest printed by `data sync`:
 
@@ -58,11 +59,32 @@ libredash deploy \
 Supply exactly one repeatable `--revision
 "<connection>=sha256:<64-lowercase-hex>"` flag for every managed connection in
 the project. The CLI rejects missing, duplicate, and unknown connection pins
-before deployment. It uploads and validates every project workspace candidate
-first, then the server switches all project-global revision pointers and
-workspace serving states in one atomic rollout. A failed candidate leaves every
-active revision and workspace unchanged. Projects with no managed connections
-use the same deploy command without revision flags.
+before creating the release. It uploads and validates every release artifact
+first, then the server deploys the ready release by switching all project-global
+revision pointers and workspace serving states in one atomic cutover. A failed
+release validation or deployment leaves every active revision and workspace
+unchanged. Projects with no managed connections use the same deploy command
+without revision flags.
+
+## Upload protocol contracts
+
+Upload-session negotiation is part of the JSON product API under
+`/api/v1/projects/{project}/connections/{connection}/upload-sessions`. It
+selects an enabled transport and returns transport endpoints, expiry, and
+required headers; it never returns storage credentials or resolved secrets.
+
+For `tus`, clients follow the TUS resumable-upload protocol at
+`/upload-protocols/tus`. Every request still requires the same bearer
+authentication as `/api/v1`. The negotiated upload ID binds the transport
+object to its product upload session, while TUS offsets and completion remain
+transport concerns.
+
+For `s3_multipart`, clients use the authenticated multipart commands nested
+beneath the upload session to create an upload, sign each part, complete it, or
+abort it. The server returns short-lived signed part URLs and the exact headers
+to send, rather than AWS credentials. Completing either transport does not make
+the revision active: clients must finalize the upload session and then pin the
+resulting immutable revision in a release.
 
 ## Inspect revisions
 
