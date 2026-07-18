@@ -1,0 +1,1472 @@
+import { LitElement, css, html } from 'lit'
+import { Blocks, Bot, Boxes, ChartNoAxesCombined, Check, Copy, Database, Eclipse, GitBranch, LayoutDashboard, Menu, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Radio, Search, Server, Sun, X, type IconNode } from 'lucide'
+import { DatastarLit } from '../../web/components/shared/datastar-lit'
+import { lucideIcon } from '../../web/components/shared/lucide-icons'
+import '../../web/components/shared/code-block'
+import type { ChartPayload } from '../../web/components/dashboard/charts/types'
+import type { TableSignal } from '../../web/components/dashboard/table/types'
+
+type ThemeMode = 'system' | 'light' | 'dark'
+
+const nextThemeMode: Record<ThemeMode, ThemeMode> = {
+  system: 'light',
+  light: 'dark',
+  dark: 'system',
+}
+
+const themeLabels: Record<ThemeMode, string> = {
+  system: 'System theme',
+  light: 'Light theme',
+  dark: 'Dark theme',
+}
+
+class SiteThemeToggle extends LitElement {
+  private themeMode: ThemeMode = currentThemeMode()
+  private readonly handleThemeApplied = (event: Event) => {
+    this.themeMode = normalizeThemeMode((event as CustomEvent<{ mode?: string }>).detail?.mode)
+    this.requestUpdate()
+  }
+
+  static styles = css`
+    :host {
+      display: block;
+    }
+
+    button {
+      display: inline-grid;
+      width: var(--site-interactive-target-size);
+      height: var(--site-interactive-target-size);
+      place-items: center;
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-bg-control);
+      color: var(--ld-fg-muted);
+      cursor: pointer;
+      font: inherit;
+    }
+
+    button:hover,
+    button:focus-visible {
+      border-color: var(--ld-button-border-hover);
+      background: var(--ld-button-bg-hover);
+      color: var(--ld-fg-default);
+    }
+
+    button:focus-visible {
+      outline: var(--focus-outline);
+      outline-offset: var(--focus-outline-offset);
+    }
+
+    [hidden] {
+      display: none;
+    }
+  `
+
+  connectedCallback(): void {
+    super.connectedCallback()
+    document.addEventListener('libredash-theme-applied', this.handleThemeApplied)
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    super.disconnectedCallback()
+  }
+
+  render() {
+    const nextMode = nextThemeMode[this.themeMode]
+    const label = `${themeLabels[this.themeMode]}. Switch to ${themeLabels[nextMode]}.`
+    return html`<button type="button" data-theme-toggle data-theme-mode=${this.themeMode} aria-label=${label} title=${label} @click=${this.toggleTheme}>
+      <span data-theme-icon="system" ?hidden=${this.themeMode !== 'system'}>${lucideIcon(Monitor)}</span>
+      <span data-theme-icon="light" ?hidden=${this.themeMode !== 'light'}>${lucideIcon(Sun)}</span>
+      <span data-theme-icon="dark" ?hidden=${this.themeMode !== 'dark'}>${lucideIcon(Moon)}</span>
+    </button>`
+  }
+
+  private toggleTheme(): void {
+    const nextMode = nextThemeMode[this.themeMode]
+    this.themeMode = nextMode
+    this.requestUpdate()
+    document.dispatchEvent(new CustomEvent('libredash-theme-change', { detail: { mode: nextMode } }))
+  }
+}
+
+if (!customElements.get('ld-site-theme-toggle')) {
+  customElements.define('ld-site-theme-toggle', SiteThemeToggle)
+}
+
+class SiteMobileMenu extends LitElement {
+  private open = false
+
+  static styles = css`
+    :host {
+      display: none;
+    }
+
+    @media (width < 48rem) {
+      :host {
+        display: block;
+      }
+    }
+
+    button {
+      display: inline-grid;
+      width: var(--site-interactive-target-size);
+      height: var(--site-interactive-target-size);
+      place-items: center;
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-bg-control);
+      color: var(--ld-fg-muted);
+      cursor: pointer;
+      font: inherit;
+    }
+
+    button:hover,
+    button:focus-visible {
+      border-color: var(--ld-button-border-hover);
+      background: var(--ld-button-bg-hover);
+      color: var(--ld-fg-default);
+    }
+
+    button:focus-visible {
+      outline: var(--focus-outline);
+      outline-offset: var(--focus-outline-offset);
+    }
+
+    nav {
+      position: fixed;
+      z-index: var(--zIndex-overlay);
+      top: calc(var(--site-header-height) + var(--base-size-8));
+      right: var(--base-size-16);
+      display: grid;
+      min-width: calc(var(--base-size-128) + var(--base-size-64));
+      overflow: hidden;
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-large);
+      background: var(--ld-bg-panel);
+      box-shadow: var(--shadow-floating-medium);
+    }
+
+    a {
+      display: flex;
+      min-height: var(--control-minTarget-auto);
+      align-items: center;
+      padding: var(--base-size-12) var(--base-size-16);
+      color: var(--ld-fg-default);
+      font-size: var(--ld-text-body-md-size);
+      font-weight: var(--ld-font-weight-medium);
+      text-decoration: none;
+    }
+
+    a:hover,
+    a:focus-visible {
+      background: var(--ld-bg-control);
+      color: var(--ld-fg-accent);
+    }
+
+    nav[hidden] {
+      display: none;
+    }
+  `
+
+  connectedCallback(): void {
+    super.connectedCallback()
+    document.addEventListener('keydown', this.handleKeydown)
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener('keydown', this.handleKeydown)
+    super.disconnectedCallback()
+  }
+
+  render() {
+    const label = this.open ? 'Close site navigation' : 'Open site navigation'
+    return html`<button type="button" aria-label=${label} aria-controls="site-mobile-navigation" aria-expanded=${String(this.open)} @click=${this.toggle}>${lucideIcon(this.open ? X : Menu, { size: 20, strokeWidth: 2 })}</button>
+      <nav id="site-mobile-navigation" aria-label="Site navigation" ?hidden=${!this.open}>
+        <a href="/docs" @click=${this.close}>Docs</a>
+        <a href="/docs/search" @click=${this.close}>Search</a>
+        <a href="/charts" @click=${this.close}>Charts</a>
+      </nav>`
+  }
+
+  private toggle = (): void => {
+    this.open = !this.open
+    this.requestUpdate()
+  }
+
+  private close = (): void => {
+    this.open = false
+    this.requestUpdate()
+  }
+
+  private readonly handleKeydown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && this.open) this.close()
+  }
+}
+
+if (!customElements.get('ld-site-mobile-menu')) {
+  customElements.define('ld-site-mobile-menu', SiteMobileMenu)
+}
+
+type SiteSearchResult = {
+  href: string
+  summary: string
+  title: string
+}
+
+type SiteSearchState = {
+  loading?: boolean
+  query: string
+  resultQuery?: string
+  results: SiteSearchResult[]
+  total: number
+}
+
+const emptySiteSearch: SiteSearchState = { query: '', results: [], total: 0 }
+
+class SiteSearch extends DatastarLit(LitElement) {
+  private readonly handleGlobalKeydown = (event: KeyboardEvent): void => {
+    const target = event.target as HTMLElement | null
+    const editing = target?.matches('input, textarea, select, [contenteditable="true"]') ?? false
+    const commandShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k'
+    const slashShortcut = event.key === '/' && !event.metaKey && !event.ctrlKey && !event.altKey && !editing
+    if (event.defaultPrevented || event.repeat || (!commandShortcut && !slashShortcut)) return
+
+    event.preventDefault()
+    this.openDialog()
+  }
+
+  static styles = css`
+    :host {
+      display: block;
+    }
+
+    slot:not([name]) {
+      display: none;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .trigger {
+      display: inline-flex;
+      min-height: var(--site-interactive-target-size);
+      align-items: center;
+      gap: var(--base-size-8);
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-bg-control);
+      color: var(--ld-fg-muted);
+      cursor: pointer;
+      padding-inline: var(--base-size-12) var(--base-size-8);
+      font-size: var(--ld-text-body-sm-size);
+      font-weight: var(--ld-font-weight-medium);
+    }
+
+    .trigger:hover,
+    .trigger:focus-visible {
+      border-color: var(--ld-button-border-hover);
+      background: var(--ld-button-bg-hover);
+      color: var(--ld-fg-default);
+    }
+
+    button:focus-visible,
+    ::slotted(.site-search-active-input:focus-visible) {
+      outline: var(--focus-outline);
+      outline-offset: var(--focus-outline-offset);
+    }
+
+    kbd {
+      border: var(--ld-border-muted);
+      border-radius: var(--borderRadius-small);
+      background: var(--ld-bg-panel);
+      color: var(--ld-fg-muted);
+      padding: var(--base-size-2) var(--base-size-4);
+      font-family: var(--ld-font-family-mono);
+      font-size: var(--ld-text-caption-size);
+      line-height: 1;
+    }
+
+    dialog {
+      width: min(calc(100vw - var(--base-size-32)), calc(var(--base-size-128) * 5));
+      max-width: none;
+      margin: min(18vh, calc(var(--base-size-128) + var(--base-size-32))) auto auto;
+      overflow: hidden;
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-large);
+      background: var(--ld-bg-panel);
+      color: var(--ld-fg-default);
+      box-shadow: var(--shadow-floating-large);
+      padding: 0;
+    }
+
+    dialog::backdrop {
+      background: var(--bgColor-black);
+      opacity: 0.45;
+    }
+
+    .panel {
+      display: grid;
+      gap: var(--base-size-16);
+      padding: var(--base-size-20);
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--base-size-16);
+    }
+
+    h2 {
+      margin: 0;
+      font-size: var(--ld-text-title-md-size);
+    }
+
+    .close {
+      display: inline-grid;
+      width: var(--control-minTarget-auto);
+      height: var(--control-minTarget-auto);
+      place-items: center;
+      border: 0;
+      border-radius: var(--ld-radius-default);
+      background: transparent;
+      color: var(--ld-fg-muted);
+      cursor: pointer;
+    }
+
+    .close:hover,
+    .close:focus-visible {
+      background: var(--ld-button-bg-hover);
+      color: var(--ld-fg-default);
+    }
+
+    .controls {
+      display: flex;
+      gap: var(--base-size-8);
+    }
+
+    ::slotted(.site-search-active-input) {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      min-height: var(--control-minTarget-auto);
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-bg-control);
+      color: var(--ld-fg-default);
+      padding: var(--control-medium-paddingBlock) var(--control-medium-paddingInline-normal);
+      font: inherit;
+    }
+
+    .results {
+      max-height: min(50vh, calc(var(--base-size-128) * 3));
+      overflow-y: auto;
+      border-top: var(--ld-border-muted);
+      padding-top: var(--base-size-12);
+    }
+
+    .status {
+      margin: 0;
+      color: var(--ld-fg-muted);
+      font-size: var(--ld-text-body-sm-size);
+    }
+
+    ul {
+      display: grid;
+      gap: var(--base-size-4);
+      margin: var(--base-size-8) 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    a {
+      display: grid;
+      gap: var(--base-size-4);
+      border-radius: var(--ld-radius-default);
+      color: var(--ld-fg-default);
+      padding: var(--base-size-12);
+      text-decoration: none;
+    }
+
+    a:hover,
+    a:focus-visible {
+      background: var(--ld-button-bg-hover);
+    }
+
+    a:focus-visible {
+      outline: var(--focus-outline);
+      outline-offset: calc(var(--focus-outline-offset) * -1);
+    }
+
+    a strong {
+      font-size: var(--ld-text-body-md-size);
+    }
+
+    a span {
+      display: -webkit-box;
+      overflow: hidden;
+      color: var(--ld-fg-muted);
+      font-size: var(--ld-text-body-sm-size);
+      line-height: var(--ld-line-height-relaxed);
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+
+    @media (width < 30rem) {
+      .trigger kbd {
+        display: none;
+      }
+      .panel {
+        padding: var(--base-size-16);
+      }
+    }
+  `
+
+  connectedCallback(): void {
+    super.connectedCallback()
+    document.addEventListener('keydown', this.handleGlobalKeydown)
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener('keydown', this.handleGlobalKeydown)
+    super.disconnectedCallback()
+  }
+
+  render() {
+    const state = this.signal<SiteSearchState>('docsSearch', emptySiteSearch)
+    const query = state.query?.trim() ?? ''
+    const results = Array.isArray(state.results) ? state.results : []
+    const total = Number.isFinite(state.total) ? state.total : 0
+    const loading = Boolean(state.loading) || (query !== '' && state.resultQuery !== query)
+
+    return html`<slot></slot>
+      <button class="trigger" type="button" aria-label="Search documentation" aria-keyshortcuts="/ Meta+K Control+K" @click=${this.openDialog}>
+        ${lucideIcon(Search, { size: 16, strokeWidth: 2 })}
+        <span>Search</span>
+        <kbd aria-hidden="true">⌘K</kbd>
+      </button>
+      <dialog aria-labelledby="site-search-title" @click=${this.closeFromBackdrop}>
+        <div class="panel" role="search">
+          <header>
+            <h2 id="site-search-title">Search documentation</h2>
+            <button class="close" type="button" aria-label="Close search" @click=${this.closeDialog}>${lucideIcon(X, { size: 18, strokeWidth: 2 })}</button>
+          </header>
+          <div class="controls" @keydown=${this.handleInputKeydown}>
+            <slot name="input"></slot>
+          </div>
+          <section class="results" aria-live="polite" aria-busy=${String(loading)}>${this.renderResults(query, results, total, loading)}</section>
+        </div>
+      </dialog>`
+  }
+
+  private renderResults(query: string, results: SiteSearchResult[], total: number, loading: boolean) {
+    if (!query) return html`<p class="status">Start typing to search the documentation.</p>`
+    if (loading) return html`<p class="status">Searching…</p>`
+    if (results.length === 0) return html`<p class="status">No results for “${query}”.</p>`
+    const label = `${total} ${total === 1 ? 'result' : 'results'}`
+    return html`<p class="status">${label}</p>
+      <ul>
+        ${results.map(
+          (result) =>
+            html`<li>
+              <a href=${result.href}>
+                <strong>${result.title}</strong>
+                <span>${result.summary}</span>
+              </a>
+            </li>`,
+        )}
+      </ul>`
+  }
+
+  private openDialog = (): void => {
+    const dialog = this.renderRoot.querySelector<HTMLDialogElement>('dialog')
+    if (!dialog || dialog.open) return
+    dialog.showModal()
+    requestAnimationFrame(() => this.querySelector<HTMLInputElement>('input[slot="input"]')?.focus())
+  }
+
+  private closeDialog = (): void => {
+    this.renderRoot.querySelector<HTMLDialogElement>('dialog')?.close()
+  }
+
+  private closeFromBackdrop = (event: MouseEvent): void => {
+    if (event.target === event.currentTarget) this.closeDialog()
+  }
+
+  private handleInputKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== 'Enter' || event.isComposing) return
+    const query = this.querySelector<HTMLInputElement>('input[slot="input"]')?.value.trim() ?? ''
+    if (!query) return
+    event.preventDefault()
+    window.location.assign(`/docs/search?q=${encodeURIComponent(query)}`)
+  }
+}
+
+if (!customElements.get('ld-site-search')) {
+  customElements.define('ld-site-search', SiteSearch)
+}
+
+class SiteDocsDrawerToggle extends LitElement {
+  static properties = {
+    placement: { type: String },
+  }
+
+  declare placement: string
+
+  private open = false
+  private readonly handleDrawerState = (event: Event) => {
+    this.open = Boolean((event as CustomEvent<{ open?: boolean }>).detail?.open)
+    this.requestUpdate()
+  }
+
+  static styles = css`
+    :host {
+      display: none;
+    }
+
+    @media (max-width: 56.25rem) {
+      :host {
+        display: block;
+      }
+    }
+
+    button {
+      display: inline-grid;
+      width: var(--site-interactive-target-size);
+      height: var(--site-interactive-target-size);
+      place-items: center;
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-bg-control);
+      color: var(--ld-fg-muted);
+      cursor: pointer;
+      font: inherit;
+    }
+
+    button:hover,
+    button:focus-visible {
+      border-color: var(--ld-button-border-hover);
+      background: var(--ld-button-bg-hover);
+      color: var(--ld-fg-default);
+    }
+
+    button:focus-visible {
+      outline: var(--focus-outline);
+      outline-offset: var(--focus-outline-offset);
+    }
+  `
+
+  connectedCallback(): void {
+    super.connectedCallback()
+    document.addEventListener('libredash-docs-drawer-state', this.handleDrawerState)
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener('libredash-docs-drawer-state', this.handleDrawerState)
+    super.disconnectedCallback()
+  }
+
+  render() {
+    const closeControl = this.placement === 'drawer'
+    const label = closeControl || this.open ? 'Close documentation menu' : 'Open documentation menu'
+    const icon = closeControl || this.open ? PanelLeftClose : PanelLeftOpen
+    return html`<button type="button" aria-label=${label} aria-controls="site-docs-sidebar" aria-expanded=${String(this.open)} @click=${this.toggleDrawer}>${lucideIcon(closeControl ? X : icon, { size: 18, strokeWidth: 2 })}</button>`
+  }
+
+  private toggleDrawer = (): void => {
+    document.dispatchEvent(
+      new CustomEvent('libredash-docs-drawer-request', {
+        detail: { open: this.placement === 'drawer' ? false : !this.open },
+      }),
+    )
+  }
+}
+
+if (!customElements.get('ld-site-docs-drawer-toggle')) {
+  customElements.define('ld-site-docs-drawer-toggle', SiteDocsDrawerToggle)
+}
+
+function syncDocsDrawer(open = false): void {
+  const layout = document.querySelector<HTMLElement>('.site-docs-layout')
+  const sidebar = document.querySelector<HTMLElement>('.site-docs-sidebar')
+  if (!layout || !sidebar) return
+
+  const compact = window.matchMedia('(max-width: 56.25rem)').matches
+  const nextOpen = compact && open
+  const wasOpen = layout.classList.contains('site-docs-drawer-open')
+  layout.classList.toggle('site-docs-drawer-open', nextOpen)
+  sidebar.inert = compact && !nextOpen
+  sidebar.setAttribute('aria-hidden', String(compact && !nextOpen))
+  document.body.classList.toggle('site-docs-drawer-open', nextOpen)
+  document.dispatchEvent(
+    new CustomEvent('libredash-docs-drawer-state', {
+      detail: { open: nextOpen },
+    }),
+  )
+  if (nextOpen && !wasOpen) requestAnimationFrame(revealCurrentDocsLink)
+  if (compact && wasOpen && !nextOpen) {
+    document.querySelector<HTMLElement>('ld-site-docs-drawer-toggle:not([placement])')?.shadowRoot?.querySelector<HTMLButtonElement>('button')?.focus()
+  }
+}
+
+document.addEventListener('libredash-docs-drawer-request', (event) => {
+  const requested = (event as CustomEvent<{ open?: boolean }>).detail?.open
+  const currentlyOpen = document.querySelector('.site-docs-layout')?.classList.contains('site-docs-drawer-open') ?? false
+  syncDocsDrawer(typeof requested === 'boolean' ? requested : !currentlyOpen)
+})
+
+document.addEventListener('click', (event) => {
+  if ((event.target as Element).closest('[data-site-docs-drawer-close]')) syncDocsDrawer(false)
+})
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') syncDocsDrawer(false)
+})
+
+window.addEventListener('resize', () => syncDocsDrawer(document.querySelector('.site-docs-layout')?.classList.contains('site-docs-drawer-open')))
+syncDocsDrawer()
+requestAnimationFrame(revealCurrentDocsLink)
+
+function revealCurrentDocsLink(): void {
+  document.querySelector<HTMLElement>('.site-docs-link-current')?.scrollIntoView({
+    block: 'nearest',
+    inline: 'nearest',
+  })
+}
+
+class SiteMarkdownCopy extends LitElement {
+  static properties = {
+    markdown: { type: String },
+  }
+
+  declare markdown: string
+
+  private copied = false
+  private resetTimer?: number
+
+  static styles = css`
+    :host {
+      display: inline-block;
+    }
+
+    button {
+      display: inline-flex;
+      box-sizing: border-box;
+      height: 33px;
+      align-items: center;
+      flex-shrink: 0;
+      gap: var(--base-size-6);
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-default);
+      background: transparent;
+      color: var(--ld-fg-muted);
+      cursor: pointer;
+      font: inherit;
+      font-size: var(--ld-text-body-sm-size);
+      line-height: 1.3;
+      padding: 0 var(--base-size-12);
+      transition: border-color var(--motion-duration-medium);
+    }
+
+    button:hover,
+    button:focus-visible {
+      border-color: var(--ld-button-border-hover);
+    }
+
+    button:focus-visible {
+      outline: var(--focus-outline);
+      outline-offset: var(--focus-outline-offset);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      button {
+        transition: none;
+      }
+    }
+  `
+
+  disconnectedCallback(): void {
+    window.clearTimeout(this.resetTimer)
+    super.disconnectedCallback()
+  }
+
+  render() {
+    const label = this.copied ? 'Markdown copied' : 'Copy Markdown'
+    return html`<button type="button" aria-label=${label} @click=${this.copyMarkdown}>
+      ${lucideIcon(this.copied ? Check : Copy, { size: 16, strokeWidth: 2 })}
+      <span>${this.copied ? 'Copied' : 'Copy Markdown'}</span>
+    </button>`
+  }
+
+  private copyMarkdown = async (): Promise<void> => {
+    if (!this.markdown) return
+
+    try {
+      await writeClipboard(this.markdown)
+    } catch {
+      return
+    }
+
+    this.copied = true
+    this.requestUpdate()
+    window.clearTimeout(this.resetTimer)
+    this.resetTimer = window.setTimeout(() => {
+      this.copied = false
+      this.requestUpdate()
+    }, 2_000)
+  }
+}
+
+if (!customElements.get('ld-site-markdown-copy')) {
+  customElements.define('ld-site-markdown-copy', SiteMarkdownCopy)
+}
+
+type ResolvedThemeMode = 'light' | 'dark'
+
+let mermaidModule: Promise<(typeof import('mermaid'))['default']> | undefined
+let mermaidRenderSequence = 0
+let mermaidRenderQueue: Promise<void> = Promise.resolve()
+
+function loadMermaid(): Promise<(typeof import('mermaid'))['default']> {
+  mermaidModule ??= import('mermaid').then((module) => module.default)
+  return mermaidModule
+}
+
+function resolvedThemeMode(): ResolvedThemeMode {
+  const colorScheme = document.documentElement.style.colorScheme
+  if (colorScheme === 'dark' || colorScheme === 'light') return colorScheme
+  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function mermaidAccessibleTitle(source: string): string {
+  const accessibilityTitle = source.match(/^\s*accTitle:\s*(.+?)\s*$/m)?.[1]
+  if (accessibilityTitle) return accessibilityTitle
+
+  const frontmatter = source.match(/^---\s*\n([\s\S]*?)\n---\s*\n/)
+  const frontmatterTitle = frontmatter?.[1].match(/^title:\s*["']?(.+?)["']?\s*$/m)?.[1]
+  return frontmatterTitle || 'Documentation diagram'
+}
+
+class SiteMermaid extends LitElement {
+  static properties = {
+    source: { type: String },
+  }
+
+  declare source: string
+  private renderGeneration = 0
+  private readonly handleThemeApplied = (event: Event): void => {
+    const detail = (event as CustomEvent<{ resolvedMode?: string }>).detail
+    const theme = detail?.resolvedMode === 'dark' ? 'dark' : 'light'
+    if (this.dataset.renderedTheme !== theme) void this.draw(theme)
+  }
+
+  static styles = css`
+    :host {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      color: var(--ld-fg-default);
+    }
+
+    figure {
+      display: grid;
+      min-width: 0;
+      margin: 0;
+      gap: var(--base-size-12);
+      border: var(--ld-border-muted);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-bg-panel);
+      padding: var(--base-size-20);
+    }
+
+    .canvas {
+      display: grid;
+      min-width: 0;
+      min-height: var(--base-size-64);
+      place-items: center;
+      overflow: auto hidden;
+    }
+
+    .canvas svg {
+      display: block;
+      width: auto;
+      max-width: 100%;
+      height: auto;
+      max-height: min(38rem, 70svh);
+    }
+
+    figcaption,
+    .error {
+      margin: 0;
+      color: var(--ld-fg-muted);
+      font-size: var(--ld-text-body-sm-size);
+      line-height: var(--ld-line-height-relaxed);
+    }
+
+    figcaption {
+      text-align: center;
+    }
+
+    .error {
+      color: var(--ld-fg-danger);
+    }
+
+    [hidden] {
+      display: none;
+    }
+
+    @media (width < 48rem) {
+      figure {
+        padding: var(--base-size-12);
+      }
+    }
+  `
+
+  connectedCallback(): void {
+    super.connectedCallback()
+    document.addEventListener('libredash-theme-applied', this.handleThemeApplied)
+  }
+
+  disconnectedCallback(): void {
+    document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    this.renderGeneration += 1
+    super.disconnectedCallback()
+  }
+
+  protected updated(changed: Map<PropertyKey, unknown>): void {
+    if (changed.has('source')) {
+      this.setAttribute('aria-label', mermaidAccessibleTitle(this.source ?? ''))
+      void this.draw(resolvedThemeMode())
+    }
+  }
+
+  render() {
+    const title = mermaidAccessibleTitle(this.source ?? '')
+    return html`<figure>
+      <div class="canvas" aria-busy="true"></div>
+      <p class="error" role="alert" hidden></p>
+      <figcaption>${title}</figcaption>
+    </figure>`
+  }
+
+  private async draw(theme: ResolvedThemeMode): Promise<void> {
+    const generation = ++this.renderGeneration
+    await this.updateComplete
+    const source = this.source?.trim()
+    const canvas = this.renderRoot.querySelector<HTMLElement>('.canvas')
+    const error = this.renderRoot.querySelector<HTMLElement>('.error')
+    if (!source || !canvas || !error) return
+
+    canvas.setAttribute('aria-busy', 'true')
+    error.hidden = true
+    const task = async (): Promise<void> => {
+      try {
+        const mermaid = await loadMermaid()
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: 'strict',
+          suppressErrorRendering: true,
+          theme: 'base',
+          fontFamily: cssToken(this, '--ld-font-family-ui'),
+          themeVariables: mermaidThemeVariables(this),
+          flowchart: { htmlLabels: false, useMaxWidth: true },
+        })
+        const id = `libredash-docs-diagram-${++mermaidRenderSequence}`
+        const result = await mermaid.render(id, source)
+        if (generation !== this.renderGeneration || !this.isConnected) return
+
+        canvas.innerHTML = result.svg
+        const svg = canvas.querySelector('svg')
+        if (svg) {
+          svg.setAttribute('role', 'img')
+          svg.style.maxWidth = '100%'
+          svg.style.height = 'auto'
+        }
+        result.bindFunctions?.(canvas)
+        canvas.setAttribute('aria-busy', 'false')
+        this.dataset.renderedTheme = theme
+      } catch (cause) {
+        if (generation !== this.renderGeneration || !this.isConnected) return
+        canvas.replaceChildren()
+        canvas.setAttribute('aria-busy', 'false')
+        error.textContent = `Diagram could not be rendered: ${cause instanceof Error ? cause.message : String(cause)}`
+        error.hidden = false
+      }
+    }
+
+    const queued = mermaidRenderQueue.then(task, task)
+    mermaidRenderQueue = queued.then(
+      () => undefined,
+      () => undefined,
+    )
+    await queued
+  }
+}
+
+function cssToken(element: Element, name: string): string {
+  const value = getComputedStyle(element).getPropertyValue(name).trim()
+  if (!value) throw new Error(`Required diagram token ${name} is unavailable`)
+  return value
+}
+
+function mermaidThemeVariables(element: Element): Record<string, string> {
+  const background = cssToken(element, '--ld-bg-panel')
+  const foreground = cssToken(element, '--ld-fg-default')
+  const muted = cssToken(element, '--ld-fg-muted')
+  const accent = cssToken(element, '--ld-fg-accent')
+  const accentBackground = cssToken(element, '--ld-bg-accent-muted')
+  const control = cssToken(element, '--ld-bg-control')
+  const border = cssToken(element, '--ld-line-muted')
+
+  return {
+    background,
+    primaryColor: accentBackground,
+    primaryTextColor: foreground,
+    primaryBorderColor: accent,
+    secondaryColor: control,
+    secondaryTextColor: foreground,
+    secondaryBorderColor: border,
+    tertiaryColor: background,
+    tertiaryTextColor: foreground,
+    tertiaryBorderColor: border,
+    lineColor: muted,
+    textColor: foreground,
+    mainBkg: accentBackground,
+    nodeBorder: accent,
+    clusterBkg: control,
+    clusterBorder: border,
+    edgeLabelBackground: background,
+    noteBkgColor: control,
+    noteBorderColor: border,
+    noteTextColor: foreground,
+  }
+}
+
+if (!customElements.get('ld-site-mermaid')) {
+  customElements.define('ld-site-mermaid', SiteMermaid)
+}
+
+function enhanceDocsCodeBlocks(): void {
+  document.querySelectorAll<HTMLElement>('.site-docs-article pre').forEach((pre) => {
+    if (pre.closest('ld-code-block, ld-site-mermaid')) return
+
+    const code = pre.querySelector('code')
+    const languageClass = Array.from(code?.classList ?? []).find((name) => name.startsWith('language-'))
+    const language = languageClass?.slice('language-'.length).toLowerCase() ?? ''
+    if (language === 'mermaid') {
+      const diagram = document.createElement('ld-site-mermaid') as SiteMermaid
+      diagram.source = code?.textContent ?? pre.textContent ?? ''
+      pre.replaceWith(diagram)
+      return
+    }
+    const block = document.createElement('ld-code-block') as HTMLElement & {
+      code: string
+      copy: boolean
+      toolbar: boolean
+    }
+
+    block.setAttribute('language', language || 'text')
+    block.code = code?.textContent ?? pre.textContent ?? ''
+    block.copy = true
+    block.toolbar = true
+    pre.replaceWith(block)
+  })
+}
+
+type CalloutKind = 'note' | 'tip' | 'warning' | 'danger'
+
+const calloutKinds: Record<string, { kind: CalloutKind; label: string }> = {
+  CAUTION: { kind: 'danger', label: 'Caution' },
+  DANGER: { kind: 'danger', label: 'Danger' },
+  IMPORTANT: { kind: 'note', label: 'Important' },
+  NOTE: { kind: 'note', label: 'Note' },
+  TIP: { kind: 'tip', label: 'Tip' },
+  WARNING: { kind: 'warning', label: 'Warning' },
+}
+
+function enhanceDocsCallouts(): void {
+  document.querySelectorAll<HTMLElement>('.site-docs-article blockquote').forEach((blockquote) => {
+    if (blockquote.classList.contains('site-docs-callout')) return
+    const paragraph = blockquote.querySelector<HTMLElement>(':scope > p')
+    if (!paragraph) return
+
+    const walker = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT)
+    const markerNode = walker.nextNode() as Text | null
+    const marker = markerNode?.data.match(/^\s*\[!(NOTE|TIP|WARNING|CAUTION|DANGER|IMPORTANT)\]\s*/i)
+    if (!markerNode || !marker) return
+
+    const definition = calloutKinds[marker[1].toUpperCase()]
+    markerNode.data = markerNode.data.slice(marker[0].length)
+    blockquote.classList.add('site-docs-callout', `site-docs-callout-${definition.kind}`)
+    blockquote.dataset.callout = definition.kind
+
+    const label = document.createElement('p')
+    label.className = 'site-docs-callout-label'
+    const strong = document.createElement('strong')
+    strong.textContent = definition.label
+    label.append(strong)
+    blockquote.prepend(label)
+  })
+}
+
+async function writeClipboard(value: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = value
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.append(textarea)
+  textarea.select()
+  const copied = document.execCommand('copy')
+  textarea.remove()
+  if (!copied) throw new Error('clipboard write failed')
+}
+
+enhanceDocsCodeBlocks()
+enhanceDocsCallouts()
+
+class SiteBrandMark extends LitElement {
+  static styles = css`
+    :host {
+      display: inline-grid;
+      width: var(--base-size-24);
+      height: var(--base-size-24);
+      flex: 0 0 auto;
+      place-items: center;
+      color: var(--ld-fg-accent);
+    }
+  `
+
+  render() {
+    return lucideIcon(Eclipse, { size: 22, strokeWidth: 2.2 })
+  }
+}
+
+if (!customElements.get('ld-site-brand-mark')) {
+  customElements.define('ld-site-brand-mark', SiteBrandMark)
+}
+
+const featureIcons: Record<string, IconNode> = {
+  agent: Bot,
+  blocks: Blocks,
+  boxes: Boxes,
+  chart: ChartNoAxesCombined,
+  dashboard: LayoutDashboard,
+  database: Database,
+  'git-branch': GitBranch,
+  radio: Radio,
+  server: Server,
+}
+
+class SiteFeatureIcon extends LitElement {
+  static properties = {
+    name: { type: String },
+  }
+
+  declare name: string
+
+  static styles = css`
+    :host {
+      display: grid;
+      width: var(--control-large-size);
+      height: var(--control-large-size);
+      place-items: center;
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-large);
+      background: var(--ld-bg-control);
+      color: var(--ld-fg-accent);
+    }
+  `
+
+  render() {
+    return lucideIcon(featureIcons[this.name] ?? Blocks, {
+      size: 22,
+      strokeWidth: 1.8,
+    })
+  }
+}
+
+if (!customElements.get('ld-site-feature-icon')) {
+  customElements.define('ld-site-feature-icon', SiteFeatureIcon)
+}
+
+function currentThemeMode(): ThemeMode {
+  try {
+    return normalizeThemeMode(localStorage.getItem('libredash-color-mode'))
+  } catch {
+    return normalizeThemeMode(document.documentElement.dataset.colorMode)
+  }
+}
+
+function normalizeThemeMode(mode: string | null | undefined): ThemeMode {
+  return mode === 'light' || mode === 'dark' || mode === 'system' ? mode : 'system'
+}
+
+type ArticleSection = { id: string; label: string; level: number }
+type ArticleSectionNode = ArticleSection & { children: ArticleSectionNode[] }
+
+class SiteArticleToc extends LitElement {
+  private sections: ArticleSection[] = []
+  private activeId = ''
+  private observer?: IntersectionObserver
+
+  static styles = css`
+    :host {
+      display: block;
+      position: sticky;
+      top: calc(var(--site-header-height) + var(--base-size-32));
+      align-self: start;
+      height: calc(100svh - var(--site-header-height) - var(--base-size-32));
+      overflow: auto;
+      scrollbar-width: none;
+    }
+
+    :host::-webkit-scrollbar {
+      display: none;
+    }
+
+    h2 {
+      margin: 0 0 0 var(--base-size-12);
+      color: var(--ld-fg-subtle);
+      font-size: var(--ld-text-body-sm-size);
+      font-weight: var(--ld-font-weight-normal);
+      letter-spacing: 0.03em;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    ul {
+      padding: 0;
+      list-style: none;
+    }
+
+    ul#toc {
+      position: relative;
+      margin: 15px 0 0;
+    }
+
+    ul ul {
+      margin: var(--base-size-2) 0 var(--base-size-2) 15px;
+      border-left: var(--ld-border-muted);
+    }
+
+    ul ul ul {
+      display: none;
+    }
+
+    li {
+      font-size: var(--ld-text-body-sm-size);
+      font-weight: var(--ld-font-weight-normal);
+      letter-spacing: 0.005em;
+      line-height: 1;
+      list-style: none;
+    }
+
+    a {
+      display: inline-block;
+      overflow: hidden;
+      max-width: 100%;
+      border-radius: var(--ld-radius-full);
+      padding: var(--base-size-6) var(--base-size-12);
+      color: var(--ld-fg-subtle);
+      line-height: 1;
+      text-decoration: none;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    a:hover,
+    a:focus-visible,
+    li.current > a {
+      color: var(--ld-fg-default);
+    }
+
+    a:focus-visible {
+      outline: var(--focus-outline);
+      outline-offset: calc(-1 * var(--focus-outline-offset));
+    }
+  `
+
+  connectedCallback() {
+    super.connectedCallback()
+    requestAnimationFrame(() => this.collectSections())
+  }
+
+  disconnectedCallback() {
+    this.observer?.disconnect()
+    super.disconnectedCallback()
+  }
+
+  private collectSections() {
+    const headings = Array.from(document.querySelectorAll<HTMLElement>('.site-docs-article h2, .site-docs-article h3, .site-docs-article h4'))
+    const used = new Set<string>()
+    this.sections = headings.map((heading) => {
+      let id =
+        heading.id ||
+        heading.textContent
+          ?.trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-|-$/g, '') ||
+        'section'
+      const base = id
+      let suffix = 2
+      while (used.has(id)) id = `${base}-${suffix++}`
+      used.add(id)
+      heading.id = id
+      return {
+        id,
+        label: heading.textContent?.trim() ?? '',
+        level: Number(heading.tagName.slice(1)),
+      }
+    })
+    this.activeId = this.sections[0]?.id ?? ''
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
+        if (visible?.target.id && this.activeId !== visible.target.id) {
+          this.activeId = visible.target.id
+          this.requestUpdate()
+        }
+      },
+      { rootMargin: '-18% 0px -70% 0px', threshold: 0 },
+    )
+    headings.forEach((heading) => this.observer?.observe(heading))
+    this.requestUpdate()
+  }
+
+  private sectionTree(): ArticleSectionNode[] {
+    const roots: ArticleSectionNode[] = []
+    const stack: ArticleSectionNode[] = []
+
+    for (const section of this.sections) {
+      const node: ArticleSectionNode = { ...section, children: [] }
+      while (stack.length && stack[stack.length - 1].level >= node.level) stack.pop()
+      const parent = stack[stack.length - 1]
+      if (parent) parent.children.push(node)
+      else roots.push(node)
+      stack.push(node)
+    }
+
+    return roots
+  }
+
+  private renderSections(sections: ArticleSectionNode[]): Array<ReturnType<typeof html>> {
+    return sections.map(
+      (section) => html`
+        <li class=${section.id === this.activeId ? 'current' : ''}>
+          <a class=${section.id === this.activeId ? 'active' : ''} data-level=${section.level} href=${`#${section.id}`}>${section.label}</a>
+          ${
+            section.children.length
+              ? html`<ul>
+                  ${this.renderSections(section.children)}
+                </ul>`
+              : null
+          }
+        </li>
+      `,
+    )
+  }
+
+  render() {
+    if (!this.sections.length) return null
+    return html`<nav aria-label="In this article">
+      <h2>In this article</h2>
+      <ul id="toc">
+        ${this.renderSections(this.sectionTree())}
+      </ul>
+    </nav>`
+  }
+}
+
+if (!customElements.get('ld-site-article-toc')) customElements.define('ld-site-article-toc', SiteArticleToc)
+
+class SiteDocsChart extends DatastarLit(LitElement) {
+  static properties = {
+    chartId: { type: String, attribute: 'chart-id' },
+  }
+
+  declare chartId: string
+
+  static styles = css`
+    :host {
+      display: block;
+      min-height: 28rem;
+      margin-block: var(--base-size-24);
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-chart-surface);
+      box-shadow: var(--shadow-resting-small);
+      overflow: hidden;
+    }
+
+    ld-echart,
+    ld-kpi-card {
+      display: block;
+      height: 28rem;
+    }
+  `
+
+  render() {
+    const charts = this.signal<ChartPayload[]>('charts', [])
+    const chart = charts.find((candidate) => candidate.id === this.chartId) ?? null
+    if (chart?.type === 'kpi') {
+      return html`<ld-kpi-card .visual=${chart}></ld-kpi-card>`
+    }
+    return html`<ld-echart .chart=${chart}></ld-echart>`
+  }
+}
+
+if (!customElements.get('ld-site-doc-chart')) {
+  customElements.define('ld-site-doc-chart', SiteDocsChart)
+}
+
+class SiteChartShowcase extends DatastarLit(LitElement) {
+  static styles = css`
+    :host {
+      display: block;
+    }
+
+    .showcase-section {
+      display: grid;
+      gap: var(--base-size-16);
+    }
+
+    .section-heading {
+      display: grid;
+      gap: var(--base-size-4);
+    }
+
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h2 {
+      color: var(--ld-fg-default);
+      font-size: var(--ld-text-title-lg-size);
+      font-weight: var(--ld-font-weight-strong);
+      line-height: var(--ld-line-height-tight);
+    }
+
+    p {
+      color: var(--ld-fg-muted);
+      font-size: var(--ld-text-body-md-size);
+      line-height: var(--ld-line-height-relaxed);
+    }
+
+    .chart-grid,
+    .table-grid {
+      display: grid;
+      gap: var(--base-size-16);
+    }
+
+    .chart-grid {
+      grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    }
+
+    .table-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .chart {
+      min-height: 20rem;
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-chart-surface);
+      box-shadow: var(--shadow-resting-small);
+      overflow: hidden;
+    }
+
+    ld-echart,
+    ld-kpi-card {
+      display: block;
+      height: 20rem;
+    }
+
+    .table-card {
+      min-width: 0;
+      height: 26rem;
+      border: var(--ld-border-default);
+      border-radius: var(--ld-radius-default);
+      background: var(--ld-chart-surface);
+      box-shadow: var(--shadow-resting-small);
+      overflow: hidden;
+    }
+
+    .table-card.featured {
+      grid-column: 1 / -1;
+      height: 30rem;
+    }
+
+    ld-report-table {
+      display: block;
+      height: 100%;
+    }
+
+    @media (width < 48rem) {
+      .table-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .table-card.featured {
+        grid-column: auto;
+      }
+    }
+  `
+
+  render() {
+    const charts = this.signal<ChartPayload[]>('charts', [])
+    const tables = this.signal<TableSignal[]>('tables', [])
+    return html`
+      <section class="showcase-section" aria-labelledby="chart-showcase-heading">
+        <div class="section-heading">
+          <h2 id="chart-showcase-heading">Charts</h2>
+          <p>Renderer-neutral chart payloads, adapted by the product ECharts plugin.</p>
+        </div>
+        <div class="chart-grid">${charts.map((chart) => html`<article class="chart">${chart.type === 'kpi' ? html`<ld-kpi-card .visual=${chart}></ld-kpi-card>` : html`<ld-echart .chart=${chart}></ld-echart>`}</article>`)}</div>
+      </section>
+      <section class="showcase-section" aria-labelledby="table-showcase-heading">
+        <div class="section-heading">
+          <h2 id="table-showcase-heading">Tables, matrices, and pivots</h2>
+          <p>Table variants from the Visual Showcase dashboard, including density, grid, and conditional-formatting treatments.</p>
+        </div>
+        <div class="table-grid">
+          ${tables.map(
+            (table, index) =>
+              html`<article class="table-card ${index === 0 ? 'featured' : ''}">
+                <ld-report-table table-id=${table.title} .table=${table}></ld-report-table>
+              </article>`,
+          )}
+        </div>
+      </section>
+    `
+  }
+}
+
+if (!customElements.get('ld-site-chart-showcase')) {
+  customElements.define('ld-site-chart-showcase', SiteChartShowcase)
+}
+
+async function loadRouteComponents(): Promise<void> {
+  const imports: Promise<unknown>[] = []
+  if (document.querySelector('ld-site-chart-showcase, ld-site-doc-chart')) {
+    imports.push(import('../../web/components/dashboard/charts/echart'))
+  }
+  if (document.querySelector('ld-site-chart-showcase')) {
+    imports.push(import('../../web/components/dashboard/table/report-table'))
+  }
+  if (document.querySelector('ld-site-flow-background')) {
+    imports.push(import('./site-flow-background'))
+  }
+  await Promise.all(imports)
+}
+
+void loadRouteComponents()

@@ -10,10 +10,11 @@ task dev
 
 `task dev` installs JavaScript dependencies with Bun, builds Tailwind CSS and Bun-bundled browser assets, syncs the demo data, starts or reuses a managed dev server, chooses a worktree-safe port, and prints the URL. Use `task dev:status`, `task dev:logs`, and `task dev:stop` for lifecycle checks. Set `LIBREDASH_DEV_RESTART=1` to force a restart.
 
-Generated files such as `static/app.css`, route entrypoints, and other bundled component assets are intentionally not checked in. If you run the app without `task dev`, build assets first:
+Generated implementation code, documentation indexes/reference pages, CSS, route entrypoints, and bundled component assets are intentionally not checked in. `task dev`, `task test`, and the public-site tasks generate their prerequisites automatically. If you run individual commands directly, generate and build first:
 
 ```sh
 bun install
+task generate
 bun run build
 go run ./internal/tools/bootstrapolist --out .data/olist
 go run ./cmd/libredash

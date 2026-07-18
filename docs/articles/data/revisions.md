@@ -1,0 +1,81 @@
+# Data revisions and activation
+
+Managed data is stored as immutable, content-addressed revisions. A revision digest identifies the canonical manifest of files staged for one project-global managed connection. Staging creates a candidate; deployment decides which candidate an environment serves.
+
+## Plan local input
+
+Plan before uploading:
+
+```sh
+libredash data plan \
+  --project dashboards/libredash.yaml \
+  --connection olist \
+  --from /srv/olist
+```
+
+Planning discovers the files referenced by the managed connection, hashes them, and prints the canonical manifest. It is local and does not alter server state. Keep the source directory stable while hashing; a changed file belongs to a new plan.
+
+Use `--previous-manifest` when reviewing a later revision and you want files classified as added, changed, removed, or unchanged. The digest represents content and canonical manifest metadata, not a mutable folder name or upload timestamp.
+
+## Stage without activation
+
+Upload missing objects and stage the revision:
+
+```sh
+libredash data sync \
+  --project dashboards/libredash.yaml \
+  --connection olist \
+  --from /srv/olist \
+  --target "$LIBREDASH_TARGET" \
+  --token "$LIBREDASH_API_TOKEN"
+```
+
+The server deduplicates already available content and returns a lowercase `sha256:` revision digest. Staging is intentionally non-serving: dashboards continue querying the active revision until a project deployment activates the new digest.
+
+Do not modify the source tree during transfer. If content changes, let the operation fail and create a new plan rather than trying to preserve the old digest.
+
+## Pin revisions during deployment
+
+Pass exactly one pin for every managed connection in the project:
+
+```sh
+libredash deploy \
+  --project dashboards/libredash.yaml \
+  --revision "olist=sha256:<64-lowercase-hex>" \
+  --environment prod \
+  --target "$LIBREDASH_TARGET" \
+  --token "$LIBREDASH_API_TOKEN"
+```
+
+The deployment validates configuration candidates and all revision pins before activation. Missing, duplicate, unknown, or malformed pins are rejected. Successful activation moves project configuration, workspace serving state, and managed revision pointers as one reviewed rollout.
+
+This coupling matters when model SQL changes alongside input data. Activating only the file or only the model could create an incompatible serving state; the project deployment makes their intended combination explicit.
+
+## Inspect staged and active state
+
+Server revision commands use the project resource ID, not the local manifest path:
+
+```sh
+libredash data revisions list \
+  --project libredash-showcase \
+  --connection olist \
+  --target "$LIBREDASH_TARGET" \
+  --token "$LIBREDASH_API_TOKEN"
+
+libredash data revisions current \
+  --project libredash-showcase \
+  --connection olist \
+  --environment prod \
+  --target "$LIBREDASH_TARGET" \
+  --token "$LIBREDASH_API_TOKEN"
+```
+
+Listing shows staged revisions with pagination controls. `current` reports the environment's active digest or `none`. Record the reviewed digest in deployment logs so an operator can distinguish the intended rollout from another staged candidate.
+
+## Retry and rollback boundaries
+
+Revision identity is immutable; activation is mutable. Re-uploading the same canonical content can safely resolve to the same digest, while changed content produces a new digest. A failed deployment leaves prior active pointers unchanged.
+
+A later deployment can reselect a previously staged revision only if the surrounding project and retention policy still make it a valid candidate. Do not assume every historical analytical snapshot is a customer-facing rollback point; managed source revisions and DuckLake serving snapshots have different lifecycles.
+
+See [Managed data ingestion](/docs/data-ingestion) and the generated [`data revisions` reference](/docs/cli/data-revisions) for exact flags.

@@ -110,7 +110,6 @@ WHERE (
   )
 ORDER BY created_at DESC, id DESC
 LIMIT sqlc.arg(limit);
-
 -- name: ListQueryEventFilterOptions :many
 WITH option_values AS (
   SELECT CASE CAST(sqlc.arg(field) AS TEXT)

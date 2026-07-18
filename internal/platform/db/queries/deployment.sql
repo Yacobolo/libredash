@@ -26,7 +26,6 @@ ORDER BY workspace_id;
 SELECT * FROM project_deployment_connections
 WHERE deployment_id = ?
 ORDER BY collection_id;
-
 -- name: GetWorkspaceActiveServingStateID :one
 SELECT serving_state_id
 FROM workspace_active_serving_states

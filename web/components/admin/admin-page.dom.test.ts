@@ -467,7 +467,8 @@ test('query audit page filters table rows and exposes optional metadata columns'
       const hiddenRuntimeHeaders = visibleHeaderLabels(table)
       table.querySelector<HTMLButtonElement>('.record-query-expand')?.click()
       await table.updateComplete
-      const expandedCodeBlock = table.querySelector('.record-query-expanded-cell ld-code-block') as HTMLElement | null
+      const expandedCodeBlock = table.querySelector('.record-query-expanded-cell ld-code-block') as (HTMLElement & { updateComplete: Promise<boolean> }) | null
+      await expandedCodeBlock?.updateComplete
       const expandedQueryText = expandedCodeBlock?.shadowRoot?.querySelector('code')?.textContent
         ?? table.querySelector('.record-query-expanded-cell')?.textContent
         ?? ''
@@ -481,7 +482,8 @@ test('query audit page filters table rows and exposes optional metadata columns'
       await element.updateComplete
       const drawer = root.querySelector('.query-detail-drawer') as HTMLElement | null
       const drawerText = drawer?.textContent ?? ''
-      const drawerCodeBlock = drawer?.querySelector('ld-code-block') as HTMLElement | null
+      const drawerCodeBlock = drawer?.querySelector('ld-code-block') as (HTMLElement & { updateComplete: Promise<boolean> }) | null
+      await drawerCodeBlock?.updateComplete
       const drawerCode = drawerCodeBlock?.shadowRoot?.querySelector('code')?.textContent ?? drawerCodeBlock?.querySelector('code')?.textContent ?? ''
       const drawerAnimationName = drawer ? getComputedStyle(drawer).animationName : ''
       const status = drawer?.querySelector('.query-detail-status') as HTMLElement | null

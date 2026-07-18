@@ -43,9 +43,6 @@ jobs:
       - name: Install JavaScript dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check generated configuration
-        run: task config:check
-
       - name: Check generated database code is untracked
         run: |
           tracked="$(git ls-files -- internal/platform/db/db.go internal/platform/db/models.go 'internal/platform/db/*.sql.go')"
@@ -54,16 +51,83 @@ jobs:
             exit 1
           fi
 
+      - name: Check generated build inputs are untracked
+        run: |
+          tracked="$(git ls-files -- docs/catalog.json docs/search-index.sqlite3 docs/configuration.md 'docs/api/*.md' docs/reference/cli docs/reference/config internal/config/config_gen.go internal/configspec/names_gen.go web/generated)"
+          if [ -n "$tracked" ]; then
+            printf 'derived build inputs must be generated, not committed:\n%s\n' "$tracked" >&2
+            exit 1
+          fi
+
       - name: Generate checked build inputs
         run: task generate
 
-      - name: Check committed generated artifacts
+      - name: Check generated configuration
+        run: task config:check
+
+      - name: Check generated documentation
+        run: task docs:check
+
+      - name: Check public contract snapshots
         run: |
-          changed="$(git status --porcelain -- .env.example docs/configuration.md internal/config/config_gen.go internal/configspec/names_gen.go schemas web/generated)"
-          test -z "$changed" || { printf 'committed generated artifacts are stale:\n%s\n' "$changed" >&2; exit 1; }
+          changed="$(git status --porcelain -- .env.example docs/api/openapi.yaml schemas/config schemas/json)"
+          test -z "$changed" || { printf 'public contract snapshots are stale:\n%s\n' "$changed" >&2; exit 1; }
+
+      - name: Check generation is deterministic
+        run: |
+          generated_paths=(
+            .env.example
+            api/gen
+            docs/api
+            docs/catalog.json
+            docs/configuration.md
+            docs/reference/cli
+            docs/reference/config
+            docs/search-index.sqlite3
+            internal/api/gen
+            internal/cli/gen
+            internal/config/config_gen.go
+            internal/configspec/names_gen.go
+            internal/platform/db/db.go
+            internal/platform/db/models.go
+            internal/platform/db/*.sql.go
+            internal/ui/signals/models.gen.go
+            schemas
+            web/generated
+          )
+          find "${generated_paths[@]}" -type f -print0 | sort -z | xargs -0 sha256sum > /tmp/generated-before.sha256
+          rm -rf \
+            .task \
+            api/gen \
+            docs/reference/cli \
+            docs/reference/config \
+            internal/api/gen \
+            internal/cli/gen \
+            schemas/config \
+            schemas/json \
+            web/generated
+          rm -f \
+            .env.example \
+            docs/api/*.md \
+            docs/api/openapi.yaml \
+            docs/catalog.json \
+            docs/configuration.md \
+            docs/search-index.sqlite3 \
+            internal/config/config_gen.go \
+            internal/configspec/names_gen.go \
+            internal/platform/db/db.go \
+            internal/platform/db/models.go \
+            internal/platform/db/*.sql.go \
+            internal/ui/signals/models.gen.go
+          task generate
+          find "${generated_paths[@]}" -type f -print0 | sort -z | xargs -0 sha256sum > /tmp/generated-after.sha256
+          diff -u /tmp/generated-before.sha256 /tmp/generated-after.sha256
 
       - name: Build browser assets
         run: task build
+
+      - name: Build public site assets
+        run: task site:build
 
       - name: Upload generated assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -75,13 +139,22 @@ jobs:
             api/gen/
             internal/api/gen/
             internal/cli/gen/
+            internal/config/config_gen.go
+            internal/configspec/names_gen.go
             internal/platform/db/db.go
             internal/platform/db/models.go
             internal/platform/db/*.sql.go
             internal/ui/signals/models.gen.go
+            docs/catalog.json
+            docs/search-index.sqlite3
+            docs/configuration.md
+            docs/api/*.md
+            docs/reference/cli/
+            docs/reference/config/
             schemas/json/
             web/generated/
             static/
+            site/static/
 
   go-tests:
     name: Go tests
@@ -107,6 +180,18 @@ jobs:
 
       - name: Run Go tests
         run: go test ./...
+
+  site-image:
+    name: Public site image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Build production site image
+        run: docker build --file Dockerfile.site --tag libredash-site:ci .
 
   frontend-tests:
     name: Frontend tests (${{ matrix.name }})
@@ -155,6 +240,10 @@ jobs:
               bun run test:semantic-model-graph
               bun run test:datastar-inspector
               bun run test:topology-background
+          - name: site
+            tests: |
+              bun run test:docs-diagrams
+              bun run test:site
 
     steps:
       - name: Checkout
@@ -164,6 +253,13 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.7
+
+      - name: Set up Go for public site tests
+        if: matrix.name == 'site'
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - name: Install JavaScript dependencies
         run: bun install --frozen-lockfile

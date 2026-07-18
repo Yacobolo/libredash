@@ -490,6 +490,74 @@ func TestProductionContainerContractExists(t *testing.T) {
 	}
 }
 
+func TestPublicSiteProductionContainerContractExists(t *testing.T) {
+	root := repoRoot(t)
+	dockerfile, err := os.ReadFile(filepath.Join(root, "Dockerfile.site"))
+	if err != nil {
+		t.Fatalf("read Dockerfile.site: %v", err)
+	}
+	text := string(dockerfile)
+	for _, want := range []string{
+		"FROM node:24-bookworm@sha256:",
+		"FROM golang:1.25-bookworm@sha256:",
+		"go run ./internal/tools/configgen",
+		"go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3",
+		"typespec-compile -manifest api/apigen.yaml -target ui-signals",
+		"all -manifest api/apigen.yaml -target ui-signals",
+		"go run ./internal/tools/uisignalspostprocess",
+		"FROM oven/bun:1.3.7@sha256:",
+		"RUN bun install --frozen-lockfile --no-cache",
+		"RUN bun run build:site",
+		"FROM golang:1.25-bookworm@sha256:",
+		"CGO_ENABLED=0 go build -trimpath",
+		"./cmd/libredash-site",
+		"FROM gcr.io/distroless/static-debian12:nonroot@sha256:",
+		"USER nonroot:nonroot",
+		"ENV LIBREDASH_SITE_BASE_URL=",
+		"ENTRYPOINT [\"/libredash-site\"]",
+		"CMD [\"-addr=:8081\"]",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("Dockerfile.site missing production container contract fragment %q", want)
+		}
+	}
+	if strings.Contains(text, "apigen@v0.4.0") || strings.Contains(text, "apigenpostprocess") {
+		t.Error("Dockerfile.site still uses the retired APIGen v0.4 generation pipeline")
+	}
+}
+
+func TestCoreProceduralGuidesUseTheOperationalTemplate(t *testing.T) {
+	root := repoRoot(t)
+	guides := []string{
+		"docs/articles/start/installation.md",
+		"docs/articles/start/first-dashboard.md",
+		"docs/articles/build/connect-data.md",
+		"docs/articles/build/model-tables.md",
+		"docs/articles/build/semantic-model.md",
+		"docs/articles/build/dashboard.md",
+		"docs/guides/cli/validate-deploy.md",
+		"docs/articles/operate/self-hosting.md",
+		"docs/articles/security/oidc.md",
+		"docs/articles/integrate/api-quickstart.md",
+	}
+	for _, guide := range guides {
+		body, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(guide)))
+		if err != nil {
+			t.Errorf("read %s: %v", guide, err)
+			continue
+		}
+		text := string(body)
+		for _, section := range []string{"\n## Before you begin\n", "\n## Validate", "\n## Verify", "\n## Troubleshooting\n", "\n## Next steps\n"} {
+			if !strings.Contains(text, section) {
+				t.Errorf("%s missing procedural section %q", guide, strings.TrimSpace(section))
+			}
+		}
+		if !strings.Contains(text, "\n1. ") {
+			t.Errorf("%s does not contain a numbered procedure", guide)
+		}
+	}
+}
+
 func TestDevelopmentServerTracksCompiledFallbackProcess(t *testing.T) {
 	root := repoRoot(t)
 	server, err := os.ReadFile(filepath.Join(root, "scripts", "dev-server.sh"))
@@ -667,6 +735,73 @@ func TestSQLCOutputsAreGeneratedBuildInputs(t *testing.T) {
 		for _, fragment := range fragments {
 			if !strings.Contains(string(body), fragment) {
 				t.Errorf("%s missing sqlc generation contract fragment %q", name, fragment)
+			}
+		}
+	}
+}
+
+func TestDerivedArtifactsAreGeneratedBuildInputs(t *testing.T) {
+	root := repoRoot(t)
+	files := map[string][]string{
+		".gitignore": {
+			"internal/config/config_gen.go",
+			"internal/configspec/names_gen.go",
+			"web/generated/",
+			"docs/catalog.json",
+			"docs/search-index.sqlite3",
+			"docs/configuration.md",
+			"docs/api/*.md",
+			"docs/reference/cli/",
+			"docs/reference/config/",
+		},
+		".dockerignore": {
+			"internal/config/config_gen.go",
+			"internal/configspec/names_gen.go",
+			"web/generated",
+			"docs/catalog.json",
+			"docs/search-index.sqlite3",
+			"docs/configuration.md",
+			"docs/api/*.md",
+			"docs/reference/cli",
+			"docs/reference/config",
+		},
+		filepath.Join(".github", "workflows", "ci.yml"): {
+			"Check generated build inputs are untracked",
+			"docs/catalog.json docs/search-index.sqlite3 docs/configuration.md",
+			"'docs/api/*.md' docs/reference/cli docs/reference/config",
+			"internal/config/config_gen.go internal/configspec/names_gen.go web/generated",
+			"Check public contract snapshots",
+			".env.example docs/api/openapi.yaml schemas/config schemas/json",
+			"Check generation is deterministic",
+		},
+		"Dockerfile.site": {
+			"AS sourcegen",
+			"go run ./internal/tools/configgen",
+			"go run ./internal/tools/clidocgen",
+			"go run ./internal/tools/schemadocgen",
+			"go run ./internal/tools/openapidocgen",
+			"go run ./internal/tools/docsitegen",
+			"FROM sourcegen AS build",
+			"COPY --from=sourcegen /src/web/generated ./web/generated",
+		},
+		"Dockerfile": {
+			"COPY --from=sourcegen /src/internal/config/config_gen.go ./internal/config/config_gen.go",
+			"COPY --from=sourcegen /src/internal/configspec/names_gen.go ./internal/configspec/names_gen.go",
+		},
+		"Taskfile.yml": {
+			"desc: Build the LibreDash public site assets from generated contracts",
+			"desc: Build the independently deployable public site from generated documentation",
+			"desc: Start the public site from generated documentation on http://localhost:8081",
+		},
+	}
+	for name, fragments := range files {
+		body, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		for _, fragment := range fragments {
+			if !strings.Contains(string(body), fragment) {
+				t.Errorf("%s missing generated-input contract fragment %q", name, fragment)
 			}
 		}
 	}

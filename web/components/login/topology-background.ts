@@ -1,10 +1,13 @@
 import { LitElement, css, html } from 'lit'
+import accessibility from 'p5/accessibility'
 import color from 'p5/color'
 import p5 from 'p5/core'
 import math from 'p5/math'
 import shape from 'p5/shape'
 import topology from '../../vendor/vanta/vanta.topology.js'
 
+p5.disableFriendlyErrors = true
+p5.registerAddon(accessibility)
 p5.registerAddon(color)
 p5.registerAddon(math)
 p5.registerAddon(shape)

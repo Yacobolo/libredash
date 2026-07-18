@@ -71,7 +71,7 @@ func TestAPIGenUsesTypeSpecV053(t *testing.T) {
 	taskText := string(taskfile)
 	for _, want := range []string{
 		"- task: api:generate\n      - task: ui-signals:generate\n      - task: schema:generate",
-		"schema:generate:\n    desc: Generate JSON Schema artifacts for LibreDash YAML contracts\n    deps:\n      - api:generate\n      - ui-signals:generate",
+		"schema:generate:\n    desc: Generate JSON Schema artifacts for LibreDash YAML contracts\n    deps:\n      - db:generate\n      - config:generate\n      - api:generate\n      - ui-signals:generate",
 	} {
 		if !strings.Contains(taskText, want) {
 			t.Fatalf("Taskfile.yml does not enforce generated-model ordering %q", want)

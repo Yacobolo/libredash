@@ -25,9 +25,11 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
 	github.com/scim2/filter-parser/v2 v2.2.0
 	github.com/spf13/cobra v1.10.2
+	github.com/spf13/pflag v1.0.10
 	github.com/starfederation/datastar-go v1.2.2
 	github.com/toon-format/toon-go v0.0.0-20251202084852-7ca0e27c4e8c
 	github.com/tus/tusd/v2 v2.10.0
+	github.com/yuin/goldmark v1.7.17
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/sync v0.21.0
 	golang.org/x/sys v0.46.0
@@ -89,7 +91,6 @@ require (
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20260217160748-a481f6a22f94 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
-	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tus/lockfile v1.2.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect

@@ -51,6 +51,14 @@ class Effect extends P5Base {
         init_flow()
       }
       p.draw = function() {
+        if (width !== p.width || height !== p.height) {
+          width = p.width
+          height = p.height
+          flow_width = (width + offset * 2) / flow_cell_size
+          flow_height = (height + offset * 2) / flow_cell_size
+          flow_grid = []
+          init_flow()
+        }
         p.translate(-offset, -offset)
         //display_flow()
         update_particles()
@@ -138,7 +146,8 @@ class Effect extends P5Base {
       function get_flow(xpos, ypos) {
         xpos = p.constrain(xpos, 0, p.width + offset * 2)
         ypos = p.constrain(ypos, 0, p.height + offset * 2)
-        return flow_grid[p.floor(ypos / flow_cell_size)][p.floor(xpos / flow_cell_size)]
+        const row = flow_grid[Math.min(flow_grid.length - 1, p.floor(ypos / flow_cell_size))]
+        return row[Math.min(row.length - 1, p.floor(xpos / flow_cell_size))]
       }
 
       function display_particles() {

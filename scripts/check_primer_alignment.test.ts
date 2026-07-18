@@ -10,8 +10,13 @@ async function withWorkspace(run: (workspace: string) => Promise<void>): Promise
 
   try {
     await mkdir(path.join(workspace, "docs", "reference", "primer-primitives-css"), {recursive: true});
+    await mkdir(path.join(workspace, "site", "static"), {recursive: true});
+    await mkdir(path.join(workspace, "site", "web"), {recursive: true});
     await mkdir(path.join(workspace, "static"), {recursive: true});
     await mkdir(path.join(workspace, "web", "components", "example"), {recursive: true});
+    await writeFile(path.join(workspace, "site", "static", "site.css"), "");
+    await writeFile(path.join(workspace, "site", "web", "site-page.ts"), "");
+    await writeFile(path.join(workspace, "static", "app.css"), "");
     await writeFile(
       path.join(workspace, "docs", "reference", "primer-primitives-css", "size.css"),
       ":root { --base-size-4: 0.25rem; --base-size-8: 0.5rem; --control-small-size: 1.75rem; --motion-duration-short: 200ms; }\n",
@@ -86,6 +91,23 @@ describe("checkPrimerAlignment", () => {
         "undefined-token",
         "undefined-token",
       ]);
+    });
+  });
+
+  test("checks site styles and rejects tokens missing from compiled runtime CSS", async () => {
+    await withWorkspace(async workspace => {
+      await writeFile(
+        path.join(workspace, "static", "app.input.css"),
+        ":root { --ld-accent: var(--fgColor-accent); --container-site-reading: 32rem; }\n",
+      );
+      await writeFile(path.join(workspace, "static", "app.css"), ":root { --ld-accent: var(--fgColor-accent); }\n");
+      await writeFile(
+        path.join(workspace, "site", "static", "site.css"),
+        ":root { color: #0969da; } .article { max-width: var(--container-site-reading); }\n",
+      );
+
+      const violations = await checkPrimerAlignment({root: workspace});
+      expect(violations.map(violation => violation.kind)).toEqual(["raw-color", "runtime-undefined-token"]);
     });
   });
 

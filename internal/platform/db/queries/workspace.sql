@@ -5,7 +5,6 @@ ON CONFLICT(id) DO UPDATE SET
   title = excluded.title,
   description = excluded.description,
   updated_at = CURRENT_TIMESTAMP;
-
 -- name: GetWorkspace :one
 SELECT * FROM workspaces WHERE id = ?;
 
@@ -52,4 +51,3 @@ VALUES (?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(workspace_id, environment) DO UPDATE SET
   serving_state_id = excluded.serving_state_id,
   updated_at = CURRENT_TIMESTAMP;
-

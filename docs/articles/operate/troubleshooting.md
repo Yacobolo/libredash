@@ -1,0 +1,74 @@
+# Operational troubleshooting
+
+Start at the first boundary that reports failure and preserve the last active state. Capture timestamps, request or job IDs, application image digest, environment, deployment ID, revision digest, and relevant logs before restarting or retrying.
+
+## Process does not start
+
+Run production validation in the same environment as the service:
+
+```sh
+libredash config validate --production
+```
+
+Confirm `LIBREDASH_HOME`, DuckLake catalog, analytical data, and managed-data directories exist and are writable by the service identity. Check remote catalog and object-store connectivity, free space, file descriptor limits, and port binding.
+
+Verify required secrets are present by name without printing their values. An incomplete OIDC, Azure, S3, or credential pair is intentionally rejected.
+
+## Liveness or readiness fails
+
+If the process is absent or `/healthz` fails, inspect process exit and startup logs. If liveness passes but `/readyz` fails, investigate required state attachment and runtime readiness rather than restarting repeatedly.
+
+Compare direct local checks with reverse-proxy checks. A healthy local service with a failing public endpoint points to TLS, routing, host allowlist, firewall, or proxy configuration.
+
+## Authentication fails
+
+For browser auth, confirm exact public issuer and callback URLs, secure cookies, allowed hosts, clock synchronization, provider client credentials, and proxy scheme/host preservation. Test with a fresh private browser session to separate provider failure from a stale cookie.
+
+For tokens, confirm the token is not expired or revoked, the principal remains active, and workspace/privilege restrictions include the operation. Do not replace a scoped token with a broad owner token merely to make a test pass.
+
+Keep a tested local break-glass path only when policy permits it. Audit every use and rotate temporary credentials afterward.
+
+## Health passes but workspaces are empty
+
+Check that the intended project deployment is active in the selected environment and that the principal has workspace access. A successful application deployment does not publish a project.
+
+List workspaces through the CLI/API with the same principal. Inspect deployment activation, workspace role bindings, and active environment selection.
+
+## Dashboards load but queries fail
+
+Reproduce below the browser with semantic-model or dashboard CLI commands. Inspect active managed revisions, latest refresh state, query queue saturation, timeout, and source/analytical storage availability.
+
+If every query fails, suspect runtime/storage or active deployment. If one semantic field or visual fails, suspect its model, relationship, filter, or query contract. Preserve the exact error and request identity.
+
+## Project deployment fails
+
+- Run local validation and fix every diagnostic.
+- Generate a target-aware plan and review active differences.
+- Confirm the service principal can deploy to the environment.
+- Supply one valid pin for every managed connection.
+- Verify each digest is staged for the same project and connection.
+- Check candidate workspace and access-resource references.
+
+A failed candidate should leave active projects and revisions unchanged. Confirm that invariant before retrying.
+
+## Refreshes queue or fail
+
+Inspect the latest generation, executor read/write limits, queue lengths, timeouts, source reachability, temporary capacity, and first failing model table. Older runs may be intentionally superseded.
+
+Do not increase concurrency until CPU, memory, disk, and catalog write capacity show headroom. More simultaneous work can make a saturated single node less available.
+
+## Disk usage grows
+
+Identify whether growth is backups, managed upload staging, managed objects, DuckLake catalog, analytical Parquet, logs, or runtime cache. Run storage cleanup without `--apply` first:
+
+```sh
+libredash admin storage cleanup
+```
+
+Review protected serving states and query leases, then use `--apply` only under the approved maintenance procedure. Do not delete catalog rows or Parquet objects manually.
+
+## Gather a useful incident record
+
+Record impact, start time, last known good deployment/image/revision, failing identities, relevant metrics and logs, attempted actions, and whether active state changed. Redact secrets but keep stable digests and IDs.
+
+Correct configuration, data, or project candidates through normal workflows. Repeated restarts, manual pointer edits, and deleting active state destroy evidence and can turn a contained failure into data loss.

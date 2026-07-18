@@ -48,10 +48,12 @@ afterAll(async () => {
 test('topology background renders and animates without external requests', async () => {
   const page = await browser.newPage({ viewport: { width: 800, height: 500 } })
   const externalRequests: string[] = []
+  const pageErrors: string[] = []
   page.on('request', (request) => {
     const url = new URL(request.url())
     if (url.origin !== baseURL) externalRequests.push(request.url())
   })
+  page.on('pageerror', (error) => pageErrors.push(error.message))
 
   try {
     await page.goto(baseURL)
@@ -64,11 +66,13 @@ test('topology background renders and animates without external requests', async
     })
 
     const firstFrame = await canvasDataURL(page)
+    await page.setViewportSize({ width: 900, height: 600 })
     await page.waitForTimeout(150)
     const secondFrame = await canvasDataURL(page)
 
     expect(secondFrame).not.toBe(firstFrame)
     expect(externalRequests).toEqual([])
+    expect(pageErrors).toEqual([])
   } finally {
     await page.close()
   }

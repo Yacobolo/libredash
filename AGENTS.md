@@ -28,6 +28,7 @@ LibreDash is a dashboards-as-code BI monolith. Go owns configuration compilation
 ## Important Files
 
 - `cmd/libredash/main.go` and `internal/cli/serve.go`: process startup and lifecycle.
+- `cmd/libredash-site/main.go` and `internal/site/http/`: independently deployable public site startup and HTTP adapter.
 - `internal/app/router.go`: canonical page, command, auth, admin, and API routes.
 - `internal/workspace/compiler/compiler.go`: project compilation entrypoint.
 - `internal/runtimehost/manager.go`: serving-generation and snapshot-lease lifecycle.
@@ -37,6 +38,7 @@ LibreDash is a dashboards-as-code BI monolith. Go owns configuration compilation
 - `internal/ui/page.go` and `internal/dashboard/ui/page.go`: gomponents page shells.
 - `web/components/dashboard/dashboard-page.ts`: interactive report surface.
 - `web/components/dashboard/table/report-table.ts`: BI table component.
+- `docs/`: authored and generated public documentation; `site/`: site-specific browser source and static assets.
 - `.github/workflows/ci.yml`: canonical parallel CI workflow.
 
 ## Development
@@ -45,7 +47,7 @@ LibreDash is a dashboards-as-code BI monolith. Go owns configuration compilation
 - `task test` generates required sources/assets and runs the complete Go and browser test suite.
 - `task ci` adds generated-artifact checks, static/race analysis, route QA, and deployment validation.
 - `task generate` regenerates sqlc, configuration, API, signal, and JSON Schema artifacts.
-- `task generated:check` verifies committed generated contracts are current.
+- `task generated:check` verifies intentional public contract snapshots are current.
 - `task dev:status`, `task dev:logs`, and `task dev:stop` manage the worktree-local server.
 
 Use `task ci` before handing off substantial changes. Follow red-green-refactor for features and fixes. Prefer long-term correctness, simplicity, robustness, and scalability over minimizing implementation cost.

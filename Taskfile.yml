@@ -3,28 +3,25 @@ version: '3'
 tasks:
   dev:
     desc: Start the managed LibreDash dev server for this worktree
-    deps:
-      - generate
-      - build
-      - bootstrap
     cmds:
+      - task: generate
+      - task: build
+      - task: bootstrap
       - ./scripts/dev-server.sh start
 
   dev:movielens:
     desc: Start the managed LibreDash dev server with the MovieLens 32M experiment project
-    deps:
-      - generate
-      - build
-      - bootstrap:movielens
     cmds:
+      - task: generate
+      - task: build
+      - task: bootstrap:movielens
       - LIBREDASH_DEV_RESTART=1 LIBREDASH_DEV_READY_ATTEMPTS=1800 ./scripts/dev-server.sh start dashboards/experiments/movielens/libredash.yaml movielens .data/movielens
 
   dev:quack:
     desc: Start the managed LibreDash dev server with the local Quack profile
-    deps:
-      - generate
-      - build
     cmds:
+      - task: generate
+      - task: build
       - ./scripts/dev-profile.sh quack start
 
   bootstrap:
@@ -92,6 +89,39 @@ tasks:
     cmds:
       - bun run build
 
+  site:build:
+    desc: Build the LibreDash public site assets from generated contracts
+    cmds:
+      - task: ui-signals:generate
+      - task: node:deps
+      - bun run build:site
+
+  site:binary:
+    desc: Build the independently deployable public site from generated documentation
+    cmds:
+      - task: generate
+      - task: site:build
+      - go build -o bin/libredash-site ./cmd/libredash-site
+
+  site:image:
+    desc: Build the production LibreDash public site OCI image
+    cmds:
+      - docker build --file Dockerfile.site --tag libredash-site:local .
+
+  site:dev:
+    desc: Start the public site from generated documentation on http://localhost:8081
+    cmds:
+      - task: generate
+      - task: site:build
+      - go run ./cmd/libredash-site
+
+  site:product-screenshot:
+    desc: Refresh light and dark homepage screenshots from the deployed Visual Showcase
+    cmds:
+      - task: generate
+      - task: build
+      - bun scripts/capture_site_product.ts
+
   bench:datastar-bridge:
     desc: Benchmark legacy, Ignition, and DatastarLit bridges in Chromium
     deps:
@@ -128,6 +158,67 @@ tasks:
       - task: api:generate
       - task: ui-signals:generate
       - task: schema:generate
+      - task: cli-docs:generate
+      - task: node:deps
+      - task: docs:render
+
+  docs:generate:
+    desc: Generate reference documentation, the unified catalog, and the FTS5 search index
+    cmds:
+      - task: schema:generate
+      - task: cli-docs:generate
+      - task: node:deps
+      - task: docs:render
+
+  docs:render:
+    internal: true
+    method: checksum
+    sources:
+      - Taskfile.yml
+      - docs/navigation.yaml
+      - docs/*.md
+      - docs/articles/**/*.md
+      - docs/guides/**/*.md
+      - docs/api/*.md
+      - docs/api/catalog.json
+      - docs/reference/cli/*.md
+      - docs/reference/cli/catalog.json
+      - docs/reference/config/*.md
+      - docs/reference/config/catalog.json
+      - docs/visuals/*.md
+      - docs/visuals/catalog.json
+      - internal/tools/docsitegen/**/*.go
+    generates:
+      - docs/catalog.json
+      - docs/search-index.sqlite3
+    cmds:
+      - bun run docs:validate-diagrams
+      - go run ./internal/tools/docsitegen
+
+  docs:check:
+    desc: Verify the unified documentation catalog and FTS5 search index are current
+    deps:
+      - node:deps
+    cmds:
+      - bun run docs:validate-diagrams
+      - go run ./internal/tools/docsitegen --check
+
+  cli-docs:generate:
+    desc: Generate public CLI reference documentation from Cobra commands
+    deps:
+      - db:generate
+      - config:generate
+      - api:generate
+      - ui-signals:generate
+    method: checksum
+    sources:
+      - Taskfile.yml
+      - internal/cli/**/*.go
+      - internal/tools/clidocgen/**/*.go
+    generates:
+      - docs/reference/cli/catalog.json
+    cmds:
+      - go run ./internal/tools/clidocgen
 
   db:generate:
     desc: Generate SQLite adapter code from the checked-in schema and queries
@@ -166,14 +257,14 @@ tasks:
       - go run ./internal/tools/configgen --check
 
   generated:check:
-    desc: Verify every committed generated artifact is current
+    desc: Verify intentional public contract snapshots are current
     deps:
       - generate
     cmds:
       - task: config:check
       - |
-        changed="$(git status --porcelain -- .env.example docs/configuration.md internal/config/config_gen.go internal/configspec/names_gen.go schemas web/generated)"
-        test -z "$changed" || { printf 'committed generated artifacts are stale:\n%s\n' "$changed" >&2; exit 1; }
+        changed="$(git status --porcelain -- .env.example docs/api/openapi.yaml schemas/config schemas/json)"
+        test -z "$changed" || { printf 'public contract snapshots are stale:\n%s\n' "$changed" >&2; exit 1; }
 
   api:generate:
     desc: Generate headless API contract artifacts and APIGen Go surfaces
@@ -182,19 +273,25 @@ tasks:
       - Taskfile.yml
       - api/apigen.yaml
       - api/typespec/**/*.tsp
+      - internal/tools/openapidocgen/**/*.go
     generates:
       - api/gen/json-ir.json
       - api/gen/openapi.yaml
       - internal/api/gen/request_models.gen.go
       - internal/api/gen/server.apigen.gen.go
       - internal/cli/gen/apigen_registry.gen.go
+      - docs/api/catalog.json
+      - docs/api/openapi.yaml
     cmds:
       - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 typespec-compile -manifest api/apigen.yaml -target libredash-v1
       - go run github.com/Yacobolo/toolbelt/apigen/cmd/apigen@v0.5.3 all -manifest api/apigen.yaml -target libredash-v1
+      - go run ./internal/tools/openapidocgen
 
   schema:generate:
     desc: Generate JSON Schema artifacts for LibreDash YAML contracts
     deps:
+      - db:generate
+      - config:generate
       - api:generate
       - ui-signals:generate
     method: checksum
@@ -205,12 +302,15 @@ tasks:
       - internal/configschema/**/*.go
       - internal/dashboard/report/**/*.go
       - internal/semantic/**/*.go
+      - internal/tools/schemadocgen/**/*.go
+      - dashboards/**/*.yaml
     generates:
-      - schemas/json/catalog.schema.json
       - schemas/json/dashboard.schema.json
       - schemas/json/semantic-model.schema.json
+      - docs/reference/config/catalog.json
     cmds:
       - go run ./cmd/libredash schema export --format json-schema --out schemas/json
+      - go run ./internal/tools/schemadocgen
 
   ui-signals:generate:
     desc: Generate UI signal Go and TypeScript contracts from TypeSpec
@@ -231,13 +331,14 @@ tasks:
 
   test:
     desc: Run tests
-    deps:
-      - generate
-      - build
     cmds:
+      - task: generate
+      - task: build
       - bun run test:primer-primitives
+      - bun run test:docs-diagrams
       - bun run test:primer-alignment
       - bun run test:theme
+      - bun run test:site
       - bun run test:datastar-lit
       - bun run test:app-shell
       - bun run test:interaction-selection

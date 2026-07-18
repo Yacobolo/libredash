@@ -48,6 +48,8 @@ COPY . .
 COPY --from=sourcegen /src/api/gen ./api/gen
 COPY --from=sourcegen /src/internal/api/gen ./internal/api/gen
 COPY --from=sourcegen /src/internal/cli/gen ./internal/cli/gen
+COPY --from=sourcegen /src/internal/config/config_gen.go ./internal/config/config_gen.go
+COPY --from=sourcegen /src/internal/configspec/names_gen.go ./internal/configspec/names_gen.go
 COPY --from=sourcegen /src/internal/platform/db/db.go ./internal/platform/db/db.go
 COPY --from=sourcegen /src/internal/platform/db/models.go ./internal/platform/db/models.go
 COPY --from=sourcegen /src/internal/platform/db/*.sql.go ./internal/platform/db/

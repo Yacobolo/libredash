@@ -191,4 +191,3 @@ ORDER BY
   COALESCE(d.activated_at, d.created_at) DESC,
   d.created_at DESC,
   d.id DESC;
-

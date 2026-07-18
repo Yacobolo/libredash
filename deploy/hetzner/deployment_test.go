@@ -115,14 +115,12 @@ func TestReleaseWorkflowPublishesAttestedImage(t *testing.T) {
 }
 
 func TestSupplyChainInputsArePinned(t *testing.T) {
-	dockerfile := readFile(t, filepath.Join("..", "..", "Dockerfile"))
-	if !strings.HasPrefix(dockerfile, "# syntax=docker/dockerfile:1.7@sha256:") {
-		t.Error("Dockerfile frontend is not pinned by digest")
-	}
-	for _, line := range strings.Split(dockerfile, "\n") {
-		if strings.HasPrefix(line, "FROM ") && !strings.Contains(line, "@sha256:") {
-			t.Errorf("Docker base image is not pinned by digest: %s", line)
+	for _, name := range []string{"Dockerfile", "Dockerfile.site"} {
+		dockerfile := readFile(t, filepath.Join("..", "..", name))
+		if !strings.HasPrefix(dockerfile, "# syntax=docker/dockerfile:1.7@sha256:") {
+			t.Errorf("%s frontend is not pinned by digest", name)
 		}
+		assertDockerfileImagesPinned(t, name, dockerfile)
 	}
 
 	workflows, err := filepath.Glob(filepath.Join("..", "..", ".github", "workflows", "*.yml"))
@@ -134,6 +132,28 @@ func TestSupplyChainInputsArePinned(t *testing.T) {
 		contents := readFile(t, workflow)
 		if match := mutableAction.FindString(contents); match != "" {
 			t.Errorf("GitHub Action is not pinned by commit in %s: %s", workflow, strings.TrimSpace(match))
+		}
+	}
+}
+
+func assertDockerfileImagesPinned(t *testing.T, name, dockerfile string) {
+	t.Helper()
+	stages := make(map[string]struct{})
+	hexDigest := regexp.MustCompile(`^[0-9a-f]{64}$`)
+	for _, line := range strings.Split(dockerfile, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[0] != "FROM" {
+			continue
+		}
+		image := fields[1]
+		if _, internal := stages[image]; !internal {
+			_, digest, pinned := strings.Cut(image, "@sha256:")
+			if !pinned || !hexDigest.MatchString(digest) {
+				t.Errorf("%s base image is not pinned by a valid SHA-256 digest: %s", name, line)
+			}
+		}
+		if len(fields) >= 4 && fields[2] == "AS" {
+			stages[fields[3]] = struct{}{}
 		}
 	}
 }

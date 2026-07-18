@@ -44,7 +44,7 @@ afterAll(async () => {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 }, 15_000)
 
-test('code block highlights json and toon, and falls back plainly for text and unknown languages', async () => {
+test('code block highlights product and documentation languages with GitHub themes', async () => {
   const page = await browser.newPage({ viewport: { width: 900, height: 700 } })
   try {
     await page.goto(baseURL)
@@ -58,6 +58,8 @@ test('code block highlights json and toon, and falls back plainly for text and u
           await new Promise((resolve) => setTimeout(resolve, 20))
         }
       }
+
+      document.documentElement.style.colorScheme = 'light'
       const json = document.createElement('ld-code-block') as any
       json.language = 'json'
       json.code = '{\n  "ok": true,\n  "count": 3\n}'
@@ -69,6 +71,35 @@ test('code block highlights json and toon, and falls back plainly for text and u
       toon.code = 'items[2]{id,title}:\n  1,Sales\n  2,Ops\ncount: 2'
       document.body.append(toon)
       await waitFor(() => Boolean(toon.querySelector('.shiki')))
+
+      const yaml = document.createElement('ld-code-block') as any
+      yaml.language = 'yaml'
+      yaml.code = 'apiVersion: libredash.dev/v1\nkind: Project'
+      yaml.copy = true
+      yaml.toolbar = true
+      document.body.append(yaml)
+      await waitFor(() => Boolean(yaml.querySelector('.shiki.github-light')))
+
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
+      document.execCommand = (command) => {
+        document.documentElement.dataset.copiedCode = (document.activeElement as HTMLTextAreaElement | null)?.value ?? ''
+        return command === 'copy'
+      }
+      ;(yaml.querySelector('.code-block-copy') as HTMLButtonElement).click()
+      await waitFor(() => yaml.querySelector('.code-block-copy')?.getAttribute('aria-label') === 'Code copied')
+
+      const shell = document.createElement('ld-code-block') as any
+      shell.language = 'sh'
+      shell.code = 'libredash validate --project dashboards/libredash.yaml'
+      document.body.append(shell)
+      await waitFor(() => Boolean(shell.querySelector('.shiki')))
+
+      const formattedSQL = document.createElement('ld-code-block') as any
+      formattedSQL.language = 'sql'
+      formattedSQL.code = 'select status from orders'
+      formattedSQL.format = true
+      document.body.append(formattedSQL)
+      await formattedSQL.updateComplete
 
       const text = document.createElement('ld-code-block') as any
       text.language = 'text'
@@ -88,13 +119,23 @@ test('code block highlights json and toon, and falls back plainly for text and u
       compact.code = '{"compact":true}'
       document.body.append(compact)
       await compact.updateComplete
+      document.documentElement.style.colorScheme = 'dark'
+      document.dispatchEvent(new CustomEvent('libredash-theme-applied'))
+      await waitFor(() => Boolean(yaml.querySelector('.shiki.github-dark')))
       const compactPre = compact.querySelector('pre') as HTMLElement
 
       return {
         jsonHighlighted: Boolean(json.querySelector('.shiki')),
         toonHighlighted: Boolean(toon.querySelector('.shiki')),
+        yamlHighlighted: Boolean(yaml.querySelector('.shiki.github-dark')),
+        shellHighlighted: Boolean(shell.querySelector('.shiki')),
+        formattedSQL: formattedSQL.querySelector('code')?.textContent || '',
         jsonText: json.textContent || '',
         toonText: toon.textContent || '',
+        yamlText: yaml.textContent || '',
+        yamlLanguage: yaml.querySelector('.code-block-language')?.textContent || '',
+        yamlCopyLabel: yaml.querySelector('.code-block-copy')?.getAttribute('aria-label') || '',
+        copiedCode: document.documentElement.dataset.copiedCode || '',
         textFallback: Boolean(text.querySelector('.code-block-fallback')),
         textError: Boolean(text.querySelector('.code-block-error')),
         unknownFallback: Boolean(unknown.querySelector('.code-block-fallback')),
@@ -107,8 +148,16 @@ test('code block highlights json and toon, and falls back plainly for text and u
 
     expect(state.jsonHighlighted).toBe(true)
     expect(state.toonHighlighted).toBe(true)
+    expect(state.yamlHighlighted).toBe(true)
+    expect(state.shellHighlighted).toBe(true)
+    expect(state.formattedSQL).toContain('SELECT')
+    expect(state.formattedSQL).toMatch(/\nFROM\n\s+orders/)
     expect(state.jsonText).toContain('"ok"')
     expect(state.toonText).toContain('items[2]{id,title}:')
+    expect(state.yamlText).toContain('apiVersion: libredash.dev/v1')
+    expect(state.yamlLanguage).toBe('YAML')
+    expect(state.yamlCopyLabel).toBe('Code copied')
+    expect(state.copiedCode).toBe('apiVersion: libredash.dev/v1\nkind: Project')
     expect(state.textFallback).toBe(true)
     expect(state.textError).toBe(false)
     expect(state.unknownFallback).toBe(true)

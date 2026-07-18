@@ -1,0 +1,788 @@
+package http
+
+import (
+	"bufio"
+	"compress/gzip"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/Yacobolo/libredash/internal/configschema"
+)
+
+func TestHomepageDashboardExampleMatchesThePublishedSchema(t *testing.T) {
+	if err := configschema.ValidateBytes(configschema.KindDashboardResource, "homepage-dashboard.yaml", []byte(siteHomepageDashboardYAML)); err != nil {
+		t.Fatalf("validate homepage dashboard example: %v", err)
+	}
+}
+
+func TestSiteUnknownRouteReturnsNotFound(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/not-a-real-route")
+	if err != nil {
+		t.Fatalf("get unknown route: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown route status = %d, want %d", response.StatusCode, http.StatusNotFound)
+	}
+	body := readBody(t, response)
+	if !strings.Contains(body, "Page not found") || !strings.Contains(body, `href="/docs"`) {
+		t.Fatalf("unknown route did not render the site 404 page:\n%s", body)
+	}
+}
+
+func TestSiteArticlePublishesSearchAndSocialMetadata(t *testing.T) {
+	baseURL, err := url.Parse("https://docs.libredash.dev")
+	if err != nil {
+		t.Fatalf("parse base URL: %v", err)
+	}
+	server := httptest.NewServer(NewHandlerWithOptions(Options{BaseURL: baseURL}))
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs/introduction")
+	if err != nil {
+		t.Fatalf("get article: %v", err)
+	}
+	defer response.Body.Close()
+	body := readBody(t, response)
+	document, ok := siteDocumentBySlug("introduction")
+	if !ok {
+		t.Fatal("introduction document not found")
+	}
+	for _, want := range []string{
+		`<meta name="description" content="` + document.summary + `">`,
+		`<link rel="canonical" href="https://docs.libredash.dev/docs/introduction">`,
+		`<meta property="og:title" content="` + document.title + `">`,
+		`<meta property="og:type" content="article">`,
+		`<meta property="og:url" content="https://docs.libredash.dev/docs/introduction">`,
+		`<meta name="twitter:card" content="summary">`,
+		`<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("article metadata missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestSitePublishesSitemapAndRobots(t *testing.T) {
+	baseURL, err := url.Parse("https://docs.libredash.dev")
+	if err != nil {
+		t.Fatalf("parse base URL: %v", err)
+	}
+	server := httptest.NewServer(NewHandlerWithOptions(Options{BaseURL: baseURL}))
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/sitemap.xml")
+	if err != nil {
+		t.Fatalf("get sitemap: %v", err)
+	}
+	sitemap := readBody(t, response)
+	response.Body.Close()
+	if got := response.Header.Get("Content-Type"); !strings.HasPrefix(got, "application/xml") {
+		t.Fatalf("sitemap content type = %q", got)
+	}
+	for _, want := range []string{
+		"https://docs.libredash.dev/",
+		"https://docs.libredash.dev/charts",
+		"https://docs.libredash.dev/docs",
+		"https://docs.libredash.dev/docs/introduction",
+	} {
+		if !strings.Contains(sitemap, "<loc>"+want+"</loc>") {
+			t.Errorf("sitemap missing %q:\n%s", want, sitemap)
+		}
+	}
+	if strings.Contains(sitemap, "/docs/search") {
+		t.Fatalf("sitemap contains search page:\n%s", sitemap)
+	}
+
+	response, err = server.Client().Get(server.URL + "/robots.txt")
+	if err != nil {
+		t.Fatalf("get robots: %v", err)
+	}
+	robots := readBody(t, response)
+	response.Body.Close()
+	for _, want := range []string{
+		"User-agent: *",
+		"Disallow: /docs/search",
+		"Sitemap: https://docs.libredash.dev/sitemap.xml",
+	} {
+		if !strings.Contains(robots, want) {
+			t.Errorf("robots.txt missing %q:\n%s", want, robots)
+		}
+	}
+}
+
+func TestSiteProductionHeadersAndHealthEndpoints(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	for _, path := range []string{"/healthz", "/readyz"} {
+		response, err := server.Client().Get(server.URL + path)
+		if err != nil {
+			t.Fatalf("get %s: %v", path, err)
+		}
+		body := readBody(t, response)
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK || strings.TrimSpace(body) != "ok" {
+			t.Errorf("%s = %d %q, want 200 ok", path, response.StatusCode, body)
+		}
+	}
+
+	response, err := server.Client().Get(server.URL + "/docs/introduction")
+	if err != nil {
+		t.Fatalf("get article: %v", err)
+	}
+	response.Body.Close()
+	for header, want := range map[string]string{
+		"Content-Security-Policy": "default-src 'self'",
+		"Referrer-Policy":         "strict-origin-when-cross-origin",
+		"X-Content-Type-Options":  "nosniff",
+		"X-Frame-Options":         "DENY",
+		"Cache-Control":           "no-cache",
+	} {
+		if got := response.Header.Get(header); !strings.Contains(got, want) {
+			t.Errorf("%s = %q, want containing %q", header, got, want)
+		}
+	}
+	if got := response.Header.Get("Content-Security-Policy"); !strings.Contains(got, "script-src 'self' 'unsafe-eval'") {
+		t.Errorf("Content-Security-Policy = %q, want Datastar expression evaluation allowance", got)
+	}
+
+	response, err = server.Client().Get(server.URL + "/static/site-page.js")
+	if err != nil {
+		t.Fatalf("get site asset: %v", err)
+	}
+	response.Body.Close()
+	if got := response.Header.Get("Cache-Control"); got != "public, max-age=0, must-revalidate" {
+		t.Fatalf("site asset cache control = %q", got)
+	}
+}
+
+func TestSiteAssetsDoNotDependOnWorkingDirectory(t *testing.T) {
+	workingDirectory, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("get working directory: %v", err)
+	}
+	t.Chdir(filepath.Dir(workingDirectory))
+
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+	for _, path := range []string{"/static/favicon.svg", "/static/site.css", "/static/site-page.js", "/shared/app.css", "/shared/theme.js", "/shared/files/inter-latin-wght-normal.woff2", "/static/vendor/datastar-1.0.2.js", "/static/vendor/github-mark.svg"} {
+		response, err := server.Client().Get(server.URL + path)
+		if err != nil {
+			t.Fatalf("get %s: %v", path, err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Errorf("%s status = %d, want %d", path, response.StatusCode, http.StatusOK)
+		}
+	}
+}
+
+func TestSiteAssetsSupportGzipCompression(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+	client := &http.Client{Transport: &http.Transport{DisableCompression: true}}
+	request, err := http.NewRequest(http.MethodGet, server.URL+"/static/site-page.js", nil)
+	if err != nil {
+		t.Fatalf("create asset request: %v", err)
+	}
+	request.Header.Set("Accept-Encoding", "gzip")
+	response, err := client.Do(request)
+	if err != nil {
+		t.Fatalf("get compressed asset: %v", err)
+	}
+	defer response.Body.Close()
+	if got := response.Header.Get("Content-Encoding"); got != "gzip" {
+		t.Fatalf("asset content encoding = %q, want gzip", got)
+	}
+	compressed, err := gzip.NewReader(response.Body)
+	if err != nil {
+		t.Fatalf("open compressed asset: %v", err)
+	}
+	defer compressed.Close()
+	body, err := io.ReadAll(compressed)
+	if err != nil {
+		t.Fatalf("read compressed asset: %v", err)
+	}
+	if !strings.Contains(string(body), "customElements") {
+		t.Fatalf("compressed asset does not contain site bundle")
+	}
+}
+
+func TestSiteHomeRendersPageStreamDocument(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/")
+	if err != nil {
+		t.Fatalf("get home page: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("home status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+
+	body := readBody(t, response)
+	for _, want := range []string{
+		"<title>LeapView — agent-native BI and analytics as code</title>",
+		`data-color-mode="auto"`,
+		`/updates`,
+		`data-init="@get(&#39;/updates&#39;, {openWhenHidden: true})"`,
+		`/shared/app.css`,
+		`<link rel="preload" href="/shared/files/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin="anonymous">`,
+		`/static/site.css`,
+		`/static/site-page.js`,
+		`<meta name="view-transition" content="same-origin">`,
+		`<ld-site-flow-background class="site-hero-background" aria-hidden="true"></ld-site-flow-background>`,
+		`<section id="main-content" class="site-hero">`,
+		`<div class="site-hero-layout">`,
+		`<img class="site-product-screenshot site-product-screenshot-light" src="/static/product-dashboard-light.png"`,
+		`<img class="site-product-screenshot site-product-screenshot-dark" src="/static/product-dashboard-dark.png"`,
+		`<div class="site-proof-strip">`,
+		`<ld-site-feature-icon name="database" aria-hidden="true"></ld-site-feature-icon>`,
+		`<ld-site-feature-icon name="dashboard" aria-hidden="true"></ld-site-feature-icon>`,
+		`<ld-site-feature-icon name="git-branch" aria-hidden="true"></ld-site-feature-icon>`,
+		`<section id="product" class="site-workflow">`,
+		`<ol class="site-stack-flow" aria-label="LeapView position in the data stack">`,
+		`<section class="site-interfaces-section">`,
+		`<article class="site-interface-card">`,
+		`<ld-site-feature-icon name="agent" aria-hidden="true"></ld-site-feature-icon>`,
+		`<a class="site-interface-link" href="/docs/guides/integrate/agent">Explore agent integrations</a>`,
+		`<section class="site-cta">`,
+		`<footer class="site-footer" role="contentinfo">`,
+		`<header class="site-header">`,
+		`<ld-site-theme-toggle></ld-site-theme-toggle>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("home page missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "One model. Two ways to explore.") {
+		t.Error("home page still renders the removed live-interaction section")
+	}
+	if strings.Contains(body, "site-capabilities-section") {
+		t.Error("home page still renders the redundant capabilities section")
+	}
+}
+
+func TestSiteChartsRendersPageStreamShowcase(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/charts")
+	if err != nil {
+		t.Fatalf("get charts page: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("charts status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+
+	body := readBody(t, response)
+	for _, want := range []string{
+		"<title>LeapView chart showcase</title>",
+		`data-init="@get(&#39;/updates?view=charts&#39;, {openWhenHidden: true})"`,
+		"<ld-site-chart-showcase>",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("charts page missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestSiteGettingStartedRendersGuide(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs/getting-started")
+	if err != nil {
+		t.Fatalf("get getting started page: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("getting started status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+
+	body := readBody(t, response)
+	for _, want := range []string{
+		"<title>Get started with LibreDash</title>",
+		`<ld-site-docs-drawer-toggle></ld-site-docs-drawer-toggle>`,
+		`<nav class="site-docs-breadcrumb" aria-label="Breadcrumb"><ol><li><a href="/docs/introduction">Start here</a></li><li><span aria-current="page">Getting started</span></li></ol></nav>`,
+		`<button class="site-docs-drawer-backdrop" type="button" aria-label="Close documentation menu" aria-hidden="true" tabindex="-1" data-site-docs-drawer-close="true"></button>`,
+		`<ld-site-markdown-copy`,
+		`<article id="main-content" class="site-docs-article">`,
+		`<aside class="site-docs-sidebar" id="site-docs-sidebar">`,
+		`<a class="site-docs-link site-docs-link-current" href="/docs/getting-started" title="Get started with LibreDash" aria-current="page">Get started with LibreDash</a>`,
+		`<details class="site-docs-nav-group" data-site-docs-group="reference-configuration">`,
+		`<a class="site-docs-link" href="/docs/configuration" title="Environment variable reference">Environment variable reference</a>`,
+		`<a class="site-docs-link" href="/docs/enterprise-auth" title="Overview">Overview</a>`,
+		`<a class="site-docs-link" href="/docs/storage-architecture" title="Storage architecture">Storage architecture</a>`,
+		`<details class="site-docs-nav-group site-docs-nav-group-active" data-site-docs-group="start" open="true">`,
+		`<summary title="Start here"><span class="site-docs-nav-label">Start here</span></summary>`,
+		`<details class="site-docs-nav-group" data-site-docs-group="reference-visuals">`,
+		`<summary title="Charts"><span class="site-docs-nav-label">Charts</span></summary>`,
+		`<ul class="site-docs-nav-tree">`,
+		`<a class="site-docs-link" href="/docs/charts/overview" title="Overview">Overview</a>`,
+		"<h1>Get started with LibreDash</h1>",
+		"<h2>Bootstrap the workspace</h2>",
+		"task bootstrap",
+		"task dev",
+		"libredash.yaml",
+		"workspaces/",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("getting started page missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "LibreDash Docs") {
+		t.Errorf("getting started page retains the redundant docs header:\n%s", body)
+	}
+	if strings.Contains(body, "Guides and reference") {
+		t.Errorf("getting started page retains the redundant sidebar heading:\n%s", body)
+	}
+	if strings.Contains(body, "catalog.yaml") {
+		t.Errorf("getting started page retains the obsolete catalog layout:\n%s", body)
+	}
+	if strings.Contains(body, `<footer class="site-footer" role="contentinfo">`) {
+		t.Errorf("getting started page retains the marketing footer:\n%s", body)
+	}
+}
+
+func TestSiteCLIGuideUsesDeployCommand(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs/cli/validate-deploy")
+	if err != nil {
+		t.Fatalf("get deploy guide: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("deploy guide status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	body := readBody(t, response)
+	for _, want := range []string{"Validate, plan, and deploy", "libredash deploy --project dashboards/libredash.yaml"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("deploy guide missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "libredash publish") {
+		t.Errorf("deploy guide contains nonexistent publish command:\n%s", body)
+	}
+}
+
+func TestSiteDocsIndexListsEverySection(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs")
+	if err != nil {
+		t.Fatalf("get docs index: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("docs index status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+
+	body := readBody(t, response)
+	for _, want := range []string{
+		"<title>LeapView documentation</title>",
+		"<h1>Documentation</h1>",
+		`href="/docs/introduction"`,
+		`href="/docs/concepts"`,
+		`href="/docs/guides/build"`,
+		`href="/docs/data-ingestion"`,
+		`href="/docs/guides/operate"`,
+		`href="/docs/enterprise-auth"`,
+		`href="/docs/integrate"`,
+		`href="/docs/reference"`,
+		`href="/docs/architecture"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("docs index missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestSiteDocumentationCatalogRendersJourneySections(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs")
+	if err != nil {
+		t.Fatalf("get docs index: %v", err)
+	}
+	defer response.Body.Close()
+	body := readBody(t, response)
+	for _, want := range []string{"Start here", "Core concepts", "Build dashboards", "Manage data", "Deploy and operate", "Security and administration", "Integrate", "Reference", "Architecture and contributing"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("docs index missing journey section %q", want)
+		}
+	}
+}
+
+func TestSiteDocumentationSupportsNestedArticleSlugs(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs/concepts/query-lifecycle")
+	if err != nil {
+		t.Fatalf("get nested documentation article: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("nested documentation status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	body := readBody(t, response)
+	for _, want := range []string{"<h1>Query and interaction lifecycle</h1>", "Core concepts", "Datastar signal flow", "About this page", "Edit this page"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("nested documentation missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{`class="site-docs-pagination"`, `aria-label="Documentation pagination"`} {
+		if strings.Contains(body, unwanted) {
+			t.Errorf("nested documentation unexpectedly contains %q", unwanted)
+		}
+	}
+}
+
+func TestSiteDocumentationSearchFindsCatalogContent(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs/search?q=semantic+relationships")
+	if err != nil {
+		t.Fatalf("search documentation: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("search status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	body := readBody(t, response)
+	for _, want := range []string{"Search documentation", `value="semantic relationships"`, `href="/docs/concepts/semantic-models"`, "Semantic models"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("search result missing %q", want)
+		}
+	}
+}
+
+func TestDocumentationNavigationUsesExplicitOverviewLabelsAndDeveloperGroups(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs/architecture/runtime")
+	if err != nil {
+		t.Fatalf("get architecture documentation: %v", err)
+	}
+	defer response.Body.Close()
+	body := readBody(t, response)
+	for _, want := range []string{
+		`data-site-docs-group="architecture-architecture"`,
+		`data-site-docs-group="architecture-contributing"`,
+		`href="/docs/architecture" title="Overview">Overview</a>`,
+		`href="/docs/data-ingestion" title="Overview">Overview</a>`,
+		`href="/docs/config" title="Overview">Overview</a>`,
+		`title="Projects, workspaces, and environments">Projects, workspaces, and environments</a>`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("architecture navigation missing %q", want)
+		}
+	}
+}
+
+func TestSiteDocumentationActiveSearchStreamsRankedResults(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	signals := `{"docsSearch":{"query":"semantic relationships"}}`
+	response, err := server.Client().Get(server.URL + "/docs/search/active?datastar=" + url.QueryEscape(signals))
+	if err != nil {
+		t.Fatalf("active search documentation: %v", err)
+	}
+	defer response.Body.Close()
+	if got := response.Header.Get("Content-Type"); !strings.Contains(got, "text/event-stream") {
+		t.Fatalf("active search content type = %q, want text/event-stream", got)
+	}
+	body := readBody(t, response)
+	for _, want := range []string{`"docsSearch"`, `"resultQuery":"semantic relationships"`, `"title":"Semantic models"`, `"href":"/docs/concepts/semantic-models"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("active search result missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestEveryCatalogDocumentHasAReachableRoute(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+	for _, document := range allSiteDocuments() {
+		response, err := server.Client().Get(server.URL + "/docs/" + document.slug)
+		if err != nil {
+			t.Fatalf("get %s: %v", document.slug, err)
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusOK {
+			t.Errorf("%s status = %d, want %d", document.slug, response.StatusCode, http.StatusOK)
+		}
+	}
+}
+
+func TestSiteChartsDocumentationParentPathIsNotAnArticle(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs/charts")
+	if err != nil {
+		t.Fatalf("get chart documentation parent path: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("chart documentation parent status = %d, want %d", response.StatusCode, http.StatusNotFound)
+	}
+}
+
+func TestSiteAPIReferenceIsGeneratedFromOpenAPI(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs/api/workspaces")
+	if err != nil {
+		t.Fatalf("get API reference: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("API reference status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+	body := readBody(t, response)
+	for _, want := range []string{"<title>Workspaces</title>", "<h1>Workspaces</h1>", "Get the active asset graph", "<code>GET /api/v1/workspaces"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("API reference missing %q:\n%s", want, body)
+		}
+	}
+
+	specification, err := server.Client().Get(server.URL + "/docs/openapi.yaml")
+	if err != nil {
+		t.Fatalf("get OpenAPI specification: %v", err)
+	}
+	defer specification.Body.Close()
+	if got := specification.Header.Get("Content-Type"); !strings.Contains(got, "application/yaml") {
+		t.Errorf("OpenAPI content type = %q, want application/yaml", got)
+	}
+	if !strings.Contains(readBody(t, specification), "openapi: 3.0.0") {
+		t.Error("served OpenAPI specification is not the generated contract")
+	}
+}
+
+func TestSiteChartDocumentationArticleRendersConfiguration(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs/charts/line")
+	if err != nil {
+		t.Fatalf("get line chart documentation: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("line chart documentation status = %d, want %d", response.StatusCode, http.StatusOK)
+	}
+
+	body := readBody(t, response)
+	for _, want := range []string{
+		"<title>Line chart</title>",
+		`data-init="@get(&#39;/updates?view=charts&#39;, {openWhenHidden: true})"`,
+		`<nav class="site-docs-breadcrumb" aria-label="Breadcrumb"><ol><li><a href="/docs/charts/overview">Charts</a></li><li><span aria-current="page">Line chart</span></li></ol></nav>`,
+		"<h1>Line chart</h1>",
+		`<ld-site-doc-chart chart-id="line"></ld-site-doc-chart>`,
+		"<h2>Configuration</h2>",
+		"type: line",
+		`href="/docs/charts/line"`,
+		`href="/docs/charts/kpi"`,
+		`<details class="site-docs-nav-group site-docs-nav-group-active" data-site-docs-group="reference-visuals" open="true">`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("line chart documentation missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestSiteEveryChartTypeHasDocumentation(t *testing.T) {
+	if got, want := len(visualDocuments), 23; got != want {
+		t.Fatalf("documented chart types = %d, want %d", got, want)
+	}
+
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+	for _, document := range visualDocuments {
+		response, err := server.Client().Get(server.URL + "/docs/" + document.slug)
+		if err != nil {
+			t.Fatalf("get %s documentation: %v", document.slug, err)
+		}
+		if response.StatusCode != http.StatusOK {
+			response.Body.Close()
+			t.Errorf("%s documentation status = %d, want %d", document.slug, response.StatusCode, http.StatusOK)
+			continue
+		}
+		body := readBody(t, response)
+		if !strings.Contains(body, "<h2>Configuration</h2>") {
+			t.Errorf("%s documentation has no configuration block", document.slug)
+		}
+		if !strings.Contains(body, `<ld-site-doc-chart chart-id="`+document.chartID+`"></ld-site-doc-chart>`) {
+			t.Errorf("%s documentation has no live chart component", document.slug)
+		}
+	}
+}
+
+func TestSiteServesGeneratedConfigurationReferenceAndSchema(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	article, err := server.Client().Get(server.URL + "/docs/config/project")
+	if err != nil {
+		t.Fatalf("get generated project configuration reference: %v", err)
+	}
+	defer article.Body.Close()
+	if article.StatusCode != http.StatusOK {
+		t.Fatalf("project configuration status = %d, want %d", article.StatusCode, http.StatusOK)
+	}
+	body := readBody(t, article)
+	for _, want := range []string{"<h1>Project configuration</h1>", "<h2>Example</h2>", "<h2>Fields</h2>", "/docs/schemas/project.schema.json", `href="/docs/config/project"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("project configuration reference missing %q:\n%s", want, body)
+		}
+	}
+
+	schema, err := server.Client().Get(server.URL + "/docs/schemas/project.schema.json")
+	if err != nil {
+		t.Fatalf("get project configuration schema: %v", err)
+	}
+	defer schema.Body.Close()
+	if schema.StatusCode != http.StatusOK {
+		t.Fatalf("project schema status = %d, want %d", schema.StatusCode, http.StatusOK)
+	}
+	if got := schema.Header.Get("Content-Type"); !strings.Contains(got, "application/schema+json") {
+		t.Errorf("project schema content type = %q", got)
+	}
+	if !strings.Contains(readBody(t, schema), `"kind": {`) {
+		t.Error("project schema does not contain the generated contract")
+	}
+}
+
+func TestSiteGettingStartedRedirectsToDocumentation(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	client := server.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	response, err := client.Get(server.URL + "/getting-started")
+	if err != nil {
+		t.Fatalf("get legacy getting started route: %v", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusPermanentRedirect {
+		t.Fatalf("legacy route status = %d, want %d", response.StatusCode, http.StatusPermanentRedirect)
+	}
+	if got := response.Header.Get("Location"); got != "/docs/getting-started" {
+		t.Errorf("legacy route location = %q, want %q", got, "/docs/getting-started")
+	}
+}
+
+func TestSiteUpdatesSendReadySignal(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/updates")
+	if err != nil {
+		t.Fatalf("get updates: %v", err)
+	}
+	defer response.Body.Close()
+	if got := response.Header.Get("Content-Type"); !strings.Contains(got, "text/event-stream") {
+		t.Fatalf("updates content type = %q, want text/event-stream", got)
+	}
+
+	line := readSSEUntil(t, response, `"ready":true`)
+	for _, want := range []string{`event: datastar-patch-signals`, `"site"`, `"ready":true`} {
+		if !strings.Contains(line, want) {
+			t.Errorf("initial updates missing %q:\n%s", want, line)
+		}
+	}
+}
+
+func TestSiteUpdatesCloseAfterInitialPatch(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	client := server.Client()
+	client.Timeout = time.Second
+	response, err := client.Get(server.URL + "/updates")
+	if err != nil {
+		t.Fatalf("get updates: %v", err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read bounded updates response: %v", err)
+	}
+	if !strings.Contains(string(body), `"ready":true`) {
+		t.Fatalf("bounded updates response does not contain initial patch:\n%s", body)
+	}
+}
+
+func TestSiteChartShowcaseUpdatesIncludeEveryChartType(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/updates?view=charts")
+	if err != nil {
+		t.Fatalf("get chart showcase updates: %v", err)
+	}
+	defer response.Body.Close()
+
+	line := readSSEUntil(t, response, `"charts"`)
+	for _, want := range []string{`"type":"line"`, `"type":"sunburst"`, `"type":"kpi"`, `"tables"`, `"kind":"matrix_table"`, `"kind":"pivot_table"`, `"title":"Orders conditional formatting"`} {
+		if !strings.Contains(line, want) {
+			t.Errorf("chart showcase updates missing %q:\n%s", want, line)
+		}
+	}
+}
+
+func readBody(t *testing.T, response *http.Response) string {
+	t.Helper()
+	bytes, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	return string(bytes)
+}
+
+func readSSEUntil(t *testing.T, response *http.Response, marker string) string {
+	t.Helper()
+	var builder strings.Builder
+	scanner := bufio.NewScanner(response.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		builder.WriteString(line)
+		builder.WriteByte('\n')
+		if strings.Contains(line, marker) {
+			return builder.String()
+		}
+		if line == "" {
+			break
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("read updates: %v", err)
+	}
+	t.Fatalf("updates ended before %q:\n%s", marker, builder.String())
+	return ""
+}

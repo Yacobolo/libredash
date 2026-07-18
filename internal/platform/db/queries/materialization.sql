@@ -129,7 +129,6 @@ UPDATE refresh_jobs
 SET status = sqlc.arg(new_status), updated_at = CURRENT_TIMESTAMP
 WHERE refresh_jobs.id = (SELECT job_id FROM refresh_job_runs WHERE refresh_job_runs.id = sqlc.arg(run_id))
   AND workspace_id = sqlc.arg(workspace_id);
-
 -- name: CompleteRefreshJobSucceeded :exec
 UPDATE refresh_jobs
 SET status = 'succeeded', updated_at = CURRENT_TIMESTAMP, finished_at = CURRENT_TIMESTAMP,
@@ -143,7 +142,6 @@ SET status = 'failed', updated_at = CURRENT_TIMESTAMP, finished_at = CURRENT_TIM
     lease_owner = '', lease_expires_at = NULL, last_error = sqlc.arg(error_message)
 WHERE refresh_jobs.id = (SELECT job_id FROM refresh_job_runs WHERE refresh_job_runs.id = sqlc.arg(run_id))
   AND workspace_id = sqlc.arg(workspace_id);
-
 -- name: CancelQueuedMaterializationRun :execresult
 UPDATE refresh_job_runs
 SET status = sqlc.arg(cancelled_status), finished_at = CURRENT_TIMESTAMP, error = ''

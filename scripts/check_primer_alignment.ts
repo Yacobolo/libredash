@@ -8,6 +8,7 @@ export type PrimerAlignmentViolation = {
     | "raw-color"
     | "raw-var-fallback"
     | "undefined-token"
+    | "runtime-undefined-token"
     | "local-primer-token"
     | "standard-state-color-mix"
     | "asset-token"
@@ -23,8 +24,9 @@ type CheckPrimerAlignmentOptions = {
 };
 
 const cssSourceExtensions = new Set([".css", ".ts"]);
-const productSourceRoots = [path.join("web", "components")];
-const staticSourceFiles = [path.join("static", "app.input.css")];
+const productSourceRoots = [path.join("web", "components"), path.join("site", "web")];
+const staticSourceFiles = [path.join("static", "app.input.css"), path.join("site", "static", "site.css")];
+const compiledRuntimeSourceFiles = [path.join("static", "app.css")];
 const excludedPathParts = [
   `${path.sep}web${path.sep}components${path.sep}inspector${path.sep}datastar-inspector.ts`,
   `${path.sep}web${path.sep}vendor${path.sep}`,
@@ -50,7 +52,7 @@ const runtimeTokenNames = new Set([
   "--report-canvas-width",
 ]);
 const checkedTokenPattern =
-  /^--(?:ld|base|motion|control|controlStack|border|borderColor|zIndex|shadow|fgColor|bgColor|data|label|button|overlay|text|fontStack|stack|selection|card|dashboard|report|color|spacing|container|radius|duration|ease|breakpoint|outline|focus)-/;
+  /^--(?:site|ld|base|motion|control|controlStack|border|borderColor|zIndex|shadow|fgColor|bgColor|data|label|button|overlay|text|fontStack|stack|selection|card|dashboard|report|color|spacing|container|radius|duration|ease|breakpoint|outline|focus)-/;
 const standardStateTokenPattern = /^--ld-bg-(?:hover|control-hover|control-active|selected)$/;
 const standardStateSelectorPattern = /(?:\[aria-pressed=['"]true['"]\]|:focus-visible|:focus(?![-\w])|\.day\.in-range)/;
 const standardButtonContractSelectorPattern =
@@ -220,6 +222,30 @@ function scanCssForTokenViolations(
   }
 }
 
+function scanCssForRuntimeTokenViolations(
+  file: string,
+  css: string,
+  sourceDefinitions: Set<string>,
+  runtimeDefinitions: Set<string>,
+  violations: PrimerAlignmentViolation[],
+): void {
+  const uncommented = stripCssComments(css);
+
+  for (const tokenName of tokenReferences(uncommented)) {
+    if (!checkedTokenPattern.test(tokenName) || runtimeTokenNames.has(tokenName)) continue;
+    if (!sourceDefinitions.has(tokenName) || runtimeDefinitions.has(tokenName)) continue;
+    const index = uncommented.indexOf(tokenName);
+    addViolation(
+      violations,
+      file,
+      uncommented,
+      index,
+      "runtime-undefined-token",
+      `${tokenName} is defined in source but is absent from the compiled CSS loaded by the site.`,
+    );
+  }
+}
+
 export async function checkPrimerAlignment(options: CheckPrimerAlignmentOptions = {}): Promise<PrimerAlignmentViolation[]> {
   const root = options.root ?? process.cwd();
   const referenceRoot = options.referenceRoot ?? path.join(root, "docs", "reference", "primer-primitives-css");
@@ -245,6 +271,24 @@ export async function checkPrimerAlignment(options: CheckPrimerAlignmentOptions 
     for (const block of blocks) {
       scanCssForValueViolations(file, block, violations);
       scanCssForTokenViolations(file, block, allDefinitions, primerDefinitions, violations);
+    }
+  }
+
+  const siteFiles = sourceFiles.filter(file => file.startsWith(`${path.join("site")}${path.sep}`));
+  if (siteFiles.length > 0) {
+    const runtimeDefinitions = new Set<string>(runtimeTokenNames);
+    for (const file of [...compiledRuntimeSourceFiles, ...siteFiles]) {
+      const content = await readFile(path.join(root, file), "utf8");
+      for (const block of cssBlocksForFile(file, content)) {
+        for (const tokenName of tokenDefinitions(stripCssComments(block))) {
+          runtimeDefinitions.add(tokenName);
+        }
+      }
+    }
+    for (const file of siteFiles) {
+      for (const block of cssByFile.get(file) ?? []) {
+        scanCssForRuntimeTokenViolations(file, block, allDefinitions, runtimeDefinitions, violations);
+      }
     }
   }
 

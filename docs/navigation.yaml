@@ -1,0 +1,377 @@
+sections:
+  - id: start
+    title: Start here
+    summary: Install LibreDash, run the sample workspace, and understand the project layout.
+    documents:
+      - slug: introduction
+        title: What is LibreDash?
+        summary: Understand the problems LibreDash solves and its code-native model.
+        source: articles/start/introduction.md
+      - slug: getting-started
+        title: Get started with LibreDash
+        summary: Bootstrap and run the included workspace.
+        source: getting-started.md
+        breadcrumb: Getting started
+      - slug: installation
+        title: Installation
+        summary: Prepare a local source checkout and build the application.
+        source: articles/start/installation.md
+      - slug: first-dashboard
+        title: Build your first dashboard
+        summary: Change a model and dashboard and deploy it locally.
+        source: articles/start/first-dashboard.md
+      - slug: project-structure
+        title: Project structure
+        summary: Learn how project-global resources and workspace resources are organized.
+        source: articles/start/project-structure.md
+
+  - id: concepts
+    title: Core concepts
+    summary: Learn the resource model and runtime ideas behind LibreDash.
+    documents:
+      - slug: concepts
+        title: Core concepts
+        navigationTitle: Overview
+        summary: A map of the concepts used throughout LibreDash.
+        source: articles/concepts/overview.md
+      - slug: concepts/projects-workspaces-environments
+        title: Projects, workspaces, and environments
+        summary: Understand ownership, isolation, and deployment scope.
+        source: articles/concepts/projects-workspaces-environments.md
+      - slug: concepts/connections-sources
+        title: Connections and sources
+        summary: Separate physical data access from reusable logical source definitions.
+        source: articles/concepts/connections-sources.md
+      - slug: concepts/model-tables
+        title: Model tables
+        summary: Materialize reusable analytical tables from source data.
+        source: articles/concepts/model-tables.md
+      - slug: concepts/semantic-models
+        title: Semantic models
+        summary: Define datasets, dimensions, measures, and relationships once.
+        source: articles/concepts/semantic-models.md
+      - slug: concepts/dashboards
+        title: Dashboards, pages, and visuals
+        summary: Understand the presentation resources rendered by the BI workspace.
+        source: articles/concepts/dashboards.md
+      - slug: concepts/query-lifecycle
+        title: Query and interaction lifecycle
+        summary: Follow a user interaction from signals through DuckDB and back.
+        source: articles/concepts/query-lifecycle.md
+
+  - id: build
+    title: Build dashboards
+    summary: Author data resources, semantic models, dashboards, and interactions.
+    documents:
+      - slug: guides/build
+        title: Build dashboards
+        navigationTitle: Overview
+        summary: Follow the dashboard-as-code authoring workflow.
+        source: articles/build/overview.md
+      - slug: guides/build/connect-data
+        title: Connect a data source
+        summary: Add a connection and source definitions to a project.
+        source: articles/build/connect-data.md
+      - slug: guides/build/model-tables
+        title: Define model tables
+        summary: Turn source data into stable analytical tables.
+        source: articles/build/model-tables.md
+      - slug: guides/build/semantic-model
+        title: Build a semantic model
+        summary: Expose reusable fields, measures, and relationships.
+        source: articles/build/semantic-model.md
+      - slug: guides/build/dashboard
+        title: Create a dashboard
+        summary: Define a workspace dashboard and its first report page.
+        source: articles/build/dashboard.md
+      - slug: guides/build/pages-layout
+        title: Pages and layout
+        summary: Compose responsive report pages from code.
+        source: articles/build/pages-layout.md
+      - slug: guides/build/filters-interactions
+        title: Filters and interactions
+        summary: Configure filter cards and cross-visual selections.
+        source: articles/build/filters-interactions.md
+      - slug: guides/build/tables
+        title: Tables, matrices, and pivots
+        summary: Choose and configure tabular BI surfaces.
+        source: articles/build/tables.md
+      - slug: guides/build/patterns
+        title: Dashboard authoring patterns
+        summary: Apply maintainable modeling and presentation conventions.
+        source: articles/build/patterns.md
+
+  - id: data
+    title: Manage data
+    summary: Stage immutable revisions, refresh analytical tables, and recover safely.
+    documents:
+      - slug: data-ingestion
+        title: Managed data ingestion
+        navigationTitle: Overview
+        summary: Plan, stage, and activate immutable project-global data revisions.
+        source: data-ingestion.md
+      - slug: guides/data/revisions
+        title: Data revisions and activation
+        summary: Understand revision identity and atomic activation.
+        source: articles/data/revisions.md
+      - slug: guides/data/refresh
+        title: Materialization and refresh
+        summary: Refresh model tables without disrupting active queries.
+        source: articles/data/refresh.md
+      - slug: guides/data/storage-recovery
+        title: Storage and recovery
+        summary: Operate local or object-backed analytical storage safely.
+        source: articles/data/storage-recovery.md
+      - slug: guides/data/troubleshooting
+        title: Data troubleshooting
+        summary: Diagnose planning, upload, revision, and refresh failures.
+        source: articles/data/troubleshooting.md
+
+  - id: operate
+    title: Deploy and operate
+    summary: Move reviewed projects into environments and run LibreDash in production.
+    documents:
+      - slug: guides/operate
+        title: Deploy and operate LibreDash
+        navigationTitle: Overview
+        summary: Understand the production delivery and operations workflow.
+        source: articles/operate/overview.md
+      - slug: cli/validate-deploy
+        title: Validate, plan, and deploy
+        summary: Use the standard atomic delivery workflow.
+        source: guides/cli/validate-deploy.md
+      - slug: cli/targets
+        title: Targets and environments
+        summary: Keep local, staging, and production changes explicit.
+        source: guides/cli/targets.md
+      - slug: guides/operate/production-configuration
+        title: Production configuration
+        summary: Configure secrets, storage, auth, and runtime boundaries.
+        source: articles/operate/production-configuration.md
+      - slug: guides/operate/self-hosting
+        title: Self-hosting
+        summary: Build and run a supported single-node deployment.
+        source: articles/operate/self-hosting.md
+      - slug: guides/operate/observability
+        title: Health and observability
+        summary: Monitor health, query activity, refreshes, and deployments.
+        source: articles/operate/observability.md
+      - slug: guides/operate/backup-restore
+        title: Backup and restore
+        summary: Create, validate, and restore consistent instance backups.
+        source: articles/operate/backup-restore.md
+      - slug: guides/operate/upgrades
+        title: Upgrades and migrations
+        summary: Upgrade binaries and persistent state with rollback boundaries.
+        source: articles/operate/upgrades.md
+      - slug: guides/operate/troubleshooting
+        title: Operational troubleshooting
+        summary: Diagnose deployment and runtime failures systematically.
+        source: articles/operate/troubleshooting.md
+
+  - id: security
+    title: Security and administration
+    summary: Configure identity, authorization, credentials, and auditing.
+    documents:
+      - slug: enterprise-auth
+        title: Authentication and authorization
+        navigationTitle: Overview
+        summary: Understand LibreDash identity and authorization boundaries.
+        source: enterprise-auth.md
+      - slug: security/local-auth
+        title: Local authentication
+        summary: Configure self-hosted and break-glass local users.
+        source: articles/security/local-auth.md
+      - slug: security/oidc
+        title: OIDC
+        summary: Connect an enterprise identity provider for browser login.
+        source: articles/security/oidc.md
+      - slug: security/scim
+        title: SCIM provisioning
+        summary: Provision users, groups, and memberships from a directory.
+        source: articles/security/scim.md
+      - slug: security/authorization
+        title: Roles, grants, and policies
+        summary: Assign least-privilege access to securable resources.
+        source: articles/security/authorization.md
+      - slug: security/tokens
+        title: Service principals and API tokens
+        summary: Authenticate non-human workloads with scoped credentials.
+        source: articles/security/tokens.md
+      - slug: security/audit
+        title: Audit events
+        summary: Inspect security and administrative activity.
+        source: articles/security/audit.md
+
+  - id: integrate
+    title: Integrate
+    summary: Automate LibreDash through the CLI, API, and agent surfaces.
+    documents:
+      - slug: integrate
+        title: Integrate with LibreDash
+        navigationTitle: Overview
+        summary: Choose between CLI, API, and agent integration surfaces.
+        source: articles/integrate/overview.md
+      - slug: cli
+        title: CLI overview
+        summary: Install, authenticate, validate, plan, and deploy with the CLI.
+        source: guides/cli/overview.md
+      - slug: cli/authentication
+        title: Install and authenticate the CLI
+        summary: Configure targets and use API tokens safely.
+        source: guides/cli/authentication.md
+      - slug: guides/integrate/api-quickstart
+        title: API quickstart
+        summary: Authenticate and call the headless API.
+        source: articles/integrate/api-quickstart.md
+      - slug: guides/integrate/api-conventions
+        title: API conventions
+        summary: Handle authentication, errors, and pagination consistently.
+        source: articles/integrate/api-conventions.md
+      - slug: guides/integrate/headless-bi
+        title: Headless BI queries
+        summary: Query dashboards and semantic models through stable contracts.
+        source: articles/integrate/headless-bi.md
+      - slug: guides/integrate/agent
+        title: Agent integrations
+        summary: Configure agent policies, tools, and conversations.
+        source: articles/integrate/agent.md
+      - slug: cli/automation
+        title: Automation and CI
+        summary: Run validation and deployments safely in CI.
+        source: guides/cli/automation.md
+
+  - id: reference
+    title: Reference
+    summary: Exact generated contracts for configuration, commands, APIs, and visuals.
+    documents:
+      - slug: reference
+        title: Reference
+        navigationTitle: Overview
+        summary: Find exact syntax and supported contracts.
+        source: articles/reference/overview.md
+      - slug: configuration
+        title: Environment variable reference
+        summary: Process-wide settings generated from the runtime configuration specification.
+        source: configuration.md
+        breadcrumb: Environment variables
+        generated: true
+      - slug: reference/capabilities
+        title: Supported capabilities
+        summary: Review supported resource, data, visual, and integration surfaces.
+        source: articles/reference/capabilities.md
+      - slug: cli/troubleshooting
+        title: CLI troubleshooting
+        summary: Diagnose local validation and remote operation failures.
+        source: guides/cli/troubleshooting.md
+    groups:
+      - id: configuration
+        title: Configuration
+        summary: Generated fields and JSON Schemas for every resource kind.
+        collection:
+          kind: catalog
+          catalog: reference/config/catalog.json
+          sourceDir: reference/config
+          slugPrefix: config
+          index:
+            slug: config
+            title: Configuration reference
+            navigationTitle: Overview
+            summary: Choose a resource kind and open its generated field reference and JSON Schema.
+            source: articles/reference/configuration.md
+      - id: commands
+        title: CLI commands
+        summary: Usage and flags generated from the Cobra command tree.
+        collection:
+          kind: catalog
+          catalog: reference/cli/catalog.json
+          sourceDir: reference/cli
+          slugPrefix: cli
+          index:
+            slug: cli/reference
+            title: CLI command reference
+            navigationTitle: Overview
+            summary: Browse every generated LibreDash command.
+            source: reference/cli/index.md
+            generated: true
+      - id: api
+        title: API reference
+        summary: Operations generated from the OpenAPI contract.
+        collection:
+          kind: catalog
+          catalog: api/catalog.json
+          sourceDir: api
+          slugPrefix: api
+          index:
+            slug: api
+            title: API reference
+            navigationTitle: Overview
+            summary: Browse the generated headless API contract.
+            source: api/index.md
+            generated: true
+      - id: visuals
+        title: Charts
+        summary: Configuration and live examples for every visual type.
+        collection:
+          kind: visual
+          catalog: visuals/catalog.json
+          sourceDir: visuals
+          slugPrefix: charts
+          index:
+            slug: charts/overview
+            title: Chart types
+            navigationTitle: Overview
+            summary: Choose from every supported LibreDash visual type.
+            source: visuals/index.md
+            breadcrumb: Charts
+
+  - id: architecture
+    title: Architecture and contributing
+    summary: Understand the implementation and extend LibreDash safely.
+    groups:
+      - id: architecture
+        title: Architecture
+        summary: Understand the monolith, storage, runtime, and browser boundaries.
+        documents:
+          - slug: architecture
+            title: Architecture overview
+            navigationTitle: Overview
+            summary: See how the monolith, contracts, storage, and browser components fit together.
+            source: articles/architecture/overview.md
+          - slug: architecture/runtime
+            title: Runtime architecture
+            summary: Follow routing, query execution, and streamed UI updates.
+            source: articles/architecture/runtime.md
+          - slug: storage-architecture
+            title: Storage architecture
+            summary: Understand DuckLake, DuckDB, snapshots, and serving pointers.
+            source: storage-architecture-spec.md
+          - slug: architecture/datastar
+            title: Datastar signal flow
+            summary: Understand server-owned state and SSE response contracts.
+            source: articles/architecture/datastar.md
+          - slug: architecture/visual-plugins
+            title: Visual plugin architecture
+            summary: Understand renderer-neutral shapes and renderer adapters.
+            source: articles/architecture/visual-plugins.md
+      - id: contributing
+        title: Contributing
+        summary: Develop LibreDash and extend its generated contracts safely.
+        documents:
+          - slug: contributing/repository
+            title: Repository and development workflow
+            navigationTitle: Overview
+            summary: Work effectively in the LibreDash monorepo.
+            source: articles/contributing/repository.md
+          - slug: contributing/visual
+            title: Add a visual type
+            summary: Extend contracts, rendering, documentation, and tests together.
+            source: articles/contributing/visual.md
+          - slug: contributing/configuration
+            title: Add a configuration resource
+            summary: Extend schemas, generated references, and validation together.
+            source: articles/contributing/configuration.md
+          - slug: contributing/documentation
+            title: Write documentation
+            summary: Author procedural guides and accessible diagrams that remain valid with the product.
+            source: articles/contributing/documentation.md

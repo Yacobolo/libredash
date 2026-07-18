@@ -1,0 +1,72 @@
+{
+  "title": "LibreDash Headless API",
+  "version": "1.0.0",
+  "description": "Headless API for LibreDash workspaces, deployments, managed data, access control, refreshes, and agent operations.",
+  "documents": [
+    {
+      "slug": "system",
+      "title": "System",
+      "summary": "API capabilities and protocol discovery."
+    },
+    {
+      "slug": "projects",
+      "title": "Projects",
+      "summary": "Read-only project registry."
+    },
+    {
+      "slug": "releases",
+      "title": "Releases",
+      "summary": "Immutable project releases and artifacts."
+    },
+    {
+      "slug": "current-user",
+      "title": "Current User",
+      "summary": "Current principal, sessions, tokens, and privileges."
+    },
+    {
+      "slug": "workspaces",
+      "title": "Workspaces",
+      "summary": "Workspace and lineage discovery."
+    },
+    {
+      "slug": "search",
+      "title": "Search",
+      "summary": "Progressive workspace discovery across BI assets."
+    },
+    {
+      "slug": "bi",
+      "title": "BI",
+      "summary": "Dashboard and semantic model read APIs."
+    },
+    {
+      "slug": "deployments",
+      "title": "Deployments",
+      "summary": "Atomic project release deployment."
+    },
+    {
+      "slug": "refresh-runs",
+      "title": "Refresh Runs",
+      "summary": "Headless refresh run operations."
+    },
+    {
+      "slug": "agent",
+      "title": "Agent",
+      "summary": "Headless agent conversation and run operations."
+    },
+    {
+      "slug": "access",
+      "title": "Access",
+      "summary": "Principals, groups, roles, and role bindings."
+    },
+    {
+      "slug": "audit",
+      "title": "Audit",
+      "summary": "Workspace audit event discovery."
+    },
+    {
+      "slug": "managed-data",
+      "title": "Managed Data",
+      "summary": "Project-global managed-data revisions and uploads."
+    }
+  ]
+}
