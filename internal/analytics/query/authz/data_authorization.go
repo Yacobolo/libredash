@@ -447,24 +447,6 @@ func (m Metrics) QueryTablePage(ctx context.Context, dashboardID, pageID string,
 	return m.Metrics.QueryTablePage(dataquery.WithGovernor(ctx, m), dashboardID, pageID, filters, request)
 }
 
-func (m Metrics) RefreshModelTables(ctx context.Context, modelID string, tableNames []string) error {
-	if port, ok := m.Metrics.(interface {
-		RefreshModelTables(context.Context, string, []string) error
-	}); ok {
-		return port.RefreshModelTables(ctx, modelID, tableNames)
-	}
-	return errors.New("model table refresh is not configured")
-}
-
-func (m Metrics) RefreshTables(ctx context.Context, modelID string, tableNames []string) error {
-	if port, ok := m.Metrics.(interface {
-		RefreshTables(context.Context, string, []string) error
-	}); ok {
-		return port.RefreshTables(ctx, modelID, tableNames)
-	}
-	return errors.New("model table refresh is not configured")
-}
-
 func (m Metrics) applyDataPolicies(ctx context.Context, request dataquery.Query, objects []access.ObjectRef) (dataquery.Query, error) {
 	policies, err := m.effectiveDataPolicies(ctx, request, objects)
 	if err != nil {

@@ -34,6 +34,8 @@ func TestDeployPreparesCompleteProjectBeforeOneAtomicActivation(t *testing.T) {
 		mu.Unlock()
 		workspaceID := workspaceIDFromAPIPath(r.URL.Path)
 		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/instance":
+			writeCLIJSON(t, w, apigenapi.InstanceResponse{Environment: "prod"})
 		case r.Method == http.MethodGet && r.URL.Path == "/api/v1/capabilities":
 			writeCLIJSON(t, w, apigenapi.CapabilitiesResponse{ApiVersion: "v1", BuildVersion: "test", Environment: "prod", Authentication: []apigenapi.AuthenticationMode{apigenapi.AuthenticationModeBearer}, QueryFormats: []apigenapi.QueryFormat{apigenapi.QueryFormatApplicationJson}, UploadProtocols: []apigenapi.UploadProtocol{apigenapi.UploadProtocolTus}, VisualShapes: []apigenapi.VisualShape{apigenapi.VisualShapeCategoryValue}})
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/active-asset-graph"):
@@ -88,6 +90,7 @@ func TestDeployPreparesCompleteProjectBeforeOneAtomicActivation(t *testing.T) {
 		t.Fatalf("output = %q", out.String())
 	}
 	assertSequenceContainsInOrder(t, sequence, []string{
+		"GET /api/v1/instance",
 		"GET /api/v1/capabilities",
 		"GET /api/v1/workspaces/operations/active-asset-graph",
 		"GET /api/v1/workspaces/sales/active-asset-graph",

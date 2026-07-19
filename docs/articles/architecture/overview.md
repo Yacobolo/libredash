@@ -14,7 +14,7 @@ Avoid introducing a second path around these services. Browser, CLI-backed API, 
 
 Project and workspace YAML is loaded and validated as a graph. A project discovers global connections/sources and workspace manifests. Each workspace discovers its model, semantic, dashboard, access, and agent resources.
 
-Deployment compiles validated candidates into immutable artifacts and serving metadata. Environment activation changes pointers to accepted state; runtime requests read the active deployment rather than mutable repository files. Managed-data revision pins move with the project candidate.
+Project deployment compiles validated candidates into immutable artifacts and serving metadata, then changes the instance's serving pointers to accepted state. Runtime requests read the active deployment rather than mutable repository files. Managed-data revision pins move with the project candidate.
 
 ## Analytical storage
 

@@ -82,7 +82,7 @@ func TestOperationalEnvironmentReferencesAreCataloged(t *testing.T) {
 			continue
 		}
 		_ = filepath.WalkDir(path, func(path string, entry os.DirEntry, err error) error {
-			if err == nil && !entry.IsDir() && !strings.Contains(path, ".terraform/") && !strings.Contains(path, "/.local/") && !strings.HasSuffix(path, ".tfstate") {
+			if err == nil && !entry.IsDir() && !strings.Contains(path, ".terraform/") && !strings.Contains(path, "/.local/") && !strings.HasSuffix(path, ".tfstate") && !strings.HasSuffix(path, ".sqlite3") {
 				visit(path)
 			}
 			return err

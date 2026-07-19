@@ -22,17 +22,19 @@ libredash config validate --production
 
 The CSRF key protects CSRF state and OAuth state cookies. Store it in the deployment secret manager. Rotating it can invalidate security state and should follow a controlled maintenance procedure.
 
-## Bootstrap the first administrator
+## Initialize the first administrator
 
-Production provisioning may set `LIBREDASH_BOOTSTRAP_ADMIN_EMAIL` and run:
+Before the server starts for the first time, set `LIBREDASH_BOOTSTRAP_ADMIN_EMAIL` and run:
 
 ```sh
-libredash admin bootstrap
+umask 077
+libredash admin initialize --format json > initial-credentials.json
+libredash admin initialize --acknowledge-credentials
 ```
 
-The bootstrap workflow creates an owner principal and API token needed to establish normal administration. Treat bootstrap material as one-time recovery-sensitive output: capture it through a protected channel, create ordinary scoped administrative identities, and retire unrestricted bootstrap credentials.
+The one-shot offline initializer atomically binds the instance environment and creates a platform administrator with a forced-change temporary password plus a privilege-restricted publisher token that expires after 24 hours. It does not start an HTTP server or create an unrestricted bootstrap token. Until acknowledgement, rerunning the initializer returns the same credential bundle so an output-delivery failure is recoverable. After acknowledgement, a second initialization attempt fails.
 
-The supported Hetzner deployment wraps this process and emits a forced-change temporary password plus a limited publisher token through a one-time command.
+The generic Compose controller and Hetzner provider recipe wrap this command and expose the result once through `libredashctl first-login`, which deletes the credential file after printing it.
 
 ## Create local users
 

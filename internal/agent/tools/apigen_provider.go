@@ -28,7 +28,7 @@ type CredentialScope struct {
 
 type APIGenAuthorizeFunc func(ctx context.Context, scope Scope, operationID string) (agentcore.ToolResult, bool)
 
-type APIGenDispatchFunc func(operationID string, request *http.Request) (*http.Response, bool)
+type APIGenDispatchFunc func(scope Scope, operationID string, request *http.Request) (*http.Response, bool)
 
 type APIGenProvider struct {
 	Authorize APIGenAuthorizeFunc
@@ -39,7 +39,7 @@ func (p APIGenProvider) Definitions(scope Scope) []agentcore.ToolDefinition {
 	operations := APIGenOperations()
 	definitions := make([]agentcore.ToolDefinition, 0, len(operations))
 	for _, operation := range operations {
-		operation := operation
+		operation := operationForScope(operation, scope)
 		definitions = append(definitions, agentcore.ToolDefinition{
 			Name:        operation.Tool.Name,
 			Description: operation.Tool.Description,
@@ -56,28 +56,33 @@ func (p APIGenProvider) Run(ctx context.Context, scope Scope, operation APIGenOp
 	if p.Authorize == nil {
 		return apigenAgentToolError("authorization_failed", "agent tool authorizer is not configured")
 	}
-	if errResult, ok := p.Authorize(ctx, scope, operation.Contract.OperationID); !ok {
-		return errResult
-	}
-	ctx = dataquery.WithMetadata(ctx, dataquery.Metadata{
-		WorkspaceID: scope.WorkspaceID,
-		Surface:     dataquery.SurfaceAgent,
-		Operation:   dataquery.OperationAgentQuery,
-		PrincipalID: scope.PrincipalID,
-		RequestID:   call.ID,
-		ObjectType:  "agent_tool",
-		ObjectID:    operation.Tool.Name,
-	})
 	request, err := agenttool.BuildRequest(operation.Tool, call.Arguments, agenttool.Context{"workspace": scope.WorkspaceID})
 	if err != nil {
 		return agentToolRuntimeError(err)
 	}
+	request = withAPIGenRouteContext(request, operation.Tool.Path)
+	runScope := scope
+	if runScope.WorkspaceID == "" {
+		runScope.WorkspaceID = strings.TrimSpace(chi.URLParam(request, "workspace"))
+	}
+	if errResult, ok := p.Authorize(ctx, runScope, operation.Contract.OperationID); !ok {
+		return errResult
+	}
+	ctx = dataquery.WithMetadata(ctx, dataquery.Metadata{
+		WorkspaceID: runScope.WorkspaceID,
+		Surface:     dataquery.SurfaceAgent,
+		Operation:   dataquery.OperationAgentQuery,
+		PrincipalID: runScope.PrincipalID,
+		RequestID:   call.ID,
+		ObjectType:  "agent_tool",
+		ObjectID:    operation.Tool.Name,
+	})
 	request = request.WithContext(ctx)
 	request = withAPIGenRouteContext(request, operation.Tool.Path)
 	if p.Dispatch == nil {
 		return apigenAgentToolError("operation_not_found", "APIGen operation dispatcher is not configured")
 	}
-	response, ok := p.Dispatch(operation.Contract.OperationID, request)
+	response, ok := p.Dispatch(runScope, operation.Contract.OperationID, request)
 	if !ok {
 		return apigenAgentToolError("operation_not_found", "APIGen operation is not dispatchable")
 	}
@@ -86,6 +91,63 @@ func (p APIGenProvider) Run(ctx context.Context, scope Scope, operation APIGenOp
 		return agentToolRuntimeError(err)
 	}
 	return agentcore.ToolResult{Content: result.Content, IsError: result.IsError}
+}
+
+func operationForScope(operation APIGenOperation, scope Scope) APIGenOperation {
+	if strings.TrimSpace(scope.WorkspaceID) != "" {
+		return operation
+	}
+	tool := agenttool.CloneContract(operation.Tool)
+	promoted := false
+	for index := range tool.Bindings {
+		binding := &tool.Bindings[index]
+		if binding.Mode != "context" || binding.ContextKey != "workspace" {
+			continue
+		}
+		binding.Argument = "workspace"
+		binding.Mode = "model"
+		binding.ContextKey = ""
+		binding.Required = true
+		promoted = true
+	}
+	if promoted {
+		tool.InputSchema = requireToolStringProperty(tool.InputSchema, "workspace")
+	}
+	operation.Tool = tool
+	return operation
+}
+
+func requireToolStringProperty(input json.RawMessage, name string) json.RawMessage {
+	var schema map[string]any
+	if err := json.Unmarshal(input, &schema); err != nil {
+		return input
+	}
+	properties, _ := schema["properties"].(map[string]any)
+	if properties == nil {
+		properties = map[string]any{}
+		schema["properties"] = properties
+	}
+	properties[name] = map[string]any{
+		"type":        "string",
+		"minLength":   1,
+		"description": "Workspace ID to query.",
+	}
+	required, _ := schema["required"].([]any)
+	for _, item := range required {
+		if item == name {
+			encoded, err := json.Marshal(schema)
+			if err == nil {
+				return encoded
+			}
+			return input
+		}
+	}
+	schema["required"] = append(required, name)
+	encoded, err := json.Marshal(schema)
+	if err != nil {
+		return input
+	}
+	return encoded
 }
 
 func withAPIGenRouteContext(request *http.Request, pathTemplate string) *http.Request {

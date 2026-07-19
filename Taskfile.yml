@@ -413,6 +413,7 @@ tasks:
   deploy:check:
     desc: Validate the supported single-node deployment and lifecycle contracts
     cmds:
+      - go test ./cmd/libredashctl ./internal/composectl ./deploy/compose
       - go test ./deploy/hetzner
       - terraform fmt -check -recursive deploy/hetzner
       - terraform -chdir=deploy/hetzner init -backend=false -input=false

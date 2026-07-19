@@ -66,7 +66,7 @@ Workspace metadata supplies the stable resource name used in routes and authoriz
 
 Every resource uses the same envelope: `apiVersion`, `kind`, `metadata`, and `spec`. `metadata.name` is a stable machine identifier. `metadata.title`, `description`, `owner`, and `tags` communicate intent without changing identity. Workspace-owned resources also declare `metadata.workspace` where required by their schema.
 
-Use lower-case, stable names and avoid encoding environment names in resource IDs. Environments select active deployments; they do not need parallel `sales-dev` and `sales-prod` resource trees.
+Use lower-case, stable names and avoid encoding environment names in resource IDs. Deploy the same project source to separate dev, staging, and production instances; do not create parallel `sales-dev` and `sales-prod` resource trees.
 
 ## Validate discovery
 

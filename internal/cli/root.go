@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -84,6 +85,9 @@ func loginCommand(opts *rootOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if opts.target == "" || opts.token == "" {
 				return fmt.Errorf("login requires --target and --token for v1 CLI authentication")
+			}
+			if _, err := targetEnvironment(cmd.Context(), http.DefaultClient, opts.target, opts.token, ""); err != nil {
+				return err
 			}
 			config, err := loadClientConfig()
 			if err != nil {

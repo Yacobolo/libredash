@@ -238,6 +238,19 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.
 			}
 		}
 	}
+	for _, pipelineName := range sortedMapKeys(definition.RefreshPipelines) {
+		pipeline := definition.RefreshPipelines[pipelineName]
+		pipelineID, err := add(workspace.AssetTypeRefreshPipeline, workspaceKey(pipelineName), catalogID, pipeline.Name, "", refreshPipelinePayload(pipeline))
+		if err != nil {
+			return workspace.AssetGraph{}, err
+		}
+		edge(catalogID, pipelineID, workspace.AssetEdgeContains)
+		modelID, err := assetID(workspace.AssetTypeSemanticModel, workspaceKey(pipeline.SemanticModel))
+		if err != nil {
+			return workspace.AssetGraph{}, err
+		}
+		edge(pipelineID, modelID, workspace.AssetEdgeRefreshesSemanticModel)
+	}
 	for _, reportEntry := range definition.Catalog.Dashboards {
 		report := definition.Dashboards[reportEntry.ID]
 		reportKey := workspaceKey(reportEntry.ID)

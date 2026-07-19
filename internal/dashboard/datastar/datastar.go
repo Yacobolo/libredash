@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
@@ -105,7 +104,6 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 			"error":           message,
 			"refreshId":       event.RefreshID,
 			"generation":      generation,
-			"lastUpdated":     time.Now().Format("15:04:05"),
 			"setupRequired":   errorSetupRequired(err),
 			"progressPercent": dashboard.NormalizeProgressPercent(event.ProgressPercent, loading),
 		}

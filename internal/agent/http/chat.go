@@ -112,8 +112,8 @@ func (h *Handler) ChatTurn(w nethttp.ResponseWriter, r *nethttp.Request) {
 func (h *Handler) ChatUpdates(w nethttp.ResponseWriter, r *nethttp.Request) {
 	scope := h.chatScope(r)
 	signal, view := h.chatBootstrapSignal(r, scope)
-	workspaceID := h.chatDefaultWorkspaceID()
-	catalog := h.catalogForWorkspace(workspaceID)
+	workspaceID := ""
+	catalog := h.catalogForWorkspace(h.chatDefaultWorkspaceID())
 	streamID := chatStreamID(scope, chatClientID(r))
 	var trace *pagestream.TraceStore
 	if h.options.Broker != nil {
@@ -134,8 +134,8 @@ func (h *Handler) renderChat(w nethttp.ResponseWriter, r *nethttp.Request, view 
 	_ = pagestream.EnsureClientID(w, r)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(nethttp.StatusOK)
-	workspaceID := h.chatDefaultWorkspaceID()
-	catalog := h.catalogForWorkspace(workspaceID)
+	workspaceID := ""
+	catalog := h.catalogForWorkspace(h.chatDefaultWorkspaceID())
 	if err := ui.ChatPage(catalog, workspaceID, h.csrfToken(r), h.currentRoleLabel(r), view, signal).Render(w); err != nil {
 		nethttp.Error(w, err.Error(), nethttp.StatusInternalServerError)
 	}
@@ -253,7 +253,7 @@ func (h *Handler) chatScope(r *nethttp.Request) agent.Scope {
 			devBypass = principal.DevAuthBypass
 		}
 	}
-	return agent.Scope{WorkspaceID: h.chatDefaultWorkspaceID(), PrincipalID: principalID, DevAuthBypass: devBypass}
+	return agent.Scope{PrincipalID: principalID, DevAuthBypass: devBypass}
 }
 
 func (h *Handler) chatSignal(ctx context.Context, scope agent.Scope, activeID, statusErr string, running bool) ui.ChatViewState {
@@ -321,8 +321,8 @@ func chatSignalPatch(signal ui.ChatViewState) pagestream.SignalPatch {
 	}
 }
 
-func chatRoutePath(workspaceID string, parts ...string) string {
-	path := "/chat"
+func chatRoutePath(_ string, parts ...string) string {
+	path := "/chats"
 	for _, part := range parts {
 		part = strings.Trim(part, "/")
 		if part == "" {

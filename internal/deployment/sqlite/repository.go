@@ -276,6 +276,16 @@ func (r *Repository) ActivateDeployment(ctx context.Context, id string) (deploym
 		if err := q.SetActiveServingState(ctx, platformdb.SetActiveServingStateParams{WorkspaceID: target.WorkspaceID, Environment: row.Environment, ServingStateID: target.ServingStateID}); err != nil {
 			return deployment.Deployment{}, err
 		}
+		if candidate.DucklakeSnapshotID > 0 {
+			if err := persistPublishDataVersions(ctx, q, candidate, row.Environment); err != nil {
+				return deployment.Deployment{}, err
+			}
+			if err := q.DeleteUndeployedSemanticModelDataVersions(ctx, platformdb.DeleteUndeployedSemanticModelDataVersionsParams{
+				WorkspaceID: candidate.WorkspaceID, Environment: row.Environment, TargetServingStateID: candidate.ID,
+			}); err != nil {
+				return deployment.Deployment{}, err
+			}
+		}
 		result, err := q.ActivateProjectDeploymentTarget(ctx, platformdb.ActivateProjectDeploymentTargetParams{DeploymentID: row.ID, WorkspaceID: target.WorkspaceID})
 		if err := requireOne(result, err, "deployment target changed while activating"); err != nil {
 			return deployment.Deployment{}, err
@@ -292,6 +302,12 @@ func (r *Repository) ActivateDeployment(ctx context.Context, id string) (deploym
 		return deployment.Deployment{}, mapError(err)
 	}
 	return r.DeploymentByID(ctx, id)
+}
+
+func persistPublishDataVersions(ctx context.Context, q *platformdb.Queries, candidate platformdb.ServingState, environment string) error {
+	return q.PersistPublishSemanticModelDataVersions(ctx, platformdb.PersistPublishSemanticModelDataVersionsParams{
+		Environment: environment, SnapshotID: candidate.DucklakeSnapshotID, TargetServingStateID: candidate.ID,
+	})
 }
 
 type projectContract struct {

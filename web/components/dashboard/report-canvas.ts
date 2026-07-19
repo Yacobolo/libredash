@@ -7,7 +7,8 @@ type VisualElement = HTMLElement & {
   dataset: DOMStringMap
 }
 
-type ZoomMode = 'fit-page' | 'custom'
+type ZoomMode = 'fit-width' | 'fit-page' | 'actual-size' | 'custom'
+type PresentationMode = ZoomMode | 'responsive'
 
 type ZoomCommand = {
   mode?: ZoomMode
@@ -24,6 +25,8 @@ class ReportCanvas extends LitElement {
   @property({ type: Number }) height = 768
   @state() private scale = 1
   @state() private zoomMode: ZoomMode = storedZoomMode()
+  @state() private presentationMode: PresentationMode = 'fit-width'
+  @state() private contentHeight = this.height
   private customScale = storedCustomScale()
   private zoomAnchor?: ZoomAnchor
 
@@ -99,6 +102,75 @@ class ReportCanvas extends LitElement {
       overflow: visible;
       z-index: 5;
     }
+
+    @media (max-width: 767px) {
+      :host,
+      .surface,
+      .viewport,
+      .sizer,
+      .frame-wrap,
+      .frame {
+        width: 100%;
+        height: auto;
+        min-height: 0;
+      }
+
+      .viewport {
+        overflow: visible;
+      }
+
+      .sizer {
+        display: block;
+      }
+
+      .frame-wrap {
+        position: relative;
+      }
+
+      .frame {
+        position: relative;
+        inset: auto;
+        display: grid;
+        gap: var(--base-size-12);
+        transform: none;
+        background: transparent;
+      }
+
+      ::slotted([data-canvas-visual]) {
+        position: relative !important;
+        inset: auto !important;
+        width: 100% !important;
+        height: auto !important;
+        min-height: 132px;
+        overflow: visible;
+      }
+
+      ::slotted([data-component-kind='heading']) {
+        min-height: 96px;
+      }
+
+      ::slotted([data-component-kind='filter_card']) {
+        min-height: 88px;
+      }
+
+      ::slotted([data-component-kind='kpi_card']) {
+        min-height: 144px;
+      }
+
+      ::slotted([data-component-kind='line_chart']),
+      ::slotted([data-component-kind='bar_chart']),
+      ::slotted([data-component-kind='area_chart']),
+      ::slotted([data-component-kind='pie_chart']),
+      ::slotted([data-component-kind='scatter_chart']) {
+        min-height: 320px;
+      }
+
+      ::slotted([data-component-kind='table']) {
+        height: 520px !important;
+        min-height: 420px;
+        overflow: hidden;
+      }
+    }
   `
 
   connectedCallback(): void {
@@ -107,8 +179,8 @@ class ReportCanvas extends LitElement {
     this.resizeObserver = new ResizeObserver(() => this.updateScale())
     this.updateComplete.then(() => {
       this.resizeObserver?.observe(this)
-      this.updateScale()
       this.positionVisuals()
+      this.updateScale()
       this.emitZoomState()
     })
   }
@@ -120,40 +192,66 @@ class ReportCanvas extends LitElement {
   }
 
   updated(): void {
-    this.updateScale()
     this.positionVisuals()
+    this.updateScale()
   }
 
   private updateScale(): void {
     const hostRect = this.getBoundingClientRect()
     const availableWidth = Math.max(0, hostRect.width)
     const availableHeight = Math.max(0, hostRect.height)
-    if (!availableWidth || !availableHeight || !this.width || !this.height) return
+    if (!availableWidth || !availableHeight || !this.width || !this.contentHeight) return
+    const responsive = availableWidth < 768
     const widthScale = availableWidth / this.width
-    const heightScale = availableHeight / this.height
-    let nextScale = Math.min(widthScale, heightScale)
-    if (this.zoomMode === 'custom') {
+    const heightScale = availableHeight / this.contentHeight
+    let nextMode: PresentationMode = this.zoomMode
+    let nextScale = 1
+
+    if (responsive) {
+      nextMode = 'responsive'
+    } else if (this.zoomMode === 'fit-width') {
+      nextScale = widthScale
+    } else if (this.zoomMode === 'fit-page') {
+      const fitPageScale = Math.min(widthScale, heightScale)
+      if (fitPageScale < 0.75) {
+        nextMode = 'fit-width'
+        nextScale = widthScale
+      } else {
+        nextScale = fitPageScale
+      }
+    } else if (this.zoomMode === 'custom') {
       nextScale = this.customScale
     }
     nextScale = clampScale(nextScale)
-    if (Math.abs(nextScale - this.scale) > 0.001) {
+    const modeChanged = nextMode !== this.presentationMode
+    const scaleChanged = Math.abs(nextScale - this.scale) > 0.001
+    if (modeChanged) this.presentationMode = nextMode
+    if (scaleChanged) {
       const anchor = this.zoomAnchor
       this.scale = nextScale
       this.emitZoomState()
       if (anchor) {
         this.updateComplete.then(() => this.restoreZoomAnchor(anchor))
       }
-    } else {
+    } else if (!modeChanged) {
       this.zoomAnchor = undefined
     }
+    if (modeChanged && !scaleChanged) this.emitZoomState()
   }
 
   private positionVisuals(): void {
     const slot = this.shadowRoot?.querySelector('slot:not([name])') as HTMLSlotElement | null
     const assigned = slot?.assignedElements({ flatten: true }) ?? []
+    let nextContentHeight = this.height
     for (const element of assigned) {
       if (!(element instanceof HTMLElement)) continue
       this.positionVisual(element as VisualElement)
+      const y = parseCanvasNumber(element.dataset.y, 0)
+      const height = parseCanvasNumber(element.dataset.h, 180)
+      nextContentHeight = Math.max(nextContentHeight, y + height + 16)
+    }
+    if (nextContentHeight !== this.contentHeight) {
+      this.contentHeight = nextContentHeight
     }
   }
 
@@ -231,7 +329,7 @@ class ReportCanvas extends LitElement {
 
   private emitZoomState(): void {
     this.dispatchEvent(new CustomEvent('ld-report-zoom-state', {
-      detail: { mode: this.zoomMode, scale: this.scale },
+      detail: { mode: this.presentationMode, scale: this.scale },
       bubbles: true,
       composed: true,
     }))
@@ -240,12 +338,17 @@ class ReportCanvas extends LitElement {
   render() {
     const style = [
       `--report-canvas-width:${this.width}`,
-      `--report-canvas-height:${this.height}`,
+      `--report-canvas-height:${this.contentHeight}`,
       `--report-canvas-scale:${this.scale}`,
     ].join(';')
 
     return html`
-      <div class="surface" style=${style}>
+      <div
+        class="surface"
+        style=${style}
+        data-presentation-mode=${this.presentationMode}
+        data-scale=${String(this.scale)}
+      >
         <div class="viewport">
           <div class="sizer">
             <div class="frame-wrap">
@@ -261,7 +364,7 @@ class ReportCanvas extends LitElement {
 }
 
 class ReportZoom extends LitElement {
-  @state() private mode: ZoomMode = storedZoomMode()
+  @state() private mode: PresentationMode = storedZoomMode()
   @state() private scale = storedCustomScale()
 
   static styles = css`
@@ -273,7 +376,7 @@ class ReportZoom extends LitElement {
 
     .zoom {
       display: inline-grid;
-      grid-template-columns: auto auto minmax(86px, 176px) auto auto;
+      grid-template-columns: auto auto auto auto minmax(86px, 176px) auto auto;
       align-items: center;
       min-height: 32px;
     }
@@ -384,14 +487,17 @@ class ReportZoom extends LitElement {
       white-space: nowrap;
     }
 
-    @media (max-width: 700px) {
-      .zoom {
-        grid-template-columns: auto auto minmax(64px, 112px) auto auto;
-      }
+    .mode-label {
+      width: auto;
+      min-width: 32px;
+      padding-inline: 7px;
+      font-size: var(--ld-font-size-caption);
+      font-weight: var(--ld-font-weight-strong);
+    }
 
-      .slider {
-        margin-inline: 4px;
-        padding-inline: 7px;
+    @media (max-width: 700px) {
+      :host {
+        display: none;
       }
     }
   `
@@ -406,7 +512,7 @@ class ReportZoom extends LitElement {
     super.disconnectedCallback()
   }
 
-  private onZoomState = (event: CustomEvent<{ mode: ZoomMode; scale: number }>): void => {
+  private onZoomState = (event: CustomEvent<{ mode: PresentationMode; scale: number }>): void => {
     this.mode = event.detail.mode
     this.scale = event.detail.scale
   }
@@ -432,14 +538,20 @@ class ReportZoom extends LitElement {
     const percent = Math.round(this.scale * 100)
     return html`
       <div class="zoom" role="group" aria-label="Report zoom">
+        <button class="mode-label" type="button" title="Fit width" aria-label="Fit width" aria-pressed=${String(this.mode === 'fit-width')} @click=${() => this.command({ mode: 'fit-width' })}>
+          Width
+        </button>
         <button type="button" title="Fit page" aria-label="Fit page" aria-pressed=${String(this.mode === 'fit-page')} @click=${() => this.command({ mode: 'fit-page' })}>
           ${zoomIcon('fit-page')}
+        </button>
+        <button class="mode-label" type="button" title="Actual size" aria-label="Actual size" aria-pressed=${String(this.mode === 'actual-size')} @click=${() => this.command({ mode: 'actual-size' })}>
+          1:1
         </button>
         <button type="button" title="Zoom out" aria-label="Zoom out" @click=${() => this.nudge(-0.1)}>
           ${zoomIcon('minus')}
         </button>
         <div class="slider">
-          <input type="range" min="0" max="200" .value=${String(percent)} aria-label="Zoom percent" @input=${this.slide} />
+          <input type="range" min="50" max="200" .value=${String(percent)} aria-label="Zoom percent" @input=${this.slide} />
         </div>
         <button type="button" title="Zoom in" aria-label="Zoom in" @click=${() => this.nudge(0.1)}>
           ${zoomIcon('plus')}
@@ -470,13 +582,13 @@ function zoomScaleStorageKey(): string {
 function storedZoomMode(): ZoomMode {
   try {
     const value = localStorage.getItem(zoomStorageKey())
-    if (value === 'custom') {
+    if (value === 'fit-width' || value === 'fit-page' || value === 'actual-size' || value === 'custom') {
       return value
     }
   } catch {
     // Ignore storage failures.
   }
-  return 'fit-page'
+  return 'fit-width'
 }
 
 function storedCustomScale(): number {
@@ -489,7 +601,7 @@ function storedCustomScale(): number {
 
 function clampScale(value: number): number {
   if (!Number.isFinite(value)) return 1
-  return Math.min(2, Math.max(0, value))
+  return Math.min(2, Math.max(0.5, value))
 }
 
 function clampRatio(value: number): number {

@@ -13,10 +13,11 @@ import (
 )
 
 type dataRevisionOptions struct {
-	project    string
-	connection string
-	limit      int
-	pageToken  string
+	project     string
+	connection  string
+	environment string
+	limit       int
+	pageToken   string
 }
 
 func dataRevisionsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
@@ -32,6 +33,9 @@ func dataRevisionsCommand(ctx context.Context, opts *rootOptions) *cobra.Command
 			}
 			target, token, err := clientTargetAndToken(opts)
 			if err != nil {
+				return err
+			}
+			if _, err := targetEnvironment(ctx, nil, target, token, listOptions.environment); err != nil {
 				return err
 			}
 			return runDataRevisionsList(ctx, opts, listOptions, newManagedDataCLIClient(nil, target, token), cmd.OutOrStdout())
@@ -52,6 +56,9 @@ func dataRevisionsCommand(ctx context.Context, opts *rootOptions) *cobra.Command
 			if err != nil {
 				return err
 			}
+			if _, err := targetEnvironment(ctx, nil, target, token, currentOptions.environment); err != nil {
+				return err
+			}
 			return runDataRevisionCurrent(ctx, opts, currentOptions, newManagedDataCLIClient(nil, target, token), cmd.OutOrStdout())
 		},
 	}
@@ -63,6 +70,7 @@ func dataRevisionsCommand(ctx context.Context, opts *rootOptions) *cobra.Command
 func addDataRevisionFlags(command *cobra.Command, opts *rootOptions, values *dataRevisionOptions, current bool) {
 	command.Flags().StringVar(&values.project, "project", "", "server project id")
 	command.Flags().StringVar(&values.connection, "connection", "", "project-global managed connection")
+	command.Flags().StringVar(&values.environment, "environment", "", "assert the target instance environment")
 	if !current {
 		command.Flags().IntVar(&values.limit, "limit", 0, "maximum revisions to return")
 		command.Flags().StringVar(&values.pageToken, "page-token", "", "opaque page token")

@@ -24,6 +24,9 @@ func Load() (Config, error) {
 	if err := env.Parse(&cfg); err != nil {
 		return Config{}, configurationError(err)
 	}
+	if strings.TrimSpace(cfg.ManagedDataDir) == "" {
+		cfg.ManagedDataDir = filepath.Join(cfg.HomeDir, "managed-data")
+	}
 	return cfg, nil
 }
 

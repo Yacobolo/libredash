@@ -33,9 +33,11 @@ type InstanceBackupOptions struct {
 }
 
 type InstanceRestoreOptions struct {
-	TargetHomeDir    string
-	BackupPath       string
-	CurrentBackupOut string
+	TargetHomeDir        string
+	BackupPath           string
+	CurrentBackupOut     string
+	ExpectedEnvironment  string
+	PreserveRelativeFile string
 }
 
 type instanceBackupManifest struct {
@@ -46,32 +48,17 @@ type instanceBackupManifest struct {
 }
 
 func BackupInstance(ctx context.Context, options InstanceBackupOptions) error {
-	homeDir := strings.TrimSpace(options.HomeDir)
-	dbPath := strings.TrimSpace(options.DBPath)
 	outPath := strings.TrimSpace(options.OutPath)
-	if homeDir == "" {
-		return fmt.Errorf("instance backup home dir is required")
-	}
-	if dbPath == "" {
-		return fmt.Errorf("instance backup database path is required")
-	}
 	if outPath == "" {
 		return fmt.Errorf("instance backup output path is required")
-	}
-	homeAbs, err := filepath.Abs(homeDir)
-	if err != nil {
-		return err
-	}
-	dbAbs, err := filepath.Abs(dbPath)
-	if err != nil {
-		return err
 	}
 	outAbs, err := filepath.Abs(outPath)
 	if err != nil {
 		return err
 	}
-	if !pathWithin(homeAbs, dbAbs) {
-		return fmt.Errorf("instance backup database path must be inside home dir")
+	homeAbs, _, err := validateInstanceBackupSource(options.HomeDir, options.DBPath)
+	if err != nil {
+		return err
 	}
 	if pathWithin(homeAbs, outAbs) {
 		return fmt.Errorf("instance backup output path must not be inside home dir")
@@ -84,8 +71,54 @@ func BackupInstance(ctx context.Context, options InstanceBackupOptions) error {
 	if err := os.MkdirAll(filepath.Dir(outAbs), 0o755); err != nil {
 		return err
 	}
+	tmpArchive, err := os.CreateTemp(filepath.Dir(outAbs), ".libredash-instance-backup-*.tar.gz")
+	if err != nil {
+		return err
+	}
+	tmpArchivePath := tmpArchive.Name()
+	cleanupArchive := true
+	defer func() {
+		if cleanupArchive {
+			_ = os.Remove(tmpArchivePath)
+		}
+	}()
+	if err := writeInstanceBackup(ctx, options.HomeDir, options.DBPath, tmpArchive); err != nil {
+		_ = tmpArchive.Close()
+		return err
+	}
+	if err := tmpArchive.Sync(); err != nil {
+		_ = tmpArchive.Close()
+		return err
+	}
+	if err := tmpArchive.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpArchivePath, outAbs); err != nil {
+		return err
+	}
+	cleanupArchive = false
+	return nil
+}
 
-	tmpDir, err := os.MkdirTemp("", "libredash-instance-backup-*")
+// BackupInstanceToWriter writes a validated full-instance archive directly to
+// out. Callers own atomic destination handling and must stop the serving process.
+func BackupInstanceToWriter(ctx context.Context, homeDir, dbPath string, out io.Writer) error {
+	if out == nil {
+		return fmt.Errorf("instance backup output is required")
+	}
+	return writeInstanceBackup(ctx, homeDir, dbPath, out)
+}
+
+func writeInstanceBackup(ctx context.Context, homeDir, dbPath string, out io.Writer) error {
+	homeAbs, dbAbs, err := validateInstanceBackupSource(homeDir, dbPath)
+	if err != nil {
+		return err
+	}
+	parent := filepath.Dir(homeAbs)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+	tmpDir, err := os.MkdirTemp(parent, ".libredash-instance-backup-*")
 	if err != nil {
 		return err
 	}
@@ -103,18 +136,7 @@ func BackupInstance(ctx context.Context, options InstanceBackupOptions) error {
 		return err
 	}
 
-	tmpArchive, err := os.CreateTemp(filepath.Dir(outAbs), ".libredash-instance-backup-*.tar.gz")
-	if err != nil {
-		return err
-	}
-	tmpArchivePath := tmpArchive.Name()
-	cleanupArchive := true
-	defer func() {
-		if cleanupArchive {
-			_ = os.Remove(tmpArchivePath)
-		}
-	}()
-	gzw := gzip.NewWriter(tmpArchive)
+	gzw := gzip.NewWriter(out)
 	tw := tar.NewWriter(gzw)
 	manifest := instanceBackupManifest{
 		Version:   instanceBackupVersion,
@@ -123,11 +145,11 @@ func BackupInstance(ctx context.Context, options InstanceBackupOptions) error {
 		DBPath:    instanceBackupDBName,
 	}
 	if err := addJSONToTar(tw, instanceBackupManifestName, manifest); err != nil {
-		_ = closeArchiveWriters(tw, gzw, tmpArchive)
+		_ = closeArchiveStreamWriters(tw, gzw)
 		return err
 	}
 	if err := addFileToTar(tw, dbCopy, instanceBackupDBName); err != nil {
-		_ = closeArchiveWriters(tw, gzw, tmpArchive)
+		_ = closeArchiveStreamWriters(tw, gzw)
 		return err
 	}
 	if err := filepath.WalkDir(homeAbs, func(path string, entry os.DirEntry, walkErr error) error {
@@ -145,9 +167,6 @@ func BackupInstance(ctx context.Context, options InstanceBackupOptions) error {
 			if entry.IsDir() {
 				return filepath.SkipDir
 			}
-			return nil
-		}
-		if samePath(pathAbs, outAbs) || samePath(pathAbs, tmpArchivePath) {
 			return nil
 		}
 		rel, err := filepath.Rel(homeAbs, pathAbs)
@@ -197,28 +216,43 @@ func BackupInstance(ctx context.Context, options InstanceBackupOptions) error {
 		}
 		return closeErr
 	}); err != nil {
-		_ = closeArchiveWriters(tw, gzw, tmpArchive)
+		_ = closeArchiveStreamWriters(tw, gzw)
 		return err
 	}
-	if err := closeArchiveWriters(tw, gzw, tmpArchive); err != nil {
-		return err
+	return closeArchiveStreamWriters(tw, gzw)
+}
+
+func validateInstanceBackupSource(homeDir, dbPath string) (string, string, error) {
+	homeDir = strings.TrimSpace(homeDir)
+	dbPath = strings.TrimSpace(dbPath)
+	if homeDir == "" {
+		return "", "", fmt.Errorf("instance backup home dir is required")
 	}
-	if err := os.Rename(tmpArchivePath, outAbs); err != nil {
-		return err
+	if dbPath == "" {
+		return "", "", fmt.Errorf("instance backup database path is required")
 	}
-	cleanupArchive = false
-	return nil
+	homeAbs, err := filepath.Abs(homeDir)
+	if err != nil {
+		return "", "", err
+	}
+	dbAbs, err := filepath.Abs(dbPath)
+	if err != nil {
+		return "", "", err
+	}
+	if !pathWithin(homeAbs, dbAbs) {
+		return "", "", fmt.Errorf("instance backup database path must be inside home dir")
+	}
+	return homeAbs, dbAbs, nil
 }
 
 func RestoreInstance(ctx context.Context, options InstanceRestoreOptions) error {
-	targetHome := strings.TrimSpace(options.TargetHomeDir)
 	backupPath := strings.TrimSpace(options.BackupPath)
-	currentBackupOut := strings.TrimSpace(options.CurrentBackupOut)
-	if targetHome == "" {
-		return fmt.Errorf("instance restore target home dir is required")
-	}
 	if backupPath == "" {
 		return fmt.Errorf("instance restore backup path is required")
+	}
+	targetHome := strings.TrimSpace(options.TargetHomeDir)
+	if targetHome == "" {
+		return fmt.Errorf("instance restore target home dir is required")
 	}
 	targetAbs, err := filepath.Abs(targetHome)
 	if err != nil {
@@ -231,6 +265,37 @@ func RestoreInstance(ctx context.Context, options InstanceRestoreOptions) error 
 	if pathWithin(targetAbs, backupAbs) {
 		return fmt.Errorf("instance restore backup path must not be inside target home dir")
 	}
+	file, err := os.Open(backupAbs)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	return restoreInstanceFromReader(ctx, options, file)
+}
+
+// RestoreInstanceFromReader validates and restores a full-instance archive
+// directly from in. The target is replaced only after extraction succeeds.
+func RestoreInstanceFromReader(ctx context.Context, options InstanceRestoreOptions, in io.Reader) error {
+	if in == nil {
+		return fmt.Errorf("instance restore input is required")
+	}
+	return restoreInstanceFromReader(ctx, options, in)
+}
+
+func restoreInstanceFromReader(ctx context.Context, options InstanceRestoreOptions, in io.Reader) error {
+	targetHome := strings.TrimSpace(options.TargetHomeDir)
+	currentBackupOut := strings.TrimSpace(options.CurrentBackupOut)
+	preserveRelativeFile, err := validatePreservedRelativeFile(options.PreserveRelativeFile)
+	if err != nil {
+		return err
+	}
+	if targetHome == "" {
+		return fmt.Errorf("instance restore target home dir is required")
+	}
+	targetAbs, err := filepath.Abs(targetHome)
+	if err != nil {
+		return err
+	}
 	if currentBackupOut != "" {
 		currentBackupAbs, err := filepath.Abs(currentBackupOut)
 		if err != nil {
@@ -241,23 +306,10 @@ func RestoreInstance(ctx context.Context, options InstanceRestoreOptions) error 
 		}
 	}
 
-	exists, nonEmpty, err := dirExistsNonEmpty(targetAbs)
+	exists, nonEmpty, err := dirExistsNonEmptyExcept(targetAbs, preserveRelativeFile)
 	if err != nil {
 		return err
 	}
-	if exists && nonEmpty {
-		if currentBackupOut == "" {
-			return fmt.Errorf("current instance backup path is required when restoring over an existing home dir")
-		}
-		if err := BackupInstance(ctx, InstanceBackupOptions{
-			HomeDir: targetAbs,
-			DBPath:  filepath.Join(targetAbs, instanceBackupDBName),
-			OutPath: currentBackupOut,
-		}); err != nil {
-			return fmt.Errorf("backup current instance: %w", err)
-		}
-	}
-
 	parent := filepath.Dir(targetAbs)
 	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return err
@@ -272,8 +324,39 @@ func RestoreInstance(ctx context.Context, options InstanceRestoreOptions) error 
 			_ = os.RemoveAll(tmpRestore)
 		}
 	}()
-	if err := extractInstanceBackup(ctx, backupAbs, tmpRestore); err != nil {
+	if err := extractInstanceBackupReader(ctx, in, tmpRestore); err != nil {
 		return err
+	}
+	if environment := strings.TrimSpace(options.ExpectedEnvironment); environment != "" {
+		restored, err := Open(ctx, filepath.Join(tmpRestore, instanceBackupDBName))
+		if err != nil {
+			return fmt.Errorf("open restored instance environment: %w", err)
+		}
+		bindErr := restored.BindInstanceEnvironment(ctx, environment)
+		closeErr := restored.Close()
+		if bindErr != nil {
+			return fmt.Errorf("validate restored instance environment: %w", bindErr)
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	if exists && nonEmpty {
+		if currentBackupOut == "" {
+			return fmt.Errorf("current instance backup path is required when restoring over an existing home dir")
+		}
+		if err := BackupInstance(ctx, InstanceBackupOptions{
+			HomeDir: targetAbs,
+			DBPath:  filepath.Join(targetAbs, instanceBackupDBName),
+			OutPath: currentBackupOut,
+		}); err != nil {
+			return fmt.Errorf("backup current instance: %w", err)
+		}
+	}
+	if preserveRelativeFile != "" {
+		if err := preserveFileAcrossRestore(targetAbs, tmpRestore, preserveRelativeFile); err != nil {
+			return err
+		}
 	}
 
 	oldTarget := ""
@@ -296,13 +379,63 @@ func RestoreInstance(ctx context.Context, options InstanceRestoreOptions) error 
 	return nil
 }
 
-func extractInstanceBackup(ctx context.Context, archivePath, targetDir string) error {
-	file, err := os.Open(archivePath)
+func validatePreservedRelativeFile(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	clean := filepath.Clean(value)
+	if filepath.IsAbs(clean) || clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("preserved restore file must be a relative path inside the instance home")
+	}
+	return clean, nil
+}
+
+func preserveFileAcrossRestore(currentHome, restoredHome, relativePath string) error {
+	currentPath := filepath.Join(currentHome, relativePath)
+	info, err := os.Lstat(currentPath)
+	if os.IsNotExist(err) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
-	defer file.Close()
-	gzr, err := gzip.NewReader(file)
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("preserved restore path %q is not a regular file", relativePath)
+	}
+	restoredPath := filepath.Join(restoredHome, relativePath)
+	if err := os.Remove(restoredPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(restoredPath), instanceRestoreDirMode); err != nil {
+		return err
+	}
+	if err := os.Link(currentPath, restoredPath); err != nil {
+		return fmt.Errorf("preserve restore file %q: %w", relativePath, err)
+	}
+	return nil
+}
+
+func dirExistsNonEmptyExcept(path, ignoredRelativeFile string) (bool, bool, error) {
+	exists, _, err := dirExistsNonEmpty(path)
+	if err != nil || !exists {
+		return exists, false, err
+	}
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return false, false, err
+	}
+	for _, entry := range entries {
+		if ignoredRelativeFile != "" && entry.Name() == ignoredRelativeFile {
+			continue
+		}
+		return true, true, nil
+	}
+	return true, false, nil
+}
+
+func extractInstanceBackupReader(ctx context.Context, archive io.Reader, targetDir string) error {
+	gzr, err := gzip.NewReader(archive)
 	if err != nil {
 		return fmt.Errorf("open instance backup gzip: %w", err)
 	}
@@ -458,21 +591,15 @@ func addFileToTar(tw *tar.Writer, sourcePath, name string) error {
 	return err
 }
 
-func closeArchiveWriters(tw *tar.Writer, gzw *gzip.Writer, file *os.File) error {
+func closeArchiveStreamWriters(tw *tar.Writer, gzw *gzip.Writer) error {
 	if err := tw.Close(); err != nil {
 		_ = gzw.Close()
-		_ = file.Close()
 		return err
 	}
 	if err := gzw.Close(); err != nil {
-		_ = file.Close()
 		return err
 	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
+	return nil
 }
 
 func dirExistsNonEmpty(path string) (bool, bool, error) {

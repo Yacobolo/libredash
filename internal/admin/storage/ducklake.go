@@ -18,6 +18,7 @@ import (
 type Service struct {
 	CatalogPath string
 	DataPath    string
+	Environment string
 }
 
 const DuckLakeCatalogID = "ducklake-catalog"
@@ -66,7 +67,7 @@ func (s Service) Data(ctx context.Context) ui.AdminStorageData {
 		SizeBytes: data.TotalSizeBytes,
 		SizeLabel: data.TotalSizeLabel,
 	}}
-	metadata, err := inspectDuckLakeStorage(ctx, data.CatalogPath, data.DataPath)
+	metadata, err := inspectDuckLakeStorage(ctx, data.CatalogPath, data.DataPath, s.Environment)
 	if err != nil {
 		data.Status = err.Error()
 		return data
@@ -98,7 +99,7 @@ func (s Service) SelectTable(ctx context.Context, command ui.AdminStorageCommand
 	if strings.TrimSpace(s.CatalogPath) == "" || strings.TrimSpace(s.DataPath) == "" {
 		return nil, fmt.Errorf("DuckLake catalog is not configured")
 	}
-	metadata, err := inspectDuckLakeStorage(ctx, s.CatalogPath, s.DataPath)
+	metadata, err := inspectDuckLakeStorage(ctx, s.CatalogPath, s.DataPath, s.Environment)
 	if err != nil {
 		return nil, err
 	}
@@ -121,14 +122,14 @@ type duckLakeStorageMetadata struct {
 	TotalDataSizeBytes int64
 }
 
-func inspectDuckLakeStorage(ctx context.Context, catalogPath, dataPath string) (duckLakeStorageMetadata, error) {
+func inspectDuckLakeStorage(ctx context.Context, catalogPath, dataPath, environment string) (duckLakeStorageMetadata, error) {
 	db, err := openDuckLakeMetadataForInspection(ctx, catalogPath, dataPath)
 	if err != nil {
 		return duckLakeStorageMetadata{}, fmt.Errorf("DuckLake catalog could not be opened: %w", err)
 	}
 	defer db.Close()
 
-	serving_states, err := inspectDuckLakeServingStates(ctx, db)
+	serving_states, err := inspectDuckLakeServingStates(ctx, db, environment)
 	if err != nil {
 		return duckLakeStorageMetadata{}, err
 	}
@@ -495,7 +496,7 @@ ORDER BY s.snapshot_id`)
 	return snapshots, rows.Err()
 }
 
-func inspectDuckLakeServingStates(ctx context.Context, db *sql.DB) ([]ui.AdminStorageServingState, error) {
+func inspectDuckLakeServingStates(ctx context.Context, db *sql.DB, environment string) ([]ui.AdminStorageServingState, error) {
 	rows, err := db.QueryContext(ctx, `
 SELECT d.workspace_id, d.environment, d.id, d.status, d.ducklake_snapshot_id, d.digest,
        coalesce(d.activated_at, ''),
@@ -506,7 +507,8 @@ LEFT JOIN meta.workspace_active_serving_states active
  AND active.environment = d.environment
  AND active.serving_state_id = d.id
 WHERE d.ducklake_snapshot_id > 0
-ORDER BY d.workspace_id, d.environment, d.created_at, d.id`)
+  AND (? = '' OR d.environment = ?)
+ORDER BY d.workspace_id, d.environment, d.created_at, d.id`, environment, environment)
 	if err != nil {
 		if isMissingSQLiteTableError(err) {
 			return nil, nil

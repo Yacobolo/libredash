@@ -114,6 +114,19 @@ func TestAsyncEventResponsePromotesCommonProgressAndErrorFields(t *testing.T) {
 	}
 }
 
+func TestAsyncEventResponseNormalizesSQLiteTimestamp(t *testing.T) {
+	events, err := asyncEventResponses([]asyncjob.Event{{
+		ID: 1, ResourceKind: "refresh", ResourceID: "run-a", EventType: "refresh.succeeded",
+		CreatedAt: "2026-07-19 06:00:00.123", Data: []byte(`{"status":"succeeded"}`),
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 1 || events[0].CreatedAt != "2026-07-19T06:00:00.123Z" {
+		t.Fatalf("event timestamp = %#v, want RFC3339", events)
+	}
+}
+
 func TestAsyncEventPaginationRejectsCursorForAnotherResource(t *testing.T) {
 	repo := asyncjobsqlite.NewRepository(testStore(t).SQLDB())
 	appendTestAsyncEvent(t, repo, "release", "rel-a", "release.created", 1)

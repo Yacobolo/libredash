@@ -59,7 +59,7 @@ After restoration:
 
 1. Start the application with the matching supported configuration.
 2. Verify health and storage attachment.
-3. Confirm projects, users, grants, and active environment pointers.
+3. Confirm the bound instance environment, projects, users, grants, and active serving pointers.
 4. Open representative dashboards and run semantic queries.
 5. Confirm managed revision lookups and refresh history.
 6. Run a non-destructive backup or maintenance inspection.

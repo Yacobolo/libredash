@@ -12,23 +12,19 @@ import (
 
 type QueueRepository interface {
 	RunRepository
-	ClaimNextExecutableJob(ctx context.Context, owner string, lease time.Duration) (materialize.JobRecord, bool, error)
+	ClaimNextExecutableJob(ctx context.Context, environment, owner string, lease time.Duration) (materialize.JobRecord, bool, error)
 	RenewJobLease(ctx context.Context, jobID, owner string, lease time.Duration) error
-	JobQueueStats(ctx context.Context) (materialize.JobQueueStats, error)
-}
-
-type DirectExecutor interface {
-	ExecuteDirectJob(ctx context.Context, job materialize.JobRecord) error
+	JobQueueStats(ctx context.Context, environment string) (materialize.JobQueueStats, error)
 }
 
 type Dispatcher struct {
 	Runs           QueueRepository
 	Service        Service
 	Executor       *execution.Service
-	Direct         DirectExecutor
 	LeaseTimeout   time.Duration
 	Logger         *slog.Logger
 	Owner          string
+	Environment    string
 	ExecutionStats func() execution.Stats
 	RunFinished    func(context.Context, materialize.JobRecord)
 }
@@ -42,8 +38,8 @@ func (d Dispatcher) Run(ctx context.Context) {
 		owner = fmt.Sprintf("libredash-%d", time.Now().UnixNano())
 	}
 	for {
-		queueStats, _ := d.Runs.JobQueueStats(ctx)
-		job, ok, err := d.Runs.ClaimNextExecutableJob(ctx, owner, d.leaseTimeout())
+		queueStats, _ := d.Runs.JobQueueStats(ctx, d.Environment)
+		job, ok, err := d.Runs.ClaimNextExecutableJob(ctx, d.Environment, owner, d.leaseTimeout())
 		if err != nil {
 			if d.Logger != nil {
 				d.Logger.WarnContext(ctx, "claim refresh job failed", "error", err)
@@ -92,14 +88,7 @@ func (d Dispatcher) notifyRunFinished(job materialize.JobRecord) {
 
 func (d Dispatcher) executeClaimedJob(ctx context.Context, job materialize.JobRecord) error {
 	switch job.Kind {
-	case materialize.JobKindRefresh:
-		if d.Direct == nil {
-			err := fmt.Errorf("direct refresh executor is required")
-			_, _ = d.Runs.MarkRunFailed(ctx, job.WorkspaceID, job.RunID, err.Error())
-			return err
-		}
-		return d.Direct.ExecuteDirectJob(ctx, job)
-	case materialize.JobKindWorkspaceAssetRefresh:
+	case materialize.JobKindRefreshPipeline:
 		return d.Service.ExecuteClaimedJob(ctx, job)
 	default:
 		err := fmt.Errorf("unsupported refresh job kind %q", job.Kind)

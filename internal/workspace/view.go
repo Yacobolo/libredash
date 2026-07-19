@@ -209,7 +209,7 @@ func AssetByID(assets []AssetView, id string) (AssetView, bool) {
 
 func IsWorkspaceLandingAsset(typ string) bool {
 	switch typ {
-	case string(AssetTypeModelTable), string(AssetTypeSemanticModel), string(AssetTypeDashboard):
+	case string(AssetTypeModelTable), string(AssetTypeSemanticModel), string(AssetTypeDashboard), string(AssetTypeRefreshPipeline):
 		return true
 	default:
 		return false

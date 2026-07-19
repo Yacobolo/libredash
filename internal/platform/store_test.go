@@ -17,6 +17,7 @@ import (
 	"github.com/Yacobolo/libredash/internal/access"
 	agentconfig "github.com/Yacobolo/libredash/internal/agent/config"
 	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
+	"github.com/Yacobolo/libredash/internal/instancelock"
 )
 
 func TestStoreMigratesAndSeedsRoles(t *testing.T) {
@@ -575,6 +576,83 @@ func TestRestoreInstanceReplacesHomeAndBacksUpCurrent(t *testing.T) {
 	beforeEntries := readTarGzEntries(t, beforePath)
 	if got := string(beforeEntries["artifacts/old.tar.gz"]); got != "old artifact" {
 		t.Fatalf("before-restore artifact = %q, want old artifact", got)
+	}
+}
+
+func TestRestoreInstanceRejectsBackupFromAnotherEnvironmentBeforeReplacement(t *testing.T) {
+	ctx := context.Background()
+	sourceHome := t.TempDir()
+	sourceDB := filepath.Join(sourceHome, instanceBackupDBName)
+	source, err := Open(ctx, sourceDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := source.BindInstanceEnvironment(ctx, "prod"); err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(t.TempDir(), "prod.tar.gz")
+	if err := BackupInstance(ctx, InstanceBackupOptions{HomeDir: sourceHome, DBPath: sourceDB, OutPath: archive}); err != nil {
+		t.Fatal(err)
+	}
+	targetHome := t.TempDir()
+	marker := filepath.Join(targetHome, "current-state")
+	if err := os.WriteFile(marker, []byte("preserve"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err = RestoreInstance(ctx, InstanceRestoreOptions{TargetHomeDir: targetHome, BackupPath: archive, ExpectedEnvironment: "staging"})
+	if err == nil || !strings.Contains(err.Error(), `bound to environment "prod"`) {
+		t.Fatalf("restore environment error = %v", err)
+	}
+	if contents, readErr := os.ReadFile(marker); readErr != nil || string(contents) != "preserve" {
+		t.Fatalf("current state changed: %q, %v", contents, readErr)
+	}
+}
+
+func TestRestoreInstancePreservesLifetimeLockAcrossHomeSwap(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	sourceHome := filepath.Join(dir, "source")
+	sourceDB := filepath.Join(sourceHome, instanceBackupDBName)
+	source, err := Open(ctx, sourceDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := source.Close(); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(dir, "source.tar.gz")
+	if err := BackupInstance(ctx, InstanceBackupOptions{HomeDir: sourceHome, DBPath: sourceDB, OutPath: archive}); err != nil {
+		t.Fatal(err)
+	}
+
+	targetHome := filepath.Join(dir, "target")
+	lock, err := instancelock.Acquire(targetHome)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := RestoreInstance(ctx, InstanceRestoreOptions{
+		TargetHomeDir:        targetHome,
+		BackupPath:           archive,
+		PreserveRelativeFile: instancelock.FileName,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if competing, err := instancelock.Acquire(targetHome); err == nil {
+		_ = competing.Release()
+		t.Fatal("competing process acquired the instance lock after restore")
+	}
+	if err := lock.Release(); err != nil {
+		t.Fatal(err)
+	}
+	reacquired, err := instancelock.Acquire(targetHome)
+	if err != nil {
+		t.Fatalf("acquire restored instance after release: %v", err)
+	}
+	if err := reacquired.Release(); err != nil {
+		t.Fatal(err)
 	}
 }
 

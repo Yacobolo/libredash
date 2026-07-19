@@ -291,110 +291,20 @@ func TestAgentAPIRejectsConcurrentTurnsForConversation(t *testing.T) {
 	}
 }
 
-func TestMaterializationRunAPIPersistsAsyncRefreshStatus(t *testing.T) {
+func TestRefreshRunAPIRejectsExternallySuppliedTarget(t *testing.T) {
 	ctx := context.Background()
 	store := testStore(t)
 	principal := testPrincipal(t, ctx, store, "editor@example.com", "Editor", "editor")
-	if _, err := store.SQLDB().ExecContext(ctx, `
-		INSERT INTO serving_states (id, workspace_id, status, digest, manifest_json, created_by)
-		VALUES ('dep_1', 'test', 'active', 'sha256:test', '{}', ?)
-	`, principal.ID); err != nil {
-		t.Fatalf("seed deployment: %v", err)
-	}
-	token := testAPIToken(t, ctx, store, principal.ID, "materialization-test")
+	token := testAPIToken(t, ctx, store, principal.ID, "refresh-contract-test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
-	metrics := &materializationAPIMetrics{done: make(chan string, 1)}
-	server := NewWithOptions(metrics, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
-
-	createReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/refresh-runs", token, `{"modelId":"model.orders","servingStateId":"dep_1"}`)
-	createReq.Header.Set("Idempotency-Key", "refresh-agent-test")
-	createRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(createRec, createReq)
-	if createRec.Code != http.StatusAccepted {
-		t.Fatalf("create status=%d body=%s", createRec.Code, createRec.Body.String())
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
+	req := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/refresh-runs", token, `{"modelId":"model.orders","targetType":"model_table"}`)
+	req.Header.Set("Idempotency-Key", "legacy-refresh-target")
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("legacy refresh create status=%d body=%s", rec.Code, rec.Body.String())
 	}
-	var created struct {
-		ID                   string `json:"id"`
-		ModelID              string `json:"modelId"`
-		ServingStateID       string `json:"servingStateId"`
-		Status               string `json:"status"`
-		PrincipalID          string `json:"principalId"`
-		PrincipalDisplayName string `json:"principalDisplayName"`
-	}
-	if err := json.Unmarshal(createRec.Body.Bytes(), &created); err != nil {
-		t.Fatalf("decode create: %v", err)
-	}
-	if created.ID == "" || created.Status != "queued" || created.ModelID != "model.orders" || created.ServingStateID != "dep_1" {
-		t.Fatalf("created run = %#v", created)
-	}
-	if created.PrincipalID != principal.ID || created.PrincipalDisplayName != "Editor" {
-		t.Fatalf("created attribution = %#v, want Editor principal", created)
-	}
-
-	select {
-	case modelID := <-metrics.done:
-		if modelID != "model.orders" {
-			t.Fatalf("refreshed model = %q", modelID)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for async refresh")
-	}
-
-	getReq := authedJSONRequest(http.MethodGet, "/api/v1/workspaces/test/refresh-runs/"+created.ID, token, "")
-	getRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(getRec, getReq)
-	if getRec.Code != http.StatusOK || !strings.Contains(getRec.Body.String(), `"status":"succeeded"`) || !strings.Contains(getRec.Body.String(), `"principalDisplayName":"Editor"`) {
-		t.Fatalf("get status=%d body=%s", getRec.Code, getRec.Body.String())
-	}
-	listReq := authedJSONRequest(http.MethodGet, "/api/v1/workspaces/test/refresh-runs?limit=1", token, "")
-	listRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(listRec, listReq)
-	if listRec.Code != http.StatusOK || !strings.Contains(listRec.Body.String(), created.ID) || !strings.Contains(listRec.Body.String(), `"principalDisplayName":"Editor"`) {
-		t.Fatalf("list status=%d body=%s", listRec.Code, listRec.Body.String())
-	}
-	retryReq := authedJSONRequest(http.MethodPost, "/api/v1/workspaces/test/refresh-runs", token, `{"retryOf":"`+created.ID+`"}`)
-	retryReq.Header.Set("Idempotency-Key", "refresh-agent-retry")
-	retryRec := httptest.NewRecorder()
-	server.Routes().ServeHTTP(retryRec, retryReq)
-	if retryRec.Code != http.StatusAccepted || !strings.Contains(retryRec.Body.String(), `"retryOf":"`+created.ID+`"`) || retryRec.Header().Get("Location") == "" {
-		t.Fatalf("retry status=%d location=%q body=%s", retryRec.Code, retryRec.Header().Get("Location"), retryRec.Body.String())
-	}
-	var retried struct {
-		ID string `json:"id"`
-	}
-	if err := json.Unmarshal(retryRec.Body.Bytes(), &retried); err != nil || retried.ID == "" {
-		t.Fatalf("decode retry: %v body=%s", err, retryRec.Body.String())
-	}
-	select {
-	case <-metrics.done:
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for retry refresh")
-	}
-	deadline := time.Now().Add(time.Second)
-	retryFinished := false
-	for time.Now().Before(deadline) {
-		statusReq := authedJSONRequest(http.MethodGet, "/api/v1/workspaces/test/refresh-runs/"+retried.ID, token, "")
-		statusRec := httptest.NewRecorder()
-		server.Routes().ServeHTTP(statusRec, statusReq)
-		if strings.Contains(statusRec.Body.String(), `"status":"succeeded"`) {
-			retryFinished = true
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if !retryFinished {
-		t.Fatal("retry refresh did not reach succeeded")
-	}
-}
-
-type materializationAPIMetrics struct {
-	fakeMetrics
-	done chan string
-}
-
-func (m *materializationAPIMetrics) RefreshMaterializations(_ context.Context, modelID string) error {
-	m.done <- modelID
-	return nil
 }
 
 func authedJSONRequest(method, path, token, body string) *http.Request {

@@ -871,16 +871,18 @@ class LibreDashSidebar extends LitElement {
         <button
           class="mobile-menu-button"
           type="button"
-          aria-label=${this.mobileOpen ? 'Close navigation' : 'Open navigation'}
+          aria-label="Open navigation"
+          aria-hidden=${String(this.mobileOpen)}
           aria-controls="mobile-navigation"
           aria-expanded=${String(this.mobileOpen)}
-          title=${this.mobileOpen ? 'Close navigation' : 'Open navigation'}
+          title="Open navigation"
+          ?inert=${this.mobileOpen}
           @click=${this.toggleMobileNavigation}
         >
           ${icon(this.mobileOpen ? 'close' : 'menu')}
         </button>
 
-        <button class="mobile-backdrop" type="button" aria-label="Close navigation" @click=${() => this.closeMobileNavigation(true)}></button>
+        <div class="mobile-backdrop" aria-hidden="true" @click=${() => this.closeMobileNavigation(true)}></div>
 
         <nav id="mobile-navigation" aria-label="Primary" aria-hidden=${String(mobileNavigationClosed)} ?inert=${mobileNavigationClosed}>
           <div class="mobile-drawer-header">

@@ -14,21 +14,22 @@ const (
 	RunStatusFailed    = "failed"
 	RunStatusCancelled = "cancelled"
 
-	TargetSemanticModel = "semantic_model"
-	TargetModelTable    = "model_table"
+	TargetModelTable      = "model_table"
+	TargetRefreshPipeline = "refresh_pipeline"
 
-	TriggerDirect        = "direct"
-	TriggerSemanticModel = "semantic_model"
-	TriggerDependency    = "dependency"
+	TriggerDependency = "dependency"
+	TriggerManual     = "manual"
+	TriggerSchedule   = "schedule"
+	TriggerRetry      = "retry"
 
-	JobKindRefresh               = "refresh"
-	JobKindWorkspaceAssetRefresh = "workspace_asset_refresh"
-	JobKindChildRun              = "child_run"
+	JobKindRefreshPipeline = "refresh_pipeline"
+	JobKindChildRun        = "child_run"
 )
 
 type RunRecord struct {
 	ID                   string `json:"id"`
 	WorkspaceID          string `json:"workspaceId"`
+	Environment          string `json:"-"`
 	ModelID              string `json:"modelId"`
 	ServingStateID       string `json:"servingStateId,omitempty"`
 	PrincipalID          string `json:"principalId,omitempty"`
@@ -48,6 +49,7 @@ type RunRecord struct {
 
 type RunInput struct {
 	WorkspaceID    string
+	Environment    string
 	ModelID        string
 	ServingStateID string
 	PrincipalID    string
@@ -63,6 +65,7 @@ type RunInput struct {
 type JobRecord struct {
 	ID             string
 	WorkspaceID    string
+	Environment    string
 	ServingStateID string
 	ModelID        string
 	Kind           string
@@ -86,14 +89,15 @@ type RunRepository interface {
 	ListRuns(ctx context.Context, workspaceID string, page RunPage) ([]RunRecord, error)
 	ListTargetRuns(ctx context.Context, workspaceID, targetType, targetID string, page RunPage) ([]RunRecord, error)
 	ListChildRuns(ctx context.Context, workspaceID, parentRunID string) ([]RunRecord, error)
-	LatestTargetRun(ctx context.Context, workspaceID, targetType, targetID string) (RunRecord, bool, error)
-	LatestSuccessfulTargetRun(ctx context.Context, workspaceID, targetType, targetID string) (RunRecord, bool, error)
+	LatestTargetRun(ctx context.Context, workspaceID, environment, targetType, targetID string) (RunRecord, bool, error)
+	LatestSuccessfulTargetRun(ctx context.Context, workspaceID, environment, targetType, targetID string) (RunRecord, bool, error)
 	MarkRunRunning(ctx context.Context, workspaceID, runID string) (RunRecord, error)
 	MarkRunSucceeded(ctx context.Context, workspaceID, runID string) (RunRecord, error)
 	MarkRunFailed(ctx context.Context, workspaceID, runID, message string) (RunRecord, error)
 }
 
 type RunPage struct {
-	Limit int
-	After string
+	Limit       int
+	After       string
+	Environment string
 }

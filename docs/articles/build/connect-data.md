@@ -1,6 +1,34 @@
 # Connect a data source
 
-Connections are project-global access definitions. Sources give individual files, objects, or tables stable logical names that workspaces can consume. This guide adds a managed CSV input; external connectors use the same resource relationship with connector-specific settings.
+Connections are project-global access definitions. Sources give individual files, objects, or tables stable logical names that workspaces can consume. Object storage is the normal production path; managed uploads remain the zero-dependency path when LibreDash should own immutable revisions.
+
+For scoped S3 Parquet with workload or instance identity:
+
+```yaml
+apiVersion: libredash.dev/v1
+kind: Connection
+metadata: {name: commerce_lake}
+spec:
+  kind: s3
+  scope: s3://company-analytics/commerce/
+  credentials:
+    provider: ambient
+    region: eu-west-1
+```
+
+Then define a source within that connection's scope:
+
+```yaml
+apiVersion: libredash.dev/v1
+kind: Source
+metadata: {name: commerce.orders}
+spec:
+  connection: commerce_lake
+  path: s3://company-analytics/commerce/orders/v2026-07-18/*.parquet
+  format: parquet
+```
+
+Use `provider: env` with a secret environment-variable name when explicit keys are required. That variable contains the existing connector JSON object. Use `provider: none` only for deliberately public S3 or HTTP objects.
 
 ## Before you begin
 
@@ -129,7 +157,7 @@ Then stage it to a target with `libredash data sync`. Staging returns an immutab
 
 ## Verify the source boundary
 
-Check that filenames match source paths exactly, source fields reflect the actual header, credentials resolve in the target environment, and the workspace lists every source its model SQL will read. Continue with [Define model tables](/docs/guides/build/model-tables).
+Check that filenames match source paths exactly, source fields reflect the actual header, credentials resolve in the target instance, and the workspace lists every source its model SQL will read. Continue with [Define model tables](/docs/guides/build/model-tables).
 
 For managed data, retain the revision digest returned by staging and confirm that the target can resolve it before deployment. Re-run the plan against the same input directory; an unchanged directory should produce the same reviewed revision.
 

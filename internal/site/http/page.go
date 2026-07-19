@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/pkg/pagestream"
+	siteassets "github.com/Yacobolo/libredash/site"
 	g "maragu.dev/gomponents"
 	dsattr "maragu.dev/gomponents-datastar"
 	h "maragu.dev/gomponents/html"
@@ -19,36 +20,55 @@ type sitePageMetadata struct {
 	robots      string
 }
 
+type siteStackIntegration struct {
+	label       string
+	registryKey string
+	icon        string
+	format      bool
+}
+
+type siteStackGroupSpec struct {
+	title        string
+	integrations []siteStackIntegration
+}
+
+var siteStackGroups = []siteStackGroupSpec{
+	{
+		title: "Databases",
+		integrations: []siteStackIntegration{
+			{label: "PostgreSQL", registryKey: "postgres", icon: "postgresql"},
+			{label: "MySQL", registryKey: "mysql", icon: "mysql"},
+			{label: "SQLite", registryKey: "sqlite", icon: "sqlite"},
+		},
+	},
+	{
+		title: "Object storage",
+		integrations: []siteStackIntegration{
+			{label: "Amazon S3", registryKey: "s3", icon: "amazons3"},
+			{label: "Azure Blob", registryKey: "azure_blob", icon: "microsoftazure"},
+			{label: "Google Cloud Storage", registryKey: "gcs", icon: "googlecloudstorage"},
+			{label: "Cloudflare R2", registryKey: "r2", icon: "cloudflare"},
+			{label: "Hetzner Object Storage", registryKey: "s3", icon: "hetzner"},
+		},
+	},
+	{
+		title: "Formats",
+		integrations: []siteStackIntegration{
+			{label: "CSV", registryKey: "csv", icon: "csv", format: true},
+			{label: "JSON", registryKey: "json", icon: "json", format: true},
+			{label: "Parquet", registryKey: "parquet", icon: "apacheparquet", format: true},
+			{label: "Excel", registryKey: "excel", icon: "excel", format: true},
+			{label: "Vortex", registryKey: "vortex", icon: "vortex", format: true},
+			{label: "Delta Lake", registryKey: "delta", icon: "deltalake", format: true},
+			{label: "Apache Iceberg", registryKey: "iceberg", icon: "apacheiceberg", format: true},
+			{label: "Lance", registryKey: "lance", icon: "lance", format: true},
+			{label: "DuckLake", registryKey: "ducklake", icon: "ducklake"},
+		},
+	},
+}
+
 const siteDatastarScriptURL = "/static/vendor/datastar-1.0.2.js"
 const siteBrandName = "LeapView"
-
-const siteHomepageDashboardYAML = `apiVersion: libredash.dev/v1
-kind: Dashboard
-metadata:
-  workspace: sales
-  name: executive-sales
-  title: Executive Sales
-spec:
-  semanticModel: sales
-  visuals:
-    total_orders:
-      kind: kpi
-      query:
-        measures:
-          order_count:
-  pages:
-    - name: overview
-      title: Overview
-      visuals:
-        - id: total_orders
-          kind: kpi_card
-          visual: total_orders
-          placement:
-            col: 1
-            row: 1
-            col_span: 3
-            row_span: 2
-`
 
 func sitePage(metadata sitePageMetadata) g.Node {
 	return pagestream.RenderPage(pagestream.PageSpec{
@@ -129,27 +149,21 @@ func sitePage(metadata sitePageMetadata) g.Node {
 						h.H2(g.Text("Ship analytics like software.")),
 						h.P(g.Text("Build in code. Review in Git. Deploy with confidence.")),
 					),
-					h.Div(h.Class("site-workflow-grid"),
-						h.Div(h.Class("site-workflow-code"),
-							g.El("ld-code-block", g.Attr("language", "yaml"), g.Attr("code", siteHomepageDashboardYAML), g.Attr("copy", ""), g.Attr("toolbar", "")),
-						),
-						h.Ol(h.Class("site-workflow-steps"),
-							siteWorkflowStep("01", "Build in code", "Define dashboards and analytics as versioned project files."),
-							siteWorkflowStep("02", "Review in Git", "Validate and review every change before it ships."),
-							siteWorkflowStep("03", "Deploy with confidence", "Publish dashboards and AI agents together."),
-						),
+					h.Ol(h.Class("site-workflow-flow"), g.Attr("aria-label", "Analytics delivery workflow"),
+						siteWorkflowCard("blocks", "01", "Build in code", "Create analytics in one versioned project."),
+						siteWorkflowCard("git-branch", "02", "Review in Git", "Validate and approve every change before release."),
+						siteWorkflowCard("server", "03", "Deploy with confidence", "Publish dashboards and AI agents together."),
 					),
 				),
 				h.Section(h.Class("site-stack-section"),
 					h.Div(h.Class("site-stack-heading"),
-						h.P(h.Class("site-eyebrow"), g.Text("Built for your stack")),
-						h.H2(g.Text("Fits your existing data stack.")),
-						h.P(g.Text("Connect "+siteBrandName+" to the data platform your team already uses.")),
+						h.P(h.Class("site-eyebrow"), g.Text("Works with your stack")),
+						h.H2(g.Text("Keep your data stack. Add "+siteBrandName+".")),
+						h.P(g.Text("Connect databases and object storage directly, or query open lakehouse formats where they already live.")),
 					),
-					h.Ol(h.Class("site-stack-flow"), g.Attr("aria-label", siteBrandName+" position in the data stack"),
-						siteStackStage("database", "01", "Sources", "Bring data from the systems you already use.", []string{"Apps", "Databases", "Files", "Object storage"}, false),
-						siteStackStage("boxes", "02", "Data platform", "Keep your existing warehouse or lakehouse.", []string{"Databricks", "Microsoft Fabric", "Snowflake", "Lakehouse / warehouse"}, false),
-						siteStackStage("blocks", "03", siteBrandName, "Add version-controlled dashboards and AI agents.", []string{"Analytics as code", "Dashboards", "AI agents", "Access controls"}, true),
+					h.Ol(h.Class("site-stack-flow"), g.Attr("aria-label", "How "+siteBrandName+" connects to your data stack"),
+						siteDataStackStage(),
+						siteStackProductNode(),
 					),
 				),
 				h.Section(h.Class("site-cta"),
@@ -349,30 +363,169 @@ func siteHTMLAttrs() []g.Node {
 	}
 }
 
-func siteWorkflowStep(number, title, body string) g.Node {
-	return h.Li(
-		h.Span(h.Class("site-workflow-number"), g.Attr("aria-hidden", "true"), g.Text(number)),
-		h.Div(h.H3(g.Text(title)), h.P(g.Text(body))),
-	)
-}
-
-func siteStackStage(icon, number, title, body string, chips []string, featured bool) g.Node {
-	className := "site-stack-stage"
-	if featured {
-		className += " site-stack-stage-featured"
-	}
-	chipNodes := make([]g.Node, 0, len(chips))
-	for _, chip := range chips {
-		chipNodes = append(chipNodes, h.Li(g.Text(chip)))
-	}
-	return h.Li(h.Class(className),
-		h.Div(h.Class("site-stack-stage-header"),
+func siteWorkflowCard(icon, number, title, body string) g.Node {
+	return h.Li(h.Class("site-workflow-card"),
+		h.Div(h.Class("site-workflow-card-top"),
 			siteFeatureIcon(icon),
-			h.Span(h.Class("site-stack-stage-number"), g.Text(number)),
+			h.Span(h.Class("site-workflow-number"), g.Attr("aria-hidden", "true"), g.Text(number)),
 		),
 		h.H3(g.Text(title)),
 		h.P(g.Text(body)),
-		h.Ul(h.Class("site-stack-chips"), g.Group(chipNodes)),
+		h.Span(h.Class("site-workflow-arrow"), g.Attr("aria-hidden", "true")),
+	)
+}
+
+func siteDataStackStage() g.Node {
+	groups := make([]g.Node, 0, len(siteStackGroups))
+	for _, group := range siteStackGroups {
+		groups = append(groups, siteStackGroup(group))
+	}
+	return h.Li(h.Class("site-stack-stage site-stack-stage-data"),
+		h.Div(h.Class("site-stack-groups"), g.Group(groups)),
+		siteStackEdges(
+			"site-stack-edges-desktop",
+			"0 0 100 300",
+			"site-stack-arrow-desktop",
+			[]string{
+				"M0 50 C44 50 42 150 66 150",
+				"M0 150 H66",
+				"M0 250 C44 250 42 150 66 150",
+				"M66 150 H96",
+			},
+			[]string{
+				"M0 50 C44 50 42 150 66 150 H96",
+				"M0 150 H96",
+				"M0 250 C44 250 42 150 66 150 H96",
+			},
+		),
+		siteStackEdges(
+			"site-stack-edges-mobile",
+			"0 0 100 100",
+			"site-stack-arrow-mobile",
+			[]string{"M50 0 V96"},
+			[]string{"M50 0 V96"},
+		),
+	)
+}
+
+func siteStackProductNode() g.Node {
+	return h.Li(h.Class("site-stack-stage site-stack-node site-stack-product-node"),
+		h.H3(h.Class("site-stack-product-brand"),
+			g.El("ld-site-brand-mark", g.Attr("large", ""), g.Attr("aria-hidden", "true")),
+			h.Span(g.Text(siteBrandName)),
+		),
+		h.Div(h.Class("site-stack-client-surface"),
+			h.H4(g.Text("Interfaces")),
+			h.Ul(h.Class("site-stack-client-interfaces"), g.Attr("aria-label", siteBrandName+" interfaces"),
+				siteStackClientInterface("Web app", siteStackFeatureIcon("square-mouse-pointer")),
+				siteStackClientInterface("CLI", siteStackFeatureIcon("terminal")),
+				siteStackClientInterface("REST API", siteStackFeatureIcon("code-xml")),
+				siteStackClientInterface("MCP", siteStackMCPMark()),
+			),
+		),
+	)
+}
+
+func siteStackClientInterface(label string, icon g.Node) g.Node {
+	return h.Li(
+		h.Class("site-stack-integration site-stack-client-interface"),
+		g.Attr("aria-label", label),
+		g.Attr("data-label", label),
+		g.Attr("tabindex", "0"),
+		icon,
+	)
+}
+
+func siteStackFeatureIcon(name string) g.Node {
+	return g.El("ld-site-feature-icon", g.Attr("name", name), g.Attr("plain", ""), g.Attr("aria-hidden", "true"))
+}
+
+func siteStackMCPMark() g.Node {
+	mark, err := siteassets.MCPMark()
+	if err != nil {
+		panic(err)
+	}
+	return h.Span(
+		h.Class("site-stack-mcp-mark"),
+		g.Attr("aria-hidden", "true"),
+		g.Raw(mark),
+	)
+}
+
+func siteStackEdges(className, viewBox, markerID string, paths, flowPaths []string) g.Node {
+	edges := make([]g.Node, 0, len(paths))
+	for index, path := range paths {
+		attributes := []g.Node{h.Class("site-stack-edge"), g.Attr("d", path)}
+		if index == len(paths)-1 {
+			attributes = append(attributes, g.Attr("marker-end", "url(#"+markerID+")"))
+		}
+		edges = append(edges, g.El("path", attributes...))
+	}
+	flowMarkers := make([]g.Node, 0, len(flowPaths))
+	flowMarkerClasses := []string{"site-stack-flow-marker-1", "site-stack-flow-marker-2", "site-stack-flow-marker-3"}
+	for index, path := range flowPaths {
+		flowMarkers = append(flowMarkers,
+			g.El("path",
+				h.Class("site-stack-flow-marker "+flowMarkerClasses[index%len(flowMarkerClasses)]),
+				g.Attr("d", path),
+				g.Attr("data-flow-path", path),
+			),
+		)
+	}
+	return g.El("svg",
+		h.Class("site-stack-edges "+className),
+		g.Attr("viewBox", viewBox),
+		g.Attr("preserveAspectRatio", "none"),
+		g.Attr("aria-hidden", "true"),
+		g.Attr("focusable", "false"),
+		g.El("defs",
+			g.El("marker",
+				g.Attr("id", markerID),
+				g.Attr("viewBox", "0 0 8 8"),
+				g.Attr("refX", "7"),
+				g.Attr("refY", "4"),
+				g.Attr("markerWidth", "7"),
+				g.Attr("markerHeight", "7"),
+				g.Attr("orient", "auto"),
+				g.El("path", h.Class("site-stack-arrowhead"), g.Attr("d", "M0 0 L8 4 L0 8 Z")),
+			),
+		),
+		g.Group(edges),
+		g.Group(flowMarkers),
+	)
+}
+
+func siteStackGroup(group siteStackGroupSpec) g.Node {
+	return h.Section(h.Class("site-stack-group"),
+		h.H4(g.Text(group.title)),
+		siteStackLogoList(group.integrations),
+	)
+}
+
+func siteStackLogoList(integrations []siteStackIntegration) g.Node {
+	items := make([]g.Node, 0, len(integrations))
+	for _, integration := range integrations {
+		items = append(items, h.Li(
+			h.Class("site-stack-integration"),
+			g.Attr("aria-label", integration.label),
+			g.Attr("data-label", integration.label),
+			g.Attr("data-registry-key", integration.registryKey),
+			g.Attr("tabindex", "0"),
+			siteStackLogo(integration.icon),
+		))
+	}
+	return h.Ul(h.Class("site-stack-logos"), g.Group(items))
+}
+
+func siteStackLogo(icon string) g.Node {
+	logo, err := siteassets.IntegrationLogo(icon)
+	if err != nil {
+		panic(err)
+	}
+	return h.Span(
+		h.Class("site-stack-logo"),
+		g.Attr("aria-hidden", "true"),
+		g.Raw(logo),
 	)
 }
 

@@ -70,7 +70,7 @@ test('catalog page composes dashboard cards', async () => {
     expect(state.title).toBe('Dashboards')
     expect(state.card).toBe('Executive Sales Dashboard')
     expect(state.href).toBe('/dashboards/executive-sales')
-    expect(state.pages).toBe('2 pages')
+    expect(state.pages).toBe('1 page')
     expect(state.sectionWidth).toBeLessThan(1280)
     expect(state.centeredDelta).toBeLessThanOrEqual(1)
   } finally {
@@ -88,7 +88,7 @@ function testDocument(): string {
       title: 'Executive Sales Dashboard',
       description: 'Fixture report',
       semanticModel: 'olist',
-      pageCount: 2,
+      pageCount: 1,
       tags: ['sales'],
       href: '/dashboards/executive-sales',
     }],

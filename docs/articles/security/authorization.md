@@ -61,7 +61,7 @@ Test policies with representative users, including aggregates. Row filtering can
 
 Ownership and platform administration are distinct from ordinary workspace use. Keep platform-wide `MANAGE_PLATFORM`, workspace `MANAGE_GRANTS`, deployment, refresh, query, and view privileges separated according to operational responsibility.
 
-A service principal used by CI should receive only the target environments, workspaces, and deployment/data privileges required by that pipeline. A read-only integration should not inherit project activation or grant management.
+A service principal used by CI should exist only on the target instances and receive the workspace and deployment/data privileges required by that pipeline. A read-only integration should not inherit project activation or grant management.
 
 ## Review access
 

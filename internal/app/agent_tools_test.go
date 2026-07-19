@@ -515,8 +515,8 @@ func TestAPIGenAgentSearchToolInjectsDefaultLimit(t *testing.T) {
 }
 
 func TestAPIGenAgentListWorkspacesUsesDeclarativeOutputShape(t *testing.T) {
-	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
-	tools := agentAPIGenToolsForTest(server, agentcap.Scope{WorkspaceID: "test", PrincipalID: "principal"})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
+	tools := agentAPIGenToolsForTest(server, agentcap.Scope{PrincipalID: "principal", DevAuthBypass: true})
 	var listWorkspaces agentcore.ToolDefinition
 	for _, tool := range tools {
 		if tool.Name == "list_workspaces" {

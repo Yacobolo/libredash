@@ -29,6 +29,11 @@ beforeAll(async () => {
       response.end(testDocument('new', 'new'))
       return
     }
+    if (url.pathname.startsWith('/chats/')) {
+      response.setHeader('content-type', 'text/html')
+      response.end(testDocument())
+      return
+    }
     const fileRoot = url.pathname.startsWith('/static/vendor/') ? projectRoot : root
     const file = normalize(join(fileRoot, url.pathname))
     if (!file.startsWith(fileRoot)) {
@@ -194,6 +199,22 @@ for (const viewport of [
   })
 }
 
+test('new chat navigates when the created conversation signal arrives', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(`${baseURL}/new`)
+    await page.waitForFunction(() => customElements.get('ld-chat-page'))
+    await page.evaluate(async () => {
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+      mergePatch({ agent: { activeConversationId: 'c3' } })
+    })
+    await page.waitForURL(`${baseURL}/chats/c3`)
+    expect(new URL(page.url()).pathname).toBe('/chats/c3')
+  } finally {
+    await page.close()
+  }
+})
+
 test('chat list page renders searchable conversation history', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
@@ -252,7 +273,7 @@ test('chat list page renders searchable conversation history', async () => {
     expect(initial.activeConversationId).toBe('c1')
     expect(initial.title).toBe('Chats')
     expect(initial.searchPlaceholder).toBe('Search chats...')
-    expect(initial.newChatHref).toBe('/chat/new')
+    expect(initial.newChatHref).toBe('/chats/new')
     expect(initial.headerOrder).toEqual(['h2', 'new-chat-link'])
     expect(initial.metrics).toEqual({
       titleFontSize: '20px',
@@ -264,8 +285,8 @@ test('chat list page renders searchable conversation history', async () => {
       dateDistanceFromRowEnd: 12,
     })
     expect(initial.tableHeaders).toEqual(['Conversation'])
-    expect(initial.rows).toContainEqual({ href: '/chat/c1', label: 'Revenue check', active: 'true', text: 'Revenue check Jan 2', optionsLabel: 'More options for Revenue check' })
-    expect(initial.rows).toContainEqual({ href: '/chat/c2', label: 'Inventory status', active: 'false', text: 'Inventory status Jan 3', optionsLabel: 'More options for Inventory status' })
+    expect(initial.rows).toContainEqual({ href: '/chats/c1', label: 'Revenue check', active: 'true', text: 'Revenue check Jan 2', optionsLabel: 'More options for Revenue check' })
+    expect(initial.rows).toContainEqual({ href: '/chats/c2', label: 'Inventory status', active: 'false', text: 'Inventory status Jan 3', optionsLabel: 'More options for Inventory status' })
 
     await page.locator('ld-chat-page').evaluate((element: any) => {
       const input = element.shadowRoot.querySelector('ld-chat-list').shadowRoot.querySelector('.search') as HTMLInputElement
@@ -285,7 +306,7 @@ test('chat list page renders searchable conversation history', async () => {
       }))
     })
 
-    expect(filteredRows).toEqual([{ href: '/chat/c2', text: 'Inventory status Jan 3' }])
+    expect(filteredRows).toEqual([{ href: '/chats/c2', text: 'Inventory status Jan 3' }])
 
     const scrollState = await page.evaluate(() => ({
       innerHeight,
@@ -308,8 +329,8 @@ function testDocument(view = 'conversation', scenario: 'active' | 'new' = 'activ
   }
   const agent = {
     conversations: [
-      { id: 'c1', title: 'Revenue check', href: '/chat/c1', updatedAt: '2026-01-02T10:00:00Z' },
-      { id: 'c2', title: 'Inventory status', href: '/chat/c2', updatedAt: '2026-01-03T10:00:00Z' },
+      { id: 'c1', title: 'Revenue check', href: '/chats/c1', updatedAt: '2026-01-02T10:00:00Z' },
+      { id: 'c2', title: 'Inventory status', href: '/chats/c2', updatedAt: '2026-01-03T10:00:00Z' },
     ],
     activeConversationId: scenario === 'new' ? '' : 'c1',
     transcript: scenario === 'new' ? [] : [{ role: 'assistant', content: 'Ready.' }],

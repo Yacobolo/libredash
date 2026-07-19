@@ -27,6 +27,12 @@ func newManagedDataCLIClient(client *http.Client, target, token string) *managed
 	return &managedDataCLIClient{http: client, target: strings.TrimRight(target, "/"), token: token}
 }
 
+func (c *managedDataCLIClient) instance(ctx context.Context) (apigenapi.InstanceResponse, error) {
+	var response apigenapi.InstanceResponse
+	err := c.json(ctx, http.MethodGet, "getInstance", nil, nil, "", nil, &response)
+	return response, err
+}
+
 func (c *managedDataCLIClient) createUploadSession(ctx context.Context, project, connection, key string, body apigenapi.ManagedDataUploadSessionCreateRequest) (apigenapi.ManagedDataUploadSessionResponse, error) {
 	var response apigenapi.ManagedDataUploadSessionResponse
 	err := c.json(ctx, http.MethodPost, "createManagedDataUploadSession", map[string]string{"project": project, "connection": connection}, nil, key, body, &response)

@@ -101,7 +101,7 @@ jobs:
         run: |
           server_ip="$(terraform output -raw server_ipv4)"
           credentials="$(ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl first-login')"
-          jq -e '.principal.email and .temporaryPassword and .publishToken and .publishTokenExpiresAt' <<<"$credentials" >/dev/null
+          jq -e '.email and .temporaryPassword and .publisherToken and .publisherTokenExpiresAt' <<<"$credentials" >/dev/null
           if ssh -i "$RUNNER_TEMP/libredash-ci" root@"$server_ip" 'libredashctl first-login'; then
             echo "first-login credentials were retrievable more than once" >&2
             exit 1

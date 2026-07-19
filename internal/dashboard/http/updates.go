@@ -61,7 +61,15 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 		broker.TraceStore(), streamID, "dashboard.bootstrap",
 	))
 	bootstrap := reportui.BootstrapSignals(clientID, streamInstanceID, metrics.Catalog(), reportDefinition, model, pages, activePage, initialFilters)
-	bootstrap["status"] = lddatastar.LoadingPatch()["status"]
+	status := lddatastar.LoadingPatch()["status"].(map[string]any)
+	environment := ""
+	if h.Environment != nil {
+		environment = h.Environment(r)
+	}
+	if h.DataRefreshedAt != nil {
+		status["lastUpdated"] = h.DataRefreshedAt(r.Context(), metrics.Catalog().Workspace.ID, environment, request.ModelID)
+	}
+	bootstrap["status"] = status
 	if err := updates.Patch(bootstrap); err != nil {
 		return
 	}
@@ -76,6 +84,18 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 	defer closeCoordinator()
 	h.observeRefreshes(coordinator, dashboardID, activePage.ID)
 	service := command.Service{Metrics: metrics}
+	registry.Bind(streamID, metrics.Catalog().Workspace.ID, environment, request.ModelID, func() {
+		_, _ = coordinator.BeginPrepared(func(current dashboard.Filters) (dashboardstream.RefreshPreparation, error) {
+			prepared, err := service.PrepareInitial(request, current)
+			return streamPreparation(prepared), err
+		}, func(preparation dashboardstream.RefreshPreparation) dashboardstream.RefreshWork {
+			plan, _ := preparation.Plan.(command.RefreshPlan)
+			return dashboardstream.TargetWork(metrics, dashboardstream.WorkRequest{
+				DashboardID: dashboardID, PageID: activePage.ID, ModelID: request.ModelID,
+				Filters: preparation.Filters, Plan: plan, EventObserved: h.RefreshEventObserved, CacheObserved: h.CacheObserved,
+			})
+		})
+	})
 	_, err := coordinator.BeginPrepared(func(dashboard.Filters) (dashboardstream.RefreshPreparation, error) {
 		prepared, err := service.PrepareInitial(request, initialFilters)
 		return streamPreparation(prepared), err

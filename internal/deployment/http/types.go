@@ -21,10 +21,11 @@ type Coordinator interface {
 }
 
 type Options struct {
-	Coordinator      Coordinator
-	CurrentPrincipal func(*stdhttp.Request) (Principal, bool)
-	MaxJSONBodyBytes int64
-	Logger           *slog.Logger
+	Coordinator         Coordinator
+	CurrentPrincipal    func(*stdhttp.Request) (Principal, bool)
+	MaxJSONBodyBytes    int64
+	InstanceEnvironment string
+	Logger              *slog.Logger
 }
 
 type Handler struct {

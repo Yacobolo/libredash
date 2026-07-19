@@ -397,6 +397,8 @@ class KPICard extends LitElement {
   static styles = css`
     :host {
       display: block;
+      min-width: 0;
+      container-type: inline-size;
     }
 
     .kpi {
@@ -432,16 +434,19 @@ class KPICard extends LitElement {
 
     .value {
       margin: 8px 0 4px;
-      font-size: var(--ld-font-size-display);
+      font-size: clamp(1.75rem, 7cqi, var(--ld-font-size-display));
       font-weight: var(--ld-font-weight-strong);
       line-height: var(--ld-line-height-none);
       letter-spacing: 0;
+      white-space: nowrap;
     }
 
     .note {
       color: var(--ld-fg-muted);
       font-size: var(--ld-font-size-body-md);
       font-weight: var(--ld-font-weight-medium);
+      line-height: var(--ld-line-height-compact);
+      overflow-wrap: anywhere;
     }
 
     .green::before {
@@ -458,6 +463,21 @@ class KPICard extends LitElement {
     }
     .neutral::before {
       background: var(--ld-line-muted);
+    }
+
+    @container (max-width: 220px) {
+      .kpi {
+        padding-inline: 12px 10px;
+      }
+
+      .value {
+        margin-block: 6px 3px;
+        font-size: clamp(1.35rem, 12cqi, 1.85rem);
+      }
+
+      .note {
+        font-size: var(--ld-font-size-body-sm);
+      }
     }
 
   `

@@ -1,4 +1,0 @@
-{$CADDY_DOMAIN} {
-	encode zstd gzip
-	reverse_proxy libredash:8080
-}

@@ -206,6 +206,11 @@ func (s *Server) executeAsyncJob(ctx context.Context, job asyncjob.Job) error {
 			return err
 		}
 		row, err := s.deploymentOptions.Coordinator.Activate(ctx, apiadapter.ActivateRequest{Scope: apiadapter.Scope{Project: payload.Project, DeploymentID: payload.Deployment}, Actor: payload.Actor, IdempotencyKey: payload.IdempotencyKey})
+		if err == nil && s.refreshPipelineRepo != nil {
+			if reconcileErr := s.reconcileRefreshPipelineSchedules(ctx, s.refreshPipelineRepo); reconcileErr != nil {
+				s.logger.WarnContext(ctx, "reconcile refresh pipelines after deployment activation failed", "error", reconcileErr)
+			}
+		}
 		event := "deployment.active"
 		if err != nil {
 			event = "deployment.failed"

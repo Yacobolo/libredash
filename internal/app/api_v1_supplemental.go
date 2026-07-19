@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
+	materializehttp "github.com/Yacobolo/libredash/internal/analytics/materialize/http"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 	"github.com/Yacobolo/libredash/internal/manageddata/control"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -186,7 +187,27 @@ func (a apiGenAdapter) CancelRefreshRun(w http.ResponseWriter, r *http.Request, 
 		writeAPIProblem(w, r, http.StatusServiceUnavailable, "REFRESH_SERVICE_UNAVAILABLE", "Refresh service is unavailable", nil)
 		return
 	}
-	row, err := repo.CancelRun(r.Context(), a.server.workspaceID(workspaceID), runID)
+	resolvedWorkspaceID := a.server.workspaceID(workspaceID)
+	prior, err := repo.GetRun(r.Context(), resolvedWorkspaceID, runID)
+	if err != nil || prior.Environment != string(a.server.defaultServingEnvironment()) {
+		writeAPIProblem(w, r, http.StatusNotFound, "REFRESH_RUN_NOT_FOUND", "Refresh run not found", nil)
+		return
+	}
+	publicPrior, ok := materializehttp.PipelineRunResponseFor(prior)
+	if !ok {
+		writeAPIProblem(w, r, http.StatusNotFound, "REFRESH_RUN_NOT_FOUND", "Refresh run not found", nil)
+		return
+	}
+	allowed, err := a.server.authorizeRefreshPipelineExecution(r, resolvedWorkspaceID, publicPrior.PipelineID)
+	if err != nil {
+		writeAPIProblem(w, r, http.StatusInternalServerError, "REFRESH_AUTHORIZATION_FAILED", "Refresh authorization failed", nil)
+		return
+	}
+	if !allowed {
+		writeAPIProblem(w, r, http.StatusForbidden, "FORBIDDEN", "Refresh run is not accessible", nil)
+		return
+	}
+	row, err := repo.CancelRun(r.Context(), resolvedWorkspaceID, runID)
 	if err != nil {
 		if errors.Is(err, materialize.ErrRunNotCancellable) {
 			writeAPIProblem(w, r, http.StatusConflict, "REFRESH_NOT_CANCELLABLE", "Only queued refresh runs can be cancelled", nil)
@@ -195,12 +216,17 @@ func (a apiGenAdapter) CancelRefreshRun(w http.ResponseWriter, r *http.Request, 
 		writeAPIProblem(w, r, http.StatusNotFound, "REFRESH_RUN_NOT_FOUND", "Refresh run not found", nil)
 		return
 	}
-	if err := a.server.appendAsyncEvent(r.Context(), "refresh", runID, "refresh.cancelled", row); err != nil {
+	response, ok := materializehttp.PipelineRunResponseFor(row)
+	if !ok {
+		writeAPIProblem(w, r, http.StatusInternalServerError, "REFRESH_RESPONSE_INVALID", "Refresh response is invalid", nil)
+		return
+	}
+	if err := a.server.appendAsyncEvent(r.Context(), "refresh", runID, "refresh.cancelled", response); err != nil {
 		writeAPIProblem(w, r, http.StatusServiceUnavailable, "ASYNC_EVENT_STORE_UNAVAILABLE", "Refresh cancellation could not be recorded", nil)
 		return
 	}
 	w.Header().Set("Location", "/api/v1/workspaces/"+workspaceID+"/refresh-runs/"+runID)
-	writeAPIJSON(w, http.StatusAccepted, row)
+	writeAPIJSON(w, http.StatusAccepted, response)
 }
 
 func (a apiGenAdapter) ListRefreshRunEvents(w http.ResponseWriter, r *http.Request, workspaceID, runID string, params apigenapi.GenListRefreshRunEventsParams, _ apigenapi.GenListRefreshRunEventsHeaders) {
@@ -209,9 +235,24 @@ func (a apiGenAdapter) ListRefreshRunEvents(w http.ResponseWriter, r *http.Reque
 		writeAPIProblem(w, r, http.StatusServiceUnavailable, "REFRESH_SERVICE_UNAVAILABLE", "Refresh service is unavailable", nil)
 		return
 	}
-	_, err = repo.GetRun(r.Context(), a.server.workspaceID(workspaceID), runID)
-	if err != nil {
+	resolvedWorkspaceID := a.server.workspaceID(workspaceID)
+	run, err := repo.GetRun(r.Context(), resolvedWorkspaceID, runID)
+	if err != nil || run.Environment != string(a.server.defaultServingEnvironment()) {
 		writeAPIProblem(w, r, http.StatusNotFound, "REFRESH_RUN_NOT_FOUND", "Refresh run not found", nil)
+		return
+	}
+	response, ok := materializehttp.PipelineRunResponseFor(run)
+	if !ok {
+		writeAPIProblem(w, r, http.StatusNotFound, "REFRESH_RUN_NOT_FOUND", "Refresh run not found", nil)
+		return
+	}
+	allowed, err := a.server.authorizeRefreshPipelineVisibility(r, resolvedWorkspaceID, response.PipelineID)
+	if err != nil {
+		writeAPIProblem(w, r, http.StatusInternalServerError, "REFRESH_AUTHORIZATION_FAILED", "Refresh authorization failed", nil)
+		return
+	}
+	if !allowed {
+		writeAPIProblem(w, r, http.StatusForbidden, "FORBIDDEN", "Refresh run is not accessible", nil)
 		return
 	}
 	eventsRepo, repoErr := a.server.asyncRepository()

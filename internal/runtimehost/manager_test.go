@@ -724,6 +724,25 @@ func TestRegistryPrepareCommitRoutesDeploymentByWorkspace(t *testing.T) {
 	}
 }
 
+func TestRegistryPreparedRuntimeDoesNotCommitWhenMetadataActivationFails(t *testing.T) {
+	repo := newFakeRegistryRepo()
+	repo.deployments["dep_sales_prod"] = servingstate.State{ID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Status: servingstate.StatusValidated}
+	repo.artifacts["dep_sales_prod"] = servingstate.Artifact{ServingStateID: "dep_sales_prod", WorkspaceID: "sales", Environment: "prod", Digest: "sales-prod"}
+	registry := NewRegistryWithFactory(RegistryOptions{Repo: repo, WorkspaceIDs: []servingstate.WorkspaceID{"sales"}, Environment: "prod", Factory: &recordingRegistryFactory{}})
+	prepared, err := registry.PrepareServingState(context.Background(), "dep_sales_prod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	wantErr := errors.New("activation failed")
+	if err := registry.CommitPreparedWithActivation(prepared, func() error { return wantErr }); !errors.Is(err, wantErr) {
+		t.Fatalf("commit error = %v, want %v", err, wantErr)
+	}
+	if _, err := registry.managerForWorkspace("sales").Active(); err == nil {
+		t.Fatal("runtime committed after metadata activation failed")
+	}
+}
+
 func TestRegistryPreparedSetActivatesAndCommitsEveryWorkspaceTogether(t *testing.T) {
 	repo := newFakeRegistryRepo()
 	for _, workspaceID := range []servingstate.WorkspaceID{"operations", "sales"} {

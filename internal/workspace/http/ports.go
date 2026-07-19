@@ -25,7 +25,7 @@ type AssetCatalogReader interface {
 }
 
 type RefreshStateProvider interface {
-	AssetRefreshState(ctx context.Context, workspaceID string, asset workspace.AssetView) (ui.AssetRefreshState, error)
+	AssetRefreshState(ctx context.Context, workspaceID, environment string, asset workspace.AssetView) (ui.AssetRefreshState, error)
 	AssetVersionsState(ctx context.Context, workspaceID, environment string, asset workspace.AssetView, section string) (ui.AssetVersionsState, error)
 }
 

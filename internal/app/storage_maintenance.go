@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	storagemaintenance "github.com/Yacobolo/libredash/internal/storage/maintenance"
 )
 
@@ -31,6 +32,7 @@ func (s *Server) reconcileStorageRetention(ctx context.Context, dryRun bool) err
 		protected = provider.LeasedSnapshots()
 	}
 	_, err := storagemaintenance.Run(ctx, repo, storagemaintenance.Options{
+		Environment:                  servingstate.Environment(s.defaultEnvironment),
 		RootDir:                      rootDir,
 		CatalogPath:                  catalogPath,
 		DataPath:                     dataPath,

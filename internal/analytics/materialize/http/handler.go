@@ -11,6 +11,7 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	"github.com/Yacobolo/libredash/internal/api"
+	"github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -19,22 +20,69 @@ type Principal struct {
 }
 
 type Handler struct {
-	Repository       func() (materialize.RunRepository, error)
-	RunnerConfigured func() bool
-	DispatchQueued   func()
-	CurrentPrincipal func(*nethttp.Request) (Principal, bool)
-	WorkspaceID      func(string) string
-	RunCreated       func(context.Context, materialize.RunRecord) error
+	Repository            func() (materialize.RunRepository, error)
+	RunnerConfigured      func() bool
+	DispatchQueued        func()
+	CurrentPrincipal      func(*nethttp.Request) (Principal, bool)
+	WorkspaceID           func(string) string
+	Environment           func(*nethttp.Request) string
+	RunCreated            func(context.Context, materialize.RunRecord) error
+	AuthorizePipelineView func(*nethttp.Request, string, string) (bool, error)
+	AuthorizePipelineRun  func(*nethttp.Request, string, string) (bool, error)
+	QueuePipeline         func(context.Context, string, string, string, string, string) (materialize.RunRecord, error)
 }
 
 type materializationRunRequest struct {
-	ModelID        string `json:"modelId"`
-	ServingStateID string `json:"servingStateId,omitempty"`
-	TargetType     string `json:"targetType,omitempty"`
-	TargetID       string `json:"targetId,omitempty"`
-	TriggerType    string `json:"triggerType,omitempty"`
-	ParentRunID    string `json:"parentRunId,omitempty"`
-	RetryOf        string `json:"retryOf,omitempty"`
+	PipelineID string `json:"pipelineId"`
+	RetryOf    string `json:"retryOf,omitempty"`
+}
+
+// PipelineRunResponse is the public representation of a root refresh-pipeline
+// run. Model-table dependency runs and queue implementation details are never
+// part of the API contract.
+type PipelineRunResponse struct {
+	ID                   string `json:"id"`
+	WorkspaceID          string `json:"workspaceId"`
+	PipelineID           string `json:"pipelineId"`
+	SemanticModel        string `json:"semanticModel"`
+	PrincipalID          string `json:"principalId,omitempty"`
+	PrincipalDisplayName string `json:"principalDisplayName,omitempty"`
+	Trigger              string `json:"trigger"`
+	RetryOf              string `json:"retryOf,omitempty"`
+	Status               string `json:"status"`
+	Error                string `json:"error,omitempty"`
+	CreatedAt            string `json:"createdAt"`
+	StartedAt            string `json:"startedAt,omitempty"`
+	FinishedAt           string `json:"finishedAt,omitempty"`
+}
+
+func PipelineRunResponseFor(run materialize.RunRecord) (PipelineRunResponse, bool) {
+	prefix := run.WorkspaceID + "."
+	if run.ParentRunID != "" || run.TargetType != materialize.TargetRefreshPipeline || !strings.HasPrefix(run.TargetID, prefix) {
+		return PipelineRunResponse{}, false
+	}
+	pipelineID := strings.TrimSpace(strings.TrimPrefix(run.TargetID, prefix))
+	if pipelineID == "" {
+		return PipelineRunResponse{}, false
+	}
+	createdAt, err := api.NormalizeTimestamp(run.CreatedAt)
+	if err != nil || createdAt == "" {
+		return PipelineRunResponse{}, false
+	}
+	startedAt, err := api.NormalizeTimestamp(run.StartedAt)
+	if err != nil {
+		return PipelineRunResponse{}, false
+	}
+	finishedAt, err := api.NormalizeTimestamp(run.FinishedAt)
+	if err != nil {
+		return PipelineRunResponse{}, false
+	}
+	return PipelineRunResponse{
+		ID: run.ID, WorkspaceID: run.WorkspaceID, PipelineID: pipelineID, SemanticModel: run.ModelID,
+		PrincipalID: run.PrincipalID, PrincipalDisplayName: run.PrincipalDisplayName, Trigger: run.TriggerType,
+		RetryOf: run.RetryOf, Status: run.Status, Error: run.Error, CreatedAt: createdAt,
+		StartedAt: startedAt, FinishedAt: finishedAt,
+	}, true
 }
 
 func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -59,6 +107,21 @@ func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
 			principalID = principal.ID
 		}
 	}
+	if strings.TrimSpace(input.PipelineID) == "" {
+		writeJSONError(w, fmt.Errorf("pipelineId is required"), nethttp.StatusBadRequest)
+		return
+	}
+	if h.AuthorizePipelineRun != nil {
+		allowed, err := h.AuthorizePipelineRun(r, workspaceID, input.PipelineID)
+		if err != nil {
+			writeJSONError(w, err, nethttp.StatusInternalServerError)
+			return
+		}
+		if !allowed {
+			writeJSONError(w, fmt.Errorf("forbidden"), nethttp.StatusForbidden)
+			return
+		}
+	}
 	if input.RetryOf != "" {
 		prior, err := repo.GetRun(r.Context(), workspaceID, input.RetryOf)
 		if err != nil {
@@ -69,30 +132,16 @@ func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
 			writeJSONError(w, fmt.Errorf("retryOf refresh run is not terminal"), nethttp.StatusConflict)
 			return
 		}
-		if input.ModelID == "" {
-			input.ModelID = prior.ModelID
-		}
-		if input.ServingStateID == "" {
-			input.ServingStateID = prior.ServingStateID
-		}
-		if input.TargetType == "" {
-			input.TargetType = prior.TargetType
-		}
-		if input.TargetID == "" {
-			input.TargetID = prior.TargetID
+		if prior.Environment != h.environment(r) || prior.TargetType != materialize.TargetRefreshPipeline || prior.TargetID != workspaceID+"."+input.PipelineID {
+			writeJSONError(w, fmt.Errorf("retryOf does not belong to pipelineId"), nethttp.StatusUnprocessableEntity)
+			return
 		}
 	}
-	run, err := repo.CreateRun(r.Context(), materialize.RunInput{
-		WorkspaceID:    workspaceID,
-		ModelID:        input.ModelID,
-		ServingStateID: input.ServingStateID,
-		PrincipalID:    principalID,
-		TargetType:     input.TargetType,
-		TargetID:       input.TargetID,
-		TriggerType:    input.TriggerType,
-		ParentRunID:    input.ParentRunID,
-		RetryOf:        input.RetryOf,
-	})
+	if h.QueuePipeline == nil {
+		writeJSONError(w, fmt.Errorf("refresh pipeline runner is not configured"), nethttp.StatusServiceUnavailable)
+		return
+	}
+	run, err := h.QueuePipeline(r.Context(), workspaceID, h.environment(r), input.PipelineID, principalID, input.RetryOf)
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
@@ -107,7 +156,12 @@ func (h Handler) CreateRun(w nethttp.ResponseWriter, r *nethttp.Request) {
 		h.DispatchQueued()
 	}
 	w.Header().Set("Location", strings.TrimSuffix(r.URL.Path, "/")+"/"+run.ID)
-	writeJSON(w, nethttp.StatusAccepted, run)
+	response, ok := PipelineRunResponseFor(run)
+	if !ok {
+		writeJSONError(w, fmt.Errorf("refresh service returned a non-pipeline run"), nethttp.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, nethttp.StatusAccepted, response)
 }
 
 func (h Handler) ListRuns(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -119,20 +173,45 @@ func (h Handler) ListRuns(w nethttp.ResponseWriter, r *nethttp.Request) {
 	if !ok {
 		return
 	}
-	runs, err := repo.ListRuns(r.Context(), workspaceID, materialize.RunPage{
-		Limit: limit + 1,
-		After: firstNonEmpty(r.URL.Query().Get("pageToken"), r.URL.Query().Get("after")),
-	})
-	if err != nil {
-		writeJSONError(w, err, nethttp.StatusInternalServerError)
-		return
+	responses := make([]PipelineRunResponse, 0, limit+1)
+	after := firstNonEmpty(r.URL.Query().Get("pageToken"), r.URL.Query().Get("after"))
+	for len(responses) <= limit {
+		runs, err := repo.ListRuns(r.Context(), workspaceID, materialize.RunPage{Limit: maxAPILimit, After: after, Environment: h.environment(r)})
+		if err != nil {
+			writeJSONError(w, err, nethttp.StatusInternalServerError)
+			return
+		}
+		if len(runs) == 0 {
+			break
+		}
+		for _, run := range runs {
+			response, valid := PipelineRunResponseFor(run)
+			if !valid {
+				continue
+			}
+			allowed, err := h.pipelineAllowed(r, workspaceID, response.PipelineID)
+			if err != nil {
+				writeJSONError(w, err, nethttp.StatusInternalServerError)
+				return
+			}
+			if allowed {
+				responses = append(responses, response)
+				if len(responses) > limit {
+					break
+				}
+			}
+		}
+		after = runs[len(runs)-1].ID
+		if len(runs) < maxAPILimit {
+			break
+		}
 	}
 	nextCursor := ""
-	if len(runs) > limit {
-		nextCursor = runs[limit-1].ID
-		runs = runs[:limit]
+	if len(responses) > limit {
+		nextCursor = responses[limit-1].ID
+		responses = responses[:limit]
 	}
-	writeJSON(w, nethttp.StatusOK, pagedResponseWithCursor(runs, nextCursor))
+	writeJSON(w, nethttp.StatusOK, pagedResponseWithCursor(responses, nextCursor))
 }
 
 func (h Handler) GetRun(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -145,7 +224,39 @@ func (h Handler) GetRun(w nethttp.ResponseWriter, r *nethttp.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	writeJSON(w, nethttp.StatusOK, run)
+	if run.Environment != h.environment(r) {
+		writeJSONError(w, sql.ErrNoRows, nethttp.StatusNotFound)
+		return
+	}
+	response, valid := PipelineRunResponseFor(run)
+	if !valid {
+		writeJSONError(w, sql.ErrNoRows, nethttp.StatusNotFound)
+		return
+	}
+	allowed, err := h.pipelineAllowed(r, workspaceID, response.PipelineID)
+	if err != nil {
+		writeJSONError(w, err, nethttp.StatusInternalServerError)
+		return
+	}
+	if !allowed {
+		writeJSONError(w, fmt.Errorf("forbidden"), nethttp.StatusForbidden)
+		return
+	}
+	writeJSON(w, nethttp.StatusOK, response)
+}
+
+func (h Handler) pipelineAllowed(r *nethttp.Request, workspaceID, pipelineID string) (bool, error) {
+	if h.AuthorizePipelineView == nil {
+		return true, nil
+	}
+	return h.AuthorizePipelineView(r, workspaceID, pipelineID)
+}
+
+func (h Handler) environment(r *nethttp.Request) string {
+	if h.Environment == nil {
+		return string(servingstate.DefaultEnvironment)
+	}
+	return string(servingstate.NormalizeEnvironment(servingstate.Environment(h.Environment(r))))
 }
 
 func (h Handler) runRepository(w nethttp.ResponseWriter, r *nethttp.Request) (materialize.RunRepository, string, bool) {

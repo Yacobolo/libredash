@@ -9,6 +9,7 @@ import (
 func (s *Server) deploymentHTTPHandler() *deploymenthttp.Handler {
 	options := s.deploymentOptions
 	options.Logger = s.logger
+	options.InstanceEnvironment = s.defaultEnvironment
 	options.CurrentPrincipal = func(r *http.Request) (deploymenthttp.Principal, bool) {
 		if s.auth == nil {
 			return deploymenthttp.Principal{}, false

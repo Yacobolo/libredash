@@ -26,3 +26,26 @@ func TestRegistryExpiresOrphanCoordinatorCreatedByCommand(t *testing.T) {
 		t.Fatal("expired orphan remains registered")
 	}
 }
+
+func TestRegistryRefreshSemanticModelTargetsOnlyMatchingStreams(t *testing.T) {
+	registry := NewRegistry()
+	defer registry.Close()
+	ctx := context.Background()
+	for _, streamID := range []string{"sales-a", "sales-b", "support"} {
+		registry.Ensure(streamID, ctx, func(RefreshEvent) {})
+	}
+	refreshed := map[string]int{}
+	registry.Bind("sales-a", "sales", "prod", "orders", func() { refreshed["sales-a"]++ })
+	registry.Bind("sales-b", "sales", "prod", "customers", func() { refreshed["sales-b"]++ })
+	registry.Bind("support", "support", "prod", "orders", func() { refreshed["support"]++ })
+	registry.Ensure("sales-dev", ctx, func(RefreshEvent) {})
+	registry.Bind("sales-dev", "sales", "dev", "orders", func() { refreshed["sales-dev"]++ })
+
+	streams := registry.RefreshSemanticModel("sales", "prod", "orders")
+	if len(streams) != 1 || streams[0] != "sales-a" {
+		t.Fatalf("refreshed streams = %#v, want sales-a", streams)
+	}
+	if refreshed["sales-a"] != 1 || refreshed["sales-b"] != 0 || refreshed["support"] != 0 || refreshed["sales-dev"] != 0 {
+		t.Fatalf("refresh callbacks = %#v", refreshed)
+	}
+}

@@ -107,10 +107,13 @@ class ReportFooter extends LitElement {
   }
 
   private statusText(): string {
-    if (this.status.error) return 'Refresh failed'
-    if (this.status.loading) return 'Refreshing'
-    if (this.status.lastUpdated) return `Updated ${this.status.lastUpdated}`
-    return 'Not refreshed'
+    if (this.status.error) return 'Unable to update visuals'
+    if (this.status.lastUpdated) {
+      const parsed = new Date(this.status.lastUpdated)
+      const value = Number.isNaN(parsed.getTime()) ? this.status.lastUpdated : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(parsed)
+      return `Data refreshed ${value}`
+    }
+    return 'Data not refreshed'
   }
 }
 

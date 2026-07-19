@@ -450,6 +450,7 @@ func TestPackProjectStoresActiveDeploymentPlanDiff(t *testing.T) {
 
 func TestPackProjectDoesNotSerializeResolvedConnectionCredentials(t *testing.T) {
 	t.Setenv("LIBREDASH_TEST_CRM_URL", "postgres://secret-host/sales")
+	t.Setenv("AWS_SECRET_ACCESS_KEY", "ambient-secret-must-not-be-serialized")
 	projectPath := writeBundleProjectFixture(t, map[string]string{
 		"libredash.yaml": `
 apiVersion: libredash.dev/v1
@@ -478,6 +479,18 @@ spec:
     provider: env
     secret: LIBREDASH_TEST_CRM_URL
 `,
+		"connections/lake.yaml": `
+apiVersion: libredash.dev/v1
+kind: Connection
+metadata:
+  name: lake
+spec:
+  kind: s3
+  scope: s3://company-analytics/sales/
+  credentials:
+    provider: ambient
+    region: eu-west-1
+`,
 		"sources/crm.orders.yaml": `
 apiVersion: libredash.dev/v1
 kind: Source
@@ -490,6 +503,19 @@ spec:
     order_id:
       type: string
 `,
+		"sources/lake.events.yaml": `
+apiVersion: libredash.dev/v1
+kind: Source
+metadata:
+  name: lake.events
+spec:
+  connection: lake
+  path: s3://company-analytics/sales/events/*.parquet
+  format: parquet
+  fields:
+    event_id:
+      type: string
+`,
 		"workspaces/sales/workspace.yaml": `
 apiVersion: libredash.dev/v1
 kind: Workspace
@@ -499,6 +525,7 @@ spec:
   uses:
     sources:
       - crm.orders
+      - lake.events
   models:
     include:
       - models/*.yaml
@@ -591,8 +618,10 @@ spec:
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(compiledBytes), "postgres://secret-host/sales") {
-		t.Fatalf("compiled artifact serialized resolved credential")
+	for _, secret := range []string{"postgres://secret-host/sales", "ambient-secret-must-not-be-serialized"} {
+		if strings.Contains(string(compiledBytes), secret) {
+			t.Fatalf("compiled artifact serialized resolved credential")
+		}
 	}
 }
 

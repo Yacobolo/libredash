@@ -39,8 +39,11 @@ type Connection struct {
 }
 
 type ConnectionCredentials struct {
-	Provider string `yaml:"provider" json:"provider"`
-	Secret   string `yaml:"secret" json:"secret,omitempty"`
+	Provider    string `yaml:"provider" json:"provider"`
+	Secret      string `yaml:"secret" json:"secret,omitempty"`
+	Region      string `yaml:"region" json:"region,omitempty"`
+	Endpoint    string `yaml:"endpoint" json:"endpoint,omitempty"`
+	AccountName string `yaml:"accountName" json:"accountName,omitempty"`
 }
 
 type ConnectionDefaults struct {

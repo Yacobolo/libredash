@@ -9,7 +9,6 @@ import (
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/access/httpauth"
 	"github.com/Yacobolo/libredash/internal/access/scimprov"
-	agenthttp "github.com/Yacobolo/libredash/internal/agent/http"
 	dashboardhttp "github.com/Yacobolo/libredash/internal/dashboard/http"
 	"github.com/Yacobolo/libredash/internal/staticasset"
 	workspacehttp "github.com/Yacobolo/libredash/internal/workspace/http"
@@ -46,16 +45,19 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/data/command", s.protected(access.PrivilegeViewItem, workspaceHTTP.DataExplorerCommand))
 		r.Get("/workspaces", s.protected(access.PrivilegeViewItem, workspaceHTTP.WorkspaceCatalog))
 		r.Get("/workspaces/{workspace}", s.protected(access.PrivilegeViewItem, workspaceHTTP.WorkspaceAssets))
-		r.Get("/workspaces/{workspace}/assets/{asset}", s.protectedWithObjects(access.PrivilegeViewItem, workspacehttp.AssetObjectRefs, workspaceHTTP.WorkspaceAsset))
-		r.Get("/workspaces/{workspace}/assets/{asset}/{section}", s.protectedWithObjects(access.PrivilegeViewItem, workspacehttp.AssetObjectRefs, workspaceHTTP.WorkspaceAssetSection))
-		r.Post("/workspaces/{workspace}/assets/{asset}/refresh", s.protectedWithObjects(access.PrivilegeRefreshData, workspacehttp.AssetObjectRefs, workspaceHTTP.RefreshAsset))
-		r.Post("/workspaces/{workspace}/assets/{asset}/refresh-materializations", s.protectedWithObjects(access.PrivilegeRefreshData, workspacehttp.AssetObjectRefs, workspaceHTTP.RefreshAssetMaterializations))
+		r.Get("/workspaces/{workspace}/assets/{asset}", s.protectedWithObjects(access.PrivilegeViewItem, s.workspaceAssetObjectRefs, workspaceHTTP.WorkspaceAsset))
+		r.Get("/workspaces/{workspace}/assets/{asset}/{section}", s.protectedWithObjects(access.PrivilegeViewItem, s.workspaceAssetObjectRefs, workspaceHTTP.WorkspaceAssetSection))
+		r.Post("/workspaces/{workspace}/assets/{asset}/refresh", s.protectedWithObjects(access.PrivilegeRefreshData, s.workspaceAssetObjectRefs, workspaceHTTP.RefreshAsset))
 		r.Get("/workspaces/{workspace}/data", s.protected(access.PrivilegeViewItem, workspaceHTTP.WorkspaceDataExplorerRedirect))
 		agentHTTP := s.agentHTTPHandler()
-		r.Get("/chat", s.protected(access.PrivilegeViewAgent, agentHTTP.Chat))
-		r.Get("/chat/new", s.protected(access.PrivilegeViewAgent, agentHTTP.ChatNew))
-		r.Get("/chat/{conversation}", s.protectedWithObjects(access.PrivilegeViewAgent, agenthttp.ConversationObjectRefs, agentHTTP.ChatConversation))
-		r.Post("/chat/turns", s.protected(access.PrivilegeUseAgent, agentHTTP.ChatTurn))
+		r.Get("/chats", s.protected(access.PrivilegeViewAgent, agentHTTP.Chat))
+		r.Get("/chats/new", s.protected(access.PrivilegeViewAgent, agentHTTP.ChatNew))
+		r.Get("/chats/{conversation}", s.protected(access.PrivilegeViewAgent, agentHTTP.ChatConversation))
+		r.Post("/chats/turns", s.protected(access.PrivilegeUseAgent, agentHTTP.ChatTurn))
+		r.Get("/chat", redirectLegacyChat)
+		r.Get("/chat/updates", http.NotFound)
+		r.Get("/chat/*", redirectLegacyChat)
+		r.Post("/chat/turns", redirectLegacyChat)
 		adminHTTP := s.adminHTTPHandler()
 		r.Get("/admin", s.protected(access.PrivilegeManageGrants, adminHTTP.General))
 		r.Get("/admin/principals", s.protected(access.PrivilegeManageGrants, adminHTTP.Principals))
@@ -122,6 +124,14 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("/static/*", staticAssetCache(http.StripPrefix("/static/", http.FileServer(http.Dir("static")))))
 
 	return mux
+}
+
+func redirectLegacyChat(w http.ResponseWriter, r *http.Request) {
+	target := "/chats" + strings.TrimPrefix(r.URL.Path, "/chat")
+	if r.URL.RawQuery != "" {
+		target += "?" + r.URL.RawQuery
+	}
+	http.Redirect(w, r, target, http.StatusPermanentRedirect)
 }
 
 func managedDataTusHandler(next http.Handler) http.Handler {

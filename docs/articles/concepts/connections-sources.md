@@ -25,6 +25,27 @@ Connection options are connector-specific. Put options shared by its sources und
 
 Do not store secret values directly in project YAML. Use the supported credential provider and runtime secret boundary. A connection can name an environment-backed secret without placing its value in Git.
 
+Object storage is the recommended external-file boundary. LibreDash supports these v1 credential modes:
+
+| Connection | Explicit `env` | Public `none` | Ambient identity |
+| --- | --- | --- | --- |
+| S3 | Access-key JSON | Yes, when explicitly declared | AWS default credential chain |
+| Azure Blob | Connection string or service-principal JSON | No | Azure default credential chain with `accountName` |
+| R2 and GCS | Provider-specific JSON | No | Not in v1 |
+| HTTP(S) | Connector-specific | Yes | Not applicable |
+
+Ambient S3 credentials may declare a non-secret `region` and `endpoint`. Ambient Azure credentials require the storage `accountName`. LibreDash compiles these declarations into temporary, path-scoped DuckDB secrets; resolved credentials are not written to deployment artifacts.
+
+The v1 object-storage contract is:
+
+| Source boundary | Formats | Credential modes | Path boundary | Read consistency | LibreDash-owned alternative | Backup owner |
+| --- | --- | --- | --- | --- | --- | --- |
+| S3 | CSV, JSON, Parquet, Excel, text, blob, Vortex, Delta, Iceberg, and Lance where the corresponding extension supports the object | `env`, `none`, `ambient` | Required connection `scope`; compiled secrets use the same scope | Direct read at discovery or refresh time | Managed data with a pinned revision | Source owner |
+| Azure Blob | Same path-backed formats | `env`, `ambient` | Required connection `scope`; ambient also requires `accountName` | Direct read at discovery or refresh time | Managed data with a pinned revision | Source owner |
+| R2 and GCS | Same path-backed formats supported by their S3-compatible access | `env` | Required connection `scope` | Direct read at discovery or refresh time | Managed data with a pinned revision | Source owner |
+| Public HTTP(S) | Path-backed formats supported by the configured reader | `none` | URL scope constrains authored source paths | Direct read at discovery or refresh time | Download and publish as managed data | Source owner |
+| Managed local or S3 uploads | CSV, JSON, Parquet, Excel, text, blob, Vortex, Delta, Iceberg, and Lance | LibreDash-managed storage configuration | Immutable revision manifest | Explicit pinned revision | This is the managed alternative | LibreDash operator; S3 objects also need bucket-native backup |
+
 ## Sources
 
 A source gives one accessible object a stable project identity:
@@ -64,9 +85,11 @@ Validation should fail when a model table references an undiscovered source or a
 
 ## Managed and external data
 
-Managed connections participate in the plan, stage, revision, and activation lifecycle. The file content is identified by immutable revision state before deployment activates it. External connectors resolve their configured systems according to the connector and refresh contract; their availability and consistency remain operational dependencies.
+Managed connections participate in the plan, stage, revision, and activation lifecycle. The file content is identified by immutable revision state before deployment activates it. External connectors are direct reads: discovery or refresh observes whatever the configured object path exposes at that time. LibreDash does not copy, pin, or version those objects in v1.
 
 Use managed data when LibreDash should own the uploaded object revision. Use an external connection when an existing system remains the source of truth and LibreDash should read it in place.
+
+For reproducible external refreshes, publish immutable object keys or versioned prefixes and change the source path through a reviewed project deployment. A mutable glob or overwritten key remains the source owner's consistency responsibility. A failed refresh does not replace the last successful serving snapshot.
 
 ## Change safely
 
@@ -74,7 +97,7 @@ Changing a connection endpoint or source path can affect every dependent workspa
 
 1. Search the dependency graph for consumers.
 2. Validate the whole project.
-3. Plan against the target environment.
+3. Plan against the target instance.
 4. Refresh affected model tables in a non-production environment.
 5. Compare row counts, null behavior, types, and key uniqueness.
 

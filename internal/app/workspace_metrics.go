@@ -113,13 +113,6 @@ func (m multiWorkspaceMetrics) PreviewSemantic(ctx context.Context, modelID stri
 	return nil, fmt.Errorf("workspace metrics are not configured")
 }
 
-func (m multiWorkspaceMetrics) RefreshMaterializations(ctx context.Context, modelID string) error {
-	if metrics := m.defaultMetrics(); metrics != nil {
-		return metrics.RefreshMaterializations(ctx, modelID)
-	}
-	return fmt.Errorf("workspace metrics are not configured")
-}
-
 func (m multiWorkspaceMetrics) Pages(dashboardID string) []dashboard.Page {
 	if metrics := m.defaultMetrics(); metrics != nil {
 		return metrics.Pages(dashboardID)
@@ -242,13 +235,6 @@ func (m *dynamicRuntimeMetrics) PreviewSemantic(ctx context.Context, modelID str
 		return metrics.PreviewSemantic(ctx, modelID, request)
 	}
 	return nil, fmt.Errorf("workspace metrics are not configured")
-}
-
-func (m *dynamicRuntimeMetrics) RefreshMaterializations(ctx context.Context, modelID string) error {
-	if metrics := m.defaultMetrics(); metrics != nil {
-		return metrics.RefreshMaterializations(ctx, modelID)
-	}
-	return fmt.Errorf("workspace metrics are not configured")
 }
 
 func (m *dynamicRuntimeMetrics) Pages(dashboardID string) []dashboard.Page {

@@ -8,10 +8,10 @@ import (
 
 	dashboardadapter "github.com/Yacobolo/libredash/internal/analytics/duckdb/dashboardadapter"
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
+	manageddataruntimebinding "github.com/Yacobolo/libredash/internal/manageddata/runtimebinding"
 	"github.com/Yacobolo/libredash/internal/runtimehost"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
-	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
 type servingStateRuntimeFactory struct {
@@ -42,7 +42,7 @@ func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost
 	if compiled.WorkspaceID != string(input.State.WorkspaceID) {
 		return nil, fmt.Errorf("compiled artifact workspace = %q, want %q", compiled.WorkspaceID, input.State.WorkspaceID)
 	}
-	if err := bindManagedDataRoots(compiled.Definition, input.ManagedData); err != nil {
+	if err := manageddataruntimebinding.BindRoots(compiled.Definition, input.ManagedData); err != nil {
 		return nil, err
 	}
 	dataPath := runtimeFirstNonEmpty(f.duckLakeDataPath, filepath.Join(duckDir, "data"))
@@ -70,33 +70,6 @@ func (f servingStateRuntimeFactory) Prepare(_ context.Context, input runtimehost
 		}
 	}
 	return service, nil
-}
-
-func bindManagedDataRoots(definition *workspace.Definition, resolution runtimehost.ManagedDataResolution) error {
-	if definition == nil {
-		return fmt.Errorf("workspace definition is required")
-	}
-	for modelID, model := range definition.Models {
-		if model == nil {
-			continue
-		}
-		for connectionName, connection := range model.Connections {
-			if connection.Kind != "managed" {
-				continue
-			}
-			root := filepath.Clean(resolution.Roots[connectionName])
-			if resolution.Roots[connectionName] == "" {
-				return fmt.Errorf("semantic model %q managed connection %q has no bound revision", modelID, connectionName)
-			}
-			if !filepath.IsAbs(root) {
-				return fmt.Errorf("semantic model %q managed connection %q revision root must be absolute", modelID, connectionName)
-			}
-			connection.Root = root
-			connection.Scope = ""
-			model.Connections[connectionName] = connection
-		}
-	}
-	return nil
 }
 
 func runtimeFirstNonEmpty(values ...string) string {

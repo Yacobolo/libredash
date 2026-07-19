@@ -76,10 +76,6 @@ type semanticQueryRuntime interface {
 	PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
 }
 
-type materializationRuntime interface {
-	RefreshMaterializations(ctx context.Context, modelID string) error
-}
-
 type agentPolicyProvider interface {
 	AgentPolicy() workspace.AgentPolicy
 }
@@ -340,34 +336,6 @@ func (m runtimeMetrics) ExplainSemanticPreview(modelID string, request reportdef
 		return semanticquery.Plan{}, fmt.Errorf("unknown semantic model %q", modelID)
 	}
 	return semanticquery.NewPlanner(model).PlanRows(reportdef.SemanticRowRequest(request))
-}
-
-func (m runtimeMetrics) RefreshMaterializations(ctx context.Context, modelID string) error {
-	runtime, release, err := m.active(ctx)
-	if err != nil {
-		return err
-	}
-	defer release()
-	port, ok := runtime.(materializationRuntime)
-	if !ok {
-		return fmt.Errorf("active runtime does not provide materialization refresh")
-	}
-	return port.RefreshMaterializations(ctx, modelID)
-}
-
-func (m runtimeMetrics) RefreshModelTables(ctx context.Context, modelID string, tableNames []string) error {
-	runtime, release, err := m.active(ctx)
-	if err != nil {
-		return err
-	}
-	defer release()
-	port, ok := runtime.(interface {
-		RefreshTables(context.Context, string, []string) error
-	})
-	if !ok {
-		return fmt.Errorf("active runtime does not support model table refresh")
-	}
-	return port.RefreshTables(ctx, modelID, tableNames)
 }
 
 func (m runtimeMetrics) Pages(dashboardID string) []dashboard.Page {

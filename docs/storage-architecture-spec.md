@@ -12,7 +12,7 @@ Refreshes replace the served data atomically. DuckLake snapshots provide interna
 
 - Use DuckLake for materialized model tables, snapshots, schema history, statistics, commit metadata, and physical data-file ownership.
 - Use the control-plane database for LibreDash state: workspaces, environments, active serving pointers, permissions, and application job state.
-- Use one global DuckLake catalog for analytical metadata across all workspaces and environments.
+- Use one global DuckLake catalog for analytical metadata across all workspaces in the instance's single environment.
 - Store analytical data as DuckLake-managed Parquet files in the LibreDash data store.
 - Execute BI queries through DuckDB attached to the active DuckLake snapshot.
 - Activate refreshed data by flipping a metadata pointer, not by moving files.
@@ -31,7 +31,7 @@ Refreshes replace the served data atomically. DuckLake snapshots provide interna
 
 ## Architecture
 
-Each LibreDash instance has one control-plane database, one global DuckLake catalog, and one analytical data store:
+Each LibreDash instance has one server process, one configured environment, one control-plane database, one global DuckLake catalog, and one analytical data store:
 
 ```text
 .libredash/

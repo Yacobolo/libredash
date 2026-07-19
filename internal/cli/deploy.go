@@ -29,6 +29,7 @@ type deployRequest struct {
 	Revisions   map[string]string
 	Target      string
 	Token       string
+	Environment string
 	AutoApprove bool
 	Out         io.Writer
 	HTTPClient  *http.Client
@@ -54,7 +55,7 @@ func deployCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 			}
 			return runDeploy(ctx, deployRequest{
 				ProjectPath: opts.catalog, Revisions: pins,
-				Target: target, Token: token, AutoApprove: opts.autoApprove,
+				Target: target, Token: token, Environment: opts.environment, AutoApprove: opts.autoApprove,
 				Out: cmd.OutOrStdout(), HTTPClient: http.DefaultClient,
 			})
 		},
@@ -62,6 +63,7 @@ func deployCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	command.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL")
 	command.Flags().StringVar(&opts.token, "token", "", "API token")
 	command.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
+	command.Flags().StringVar(&opts.environment, "environment", "", "assert the target instance environment")
 	command.Flags().StringArrayVar(&revisions, "revision", nil, "managed revision pin as connection=sha256:<digest> (repeatable)")
 	command.Flags().BoolVar(&opts.autoApprove, "auto-approve", false, "approve and activate the deployment without prompting")
 	return command
@@ -88,13 +90,20 @@ func runDeploy(ctx context.Context, request deployRequest) error {
 	if len(workspaceIDs) == 0 {
 		return fmt.Errorf("project %q has no workspaces", request.ProjectPath)
 	}
+	request.Environment, err = targetEnvironment(ctx, request.HTTPClient, request.Target, request.Token, request.Environment)
+	if err != nil {
+		return err
+	}
 
 	client := newManagedDataCLIClient(request.HTTPClient, request.Target, request.Token)
 	capabilities, err := client.capabilities(ctx)
 	if err != nil || strings.TrimSpace(capabilities.Environment) == "" {
 		return fmt.Errorf("read server capabilities failed")
 	}
-	cliOpts := &rootOptions{target: request.Target, token: request.Token, catalog: request.ProjectPath, autoApprove: request.AutoApprove}
+	if capabilities.Environment != request.Environment {
+		return fmt.Errorf("target instance environment %q does not match server capabilities environment %q", request.Environment, capabilities.Environment)
+	}
+	cliOpts := &rootOptions{target: request.Target, token: request.Token, catalog: request.ProjectPath, environment: request.Environment, autoApprove: request.AutoApprove}
 	type plannedWorkspace struct {
 		workspaceID string
 		activeGraph workspace.AssetGraph
@@ -128,7 +137,7 @@ func runDeploy(ctx context.Context, request deployRequest) error {
 		pins := selectManagedDataPins(request.Revisions, managedConnectionsForWorkspace(project, workspaceProject))
 		var content bytes.Buffer
 		manifest, digest, packErr := servingstatefs.PackProject(request.ProjectPath, servingstatefs.PackProjectOptions{
-			WorkspaceID: item.workspaceID, Environment: servingstate.Environment(capabilities.Environment), ServingStateID: "release-artifact",
+			WorkspaceID: item.workspaceID, Environment: servingstate.Environment(request.Environment), ServingStateID: "release-artifact",
 			ActiveGraph: item.activeGraph, ManagedDataRevisions: pins,
 		}, &content)
 		if packErr != nil {
@@ -207,7 +216,7 @@ func runDeploy(ctx context.Context, request deployRequest) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintf(outputOrDiscard(request.Out), "deployed %s release=%s deployment=%s environment=%s status=%s\n", project.Name, created.Id, deployed.Id, capabilities.Environment, deployed.Status)
+	_, err = fmt.Fprintf(outputOrDiscard(request.Out), "deployed %s release=%s deployment=%s environment=%s status=%s\n", project.Name, created.Id, deployed.Id, request.Environment, deployed.Status)
 	return err
 }
 

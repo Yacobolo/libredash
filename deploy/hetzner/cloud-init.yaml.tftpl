@@ -7,8 +7,6 @@ packages:
   - curl
   - docker.io
   - docker-compose-v2
-  - jq
-  - openssl
   - restic
   - unattended-upgrades
 
@@ -18,16 +16,31 @@ write_files:
     permissions: "0600"
     encoding: b64
     content: ${compose_b64}
-  - path: /etc/libredash/Caddyfile
+  - path: /opt/libredash/compose.https.yaml
+    owner: root:root
+    permissions: "0600"
+    encoding: b64
+    content: ${compose_https_b64}
+  - path: /opt/libredash/Caddyfile
     owner: root:root
     permissions: "0600"
     encoding: b64
     content: ${caddyfile_b64}
+  - path: /opt/libredash/deployment.env.example
+    owner: root:root
+    permissions: "0600"
+    encoding: b64
+    content: ${deployment_example_b64}
   - path: /usr/local/sbin/libredashctl
     owner: root:root
     permissions: "0700"
     encoding: b64
-    content: ${libredashctl_b64}
+    content: ${libredashctl_wrapper_b64}
+  - path: /usr/local/sbin/libredash-backup-hook
+    owner: root:root
+    permissions: "0700"
+    encoding: b64
+    content: ${backup_hook_b64}
   - path: /etc/systemd/system/libredash-backup.service
     owner: root:root
     permissions: "0644"

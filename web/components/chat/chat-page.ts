@@ -16,6 +16,8 @@ const emptyAgent: ChatSignal = {
 }
 
 class LibreDashChatPage extends DatastarLit(LitElement) {
+  private redirectedConversationID = ''
+
   static styles = css`
     :host {
       display: block;
@@ -179,6 +181,14 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
       status: 'required',
       composer: 'required',
     })
+    this.navigateFromDraft()
+  }
+
+  private navigateFromDraft(): void {
+    const conversationID = this.agent.activeConversationId?.trim()
+    if (this.page?.view !== 'new' || !conversationID || conversationID === this.redirectedConversationID) return
+    this.redirectedConversationID = conversationID
+    window.location.assign(`/chats/${encodeURIComponent(conversationID)}`)
   }
 
   get page(): ChatPageSignal | null {

@@ -33,6 +33,7 @@ import (
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
 	"github.com/Yacobolo/libredash/internal/dataquery"
+	"github.com/Yacobolo/libredash/internal/manageddata"
 	"github.com/Yacobolo/libredash/internal/platform"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	servingstatefs "github.com/Yacobolo/libredash/internal/servingstate/filesystem"
@@ -50,7 +51,13 @@ type harness struct {
 	workspaceID string
 }
 
-const integrationOlistManagedDataRevision = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+var integrationOlistManagedDataRevision = integrationManagedDataManifest().RevisionID()
+
+func integrationManagedDataManifest() manageddata.Manifest {
+	return manageddata.Manifest{Files: []manageddata.File{{
+		Path: "fixture.csv", Size: 1, SHA256: strings.Repeat("a", 64),
+	}}}
+}
 
 var integrationDataInitUpdatesPattern = regexp.MustCompile(`data-init="@get\('([^']+)'`)
 
@@ -78,7 +85,6 @@ type integrationMetrics interface {
 	ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error)
 	QuerySemantic(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error)
 	PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
-	RefreshMaterializations(ctx context.Context, modelID string) error
 	Pages(dashboardID string) []dashboard.Page
 }
 

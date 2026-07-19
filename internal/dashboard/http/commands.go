@@ -47,16 +47,6 @@ func (h Handler) ResetFilters(w nethttp.ResponseWriter, r *nethttp.Request) {
 	})
 }
 
-func (h Handler) RefreshMaterializations(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.handleCommandWithBefore(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
-		return service.PrepareMaterializationRefresh(request, current)
-	}, func(metrics Metrics, request command.Request) func(context.Context) error {
-		return func(ctx context.Context) error {
-			return metrics.RefreshMaterializations(ctx, request.ModelID)
-		}
-	})
-}
-
 func (h Handler) handleCommand(w nethttp.ResponseWriter, r *nethttp.Request, prepare commandPrepare) {
 	h.handleCommandWithBefore(w, r, prepare, nil)
 }

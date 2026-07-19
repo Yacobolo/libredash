@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	nethttp "net/http"
-	"os"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
+	"github.com/Yacobolo/libredash/internal/refreshpipeline"
 	"github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/Yacobolo/libredash/internal/workspace"
@@ -29,8 +29,6 @@ type Support struct {
 	Environment    func(*nethttp.Request) servingstate.Environment
 	PrincipalID    func(*nethttp.Request) string
 	DispatchQueued func()
-	DirectRunner   materialize.RefreshRunner
-	ModelLookup    materialize.ModelLookup
 	Broker         interface {
 		Publish(string, pagestream.SignalPatch)
 	}
@@ -38,13 +36,14 @@ type Support struct {
 	WorkspaceView        func(*nethttp.Request, string) workspace.WorkspaceView
 	WorkspaceViewContext func(context.Context, string) workspace.WorkspaceView
 	WorkspaceVersions    func(context.Context, string, string, workspace.AssetView, string) (ui.AssetVersionsState, error)
+	DataVersions         refreshpipeline.Repository
 }
 
 func (s Support) RefreshAsset(_ context.Context, input AssetRefreshInput) error {
 	return s.queueAssetRefreshWithPatches(input.Request, input.WorkspaceID, input.Asset, input.Assets, input.Edges)
 }
 
-func (s Support) AssetRefreshState(ctx context.Context, workspaceID string, asset workspace.AssetView) (ui.AssetRefreshState, error) {
+func (s Support) AssetRefreshState(ctx context.Context, workspaceID, environment string, asset workspace.AssetView) (ui.AssetRefreshState, error) {
 	if !workspaceAssetRefreshable(asset) {
 		return ui.AssetRefreshState{}, nil
 	}
@@ -52,25 +51,53 @@ func (s Support) AssetRefreshState(ctx context.Context, workspaceID string, asse
 	if err != nil {
 		return ui.AssetRefreshState{}, err
 	}
-	targetType := materialize.TargetSemanticModel
-	if asset.Type == string(workspace.AssetTypeModelTable) {
-		targetType = materialize.TargetModelTable
-	}
+	targetType := materialize.TargetRefreshPipeline
 	targetID := assetRefreshTargetID(asset)
-	runs, err := repo.ListTargetRuns(ctx, workspaceID, targetType, targetID, materialize.RunPage{Limit: 50})
+	environment = string(servingstate.NormalizeEnvironment(servingstate.Environment(environment)))
+	runs, err := repo.ListTargetRuns(ctx, workspaceID, targetType, targetID, materialize.RunPage{Limit: 50, Environment: environment})
 	if err != nil {
 		return ui.AssetRefreshState{}, err
 	}
 	state := ui.AssetRefreshState{Runs: uiRefreshRuns(runs)}
+	pipelineID := strings.TrimPrefix(asset.Key, workspaceID+".")
+	if s.DataVersions != nil {
+		nextRun, ok, err := s.DataVersions.NextRun(ctx, workspaceID, environment, pipelineID)
+		if err != nil {
+			return ui.AssetRefreshState{}, err
+		}
+		if ok {
+			state.NextRun = nextRun
+		}
+	}
 	if len(state.Runs) > 0 {
 		state.Latest = state.Runs[0]
 	}
-	if latest, ok, err := repo.LatestSuccessfulTargetRun(ctx, workspaceID, targetType, targetID); err != nil {
+	if latest, ok, err := repo.LatestSuccessfulTargetRun(ctx, workspaceID, environment, targetType, targetID); err != nil {
 		return ui.AssetRefreshState{}, err
 	} else if ok {
 		state.LatestSuccessful = uiRefreshRun(latest)
 	}
+	if s.DataVersions != nil {
+		modelID := refreshPipelineModelID(asset)
+		if version, ok, err := s.DataVersions.DataVersion(ctx, workspaceID, environment, modelID); err != nil {
+			return ui.AssetRefreshState{}, err
+		} else if ok {
+			state.DataVersion = ui.AssetDataVersion{
+				SnapshotID: version.SnapshotID, ServingStateID: version.ServingStateID,
+				RefreshedAt: version.RefreshedAt, Source: version.Source,
+			}
+		}
+	}
 	return state, nil
+}
+
+func refreshPipelineModelID(asset workspace.AssetView) string {
+	for _, key := range []string{"semanticModel", "SemanticModel"} {
+		if value, ok := asset.Payload[key].(string); ok {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func (s Support) AssetVersionsState(ctx context.Context, workspaceID, environment string, asset workspace.AssetView, section string) (ui.AssetVersionsState, error) {
@@ -97,25 +124,13 @@ func (s Support) queueAssetRefreshWithPatches(r *nethttp.Request, workspaceID st
 	if s.Environment != nil {
 		environment = s.Environment(r)
 	}
-	activeState, err := service.Active(ctx, workspaceID, environment)
-	if err != nil {
-		return err
-	}
-	artifact := activeState.Artifact
-	if strings.TrimSpace(artifact.Path) == "" {
-		return s.runAssetRefreshWithPatches(r, workspaceID, asset, assets, edges)
-	}
-	if _, err := os.Stat(artifact.Path); err != nil {
-		if os.IsNotExist(err) {
-			return s.runAssetRefreshWithPatches(r, workspaceID, asset, assets, edges)
-		}
-		return err
-	}
-	if _, err := service.QueueAssetRefresh(ctx, refresh.QueueAssetInput{
+	pipelineID := strings.TrimPrefix(asset.Key, workspaceID+".")
+	if _, err := service.QueuePipelineRefresh(ctx, refresh.QueuePipelineInput{
 		WorkspaceID: workspaceID,
 		Environment: environment,
 		PrincipalID: s.principalID(r),
-		Asset:       asset,
+		PipelineID:  pipelineID,
+		TriggerType: materialize.TriggerManual,
 	}); err != nil {
 		return err
 	}
@@ -125,93 +140,16 @@ func (s Support) queueAssetRefreshWithPatches(r *nethttp.Request, workspaceID st
 	return nil
 }
 
-func (s Support) runAssetRefreshWithPatches(r *nethttp.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
-	switch asset.Type {
-	case string(workspace.AssetTypeSemanticModel):
-		return s.refreshSemanticModelAssetWithPatches(r.Context(), r, workspaceID, asset, assets, edges)
-	case string(workspace.AssetTypeModelTable):
-		return s.refreshModelTableAssetWithPatches(r.Context(), r, workspaceID, asset, assets, edges)
-	default:
-		return nethttp.ErrMissingFile
-	}
-}
-
-func (s Support) refreshSemanticModelAssetWithPatches(ctx context.Context, r *nethttp.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
-	repo, err := s.runRepository()
-	if err != nil {
-		return err
-	}
-	orchestrator := materialize.NewRefreshOrchestrator(repo, s.DirectRunner, s.ModelLookup)
-	return orchestrator.RefreshSemanticModel(ctx, materialize.RefreshRunInput{
-		WorkspaceID: workspaceID,
-		ModelID:     semanticModelTargetID(asset),
-		PrincipalID: s.principalID(r),
-		TargetID:    asset.Key,
-	}, materialize.RefreshPublisher{
-		Root: func() { s.PublishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges) },
-		Target: func(targetID string) {
-			s.PublishWorkspaceAssetRefreshPatchForTarget(r, workspaceID, targetID, assets, edges)
-		},
-	})
-}
-
-func (s Support) refreshModelTableAssetWithPatches(ctx context.Context, r *nethttp.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) error {
-	repo, err := s.runRepository()
-	if err != nil {
-		return err
-	}
-	modelID, tableName := modelTableTargetParts(asset.Key)
-	if modelID == "" || tableName == "" {
-		return errors.New("model table asset key is invalid")
-	}
-	orchestrator := materialize.NewRefreshOrchestrator(repo, s.DirectRunner, s.ModelLookup)
-	return orchestrator.RefreshModelTable(ctx, materialize.RefreshRunInput{
-		WorkspaceID: workspaceID,
-		ModelID:     modelID,
-		PrincipalID: s.principalID(r),
-		TargetID:    asset.Key,
-	}, tableName, materialize.RefreshPublisher{
-		Root: func() { s.PublishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges) },
-		Target: func(targetID string) {
-			s.PublishWorkspaceAssetRefreshPatchForTarget(r, workspaceID, targetID, assets, edges)
-		},
-	})
-}
-
 func (s Support) PublishWorkspaceAssetRefreshPatch(r *nethttp.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView) {
 	for _, section := range workspacedatastar.WorkspaceAssetRefreshSections() {
 		s.publish(workspacedatastar.WorkspaceAssetStreamID(workspaceID, asset.ID, section), s.workspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges, section))
 	}
 }
 
-func (s Support) PublishWorkspaceAssetRefreshPatchForTarget(r *nethttp.Request, workspaceID, targetID string, assets []workspace.AssetView, edges []workspace.AssetEdgeView) {
-	for _, asset := range assets {
-		if asset.Key == targetID && workspaceAssetRefreshable(asset) {
-			s.PublishWorkspaceAssetRefreshPatch(r, workspaceID, asset, assets, edges)
-		}
-	}
-}
-
-func (s Support) PublishModelRefreshPatches(ctx context.Context, workspaceID, modelID string) {
-	assets, edges, ok := s.workspaceAssetsAndEdges(ctx, workspaceID)
-	if !ok {
+func (s Support) PublishWorkspaceAssetRefreshPatchesForTarget(ctx context.Context, workspaceID, environment, targetType, targetID string) {
+	if targetType != materialize.TargetRefreshPipeline {
 		return
 	}
-	for _, asset := range assets {
-		if asset.Type == string(workspace.AssetTypeSemanticModel) && semanticModelTargetID(asset) != modelID {
-			continue
-		}
-		if asset.Type == string(workspace.AssetTypeModelTable) {
-			assetModelID, _ := modelTableTargetParts(asset.Key)
-			if assetModelID != modelID {
-				continue
-			}
-		}
-		s.publishAssetRefreshSignals(ctx, nil, workspaceID, asset, assets, edges, "")
-	}
-}
-
-func (s Support) PublishWorkspaceAssetRefreshPatchesForTarget(ctx context.Context, workspaceID, targetType, targetID string) {
 	assets, edges, ok := s.workspaceAssetsAndEdges(ctx, workspaceID)
 	if !ok {
 		return
@@ -220,21 +158,18 @@ func (s Support) PublishWorkspaceAssetRefreshPatchesForTarget(ctx context.Contex
 		if assetRefreshTargetID(asset) != targetID {
 			continue
 		}
-		if targetType == materialize.TargetModelTable && asset.Type != string(workspace.AssetTypeModelTable) {
+		if asset.Type != string(workspace.AssetTypeRefreshPipeline) {
 			continue
 		}
-		if targetType == materialize.TargetSemanticModel && asset.Type != string(workspace.AssetTypeSemanticModel) {
-			continue
-		}
-		s.publishAssetRefreshSignals(ctx, nil, workspaceID, asset, assets, edges, "")
+		s.publishAssetRefreshSignals(ctx, nil, workspaceID, environment, asset, assets, edges, "")
 	}
 }
 
-func (s Support) publishAssetRefreshSignals(ctx context.Context, r *nethttp.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView, onlySection string) {
+func (s Support) publishAssetRefreshSignals(ctx context.Context, r *nethttp.Request, workspaceID, environment string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView, onlySection string) {
 	if !workspaceAssetRefreshable(asset) {
 		return
 	}
-	refresh, err := s.AssetRefreshState(ctx, workspaceID, asset)
+	refresh, err := s.AssetRefreshState(ctx, workspaceID, environment, asset)
 	if err != nil {
 		return
 	}
@@ -254,7 +189,11 @@ func (s Support) publishAssetRefreshSignals(ctx context.Context, r *nethttp.Requ
 }
 
 func (s Support) workspaceAssetRefreshPatch(r *nethttp.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView, section string) pagestream.SignalPatch {
-	refresh, err := s.AssetRefreshState(r.Context(), workspaceID, asset)
+	environment := string(servingstate.DefaultEnvironment)
+	if s.Environment != nil {
+		environment = string(s.Environment(r))
+	}
+	refresh, err := s.AssetRefreshState(r.Context(), workspaceID, environment, asset)
 	if err != nil {
 		refresh = ui.AssetRefreshState{Latest: ui.AssetRefreshRun{Status: "failed"}}
 	}
@@ -304,14 +243,8 @@ func uiRefreshRuns(runs []materialize.RunRecord) []ui.AssetRefreshRun {
 func uiRefreshRun(run materialize.RunRecord) ui.AssetRefreshRun {
 	return ui.AssetRefreshRun{
 		ID:                   run.ID,
-		ModelID:              run.ModelID,
-		ServingStateID:       run.ServingStateID,
-		PrincipalID:          run.PrincipalID,
 		PrincipalDisplayName: run.PrincipalDisplayName,
-		TargetType:           run.TargetType,
-		TargetID:             run.TargetID,
 		TriggerType:          run.TriggerType,
-		ParentRunID:          run.ParentRunID,
 		Status:               run.Status,
 		StartedAt:            run.StartedAt,
 		FinishedAt:           run.FinishedAt,
@@ -321,22 +254,4 @@ func uiRefreshRun(run materialize.RunRecord) ui.AssetRefreshRun {
 
 func assetRefreshTargetID(asset workspace.AssetView) string {
 	return asset.Key
-}
-
-func semanticModelTargetID(asset workspace.AssetView) string {
-	if name, ok := asset.Payload["Name"].(string); ok && strings.TrimSpace(name) != "" {
-		return strings.TrimSpace(name)
-	}
-	if name, ok := asset.Payload["name"].(string); ok && strings.TrimSpace(name) != "" {
-		return strings.TrimSpace(name)
-	}
-	return asset.Key
-}
-
-func modelTableTargetParts(key string) (string, string) {
-	parts := strings.SplitN(strings.TrimSpace(key), ".", 2)
-	if len(parts) != 2 {
-		return "", strings.TrimSpace(key)
-	}
-	return parts[0], parts[1]
 }

@@ -246,6 +246,8 @@ func PayloadSchemaForAssetType(typ AssetType) string {
 		return "workspace_role_binding.v1"
 	case AssetTypeWorkspaceAgentPolicy:
 		return "workspace_agent_policy.v1"
+	case AssetTypeRefreshPipeline:
+		return "refresh_pipeline.v1"
 	default:
 		return ""
 	}

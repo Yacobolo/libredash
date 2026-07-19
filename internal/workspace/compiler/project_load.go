@@ -11,6 +11,7 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/configschema"
 	"github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/refreshpipeline"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"gopkg.in/yaml.v3"
 )
@@ -162,6 +163,7 @@ func loadWorkspaces(project *Project, includes []string) error {
 			AccessGrants:          map[string]workspace.WorkspaceGrant{},
 			AccessDataPolicies:    map[string]workspace.WorkspaceDataPolicy{},
 			AgentPolicies:         map[string]workspace.AgentPolicy{},
+			RefreshPipelines:      map[string]refreshpipeline.Definition{},
 			ModelTitles:           map[string]string{},
 			ModelDescriptions:     map[string]string{},
 			DashboardTitles:       map[string]string{},
@@ -173,6 +175,7 @@ func loadWorkspaces(project *Project, includes []string) error {
 			DashboardPaths:        map[string]string{},
 			AccessPaths:           map[string]string{},
 			AgentPolicyPaths:      map[string]string{},
+			RefreshPipelinePaths:  map[string]string{},
 		}
 		for _, source := range spec.Uses.Sources {
 			workspaceProject.AllowedSources[source] = struct{}{}
@@ -182,6 +185,9 @@ func loadWorkspaces(project *Project, includes []string) error {
 			return err
 		}
 		if err := loadWorkspaceSemanticModels(workspaceProject, workspaceDir, spec.SemanticModels.Include); err != nil {
+			return err
+		}
+		if err := loadWorkspaceRefreshPipelines(workspaceProject, workspaceDir, spec.RefreshPipelines.Include); err != nil {
 			return err
 		}
 		if err := loadWorkspaceDashboards(workspaceProject, workspaceDir, spec.Dashboards.Include); err != nil {
@@ -194,6 +200,53 @@ func loadWorkspaces(project *Project, includes []string) error {
 			return err
 		}
 		project.Workspaces[id] = workspaceProject
+	}
+	return nil
+}
+
+func loadWorkspaceRefreshPipelines(workspaceProject *WorkspaceProject, baseDir string, includes []string) error {
+	paths, err := expandIncludes(baseDir, includes)
+	if err != nil {
+		return err
+	}
+	for _, path := range paths {
+		envelope, err := readEnvelope(path)
+		if err != nil {
+			return err
+		}
+		if envelope.Kind != "RefreshPipeline" {
+			return resourceError(path, envelopeResourceID(envelope, workspaceProject.ID), "kind", "%s kind = %q, want RefreshPipeline", path, envelope.Kind)
+		}
+		if envelope.Metadata.Workspace != "" && envelope.Metadata.Workspace != workspaceProject.ID {
+			return resourceError(path, envelopeResourceID(envelope, workspaceProject.ID), "metadata.workspace", "%s workspace = %q, want %q", path, envelope.Metadata.Workspace, workspaceProject.ID)
+		}
+		var spec refreshPipelineSpec
+		if err := envelope.Spec.Decode(&spec); err != nil {
+			return resourceError(path, envelopeResourceID(envelope, workspaceProject.ID), "spec", "%s spec: %s", path, err.Error())
+		}
+		name := envelope.Metadata.Name
+		if name == "" {
+			return resourceError(path, "", "metadata.name", "%s metadata.name is required", path)
+		}
+		if _, exists := workspaceProject.RefreshPipelines[name]; exists {
+			return resourceError(path, "refresh_pipeline:"+workspaceProject.ID+"."+name, "metadata.name", "duplicate RefreshPipeline %q in workspace %q", name, workspaceProject.ID)
+		}
+		pipeline := refreshpipeline.Definition{ID: name, Name: name, SemanticModel: spec.SemanticModel}
+		seenSchedules := map[string]struct{}{}
+		for _, authored := range spec.On.Schedule {
+			schedule, err := refreshpipeline.ParseSchedule(authored.Cron, authored.Timezone)
+			if err != nil {
+				return resourceError(path, "refresh_pipeline:"+workspaceProject.ID+"."+name, "spec.on.schedule", "RefreshPipeline %q.%q has invalid schedule: %s", workspaceProject.ID, name, err.Error())
+			}
+			key := schedule.Expression + "|" + schedule.Timezone
+			if _, exists := seenSchedules[key]; exists {
+				return resourceError(path, "refresh_pipeline:"+workspaceProject.ID+"."+name, "spec.on.schedule", "RefreshPipeline %q.%q has duplicate schedule %q in %q", workspaceProject.ID, name, schedule.Expression, schedule.Timezone)
+			}
+			seenSchedules[key] = struct{}{}
+			pipeline.Schedules = append(pipeline.Schedules, schedule)
+		}
+		workspaceProject.RefreshPipelines[name] = pipeline
+		workspaceProject.RefreshPipelinePaths[name] = path
 	}
 	return nil
 }
@@ -504,6 +557,11 @@ func envelopeResourceID(envelope resourceEnvelope, fallbackWorkspace string) str
 			return ""
 		}
 		return "workspace_agent_policy:" + workspaceID + "." + name
+	case "RefreshPipeline":
+		if workspaceID == "" {
+			return ""
+		}
+		return "refresh_pipeline:" + workspaceID + "." + name
 	default:
 		return ""
 	}
@@ -539,6 +597,8 @@ func schemaKindForEnvelope(content []byte) (configschema.Kind, bool) {
 		return configschema.KindDataPolicy, true
 	case "WorkspaceAgentPolicy":
 		return configschema.KindWorkspaceAgentPolicy, true
+	case "RefreshPipeline":
+		return configschema.KindRefreshPipeline, true
 	case "ModelTable":
 		return configschema.KindModelTable, true
 	case "SemanticModel":

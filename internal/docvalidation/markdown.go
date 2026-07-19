@@ -24,6 +24,7 @@ var schemaKinds = map[string]configschema.Kind{
 	"Grant":                configschema.KindGrant,
 	"DataPolicy":           configschema.KindDataPolicy,
 	"WorkspaceAgentPolicy": configschema.KindWorkspaceAgentPolicy,
+	"RefreshPipeline":      configschema.KindRefreshPipeline,
 	"ModelTable":           configschema.KindModelTable,
 	"SemanticModel":        configschema.KindSemanticModelResource,
 	"Dashboard":            configschema.KindDashboardResource,

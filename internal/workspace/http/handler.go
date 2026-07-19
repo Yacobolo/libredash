@@ -164,7 +164,7 @@ func (h Handler) WorkspaceAssetSection(w nethttp.ResponseWriter, r *nethttp.Requ
 		nethttp.Redirect(w, r, "/workspaces/"+workspaceID+"/assets/"+assetID+"/details", nethttp.StatusFound)
 		return
 	}
-	refresh, err := h.assetRefreshState(r.Context(), workspaceID, selected)
+	refresh, err := h.assetRefreshState(r.Context(), workspaceID, h.environment(r), selected)
 	if err != nil {
 		nethttp.Error(w, err.Error(), nethttp.StatusInternalServerError)
 		return
@@ -892,7 +892,7 @@ func (h Handler) AssetUpdatesStream(w nethttp.ResponseWriter, r *nethttp.Request
 		trace = broker.TraceStore()
 	}
 	updates := pagestream.NewSignalStream(w, r, pagestream.WithStreamTrace(trace, streamID, "workspace.asset.bootstrap"))
-	refresh, err := h.assetRefreshState(r.Context(), workspaceID, selected)
+	refresh, err := h.assetRefreshState(r.Context(), workspaceID, h.environment(r), selected)
 	if err != nil {
 		nethttp.Error(w, err.Error(), statusForNotFound(err))
 		return
@@ -945,10 +945,6 @@ func (h Handler) patchAndWait(w nethttp.ResponseWriter, r *nethttp.Request, patc
 }
 
 func (h Handler) RefreshAsset(w nethttp.ResponseWriter, r *nethttp.Request) {
-	h.refreshAsset(w, r)
-}
-
-func (h Handler) RefreshAssetMaterializations(w nethttp.ResponseWriter, r *nethttp.Request) {
 	h.refreshAsset(w, r)
 }
 
@@ -1055,11 +1051,11 @@ func (h Handler) workspaceAccess(r *nethttp.Request, view workspace.WorkspaceVie
 	return h.ReadModel.WorkspaceAccess(r, view, canManage, status)
 }
 
-func (h Handler) assetRefreshState(ctx context.Context, workspaceID string, asset workspace.AssetView) (ui.AssetRefreshState, error) {
+func (h Handler) assetRefreshState(ctx context.Context, workspaceID, environment string, asset workspace.AssetView) (ui.AssetRefreshState, error) {
 	if h.RefreshState == nil || !workspaceAssetRefreshable(asset) {
 		return ui.AssetRefreshState{}, nil
 	}
-	return h.RefreshState.AssetRefreshState(ctx, workspaceID, asset)
+	return h.RefreshState.AssetRefreshState(ctx, workspaceID, environment, asset)
 }
 
 func (h Handler) assetVersionsState(ctx context.Context, workspaceID, environment string, asset workspace.AssetView, section string) (ui.AssetVersionsState, error) {
@@ -1116,11 +1112,11 @@ func platformAssetWorkspaceView() workspace.WorkspaceView {
 }
 
 func workspaceAssetRefreshable(asset workspace.AssetView) bool {
-	return asset.Type == string(workspace.AssetTypeSemanticModel) || asset.Type == string(workspace.AssetTypeModelTable)
+	return asset.Type == string(workspace.AssetTypeRefreshPipeline)
 }
 
 func (h Handler) workspaceAssetRefreshPatch(r *nethttp.Request, workspaceID string, asset workspace.AssetView, assets []workspace.AssetView, edges []workspace.AssetEdgeView, section string) pagestream.SignalPatch {
-	refresh, err := h.assetRefreshState(r.Context(), workspaceID, asset)
+	refresh, err := h.assetRefreshState(r.Context(), workspaceID, h.environment(r), asset)
 	if err != nil {
 		refresh = ui.AssetRefreshState{Latest: ui.AssetRefreshRun{Status: "failed"}}
 	}

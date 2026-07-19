@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
+	materializehttp "github.com/Yacobolo/libredash/internal/analytics/materialize/http"
 	"github.com/Yacobolo/libredash/internal/execution"
 	"github.com/Yacobolo/libredash/internal/workspace/refresh"
 )
@@ -72,10 +73,10 @@ func (s *Server) runRefreshJobDispatcher(ctx context.Context) {
 		Runs:         repo,
 		Service:      service,
 		Executor:     s.executionService(),
-		Direct:       appDirectRefreshExecutor{repo: repo, metrics: s.metrics, logger: s.logger},
 		LeaseTimeout: s.jobLeaseTimeout,
 		Logger:       s.logger,
 		Owner:        fmt.Sprintf("libredash-%d", time.Now().UnixNano()),
+		Environment:  string(s.defaultServingEnvironment()),
 		ExecutionStats: func() execution.Stats {
 			return s.executionService().Stats()
 		},
@@ -84,8 +85,12 @@ func (s *Server) runRefreshJobDispatcher(ctx context.Context) {
 			if err != nil {
 				return
 			}
+			response, ok := materializehttp.PipelineRunResponseFor(run)
+			if !ok {
+				return
+			}
 			eventType := "refresh." + string(run.Status)
-			_ = s.appendAsyncEvent(ctx, "refresh", run.ID, eventType, run)
+			_ = s.appendAsyncEvent(ctx, "refresh", run.ID, eventType, response)
 		},
 	}
 	dispatcher.Run(ctx)

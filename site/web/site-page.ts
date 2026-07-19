@@ -1,5 +1,5 @@
 import { LitElement, css, html } from 'lit'
-import { Blocks, Bot, Boxes, ChartNoAxesCombined, Check, Copy, Database, Eclipse, GitBranch, LayoutDashboard, Menu, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Radio, Search, Server, Sun, X, type IconNode } from 'lucide'
+import { Blocks, Bot, Boxes, ChartNoAxesCombined, Check, CodeXml, Copy, Database, Eclipse, GitBranch, Menu, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Radio, Search, Server, SquareMousePointer, SquareTerminal, Sun, X, type IconNode } from 'lucide'
 import { DatastarLit } from '../../web/components/shared/datastar-lit'
 import { lucideIcon } from '../../web/components/shared/lucide-icons'
 import '../../web/components/shared/code-block'
@@ -1096,6 +1096,16 @@ class SiteBrandMark extends LitElement {
       place-items: center;
       color: var(--ld-fg-accent);
     }
+
+    :host([large]) {
+      width: var(--base-size-40);
+      height: var(--base-size-40);
+    }
+
+    :host([large]) svg {
+      width: var(--base-size-32);
+      height: var(--base-size-32);
+    }
   `
 
   render() {
@@ -1112,11 +1122,13 @@ const featureIcons: Record<string, IconNode> = {
   blocks: Blocks,
   boxes: Boxes,
   chart: ChartNoAxesCombined,
-  dashboard: LayoutDashboard,
+  'code-xml': CodeXml,
   database: Database,
   'git-branch': GitBranch,
   radio: Radio,
   server: Server,
+  'square-mouse-pointer': SquareMousePointer,
+  terminal: SquareTerminal,
 }
 
 class SiteFeatureIcon extends LitElement {
@@ -1136,6 +1148,15 @@ class SiteFeatureIcon extends LitElement {
       border-radius: var(--ld-radius-large);
       background: var(--ld-bg-control);
       color: var(--ld-fg-accent);
+    }
+
+    :host([plain]) {
+      width: var(--base-size-28);
+      height: var(--base-size-28);
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--ld-fg-muted);
     }
   `
 

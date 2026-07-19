@@ -256,7 +256,7 @@ class LibreDashWorkspaceAssetPage extends DatastarLit(LitElement) {
   }
 
   private renderAction(action: NonNullable<WorkspaceAssetPageSignal['actions']>[number], page: WorkspaceAssetPageSignal) {
-    if (action.command === 'refresh-materializations') {
+    if (action.command === 'run-refresh-pipeline') {
       return html`
         <button
           type="button"
@@ -264,7 +264,7 @@ class LibreDashWorkspaceAssetPage extends DatastarLit(LitElement) {
           title=${action.label}
           aria-label=${action.label}
           ?disabled=${Boolean(action.disabled || page.refresh?.running)}
-          @click=${() => this.dispatchEvent(new CustomEvent('ld-refresh-materializations', { bubbles: true, composed: true }))}
+          @click=${() => this.dispatchEvent(new CustomEvent('ld-run-refresh-pipeline', { bubbles: true, composed: true }))}
         >
           ${lucideIcon(RefreshCw, { className: page.refresh?.running ? 'spin' : '' })}
         </button>
@@ -559,12 +559,12 @@ const workspaceStyles = css`
 
   .asset-page {
     width: 100%;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
     gap: 0;
-    height: 100svh;
+    height: auto;
     margin-inline: 0;
     padding: 0;
-    overflow: hidden;
+    overflow: visible;
   }
 
   .catalog {
@@ -976,7 +976,7 @@ const workspaceStyles = css`
     display: grid;
     min-width: 0;
     min-height: 0;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
   }
 
   .asset-body > .tabs {
@@ -985,7 +985,7 @@ const workspaceStyles = css`
 
   .section-body {
     min-height: 0;
-    overflow: auto;
+    overflow: visible;
     padding: var(--base-size-16);
   }
 

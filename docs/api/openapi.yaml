@@ -6,6 +6,8 @@ info:
 tags:
   - name: System
     description: API capabilities and protocol discovery.
+  - name: Instance
+    description: The immutable serving identity of this LibreDash installation.
   - name: Projects
     description: Read-only project registry.
   - name: Releases
@@ -294,6 +296,256 @@ paths:
       x-authz:
         mode: privilege
         privilege: USE_WORKSPACE
+  /api/v1/instance:
+    get:
+      operationId: getInstance
+      summary: Get this LibreDash instance identity
+      parameters: []
+      responses:
+        '200':
+          description: The request has succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstanceResponse'
+              example:
+                environment: example
+        '400':
+          description: The server could not understand the request due to invalid syntax.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '401':
+          description: Access is unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '403':
+          description: Access is forbidden.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '404':
+          description: The server cannot find the requested resource.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '409':
+          description: The request conflicts with the current state of the server.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '412':
+          description: Precondition failed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '413':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '415':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '422':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '429':
+          description: Client error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '500':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '502':
+          description: Server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+        '503':
+          description: Service unavailable.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                code: example
+                detail: example
+                errors:
+                  - code: example
+                    detail: example
+                    field: example
+                instance: example
+                requestId: example
+                status: 1
+                title: example
+                type: example
+      tags:
+        - Instance
   /api/v1/me:
     get:
       operationId: getCurrentPrincipal
@@ -30411,17 +30663,14 @@ paths:
                     error: example
                     finishedAt: "2026-01-02T15:04:05Z"
                     id: example
-                    modelId: example
-                    parentRunId: example
+                    pipelineId: example
                     principalDisplayName: example
                     principalId: example
                     retryOf: example
-                    servingStateId: example
+                    semanticModel: example
                     startedAt: "2026-01-02T15:04:05Z"
                     status: example
-                    targetId: example
-                    targetType: example
-                    triggerType: example
+                    trigger: example
                     workspaceId: example
                 page:
                   nextCursor: example
@@ -30682,7 +30931,8 @@ paths:
             - count_as: count
               select:
                 - source: /id
-                - source: /modelId
+                - source: /pipelineId
+                - source: /semanticModel
                 - source: /status
                 - source: /createdAt
               source: /items
@@ -30690,7 +30940,7 @@ paths:
           - refresh
       x-authz:
         mode: privilege
-        privilege: REFRESH_DATA
+        privilege: USE_WORKSPACE
     post:
       operationId: createRefreshRun
       summary: Create a refresh run
@@ -30726,17 +30976,14 @@ paths:
                 error: example
                 finishedAt: "2026-01-02T15:04:05Z"
                 id: example
-                modelId: example
-                parentRunId: example
+                pipelineId: example
                 principalDisplayName: example
                 principalId: example
                 retryOf: example
-                servingStateId: example
+                semanticModel: example
                 startedAt: "2026-01-02T15:04:05Z"
                 status: example
-                targetId: example
-                targetType: example
-                triggerType: example
+                trigger: example
                 workspaceId: example
         '400':
           description: The server could not understand the request due to invalid syntax.
@@ -30981,16 +31228,11 @@ paths:
             schema:
               $ref: '#/components/schemas/RefreshRunCreateRequest'
             example:
-              modelId: example
-              parentRunId: example
+              pipelineId: example
               retryOf: example
-              servingStateId: example
-              targetId: example
-              targetType: example
-              triggerType: example
       x-authz:
         mode: privilege
-        privilege: REFRESH_DATA
+        privilege: USE_WORKSPACE
   /api/v1/workspaces/{workspace}/refresh-runs/{run}:
     get:
       operationId: getRefreshRun
@@ -31020,17 +31262,14 @@ paths:
                 error: example
                 finishedAt: "2026-01-02T15:04:05Z"
                 id: example
-                modelId: example
-                parentRunId: example
+                pipelineId: example
                 principalDisplayName: example
                 principalId: example
                 retryOf: example
-                servingStateId: example
+                semanticModel: example
                 startedAt: "2026-01-02T15:04:05Z"
                 status: example
-                targetId: example
-                targetType: example
-                triggerType: example
+                trigger: example
                 workspaceId: example
         '400':
           description: The server could not understand the request due to invalid syntax.
@@ -31282,10 +31521,9 @@ paths:
           mode: project
           select:
             - source: /id
-            - source: /modelId
-            - source: /servingStateId
-            - source: /targetType
-            - source: /targetId
+            - source: /pipelineId
+            - source: /semanticModel
+            - source: /trigger
             - source: /status
             - source: /error
             - source: /createdAt
@@ -31295,7 +31533,7 @@ paths:
           - refresh
       x-authz:
         mode: privilege
-        privilege: REFRESH_DATA
+        privilege: USE_WORKSPACE
   /api/v1/workspaces/{workspace}/refresh-runs/{run}/cancel:
     post:
       operationId: cancelRefreshRun
@@ -31338,17 +31576,14 @@ paths:
                 error: example
                 finishedAt: "2026-01-02T15:04:05Z"
                 id: example
-                modelId: example
-                parentRunId: example
+                pipelineId: example
                 principalDisplayName: example
                 principalId: example
                 retryOf: example
-                servingStateId: example
+                semanticModel: example
                 startedAt: "2026-01-02T15:04:05Z"
                 status: example
-                targetId: example
-                targetType: example
-                triggerType: example
+                trigger: example
                 workspaceId: example
         '400':
           description: The server could not understand the request due to invalid syntax.
@@ -31588,7 +31823,7 @@ paths:
         - Refresh Runs
       x-authz:
         mode: privilege
-        privilege: REFRESH_DATA
+        privilege: USE_WORKSPACE
   /api/v1/workspaces/{workspace}/refresh-runs/{run}/events:
     get:
       operationId: listRefreshRunEvents
@@ -31905,7 +32140,7 @@ paths:
         - Refresh Runs
       x-authz:
         mode: privilege
-        privilege: REFRESH_DATA
+        privilege: USE_WORKSPACE
   /api/v1/workspaces/{workspace}/role-bindings:
     get:
       operationId: listRoleBindings
@@ -41618,6 +41853,16 @@ components:
         path:
           - example
         value: example
+    InstanceResponse:
+      type: object
+      required:
+        - environment
+      properties:
+        environment:
+          type: string
+          example: example
+      example:
+        environment: example
     LocalPasswordResetResponse:
       type: object
       required:
@@ -43107,36 +43352,18 @@ components:
       example: application/json
     RefreshRunCreateRequest:
       type: object
+      required:
+        - pipelineId
       properties:
-        modelId:
-          type: string
-          example: example
-        servingStateId:
-          type: string
-          example: example
-        targetType:
-          type: string
-          example: example
-        targetId:
-          type: string
-          example: example
-        triggerType:
-          type: string
-          example: example
-        parentRunId:
+        pipelineId:
           type: string
           example: example
         retryOf:
           type: string
           example: example
       example:
-        modelId: example
-        parentRunId: example
+        pipelineId: example
         retryOf: example
-        servingStateId: example
-        targetId: example
-        targetType: example
-        triggerType: example
     RefreshRunListResponse:
       type: object
       required:
@@ -43152,17 +43379,14 @@ components:
               error: example
               finishedAt: "2026-01-02T15:04:05Z"
               id: example
-              modelId: example
-              parentRunId: example
+              pipelineId: example
               principalDisplayName: example
               principalId: example
               retryOf: example
-              servingStateId: example
+              semanticModel: example
               startedAt: "2026-01-02T15:04:05Z"
               status: example
-              targetId: example
-              targetType: example
-              triggerType: example
+              trigger: example
               workspaceId: example
         page:
           $ref: '#/components/schemas/PageInfo'
@@ -43172,17 +43396,14 @@ components:
             error: example
             finishedAt: "2026-01-02T15:04:05Z"
             id: example
-            modelId: example
-            parentRunId: example
+            pipelineId: example
             principalDisplayName: example
             principalId: example
             retryOf: example
-            servingStateId: example
+            semanticModel: example
             startedAt: "2026-01-02T15:04:05Z"
             status: example
-            targetId: example
-            targetType: example
-            triggerType: example
+            trigger: example
             workspaceId: example
         page:
           nextCursor: example
@@ -43191,10 +43412,9 @@ components:
       required:
         - id
         - workspaceId
-        - modelId
-        - targetType
-        - targetId
-        - triggerType
+        - pipelineId
+        - semanticModel
+        - trigger
         - status
         - createdAt
       properties:
@@ -43204,10 +43424,10 @@ components:
         workspaceId:
           type: string
           example: example
-        modelId:
+        pipelineId:
           type: string
           example: example
-        servingStateId:
+        semanticModel:
           type: string
           example: example
         principalId:
@@ -43216,16 +43436,7 @@ components:
         principalDisplayName:
           type: string
           example: example
-        targetType:
-          type: string
-          example: example
-        targetId:
-          type: string
-          example: example
-        triggerType:
-          type: string
-          example: example
-        parentRunId:
+        trigger:
           type: string
           example: example
         retryOf:
@@ -43254,17 +43465,14 @@ components:
         error: example
         finishedAt: "2026-01-02T15:04:05Z"
         id: example
-        modelId: example
-        parentRunId: example
+        pipelineId: example
         principalDisplayName: example
         principalId: example
         retryOf: example
-        servingStateId: example
+        semanticModel: example
         startedAt: "2026-01-02T15:04:05Z"
         status: example
-        targetId: example
-        targetType: example
-        triggerType: example
+        trigger: example
         workspaceId: example
     ReleaseArtifactResponse:
       type: object

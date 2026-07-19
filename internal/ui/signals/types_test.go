@@ -95,7 +95,7 @@ func TestChatInitialEnvelopeValidates(t *testing.T) {
 	if err := ValidateChatEnvelope(envelope); err != nil {
 		t.Fatalf("validate chat envelope: %v", err)
 	}
-	if envelope.Chrome.Sidebar.PrimaryAction == nil || envelope.Chrome.Sidebar.PrimaryAction.Href != "/chat/new" {
+	if envelope.Chrome.Sidebar.PrimaryAction == nil || envelope.Chrome.Sidebar.PrimaryAction.Href != "/chats/new" {
 		t.Fatalf("chat primary action = %#v", envelope.Chrome.Sidebar.PrimaryAction)
 	}
 	if envelope.Chrome.Sidebar.History == nil {
@@ -167,7 +167,7 @@ func TestCatalogSidebarUsesGlobalChat(t *testing.T) {
 	if !ok {
 		t.Fatalf("catalog sidebar missing chat item: %#v", sidebar.Groups)
 	}
-	if item.Href != "/chat" {
+	if item.Href != "/chats" {
 		t.Fatalf("catalog chat href = %q, want global chat", item.Href)
 	}
 }
@@ -181,7 +181,7 @@ func TestWorkspaceSidebarUsesGlobalChat(t *testing.T) {
 	if !ok {
 		t.Fatalf("workspace sidebar missing chat item: %#v", sidebar.Groups)
 	}
-	if item.Href != "/chat" {
+	if item.Href != "/chats" {
 		t.Fatalf("chat href = %q, want global chat", item.Href)
 	}
 }

@@ -59,10 +59,6 @@ func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, _ string, fil
 func (fakeMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	return dashboard.Table{Title: request.Table}, nil
 }
-func (fakeMetrics) RefreshMaterializations(context.Context, string) error {
-	return nil
-}
-
 func TestDashboardRedirectsToFirstPage(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(nethttp.MethodGet, "/workspaces/workspace/dashboards/dash", nil)

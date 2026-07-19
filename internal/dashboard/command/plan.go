@@ -84,11 +84,6 @@ func (s Service) PrepareInitial(request Request, initial dashboard.Filters) (Pre
 	return PreparedRefresh{Filters: filters, Plan: s.fullPlan(request, "initial")}, nil
 }
 
-func (s Service) PrepareMaterializationRefresh(request Request, authoritative dashboard.Filters) (PreparedRefresh, error) {
-	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, authoritative)
-	return PreparedRefresh{Filters: filters, Plan: s.fullPlan(request, "refresh_materializations")}, nil
-}
-
 func (s Service) PrepareTableWindow(request Request, authoritative dashboard.Filters) (PreparedRefresh, error) {
 	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, authoritative)
 	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.TableCommand)

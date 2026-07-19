@@ -3,6 +3,27 @@
     "#APIVersion": {
       "const": "libredash.dev/v1"
     },
+    "#AmbientCredentials": {
+      "additionalProperties": false,
+      "properties": {
+        "accountName": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "provider": {
+          "const": "ambient"
+        },
+        "region": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider"
+      ],
+      "type": "object"
+    },
     "#AnyObject": {
       "additionalProperties": true,
       "type": "object"
@@ -17,6 +38,9 @@
             },
             {
               "$ref": "#/$defs/%23EnvCredentials"
+            },
+            {
+              "$ref": "#/$defs/%23AmbientCredentials"
             }
           ]
         },

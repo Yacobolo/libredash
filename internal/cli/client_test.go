@@ -1,10 +1,29 @@
 package cli
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestTargetEnvironmentDiscoversAndAssertsInstance(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/instance" || r.Header.Get("Authorization") != "Bearer token" {
+			t.Fatalf("request = %s auth=%q", r.URL.Path, r.Header.Get("Authorization"))
+		}
+		_, _ = w.Write([]byte(`{"environment":"prod"}`))
+	}))
+	defer server.Close()
+	if got, err := targetEnvironment(context.Background(), server.Client(), server.URL, "token", ""); err != nil || got != "prod" {
+		t.Fatalf("environment = %q, %v", got, err)
+	}
+	if _, err := targetEnvironment(context.Background(), server.Client(), server.URL, "token", "staging"); err == nil {
+		t.Fatal("mismatched assertion succeeded")
+	}
+}
 
 func TestLoadClientConfigMakesExistingTokenFilePrivate(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cli.json")

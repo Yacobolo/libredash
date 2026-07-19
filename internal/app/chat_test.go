@@ -24,7 +24,7 @@ func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", Model: "fake-model"}), DefaultWorkspaceID: "test"})
 
-	unauthReq := httptest.NewRequest(http.MethodGet, "/chat", nil)
+	unauthReq := httptest.NewRequest(http.MethodGet, "/chats", nil)
 	unauthRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(unauthRec, unauthReq)
 	if unauthRec.Code != http.StatusUnauthorized {
@@ -38,7 +38,7 @@ func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 	principal := testPrincipal(t, ctx, store, "viewer@example.com", "Viewer", "viewer")
 	token := testAPIToken(t, ctx, store, principal.ID, "chat-page")
 
-	req := httptest.NewRequest(http.MethodGet, "/chat/new", nil)
+	req := httptest.NewRequest(http.MethodGet, "/chats/new", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -51,12 +51,12 @@ func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 		`/static/chat-page.js`,
 		`<ld-app-shell`,
 		`<ld-chat-page`,
-		`workspace-id="test"`,
+		`workspace-id=""`,
 		`view="new"`,
 		`data-indicator="agentTurnPending"`,
 		`data-on:ld-chat-submit`,
-		`/chat/turns`,
-		`/updates?route=chat&amp;view=new&amp;workspace=test`,
+		`/chats/turns`,
+		`/updates?route=chat&amp;view=new`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("chat page missing %q:\n%s", want, body)
@@ -101,17 +101,17 @@ func TestChatPageDisabledState(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{DevBypass: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{}), DefaultWorkspaceID: "test"})
 
-	req := httptest.NewRequest(http.MethodGet, "/chat", nil)
+	req := httptest.NewRequest(http.MethodGet, "/chats", nil)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, `<ld-chat-page`) || !strings.Contains(body, `/updates?route=chat&amp;view=list&amp;workspace=test`) {
+	if !strings.Contains(body, `<ld-chat-page`) || !strings.Contains(body, `/updates?route=chat&amp;view=list`) {
 		t.Fatalf("disabled chat page did not render usable disabled state:\n%s", body)
 	}
-	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&workspace=test&view=list", "", `Agent is not configured`)
+	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&view=list", "", `Agent is not configured`)
 	if !strings.Contains(updatesBody, `Agent is not configured`) {
 		t.Fatalf("disabled chat stream missing disabled state:\n%s", updatesBody)
 	}
@@ -140,6 +140,26 @@ func TestWorkspaceChatRoutesAreRemoved(t *testing.T) {
 	}
 }
 
+func TestLegacyChatRoutesRedirectToCanonicalChats(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{DefaultWorkspaceID: "test"})
+	for _, test := range []struct {
+		method   string
+		path     string
+		location string
+	}{
+		{method: http.MethodGet, path: "/chat", location: "/chats"},
+		{method: http.MethodGet, path: "/chat/new?from=legacy", location: "/chats/new?from=legacy"},
+		{method: http.MethodPost, path: "/chat/turns", location: "/chats/turns"},
+	} {
+		req := httptest.NewRequest(test.method, test.path, nil)
+		rec := httptest.NewRecorder()
+		server.Routes().ServeHTTP(rec, req)
+		if rec.Code != http.StatusPermanentRedirect || rec.Header().Get("Location") != test.location {
+			t.Fatalf("%s %s status=%d location=%q", test.method, test.path, rec.Code, rec.Header().Get("Location"))
+		}
+	}
+}
+
 func TestChatRootRendersListWhenNoConversations(t *testing.T) {
 	store := testStore(t)
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
@@ -147,7 +167,7 @@ func TestChatRootRendersListWhenNoConversations(t *testing.T) {
 	ctx := context.Background()
 	_, token := chatPrincipalAndToken(t, ctx, store)
 
-	req := httptest.NewRequest(http.MethodGet, "/chat", nil)
+	req := httptest.NewRequest(http.MethodGet, "/chats", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -155,7 +175,7 @@ func TestChatRootRendersListWhenNoConversations(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{`<ld-chat-page`, `view="list"`, `/updates?route=chat&amp;view=list&amp;workspace=test`} {
+	for _, want := range []string{`<ld-chat-page`, `view="list"`, `/updates?route=chat&amp;view=list`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("chat list missing %q:\n%s", want, body)
 		}
@@ -163,8 +183,8 @@ func TestChatRootRendersListWhenNoConversations(t *testing.T) {
 	if strings.Contains(body, `data-signals=`) || strings.Contains(body, `&#34;conversations&#34;`) {
 		t.Fatalf("chat list should not embed conversations in HTML:\n%s", body)
 	}
-	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&workspace=test&view=list", token, `"view":"list"`, `"conversations":[]`, `"href":"/chat/new"`)
-	for _, want := range []string{`"view":"list"`, `"conversations":[]`, `"href":"/chat/new"`} {
+	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&view=list", token, `"view":"list"`, `"conversations":[]`, `"href":"/chats/new"`)
+	for _, want := range []string{`"view":"list"`, `"conversations":[]`, `"href":"/chats/new"`} {
 		if !strings.Contains(updatesBody, want) {
 			t.Fatalf("chat list stream missing %q:\n%s", want, updatesBody)
 		}
@@ -192,7 +212,7 @@ func TestChatRootRendersConversationList(t *testing.T) {
 		t.Fatal("conversation IDs unexpectedly equal")
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/chat", nil)
+	req := httptest.NewRequest(http.MethodGet, "/chats", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -200,13 +220,13 @@ func TestChatRootRendersConversationList(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{`<ld-chat-page`, `view="list"`, `/updates?route=chat&amp;view=list&amp;workspace=test`} {
+	for _, want := range []string{`<ld-chat-page`, `view="list"`, `/updates?route=chat&amp;view=list`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("chat list missing %q:\n%s", want, body)
 		}
 	}
-	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&workspace=test&view=list", token, `"title":"Latest"`, `"title":"Old"`)
-	for _, want := range []string{`"view":"list"`, `"title":"Latest"`, `"title":"Old"`, `/chat/` + latest.ID, `/chat/` + old.ID} {
+	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&view=list", token, `"title":"Latest"`, `"title":"Old"`)
+	for _, want := range []string{`"view":"list"`, `"title":"Latest"`, `"title":"Old"`, `/chats/` + latest.ID, `/chats/` + old.ID} {
 		if !strings.Contains(updatesBody, want) {
 			t.Fatalf("chat list stream missing %q:\n%s", want, updatesBody)
 		}
@@ -220,7 +240,7 @@ func TestChatNewRendersDraftWithoutCreatingConversation(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", Model: "fake-model"}), DefaultWorkspaceID: "test"})
 	principal, token := chatPrincipalAndToken(t, ctx, store)
 
-	req := httptest.NewRequest(http.MethodGet, "/chat/new", nil)
+	req := httptest.NewRequest(http.MethodGet, "/chats/new", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -228,7 +248,7 @@ func TestChatNewRendersDraftWithoutCreatingConversation(t *testing.T) {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{`<ld-chat-page`, `view="new"`, `/updates?route=chat&amp;view=new&amp;workspace=test`} {
+	for _, want := range []string{`<ld-chat-page`, `view="new"`, `/updates?route=chat&amp;view=new`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("draft chat page missing %q:\n%s", want, body)
 		}
@@ -236,8 +256,8 @@ func TestChatNewRendersDraftWithoutCreatingConversation(t *testing.T) {
 	if strings.Contains(body, `&#34;active&#34;:&#34;chat&#34;`) {
 		t.Fatalf("draft chat page should not activate the Chats nav item:\n%s", body)
 	}
-	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&workspace=test&view=new", token, `"href":"/chat/new"`, `"label":"New chat"`)
-	for _, want := range []string{`"href":"/chat/new"`, `"label":"New chat"`, `"history"`} {
+	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&view=new", token, `"href":"/chats/new"`, `"label":"New chat"`)
+	for _, want := range []string{`"href":"/chats/new"`, `"label":"New chat"`, `"history"`} {
 		if !strings.Contains(updatesBody, want) {
 			t.Fatalf("draft chat stream missing %q:\n%s", want, updatesBody)
 		}
@@ -297,7 +317,7 @@ func TestChatConversationRouteLoadsOwnedEventsAndRejectsOtherPrincipal(t *testin
 		t.Fatalf("create hidden: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/chat/"+owned.ID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/chats/"+owned.ID, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -311,14 +331,14 @@ func TestChatConversationRouteLoadsOwnedEventsAndRejectsOtherPrincipal(t *testin
 	if strings.Contains(body, "hello") || strings.Contains(body, `data-signals=`) {
 		t.Fatalf("conversation route should stream transcript state instead of embedding it:\n%s", body)
 	}
-	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&workspace=test&view=conversation&conversation="+url.QueryEscape(owned.ID), token, `"kind":"user"`, "hello")
+	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&view=conversation&conversation="+url.QueryEscape(owned.ID), token, `"kind":"user"`, "hello")
 	for _, want := range []string{`"kind":"user"`, "hello", `"id":"` + owned.ID + `"`, `"active":true`} {
 		if !strings.Contains(updatesBody, want) {
 			t.Fatalf("conversation stream missing %q:\n%s", want, updatesBody)
 		}
 	}
 
-	hiddenReq := httptest.NewRequest(http.MethodGet, "/chat/"+hidden.ID, nil)
+	hiddenReq := httptest.NewRequest(http.MethodGet, "/chats/"+hidden.ID, nil)
 	hiddenReq.Header.Set("Authorization", "Bearer "+token)
 	hiddenRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(hiddenRec, hiddenReq)
@@ -351,7 +371,7 @@ func TestChatConversationRouteLoadsArtifactSignalsOutsideTranscript(t *testing.T
 		t.Fatalf("append tool: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/chat/"+conversation.ID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/chats/"+conversation.ID, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -362,7 +382,7 @@ func TestChatConversationRouteLoadsArtifactSignalsOutsideTranscript(t *testing.T
 	if strings.Contains(body, `"visuals"`) || strings.Contains(body, `data-attr:visuals="$visuals"`) {
 		t.Fatalf("chat page should not embed artifact signals in HTML:\n%s", body)
 	}
-	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&workspace=test&view=conversation&conversation="+url.QueryEscape(conversation.ID), token, `"visuals":{"agent_chart_123":`, `"artifact":{"id":"agent_chart_123","kind":"chart"`)
+	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&view=conversation&conversation="+url.QueryEscape(conversation.ID), token, `"visuals":{"agent_chart_123":`, `"artifact":{"id":"agent_chart_123","kind":"chart"`)
 	for _, want := range []string{
 		`"visuals":{"agent_chart_123":`,
 		`"title":"Orders"`,
@@ -406,7 +426,7 @@ func TestChatConversationRouteQueuesMissingTitleRepair(t *testing.T) {
 		t.Fatalf("append message: %v", err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/chat/"+conversation.ID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/chats/"+conversation.ID, nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "client-test"})
 	rec := httptest.NewRecorder()
@@ -454,7 +474,7 @@ func TestChatConversationRouteSkipsTitleRepairForManualAndMultiUserTitles(t *tes
 		}
 	}
 	for _, conversationID := range []string{manual.ID, multi.ID} {
-		req := httptest.NewRequest(http.MethodGet, "/chat/"+conversationID, nil)
+		req := httptest.NewRequest(http.MethodGet, "/chats/"+conversationID, nil)
 		req.Header.Set("Authorization", "Bearer "+token)
 		rec := httptest.NewRecorder()
 		server.Routes().ServeHTTP(rec, req)
@@ -479,7 +499,7 @@ func TestChatTurnStreamsDatastarSignalsAndPersistsEvents(t *testing.T) {
 	modelServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch calls.Add(1) {
 		case 1:
-			writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Let me look that up.","tool_calls":[{"id":"call_1","type":"function","function":{"name":"list_dashboards","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`)
+			writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Let me look that up.","tool_calls":[{"id":"call_1","type":"function","function":{"name":"list_dashboards","arguments":"{\"workspace\":\"test\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`)
 			return
 		case 2:
 			writeRawJSON(t, w, `{"choices":[{"message":{"role":"assistant","content":"Executive Sales is available."},"finish_reason":"stop"}],"usage":{"prompt_tokens":20,"completion_tokens":5,"total_tokens":25}}`)
@@ -510,7 +530,7 @@ func TestChatTurnStreamsDatastarSignalsAndPersistsEvents(t *testing.T) {
 			"transcript": []map[string]any{},
 		},
 	}
-	req := chatSignalsRequest(http.MethodPost, "/chat/turns", token, signals)
+	req := chatSignalsRequest(http.MethodPost, "/chats/turns", token, signals)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -571,7 +591,7 @@ func TestChatDraftTurnRedirectsAndStreamsThroughUpdates(t *testing.T) {
 		"activeConversationId": "",
 		"composer":             map[string]any{"value": "Draft redirect prompt"},
 	}}
-	req := chatSignalsRequest(http.MethodPost, "/chat/turns", token, signals)
+	req := chatSignalsRequest(http.MethodPost, "/chats/turns", token, signals)
 	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: "client-draft"})
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -590,7 +610,7 @@ func TestChatDraftTurnRedirectsAndStreamsThroughUpdates(t *testing.T) {
 		t.Fatalf("conversations = %#v", conversations)
 	}
 	conversationID := conversations[0].ID
-	if !strings.Contains(body, "/chat/"+conversationID) {
+	if !strings.Contains(body, "/chats/"+conversationID) {
 		t.Fatalf("redirect did not target created conversation %q:\n%s", conversationID, body)
 	}
 
@@ -600,7 +620,7 @@ func TestChatDraftTurnRedirectsAndStreamsThroughUpdates(t *testing.T) {
 		t.Fatal("background turn did not start")
 	}
 
-	pageReq := httptest.NewRequest(http.MethodGet, "/chat/"+conversationID, nil)
+	pageReq := httptest.NewRequest(http.MethodGet, "/chats/"+conversationID, nil)
 	pageReq.Header.Set("Authorization", "Bearer "+token)
 	pageRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(pageRec, pageReq)
@@ -620,7 +640,7 @@ func TestChatDraftTurnRedirectsAndStreamsThroughUpdates(t *testing.T) {
 		defer close(done)
 		server.Routes().ServeHTTP(updatesRec, updatesReq)
 	}()
-	waitForBrokerSubscription(t, server, chatStreamID(agent.Scope{WorkspaceID: "test", PrincipalID: principal.ID}, "client-draft"))
+	waitForBrokerSubscription(t, server, chatStreamID(agent.Scope{PrincipalID: principal.ID}, "client-draft"))
 	close(release)
 	waitForConversationMessage(t, service, principal.ID, conversationID, "Background complete.")
 	waitForRecorderBodyContains(t, updatesRec, `"running":false`)
@@ -652,7 +672,7 @@ func TestChatTurnWithActiveConversationDoesNotReplaceURL(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", BaseURL: modelServer.URL, Model: "fake-model"}), DefaultWorkspaceID: "test"})
 
-	req := chatSignalsRequest(http.MethodPost, "/chat/turns", token, map[string]any{"agent": map[string]any{
+	req := chatSignalsRequest(http.MethodPost, "/chats/turns", token, map[string]any{"agent": map[string]any{
 		"activeConversationId": owned.ID,
 		"composer":             map[string]any{"value": "Continue"},
 	}})
@@ -673,7 +693,7 @@ func TestChatUpdatesStreamsConversationPatches(t *testing.T) {
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	service := agent.NewService(fakeMetrics{}, testAgentRepository(store), agent.Config{APIKey: "key", Model: "fake-model"})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, Agent: service, DefaultWorkspaceID: "test"})
-	scope := agent.Scope{WorkspaceID: "test", PrincipalID: principal.ID}
+	scope := agent.Scope{PrincipalID: principal.ID}
 	key := chatStreamID(scope, "client-test")
 
 	reqCtx, cancel := context.WithCancel(context.Background())
@@ -861,7 +881,7 @@ func chatSignalsRequest(method, path, token string, signals map[string]any) *htt
 }
 
 func chatUpdatesSignalsRequest(ctx context.Context, token, clientID, activeID string) *http.Request {
-	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=chat&workspace=test&view=conversation&conversation="+url.QueryEscape(activeID), nil)
+	req := httptest.NewRequestWithContext(ctx, http.MethodGet, "/updates?route=chat&view=conversation&conversation="+url.QueryEscape(activeID), nil)
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.AddCookie(&http.Cookie{Name: "ld_client_id", Value: clientID})

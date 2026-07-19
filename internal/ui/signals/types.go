@@ -579,7 +579,7 @@ func sidebarGroups(catalog dashboard.Catalog, includeWorkspaceScoped bool) []Sid
 }
 
 func chatPath(parts ...string) string {
-	path := "/chat"
+	path := "/chats"
 	for _, part := range parts {
 		part = strings.Trim(part, "/")
 		if part == "" {

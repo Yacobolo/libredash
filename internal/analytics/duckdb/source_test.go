@@ -516,6 +516,33 @@ func TestCompileConnectionSecret(t *testing.T) {
 	}
 }
 
+func TestCompileAmbientConnectionSecrets(t *testing.T) {
+	stmt, ok, err := compileConnectionSecret("lake", semanticmodel.Connection{
+		Kind: "s3", Scope: "s3://analytics/", Credentials: semanticmodel.ConnectionCredentials{Provider: "ambient", Region: "eu-west-1", Endpoint: "s3.eu-west-1.amazonaws.com"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "CREATE OR REPLACE SECRET libredash_lake (TYPE s3, PROVIDER credential_chain, ENDPOINT 's3.eu-west-1.amazonaws.com', REGION 'eu-west-1', SCOPE 's3://analytics/')"
+	if !ok || stmt != want {
+		t.Fatalf("ambient s3 secret = %q ok=%v, want %q", stmt, ok, want)
+	}
+	stmt, ok, err = compileConnectionSecret("azure", semanticmodel.Connection{
+		Kind: "azure_blob", Scope: "az://container/", Credentials: semanticmodel.ConnectionCredentials{Provider: "ambient", AccountName: "analytics"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = "CREATE OR REPLACE SECRET libredash_azure (TYPE azure, PROVIDER credential_chain, ACCOUNT_NAME 'analytics', SCOPE 'az://container/')"
+	if !ok || stmt != want {
+		t.Fatalf("ambient azure secret = %q ok=%v, want %q", stmt, ok, want)
+	}
+	stmt, ok, err = compileConnectionSecret("public", semanticmodel.Connection{Kind: "s3", Credentials: semanticmodel.ConnectionCredentials{Provider: "none"}})
+	if err != nil || ok || stmt != "" {
+		t.Fatalf("public s3 secret = %q ok=%v err=%v", stmt, ok, err)
+	}
+}
+
 func TestCompileSourceSecretStatements(t *testing.T) {
 	model := &semanticmodel.Model{
 		Connections: map[string]semanticmodel.Connection{

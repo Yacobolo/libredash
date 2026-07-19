@@ -1,7 +1,15 @@
 import { datastarRuntimeURL } from '../web/components/shared/datastar-runtime'
 
 await Bun.$`rm -rf site/static/site-page.js site/static/chunks site/static/shared site/static/vendor`.quiet()
-await Bun.$`mkdir -p site/static/shared/files site/static/vendor`.quiet()
+await Bun.$`mkdir -p site/static/shared/files site/static/vendor/integrations`.quiet()
+
+const integrationLogoCopies: Promise<number>[] = []
+const integrationLogoGlob = new Bun.Glob('static/vendor/integrations/*.svg')
+for await (const sourcePath of integrationLogoGlob.scan({ cwd: '.', onlyFiles: true })) {
+  const fileName = sourcePath.slice('static/vendor/integrations/'.length)
+  integrationLogoCopies.push(Bun.write(`site/static/vendor/integrations/${fileName}`, Bun.file(sourcePath)))
+}
+if (integrationLogoCopies.length === 0) throw new Error('no integration logo assets found')
 
 const fontCopies: Promise<number>[] = []
 const fontGlob = new Bun.Glob('static/files/inter-*.woff2')
@@ -16,6 +24,8 @@ await Promise.all([
   Bun.write('site/static/shared/theme.js', Bun.file('static/theme.js')),
   Bun.write('site/static/vendor/datastar-1.0.2.js', Bun.file('static/vendor/datastar-1.0.2.js')),
   Bun.write('site/static/vendor/github-mark.svg', Bun.file('static/vendor/github-mark.svg')),
+  Bun.write('site/static/vendor/mcp-mark.svg', Bun.file('static/vendor/mcp-mark.svg')),
+  ...integrationLogoCopies,
   ...fontCopies,
 ])
 

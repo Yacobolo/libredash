@@ -61,6 +61,18 @@ func validateProject(project Project) error {
 				return resourceError(workspaceProject.DashboardPaths[name], "dashboard:"+workspaceProject.ID+"."+name, "spec.semanticModel", "Dashboard %q.%q references unknown SemanticModel %q", workspaceProject.ID, name, dashboard.SemanticModel)
 			}
 		}
+		pipelinesByModel := map[string]string{}
+		for _, name := range sortedMapKeys(workspaceProject.RefreshPipelines) {
+			pipeline := workspaceProject.RefreshPipelines[name]
+			path := workspaceProject.RefreshPipelinePaths[name]
+			if _, ok := workspaceProject.SemanticModels[pipeline.SemanticModel]; !ok {
+				return resourceError(path, "refresh_pipeline:"+workspaceProject.ID+"."+name, "spec.semanticModel", "RefreshPipeline %q.%q references unknown semantic model %q", workspaceProject.ID, name, pipeline.SemanticModel)
+			}
+			if existing, ok := pipelinesByModel[pipeline.SemanticModel]; ok {
+				return resourceError(path, "refresh_pipeline:"+workspaceProject.ID+"."+name, "spec.semanticModel", "semantic model %q already has refresh pipeline %q", pipeline.SemanticModel, existing)
+			}
+			pipelinesByModel[pipeline.SemanticModel] = name
+		}
 		if err := validateWorkspaceAccess(workspaceProject); err != nil {
 			return err
 		}

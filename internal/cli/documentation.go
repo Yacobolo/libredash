@@ -32,7 +32,7 @@ func annotateCommandDocumentation(root *cobra.Command) {
 var documentedCommandSafety = map[string]commandSafety{
 	"libredash":                                 {effect: "local-write", confirmation: "never"},
 	"libredash admin backup":                    {effect: "local-write", confirmation: "never"},
-	"libredash admin bootstrap":                 {effect: "write", confirmation: "never"},
+	"libredash admin initialize":                {effect: "write", confirmation: "never"},
 	"libredash admin maintenance":               {effect: "destructive", confirmation: "conditional"},
 	"libredash admin restore":                   {effect: "destructive", confirmation: "required"},
 	"libredash admin storage cleanup":           {effect: "destructive", confirmation: "conditional"},

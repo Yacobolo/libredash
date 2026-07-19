@@ -6,7 +6,7 @@ A refresh rebuilds workspace analytical tables from the sources and revisions se
 
 At refresh start, LibreDash resolves:
 
-- the target workspace, environment, and active deployment;
+- the target workspace, instance environment, and active deployment;
 - workspace source permissions;
 - active managed-data revision pointers and external connection settings;
 - model-table dependency order and transformation SQL;
@@ -23,7 +23,7 @@ The expected lifecycle is:
 3. Execute model-table transformations into isolated replacement state.
 4. Validate schemas and required analytical metadata.
 5. Commit the candidate as a DuckLake snapshot.
-6. Atomically move the workspace/environment serving pointer to the new state.
+6. Atomically move the workspace serving pointer for the instance environment to the new state.
 7. Mark the old state as draining and reconcile it later when no query lease protects it.
 
 Queries that began against the previous active snapshot continue using that snapshot for their request. New queries resolve the new pointer after activation. Users never intentionally see a half-refreshed combination of model tables.

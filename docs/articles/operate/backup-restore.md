@@ -58,7 +58,7 @@ After the process starts:
 
 1. Check liveness and readiness.
 2. Verify administrator and expected principals without changing grants.
-3. Confirm active deployments and environment pointers.
+3. Confirm the bound instance environment and active serving pointers.
 4. Confirm current managed revision digests.
 5. Run a representative semantic and dashboard query.
 6. Inspect refresh and audit history.

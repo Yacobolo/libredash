@@ -50,7 +50,7 @@ Confirm that:
 - the digest is the canonical lowercase value printed by `data sync`;
 - the staged revision belongs to the same project and connection;
 - the local project has not added or removed a managed connection since staging;
-- the token can deploy to the requested environment;
+- the token can deploy and any explicit environment assertion matches the target instance;
 - all workspace candidates validate with the pinned inputs.
 
 Use `libredash data revisions list` to confirm the revision is staged and `current` to see which digest remains active.

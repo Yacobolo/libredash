@@ -1,0 +1,44 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"syscall"
+
+	"github.com/Yacobolo/libredash/internal/composectl"
+)
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "libredashctl: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func run(ctx context.Context) error {
+	root := strings.TrimSpace(os.Getenv("LIBREDASHCTL_ROOT"))
+	if root == "" {
+		executable, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		root = filepath.Dir(executable)
+	}
+	controller, err := composectl.New(composectl.Options{
+		Root:      root,
+		DockerBin: os.Getenv("LIBREDASHCTL_DOCKER_BIN"),
+		Stdin:     os.Stdin,
+		Stdout:    os.Stdout,
+		Stderr:    os.Stderr,
+	})
+	if err != nil {
+		return err
+	}
+	return composectl.Command(ctx, controller).Execute()
+}

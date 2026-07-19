@@ -279,7 +279,7 @@ func TestAPITokenOnlyAuthChallengesInsteadOfOIDCRedirect(t *testing.T) {
 		Auth:               testAuth(store, "test", AuthConfig{APITokenOnly: true}),
 		DefaultWorkspaceID: "test",
 	})
-	req := httptest.NewRequest(http.MethodGet, "/chat", nil)
+	req := httptest.NewRequest(http.MethodGet, "/chats", nil)
 	rec := httptest.NewRecorder()
 
 	server.Routes().ServeHTTP(rec, req)

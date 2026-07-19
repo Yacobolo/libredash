@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
+	"github.com/Yacobolo/libredash/internal/refreshpipeline"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
@@ -34,9 +36,10 @@ func TestServiceExecuteClaimedJobActivatesAfterMaterializeAndPrepare(t *testing.
 		WorkspaceID:    "sales",
 		ServingStateID: "dep_candidate",
 		RunID:          "run_root",
-		TargetType:     materialize.TargetModelTable,
-		TargetID:       "sales.orders",
-		Kind:           materialize.JobKindWorkspaceAssetRefresh,
+		ModelID:        "sales",
+		TargetType:     materialize.TargetRefreshPipeline,
+		TargetID:       "sales.sales-refresh",
+		Kind:           materialize.JobKindRefreshPipeline,
 	})
 	if err != nil {
 		t.Fatalf("execute claimed job: %v", err)
@@ -78,9 +81,10 @@ func TestServiceExecuteClaimedJobMaterializeFailureDoesNotActivate(t *testing.T)
 		WorkspaceID:    "sales",
 		ServingStateID: "dep_candidate",
 		RunID:          "run_root",
-		TargetType:     materialize.TargetModelTable,
-		TargetID:       "sales.orders",
-		Kind:           materialize.JobKindWorkspaceAssetRefresh,
+		ModelID:        "sales",
+		TargetType:     materialize.TargetRefreshPipeline,
+		TargetID:       "sales.sales-refresh",
+		Kind:           materialize.JobKindRefreshPipeline,
 	})
 	if err == nil {
 		t.Fatal("execute claimed job error = nil, want materialize failure")
@@ -112,9 +116,10 @@ func TestServiceExecuteClaimedJobRuntimePrepareFailureDoesNotActivate(t *testing
 		WorkspaceID:    "sales",
 		ServingStateID: "dep_candidate",
 		RunID:          "run_root",
-		TargetType:     materialize.TargetModelTable,
-		TargetID:       "sales.orders",
-		Kind:           materialize.JobKindWorkspaceAssetRefresh,
+		ModelID:        "sales",
+		TargetType:     materialize.TargetRefreshPipeline,
+		TargetID:       "sales.sales-refresh",
+		Kind:           materialize.JobKindRefreshPipeline,
 	})
 	if err == nil {
 		t.Fatal("execute claimed job error = nil, want prepare failure")
@@ -130,38 +135,101 @@ func TestServiceExecuteClaimedJobRuntimePrepareFailureDoesNotActivate(t *testing
 	}
 }
 
-func TestServiceQueueAssetRefreshCreatesDependencyRuns(t *testing.T) {
-	ctx := context.Background()
+func TestServiceQueuePipelineRefreshCreatesFullSemanticModelRun(t *testing.T) {
 	repo := newFakeRepo()
 	service := Service{
 		ServingStates: repo,
 		Runs:          repo,
 		Artifacts:     fakeArtifactLoader{definition: refreshTestDefinition()},
-		Publisher:     &fakePublisher{},
 	}
-
-	result, err := service.QueueAssetRefresh(ctx, QueueAssetInput{
-		WorkspaceID: "sales",
-		Environment: servingstate.DefaultEnvironment,
-		PrincipalID: "principal",
-		Asset:       workspace.AssetView{Type: string(workspace.AssetTypeModelTable), Key: "sales.orders"},
+	result, err := service.QueuePipelineRefresh(t.Context(), QueuePipelineInput{
+		WorkspaceID: "sales", Environment: servingstate.DefaultEnvironment, PrincipalID: "principal",
+		PipelineID: "sales-refresh", TriggerType: materialize.TriggerManual,
 	})
 	if err != nil {
-		t.Fatalf("queue asset refresh: %v", err)
+		t.Fatalf("QueuePipelineRefresh() error = %v", err)
 	}
-	if result.ServingStateID != "dep_candidate" {
-		t.Fatalf("serving state id = %s, want dep_candidate", result.ServingStateID)
+	if result.Run.TargetType != materialize.TargetRefreshPipeline || result.Run.TargetID != "sales.sales-refresh" {
+		t.Fatalf("root run = %#v", result.Run)
 	}
-	if len(repo.createdRuns) != 2 {
-		t.Fatalf("created runs = %#v, want root plus dependency", repo.createdRuns)
+	if len(repo.createdRuns) != 3 {
+		t.Fatalf("created runs = %#v, want pipeline root plus both model-table tasks", repo.createdRuns)
 	}
-	root := repo.createdRuns[0]
-	child := repo.createdRuns[1]
-	if root.JobKind != materialize.JobKindWorkspaceAssetRefresh || root.TargetID != "sales.orders" || root.ParentRunID != "" {
-		t.Fatalf("root run = %#v, want workspace asset root", root)
+	if repo.createdRuns[0].ModelID != "sales" || repo.createdRuns[0].TriggerType != materialize.TriggerManual {
+		t.Fatalf("root input = %#v", repo.createdRuns[0])
 	}
-	if child.JobKind != materialize.JobKindChildRun || child.TargetID != "sales.customers" || child.ParentRunID != result.Run.ID {
-		t.Fatalf("child run = %#v, want dependency child", child)
+}
+
+func TestServiceQueuePipelineRefreshPinsCandidateManagedDataRevisions(t *testing.T) {
+	repo := newFakeRepo()
+	hook := &fakeCandidateValidationHook{}
+	service := Service{
+		ServingStates: repo,
+		Runs:          repo,
+		Artifacts: fakeArtifactLoader{
+			definition:           refreshTestDefinition(),
+			managedDataRevisions: map[string]string{"olist": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		},
+		CandidateValidationHooks: []CandidateValidationHook{hook},
+	}
+
+	_, err := service.QueuePipelineRefresh(t.Context(), QueuePipelineInput{
+		WorkspaceID: "sales", Environment: servingstate.DefaultEnvironment, PrincipalID: "principal",
+		PipelineID: "sales-refresh", TriggerType: materialize.TriggerManual,
+	})
+	if err != nil {
+		t.Fatalf("QueuePipelineRefresh() error = %v", err)
+	}
+	want := map[string]string{"olist": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+	if hook.candidate.ID != "dep_candidate" || !reflect.DeepEqual(hook.validation.ManagedDataRevisions, want) {
+		t.Fatalf("candidate hook = (%q, %#v), want dep_candidate and %#v", hook.candidate.ID, hook.validation.ManagedDataRevisions, want)
+	}
+	if !reflect.DeepEqual(repo.savedValidation.ManagedDataRevisions, want) {
+		t.Fatalf("saved managed-data revisions = %#v, want %#v", repo.savedValidation.ManagedDataRevisions, want)
+	}
+}
+
+func TestServiceQueuePipelineRefreshFailsCandidateWhenManagedDataPinningFails(t *testing.T) {
+	repo := newFakeRepo()
+	service := Service{
+		ServingStates: repo,
+		Runs:          repo,
+		Artifacts: fakeArtifactLoader{
+			definition:           refreshTestDefinition(),
+			managedDataRevisions: map[string]string{"olist": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		},
+		CandidateValidationHooks: []CandidateValidationHook{&fakeCandidateValidationHook{err: errors.New("pin failed")}},
+	}
+
+	_, err := service.QueuePipelineRefresh(t.Context(), QueuePipelineInput{
+		WorkspaceID: "sales", Environment: servingstate.DefaultEnvironment,
+		PipelineID: "sales-refresh", TriggerType: materialize.TriggerManual,
+	})
+	if err == nil || !strings.Contains(err.Error(), "pin failed") {
+		t.Fatalf("QueuePipelineRefresh() error = %v, want pin failure", err)
+	}
+	if repo.failedDeployment != "dep_candidate" || len(repo.createdRuns) != 0 {
+		t.Fatalf("failed candidate = %q created runs = %#v, want failed candidate and no runs", repo.failedDeployment, repo.createdRuns)
+	}
+}
+
+func TestServiceQueuePipelineRefreshRejectsSupersededScheduledArtifact(t *testing.T) {
+	repo := newFakeRepo()
+	service := Service{
+		ServingStates: repo,
+		Runs:          repo,
+		Artifacts:     fakeArtifactLoader{definition: refreshTestDefinition()},
+	}
+	_, err := service.QueuePipelineRefresh(t.Context(), QueuePipelineInput{
+		WorkspaceID: "sales", Environment: servingstate.DefaultEnvironment,
+		PipelineID: "sales-refresh", TriggerType: materialize.TriggerSchedule,
+		ArtifactDigest: "sha256:superseded",
+	})
+	if err == nil || !strings.Contains(err.Error(), "superseded") {
+		t.Fatalf("QueuePipelineRefresh() error = %v, want superseded artifact", err)
+	}
+	if len(repo.createdRuns) != 0 {
+		t.Fatalf("created runs = %#v, want none", repo.createdRuns)
 	}
 }
 
@@ -217,7 +285,9 @@ func TestServiceCreateRefreshCandidateCopiesActiveArtifactMetadata(t *testing.T)
 }
 
 func refreshTestDefinition() *workspace.Definition {
-	return &workspace.Definition{Models: map[string]*semanticmodel.Model{
+	return &workspace.Definition{RefreshPipelines: map[string]refreshpipeline.Definition{
+		"sales-refresh": {ID: "sales-refresh", Name: "sales-refresh", SemanticModel: "sales"},
+	}, Models: map[string]*semanticmodel.Model{
 		"sales": {
 			Name: "sales",
 			Tables: map[string]semanticmodel.Table{
@@ -364,11 +434,24 @@ func (r *fakeRepo) MarkRunFailed(_ context.Context, _ string, runID, _ string) (
 }
 
 type fakeArtifactLoader struct {
-	definition *workspace.Definition
+	definition           *workspace.Definition
+	managedDataRevisions map[string]string
 }
 
 func (l fakeArtifactLoader) Load(context.Context, servingstate.Artifact) (LoadedArtifact, error) {
-	return LoadedArtifact{Definition: l.definition, Graph: workspace.AssetGraph{}}, nil
+	return LoadedArtifact{Definition: l.definition, Graph: workspace.AssetGraph{}, ManagedDataRevisions: l.managedDataRevisions}, nil
+}
+
+type fakeCandidateValidationHook struct {
+	candidate  servingstate.State
+	validation servingstate.Validation
+	err        error
+}
+
+func (h *fakeCandidateValidationHook) AfterArtifactValidation(_ context.Context, candidate servingstate.State, validation servingstate.Validation) error {
+	h.candidate = candidate
+	h.validation = validation
+	return h.err
 }
 
 type fakeMaterializer struct {
@@ -423,6 +506,6 @@ type fakePublisher struct {
 	targets []string
 }
 
-func (p *fakePublisher) PublishRefreshTarget(_ context.Context, _, _, targetID string) {
+func (p *fakePublisher) PublishRefreshTarget(_ context.Context, _, _, _, targetID string) {
 	p.targets = append(p.targets, targetID)
 }

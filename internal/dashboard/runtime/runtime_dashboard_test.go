@@ -94,9 +94,6 @@ o2,20
 			t.Fatalf("%s count = %d, want 2", modelID, count)
 		}
 	}
-	if err := metrics.RefreshTables(context.Background(), "model_b", []string{"orders"}); err != nil {
-		t.Fatalf("refresh shared orders table: %v", err)
-	}
 	if err := metrics.Close(); err != nil {
 		t.Fatalf("close runtime: %v", err)
 	}
@@ -1066,9 +1063,6 @@ relogios_presentes,watches_gifts
 		t.Fatalf("heat pivot rows missing delivered values: %#v", heatPivot.Blocks["a"].Rows)
 	}
 
-	if err := metrics.RefreshMaterializations(context.Background(), "sales"); err != nil {
-		t.Fatalf("refresh materializations: %v", err)
-	}
 }
 
 func TestServiceInteractionSelectionPreservesCompositeTuples(t *testing.T) {

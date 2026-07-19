@@ -35,14 +35,17 @@ func TestServeCommandConstructionDoesNotParseEnvironment(t *testing.T) {
 }
 
 func TestServeEnvironmentDefaultsToProductionEnvironment(t *testing.T) {
-	if got := serveEnvironment(true, ""); got != servingstate.Environment("prod") {
+	if got := serveEnvironment(true, "", ""); got != servingstate.Environment("prod") {
 		t.Fatalf("production serve environment = %q, want prod", got)
 	}
-	if got := serveEnvironment(false, ""); got != servingstate.DefaultEnvironment {
+	if got := serveEnvironment(false, "", ""); got != servingstate.DefaultEnvironment {
 		t.Fatalf("development serve environment = %q, want %q", got, servingstate.DefaultEnvironment)
 	}
-	if got := serveEnvironment(true, "dev"); got != servingstate.DefaultEnvironment {
+	if got := serveEnvironment(true, "dev", "prod"); got != servingstate.DefaultEnvironment {
 		t.Fatalf("explicit production serve environment = %q, want dev", got)
+	}
+	if got := serveEnvironment(true, "", "staging"); got != servingstate.Environment("staging") {
+		t.Fatalf("configured serve environment = %q, want staging", got)
 	}
 }
 

@@ -102,6 +102,59 @@ for (const viewport of [
         canvasVisible: true,
       })
 
+      const layout = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+        const canvas = element.shadowRoot.querySelector('ld-report-canvas') as any
+        await canvas.updateComplete
+        const root = canvas.shadowRoot
+        const surface = root.querySelector('.surface') as HTMLElement
+        const viewport = root.querySelector('.viewport') as HTMLElement
+        const frame = root.querySelector('.frame') as HTMLElement
+        const assigned = (root.querySelector('slot') as HTMLSlotElement).assignedElements() as HTMLElement[]
+        const kpi = assigned.find((item) => item.dataset.componentKind === 'kpi_card')
+        const chart = assigned.find((item) => item.dataset.componentKind === 'bar_chart')
+        const table = assigned.find((item) => item.dataset.componentKind === 'table')
+        const rect = (item?: HTMLElement) => item ? item.getBoundingClientRect() : null
+        return {
+          mode: surface.dataset.presentationMode,
+          scale: Number(surface.dataset.scale),
+          viewportScrollable: viewport.scrollHeight > viewport.clientHeight,
+          framePosition: getComputedStyle(frame).position,
+          kpi: rect(kpi),
+          chart: rect(chart),
+          table: rect(table),
+        }
+      })
+
+      if (viewport.name === 'mobile') {
+        expect(layout.mode).toBe('responsive')
+        expect(layout.scale).toBe(1)
+        expect(layout.framePosition).toBe('relative')
+        expect(layout.kpi?.width ?? 0).toBeGreaterThanOrEqual(300)
+        expect(layout.chart?.height ?? 0).toBeGreaterThanOrEqual(280)
+        expect(layout.table?.height ?? 0).toBeLessThanOrEqual(700)
+        expect(layout.table?.top ?? 0).toBeGreaterThan(layout.chart?.bottom ?? 0)
+      } else {
+        expect(layout.mode).toBe('fit-width')
+        expect(layout.viewportScrollable).toBe(true)
+      }
+
+      const footerState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+        const footer = element.shadowRoot.querySelector('ld-report-footer') as any
+        await footer.updateComplete
+        const initial = footer.shadowRoot.querySelector('.status')?.textContent?.replace(/\s+/g, ' ').trim()
+        footer.status = { ...footer.status, loading: true }
+        await footer.updateComplete
+        const loading = footer.shadowRoot.querySelector('.status')?.textContent?.replace(/\s+/g, ' ').trim()
+        footer.status = { ...footer.status, error: 'query failed' }
+        await footer.updateComplete
+        const failed = footer.shadowRoot.querySelector('.status')?.textContent?.replace(/\s+/g, ' ').trim()
+        return { initial, loading, failed }
+      })
+      expect(footerState.initial).toStartWith('Data refreshed ')
+      expect(footerState.initial).not.toContain('2026-07-18T10:00:00Z')
+      expect(footerState.loading).toBe(footerState.initial)
+      expect(footerState.failed).toBe('Unable to update visuals')
+
       const tableState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
         const table = element.shadowRoot.querySelector('ld-report-table') as any
         await table.updateComplete
@@ -472,7 +525,7 @@ function testDocument(): string {
       { id: 'state-filter', kind: 'filter_card', filter: 'state', x: 488, y: 16, width: 216, height: 88 },
       { id: 'orders-kpi', kind: 'kpi_card', visual: 'orders_kpi', x: 720, y: 16, width: 240, height: 88 },
       { id: 'orders-chart', kind: 'bar_chart', visual: 'orders_chart', x: 16, y: 128, width: 456, height: 280 },
-      { id: 'orders-table', kind: 'table', table: 'orders', x: 488, y: 128, width: 472, height: 280 },
+      { id: 'orders-table', kind: 'table', table: 'orders', x: 16, y: 760, width: 944, height: 280 },
     ],
   }
   const filterConfig = [{
@@ -578,7 +631,7 @@ function testDocument(): string {
     error: '',
     refreshId: 'refresh-3',
     generation: 3,
-    lastUpdated: '12:00:00',
+    lastUpdated: '2026-07-18T10:00:00Z',
     setupRequired: false,
     progressPercent: 50,
   }

@@ -23,9 +23,24 @@ type apiGenAdapter struct {
 	server *Server
 }
 
+func (a apiGenAdapter) GetInstance(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, apigenapi.InstanceResponse{Environment: a.server.defaultEnvironment})
+}
+
 func (a apiGenAdapter) HandleAPIGen(operationID string, w http.ResponseWriter, r *http.Request) {
-	privilege, ok := apigenOperationPrivilege(operationID)
-	if !ok {
+	contract, ok := apigenapi.GetAPIGenOperationContract(operationID)
+	if !ok || !contract.Protected {
+		http.NotFound(w, r)
+		return
+	}
+	var privilege access.Privilege
+	if contract.AuthzMode == "privilege" {
+		privilege, ok = apigenOperationPrivilege(operationID)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+	} else if contract.AuthzMode != "authenticated" {
 		http.NotFound(w, r)
 		return
 	}

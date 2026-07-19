@@ -883,7 +883,7 @@ func (c Connection) Validate(name string) (Connection, error) {
 	if c.Kind == "" {
 		return c, fmt.Errorf("connection %q requires kind", name)
 	}
-	if err := validateConnectionCredentials(name, c.Credentials); err != nil {
+	if err := validateConnectionCredentials(name, c.Kind, c.Scope, c.Credentials); err != nil {
 		return c, err
 	}
 	connectionSpec, ok := LookupConnection(c.Kind)
@@ -973,8 +973,8 @@ func validateConnectionOptions(name string, connection Connection) error {
 	return nil
 }
 
-func validateConnectionCredentials(name string, credentials ConnectionCredentials) error {
-	if credentials.Provider == "" && credentials.Secret == "" {
+func validateConnectionCredentials(name, kind, scope string, credentials ConnectionCredentials) error {
+	if credentials.Provider == "" && credentials.Secret == "" && credentials.Region == "" && credentials.Endpoint == "" && credentials.AccountName == "" {
 		return nil
 	}
 	if credentials.Provider == "" {
@@ -982,8 +982,8 @@ func validateConnectionCredentials(name string, credentials ConnectionCredential
 	}
 	switch credentials.Provider {
 	case "none":
-		if credentials.Secret != "" {
-			return fmt.Errorf("connection %q none credentials cannot set secret", name)
+		if credentials.Secret != "" || credentials.Region != "" || credentials.Endpoint != "" || credentials.AccountName != "" {
+			return fmt.Errorf("connection %q none credentials cannot set credential values", name)
 		}
 	case "env":
 		if credentials.Secret == "" {
@@ -991,6 +991,31 @@ func validateConnectionCredentials(name string, credentials ConnectionCredential
 		}
 		if _, ok := os.LookupEnv(credentials.Secret); !ok {
 			return fmt.Errorf("connection %q env credential %q is not set", name, credentials.Secret)
+		}
+		if credentials.Region != "" || credentials.Endpoint != "" || credentials.AccountName != "" {
+			return fmt.Errorf("connection %q env credentials cannot set ambient metadata", name)
+		}
+	case "ambient":
+		if credentials.Secret != "" {
+			return fmt.Errorf("connection %q ambient credentials cannot set secret", name)
+		}
+		if strings.TrimSpace(scope) == "" {
+			return fmt.Errorf("connection %q ambient credentials require a path scope", name)
+		}
+		switch kind {
+		case "s3":
+			if credentials.AccountName != "" {
+				return fmt.Errorf("connection %q s3 ambient credentials cannot set accountName", name)
+			}
+		case "azure_blob":
+			if strings.TrimSpace(credentials.AccountName) == "" {
+				return fmt.Errorf("connection %q azure_blob ambient credentials require accountName", name)
+			}
+			if credentials.Region != "" || credentials.Endpoint != "" {
+				return fmt.Errorf("connection %q azure_blob ambient credentials accept only accountName", name)
+			}
+		default:
+			return fmt.Errorf("connection %q kind %q does not support ambient credentials", name, kind)
 		}
 	default:
 		return fmt.Errorf("connection %q has unsupported credentials provider %q", name, credentials.Provider)
@@ -1000,6 +1025,12 @@ func validateConnectionCredentials(name string, credentials ConnectionCredential
 
 func validateConnectionAuth(name string, connection Connection, spec ConnectionSpec) (ConnectionAuth, error) {
 	if len(connection.Auth) == 0 {
+		if connection.Credentials.Provider == "ambient" {
+			return nil, nil
+		}
+		if connection.Credentials.Provider == "none" && connection.Kind == "s3" {
+			return nil, nil
+		}
 		if connection.Credentials.Provider != "" && connection.Credentials.Provider != "none" {
 			resolved, err := ResolveConnectionAuth(connection)
 			if err != nil {
@@ -1076,6 +1107,18 @@ func ResolveConnectionAuth(connection Connection) (ConnectionAuth, error) {
 			}
 		}
 		return nil, fmt.Errorf("env credential %q must be a JSON object for connection kind %q", connection.Credentials.Secret, connection.Kind)
+	case "ambient":
+		auth := ConnectionAuth{}
+		if connection.Credentials.Region != "" {
+			auth["region"] = connection.Credentials.Region
+		}
+		if connection.Credentials.Endpoint != "" {
+			auth["endpoint"] = connection.Credentials.Endpoint
+		}
+		if connection.Credentials.AccountName != "" {
+			auth["account_name"] = connection.Credentials.AccountName
+		}
+		return auth, nil
 	default:
 		return nil, fmt.Errorf("unsupported credentials provider %q", connection.Credentials.Provider)
 	}

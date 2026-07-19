@@ -12,7 +12,6 @@ import (
 	accesssqlite "github.com/Yacobolo/libredash/internal/access/sqlite"
 	"github.com/Yacobolo/libredash/internal/agent"
 	agentopenai "github.com/Yacobolo/libredash/internal/agent/openai"
-	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	queryauthz "github.com/Yacobolo/libredash/internal/analytics/query/authz"
 	apiidempotencysqlite "github.com/Yacobolo/libredash/internal/apiidempotency/sqlite"
 	"github.com/Yacobolo/libredash/internal/asyncjob"
@@ -29,7 +28,10 @@ import (
 	"github.com/Yacobolo/libredash/internal/platform"
 	queryauditsqlite "github.com/Yacobolo/libredash/internal/queryaudit/sqlite"
 	"github.com/Yacobolo/libredash/internal/queryruntime"
+	"github.com/Yacobolo/libredash/internal/refreshpipeline"
+	refreshpipelinesqlite "github.com/Yacobolo/libredash/internal/refreshpipeline/sqlite"
 	releasesqlite "github.com/Yacobolo/libredash/internal/release/sqlite"
+	"github.com/Yacobolo/libredash/internal/runtimehost"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	servingstatesqlite "github.com/Yacobolo/libredash/internal/servingstate/sqlite"
 	"github.com/Yacobolo/libredash/internal/staticasset"
@@ -76,56 +78,60 @@ func (m multiWorkspaceMetrics) defaultMetrics() QueryMetrics {
 }
 
 type Server struct {
-	metrics                       QueryMetrics
-	executor                      *execution.Service
-	broker                        *pagestream.Broker
-	pageStreamTrace               *pagestream.TraceStore
-	dashboardRefreshes            *dashboardstream.Registry
-	store                         *platform.Store
-	servingStateRepo              servingStateRepository
-	managedDataBindingRepo        manageddatabinding.Repository
-	workspaceRepo                 workspace.Repository
-	assetCatalog                  workspace.AssetCatalogReader
-	accessRepo                    access.Repository
-	asyncJobs                     asyncjob.Repository
-	agent                         *agent.Service
-	auth                          *Auth
-	reloader                      runtimeReloader
-	artifactDir                   string
-	duckDBDir                     string
-	duckLakeCatalogPath           string
-	duckLakeDataPath              string
-	defaultWorkspaceID            string
-	defaultEnvironment            string
-	scimBearerToken               string
-	metricsBearerToken            string
-	allowedHosts                  []string
-	rateLimits                    RateLimitConfig
-	securityHeaders               SecurityHeadersConfig
-	requestBodyLimit              RequestBodyLimitConfig
-	requestLogging                bool
-	telemetry                     *httpTelemetry
-	logger                        *slog.Logger
-	jobLeaseTimeout               time.Duration
-	jobDispatchMu                 sync.Mutex
-	jobDispatching                bool
-	apiJobDispatching             bool
-	jobDispatchWG                 sync.WaitGroup
-	backgroundMu                  sync.Mutex
-	backgroundCtx                 context.Context
-	backgroundCancel              context.CancelFunc
-	backgroundStopping            bool
-	chatTitleMu                   sync.Mutex
-	pendingChatTitles             map[string]struct{}
-	managedDataOptions            manageddatahttp.Options
-	deploymentOptions             deploymenthttp.Options
-	managedDataTus                http.Handler
-	managedDataExpirer            managedDataUploadExpirer
-	managedDataExpireInterval     time.Duration
-	managedDataMaintenanceStarted bool
-	apiIdempotencyMu              sync.Mutex
-	apiIdempotency                map[string]*apiIdempotencyRecord
-	apiIdempotencyStore           *apiidempotencysqlite.Store
+	metrics                         QueryMetrics
+	executor                        *execution.Service
+	broker                          *pagestream.Broker
+	pageStreamTrace                 *pagestream.TraceStore
+	dashboardRefreshes              *dashboardstream.Registry
+	store                           *platform.Store
+	servingStateRepo                servingStateRepository
+	managedDataBindingRepo          manageddatabinding.Repository
+	managedDataResolver             runtimehost.ManagedDataResolver
+	refreshPipelineRepo             refreshpipeline.Repository
+	refreshPipelineClock            refreshpipeline.Clock
+	workspaceRepo                   workspace.Repository
+	assetCatalog                    workspace.AssetCatalogReader
+	accessRepo                      access.Repository
+	asyncJobs                       asyncjob.Repository
+	agent                           *agent.Service
+	auth                            *Auth
+	reloader                        runtimeReloader
+	artifactDir                     string
+	duckDBDir                       string
+	duckLakeCatalogPath             string
+	duckLakeDataPath                string
+	defaultWorkspaceID              string
+	defaultEnvironment              string
+	scimBearerToken                 string
+	metricsBearerToken              string
+	allowedHosts                    []string
+	rateLimits                      RateLimitConfig
+	securityHeaders                 SecurityHeadersConfig
+	requestBodyLimit                RequestBodyLimitConfig
+	requestLogging                  bool
+	telemetry                       *httpTelemetry
+	logger                          *slog.Logger
+	jobLeaseTimeout                 time.Duration
+	jobDispatchMu                   sync.Mutex
+	jobDispatching                  bool
+	apiJobDispatching               bool
+	jobDispatchWG                   sync.WaitGroup
+	backgroundMu                    sync.Mutex
+	backgroundCtx                   context.Context
+	backgroundCancel                context.CancelFunc
+	backgroundStopping              bool
+	chatTitleMu                     sync.Mutex
+	pendingChatTitles               map[string]struct{}
+	managedDataOptions              manageddatahttp.Options
+	deploymentOptions               deploymenthttp.Options
+	managedDataTus                  http.Handler
+	managedDataExpirer              managedDataUploadExpirer
+	managedDataExpireInterval       time.Duration
+	managedDataMaintenanceStarted   bool
+	refreshPipelineSchedulerStarted bool
+	apiIdempotencyMu                sync.Mutex
+	apiIdempotency                  map[string]*apiIdempotencyRecord
+	apiIdempotencyStore             *apiidempotencysqlite.Store
 }
 
 func New(metrics QueryMetrics) *Server {
@@ -155,6 +161,7 @@ type Options struct {
 	Store                     *platform.Store
 	ServingStateRepo          servingStateRepository
 	ManagedDataBindingRepo    manageddatabinding.Repository
+	ManagedDataResolver       runtimehost.ManagedDataResolver
 	WorkspaceRepo             workspace.Repository
 	AssetCatalog              workspace.AssetCatalogReader
 	AccessRepo                access.Repository
@@ -182,6 +189,7 @@ type Options struct {
 	ManagedDataTus            http.Handler
 	ManagedDataExpirer        managedDataUploadExpirer
 	ManagedDataExpireInterval time.Duration
+	RefreshPipelineClock      refreshpipeline.Clock
 }
 
 func NewWithOptions(metrics QueryMetrics, options Options) *Server {
@@ -226,17 +234,23 @@ func NewWithOptions(metrics QueryMetrics, options Options) *Server {
 		}
 	}
 	server := New(metrics)
+	server.refreshPipelineClock = options.RefreshPipelineClock
+	if server.refreshPipelineClock == nil {
+		server.refreshPipelineClock = refreshpipeline.RealClock{}
+	}
 	server.executor = executor
 	server.store = options.Store
 	if options.Store != nil {
 		server.asyncJobs = asyncjobsqlite.NewRepository(options.Store.SQLDB())
 		server.apiIdempotencyStore = apiidempotencysqlite.NewStore(options.Store.SQLDB())
+		server.refreshPipelineRepo = refreshpipelinesqlite.NewRepository(options.Store.SQLDB())
 		if err := cursorsigningsqlite.Configure(context.Background(), options.Store.SQLDB()); err != nil {
 			server.logger.ErrorContext(context.Background(), "configure cursor signing failed", "error", err)
 		}
 	}
 	server.servingStateRepo = servingStateRepo
 	server.managedDataBindingRepo = managedDataBindingRepo
+	server.managedDataResolver = options.ManagedDataResolver
 	server.workspaceRepo = options.WorkspaceRepo
 	server.assetCatalog = options.AssetCatalog
 	server.accessRepo = options.AccessRepo
@@ -312,6 +326,7 @@ func (s *Server) StartBackgroundJobs(ctx context.Context) {
 	s.backgroundMu.Unlock()
 	s.dispatchQueuedRefreshJobs(backgroundCtx)
 	s.dispatchQueuedAsyncJobs(backgroundCtx)
+	s.startRefreshPipelineScheduler(backgroundCtx)
 	if startManagedDataMaintenance {
 		s.startManagedDataMaintenance(backgroundCtx)
 	}
@@ -346,6 +361,7 @@ func (s *Server) StopBackgroundJobs(ctx context.Context) error {
 		s.backgroundCancel = nil
 		s.backgroundStopping = false
 		s.managedDataMaintenanceStarted = false
+		s.refreshPipelineSchedulerStarted = false
 		s.backgroundMu.Unlock()
 		return nil
 	case <-ctx.Done():
@@ -551,7 +567,6 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 	if s.store != nil {
 		metrics = dashboardCommandMetrics{
 			QueryMetrics: s.metrics,
-			refresh:      s.refreshMaterializationsWithRun,
 		}
 	}
 	return dashboardhttp.Handler{
@@ -564,9 +579,6 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 			if s.store != nil {
 				selected = dashboardCommandMetrics{
 					QueryMetrics: selected,
-					refresh: func(ctx context.Context, modelID string) error {
-						return s.refreshMaterializationsWithRunForWorkspace(ctx, workspaceID, modelID)
-					},
 				}
 			}
 			return selected, true
@@ -595,6 +607,17 @@ func (s *Server) dashboardHTTP() dashboardhttp.Handler {
 			return csrf.Token(r)
 		},
 		ChromeDecorators: s.dashboardChromeDecorators,
+		Environment:      func(r *http.Request) string { return string(s.requestServingEnvironment(r)) },
+		DataRefreshedAt: func(ctx context.Context, workspaceID, environment, modelID string) string {
+			if s.refreshPipelineRepo == nil {
+				return ""
+			}
+			version, ok, err := s.refreshPipelineRepo.DataVersion(ctx, workspaceID, environment, modelID)
+			if err != nil || !ok {
+				return ""
+			}
+			return version.RefreshedAt.Format(time.RFC3339)
+		},
 	}
 }
 
@@ -620,36 +643,4 @@ func (s *Server) metricsForWorkspace(workspaceID string) (QueryMetrics, bool) {
 
 type dashboardCommandMetrics struct {
 	QueryMetrics
-	refresh func(context.Context, string) error
-}
-
-func (m dashboardCommandMetrics) RefreshMaterializations(ctx context.Context, modelID string) error {
-	if m.refresh != nil {
-		return m.refresh(ctx, modelID)
-	}
-	return m.QueryMetrics.RefreshMaterializations(ctx, modelID)
-}
-
-func (s *Server) refreshMaterializationsWithRun(ctx context.Context, modelID string) error {
-	return s.refreshMaterializationsWithRunForWorkspace(ctx, "", modelID)
-}
-
-func (s *Server) refreshMaterializationsWithRunForWorkspace(ctx context.Context, workspaceID, modelID string) error {
-	if s.store == nil {
-		return s.metrics.RefreshMaterializations(ctx, modelID)
-	}
-	repo, err := s.refreshRunRepository()
-	if err != nil {
-		return err
-	}
-	principal, _ := principalFromContext(ctx)
-	orchestrator := materialize.NewRefreshOrchestrator(repo, appRefreshRunner{metrics: s.metrics}, refreshModelLookup(s.metrics))
-	return orchestrator.RefreshSemanticModel(ctx, materialize.RefreshRunInput{
-		WorkspaceID: workspaceID,
-		ModelID:     modelID,
-		PrincipalID: principal.ID,
-	}, materialize.RefreshPublisher{
-		Root:   func() { s.workspaceRefreshSupport().PublishModelRefreshPatches(ctx, workspaceID, modelID) },
-		Target: func(string) { s.workspaceRefreshSupport().PublishModelRefreshPatches(ctx, workspaceID, modelID) },
-	})
 }

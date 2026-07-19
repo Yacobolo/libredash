@@ -32,7 +32,7 @@ flowchart LR
 2. Model tables and semantic models turn those inputs into reusable analytical concepts.
 3. Dashboards compose semantic queries into filters, KPIs, charts, tables, and report pages.
 
-Workspace access resources and agent policies apply alongside those layers. Environments select which validated project and data revisions are active without requiring a second copy of the YAML tree.
+Workspace access resources and agent policies apply alongside those layers. Separate dev, staging, and production instances can run the same validated project source without requiring a second copy of the YAML tree.
 
 ## How a request is served
 

@@ -51,16 +51,6 @@ func (m queryAuditMetrics) MetricsForWorkspace(workspaceID string) (QueryMetrics
 	return nil, false
 }
 
-func (m queryAuditMetrics) RefreshModelTables(ctx context.Context, modelID string, tableNames []string) error {
-	if port, ok := m.QueryMetrics.(modelTableRefreshMetrics); ok {
-		return port.RefreshModelTables(ctx, modelID, tableNames)
-	}
-	if port, ok := m.QueryMetrics.(modelTableRefreshRuntimeMetrics); ok {
-		return port.RefreshTables(ctx, modelID, tableNames)
-	}
-	return errors.New("model table refresh is not configured")
-}
-
 func (m queryAuditMetrics) ExecuteDataQuery(ctx context.Context, request dataquery.Query) (dataquery.Result, error) {
 	if m.QueryMetrics == nil {
 		return dataquery.Result{}, errors.New("query metrics are not configured")

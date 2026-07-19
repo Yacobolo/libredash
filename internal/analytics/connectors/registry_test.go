@@ -125,6 +125,15 @@ func TestPathHelpers(t *testing.T) {
 	if WithinScope("s3://bucket/root/", "s3://bucket/root-other/events.parquet") {
 		t.Fatal("prefix sibling should not be inside scope")
 	}
+	for _, escaped := range []string{
+		"s3://bucket/root/../private/events.parquet",
+		"s3://bucket/root/%2e%2e/private/events.parquet",
+		"s3://other/root/events.parquet",
+	} {
+		if WithinScope("s3://bucket/root/", escaped) {
+			t.Fatalf("escaped path %q should not be inside scope", escaped)
+		}
+	}
 	if extension, ok := StorageExtension("az://warehouse/table"); !ok || extension != "azure" {
 		t.Fatalf("StorageExtension azure = %q, %v", extension, ok)
 	}

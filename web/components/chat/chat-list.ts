@@ -324,7 +324,7 @@ class LibreDashChatList extends LitElement {
       <section class="shell" aria-label="Chat history">
         <div class="header">
           <h2>Chats</h2>
-          <a class="new-chat-link" href="/chat/new">New chat</a>
+          <a class="new-chat-link" href="/chats/new">New chat</a>
         </div>
         <label class="toolbar">
           <span class="search-icon" aria-hidden="true">${lucideIcon(Search)}</span>
@@ -359,7 +359,7 @@ class LibreDashChatList extends LitElement {
 
   private renderRow(conversation: ChatConversationSummary) {
     const title = conversationTitle(conversation)
-    const href = `/chat/${conversation.id}`
+    const href = `/chats/${conversation.id}`
     return html`
       <tr data-active=${String(conversation.id === this.activeConversationId)}>
         <td class="primary-cell">

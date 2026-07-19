@@ -11,7 +11,7 @@ import (
 
 func ChatPage(catalog dashboard.Catalog, workspaceID, csrfToken, roleLabel, view string, state ChatViewState) g.Node {
 	chatUpdatesURL := updatesURL(uisignals.RouteChat, "workspace", workspaceID, "view", view, "conversation", state.Agent.ActiveConversationID)
-	chatBasePath := "/chat"
+	chatBasePath := "/chats"
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title:             "LibreDash Chat",
 		DatastarScriptURL: datastarScriptURL(),

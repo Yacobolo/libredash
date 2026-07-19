@@ -10,7 +10,7 @@ The application router composes liveness/readiness, protected metrics, authentic
 
 ## Active project resolution
 
-A request carries or resolves workspace and environment identity. Serving-state repositories find the active deployment/artifact and associated analytical snapshot. Runtime packages construct workspace catalogs, dashboards, semantic models, and query services from validated active metadata.
+A request resolves workspace identity while the server supplies its permanently bound instance environment. Serving-state repositories find the active deployment/artifact and associated analytical snapshot. Runtime packages construct workspace catalogs, dashboards, semantic models, and query services from validated active metadata.
 
 The request resolves active state once for its operation. A deployment or refresh activated during the request does not change the snapshot already leased by that request.
 

@@ -49,6 +49,21 @@ type clientTarget struct {
 	Token string `json:"token"`
 }
 
+func targetEnvironment(ctx context.Context, client *http.Client, target, token, asserted string) (string, error) {
+	instance, err := newManagedDataCLIClient(client, target, token).instance(ctx)
+	if err != nil {
+		return "", fmt.Errorf("read target instance: %w", err)
+	}
+	environment := strings.TrimSpace(instance.Environment)
+	if environment == "" {
+		return "", fmt.Errorf("target instance returned an empty environment")
+	}
+	if asserted = strings.TrimSpace(asserted); asserted != "" && asserted != environment {
+		return "", fmt.Errorf("requested environment %q does not match target instance environment %q", asserted, environment)
+	}
+	return environment, nil
+}
+
 func clientTargetAndToken(opts *rootOptions) (string, string, error) {
 	cfg := config.MustLoad()
 	target := strings.TrimRight(opts.target, "/")

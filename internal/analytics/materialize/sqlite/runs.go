@@ -12,6 +12,8 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
 	platformdb "github.com/Yacobolo/libredash/internal/platform/db"
+	"github.com/Yacobolo/libredash/internal/refreshpipeline"
+	"github.com/Yacobolo/libredash/internal/servingstate"
 )
 
 type SQLRunRepository struct {
@@ -24,12 +26,27 @@ func NewSQLRunRepository(db *sql.DB) *SQLRunRepository {
 }
 
 func (r *SQLRunRepository) CreateRun(ctx context.Context, input materialize.RunInput) (materialize.RunRecord, error) {
+	return r.createRun(ctx, input, nil)
+}
+
+func (r *SQLRunRepository) CreateScheduledRun(ctx context.Context, input materialize.RunInput, occurrence refreshpipeline.Occurrence) (materialize.RunRecord, error) {
+	return r.createRun(ctx, input, &occurrence)
+}
+
+func (r *SQLRunRepository) createRun(ctx context.Context, input materialize.RunInput, occurrence *refreshpipeline.Occurrence) (materialize.RunRecord, error) {
 	if r == nil || r.db == nil {
 		return materialize.RunRecord{}, fmt.Errorf("refresh run database is required")
 	}
 	normalized, err := normalizeRunInput(input)
 	if err != nil {
 		return materialize.RunRecord{}, err
+	}
+	if occurrence != nil {
+		if normalized.TriggerType != materialize.TriggerSchedule || occurrence.WorkspaceID != normalized.WorkspaceID ||
+			normalized.TargetID != occurrence.WorkspaceID+"."+occurrence.PipelineID || occurrence.Environment == "" ||
+			occurrence.ArtifactDigest == "" || occurrence.ScheduledAt.IsZero() {
+			return materialize.RunRecord{}, fmt.Errorf("scheduled refresh run does not match its claimed occurrence")
+		}
 	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -46,11 +63,28 @@ func (r *SQLRunRepository) CreateRun(ctx context.Context, input materialize.RunI
 		return materialize.RunRecord{}, err
 	}
 	if err := q.CreateRefreshJobRun(ctx, platformdb.CreateRefreshJobRunParams{
-		ID: runID, JobID: jobID, PrincipalID: normalized.PrincipalID, TargetType: normalized.TargetType,
+		ID: runID, JobID: jobID, PrincipalID: normalized.PrincipalID, Environment: normalized.Environment, TargetType: normalized.TargetType,
 		TargetID: normalized.TargetID, TriggerType: normalized.TriggerType, ParentRunID: normalized.ParentRunID,
 		RetryOf: normalized.RetryOf, Status: materialize.RunStatusQueued,
 	}); err != nil {
 		return materialize.RunRecord{}, err
+	}
+	if occurrence != nil {
+		result, err := q.AttachRefreshPipelineRun(ctx, platformdb.AttachRefreshPipelineRunParams{
+			RunID: sql.NullString{String: runID, Valid: true}, WorkspaceID: occurrence.WorkspaceID,
+			Environment: occurrence.Environment, PipelineID: occurrence.PipelineID,
+			ScheduledAt: occurrence.ScheduledAt.UTC().Format(time.RFC3339Nano),
+		})
+		if err != nil {
+			return materialize.RunRecord{}, err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return materialize.RunRecord{}, err
+		}
+		if affected != 1 {
+			return materialize.RunRecord{}, fmt.Errorf("scheduled refresh occurrence is not claimable")
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return materialize.RunRecord{}, err
@@ -58,11 +92,12 @@ func (r *SQLRunRepository) CreateRun(ctx context.Context, input materialize.RunI
 	return r.GetRun(ctx, normalized.WorkspaceID, runID)
 }
 
-func (r *SQLRunRepository) ClaimNextExecutableJob(ctx context.Context, owner string, lease time.Duration) (materialize.JobRecord, bool, error) {
+func (r *SQLRunRepository) ClaimNextExecutableJob(ctx context.Context, environment, owner string, lease time.Duration) (materialize.JobRecord, bool, error) {
 	if r == nil || r.db == nil {
 		return materialize.JobRecord{}, false, fmt.Errorf("refresh run database is required")
 	}
 	owner = strings.TrimSpace(owner)
+	environment = string(servingstate.NormalizeEnvironment(servingstate.Environment(environment)))
 	if owner == "" {
 		return materialize.JobRecord{}, false, fmt.Errorf("lease owner is required")
 	}
@@ -76,8 +111,9 @@ func (r *SQLRunRepository) ClaimNextExecutableJob(ctx context.Context, owner str
 	defer tx.Rollback()
 	q := r.q.WithTx(tx)
 	row, err := q.NextExecutableRefreshJob(ctx, platformdb.NextExecutableRefreshJobParams{
-		RefreshKind: materialize.JobKindRefresh, WorkspaceAssetRefreshKind: materialize.JobKindWorkspaceAssetRefresh,
-		QueuedStatus: materialize.RunStatusQueued, RunQueuedStatus: materialize.RunStatusQueued, RunningStatus: materialize.RunStatusRunning,
+		RefreshPipelineKind: materialize.JobKindRefreshPipeline,
+		QueuedStatus:        materialize.RunStatusQueued, RunQueuedStatus: materialize.RunStatusQueued, RunningStatus: materialize.RunStatusRunning,
+		Environment: environment,
 	})
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -86,7 +122,7 @@ func (r *SQLRunRepository) ClaimNextExecutableJob(ctx context.Context, owner str
 		return materialize.JobRecord{}, false, err
 	}
 	job := materialize.JobRecord{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, Environment: row.Environment, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
 		Kind: row.Kind, PayloadJSON: row.PayloadJson, RunID: row.RunID, TargetType: row.TargetType,
 		TargetID: row.TargetID, TriggerType: row.TriggerType, AttemptCount: int(row.AttemptCount),
 	}
@@ -125,14 +161,14 @@ func (r *SQLRunRepository) RenewJobLease(ctx context.Context, jobID, owner strin
 	})
 }
 
-func (r *SQLRunRepository) JobQueueStats(ctx context.Context) (materialize.JobQueueStats, error) {
+func (r *SQLRunRepository) JobQueueStats(ctx context.Context, environment string) (materialize.JobQueueStats, error) {
 	if r == nil || r.db == nil {
 		return materialize.JobQueueStats{}, fmt.Errorf("refresh run database is required")
 	}
 	row, err := r.q.GetRefreshJobQueueStats(ctx, platformdb.GetRefreshJobQueueStatsParams{
 		QueuedStatus: materialize.RunStatusQueued, RunningStatus: materialize.RunStatusRunning,
-		StaleRunningStatus: materialize.RunStatusRunning, RefreshKind: materialize.JobKindRefresh,
-		WorkspaceAssetRefreshKind: materialize.JobKindWorkspaceAssetRefresh,
+		StaleRunningStatus: materialize.RunStatusRunning, RefreshPipelineKind: materialize.JobKindRefreshPipeline,
+		Environment: string(servingstate.NormalizeEnvironment(servingstate.Environment(environment))),
 	})
 	if err != nil {
 		return materialize.JobQueueStats{}, err
@@ -165,7 +201,7 @@ func (r *SQLRunRepository) ListRuns(ctx context.Context, workspaceID string, pag
 	cursor := runPageCursor{}
 	after := strings.TrimSpace(page.After)
 	if after != "" {
-		resolved, ok, err := r.runPageCursor(ctx, workspaceID, "", "", after)
+		resolved, ok, err := r.runPageCursor(ctx, workspaceID, environmentForPage(page), "", "", after)
 		if err != nil {
 			return nil, err
 		}
@@ -175,7 +211,7 @@ func (r *SQLRunRepository) ListRuns(ctx context.Context, workspaceID string, pag
 		cursor = resolved
 	}
 	rows, err := r.q.ListMaterializationRuns(ctx, platformdb.ListMaterializationRunsParams{
-		WorkspaceID: workspaceID, CursorCreatedAt: cursor.CreatedAt, CursorSequence: cursor.Sequence, Limit: int64(limit),
+		WorkspaceID: workspaceID, Environment: environmentForPage(page), CursorCreatedAt: cursor.CreatedAt, CursorSequence: cursor.Sequence, Limit: int64(limit),
 	})
 	if err != nil {
 		return nil, err
@@ -185,10 +221,6 @@ func (r *SQLRunRepository) ListRuns(ctx context.Context, workspaceID string, pag
 		out = append(out, materializationRunFromListRow(row))
 	}
 	return out, nil
-}
-
-func (r *SQLRunRepository) ListModelRuns(ctx context.Context, workspaceID, modelID string, page materialize.RunPage) ([]materialize.RunRecord, error) {
-	return r.ListTargetRuns(ctx, workspaceID, materialize.TargetSemanticModel, modelID, page)
 }
 
 func (r *SQLRunRepository) ListTargetRuns(ctx context.Context, workspaceID, targetType, targetID string, page materialize.RunPage) ([]materialize.RunRecord, error) {
@@ -208,7 +240,7 @@ func (r *SQLRunRepository) ListTargetRuns(ctx context.Context, workspaceID, targ
 	cursor := runPageCursor{}
 	after := strings.TrimSpace(page.After)
 	if after != "" {
-		resolved, ok, err := r.runPageCursor(ctx, workspaceID, targetType, targetID, after)
+		resolved, ok, err := r.runPageCursor(ctx, workspaceID, environmentForPage(page), targetType, targetID, after)
 		if err != nil {
 			return nil, err
 		}
@@ -218,7 +250,7 @@ func (r *SQLRunRepository) ListTargetRuns(ctx context.Context, workspaceID, targ
 		cursor = resolved
 	}
 	rows, err := r.q.ListTargetMaterializationRuns(ctx, platformdb.ListTargetMaterializationRunsParams{
-		WorkspaceID: workspaceID, TargetType: targetType, TargetID: targetID,
+		WorkspaceID: workspaceID, Environment: environmentForPage(page), TargetType: targetType, TargetID: targetID,
 		CursorCreatedAt: cursor.CreatedAt, CursorSequence: cursor.Sequence, Limit: int64(limit),
 	})
 	if err != nil {
@@ -253,12 +285,8 @@ func (r *SQLRunRepository) ListChildRuns(ctx context.Context, workspaceID, paren
 	return out, nil
 }
 
-func (r *SQLRunRepository) LatestModelRun(ctx context.Context, workspaceID, modelID string) (materialize.RunRecord, bool, error) {
-	return r.LatestTargetRun(ctx, workspaceID, materialize.TargetSemanticModel, modelID)
-}
-
-func (r *SQLRunRepository) LatestTargetRun(ctx context.Context, workspaceID, targetType, targetID string) (materialize.RunRecord, bool, error) {
-	runs, err := r.ListTargetRuns(ctx, workspaceID, targetType, targetID, materialize.RunPage{Limit: 1})
+func (r *SQLRunRepository) LatestTargetRun(ctx context.Context, workspaceID, environment, targetType, targetID string) (materialize.RunRecord, bool, error) {
+	runs, err := r.ListTargetRuns(ctx, workspaceID, targetType, targetID, materialize.RunPage{Limit: 1, Environment: environment})
 	if err != nil {
 		return materialize.RunRecord{}, false, err
 	}
@@ -268,11 +296,7 @@ func (r *SQLRunRepository) LatestTargetRun(ctx context.Context, workspaceID, tar
 	return runs[0], true, nil
 }
 
-func (r *SQLRunRepository) LatestSuccessfulModelRun(ctx context.Context, workspaceID, modelID string) (materialize.RunRecord, bool, error) {
-	return r.LatestSuccessfulTargetRun(ctx, workspaceID, materialize.TargetSemanticModel, modelID)
-}
-
-func (r *SQLRunRepository) LatestSuccessfulTargetRun(ctx context.Context, workspaceID, targetType, targetID string) (materialize.RunRecord, bool, error) {
+func (r *SQLRunRepository) LatestSuccessfulTargetRun(ctx context.Context, workspaceID, environment, targetType, targetID string) (materialize.RunRecord, bool, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
 	targetType = strings.TrimSpace(targetType)
 	targetID = strings.TrimSpace(targetID)
@@ -286,7 +310,8 @@ func (r *SQLRunRepository) LatestSuccessfulTargetRun(ctx context.Context, worksp
 		return materialize.RunRecord{}, false, fmt.Errorf("target id is required")
 	}
 	row, err := r.q.LatestSuccessfulMaterializationRun(ctx, platformdb.LatestSuccessfulMaterializationRunParams{
-		WorkspaceID: workspaceID, TargetType: targetType, TargetID: targetID, Status: materialize.RunStatusSucceeded,
+		WorkspaceID: workspaceID, Environment: string(servingstate.NormalizeEnvironment(servingstate.Environment(environment))),
+		TargetType: targetType, TargetID: targetID, Status: materialize.RunStatusSucceeded,
 	})
 	if err == sql.ErrNoRows {
 		return materialize.RunRecord{}, false, nil
@@ -315,6 +340,13 @@ func (r *SQLRunRepository) CancelRun(ctx context.Context, workspaceID, runID str
 	if workspaceID == "" || runID == "" {
 		return materialize.RunRecord{}, fmt.Errorf("workspace id and run id are required")
 	}
+	prior, err := r.GetRun(ctx, workspaceID, runID)
+	if err != nil {
+		return materialize.RunRecord{}, err
+	}
+	if prior.ParentRunID != "" || prior.TargetType != materialize.TargetRefreshPipeline || prior.ServingStateID == "" {
+		return materialize.RunRecord{}, materialize.ErrRunNotCancellable
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return materialize.RunRecord{}, err
@@ -341,11 +373,34 @@ func (r *SQLRunRepository) CancelRun(ctx context.Context, workspaceID, runID str
 		}
 		return materialize.RunRecord{}, materialize.ErrRunNotCancellable
 	}
+	if err := q.CancelQueuedChildMaterializationRuns(ctx, platformdb.CancelQueuedChildMaterializationRunsParams{
+		CancelledStatus: materialize.RunStatusCancelled, ParentRunID: sql.NullString{String: runID, Valid: true},
+		QueuedStatus: materialize.RunStatusQueued, WorkspaceID: workspaceID,
+	}); err != nil {
+		return materialize.RunRecord{}, err
+	}
+	if err := q.CancelQueuedChildRefreshJobs(ctx, platformdb.CancelQueuedChildRefreshJobsParams{
+		CancelledStatus: materialize.RunStatusCancelled, WorkspaceID: workspaceID,
+		QueuedStatus: materialize.RunStatusQueued, ParentRunID: sql.NullString{String: runID, Valid: true},
+	}); err != nil {
+		return materialize.RunRecord{}, err
+	}
 	if err := q.CancelQueuedRefreshJobForRun(ctx, platformdb.CancelQueuedRefreshJobForRunParams{
 		CancelledStatus: materialize.RunStatusCancelled, RunID: runID,
 		WorkspaceID: workspaceID, QueuedStatus: materialize.RunStatusQueued,
 	}); err != nil {
 		return materialize.RunRecord{}, err
+	}
+	failed, err := q.FailCancelledRefreshCandidate(ctx, prior.ServingStateID)
+	if err != nil {
+		return materialize.RunRecord{}, err
+	}
+	failedCount, err := failed.RowsAffected()
+	if err != nil {
+		return materialize.RunRecord{}, err
+	}
+	if failedCount != 1 {
+		return materialize.RunRecord{}, fmt.Errorf("refresh candidate is not cancellable")
 	}
 	if err := tx.Commit(); err != nil {
 		return materialize.RunRecord{}, err
@@ -353,7 +408,7 @@ func (r *SQLRunRepository) CancelRun(ctx context.Context, workspaceID, runID str
 	return r.GetRun(ctx, workspaceID, runID)
 }
 
-func (r *SQLRunRepository) FailRunsForTerminalServingStates(ctx context.Context, message string) error {
+func (r *SQLRunRepository) FailRunsForTerminalServingStates(ctx context.Context, environment, message string) error {
 	if r == nil || r.db == nil {
 		return fmt.Errorf("refresh run database is required")
 	}
@@ -369,12 +424,12 @@ func (r *SQLRunRepository) FailRunsForTerminalServingStates(ctx context.Context,
 	q := r.q.WithTx(tx)
 	if err := q.FailTerminalServingStateRuns(ctx, platformdb.FailTerminalServingStateRunsParams{
 		FailedStatus: materialize.RunStatusFailed, ErrorMessage: message,
-		QueuedStatus: materialize.RunStatusQueued, RunningStatus: materialize.RunStatusRunning,
+		QueuedStatus: materialize.RunStatusQueued, RunningStatus: materialize.RunStatusRunning, Environment: environment,
 	}); err != nil {
 		return err
 	}
 	if err := q.FailTerminalServingStateJobs(ctx, platformdb.FailTerminalServingStateJobsParams{
-		FailedStatus: materialize.RunStatusFailed, QueuedStatus: materialize.RunStatusQueued, RunningStatus: materialize.RunStatusRunning,
+		FailedStatus: materialize.RunStatusFailed, QueuedStatus: materialize.RunStatusQueued, RunningStatus: materialize.RunStatusRunning, Environment: environment,
 	}); err != nil {
 		return err
 	}
@@ -433,6 +488,7 @@ func (r *SQLRunRepository) markRun(ctx context.Context, workspaceID, runID, stat
 type materializationRunDBRow struct {
 	ID                   string
 	WorkspaceID          string
+	Environment          string
 	ServingStateID       sql.NullString
 	ModelID              string
 	PrincipalID          sql.NullString
@@ -452,7 +508,7 @@ type materializationRunDBRow struct {
 
 func materializationRunFromGetRow(row platformdb.GetMaterializationRunRow) materialize.RunRecord {
 	return materializationRunFromDB(materializationRunDBRow{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, Environment: row.Environment, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
 		PrincipalID: row.PrincipalID, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
 		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, RetryOf: row.RetryOf, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, Error: row.Error,
@@ -461,7 +517,7 @@ func materializationRunFromGetRow(row platformdb.GetMaterializationRunRow) mater
 
 func materializationRunFromChildRow(row platformdb.ListChildMaterializationRunsRow) materialize.RunRecord {
 	return materializationRunFromDB(materializationRunDBRow{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, Environment: row.Environment, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
 		PrincipalID: row.PrincipalID, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
 		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, RetryOf: row.RetryOf, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, Error: row.Error,
@@ -470,7 +526,7 @@ func materializationRunFromChildRow(row platformdb.ListChildMaterializationRunsR
 
 func materializationRunFromLatestRow(row platformdb.LatestSuccessfulMaterializationRunRow) materialize.RunRecord {
 	return materializationRunFromDB(materializationRunDBRow{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, Environment: row.Environment, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
 		PrincipalID: row.PrincipalID, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
 		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, RetryOf: row.RetryOf, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, Error: row.Error,
@@ -479,7 +535,7 @@ func materializationRunFromLatestRow(row platformdb.LatestSuccessfulMaterializat
 
 func materializationRunFromListRow(row platformdb.ListMaterializationRunsRow) materialize.RunRecord {
 	return materializationRunFromDB(materializationRunDBRow{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, Environment: row.Environment, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
 		PrincipalID: row.PrincipalID, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
 		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, RetryOf: row.RetryOf, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, Error: row.Error,
@@ -488,7 +544,7 @@ func materializationRunFromListRow(row platformdb.ListMaterializationRunsRow) ma
 
 func materializationRunFromTargetListRow(row platformdb.ListTargetMaterializationRunsRow) materialize.RunRecord {
 	return materializationRunFromDB(materializationRunDBRow{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, Environment: row.Environment, ServingStateID: row.ServingStateID, ModelID: row.ModelID,
 		PrincipalID: row.PrincipalID, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
 		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID, RetryOf: row.RetryOf, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt, Error: row.Error,
@@ -497,7 +553,7 @@ func materializationRunFromTargetListRow(row platformdb.ListTargetMaterializatio
 
 func materializationRunFromDB(row materializationRunDBRow) materialize.RunRecord {
 	run := materialize.RunRecord{
-		ID: row.ID, WorkspaceID: row.WorkspaceID, ServingStateID: row.ServingStateID.String, ModelID: row.ModelID,
+		ID: row.ID, WorkspaceID: row.WorkspaceID, Environment: row.Environment, ServingStateID: row.ServingStateID.String, ModelID: row.ModelID,
 		PrincipalID: row.PrincipalID.String, PrincipalDisplayName: row.PrincipalDisplayName, TargetType: row.TargetType,
 		TargetID: row.TargetID, TriggerType: row.TriggerType, ParentRunID: row.ParentRunID.String, RetryOf: row.RetryOf.String, Status: row.Status,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt, StartedAt: row.StartedAt, FinishedAt: row.FinishedAt.String, Error: row.Error,
@@ -513,9 +569,9 @@ type runPageCursor struct {
 	Sequence  int64
 }
 
-func (r *SQLRunRepository) runPageCursor(ctx context.Context, workspaceID, targetType, targetID, runID string) (runPageCursor, bool, error) {
+func (r *SQLRunRepository) runPageCursor(ctx context.Context, workspaceID, environment, targetType, targetID, runID string) (runPageCursor, bool, error) {
 	row, err := r.q.GetMaterializationRunCursor(ctx, platformdb.GetMaterializationRunCursorParams{
-		RunID: runID, WorkspaceID: workspaceID, TargetType: targetType, TargetID: targetID,
+		RunID: runID, WorkspaceID: workspaceID, Environment: environment, TargetType: targetType, TargetID: targetID,
 	})
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -528,6 +584,7 @@ func (r *SQLRunRepository) runPageCursor(ctx context.Context, workspaceID, targe
 
 type normalizedRunInput struct {
 	WorkspaceID    string
+	Environment    string
 	ModelID        string
 	ServingStateID string
 	PrincipalID    string
@@ -542,6 +599,7 @@ type normalizedRunInput struct {
 
 func normalizeRunInput(input materialize.RunInput) (normalizedRunInput, error) {
 	workspaceID := strings.TrimSpace(input.WorkspaceID)
+	environment := string(servingstate.NormalizeEnvironment(servingstate.Environment(strings.TrimSpace(input.Environment))))
 	modelID := strings.TrimSpace(input.ModelID)
 	servingStateID := strings.TrimSpace(input.ServingStateID)
 	principalID := strings.TrimSpace(input.PrincipalID)
@@ -558,22 +616,6 @@ func normalizeRunInput(input materialize.RunInput) (normalizedRunInput, error) {
 	if modelID == "" {
 		return normalizedRunInput{}, fmt.Errorf("model id is required")
 	}
-	if targetType == "" {
-		targetType = materialize.TargetSemanticModel
-	}
-	if targetID == "" && targetType == materialize.TargetSemanticModel {
-		targetID = modelID
-	}
-	if triggerType == "" {
-		triggerType = materialize.TriggerDirect
-	}
-	if jobKind == "" {
-		if parentRunID != "" {
-			jobKind = materialize.JobKindChildRun
-		} else {
-			jobKind = materialize.JobKindRefresh
-		}
-	}
 	if payloadJSON == "" {
 		payloadJSON = "{}"
 	}
@@ -586,8 +628,33 @@ func normalizeRunInput(input materialize.RunInput) (normalizedRunInput, error) {
 	if err := validateJobKind(jobKind); err != nil {
 		return normalizedRunInput{}, err
 	}
+	if parentRunID == "" {
+		if targetType != materialize.TargetRefreshPipeline || jobKind != materialize.JobKindRefreshPipeline {
+			return normalizedRunInput{}, fmt.Errorf("root refresh runs must target a refresh pipeline")
+		}
+		if triggerType == materialize.TriggerDependency {
+			return normalizedRunInput{}, fmt.Errorf("root refresh runs cannot use dependency trigger")
+		}
+		if servingStateID == "" {
+			return normalizedRunInput{}, fmt.Errorf("root refresh run serving state id is required")
+		}
+	} else {
+		if targetType != materialize.TargetModelTable || triggerType != materialize.TriggerDependency || jobKind != materialize.JobKindChildRun {
+			return normalizedRunInput{}, fmt.Errorf("child refresh tasks must be model-table dependencies")
+		}
+		if retryOf != "" {
+			return normalizedRunInput{}, fmt.Errorf("child refresh tasks cannot be retries")
+		}
+	}
+	if retryOf != "" && triggerType != materialize.TriggerRetry {
+		return normalizedRunInput{}, fmt.Errorf("retry refresh runs must use retry trigger")
+	}
+	if triggerType == materialize.TriggerRetry && retryOf == "" {
+		return normalizedRunInput{}, fmt.Errorf("retry trigger requires retry_of")
+	}
 	return normalizedRunInput{
 		WorkspaceID:    workspaceID,
+		Environment:    environment,
 		ModelID:        modelID,
 		ServingStateID: servingStateID,
 		PrincipalID:    principalID,
@@ -601,9 +668,13 @@ func normalizeRunInput(input materialize.RunInput) (normalizedRunInput, error) {
 	}, nil
 }
 
+func environmentForPage(page materialize.RunPage) string {
+	return string(servingstate.NormalizeEnvironment(servingstate.Environment(strings.TrimSpace(page.Environment))))
+}
+
 func validateRunTarget(targetType, targetID string) error {
 	switch targetType {
-	case materialize.TargetSemanticModel, materialize.TargetModelTable:
+	case materialize.TargetModelTable, materialize.TargetRefreshPipeline:
 	default:
 		return fmt.Errorf("unsupported materialization target type %q", targetType)
 	}
@@ -615,7 +686,7 @@ func validateRunTarget(targetType, targetID string) error {
 
 func validateRunTrigger(triggerType string) error {
 	switch triggerType {
-	case materialize.TriggerDirect, materialize.TriggerSemanticModel, materialize.TriggerDependency:
+	case materialize.TriggerDependency, materialize.TriggerManual, materialize.TriggerSchedule, materialize.TriggerRetry:
 		return nil
 	default:
 		return fmt.Errorf("unsupported materialization trigger type %q", triggerType)
@@ -624,7 +695,7 @@ func validateRunTrigger(triggerType string) error {
 
 func validateJobKind(kind string) error {
 	switch kind {
-	case materialize.JobKindRefresh, materialize.JobKindWorkspaceAssetRefresh, materialize.JobKindChildRun:
+	case materialize.JobKindRefreshPipeline, materialize.JobKindChildRun:
 		return nil
 	default:
 		return fmt.Errorf("unsupported materialization job kind %q", kind)

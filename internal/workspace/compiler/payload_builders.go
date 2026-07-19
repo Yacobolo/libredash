@@ -4,6 +4,7 @@ import (
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/refreshpipeline"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
 
@@ -461,6 +462,22 @@ func workspaceAgentPolicyPayload(policy workspace.AgentPolicy) workspaceAgentPol
 			Deny:  append([]string{}, policy.Tools.Deny...),
 		},
 		Instructions: policy.Instructions,
+	}
+}
+
+func refreshPipelinePayload(pipeline refreshpipeline.Definition) refreshPipelinePayloadV1 {
+	schedules := make([]refreshPipelineSchedulePayloadV1, 0, len(pipeline.Schedules))
+	for _, schedule := range pipeline.Schedules {
+		schedules = append(schedules, refreshPipelineSchedulePayloadV1{
+			Cron:     schedule.Expression,
+			Timezone: schedule.Timezone,
+		})
+	}
+	return refreshPipelinePayloadV1{
+		ID:            pipeline.ID,
+		Name:          pipeline.Name,
+		SemanticModel: pipeline.SemanticModel,
+		Schedules:     schedules,
 	}
 }
 

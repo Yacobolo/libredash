@@ -71,6 +71,27 @@ metadata:
 	}
 }
 
+func TestValidateMarkdownAcceptsRefreshPipelineResources(t *testing.T) {
+	t.Parallel()
+
+	markdown := "```yaml\n" + `apiVersion: libredash.dev/v1
+kind: RefreshPipeline
+metadata:
+  workspace: sales
+  name: sales-refresh
+spec:
+  semanticModel: sales
+  on:
+    schedule:
+      - cron: "0 6 * * *"
+        timezone: Europe/Copenhagen
+` + "```\n"
+
+	if issues := ValidateMarkdown("docs/example.md", []byte(markdown)); len(issues) != 0 {
+		t.Fatalf("issues = %#v, want none", issues)
+	}
+}
+
 func TestValidateMarkdownRejectsIncompleteResourceEnvelopesAndUnclosedFences(t *testing.T) {
 	t.Parallel()
 

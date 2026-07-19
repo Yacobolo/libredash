@@ -39,6 +39,21 @@ func TestCreateResponseUsesProjectDeploymentWireContract(t *testing.T) {
 	}
 }
 
+func TestCreateRejectsEnvironmentOutsideInstanceBeforeMutation(t *testing.T) {
+	coordinator := &fakeCoordinator{}
+	handler := NewHandler(Options{Coordinator: coordinator, InstanceEnvironment: "prod", CurrentPrincipal: func(*stdhttp.Request) (Principal, bool) { return Principal{ID: "principal"}, true }})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(stdhttp.MethodPost, "/api/v1/projects/project/deployments", strings.NewReader(`{"environment":"staging","targets":[{"workspace":"sales","candidateId":"state_2"}]}`))
+	request.Header.Set("Content-Type", "application/json")
+	handler.Create(recorder, request, "project", CreateHeaders{IdempotencyKey: "deploy-1"})
+	if recorder.Code != stdhttp.StatusConflict || coordinator.creates != 0 {
+		t.Fatalf("status=%d creates=%d body=%s", recorder.Code, coordinator.creates, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), `"requestedEnvironment":"staging"`) || !strings.Contains(recorder.Body.String(), `"instanceEnvironment":"prod"`) {
+		t.Fatalf("environment conflict details missing: %s", recorder.Body.String())
+	}
+}
+
 func TestUnexpectedCoordinatorErrorIsGenericInternalServerError(t *testing.T) {
 	handler := NewHandler(Options{
 		Coordinator: &fakeCoordinator{err: errors.New("secret sqlite path /srv/libredash.db")},
@@ -77,9 +92,11 @@ func TestTypedInvalidCoordinatorErrorIsBadRequest(t *testing.T) {
 type fakeCoordinator struct {
 	response apiadapter.Deployment
 	err      error
+	creates  int
 }
 
 func (c *fakeCoordinator) Create(context.Context, apiadapter.CreateRequest) (apiadapter.Deployment, error) {
+	c.creates++
 	return c.response, c.err
 }
 func (c *fakeCoordinator) Get(context.Context, apiadapter.Scope) (apiadapter.Deployment, error) {

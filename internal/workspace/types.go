@@ -21,22 +21,24 @@ const (
 	AssetTypeWorkspaceGroup       AssetType = "workspace_group"
 	AssetTypeWorkspaceRoleBinding AssetType = "workspace_role_binding"
 	AssetTypeWorkspaceAgentPolicy AssetType = "workspace_agent_policy"
+	AssetTypeRefreshPipeline      AssetType = "refresh_pipeline"
 )
 
 type AssetEdgeType string
 
 const (
-	AssetEdgeContains          AssetEdgeType = "contains"
-	AssetEdgeUsesConnection    AssetEdgeType = "uses_connection"
-	AssetEdgeReadsSource       AssetEdgeType = "reads_source"
-	AssetEdgeUsesSemanticModel AssetEdgeType = "uses_semantic_model"
-	AssetEdgeUsesModelTable    AssetEdgeType = "uses_model_table"
-	AssetEdgeUsesSemanticTable AssetEdgeType = "uses_semantic_table"
-	AssetEdgeUsesMeasure       AssetEdgeType = "uses_measure"
-	AssetEdgeUsesField         AssetEdgeType = "uses_field"
-	AssetEdgeUsesVisual        AssetEdgeType = "uses_visual"
-	AssetEdgeUsesTable         AssetEdgeType = "uses_table"
-	AssetEdgeUsesFilter        AssetEdgeType = "uses_filter"
-	AssetEdgeFiltersField      AssetEdgeType = "filters_field"
-	AssetEdgeUsesGroup         AssetEdgeType = "uses_group"
+	AssetEdgeContains               AssetEdgeType = "contains"
+	AssetEdgeUsesConnection         AssetEdgeType = "uses_connection"
+	AssetEdgeReadsSource            AssetEdgeType = "reads_source"
+	AssetEdgeUsesSemanticModel      AssetEdgeType = "uses_semantic_model"
+	AssetEdgeUsesModelTable         AssetEdgeType = "uses_model_table"
+	AssetEdgeUsesSemanticTable      AssetEdgeType = "uses_semantic_table"
+	AssetEdgeUsesMeasure            AssetEdgeType = "uses_measure"
+	AssetEdgeUsesField              AssetEdgeType = "uses_field"
+	AssetEdgeUsesVisual             AssetEdgeType = "uses_visual"
+	AssetEdgeUsesTable              AssetEdgeType = "uses_table"
+	AssetEdgeUsesFilter             AssetEdgeType = "uses_filter"
+	AssetEdgeFiltersField           AssetEdgeType = "filters_field"
+	AssetEdgeUsesGroup              AssetEdgeType = "uses_group"
+	AssetEdgeRefreshesSemanticModel AssetEdgeType = "refreshes_semantic_model"
 )

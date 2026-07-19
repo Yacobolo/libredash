@@ -34,12 +34,13 @@ type includeList struct {
 }
 
 type workspaceSpec struct {
-	Uses           workspaceUses `yaml:"uses"`
-	Models         includeList   `yaml:"models"`
-	SemanticModels includeList   `yaml:"semanticModels"`
-	Dashboards     includeList   `yaml:"dashboards"`
-	Access         includeList   `yaml:"access"`
-	AgentPolicy    includeList   `yaml:"agentPolicy"`
+	Uses             workspaceUses `yaml:"uses"`
+	Models           includeList   `yaml:"models"`
+	SemanticModels   includeList   `yaml:"semanticModels"`
+	Dashboards       includeList   `yaml:"dashboards"`
+	Access           includeList   `yaml:"access"`
+	AgentPolicy      includeList   `yaml:"agentPolicy"`
+	RefreshPipelines includeList   `yaml:"refreshPipelines"`
 }
 
 type workspaceUses struct {
@@ -158,4 +159,18 @@ type workspaceAgentPolicySpec struct {
 type workspaceAgentPolicyToolsSpec struct {
 	Allow []string `yaml:"allow"`
 	Deny  []string `yaml:"deny"`
+}
+
+type refreshPipelineSpec struct {
+	SemanticModel string                `yaml:"semanticModel"`
+	On            refreshPipelineOnSpec `yaml:"on"`
+}
+
+type refreshPipelineOnSpec struct {
+	Schedule []refreshPipelineScheduleSpec `yaml:"schedule"`
+}
+
+type refreshPipelineScheduleSpec struct {
+	Cron     string `yaml:"cron"`
+	Timezone string `yaml:"timezone"`
 }

@@ -103,21 +103,196 @@ test('site explains the product, its workflow, and where it fits in the data sta
         })
         .isVisible(),
     ).toBe(true)
-    expect(await page.locator('.site-workflow ld-code-block').count()).toBe(1)
+    const workflow = page.getByRole('list', {
+      name: 'Analytics delivery workflow',
+    })
+    expect(await page.locator('.site-workflow ld-code-block').count()).toBe(0)
+    expect(await workflow.locator('.site-workflow-card').count()).toBe(3)
+    expect(await workflow.getByRole('heading', { name: 'Build in code' }).count()).toBe(1)
+    expect(await workflow.getByRole('heading', { name: 'Review in Git' }).count()).toBe(1)
+    expect(await workflow.getByRole('heading', { name: 'Deploy with confidence' }).count()).toBe(1)
+    expect(await workflow.locator('ld-site-feature-icon').evaluateAll((icons) => icons.map((icon) => icon.getAttribute('name')))).toEqual([
+      'blocks',
+      'git-branch',
+      'server',
+    ])
+    expect(await page.getByText('apiVersion:', { exact: false }).count()).toBe(0)
     expect(
       await page
         .getByRole('heading', {
-          name: 'Fits your existing data stack.',
+          name: 'Keep your data stack. Add LeapView.',
         })
         .isVisible(),
     ).toBe(true)
-    const stackFlow = page.getByRole('list', {
-      name: 'LeapView position in the data stack',
+    expect(
+      await page.locator('.site-stack-section').evaluate((element) => {
+        const style = getComputedStyle(element)
+        return {
+          background: style.backgroundColor,
+          borderWidth: style.borderWidth,
+          borderRadius: style.borderRadius,
+          boxShadow: style.boxShadow,
+          padding: style.padding,
+        }
+      }),
+    ).toEqual({
+      background: 'rgba(0, 0, 0, 0)',
+      borderWidth: '0px',
+      borderRadius: '0px',
+      boxShadow: 'none',
+      padding: '0px',
     })
-    expect(await stackFlow.locator('.site-stack-stage').count()).toBe(3)
-    expect(await stackFlow.getByRole('heading', { name: 'Sources' }).count()).toBe(1)
-    expect(await stackFlow.getByRole('heading', { name: 'Data platform' }).count()).toBe(1)
+    const stackFlow = page.getByRole('list', {
+      name: 'How LeapView connects to your data stack',
+    })
+    expect(await stackFlow.locator('.site-stack-stage').count()).toBe(2)
     expect(await stackFlow.getByRole('heading', { name: 'LeapView' }).count()).toBe(1)
+    const compatibilityGroups = stackFlow.locator('.site-stack-group')
+    expect(await compatibilityGroups.count()).toBe(3)
+    expect(await stackFlow.locator('.site-stack-edges-desktop .site-stack-edge').count()).toBe(4)
+    expect(await stackFlow.locator('.site-stack-edges-mobile .site-stack-edge').count()).toBe(1)
+    const desktopFlowMarkers = stackFlow.locator('.site-stack-edges-desktop .site-stack-flow-marker')
+    expect(await desktopFlowMarkers.count()).toBe(3)
+    expect(
+      await desktopFlowMarkers.evaluateAll((markers) =>
+        markers.map((marker) => {
+          const style = getComputedStyle(marker)
+          return {
+            path: marker.getAttribute('data-flow-path'),
+            duration: style.animationDuration,
+            iterationCount: style.animationIterationCount,
+          }
+        }),
+      ),
+    ).toEqual([
+      { path: 'M0 50 C44 50 42 150 66 150 H96', duration: '2.4s', iterationCount: 'infinite' },
+      { path: 'M0 150 H96', duration: '2.4s', iterationCount: 'infinite' },
+      { path: 'M0 250 C44 250 42 150 66 150 H96', duration: '2.4s', iterationCount: 'infinite' },
+    ])
+    const initialFlowOffsets = await desktopFlowMarkers.evaluateAll((markers) =>
+      markers.map((marker) => getComputedStyle(marker).strokeDashoffset),
+    )
+    await page.waitForTimeout(300)
+    const advancedFlowOffsets = await desktopFlowMarkers.evaluateAll((markers) =>
+      markers.map((marker) => getComputedStyle(marker).strokeDashoffset),
+    )
+    expect(
+      advancedFlowOffsets.every((offset, index) => offset !== initialFlowOffsets[index]),
+    ).toBe(true)
+    const mobileFlowMarkers = stackFlow.locator('.site-stack-edges-mobile .site-stack-flow-marker')
+    expect(await mobileFlowMarkers.count()).toBe(1)
+    expect(await mobileFlowMarkers.getAttribute('data-flow-path')).toBe('M50 0 V96')
+    const productNode = stackFlow.locator('.site-stack-product-node')
+    expect(await productNode.count()).toBe(1)
+    expect(await productNode.locator('ld-site-brand-mark[large]').count()).toBe(1)
+    const clientInterfaces = productNode.getByRole('list', { name: 'LeapView interfaces' })
+    expect(await clientInterfaces.locator('.site-stack-client-interface').count()).toBe(4)
+    for (const [label, icon] of [
+      ['Web app', 'square-mouse-pointer'],
+      ['CLI', 'terminal'],
+      ['REST API', 'code-xml'],
+    ]) {
+      const clientInterface = clientInterfaces.locator(`.site-stack-client-interface[aria-label="${label}"]`)
+      expect(await clientInterface.count()).toBe(1)
+      expect(await clientInterface.getAttribute('tabindex')).toBe('0')
+      expect(await clientInterface.getAttribute('data-label')).toBe(label)
+      expect(await clientInterface.locator(`ld-site-feature-icon[name="${icon}"][plain]`).count()).toBe(1)
+      expect(await clientInterface.evaluate((element) => element.childNodes.length)).toBe(1)
+    }
+    const mcpInterface = clientInterfaces.locator('.site-stack-client-interface[aria-label="MCP"]')
+    expect(await mcpInterface.locator('.site-stack-mcp-mark[aria-hidden="true"] > svg').count()).toBe(1)
+    expect(await mcpInterface.locator('ld-site-feature-icon').count()).toBe(0)
+    expect(await mcpInterface.evaluate((element) => element.childNodes.length)).toBe(1)
+    expect(
+      await mcpInterface.evaluate((element) => ({
+        content: getComputedStyle(element, '::after').content,
+        opacity: getComputedStyle(element, '::after').opacity,
+      })),
+    ).toEqual({ content: '"MCP"', opacity: '0' })
+    await mcpInterface.hover()
+    await page.waitForTimeout(250)
+    expect(Number(await mcpInterface.evaluate((element) => getComputedStyle(element, '::after').opacity))).toBeGreaterThan(0.95)
+    expect(await productNode.getByText('Planned', { exact: true }).count()).toBe(0)
+    expect(await productNode.getByText('Coming soon', { exact: true }).count()).toBe(0)
+    expect(
+      await productNode.evaluate((element) => {
+        const sourceNode = element.parentElement?.querySelector('.site-stack-group')
+        if (!sourceNode) return null
+        const sourceStyle = getComputedStyle(sourceNode)
+        const productStyle = getComputedStyle(element)
+        return {
+          backgroundMatches: sourceStyle.backgroundColor === productStyle.backgroundColor,
+          borderMatches: sourceStyle.borderColor === productStyle.borderColor,
+        }
+      }),
+    ).toEqual({ backgroundMatches: true, borderMatches: true })
+    expect(await stackFlow.getByRole('heading', { name: 'Databases' }).count()).toBe(1)
+    expect(await stackFlow.getByRole('heading', { name: 'Object storage' }).count()).toBe(1)
+    expect(await stackFlow.getByRole('heading', { name: 'Formats', exact: true }).count()).toBe(1)
+    for (const integration of [
+      'PostgreSQL',
+      'MySQL',
+      'SQLite',
+      'Amazon S3',
+      'Azure Blob',
+      'Google Cloud Storage',
+      'Cloudflare R2',
+      'Hetzner Object Storage',
+      'CSV',
+      'JSON',
+      'Parquet',
+      'Excel',
+      'Vortex',
+      'Delta Lake',
+      'Apache Iceberg',
+      'Lance',
+      'DuckLake',
+    ]) {
+      expect(await stackFlow.locator(`.site-stack-integration[aria-label="${integration}"]`).count()).toBe(1)
+    }
+    const integrationLogos = stackFlow.locator('.site-stack-group .site-stack-integration')
+    expect(await integrationLogos.count()).toBe(17)
+    expect(await stackFlow.locator('.site-stack-integration[aria-label="Text"]').count()).toBe(0)
+    expect(await stackFlow.locator('.site-stack-integration[aria-label="Binary files"]').count()).toBe(0)
+    const postgresqlLogo = stackFlow.locator('.site-stack-integration[aria-label="PostgreSQL"]')
+    expect(await postgresqlLogo.count()).toBe(1)
+    expect(await postgresqlLogo.getAttribute('tabindex')).toBe('0')
+    const postgresqlMark = postgresqlLogo.locator('.site-stack-logo')
+    expect(await postgresqlMark.count()).toBe(1)
+    expect(await postgresqlMark.evaluate((element) => element.tagName)).toBe('SPAN')
+    expect(await postgresqlMark.locator('svg').count()).toBe(1)
+    const postgresqlMarkFill = await postgresqlMark.evaluate((element) =>
+      getComputedStyle(element.querySelector('svg path')!).fill,
+    )
+    expect(postgresqlMarkFill).toBe(
+      await page.locator('.site-stack-heading > p:not(.site-eyebrow)').evaluate((element) => getComputedStyle(element).color),
+    )
+    const icebergMark = stackFlow.locator('.site-stack-integration[aria-label="Apache Iceberg"] .site-stack-logo')
+    const icebergFills = await icebergMark.evaluate((element) =>
+      Array.from(new Set(Array.from(element.querySelectorAll('path'), (path) => getComputedStyle(path).fill))),
+    )
+    expect(icebergFills).toHaveLength(3)
+    expect(icebergFills).toContain(postgresqlMarkFill)
+    expect(
+      await postgresqlLogo.evaluate((element) => ({
+        content: getComputedStyle(element, '::after').content,
+        opacity: getComputedStyle(element, '::after').opacity,
+      })),
+    ).toEqual({ content: '"PostgreSQL"', opacity: '0' })
+    await postgresqlLogo.hover()
+    await page.waitForTimeout(250)
+    expect(Number(await postgresqlLogo.evaluate((element) => getComputedStyle(element, '::after').opacity))).toBeGreaterThan(0.95)
+    await page.locator('.site-stack-heading').hover()
+    await postgresqlLogo.focus()
+    await page.waitForTimeout(250)
+    expect(Number(await postgresqlLogo.evaluate((element) => getComputedStyle(element, '::after').opacity))).toBeGreaterThan(0.95)
+    expect(await stackFlow.locator('.site-stack-platforms').count()).toBe(0)
+    expect(await stackFlow.getByText('Databricks', { exact: true }).count()).toBe(0)
+    expect(await stackFlow.getByText('Microsoft Fabric', { exact: true }).count()).toBe(0)
+    expect(await stackFlow.getByText('Snowflake', { exact: true }).count()).toBe(0)
+    expect(await stackFlow.getByText('Apps', { exact: true }).count()).toBe(0)
+    expect(await stackFlow.locator('.site-stack-connection-label').count()).toBe(0)
+    expect(await page.getByRole('link', { name: 'View all supported connections' }).count()).toBe(0)
     const interfaces = page.locator('.site-interfaces-section')
     expect(await interfaces.getByRole('heading', { name: 'Dashboards and agents, together.' }).count()).toBe(1)
     expect(await interfaces.locator('.site-interface-card').count()).toBe(2)
@@ -210,6 +385,12 @@ test('homepage flow background renders from design tokens and respects reduced m
     expect(firstFrame.activeRowRatio).toBeGreaterThan(0.65)
     expect(firstFrame.activeSampleRatio).toBeGreaterThan(0.04)
     expect(firstFrame.directionalDelta).toBeGreaterThan(0.32)
+    expect(await page.locator('.site-stack-flow-marker').count()).toBe(4)
+    expect(
+      await page.locator('.site-stack-flow-marker').evaluateAll((markers) =>
+        markers.every((marker) => getComputedStyle(marker).display === 'none'),
+      ),
+    ).toBe(true)
   } finally {
     await context.close()
   }
@@ -366,6 +547,15 @@ test('site supports system, light, and dark color modes', async () => {
     expect(await toggle.getAttribute('data-theme-mode')).toBe('light')
     expect(await page.locator('img.site-product-screenshot-light').isVisible()).toBe(true)
     expect(await page.locator('img.site-product-screenshot-dark').isVisible()).toBe(false)
+    const integrationLogo = page.locator('.site-stack-logo[aria-hidden="true"]')
+    expect(await integrationLogo.count()).toBe(17)
+    const lightLogoColors = await integrationLogo.evaluateAll((logos) =>
+      logos.map((logo) => getComputedStyle(logo.querySelector('svg path')!).fill),
+    )
+    const lightLogoColor = lightLogoColors[0]
+    expect(lightLogoColor).toBe(
+      await page.locator('.site-stack-heading > p:not(.site-eyebrow)').evaluate((element) => getComputedStyle(element).color),
+    )
 
     await toggle.click()
     await page.waitForFunction(() => document.documentElement.dataset.colorMode === 'dark')
@@ -373,6 +563,14 @@ test('site supports system, light, and dark color modes', async () => {
     expect(await page.locator('html').evaluate((element) => getComputedStyle(element).colorScheme)).toBe('dark')
     expect(await page.locator('img.site-product-screenshot-light').isVisible()).toBe(false)
     expect(await page.locator('img.site-product-screenshot-dark').isVisible()).toBe(true)
+    const darkLogoColors = await integrationLogo.evaluateAll((logos) =>
+      logos.map((logo) => getComputedStyle(logo.querySelector('svg path')!).fill),
+    )
+    const darkLogoColor = darkLogoColors[0]
+    expect(darkLogoColor).toBe(
+      await page.locator('.site-stack-heading > p:not(.site-eyebrow)').evaluate((element) => getComputedStyle(element).color),
+    )
+    expect(darkLogoColor).not.toBe(lightLogoColor)
   } finally {
     await page.close()
   }
@@ -396,6 +594,8 @@ test('mobile landing page keeps the product story compact and ordered', async ()
     expect(await menuButton.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44)
 
     expect(await page.locator('.site-interfaces-grid').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1)
+    expect(await page.getByRole('list', { name: 'Analytics delivery workflow' }).evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1)
+    expect(await page.locator('.site-stack-section').evaluate((element) => getComputedStyle(element).padding)).toBe('0px')
     expect(await menuButton.getAttribute('aria-expanded')).toBe('false')
 
     await menuButton.click()
@@ -408,7 +608,7 @@ test('mobile landing page keeps the product story compact and ordered', async ()
     expect(proofHeights).toHaveLength(4)
     expect(Math.max(...proofHeights)).toBeLessThan(180)
 
-    expect(await page.getByRole('list', { name: 'LeapView position in the data stack' }).evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1)
+    expect(await page.getByRole('list', { name: 'How LeapView connects to your data stack' }).evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1)
     const screenshot = page.locator('img.site-product-screenshot-light')
     expect(await screenshot.evaluate((element) => element.getBoundingClientRect().width <= element.parentElement!.getBoundingClientRect().width)).toBe(true)
     expect(await page.locator('ld-site-flow-background').evaluate((element) => element.getBoundingClientRect().height)).toBeLessThanOrEqual(800)
@@ -419,8 +619,9 @@ test('mobile landing page keeps the product story compact and ordered', async ()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
     await page.setViewportSize({ width: 768, height: 900 })
-    expect(await page.getByRole('list', { name: 'LeapView position in the data stack' }).evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1)
+    expect(await page.getByRole('list', { name: 'How LeapView connects to your data stack' }).evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1)
     expect(await page.locator('.site-interfaces-grid').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2)
+    expect(await page.getByRole('list', { name: 'Analytics delivery workflow' }).evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   } finally {
     await context.close()

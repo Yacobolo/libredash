@@ -80,6 +80,9 @@
         "models": {
           "$ref": "#/$defs/%23IncludeList"
         },
+        "refreshPipelines": {
+          "$ref": "#/$defs/%23IncludeList"
+        },
         "semanticModels": {
           "$ref": "#/$defs/%23IncludeList"
         },

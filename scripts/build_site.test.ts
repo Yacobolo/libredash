@@ -26,6 +26,51 @@ test('site build vendors the GitHub mark used by repository links', async () => 
   expect(await mark.text()).toContain('viewBox="0 0 24 24"')
 })
 
+test('site build vendors the official MCP mark used by the interface diagram', async () => {
+  const mark = Bun.file('site/static/vendor/mcp-mark.svg')
+  expect(await mark.exists()).toBe(true)
+  const source = await mark.text()
+  expect(source).toContain('viewBox="0 0 180 180"')
+  expect(source).toContain('stroke="currentColor"')
+  expect(source).not.toContain('<script')
+  expect(source).not.toContain('xlink:href')
+})
+
+test('site build vendors the featured integration logos', async () => {
+  for (const name of [
+    'postgresql',
+    'mysql',
+    'sqlite',
+    'amazons3',
+    'microsoftazure',
+    'googlecloudstorage',
+    'cloudflare',
+    'hetzner',
+    'csv',
+    'json',
+    'apacheparquet',
+    'excel',
+    'vortex',
+    'deltalake',
+    'apacheiceberg',
+    'lance',
+    'ducklake',
+  ]) {
+    const logo = Bun.file(`site/static/vendor/integrations/${name}.svg`)
+    expect(await logo.exists()).toBe(true)
+    const source = await logo.text()
+    expect(source).toContain('<svg')
+    expect(source).toContain('viewBox=')
+    expect(source).not.toContain('<script')
+    expect(source).not.toContain('xlink:href')
+    expect(source).toContain('var(--main-text-secondary-color, #666)')
+  }
+  expect(await Bun.file('site/static/vendor/integrations/databricks.svg').exists()).toBe(false)
+  expect(await Bun.file('site/static/vendor/integrations/microsoftfabric.svg').exists()).toBe(false)
+  expect(await Bun.file('site/static/vendor/integrations/text.svg').exists()).toBe(false)
+  expect(await Bun.file('site/static/vendor/integrations/blob.svg').exists()).toBe(false)
+})
+
 test('site build publishes every Inter subset referenced by the shared stylesheet', async () => {
   const sourceFonts: string[] = []
   const glob = new Bun.Glob('static/files/inter-*.woff2')

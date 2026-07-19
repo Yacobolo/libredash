@@ -62,14 +62,11 @@ func (r *Repository) ListConversations(ctx context.Context, workspaceID, princip
 }
 
 func (r *Repository) ListConversationsPage(ctx context.Context, workspaceID, principalID string, page agent.Page) ([]agent.Conversation, error) {
-	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	_, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := r.q.ListAgentConversations(ctx, platformdb.ListAgentConversationsParams{
-		WorkspaceID: workspaceID,
-		PrincipalID: principalID,
-	})
+	rows, err := r.q.ListAgentConversations(ctx, principalID)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +78,7 @@ func (r *Repository) ListConversationsPage(ctx context.Context, workspaceID, pri
 }
 
 func (r *Repository) GetConversation(ctx context.Context, workspaceID, principalID, conversationID string) (agent.Conversation, error) {
-	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	_, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return agent.Conversation{}, err
 	}
@@ -90,7 +87,6 @@ func (r *Repository) GetConversation(ctx context.Context, workspaceID, principal
 	}
 	row, err := r.q.GetAgentConversation(ctx, platformdb.GetAgentConversationParams{
 		ID:          conversationID,
-		WorkspaceID: workspaceID,
 		PrincipalID: principalID,
 	})
 	if err != nil {
@@ -100,7 +96,7 @@ func (r *Repository) GetConversation(ctx context.Context, workspaceID, principal
 }
 
 func (r *Repository) UpdateConversation(ctx context.Context, input agent.ConversationUpdate) (agent.Conversation, error) {
-	workspaceID, principalID, err := agentScope(input.WorkspaceID, input.PrincipalID)
+	_, principalID, err := agentScope(input.WorkspaceID, input.PrincipalID)
 	if err != nil {
 		return agent.Conversation{}, err
 	}
@@ -112,7 +108,7 @@ func (r *Repository) UpdateConversation(ctx context.Context, input agent.Convers
 		return agent.Conversation{}, fmt.Errorf("conversation title is required")
 	}
 	row, err := r.q.UpdateAgentConversationTitle(ctx, platformdb.UpdateAgentConversationTitleParams{
-		Title: title, ConversationID: input.ConversationID, WorkspaceID: workspaceID, PrincipalID: principalID,
+		Title: title, ConversationID: input.ConversationID, PrincipalID: principalID,
 	})
 	if err != nil {
 		return agent.Conversation{}, err
@@ -121,7 +117,7 @@ func (r *Repository) UpdateConversation(ctx context.Context, input agent.Convers
 }
 
 func (r *Repository) ArchiveConversation(ctx context.Context, workspaceID, principalID, conversationID string) (agent.Conversation, error) {
-	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	_, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return agent.Conversation{}, err
 	}
@@ -130,7 +126,6 @@ func (r *Repository) ArchiveConversation(ctx context.Context, workspaceID, princ
 	}
 	row, err := r.q.ArchiveAgentConversation(ctx, platformdb.ArchiveAgentConversationParams{
 		ID:          conversationID,
-		WorkspaceID: workspaceID,
 		PrincipalID: principalID,
 	})
 	if err != nil {
@@ -140,7 +135,7 @@ func (r *Repository) ArchiveConversation(ctx context.Context, workspaceID, princ
 }
 
 func (r *Repository) UpdateDefaultConversationTitle(ctx context.Context, workspaceID, principalID, conversationID, title string) (agent.Conversation, error) {
-	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	_, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return agent.Conversation{}, err
 	}
@@ -154,7 +149,6 @@ func (r *Repository) UpdateDefaultConversationTitle(ctx context.Context, workspa
 	row, err := r.q.UpdateDefaultAgentConversationTitle(ctx, platformdb.UpdateDefaultAgentConversationTitleParams{
 		Title:       title,
 		ID:          conversationID,
-		WorkspaceID: workspaceID,
 		PrincipalID: principalID,
 	})
 	if err != nil {
@@ -171,7 +165,7 @@ func (r *Repository) UpdateConversationTranscript(ctx context.Context, workspace
 	if err != nil {
 		return agent.Conversation{}, err
 	}
-	workspaceID, principalID, err = agentScope(workspaceID, principalID)
+	_, principalID, err = agentScope(workspaceID, principalID)
 	if err != nil {
 		return agent.Conversation{}, err
 	}
@@ -181,7 +175,6 @@ func (r *Repository) UpdateConversationTranscript(ctx context.Context, workspace
 	row, err := r.q.UpdateAgentConversationTranscript(ctx, platformdb.UpdateAgentConversationTranscriptParams{
 		TranscriptJson: transcript,
 		ID:             conversationID,
-		WorkspaceID:    workspaceID,
 		PrincipalID:    principalID,
 	})
 	if err != nil {
@@ -198,7 +191,7 @@ func (r *Repository) AppendMessage(ctx context.Context, input agent.MessageInput
 	if !validMessageRole(input.Role) {
 		return agent.Message{}, fmt.Errorf("invalid agent message role %q", input.Role)
 	}
-	workspaceID, principalID, err := agentScope(input.WorkspaceID, input.PrincipalID)
+	_, principalID, err := agentScope(input.WorkspaceID, input.PrincipalID)
 	if err != nil {
 		return agent.Message{}, err
 	}
@@ -212,7 +205,6 @@ func (r *Repository) AppendMessage(ctx context.Context, input agent.MessageInput
 		ToolName:       input.ToolName,
 		IsError:        input.IsError,
 		ConversationID: input.ConversationID,
-		WorkspaceID:    workspaceID,
 		PrincipalID:    principalID,
 	})
 	if err != nil {
@@ -226,7 +218,7 @@ func (r *Repository) ListMessages(ctx context.Context, workspaceID, principalID,
 }
 
 func (r *Repository) ListMessagesPage(ctx context.Context, workspaceID, principalID, conversationID string, page agent.Page) ([]agent.Message, error) {
-	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	_, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +227,6 @@ func (r *Repository) ListMessagesPage(ctx context.Context, workspaceID, principa
 	}
 	rows, err := r.q.ListAgentMessages(ctx, platformdb.ListAgentMessagesParams{
 		ConversationID: conversationID,
-		WorkspaceID:    workspaceID,
 		PrincipalID:    principalID,
 	})
 	if err != nil {
@@ -253,11 +244,11 @@ func (r *Repository) CreateRun(ctx context.Context, input agent.RunInput) (agent
 	if err != nil {
 		return agent.Run{}, err
 	}
-	workspaceID, principalID, err := agentScope(input.WorkspaceID, input.PrincipalID)
+	_, principalID, err := agentScope(input.WorkspaceID, input.PrincipalID)
 	if err != nil {
 		return agent.Run{}, err
 	}
-	if _, err := r.GetConversation(ctx, workspaceID, principalID, input.ConversationID); err != nil {
+	if _, err := r.GetConversation(ctx, input.WorkspaceID, principalID, input.ConversationID); err != nil {
 		return agent.Run{}, err
 	}
 	runID := strings.TrimSpace(input.RunID)
@@ -270,7 +261,6 @@ func (r *Repository) CreateRun(ctx context.Context, input agent.RunInput) (agent
 		Model:          input.Model,
 		MetadataJson:   metadata,
 		ConversationID: input.ConversationID,
-		WorkspaceID:    workspaceID,
 		PrincipalID:    principalID,
 	})
 	if err != nil {
@@ -287,7 +277,7 @@ func (r *Repository) FinishRun(ctx context.Context, input agent.RunFinish) (agen
 	if !validRunStatus(input.Status) || input.Status == agent.RunStatusRunning {
 		return agent.Run{}, fmt.Errorf("invalid final agent run status %q", input.Status)
 	}
-	workspaceID, principalID, err := agentScope(input.WorkspaceID, input.PrincipalID)
+	_, principalID, err := agentScope(input.WorkspaceID, input.PrincipalID)
 	if err != nil {
 		return agent.Run{}, err
 	}
@@ -301,7 +291,6 @@ func (r *Repository) FinishRun(ctx context.Context, input agent.RunFinish) (agen
 		MetadataJson:   metadata,
 		ID:             input.RunID,
 		ConversationID: input.ConversationID,
-		WorkspaceID:    workspaceID,
 		PrincipalID:    principalID,
 	})
 	if err != nil {
@@ -315,7 +304,7 @@ func (r *Repository) ListRuns(ctx context.Context, workspaceID, principalID, con
 }
 
 func (r *Repository) ListRunsPage(ctx context.Context, workspaceID, principalID, conversationID string, page agent.Page) ([]agent.Run, error) {
-	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	_, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return nil, err
 	}
@@ -324,7 +313,6 @@ func (r *Repository) ListRunsPage(ctx context.Context, workspaceID, principalID,
 	}
 	rows, err := r.q.ListAgentRuns(ctx, platformdb.ListAgentRunsParams{
 		ConversationID: conversationID,
-		WorkspaceID:    workspaceID,
 		PrincipalID:    principalID,
 	})
 	if err != nil {
@@ -338,7 +326,7 @@ func (r *Repository) ListRunsPage(ctx context.Context, workspaceID, principalID,
 }
 
 func (r *Repository) GetRun(ctx context.Context, workspaceID, principalID, conversationID, runID string) (agent.Run, error) {
-	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	_, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return agent.Run{}, err
 	}
@@ -349,7 +337,7 @@ func (r *Repository) GetRun(ctx context.Context, workspaceID, principalID, conve
 		return agent.Run{}, fmt.Errorf("run id is required")
 	}
 	row, err := r.q.GetAgentRunInConversation(ctx, platformdb.GetAgentRunInConversationParams{
-		RunID: runID, ConversationID: conversationID, WorkspaceID: workspaceID, PrincipalID: principalID,
+		RunID: runID, ConversationID: conversationID, PrincipalID: principalID,
 	})
 	if err != nil {
 		return agent.Run{}, err
@@ -358,7 +346,7 @@ func (r *Repository) GetRun(ctx context.Context, workspaceID, principalID, conve
 }
 
 func (r *Repository) GetRunByID(ctx context.Context, workspaceID, principalID, runID string) (agent.Run, error) {
-	workspaceID, principalID, err := agentScope(workspaceID, principalID)
+	_, principalID, err := agentScope(workspaceID, principalID)
 	if err != nil {
 		return agent.Run{}, err
 	}
@@ -366,7 +354,7 @@ func (r *Repository) GetRunByID(ctx context.Context, workspaceID, principalID, r
 		return agent.Run{}, fmt.Errorf("run id is required")
 	}
 	row, err := r.q.GetAgentRunForPrincipal(ctx, platformdb.GetAgentRunForPrincipalParams{
-		RunID: runID, WorkspaceID: workspaceID, PrincipalID: principalID,
+		RunID: runID, PrincipalID: principalID,
 	})
 	if err != nil {
 		return agent.Run{}, err
@@ -467,9 +455,9 @@ func (r *Repository) ListEventsPage(ctx context.Context, workspaceID, principalI
 	return out, nil
 }
 
-func (r *Repository) agentRunExists(ctx context.Context, workspaceID, principalID, runID string) (bool, error) {
+func (r *Repository) agentRunExists(ctx context.Context, _ string, principalID, runID string) (bool, error) {
 	exists, err := r.q.AgentRunExistsForPrincipal(ctx, platformdb.AgentRunExistsForPrincipalParams{
-		RunID: runID, WorkspaceID: workspaceID, PrincipalID: principalID,
+		RunID: runID, PrincipalID: principalID,
 	})
 	return exists != 0, err
 }

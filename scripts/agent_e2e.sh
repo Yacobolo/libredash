@@ -43,6 +43,7 @@ TARGET="http://127.0.0.1:$PORT"
 export LIBREDASH_HOME="$TMP_DIR/home"
 export LIBREDASH_ADDR="127.0.0.1:$PORT"
 export LIBREDASH_PRODUCTION=true
+export LIBREDASH_ENVIRONMENT=dev
 export LIBREDASH_API_TOKEN_ONLY_AUTH=true
 export LIBREDASH_CSRF_KEY="agent-e2e-csrf-key-agent-e2e-csrf-key"
 export LIBREDASH_METRICS_BEARER_TOKEN="agent-e2e-metrics-token-agent-e2e"
@@ -50,7 +51,9 @@ export LIBREDASH_AGENT_API_KEY="$DEEPSEEK_KEY"
 export LIBREDASH_AGENT_BASE_URL="https://api.deepseek.com"
 export LIBREDASH_AGENT_MODEL="deepseek-v4-flash"
 
-TOKEN="$("$BIN" admin bootstrap)"
+export LIBREDASH_BOOTSTRAP_ADMIN_EMAIL=agent-e2e@example.com
+INITIAL_CREDENTIALS="$("$BIN" admin initialize --format json)"
+TOKEN="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["publisherToken"])' <<<"$INITIAL_CREDENTIALS")"
 "$BIN" serve > "$TMP_DIR/server.log" 2>&1 &
 SERVER_PID="$!"
 

@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
@@ -73,18 +72,4 @@ func (m executionMetrics) QuerySemantic(ctx context.Context, modelID string, req
 
 func (m executionMetrics) PreviewSemantic(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
 	return m.QueryMetrics.PreviewSemantic(m.readContext(ctx), modelID, request)
-}
-
-func (m executionMetrics) RefreshModelTables(ctx context.Context, modelID string, tableNames []string) error {
-	if port, ok := m.QueryMetrics.(modelTableRefreshMetrics); ok {
-		return port.RefreshModelTables(ctx, modelID, tableNames)
-	}
-	if port, ok := m.QueryMetrics.(modelTableRefreshRuntimeMetrics); ok {
-		return port.RefreshTables(ctx, modelID, tableNames)
-	}
-	return errors.New("model table refresh is not configured")
-}
-
-func (m executionMetrics) RefreshTables(ctx context.Context, modelID string, tableNames []string) error {
-	return m.RefreshModelTables(ctx, modelID, tableNames)
 }

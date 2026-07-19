@@ -9,8 +9,10 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/deployment"
+	refreshpipelinesqlite "github.com/Yacobolo/libredash/internal/refreshpipeline/sqlite"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
@@ -125,6 +127,65 @@ func TestActivateDeploymentAtomicallyAppliesArtifactAccessPolicy(t *testing.T) {
 	}
 	if groupCount != 1 || objectCount != 1 {
 		t.Fatalf("activated access state: groups=%d dashboard_objects=%d", groupCount, objectCount)
+	}
+}
+
+func TestActivateDeploymentPersistsPublishSemanticModelDataVersion(t *testing.T) {
+	ctx, db, repository := testRepository(t)
+	insertWorkspaceCandidate(t, ctx, db, "sales", "sales_old", "sales_new", "prod")
+	targets := []deployment.TargetInput{{WorkspaceID: "sales", ServingStateID: "sales_new"}}
+	setCandidateProjectMetadata(t, ctx, db, targets)
+	if _, err := db.ExecContext(ctx, `UPDATE serving_states SET ducklake_snapshot_id = 42 WHERE id = 'sales_new'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, serving_state_id, asset_type, asset_key, payload_schema, content_hash) VALUES ('asset:model', 'semantic_model:sales.sales', 'sales', 'sales_new', 'semantic_model', 'sales.sales', 'semantic_model.v1', 'hash')`); err != nil {
+		t.Fatal(err)
+	}
+	created := createDeployment(t, ctx, repository, "deployment_data_version", targets)
+	if _, err := repository.ActivateDeployment(ctx, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	var modelID, servingStateID, source string
+	var snapshotID int64
+	if err := db.QueryRowContext(ctx, `SELECT semantic_model_id, snapshot_id, serving_state_id, source FROM semantic_model_data_versions WHERE workspace_id = 'sales' AND environment = 'prod'`).Scan(&modelID, &snapshotID, &servingStateID, &source); err != nil {
+		t.Fatal(err)
+	}
+	if modelID != "sales" || snapshotID != 42 || servingStateID != "sales_new" || source != "publish" {
+		t.Fatalf("data version = model=%q snapshot=%d state=%q source=%q", modelID, snapshotID, servingStateID, source)
+	}
+	version, ok, err := refreshpipelinesqlite.NewRepository(db).DataVersion(ctx, "sales", "prod", "sales")
+	if err != nil {
+		t.Fatalf("load publish data version: %v", err)
+	}
+	if !ok || version.RefreshedAt.IsZero() || time.Since(version.RefreshedAt) > time.Minute {
+		t.Fatalf("publish data version = %#v, found=%v", version, ok)
+	}
+}
+
+func TestActivateDeploymentRemovesDataVersionsForDeletedSemanticModels(t *testing.T) {
+	ctx, db, repository := testRepository(t)
+	insertWorkspaceCandidate(t, ctx, db, "sales", "sales_old", "sales_new", "prod")
+	targets := []deployment.TargetInput{{WorkspaceID: "sales", ServingStateID: "sales_new"}}
+	setCandidateProjectMetadata(t, ctx, db, targets)
+	if _, err := db.ExecContext(ctx, `UPDATE serving_states SET ducklake_snapshot_id = 42 WHERE id = 'sales_new'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO assets (snapshot_id, logical_asset_id, workspace_id, serving_state_id, asset_type, asset_key, payload_schema, content_hash) VALUES ('asset:model', 'semantic_model:sales.sales', 'sales', 'sales_new', 'semantic_model', 'sales.sales', 'semantic_model.v1', 'hash')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO semantic_model_data_versions (workspace_id, environment, semantic_model_id, snapshot_id, serving_state_id, refreshed_at, source) VALUES ('sales', 'prod', 'removed', 7, 'sales_old', '2026-07-18T06:00:00Z', 'publish')`); err != nil {
+		t.Fatal(err)
+	}
+	created := createDeployment(t, ctx, repository, "deployment_removes_model_version", targets)
+	if _, err := repository.ActivateDeployment(ctx, created.ID); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM semantic_model_data_versions WHERE workspace_id = 'sales' AND environment = 'prod' AND semantic_model_id = 'removed'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("removed semantic-model data versions = %d, want 0", count)
 	}
 }
 

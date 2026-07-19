@@ -30,6 +30,10 @@ Set three values in `terraform.tfvars`: `admin_email`, `libredash_image`, and
 `ssh_allowed_cidrs`. Use your public address with a `/32` suffix for SSH. The
 module deliberately rejects world-open SSH and mutable image tags.
 
+Provisioning extracts the matching Go `libredashctl` binary from the immutable
+multi-architecture application image. The provider then uses the same Compose
+lifecycle controller and files as the generic self-hosting package.
+
 When `domain` is empty, the deployment uses an HTTPS `sslip.io` hostname. That
 is useful for evaluation. Set a domain you control for a durable installation.
 
@@ -50,11 +54,11 @@ publisher token with the CLI before it expires:
 ```sh
 libredash login \
   --target "$(terraform output -raw url)" \
-  --token '<publishToken>'
+  --token '<publisherToken>'
 ```
 
-The unrestricted bootstrap token exists only in provisioning memory and is
-rotated after these credentials are created.
+Initialization is offline; no unrestricted bootstrap token is created or sent
+over HTTP.
 
 ## Deploy Project
 
@@ -83,11 +87,10 @@ $(terraform output -raw operations_command) logs
 
 Important paths:
 
-- `/var/lib/libredash`: application state and analytical data
-- `/var/lib/libredash/managed-data`: local managed-data object store and runtime views
-- `/var/backups/libredash`: consistent local archives and checksums
-- `/etc/libredash/libredash.env`: generated application configuration
-- `/etc/libredash/deployment.env`: pinned images and deployment metadata
+- Docker volume `libredash_libredash-state`: application state, analytical data, and local managed data
+- `/opt/libredash/backups`: consistent local archives and checksums
+- `/opt/libredash/libredash.env`: generated application configuration
+- `/opt/libredash/deployment.env`: pinned images and deployment metadata
 
 The server creates a consistent backup every day and retains seven local
 archives. Hetzner's daily server backups are also enabled. The application is
@@ -124,12 +127,13 @@ $(terraform output -raw operations_command) upgrade \
   ghcr.io/yacobolo/libredash@sha256:<digest>
 ```
 
-The command pulls and validates the image, starts it, and waits for health. A
-failed healthcheck automatically restores the previous image. Explicitly switch
-back after a successful upgrade with:
+The command creates a pre-upgrade state checkpoint, pulls and validates the
+image, starts it, and waits for health. A failed healthcheck automatically
+restores both the previous image and its paired state. Explicitly switch back
+after a successful upgrade, discarding post-upgrade state, with:
 
 ```sh
-$(terraform output -raw operations_command) rollback
+$(terraform output -raw operations_command) rollback --confirm
 ```
 
 ## Destroy

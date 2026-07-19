@@ -255,6 +255,27 @@ func (r *Registry) CommitPrepared(candidate servingstate.PreparedRuntime) error 
 	return prepared.manager.CommitPrepared(prepared.prepared)
 }
 
+// CommitPreparedWithActivation serializes a single-workspace durable pointer
+// update with its in-memory runtime swap.
+func (r *Registry) CommitPreparedWithActivation(candidate servingstate.PreparedRuntime, activate func() error) error {
+	prepared, ok := candidate.(*RegistryPrepared)
+	if !ok {
+		return fmt.Errorf("prepared runtime belongs to a different host")
+	}
+	if prepared == nil || prepared.manager == nil || prepared.prepared == nil {
+		return fmt.Errorf("prepared runtime is nil")
+	}
+	if activate == nil {
+		return fmt.Errorf("metadata activation is required")
+	}
+	r.cutoverMu.Lock()
+	defer r.cutoverMu.Unlock()
+	if err := activate(); err != nil {
+		return err
+	}
+	return prepared.manager.CommitPrepared(prepared.prepared)
+}
+
 // CommitPreparedSet serializes the durable pointer transaction with the
 // in-memory swap, so requests cannot observe a mixture of rollout revisions.
 func (r *Registry) CommitPreparedSet(set *PreparedSet, activate func() error) error {

@@ -9,36 +9,6 @@ import (
 	"github.com/Yacobolo/libredash/internal/execution"
 )
 
-func TestDispatcherExecutesDirectJobThroughWriteLane(t *testing.T) {
-	ctx := context.Background()
-	queue := &fakeQueueRepository{jobs: []materialize.JobRecord{{
-		ID:          "job_1",
-		WorkspaceID: "sales",
-		RunID:       "run_1",
-		Kind:        materialize.JobKindRefresh,
-	}}}
-	direct := &fakeDirectExecutor{}
-	executor := execution.New(execution.Config{MaxRunningJobs: 1, MaxQueuedJobs: 1})
-
-	Dispatcher{
-		Runs:         queue,
-		Executor:     executor,
-		Direct:       direct,
-		Owner:        "test-owner",
-		LeaseTimeout: time.Minute,
-	}.Run(ctx)
-
-	if direct.executedRun != "run_1" {
-		t.Fatalf("executed run = %q, want run_1", direct.executedRun)
-	}
-	if queue.claimOwner != "test-owner" {
-		t.Fatalf("claim owner = %q, want test-owner", queue.claimOwner)
-	}
-	if executor.Stats().RunningJobs != 0 || executor.Stats().QueuedJobs != 0 {
-		t.Fatalf("executor stats = %#v, want idle", executor.Stats())
-	}
-}
-
 func TestDispatcherMarksUnsupportedJobFailed(t *testing.T) {
 	ctx := context.Background()
 	queue := &fakeQueueRepository{jobs: []materialize.JobRecord{{
@@ -71,7 +41,7 @@ type fakeQueueRepository struct {
 	failedMessage string
 }
 
-func (r *fakeQueueRepository) ClaimNextExecutableJob(_ context.Context, owner string, _ time.Duration) (materialize.JobRecord, bool, error) {
+func (r *fakeQueueRepository) ClaimNextExecutableJob(_ context.Context, _, owner string, _ time.Duration) (materialize.JobRecord, bool, error) {
 	r.claimOwner = owner
 	if len(r.jobs) == 0 {
 		return materialize.JobRecord{}, false, nil
@@ -85,7 +55,7 @@ func (r *fakeQueueRepository) RenewJobLease(context.Context, string, string, tim
 	return nil
 }
 
-func (r *fakeQueueRepository) JobQueueStats(context.Context) (materialize.JobQueueStats, error) {
+func (r *fakeQueueRepository) JobQueueStats(context.Context, string) (materialize.JobQueueStats, error) {
 	return materialize.JobQueueStats{}, nil
 }
 
@@ -109,13 +79,4 @@ func (r *fakeQueueRepository) MarkRunFailed(_ context.Context, _ string, runID, 
 	r.failedRun = runID
 	r.failedMessage = message
 	return materialize.RunRecord{ID: runID, Status: materialize.RunStatusFailed, Error: message}, nil
-}
-
-type fakeDirectExecutor struct {
-	executedRun string
-}
-
-func (e *fakeDirectExecutor) ExecuteDirectJob(_ context.Context, job materialize.JobRecord) error {
-	e.executedRun = job.RunID
-	return nil
 }

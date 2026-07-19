@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	manageddataruntimebinding "github.com/Yacobolo/libredash/internal/manageddata/runtimebinding"
+	"github.com/Yacobolo/libredash/internal/runtimehost"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace/refresh"
 )
@@ -14,9 +16,27 @@ type WorkspaceRefreshMaterializer struct {
 	DuckDBDir       string
 	DuckLakeCatalog string
 	DuckLakeData    string
+	ManagedData     runtimehost.ManagedDataResolver
 }
 
-func (m WorkspaceRefreshMaterializer) Materialize(ctx context.Context, input refresh.MaterializeInput) (int64, error) {
+func (m WorkspaceRefreshMaterializer) Materialize(ctx context.Context, input refresh.MaterializeInput) (snapshotID int64, err error) {
+	if m.ManagedData != nil {
+		resolution, resolveErr := m.ManagedData.ResolveManagedData(ctx, input.Candidate.ID)
+		if resolveErr != nil {
+			return 0, resolveErr
+		}
+		if resolution.Lifetime != nil {
+			defer func() {
+				if releaseErr := resolution.Lifetime.Release(); err == nil && releaseErr != nil {
+					snapshotID = 0
+					err = fmt.Errorf("release managed data after workspace refresh: %w", releaseErr)
+				}
+			}()
+		}
+		if bindErr := manageddataruntimebinding.BindRoots(input.Definition, resolution); bindErr != nil {
+			return 0, bindErr
+		}
+	}
 	dbDir := m.DuckDBDir
 	if strings.TrimSpace(dbDir) == "" {
 		dbDir = filepath.Join(".libredash", "duckdb")
@@ -43,7 +63,7 @@ func (m WorkspaceRefreshMaterializer) Materialize(ctx context.Context, input ref
 	if err := runtime.RefreshWorkspaceTables(ctx, input.Plan.Tables); err != nil {
 		return 0, err
 	}
-	snapshotID := runtime.DuckLakeSnapshotID()
+	snapshotID = runtime.DuckLakeSnapshotID()
 	if snapshotID <= 0 {
 		return 0, fmt.Errorf("refresh did not produce a DuckLake snapshot")
 	}

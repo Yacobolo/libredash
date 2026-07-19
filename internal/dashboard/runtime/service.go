@@ -54,16 +54,15 @@ type setupRequiredError interface {
 }
 
 type Service struct {
-	mu               sync.RWMutex
-	runtimes         map[string]*modelRuntime
-	catalog          *CatalogService
-	reports          *ReportService
-	queries          *QueryService
-	filters          *FilterService
-	visuals          *VisualQueryService
-	tables           *TableQueryService
-	snapshots        *SnapshotService
-	materializations *MaterializationService
+	mu        sync.RWMutex
+	runtimes  map[string]*modelRuntime
+	catalog   *CatalogService
+	reports   *ReportService
+	queries   *QueryService
+	filters   *FilterService
+	visuals   *VisualQueryService
+	tables    *TableQueryService
+	snapshots *SnapshotService
 }
 
 type modelRuntime struct {
@@ -112,11 +111,6 @@ func newFromDefinition(duckDBDir string, factory DataRuntimeFactory, definition 
 		snapshots: service.snapshots,
 		tables:    service.tables,
 	}
-	service.materializations = &MaterializationService{
-		mu:       &service.mu,
-		runtimes: service.runtimes,
-	}
-
 	for modelID, model := range definition.Models {
 		optimizer, err := consumer.NewOptimizer(model)
 		if err != nil {

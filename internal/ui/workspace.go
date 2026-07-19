@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -345,9 +346,9 @@ func workspaceAssetPageSignalWithRefreshAndVersions(workspace workspaceview.Work
 	actions := []uisignals.WorkspaceActionSignal{{Label: "Back to workspace", Href: uisignals.Pointer("/workspaces/" + workspace.ID), Icon: uisignals.Pointer("back")}}
 	if assetRefreshable(asset.Type) {
 		actions = append([]uisignals.WorkspaceActionSignal{{
-			Label:    "Refresh materializations",
+			Label:    "Run now",
 			Icon:     uisignals.Pointer("refresh"),
-			Command:  uisignals.Pointer("refresh-materializations"),
+			Command:  uisignals.Pointer("run-refresh-pipeline"),
 			Disabled: uisignals.Optional(assetRefreshSignal(refresh).Running),
 		}}, actions...)
 	}
@@ -517,7 +518,7 @@ func WorkspaceAssetPageWithRefreshAndVersionsForEnvironment(catalog dashboard.Ca
 		refreshPath := "/workspaces/" + workspace.ID + "/assets/" + asset.ID + "/refresh"
 		extras.CSRFToken = refresh.CSRFToken
 		attrs = append(attrs,
-			g.Attr("data-on:ld-refresh-materializations", uiactions.Post(refreshPath)),
+			g.Attr("data-on:ld-run-refresh-pipeline", uiactions.Post(refreshPath)),
 		)
 		if activeSection == "versions" {
 			return workspaceAssetRouteDocument(asset, catalog, "workspaces", roleLabel, page, uisignals.RouteWorkspaceAsset, g.El("ld-workspace-asset-page", attrs...), extras, activeSection, chromeOptions)
@@ -812,18 +813,21 @@ type AssetRefreshState struct {
 	Runs             []AssetRefreshRun
 	Latest           AssetRefreshRun
 	LatestSuccessful AssetRefreshRun
+	DataVersion      AssetDataVersion
+	NextRun          time.Time
+}
+
+type AssetDataVersion struct {
+	SnapshotID     int64
+	ServingStateID string
+	RefreshedAt    time.Time
+	Source         string
 }
 
 type AssetRefreshRun struct {
 	ID                   string
-	ModelID              string
-	ServingStateID       string
-	PrincipalID          string
 	PrincipalDisplayName string
-	TargetType           string
-	TargetID             string
 	TriggerType          string
-	ParentRunID          string
 	Status               string
 	StartedAt            string
 	FinishedAt           string
@@ -967,12 +971,12 @@ func assetRefreshesTable(refresh AssetRefreshState) recordTable {
 
 func refreshTriggerLabel(trigger string) string {
 	switch strings.TrimSpace(trigger) {
-	case "direct":
-		return "Direct"
-	case "semantic_model":
-		return "Semantic model"
-	case "dependency":
-		return "Dependency"
+	case "manual":
+		return "Manual"
+	case "schedule":
+		return "Schedule"
+	case "retry":
+		return "Retry"
 	default:
 		return "-"
 	}
@@ -1034,7 +1038,7 @@ func parseRefreshTime(value string) (time.Time, bool) {
 }
 
 func assetRefreshable(assetType string) bool {
-	return assetType == "semantic_model" || assetType == "model_table"
+	return assetType == "refresh_pipeline"
 }
 
 func assetDataInspectable(assetType string) bool {
@@ -1767,6 +1771,8 @@ func assetDetailModelForAssetWithRefresh(workspace workspaceview.WorkspaceView, 
 		modelTableDetailModel(&model, workspace, asset, assets, refresh)
 	case "dashboard":
 		dashboardDetailModel(&model, asset, assets)
+	case "refresh_pipeline":
+		refreshPipelineDetailModel(&model, asset, refresh)
 	case "connection":
 		connectionDetailModel(&model, workspace, asset, assets, edges)
 	case "source":
@@ -1779,6 +1785,38 @@ func assetDetailModelForAssetWithRefresh(workspace workspaceview.WorkspaceView, 
 		model.Overview = append(model.Overview, metaFacts(asset.Payload)...)
 	}
 	return model
+}
+
+func refreshPipelineDetailModel(model *assetDetailModel, asset workspaceview.AssetView, refresh AssetRefreshState) {
+	semanticModel := metaString(asset.Payload, "SemanticModel", "semanticModel")
+	schedules := metaSlice(asset.Payload, "Schedules", "schedules")
+	lines := make([]string, 0, len(schedules)*2+1)
+	for _, raw := range schedules {
+		entry, _ := raw.(map[string]any)
+		cron := metaString(entry, "Cron", "cron")
+		timezone := metaString(entry, "Timezone", "timezone")
+		lines = append(lines, "- cron: "+strconv.Quote(cron), "  timezone: "+timezone)
+	}
+	scheduleYAML := "Manual only"
+	if len(lines) > 0 {
+		scheduleYAML = "schedule:\n  " + strings.Join(lines, "\n  ")
+	}
+	nextLabel := "Manual only"
+	if !refresh.NextRun.IsZero() {
+		nextLabel = refresh.NextRun.Format(time.RFC3339)
+	}
+	model.Overview = append(model.Overview,
+		definitionFact{Label: "Semantic model", Value: semanticModel, Code: true},
+		definitionFact{Label: "Schedule", Value: scheduleYAML, Code: true, Wide: true},
+		definitionFact{Label: "Next run", Value: nextLabel},
+	)
+	if refresh.DataVersion.SnapshotID > 0 {
+		model.Overview = append(model.Overview,
+			definitionFact{Label: "Current data version", Value: fmt.Sprintf("snapshot %d · %s", refresh.DataVersion.SnapshotID, refresh.DataVersion.Source), Code: true},
+			definitionFact{Label: "Serving state", Value: refresh.DataVersion.ServingStateID, Code: true},
+		)
+	}
+	model.Overview = append(model.Overview, refreshOverviewFacts(refresh)...)
 }
 
 func commonAssetOverviewFacts(asset workspaceview.AssetView, assets []workspaceview.AssetView, includeParent bool) []definitionFact {
@@ -3073,6 +3111,8 @@ func assetTypeLabel(typ string) string {
 		return "Model table"
 	case "page_item":
 		return "Page item"
+	case "refresh_pipeline":
+		return "Refresh pipeline"
 	default:
 		return strings.Title(strings.ReplaceAll(typ, "_", " "))
 	}
@@ -3102,6 +3142,8 @@ func labelFromKey(key string) string {
 		return "Uses table"
 	case "uses_visual":
 		return "Uses visual"
+	case "refreshes_semantic_model":
+		return "Refreshes semantic model"
 	}
 	return strings.Title(strings.ReplaceAll(key, "_", " "))
 }

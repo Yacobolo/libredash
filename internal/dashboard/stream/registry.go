@@ -2,6 +2,7 @@ package stream
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 )
@@ -12,7 +13,15 @@ import (
 type Registry struct {
 	mu           sync.Mutex
 	coordinators map[string]*Coordinator
+	bindings     map[string]registryBinding
 	orphanTTL    time.Duration
+}
+
+type registryBinding struct {
+	workspaceID string
+	environment string
+	modelID     string
+	refresh     func()
 }
 
 func NewRegistry() *Registry {
@@ -24,7 +33,7 @@ func NewRegistryWithTTL(orphanTTL time.Duration) *Registry {
 	if orphanTTL <= 0 {
 		orphanTTL = 5 * time.Minute
 	}
-	return &Registry{coordinators: map[string]*Coordinator{}, orphanTTL: orphanTTL}
+	return &Registry{coordinators: map[string]*Coordinator{}, bindings: map[string]registryBinding{}, orphanTTL: orphanTTL}
 }
 
 func (r *Registry) Open(streamID string, parent context.Context, publish EventPublisher) (*Coordinator, func()) {
@@ -39,10 +48,49 @@ func (r *Registry) Open(streamID string, parent context.Context, publish EventPu
 		r.mu.Lock()
 		if r.coordinators[streamID] == coordinator {
 			delete(r.coordinators, streamID)
+			delete(r.bindings, streamID)
 		}
 		r.mu.Unlock()
 		coordinator.CloseWithReason("disconnect")
 	}
+}
+
+func (r *Registry) Bind(streamID, workspaceID, environment, modelID string, refresh func()) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	if r.coordinators[streamID] != nil {
+		r.bindings[streamID] = registryBinding{workspaceID: workspaceID, environment: environment, modelID: modelID, refresh: refresh}
+	}
+	r.mu.Unlock()
+}
+
+func (r *Registry) RefreshSemanticModel(workspaceID, environment, modelID string) []string {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	type target struct {
+		streamID string
+		refresh  func()
+	}
+	var targets []target
+	for streamID, binding := range r.bindings {
+		if binding.workspaceID == workspaceID && binding.environment == environment && binding.modelID == modelID {
+			targets = append(targets, target{streamID: streamID, refresh: binding.refresh})
+		}
+	}
+	r.mu.Unlock()
+	sort.Slice(targets, func(i, j int) bool { return targets[i].streamID < targets[j].streamID })
+	streamIDs := make([]string, 0, len(targets))
+	for _, target := range targets {
+		streamIDs = append(streamIDs, target.streamID)
+		if target.refresh != nil {
+			target.refresh()
+		}
+	}
+	return streamIDs
 }
 
 func (r *Registry) Get(streamID string) (*Coordinator, bool) {
@@ -79,6 +127,7 @@ func (r *Registry) expire(streamID string, coordinator *Coordinator) {
 		return
 	}
 	delete(r.coordinators, streamID)
+	delete(r.bindings, streamID)
 	r.mu.Unlock()
 	coordinator.CloseWithReason("ttl_expired")
 }
@@ -93,6 +142,7 @@ func (r *Registry) Close() {
 		coordinators = append(coordinators, coordinator)
 	}
 	r.coordinators = map[string]*Coordinator{}
+	r.bindings = map[string]registryBinding{}
 	r.mu.Unlock()
 	for _, coordinator := range coordinators {
 		coordinator.CloseWithReason("shutdown")

@@ -16,8 +16,8 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 ### Start here
 
 - [What is LibreDash?](/docs/introduction): Understand the problems LibreDash solves and its code-native model.
-- [Get started with LibreDash](/docs/getting-started): Bootstrap and run the included workspace.
-- [Installation](/docs/installation): Prepare a local source checkout and build the application.
+- [Installation](/docs/installation): Pull the public image locally or prepare a durable production instance.
+- [Get started with LibreDash](/docs/getting-started): Bootstrap, edit, and run the included project from a source checkout.
 - [Build your first dashboard](/docs/first-dashboard): Change a model and dashboard and deploy it locally.
 - [Project structure](/docs/project-structure): Learn how project-global resources and workspace resources are organized.
 
@@ -106,6 +106,7 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 - [Grant configuration](/docs/config/grant): Fields and validation rules for the Grant YAML resource.
 - [Data Policy configuration](/docs/config/data-policy): Fields and validation rules for the DataPolicy YAML resource.
 - [Workspace Agent Policy configuration](/docs/config/workspace-agent-policy): Fields and validation rules for the WorkspaceAgentPolicy YAML resource.
+- [Refresh Pipeline configuration](/docs/config/refresh-pipeline): Fields and validation rules for the RefreshPipeline YAML resource.
 
 #### CLI commands
 
@@ -131,6 +132,7 @@ Focused slices are available at `/docs/cli/commands/{id}.json|md` and `/docs/api
 
 - [API reference](/docs/api): Browse the generated headless API contract.
 - [System](/docs/api/system): API capabilities and protocol discovery.
+- [Instance](/docs/api/instance): The immutable serving identity of this LibreDash installation.
 - [Projects](/docs/api/projects): Read-only project registry.
 - [Releases](/docs/api/releases): Immutable project releases and artifacts.
 - [Current User](/docs/api/current-user): Current principal, sessions, tokens, and privileges.

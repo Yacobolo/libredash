@@ -26,6 +26,8 @@ import (
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
 	"github.com/Yacobolo/libredash/internal/dataquery"
 	"github.com/Yacobolo/libredash/internal/execution"
+	"github.com/Yacobolo/libredash/internal/manageddata"
+	manageddatasqlite "github.com/Yacobolo/libredash/internal/manageddata/sqlite"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/queryaudit"
 	queryauditsqlite "github.com/Yacobolo/libredash/internal/queryaudit/sqlite"
@@ -87,6 +89,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 	deploymentRepo := servingstatesqlite.NewRepository(store.SQLDB())
 	projectPath := discoverCatalogPath(t)
 	initial := createAndActivateProjectDeployment(t, ctx, deploymentRepo, artifactDir, projectPath, dataDir, duckDBDir, workspaceID, "integration")
+	seedIntegrationManagedDataRevision(t, ctx, store, initial.ProjectID)
 	var registry *runtimehost.Registry
 	registry = runtimehost.NewRegistryWithFactory(runtimehost.RegistryOptions{
 		Repo:         deploymentRepo,
@@ -94,6 +97,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		Environment:  servingstate.DefaultEnvironment,
 		OnDrained: func(servingstate.ID, int64) {
 			_, _ = storagemaintenance.Run(context.Background(), deploymentRepo, storagemaintenance.Options{
+				Environment:                  servingstate.DefaultEnvironment,
 				RootDir:                      homeDir,
 				CatalogPath:                  catalogPath,
 				DataPath:                     dataPath,
@@ -129,6 +133,7 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		DuckDBDir:           duckDBDir,
 		DuckLakeCatalogPath: catalogPath,
 		DuckLakeDataPath:    dataPath,
+		ManagedDataResolver: staticIntegrationManagedDataResolver{root: dataDir},
 		DefaultWorkspaceID:  workspaceID,
 		DefaultEnvironment:  string(servingstate.DefaultEnvironment),
 		Executor:            execution.New(execution.DefaultConfig()),
@@ -163,6 +168,44 @@ func newDuckLakeHarness(t *testing.T, opts ...func(*app.Options)) *duckLakeHarne
 		stopServerBackgroundForTest(t, server)
 	})
 	return h
+}
+
+func seedIntegrationManagedDataRevision(t *testing.T, ctx context.Context, store *platform.Store, projectID string) {
+	t.Helper()
+	repository := manageddatasqlite.NewRepository(store.SQLDB())
+	collection, err := repository.CreateCollection(ctx, manageddata.CreateCollectionInput{
+		ID: "olist", ProjectID: projectID, ConnectionName: "olist", Name: "Olist",
+	})
+	if err != nil {
+		t.Fatalf("create integration managed-data collection: %v", err)
+	}
+	manifest := integrationManagedDataManifest()
+	session, err := repository.CreateUploadSession(ctx, manageddata.CreateUploadSessionInput{
+		CollectionID: collection.ID, Manifest: manifest, StorageBackend: "local",
+		StagingPrefix: "integration/olist", ExpiresAt: time.Now().Add(time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("create integration managed-data upload: %v", err)
+	}
+	if _, err := repository.CompleteUpload(ctx, manageddata.CompleteUploadInput{
+		SessionID: session.ID,
+		Files: []manageddata.StoredFile{{
+			File: manifest.Files[0], StorageKey: "integration/fixture.csv",
+		}},
+	}); err != nil {
+		t.Fatalf("complete integration managed-data upload: %v", err)
+	}
+}
+
+type staticIntegrationManagedDataResolver struct {
+	root string
+}
+
+func (r staticIntegrationManagedDataResolver) ResolveManagedData(context.Context, servingstate.ID) (runtimehost.ManagedDataResolution, error) {
+	return runtimehost.ManagedDataResolution{
+		RevisionID: integrationOlistManagedDataRevision,
+		Roots:      map[string]string{"olist": r.root},
+	}, nil
 }
 
 func registryLeasedSnapshots(registry *runtimehost.Registry) []int64 {
@@ -410,7 +453,7 @@ func (r duckLakeIntegrationDataRuntime) DuckLakeSnapshotID() int64 {
 
 func TestDuckLakeAtomicRefreshCutover(t *testing.T) {
 	h := newDuckLakeHarness(t)
-	ordersAssetID := integrationAssetID(t, h.store, "sales", "model_table", "sales.orders")
+	pipelineAssetID := integrationAssetID(t, h.store, "sales", "refresh_pipeline", "sales.sales-refresh")
 
 	initialRevenue := h.queryRevenue(t)
 	if initialRevenue != 165 {
@@ -422,10 +465,10 @@ func TestDuckLakeAtomicRefreshCutover(t *testing.T) {
 	}
 
 	writeMutatedOlistFixture(t, h.dataDir)
-	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+ordersAssetID+"/refresh"); got != http.StatusNoContent {
+	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+pipelineAssetID+"/refresh"); got != http.StatusNoContent {
 		t.Fatalf("refresh status = %d, want %d", got, http.StatusNoContent)
 	}
-	run := h.waitLatestRun(t, analyticsmaterialize.TargetModelTable, "sales.orders", analyticsmaterialize.RunStatusSucceeded)
+	run := h.waitLatestRun(t, analyticsmaterialize.TargetRefreshPipeline, "sales.sales-refresh", analyticsmaterialize.RunStatusSucceeded)
 	if run.ServingStateID == "" {
 		t.Fatalf("run has no deployment id: %#v", run)
 	}
@@ -525,12 +568,12 @@ func TestReadOverloadDoesNotBlockWriteRefresh(t *testing.T) {
 		t.Fatalf("overloaded read status=%d body=%s, want read queue full error", res.StatusCode, body)
 	}
 	writeMutatedOlistFixture(t, h.dataDir)
-	ordersAssetID := integrationAssetID(t, h.store, "sales", "model_table", "sales.orders")
-	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+ordersAssetID+"/refresh"); got != http.StatusNoContent {
+	pipelineAssetID := integrationAssetID(t, h.store, "sales", "refresh_pipeline", "sales.sales-refresh")
+	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+pipelineAssetID+"/refresh"); got != http.StatusNoContent {
 		close(release)
 		t.Fatalf("refresh status = %d", got)
 	}
-	h.waitLatestRun(t, analyticsmaterialize.TargetModelTable, "sales.orders", analyticsmaterialize.RunStatusSucceeded)
+	h.waitLatestRun(t, analyticsmaterialize.TargetRefreshPipeline, "sales.sales-refresh", analyticsmaterialize.RunStatusSucceeded)
 	close(release)
 	if err := <-readDone; err != nil {
 		t.Fatalf("held read returned error: %v", err)
@@ -553,12 +596,12 @@ func TestDuckLakeCleanupProtectsLeasedSnapshots(t *testing.T) {
 		t.Fatalf("create query snapshot lease: %v", err)
 	}
 	writeMutatedOlistFixture(t, h.dataDir)
-	ordersAssetID := integrationAssetID(t, h.store, "sales", "model_table", "sales.orders")
-	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+ordersAssetID+"/refresh"); got != http.StatusNoContent {
+	pipelineAssetID := integrationAssetID(t, h.store, "sales", "refresh_pipeline", "sales.sales-refresh")
+	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+pipelineAssetID+"/refresh"); got != http.StatusNoContent {
 		t.Fatalf("refresh status = %d", got)
 	}
-	h.waitLatestRun(t, analyticsmaterialize.TargetModelTable, "sales.orders", analyticsmaterialize.RunStatusSucceeded)
-	report, err := storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: true})
+	h.waitLatestRun(t, analyticsmaterialize.TargetRefreshPipeline, "sales.sales-refresh", analyticsmaterialize.RunStatusSucceeded)
+	report, err := storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{Environment: servingstate.DefaultEnvironment, RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: true})
 	if err != nil {
 		t.Fatalf("cleanup dry-run: %v", err)
 	}
@@ -568,7 +611,7 @@ func TestDuckLakeCleanupProtectsLeasedSnapshots(t *testing.T) {
 	if err := h.deployments.ReleaseQuerySnapshotLease(ctx, leaseID); err != nil {
 		t.Fatalf("release lease: %v", err)
 	}
-	report, err = storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: false})
+	report, err = storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{Environment: servingstate.DefaultEnvironment, RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: false})
 	if err != nil {
 		t.Fatalf("cleanup apply: %v", err)
 	}
@@ -590,17 +633,17 @@ func TestDuckLakeSnapshotProtectedByRunningQueryLease(t *testing.T) {
 		t.Fatalf("lease snapshot = %d, want positive", initial)
 	}
 	writeMutatedOlistFixture(t, h.dataDir)
-	ordersAssetID := integrationAssetID(t, h.store, "sales", "model_table", "sales.orders")
-	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+ordersAssetID+"/refresh"); got != http.StatusNoContent {
+	pipelineAssetID := integrationAssetID(t, h.store, "sales", "refresh_pipeline", "sales.sales-refresh")
+	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+pipelineAssetID+"/refresh"); got != http.StatusNoContent {
 		lease.Release()
 		t.Fatalf("refresh status = %d", got)
 	}
-	h.waitLatestRun(t, analyticsmaterialize.TargetModelTable, "sales.orders", analyticsmaterialize.RunStatusSucceeded)
+	h.waitLatestRun(t, analyticsmaterialize.TargetRefreshPipeline, "sales.sales-refresh", analyticsmaterialize.RunStatusSucceeded)
 	if got := h.activeSnapshot(t); got <= initial {
 		lease.Release()
 		t.Fatalf("active snapshot = %d, want newer than leased snapshot %d", got, initial)
 	}
-	report, err := storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: true})
+	report, err := storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{Environment: servingstate.DefaultEnvironment, RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: true})
 	if err != nil {
 		lease.Release()
 		t.Fatalf("cleanup dry-run: %v", err)
@@ -610,7 +653,7 @@ func TestDuckLakeSnapshotProtectedByRunningQueryLease(t *testing.T) {
 		t.Fatalf("lease-protected snapshots = %#v, want %d", report.LeaseProtectedSnapshots, initial)
 	}
 	lease.Release()
-	report, err = storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: false})
+	report, err = storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{Environment: servingstate.DefaultEnvironment, RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: false})
 	if err != nil {
 		t.Fatalf("cleanup apply after lease release: %v", err)
 	}
@@ -629,18 +672,18 @@ func TestDuckLakeCleanupRemovesUnleasedStaleSnapshots(t *testing.T) {
 	}
 	initial := lease.DuckLakeSnapshotID()
 	writeMutatedOlistFixture(t, h.dataDir)
-	ordersAssetID := integrationAssetID(t, h.store, "sales", "model_table", "sales.orders")
-	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+ordersAssetID+"/refresh"); got != http.StatusNoContent {
+	pipelineAssetID := integrationAssetID(t, h.store, "sales", "refresh_pipeline", "sales.sales-refresh")
+	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+pipelineAssetID+"/refresh"); got != http.StatusNoContent {
 		lease.Release()
 		t.Fatalf("refresh status = %d", got)
 	}
-	h.waitLatestRun(t, analyticsmaterialize.TargetModelTable, "sales.orders", analyticsmaterialize.RunStatusSucceeded)
+	h.waitLatestRun(t, analyticsmaterialize.TargetRefreshPipeline, "sales.sales-refresh", analyticsmaterialize.RunStatusSucceeded)
 	if !containsSnapshot(h.duckLakeSnapshotIDs(t), initial) {
 		lease.Release()
 		t.Fatalf("snapshot %d disappeared while lease was still held", initial)
 	}
 	lease.Release()
-	report, err := storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: false})
+	report, err := storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{Environment: servingstate.DefaultEnvironment, RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: false})
 	if err != nil {
 		t.Fatalf("cleanup apply: %v", err)
 	}
@@ -652,16 +695,45 @@ func TestDuckLakeCleanupRemovesUnleasedStaleSnapshots(t *testing.T) {
 	}
 }
 
+func TestDuckLakeCleanupPreservesForeignEnvironmentSnapshots(t *testing.T) {
+	h := newDuckLakeHarness(t)
+	ctx := context.Background()
+	initial := h.activeSnapshot(t)
+	foreign, err := h.deployments.Create(ctx, servingstate.CreateInput{WorkspaceID: "sales", ProjectID: "historical", Environment: "prod", CreatedBy: "integration"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.deployments.RecordDuckLakeSnapshot(ctx, foreign.ID, initial); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.store.SQLDB().ExecContext(ctx, "UPDATE serving_states SET status = ? WHERE id = ?", string(servingstate.StatusInactive), string(foreign.ID)); err != nil {
+		t.Fatal(err)
+	}
+	writeMutatedOlistFixture(t, h.dataDir)
+	pipelineAssetID := integrationAssetID(t, h.store, "sales", "refresh_pipeline", "sales.sales-refresh")
+	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+pipelineAssetID+"/refresh"); got != http.StatusNoContent {
+		t.Fatalf("refresh status = %d", got)
+	}
+	h.waitLatestRun(t, analyticsmaterialize.TargetRefreshPipeline, "sales.sales-refresh", analyticsmaterialize.RunStatusSucceeded)
+	report, err := storagemaintenance.Run(ctx, h.deployments, storagemaintenance.Options{Environment: servingstate.DefaultEnvironment, RootDir: h.homeDir, CatalogPath: h.catalogPath, DataPath: h.dataPath, DryRun: false})
+	if err != nil {
+		t.Fatalf("cleanup apply: %v", err)
+	}
+	if !containsSnapshot(report.ForeignProtectedSnapshots, initial) || !containsSnapshot(h.duckLakeSnapshotIDs(t), initial) {
+		t.Fatalf("foreign snapshot %d was not preserved: %#v", initial, report)
+	}
+}
+
 func TestFailedRefreshLeavesActiveSnapshotQueryable(t *testing.T) {
 	h := newDuckLakeHarness(t)
 	initialRevenue := h.queryRevenue(t)
 	initialSnapshot := h.activeSnapshot(t)
 	writeBrokenOlistFixture(t, h.dataDir)
-	ordersAssetID := integrationAssetID(t, h.store, "sales", "model_table", "sales.orders")
-	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+ordersAssetID+"/refresh"); got != http.StatusNoContent {
+	pipelineAssetID := integrationAssetID(t, h.store, "sales", "refresh_pipeline", "sales.sales-refresh")
+	if got := h.postAuthenticated(t, "/workspaces/sales/assets/"+pipelineAssetID+"/refresh"); got != http.StatusNoContent {
 		t.Fatalf("refresh status = %d", got)
 	}
-	h.waitLatestRun(t, analyticsmaterialize.TargetModelTable, "sales.orders", analyticsmaterialize.RunStatusFailed)
+	h.waitLatestRun(t, analyticsmaterialize.TargetRefreshPipeline, "sales.sales-refresh", analyticsmaterialize.RunStatusFailed)
 	if got := h.activeSnapshot(t); got != initialSnapshot {
 		t.Fatalf("active snapshot = %d after failed refresh, want %d", got, initialSnapshot)
 	}
@@ -672,7 +744,7 @@ func TestFailedRefreshLeavesActiveSnapshotQueryable(t *testing.T) {
 
 func TestDurableRefreshQueueResumesAfterStartup(t *testing.T) {
 	h := newDuckLakeHarness(t)
-	run := h.createQueuedWorkspaceAssetRefreshRun(t, analyticsmaterialize.TargetModelTable, "sales.orders", "sales")
+	run := h.createQueuedRefreshPipelineRun(t)
 	h.stopBackgroundJobs(t)
 	h.registry.Close()
 	h.registry = nil
@@ -687,8 +759,8 @@ func TestExpiredRefreshJobLeaseIsReclaimed(t *testing.T) {
 	h := newDuckLakeHarness(t)
 	ctx := context.Background()
 	repo := analyticsmaterializesqlite.NewSQLRunRepository(h.store.SQLDB())
-	run := h.createQueuedWorkspaceAssetRefreshRun(t, analyticsmaterialize.TargetModelTable, "sales.orders", "sales")
-	job, ok, err := repo.ClaimNextExecutableJob(ctx, "stale-worker", time.Second)
+	run := h.createQueuedRefreshPipelineRun(t)
+	job, ok, err := repo.ClaimNextExecutableJob(ctx, "dev", "stale-worker", time.Second)
 	if err != nil || !ok {
 		t.Fatalf("claim job ok=%v err=%v", ok, err)
 	}
@@ -774,7 +846,7 @@ func stopServerBackgroundForTest(t *testing.T, server *app.Server) {
 	}
 }
 
-func (h *duckLakeHarness) createQueuedWorkspaceAssetRefreshRun(t *testing.T, targetType, targetID, modelID string) analyticsmaterialize.RunRecord {
+func (h *duckLakeHarness) createQueuedRefreshPipelineRun(t *testing.T) analyticsmaterialize.RunRecord {
 	t.Helper()
 	ctx := context.Background()
 	active, artifact, err := h.deployments.ActiveArtifact(ctx, "sales", servingstate.DefaultEnvironment)
@@ -827,13 +899,13 @@ func (h *duckLakeHarness) createQueuedWorkspaceAssetRefreshRun(t *testing.T, tar
 	repo := analyticsmaterializesqlite.NewSQLRunRepository(h.store.SQLDB())
 	run, err := repo.CreateRun(ctx, analyticsmaterialize.RunInput{
 		WorkspaceID:    "sales",
-		ModelID:        modelID,
+		ModelID:        "sales",
 		ServingStateID: string(created.ID),
-		TargetType:     targetType,
-		TargetID:       targetID,
-		TriggerType:    analyticsmaterialize.TriggerDirect,
-		JobKind:        analyticsmaterialize.JobKindWorkspaceAssetRefresh,
-		PayloadJSON:    fmt.Sprintf(`{"assetKey":%q,"assetType":%q}`, targetID, targetType),
+		TargetType:     analyticsmaterialize.TargetRefreshPipeline,
+		TargetID:       "sales.sales-refresh",
+		TriggerType:    analyticsmaterialize.TriggerManual,
+		JobKind:        analyticsmaterialize.JobKindRefreshPipeline,
+		PayloadJSON:    `{"pipelineId":"sales-refresh"}`,
 	})
 	if err != nil {
 		t.Fatalf("create queued workspace asset refresh run: %v", err)

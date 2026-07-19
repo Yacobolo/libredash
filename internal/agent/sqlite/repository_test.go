@@ -212,6 +212,32 @@ func TestRepositoryPersistsConversationRunMessagesAndEvents(t *testing.T) {
 	}
 }
 
+func TestRepositoryScopesConversationsToPrincipalNotWorkspace(t *testing.T) {
+	ctx := context.Background()
+	store, repo := openAgentRepo(t, ctx)
+	owner := createAgentPrincipal(t, ctx, store, "global-owner@example.com")
+
+	conversation, err := repo.CreateConversation(ctx, agent.ConversationInput{
+		WorkspaceID: "sales",
+		PrincipalID: owner.ID,
+		Title:       "Global conversation",
+	})
+	if err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+
+	conversations, err := repo.ListConversations(ctx, "operations", owner.ID)
+	if err != nil {
+		t.Fatalf("list conversations: %v", err)
+	}
+	if len(conversations) != 1 || conversations[0].ID != conversation.ID {
+		t.Fatalf("conversations = %#v, want principal-owned conversation %s", conversations, conversation.ID)
+	}
+	if _, err := repo.GetConversation(ctx, "operations", owner.ID, conversation.ID); err != nil {
+		t.Fatalf("get conversation through another workspace scope: %v", err)
+	}
+}
+
 func TestRepositoryRejectsInvalidJSON(t *testing.T) {
 	ctx := context.Background()
 	store, repo := openAgentRepo(t, ctx)

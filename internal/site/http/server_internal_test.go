@@ -13,12 +13,42 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Yacobolo/libredash/internal/configschema"
+	"github.com/Yacobolo/libredash/internal/analytics/connectors"
 )
 
-func TestHomepageDashboardExampleMatchesThePublishedSchema(t *testing.T) {
-	if err := configschema.ValidateBytes(configschema.KindDashboardResource, "homepage-dashboard.yaml", []byte(siteHomepageDashboardYAML)); err != nil {
-		t.Fatalf("validate homepage dashboard example: %v", err)
+func TestHomepageFeaturedIntegrationsExistInTheConnectorRegistry(t *testing.T) {
+	for _, group := range siteStackGroups {
+		for _, integration := range group.integrations {
+			if integration.format {
+				if _, ok := connectors.LookupFormat(integration.registryKey); !ok {
+					t.Errorf("featured format %q (%s) is not registered", integration.label, integration.registryKey)
+				}
+				continue
+			}
+			if _, ok := connectors.LookupConnection(integration.registryKey); !ok {
+				t.Errorf("featured connection %q (%s) is not registered", integration.label, integration.registryKey)
+			}
+		}
+	}
+}
+
+func TestHomepageFeaturesSupportedDatabasesAndFormats(t *testing.T) {
+	want := map[string][]string{
+		"Databases": {"postgres", "mysql", "sqlite"},
+		"Formats":   {"csv", "json", "parquet", "excel", "vortex", "delta", "iceberg", "lance", "ducklake"},
+	}
+	for _, group := range siteStackGroups {
+		expected, ok := want[group.title]
+		if !ok {
+			continue
+		}
+		got := make([]string, 0, len(group.integrations))
+		for _, integration := range group.integrations {
+			got = append(got, integration.registryKey)
+		}
+		if strings.Join(got, ",") != strings.Join(expected, ",") {
+			t.Errorf("%s integrations = %v, want %v", group.title, got, expected)
+		}
 	}
 }
 
@@ -249,11 +279,13 @@ func TestSiteHomeRendersPageStreamDocument(t *testing.T) {
 		`<img class="site-product-screenshot site-product-screenshot-light" src="/static/product-dashboard-light.png"`,
 		`<img class="site-product-screenshot site-product-screenshot-dark" src="/static/product-dashboard-dark.png"`,
 		`<div class="site-proof-strip">`,
-		`<ld-site-feature-icon name="database" aria-hidden="true"></ld-site-feature-icon>`,
+		`<svg class="site-stack-edges site-stack-edges-desktop"`,
+		`<li class="site-stack-stage site-stack-node site-stack-product-node">`,
+		`<ld-site-brand-mark large="" aria-hidden="true"></ld-site-brand-mark>`,
 		`<ld-site-feature-icon name="dashboard" aria-hidden="true"></ld-site-feature-icon>`,
 		`<ld-site-feature-icon name="git-branch" aria-hidden="true"></ld-site-feature-icon>`,
 		`<section id="product" class="site-workflow">`,
-		`<ol class="site-stack-flow" aria-label="LeapView position in the data stack">`,
+		`<ol class="site-stack-flow" aria-label="How LeapView connects to your data stack">`,
 		`<section class="site-interfaces-section">`,
 		`<article class="site-interface-card">`,
 		`<ld-site-feature-icon name="agent" aria-hidden="true"></ld-site-feature-icon>`,

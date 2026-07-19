@@ -111,7 +111,7 @@ revision.
 ## Storage and recovery
 
 The Hetzner single-node deployment uses the local backend and stores managed
-objects under `/var/lib/libredash/managed-data`. Its stopped-state application
+objects under `/var/lib/libredash/home/managed-data`. Its stopped-state application
 backup contains the object store and LibreDash metadata, so backup and restore
 recover a complete local deployment.
 

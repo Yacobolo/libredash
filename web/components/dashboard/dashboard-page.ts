@@ -1,6 +1,5 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { property, state } from 'lit/decorators.js'
-import { RefreshCw } from 'lucide'
 import type {
   DashboardComponentSignal,
   DashboardComponentStatus,
@@ -14,7 +13,6 @@ import type {
   DashboardVisual,
   ReportFilterConfig,
 } from '../../generated/signals'
-import { lucideIcon } from '../shared/lucide-icons'
 import { DatastarLit } from '../shared/datastar-lit'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../navigation/sub-sidebar'
@@ -400,11 +398,6 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
               <h1>${page.title}</h1>
               <p class="detail">${page.headerDetail}</p>
             </div>
-            <div class="actions">
-              <button class="icon-button" type="button" title="Refresh model materializations" aria-label="Refresh model materializations" ?disabled=${snapshot.status.loading} @click=${this.refreshMaterializations}>
-                ${lucideIcon(RefreshCw)}
-              </button>
-            </div>
           </header>
           <div class="body">
             ${this.renderRefreshProgress(refreshProgress)}
@@ -478,8 +471,9 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
     const statusKey = this.componentStatusKey(component)
     const componentRefreshStatus = statusKey ? this.refreshStatusFor(statusKey) : undefined
     return html`
-      <ld-dashboard-visual-frame
-        data-canvas-visual
+              <ld-dashboard-visual-frame
+                data-canvas-visual
+                data-component-kind=${component.kind}
         ?data-canvas-filter-visual=${filterVisual}
         data-x=${component.x}
         data-y=${component.y}
@@ -616,10 +610,6 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
       ...refreshStatus,
       loading: refreshStatus.loading && refreshStatus.generation === (snapshot?.status ?? this.status).generation,
     }
-  }
-
-  private refreshMaterializations = (): void => {
-    this.dispatchEvent(new CustomEvent('ld-refresh-materializations', { bubbles: true, composed: true }))
   }
 
   private handleOptimisticInteraction = (event: CustomEvent<unknown>): void => {

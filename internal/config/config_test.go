@@ -64,6 +64,19 @@ func TestListenAddressUsesExplicitLibreDashSetting(t *testing.T) {
 	}
 }
 
+func TestManagedDataDefaultsUnderConfiguredHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("LIBREDASH_HOME", home)
+	t.Setenv("LIBREDASH_MANAGED_DATA_DIR", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(home, "managed-data"); cfg.ManagedDataDir != want {
+		t.Fatalf("ManagedDataDir = %q, want %q", cfg.ManagedDataDir, want)
+	}
+}
+
 func TestGeneratedEnvironmentExampleValidates(t *testing.T) {
 	for _, setting := range configspec.Settings() {
 		if setting.Runtime {

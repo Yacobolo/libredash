@@ -65,6 +65,10 @@ func (h *Handler) Create(w stdhttp.ResponseWriter, r *stdhttp.Request, project s
 		writeError(w, err, stdhttp.StatusBadRequest)
 		return
 	}
+	if h.options.InstanceEnvironment != "" && body.Environment != h.options.InstanceEnvironment {
+		writeEnvironmentConflict(w, body.Environment, h.options.InstanceEnvironment)
+		return
+	}
 	targets := make([]apiadapter.TargetRequest, 0, len(body.Targets))
 	for _, target := range body.Targets {
 		targets = append(targets, apiadapter.TargetRequest{Workspace: target.Workspace, CandidateID: target.CandidateID})
@@ -85,6 +89,9 @@ func (h *Handler) Get(w stdhttp.ResponseWriter, r *stdhttp.Request, project, dep
 		h.writePublicError(w, r, err)
 		return
 	}
+	if !h.environmentAllowed(w, result.Environment) {
+		return
+	}
 	writeJSON(w, stdhttp.StatusOK, response(result))
 }
 
@@ -98,6 +105,16 @@ func (h *Handler) Activate(w stdhttp.ResponseWriter, r *stdhttp.Request, project
 		writeError(w, fmt.Errorf("Idempotency-Key is required"), stdhttp.StatusBadRequest)
 		return
 	}
+	if h.options.InstanceEnvironment != "" {
+		deployment, err := h.options.Coordinator.Get(r.Context(), apiadapter.Scope{Project: project, DeploymentID: deploymentID})
+		if err != nil {
+			h.writePublicError(w, r, err)
+			return
+		}
+		if !h.environmentAllowed(w, deployment.Environment) {
+			return
+		}
+	}
 	result, err := h.options.Coordinator.Activate(r.Context(), apiadapter.ActivateRequest{
 		Scope: apiadapter.Scope{Project: project, DeploymentID: deploymentID}, Actor: principal.ID, IdempotencyKey: headers.IdempotencyKey,
 	})
@@ -106,6 +123,14 @@ func (h *Handler) Activate(w stdhttp.ResponseWriter, r *stdhttp.Request, project
 		return
 	}
 	writeJSON(w, stdhttp.StatusOK, response(result))
+}
+
+func (h *Handler) environmentAllowed(w stdhttp.ResponseWriter, environment string) bool {
+	if h.options.InstanceEnvironment == "" || environment == h.options.InstanceEnvironment {
+		return true
+	}
+	writeEnvironmentConflict(w, environment, h.options.InstanceEnvironment)
+	return false
 }
 
 func (h *Handler) principal(r *stdhttp.Request) (Principal, bool) {
@@ -206,4 +231,13 @@ func writeJSON(w stdhttp.ResponseWriter, status int, value any) {
 
 func writeError(w stdhttp.ResponseWriter, err error, status int) {
 	writeJSON(w, status, api.ErrorResponse{Code: status, Message: err.Error(), Details: map[string]any{}, RequestID: ""})
+}
+
+func writeEnvironmentConflict(w stdhttp.ResponseWriter, requested, instance string) {
+	writeJSON(w, stdhttp.StatusConflict, api.ErrorResponse{
+		Code:      stdhttp.StatusConflict,
+		Message:   fmt.Sprintf("requested environment %q does not match instance environment %q", requested, instance),
+		Details:   map[string]any{"requestedEnvironment": requested, "instanceEnvironment": instance},
+		RequestID: "",
+	})
 }

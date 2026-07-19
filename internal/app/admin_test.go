@@ -670,8 +670,12 @@ func TestAdminStorageIncludesDeploymentSnapshotContext(t *testing.T) {
 INSERT INTO workspaces (id, title) VALUES ('test', 'Test') ON CONFLICT(id) DO NOTHING;
 INSERT INTO serving_states (id, workspace_id, environment, status, digest, ducklake_snapshot_id, created_by, activated_at)
 VALUES ('dep_test', 'test', 'dev', 'active', 'digest_test', ?, 'tester', CURRENT_TIMESTAMP);
+INSERT INTO serving_states (id, workspace_id, environment, status, digest, ducklake_snapshot_id, created_by, activated_at)
+VALUES ('dep_prod', 'test', 'prod', 'active', 'digest_prod', ?, 'tester', CURRENT_TIMESTAMP);
 INSERT INTO workspace_active_serving_states (workspace_id, environment, serving_state_id)
-VALUES ('test', 'dev', 'dep_test')`, snapshotID); err != nil {
+VALUES ('test', 'dev', 'dep_test');
+INSERT INTO workspace_active_serving_states (workspace_id, environment, serving_state_id)
+VALUES ('test', 'prod', 'dep_prod')`, snapshotID, snapshotID); err != nil {
 		t.Fatal(err)
 	}
 

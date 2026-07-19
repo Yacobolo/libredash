@@ -9,6 +9,11 @@
       "summary": "API capabilities and protocol discovery."
     },
     {
+      "slug": "instance",
+      "title": "Instance",
+      "summary": "The immutable serving identity of this LibreDash installation."
+    },
+    {
       "slug": "projects",
       "title": "Projects",
       "summary": "Read-only project registry."

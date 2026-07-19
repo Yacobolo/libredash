@@ -44,7 +44,7 @@ beforeAll(async () => {
       response.end(signalShellDocument())
       return
     }
-    if (url.pathname === '/chat') {
+    if (url.pathname === '/chats') {
       response.setHeader('content-type', 'text/html')
       response.end('<!doctype html><title>Chat list</title><main>Chat list</main>')
       return
@@ -214,6 +214,7 @@ test('mobile navigation opens in an accessible drawer', async () => {
         navBackground: getComputedStyle(nav).backgroundColor,
         headerBorderBottomWidth: getComputedStyle(drawerHeader).borderBottomWidth,
         navBoxShadow: getComputedStyle(nav).boxShadow,
+        closeControlCount: root.querySelectorAll('button[aria-label="Close navigation"]:not([inert])').length,
       }
     })
 
@@ -225,6 +226,7 @@ test('mobile navigation opens in an accessible drawer', async () => {
     expect(openState.navBackground).toBe(openState.drawerBackground)
     expect(openState.headerBorderBottomWidth).not.toBe('0px')
     expect(openState.navBoxShadow).not.toBe('none')
+    expect(openState.closeControlCount).toBe(1)
 
     await page.locator('ld-app-shell').evaluate(async (element: any) => {
       const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
@@ -276,7 +278,7 @@ test('sidebar renders global chat action and recent history', async () => {
         })),
         spacing: (() => {
           const group = root.querySelector('.nav-group:not(.primary-action)') as HTMLElement
-          const navItem = root.querySelector('a[href="/chat"]') as HTMLElement
+          const navItem = root.querySelector('a[href="/chats"]') as HTMLElement
           const historyList = root.querySelector('.history-list') as HTMLElement
           return {
             navGroupGap: getComputedStyle(group).gap,
@@ -307,8 +309,8 @@ test('sidebar renders global chat action and recent history', async () => {
         historyItemMetrics: (() => {
           const item = root.querySelector('.history-item') as HTMLElement
           const title = item?.querySelector('.history-title') as HTMLElement
-          const navIcon = root.querySelector('a[href="/chat"] .nav-icon') as HTMLElement
-          const navText = root.querySelector('a[href="/chat"] .nav-text') as HTMLElement
+          const navIcon = root.querySelector('a[href="/chats"] .nav-icon') as HTMLElement
+          const navText = root.querySelector('a[href="/chats"] .nav-text') as HTMLElement
           const label = root.querySelector('.history-label') as HTMLElement
           const mutedProbe = document.createElement('span')
           mutedProbe.style.color = 'var(--ld-fg-muted)'
@@ -331,9 +333,9 @@ test('sidebar renders global chat action and recent history', async () => {
     })
 
     expect(state.historyLabel).toBe('Chats')
-    expect(state.links).toContainEqual({ href: '/chat/new', text: 'New chat', current: 'false', ariaLabel: 'New chat', title: 'New chat' })
-    expect(state.links).toContainEqual({ href: '/chat', text: 'Chats', current: 'page', ariaLabel: 'Chats', title: 'Chats' })
-    expect(state.links).toContainEqual({ href: '/chat/c1', text: 'Revenue check', current: 'page', ariaLabel: 'Revenue check', title: 'Revenue check' })
+    expect(state.links).toContainEqual({ href: '/chats/new', text: 'New chat', current: 'false', ariaLabel: 'New chat', title: 'New chat' })
+    expect(state.links).toContainEqual({ href: '/chats', text: 'Chats', current: 'page', ariaLabel: 'Chats', title: 'Chats' })
+    expect(state.links).toContainEqual({ href: '/chats/c1', text: 'Revenue check', current: 'page', ariaLabel: 'Revenue check', title: 'Revenue check' })
     expect(state.spacing).toEqual({ navGroupGap: '2px', historyListGap: '2px', navItemHeight: 32 })
     expect(state.hasHistorySearch).toBe(false)
     expect(state.historyStyle).toEqual({ borderTopWidth: '0px', paddingTop: '8px' })
@@ -402,12 +404,12 @@ test('active chat nav item navigates to the chat list href', async () => {
     await page.waitForFunction(() => customElements.get('ld-app-shell') && customElements.get('ld-sidebar'))
     await page.locator('ld-app-shell').evaluate((element: any) => element.updateComplete)
 
-    const link = page.locator('ld-app-shell ld-sidebar a[href="/chat"]')
+    const link = page.locator('ld-app-shell ld-sidebar a[href="/chats"]')
     expect(await link.count()).toBe(1)
     await link.click()
-    await page.waitForURL(`${baseURL}/chat`)
+    await page.waitForURL(`${baseURL}/chats`)
 
-    expect(new URL(page.url()).pathname).toBe('/chat')
+    expect(new URL(page.url()).pathname).toBe('/chats')
   } finally {
     await page.close()
   }
@@ -447,7 +449,7 @@ test('app shell routes retargeted sidebar clicks to the visual link', async () =
 
     await page.locator('ld-app-shell').evaluate((element: any) => {
       const sidebar = element.shadowRoot.querySelector('ld-sidebar') as HTMLElement
-      const link = sidebar.shadowRoot.querySelector('a[href="/chat"]') as HTMLElement
+      const link = sidebar.shadowRoot.querySelector('a[href="/chats"]') as HTMLElement
       const rect = link.getBoundingClientRect()
       element.dispatchEvent(new MouseEvent('click', {
         bubbles: true,
@@ -457,9 +459,9 @@ test('app shell routes retargeted sidebar clicks to the visual link', async () =
         clientY: rect.top + rect.height / 2,
       }))
     })
-    await page.waitForURL(`${baseURL}/chat`)
+    await page.waitForURL(`${baseURL}/chats`)
 
-    expect(new URL(page.url()).pathname).toBe('/chat')
+    expect(new URL(page.url()).pathname).toBe('/chats')
   } finally {
     await page.close()
   }
@@ -512,7 +514,7 @@ function signalShellDocument(): string {
           label: 'Navigation',
           items: [
             { id: 'dashboards', label: 'Dashboards', href: '/', icon: 'dashboard' },
-            { id: 'chat', label: 'Chats', href: '/chat', icon: 'chat' },
+            { id: 'chat', label: 'Chats', href: '/chats', icon: 'chat' },
             { id: 'workspaces', label: 'Workspaces', href: '/workspaces', icon: 'catalog' },
           ],
         }],
@@ -549,20 +551,20 @@ function testDocument(includeShellScript: boolean, compact = false, history = fa
       modelId: '',
       modelTitle: '',
       compact,
-      primaryAction: history ? { label: 'New chat', href: '/chat/new', icon: 'plus' } : undefined,
+      primaryAction: history ? { label: 'New chat', href: '/chats/new', icon: 'plus' } : undefined,
       history: history ? {
         label: 'Chats',
         emptyText: 'No conversations yet.',
         items: [
-          { id: 'c1', title: 'Revenue check', href: '/chat/c1', active: true },
-          { id: 'c2', title: 'Inventory status', href: '/chat/c2' },
+          { id: 'c1', title: 'Revenue check', href: '/chats/c1', active: true },
+          { id: 'c2', title: 'Inventory status', href: '/chats/c2' },
         ],
       } : undefined,
       groups: history || nav ? [{
         label: 'Navigation',
         items: [
           { id: 'dashboards', label: 'Dashboards', href: '/', icon: 'dashboard' },
-          { id: 'chat', label: 'Chats', href: '/chat', icon: 'chat' },
+          { id: 'chat', label: 'Chats', href: '/chats', icon: 'chat' },
           { id: 'workspaces', label: 'Workspaces', href: '/workspaces', icon: 'catalog' },
         ],
       }] : [],

@@ -157,6 +157,119 @@ func TestCompileProjectCompilesWorkspaceAgentPolicy(t *testing.T) {
 	assertAssetSourceFileContains(t, compiled.Workspaces["sales"].Workspace.Graph, "workspace_agent_policy:sales.default", filepath.Join("workspaces", "sales", "agent", "default.yaml"))
 }
 
+func TestCompileProjectCompilesRefreshPipeline(t *testing.T) {
+	projectPath := writeProjectFixture(t, map[string]string{
+		"libredash.yaml":                                        projectYAML(),
+		"connections/olist.yaml":                                connectionYAML("olist"),
+		"sources/olist.orders.yaml":                             sourceYAML("olist.orders", "orders.csv", "order_id"),
+		"sources/olist.customers.yaml":                          sourceYAML("olist.customers", "customers.csv", "customer_id"),
+		"workspaces/sales/workspace.yaml":                       workspaceYAMLWithRefreshPipelines("sales"),
+		"workspaces/sales/models/orders.yaml":                   modelTableYAML("sales", "orders", "olist.orders", "order_id", "SELECT order_id, order_status AS status FROM source.\"olist.orders\""),
+		"workspaces/sales/semantic-models/sales.yaml":           semanticModelYAML("sales", "orders", "order_count"),
+		"workspaces/sales/dashboards/executive-sales.yaml":      dashboardYAML("sales", "executive-sales", "sales"),
+		"workspaces/sales/refresh-pipelines/sales-refresh.yaml": refreshPipelineYAML("sales", "sales-refresh", "sales", []string{"0 6 * * *|Europe/Copenhagen", "30 18 * * MON-FRI|"}),
+	})
+
+	compiled, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
+	if err != nil {
+		t.Fatalf("CompileProject() error = %v", err)
+	}
+	pipeline, ok := compiled.Workspaces["sales"].Definition.RefreshPipelines["sales-refresh"]
+	if !ok {
+		t.Fatalf("refresh pipelines = %#v, want sales-refresh", compiled.Workspaces["sales"].Definition.RefreshPipelines)
+	}
+	if pipeline.SemanticModel != "sales" || len(pipeline.Schedules) != 2 {
+		t.Fatalf("pipeline = %#v", pipeline)
+	}
+	if pipeline.Schedules[1].Timezone != "UTC" {
+		t.Fatalf("second schedule timezone = %q, want UTC", pipeline.Schedules[1].Timezone)
+	}
+	assertGraphAsset(t, compiled.Workspaces["sales"].Workspace.Graph, "refresh_pipeline:sales.sales-refresh")
+	assertAssetSourceFileContains(t, compiled.Workspaces["sales"].Workspace.Graph, "refresh_pipeline:sales.sales-refresh", filepath.Join("workspaces", "sales", "refresh-pipelines", "sales-refresh.yaml"))
+}
+
+func TestCompileProjectSupportsManualOnlyRefreshPipeline(t *testing.T) {
+	projectPath := writeProjectFixture(t, map[string]string{
+		"libredash.yaml":                                        projectYAML(),
+		"connections/olist.yaml":                                connectionYAML("olist"),
+		"sources/olist.orders.yaml":                             sourceYAML("olist.orders", "orders.csv", "order_id"),
+		"sources/olist.customers.yaml":                          sourceYAML("olist.customers", "customers.csv", "customer_id"),
+		"workspaces/sales/workspace.yaml":                       workspaceYAMLWithRefreshPipelines("sales"),
+		"workspaces/sales/models/orders.yaml":                   modelTableYAML("sales", "orders", "olist.orders", "order_id", "SELECT order_id, order_status AS status FROM source.\"olist.orders\""),
+		"workspaces/sales/semantic-models/sales.yaml":           semanticModelYAML("sales", "orders", "order_count"),
+		"workspaces/sales/dashboards/executive-sales.yaml":      dashboardYAML("sales", "executive-sales", "sales"),
+		"workspaces/sales/refresh-pipelines/sales-refresh.yaml": refreshPipelineYAML("sales", "sales-refresh", "sales", nil),
+	})
+
+	compiled, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
+	if err != nil {
+		t.Fatalf("CompileProject() error = %v", err)
+	}
+	if got := len(compiled.Workspaces["sales"].Definition.RefreshPipelines["sales-refresh"].Schedules); got != 0 {
+		t.Fatalf("schedules = %d, want 0", got)
+	}
+}
+
+func TestCompileProjectRejectsInvalidRefreshPipeline(t *testing.T) {
+	cases := []struct {
+		name  string
+		files map[string]string
+		want  string
+		field string
+		id    string
+	}{
+		{
+			name:  "unknown semantic model",
+			files: map[string]string{"workspaces/sales/refresh-pipelines/sales-refresh.yaml": refreshPipelineYAML("sales", "sales-refresh", "missing", nil)},
+			want:  `unknown semantic model "missing"`, field: "spec.semanticModel", id: "refresh_pipeline:sales.sales-refresh",
+		},
+		{
+			name:  "workspace mismatch",
+			files: map[string]string{"workspaces/sales/refresh-pipelines/sales-refresh.yaml": refreshPipelineYAML("operations", "sales-refresh", "sales", nil)},
+			want:  `workspace = "operations", want "sales"`, field: "metadata.workspace", id: "refresh_pipeline:operations.sales-refresh",
+		},
+		{
+			name: "one pipeline per model",
+			files: map[string]string{
+				"workspaces/sales/refresh-pipelines/first.yaml":  refreshPipelineYAML("sales", "first", "sales", nil),
+				"workspaces/sales/refresh-pipelines/second.yaml": refreshPipelineYAML("sales", "second", "sales", nil),
+			},
+			want: `semantic model "sales" already has refresh pipeline`, field: "spec.semanticModel", id: "refresh_pipeline:sales.second",
+		},
+		{
+			name:  "duplicate schedule",
+			files: map[string]string{"workspaces/sales/refresh-pipelines/sales-refresh.yaml": refreshPipelineYAML("sales", "sales-refresh", "sales", []string{"0 6 * * *|UTC", "0  6  * * *|"})},
+			want:  "duplicate schedule", field: "spec.on.schedule", id: "refresh_pipeline:sales.sales-refresh",
+		},
+		{
+			name:  "cron alias",
+			files: map[string]string{"workspaces/sales/refresh-pipelines/sales-refresh.yaml": refreshPipelineYAML("sales", "sales-refresh", "sales", []string{"@daily|UTC"})},
+			want:  "five-field", field: "spec.on.schedule", id: "refresh_pipeline:sales.sales-refresh",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			files := map[string]string{
+				"libredash.yaml":                                   projectYAML(),
+				"connections/olist.yaml":                           connectionYAML("olist"),
+				"sources/olist.orders.yaml":                        sourceYAML("olist.orders", "orders.csv", "order_id"),
+				"sources/olist.customers.yaml":                     sourceYAML("olist.customers", "customers.csv", "customer_id"),
+				"workspaces/sales/workspace.yaml":                  workspaceYAMLWithRefreshPipelines("sales"),
+				"workspaces/sales/models/orders.yaml":              modelTableYAML("sales", "orders", "olist.orders", "order_id", "SELECT order_id, order_status AS status FROM source.\"olist.orders\""),
+				"workspaces/sales/semantic-models/sales.yaml":      semanticModelYAML("sales", "orders", "order_count"),
+				"workspaces/sales/dashboards/executive-sales.yaml": dashboardYAML("sales", "executive-sales", "sales"),
+			}
+			for path, content := range tc.files {
+				files[path] = content
+			}
+			projectPath := writeProjectFixture(t, files)
+			_, err := CompileProject(projectPath, Options{ServingStateID: "dep_test"})
+			assertCompileErrorContains(t, err, tc.want)
+			assertDiagnostic(t, err, tc.id, tc.field)
+		})
+	}
+}
+
 func TestCompileProjectRejectsInvalidWorkspaceAgentPolicy(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -1351,6 +1464,34 @@ spec:
   agentPolicy:
     include: []
 `
+}
+
+func workspaceYAMLWithRefreshPipelines(name string) string {
+	return strings.Replace(workspaceYAML(name), "  dashboards:\n", "  refreshPipelines:\n    include:\n      - refresh-pipelines/*.yaml\n  dashboards:\n", 1)
+}
+
+func refreshPipelineYAML(workspaceID, name, semanticModel string, schedules []string) string {
+	content := `
+apiVersion: libredash.dev/v1
+kind: RefreshPipeline
+metadata:
+  workspace: ` + workspaceID + `
+  name: ` + name + `
+spec:
+  semanticModel: ` + semanticModel + `
+`
+	if schedules == nil {
+		return content
+	}
+	content += "  on:\n    schedule:\n"
+	for _, item := range schedules {
+		cron, timezone, _ := strings.Cut(item, "|")
+		content += "      - cron: " + quoteYAML(cron) + "\n"
+		if timezone != "" {
+			content += "        timezone: " + timezone + "\n"
+		}
+	}
+	return content
 }
 
 func workspaceYAMLWithAccess(name string) string {

@@ -1,6 +1,6 @@
 # Projects, workspaces, and environments
 
-Projects, workspaces, and environments are separate dimensions in LibreDash. Treating them as interchangeable leads to duplicated configuration and unclear access boundaries.
+Projects, workspaces, and instance environments are separate concepts. A LibreDash instance serves exactly one environment; use separate instance targets for development, staging, and production.
 
 ## Project
 
@@ -40,16 +40,16 @@ Use one workspace for a coherent audience and governed semantic surface. Do not 
 
 ## Environment
 
-An environment is a serving dimension, normally `dev`, `staging`, or `prod`. The environment selects which validated project deployment and managed-data revisions are active. It is not another resource directory.
+An environment is the immutable serving identity of an instance, normally `dev`, `staging`, or `prod`. It selects the validated project deployment and managed-data revisions active in that instance. It is neither another resource directory nor a request-time selector.
 
-Keep environment-specific secrets, service URLs, storage locations, and active state in targets and runtime configuration. Keep business definitions in the shared project tree. This avoids drift between copied `dashboards-dev/` and `dashboards-prod/` directories.
+Keep environment-specific secrets, service URLs, storage locations, and active state in separate target instances. Keep business definitions in the shared project tree. This avoids drift between copied `dashboards-dev/` and `dashboards-prod/` directories.
 
 The standard progression is:
 
 1. Validate the same project source locally.
-2. Plan against the target environment's active deployment.
+2. Plan against the target instance's active deployment.
 3. Review the resource and data-revision changes.
-4. Deploy the candidate to that environment.
+4. Deploy the candidate to that instance; the CLI discovers and asserts its environment.
 5. Verify the resulting active state before promoting the same revision onward.
 
 ## Atomic delivery
@@ -64,7 +64,7 @@ Ask these questions when organizing a repository:
 
 - Is this input shared and governed across workspaces? Define it as a project connection/source.
 - Do these dashboards share owners, semantic definitions, and access rules? Keep them in one workspace.
-- Does only infrastructure or serving state differ? Use environments and targets, not copied YAML.
+- Does only infrastructure or serving state differ? Use separate instance targets, not copied YAML.
 - Must several changes become visible together? Deliver them in one project deployment.
 
 See [Project configuration](/docs/config/project), [Workspace configuration](/docs/config/workspace), and [Targets and environments](/docs/cli/targets) for the exact contracts and workflow.

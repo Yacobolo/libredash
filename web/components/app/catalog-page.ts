@@ -174,7 +174,7 @@ class LibreDashCatalogPage extends DatastarLit(LitElement) {
                 ` : nothing}
               </div>
               <footer>
-                <span>${dashboard.pageCount} pages</span>
+                <span>${dashboard.pageCount} ${dashboard.pageCount === 1 ? 'page' : 'pages'}</span>
                 <a href=${dashboard.href}>${lucideIcon(ExternalLink)}<span>Open</span></a>
               </footer>
             </article>

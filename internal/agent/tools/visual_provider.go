@@ -22,11 +22,11 @@ const (
 
 type VisualAuthorizeFunc func(ctx context.Context, scope Scope, request VisualAuthorizationRequest) (agentcore.ToolResult, bool)
 
-type VisualModelFunc func(modelID string) (*semanticmodel.Model, bool)
+type VisualModelFunc func(workspaceID, modelID string) (*semanticmodel.Model, bool)
 
-type VisualAggregateRowsFunc func(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error)
+type VisualAggregateRowsFunc func(ctx context.Context, workspaceID, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error)
 
-type VisualPreviewRowsFunc func(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
+type VisualPreviewRowsFunc func(ctx context.Context, workspaceID, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
 
 type VisualProvider struct {
 	Authorize     VisualAuthorizeFunc
@@ -44,6 +44,7 @@ type VisualAuthorizationRequest struct {
 }
 
 type agentVisualInput struct {
+	Workspace       string                    `json:"workspace"`
 	Kind            string                    `json:"kind"`
 	Model           string                    `json:"model"`
 	Dataset         string                    `json:"dataset"`
@@ -80,10 +81,14 @@ type agentVisualResult struct {
 }
 
 func (p VisualProvider) Definitions(scope Scope) []agentcore.ToolDefinition {
+	inputSchema := json.RawMessage(agentVisualToolSchema)
+	if strings.TrimSpace(scope.WorkspaceID) == "" {
+		inputSchema = requireToolStringProperty(inputSchema, "workspace")
+	}
 	return []agentcore.ToolDefinition{{
 		Name:        agentVisualToolName,
 		Description: "Create one read-only chart or BI table artifact from LibreDash semantic model fields. Data is queried from semantic models; do not provide inline data.",
-		InputSchema: json.RawMessage(agentVisualToolSchema),
+		InputSchema: inputSchema,
 		Handler: agentcore.ToolHandlerFunc(func(ctx context.Context, call agentcore.ToolCall) (agentcore.ToolResult, error) {
 			return p.Run(ctx, scope, call), nil
 		}),
@@ -98,8 +103,15 @@ func (p VisualProvider) Run(ctx context.Context, scope Scope, call agentcore.Too
 	if err != nil {
 		return apigenAgentToolError("invalid_arguments", err.Error())
 	}
+	runScope := scope
+	if runScope.WorkspaceID == "" {
+		runScope.WorkspaceID = strings.TrimSpace(input.Workspace)
+	}
+	if runScope.WorkspaceID == "" {
+		return apigenAgentToolError("invalid_arguments", "workspace is required")
+	}
 	metadata := dataquery.Metadata{
-		WorkspaceID: scope.WorkspaceID,
+		WorkspaceID: runScope.WorkspaceID,
 		Surface:     dataquery.SurfaceAgent,
 		Operation:   dataquery.OperationAgentQuery,
 		PrincipalID: scope.PrincipalID,
@@ -108,7 +120,7 @@ func (p VisualProvider) Run(ctx context.Context, scope Scope, call agentcore.Too
 		RequestID:   call.ID,
 	}
 	ctx = dataquery.WithMetadata(ctx, metadata)
-	if errResult, ok := p.Authorize(ctx, scope, VisualAuthorizationRequest{
+	if errResult, ok := p.Authorize(ctx, runScope, VisualAuthorizationRequest{
 		ToolName: agentVisualToolName,
 		CallID:   call.ID,
 		Kind:     input.Kind,
@@ -117,7 +129,7 @@ func (p VisualProvider) Run(ctx context.Context, scope Scope, call agentcore.Too
 	}); !ok {
 		return errResult
 	}
-	result, err := p.queryAgentVisual(ctx, input, agentVisualID(input.Kind, call.ID))
+	result, err := p.queryAgentVisual(ctx, runScope.WorkspaceID, input, agentVisualID(input.Kind, call.ID))
 	if err != nil {
 		return apigenAgentToolError("query_visual_failed", err.Error())
 	}
@@ -166,11 +178,11 @@ func decodeAgentVisualInput(rawArgs json.RawMessage) (agentVisualInput, error) {
 	return input, nil
 }
 
-func (p VisualProvider) queryAgentVisual(ctx context.Context, input agentVisualInput, id string) (agentVisualResult, error) {
+func (p VisualProvider) queryAgentVisual(ctx context.Context, workspaceID string, input agentVisualInput, id string) (agentVisualResult, error) {
 	if p.SemanticModel == nil {
 		return agentVisualResult{}, fmt.Errorf("semantic model provider is not configured")
 	}
-	model, ok := p.SemanticModel(input.Model)
+	model, ok := p.SemanticModel(workspaceID, input.Model)
 	if !ok || model == nil {
 		return agentVisualResult{}, fmt.Errorf("unknown semantic model %q", input.Model)
 	}
@@ -179,15 +191,15 @@ func (p VisualProvider) queryAgentVisual(ctx context.Context, input agentVisualI
 	}
 	switch input.Kind {
 	case "chart":
-		return p.queryAgentChart(ctx, model, input, id)
+		return p.queryAgentChart(ctx, workspaceID, model, input, id)
 	case "table":
-		return p.queryAgentTable(ctx, model, input, id)
+		return p.queryAgentTable(ctx, workspaceID, model, input, id)
 	default:
 		return agentVisualResult{}, fmt.Errorf("kind must be chart or table")
 	}
 }
 
-func (p VisualProvider) queryAgentChart(ctx context.Context, model *semanticmodel.Model, input agentVisualInput, id string) (agentVisualResult, error) {
+func (p VisualProvider) queryAgentChart(ctx context.Context, workspaceID string, model *semanticmodel.Model, input agentVisualInput, id string) (agentVisualResult, error) {
 	if len(input.Measures) == 0 {
 		return agentVisualResult{}, fmt.Errorf("chart requires at least one measure")
 	}
@@ -206,7 +218,7 @@ func (p VisualProvider) queryAgentChart(ctx context.Context, model *semanticmode
 	if shape != "single_value" && len(input.Dimensions) == 0 {
 		return agentVisualResult{}, fmt.Errorf("chart shape %q requires at least one dimension", shape)
 	}
-	data, err := p.agentChartData(ctx, input, shape, model)
+	data, err := p.agentChartData(ctx, workspaceID, input, shape, model)
 	if err != nil {
 		return agentVisualResult{}, err
 	}
@@ -254,12 +266,12 @@ func (p VisualProvider) queryAgentChart(ctx context.Context, model *semanticmode
 	}, nil
 }
 
-func (p VisualProvider) agentChartData(ctx context.Context, input agentVisualInput, shape string, model *semanticmodel.Model) ([]dashboard.Datum, error) {
+func (p VisualProvider) agentChartData(ctx context.Context, workspaceID string, input agentVisualInput, shape string, model *semanticmodel.Model) ([]dashboard.Datum, error) {
 	if p.AggregateRows == nil {
 		return nil, fmt.Errorf("aggregate query provider is not configured")
 	}
 	if shape == "single_value" {
-		rows, err := p.AggregateRows(ctx, input.Model, reportdef.AggregateQuery{
+		rows, err := p.AggregateRows(ctx, workspaceID, input.Model, reportdef.AggregateQuery{
 			Table:    input.Dataset,
 			Measures: []reportdef.QueryField{{Field: input.Measures[0].Field, Alias: "value"}},
 			Limit:    1,
@@ -276,7 +288,7 @@ func (p VisualProvider) agentChartData(ctx context.Context, input agentVisualInp
 	if shape == "category_multi_measure" || len(input.Measures) > 1 {
 		out := []dashboard.Datum{}
 		for _, measureRef := range input.Measures {
-			rows, err := p.AggregateRows(ctx, input.Model, reportdef.AggregateQuery{
+			rows, err := p.AggregateRows(ctx, workspaceID, input.Model, reportdef.AggregateQuery{
 				Table:      input.Dataset,
 				Dimensions: []reportdef.QueryField{{Field: input.Dimensions[0].Field, Alias: "label"}},
 				Measures:   []reportdef.QueryField{{Field: measureRef.Field, Alias: "value"}},
@@ -301,7 +313,7 @@ func (p VisualProvider) agentChartData(ctx context.Context, input agentVisualInp
 	if input.Series != nil && input.Series.Field != "" {
 		dimensions = append(dimensions, reportdef.QueryField{Field: input.Series.Field, Alias: "series"})
 	}
-	rows, err := p.AggregateRows(ctx, input.Model, reportdef.AggregateQuery{
+	rows, err := p.AggregateRows(ctx, workspaceID, input.Model, reportdef.AggregateQuery{
 		Table:      input.Dataset,
 		Dimensions: dimensions,
 		Measures:   []reportdef.QueryField{{Field: input.Measures[0].Field, Alias: "value"}},
@@ -322,7 +334,7 @@ func (p VisualProvider) agentChartData(ctx context.Context, input agentVisualInp
 	return out, nil
 }
 
-func (p VisualProvider) queryAgentTable(ctx context.Context, model *semanticmodel.Model, input agentVisualInput, id string) (agentVisualResult, error) {
+func (p VisualProvider) queryAgentTable(ctx context.Context, workspaceID string, model *semanticmodel.Model, input agentVisualInput, id string) (agentVisualResult, error) {
 	fields := input.Fields
 	aggregate := len(fields) == 0 && (len(input.Rows) > 0 || len(input.Measures) > 0)
 	if len(fields) == 0 {
@@ -341,7 +353,7 @@ func (p VisualProvider) queryAgentTable(ctx context.Context, model *semanticmode
 		if p.AggregateRows == nil {
 			return agentVisualResult{}, fmt.Errorf("aggregate query provider is not configured")
 		}
-		rows, err = p.AggregateRows(ctx, input.Model, reportdef.AggregateQuery{
+		rows, err = p.AggregateRows(ctx, workspaceID, input.Model, reportdef.AggregateQuery{
 			Table:      input.Dataset,
 			Dimensions: dimensions,
 			Measures:   measures,
@@ -352,7 +364,7 @@ func (p VisualProvider) queryAgentTable(ctx context.Context, model *semanticmode
 		if p.PreviewRows == nil {
 			return agentVisualResult{}, fmt.Errorf("preview query provider is not configured")
 		}
-		rows, err = p.PreviewRows(ctx, input.Model, reportdef.RowQuery{
+		rows, err = p.PreviewRows(ctx, workspaceID, input.Model, reportdef.RowQuery{
 			Table:      input.Dataset,
 			Dimensions: dimensions,
 			Measures:   measures,

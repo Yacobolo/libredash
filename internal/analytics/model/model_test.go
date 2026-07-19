@@ -24,6 +24,29 @@ func TestConnectionRejectsRemovedLocalKind(t *testing.T) {
 	}
 }
 
+func TestObjectStorageCredentialModes(t *testing.T) {
+	for _, connection := range []Connection{
+		{Kind: "s3", Scope: "s3://public/", Credentials: ConnectionCredentials{Provider: "none"}},
+		{Kind: "s3", Scope: "s3://private/", Credentials: ConnectionCredentials{Provider: "ambient", Region: "eu-west-1"}},
+		{Kind: "azure_blob", Scope: "az://container/", Credentials: ConnectionCredentials{Provider: "ambient", AccountName: "analytics"}},
+	} {
+		if _, err := connection.Validate("lake"); err != nil {
+			t.Fatalf("Validate(%#v): %v", connection.Credentials, err)
+		}
+	}
+	for _, connection := range []Connection{
+		{Kind: "r2", Credentials: ConnectionCredentials{Provider: "ambient"}},
+		{Kind: "azure_blob", Credentials: ConnectionCredentials{Provider: "ambient"}},
+		{Kind: "s3", Credentials: ConnectionCredentials{Provider: "ambient"}},
+		{Kind: "azure_blob", Credentials: ConnectionCredentials{Provider: "ambient", AccountName: "analytics"}},
+		{Kind: "azure_blob", Scope: "az://container/", Credentials: ConnectionCredentials{Provider: "ambient", AccountName: "analytics", Endpoint: "blob.example.com"}},
+	} {
+		if _, err := connection.Validate("lake"); err == nil {
+			t.Fatalf("Validate(%#v) succeeded", connection)
+		}
+	}
+}
+
 func TestManagedSourceRejectsAbsoluteAndTraversalPaths(t *testing.T) {
 	connections := map[string]Connection{"olist": {Kind: "managed"}}
 	for _, value := range []string{filepath.Join(string(filepath.Separator), "orders.csv"), "../orders.csv"} {

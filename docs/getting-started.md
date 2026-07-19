@@ -2,6 +2,8 @@
 
 LibreDash keeps the semantic layer, report definition, and visual runtime together. Start with the included workspace, then make it your own.
 
+This guide uses a source checkout so you can edit the bundled project. To evaluate the running server without building LibreDash, start with the public-image path in [Installation](/docs/installation).
+
 ## Bootstrap the workspace
 
 Download the sample data and prepare the local workspace.

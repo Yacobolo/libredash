@@ -146,7 +146,7 @@ spec:
       title: Overview
       canvas:
         width: 1366
-        height: 900
+        height: 1824
       grid:
         columns: 12
         row_height: 48
@@ -164,28 +164,28 @@ spec:
         - id: category-filter
           kind: filter_card
           filter: category
-          placement: {col: 9, row: 1, col_span: 2, row_span: 2}
+          placement: {col: 9, row: 1, col_span: 4, row_span: 2}
         - id: total-orders
           kind: kpi_card
           visual: total_orders
-          placement: {col: 11, row: 1, col_span: 1, row_span: 2}
+          placement: {col: 1, row: 4, col_span: 4, row_span: 3}
         - id: revenue
           kind: kpi_card
           visual: revenue_kpi
-          placement: {col: 12, row: 1, col_span: 1, row_span: 2}
+          placement: {col: 5, row: 4, col_span: 4, row_span: 3}
         - id: aov
           kind: kpi_card
           visual: aov_kpi
-          placement: {col: 1, row: 4, col_span: 3, row_span: 3}
+          placement: {col: 9, row: 4, col_span: 4, row_span: 3}
         - id: revenue-trend
           kind: area_chart
           visual: revenue_by_month
-          placement: {col: 4, row: 4, col_span: 9, row_span: 6}
+          placement: {col: 1, row: 8, col_span: 12, row_span: 6}
         - id: categories
           kind: bar_chart
           visual: category_revenue
-          placement: {col: 1, row: 10, col_span: 12, row_span: 6}
+          placement: {col: 1, row: 14, col_span: 12, row_span: 6}
         - id: orders_table
           kind: table
           table: orders_table
-          placement: {col: 1, row: 17, col_span: 12, row_span: 8}
+          placement: {col: 1, row: 21, col_span: 12, row_span: 8}

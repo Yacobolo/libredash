@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	agentcap "github.com/Yacobolo/libredash/internal/agent"
@@ -38,6 +40,9 @@ func (s *Server) configureAgentTools() {
 }
 
 func (s *Server) agentPolicyForScope(scope agentcap.Scope) (workspace.AgentPolicy, bool) {
+	if strings.TrimSpace(scope.WorkspaceID) == "" {
+		return workspace.DefaultAgentPolicy(), true
+	}
 	metrics, ok := s.metricsForWorkspace(scope.WorkspaceID)
 	if !ok || metrics == nil {
 		return workspace.AgentPolicy{}, false
@@ -61,17 +66,26 @@ func (s *Server) agentVisualToolProvider() agenttools.VisualProvider {
 			}
 			return s.authorizeAgentPrivilege(ctx, agentScope, access.PrivilegeQueryData, objects, "agent_tool", request.ToolName)
 		},
-		SemanticModel: func(modelID string) (model *semanticmodel.Model, ok bool) {
-			if s.metrics == nil {
+		SemanticModel: func(workspaceID, modelID string) (model *semanticmodel.Model, ok bool) {
+			metrics, ok := s.metricsForWorkspace(workspaceID)
+			if !ok || metrics == nil {
 				return nil, false
 			}
-			return s.metrics.SemanticModel(modelID)
+			return metrics.SemanticModel(modelID)
 		},
-		AggregateRows: func(ctx context.Context, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
-			return executeAggregateRows(ctx, s.metrics, modelID, request)
+		AggregateRows: func(ctx context.Context, workspaceID, modelID string, request reportdef.AggregateQuery) (reportdef.QueryRows, error) {
+			metrics, ok := s.metricsForWorkspace(workspaceID)
+			if !ok || metrics == nil {
+				return nil, fmt.Errorf("unknown workspace %q", workspaceID)
+			}
+			return executeAggregateRows(ctx, metrics, modelID, request)
 		},
-		PreviewRows: func(ctx context.Context, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
-			return executePreviewRows(ctx, s.metrics, modelID, request)
+		PreviewRows: func(ctx context.Context, workspaceID, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error) {
+			metrics, ok := s.metricsForWorkspace(workspaceID)
+			if !ok || metrics == nil {
+				return nil, fmt.Errorf("unknown workspace %q", workspaceID)
+			}
+			return executePreviewRows(ctx, metrics, modelID, request)
 		},
 	}
 }
@@ -81,7 +95,16 @@ func (s *Server) agentAPIGenToolProvider() agenttools.APIGenProvider {
 		Authorize: func(ctx context.Context, scope agenttools.Scope, operationID string) (agentcore.ToolResult, bool) {
 			return s.authorizeAPIGenAgentOperation(ctx, agentScopeFromTools(scope), operationID)
 		},
-		Dispatch: func(operationID string, request *http.Request) (*http.Response, bool) {
+		Dispatch: func(scope agenttools.Scope, operationID string, request *http.Request) (*http.Response, bool) {
+			principal := Principal{
+				ID:        scope.PrincipalID,
+				DevBypass: scope.DevAuthBypass,
+			}
+			if s.auth == nil {
+				principal = localDeveloperPrincipal()
+			}
+			ctx := context.WithValue(request.Context(), principalContextKey{}, principal)
+			request = request.WithContext(ctx)
 			recorder := httptest.NewRecorder()
 			if ok := apigenapi.DispatchAPIGenOperation(operationID, apiGenAdapter{server: s}, apiGenTransportErrorResponder{server: s}, recorder, request); !ok {
 				return nil, false
@@ -121,6 +144,15 @@ func (s *Server) authorizeAPIGenAgentOperation(ctx context.Context, scope agentc
 	privilege, ok := apigenOperationPrivilege(operationID)
 	if !ok {
 		return agenttools.ToolError("forbidden", "operation has no generated LibreDash privilege metadata"), false
+	}
+	if operationID == "listWorkspaces" && strings.TrimSpace(scope.WorkspaceID) == "" {
+		if strings.TrimSpace(scope.PrincipalID) == "" {
+			return agenttools.ToolError("unauthorized", "agent tool requires an authenticated principal"), false
+		}
+		if !agentCredentialAllowsPrivilege(scope, privilege) {
+			return agenttools.ToolError("forbidden", "credential is not allowed to call this tool"), false
+		}
+		return agentcore.ToolResult{}, true
 	}
 	return s.authorizeAgentPrivilege(ctx, scope, privilege, []access.ObjectRef{access.WorkspaceObject(scope.WorkspaceID)}, "agent_tool", operationID)
 }

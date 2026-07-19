@@ -10,20 +10,25 @@ import (
 	"time"
 
 	analyticsducklake "github.com/Yacobolo/libredash/internal/analytics/ducklake"
+	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 )
 
 type ServingStateRepository interface {
-	ReconcileRetention(ctx context.Context, now time.Time) error
-	ReferencedDuckLakeSnapshots(ctx context.Context) ([]int64, error)
+	ReconcileRetention(ctx context.Context, environment servingstate.Environment, now time.Time) error
+	ReferencedDuckLakeSnapshots(ctx context.Context, environment string) ([]int64, error)
 }
 
 type snapshotProtectionRepository interface {
-	ActiveDuckLakeSnapshots(ctx context.Context) ([]int64, error)
-	LeasedDuckLakeSnapshots(ctx context.Context) ([]int64, error)
+	ActiveDuckLakeSnapshots(ctx context.Context, environment string) ([]int64, error)
+	LeasedDuckLakeSnapshots(ctx context.Context, environment string) ([]int64, error)
 }
 
 type expiredLeaseReconciler interface {
-	ReleaseExpiredQuerySnapshotLeases(ctx context.Context) error
+	ReleaseExpiredQuerySnapshotLeases(ctx context.Context, environment string) error
+}
+
+type foreignSnapshotProtectionRepository interface {
+	ForeignEnvironmentDuckLakeSnapshots(ctx context.Context, environment string) ([]int64, error)
 }
 
 type Options struct {
@@ -31,32 +36,38 @@ type Options struct {
 	CatalogPath                  string
 	DataPath                     string
 	AdditionalProtectedSnapshots []int64
+	Environment                  servingstate.Environment
 	DryRun                       bool
 	Out                          io.Writer
 }
 
 type Report struct {
-	ProtectedSnapshots       []int64
-	ActiveProtectedSnapshots []int64
-	LeaseProtectedSnapshots  []int64
-	Candidates               []int64
+	ProtectedSnapshots        []int64
+	ActiveProtectedSnapshots  []int64
+	LeaseProtectedSnapshots   []int64
+	ForeignProtectedSnapshots []int64
+	Candidates                []int64
 }
 
 func Run(ctx context.Context, repo ServingStateRepository, options Options) (Report, error) {
 	if repo == nil {
 		return Report{}, fmt.Errorf("serving state repository is required")
 	}
+	environment := servingstate.Environment(strings.TrimSpace(string(options.Environment)))
+	if environment == "" {
+		return Report{}, fmt.Errorf("instance environment is required")
+	}
 	if !options.DryRun {
 		if leases, ok := repo.(expiredLeaseReconciler); ok {
-			if err := leases.ReleaseExpiredQuerySnapshotLeases(ctx); err != nil {
+			if err := leases.ReleaseExpiredQuerySnapshotLeases(ctx, string(environment)); err != nil {
 				return Report{}, err
 			}
 		}
-		if err := repo.ReconcileRetention(ctx, time.Now()); err != nil {
+		if err := repo.ReconcileRetention(ctx, environment, time.Now()); err != nil {
 			return Report{}, err
 		}
 	}
-	active, leased, err := protectedSnapshots(ctx, repo)
+	active, leased, foreign, err := protectedSnapshots(ctx, repo, string(environment))
 	if err != nil {
 		return Report{}, err
 	}
@@ -78,6 +89,9 @@ func Run(ctx context.Context, repo ServingStateRepository, options Options) (Rep
 		protected[snapshotID] = struct{}{}
 	}
 	for _, snapshotID := range leased {
+		protected[snapshotID] = struct{}{}
+	}
+	for _, snapshotID := range foreign {
 		protected[snapshotID] = struct{}{}
 	}
 	for _, snapshotID := range options.AdditionalProtectedSnapshots {
@@ -105,15 +119,17 @@ func Run(ctx context.Context, repo ServingStateRepository, options Options) (Rep
 		fmt.Fprintf(options.Out, "mode: %s\n", cleanupMode(options.DryRun))
 		fmt.Fprintf(options.Out, "protected active snapshots: %s\n", FormatSnapshotIDs(active))
 		fmt.Fprintf(options.Out, "protected leased snapshots: %s\n", FormatSnapshotIDs(leased))
+		fmt.Fprintf(options.Out, "protected foreign-environment snapshots: %s\n", FormatSnapshotIDs(foreign))
 		fmt.Fprintf(options.Out, "protected snapshots: %s\n", FormatSnapshotIDs(protectedList))
 		fmt.Fprintf(options.Out, "expiration candidates: %s\n", FormatSnapshotIDs(candidates))
 	}
 	if options.DryRun {
 		return Report{
-			ProtectedSnapshots:       protectedList,
-			ActiveProtectedSnapshots: active,
-			LeaseProtectedSnapshots:  leased,
-			Candidates:               candidates,
+			ProtectedSnapshots:        protectedList,
+			ActiveProtectedSnapshots:  active,
+			LeaseProtectedSnapshots:   leased,
+			ForeignProtectedSnapshots: foreign,
+			Candidates:                candidates,
 		}, nil
 	}
 	if err := env.ExpireSnapshots(ctx, candidates, options.DryRun); err != nil {
@@ -126,30 +142,39 @@ func Run(ctx context.Context, repo ServingStateRepository, options Options) (Rep
 		return Report{}, fmt.Errorf("delete orphaned files: %w", err)
 	}
 	return Report{
-		ProtectedSnapshots:       protectedList,
-		ActiveProtectedSnapshots: active,
-		LeaseProtectedSnapshots:  leased,
-		Candidates:               candidates,
+		ProtectedSnapshots:        protectedList,
+		ActiveProtectedSnapshots:  active,
+		LeaseProtectedSnapshots:   leased,
+		ForeignProtectedSnapshots: foreign,
+		Candidates:                candidates,
 	}, nil
 }
 
-func protectedSnapshots(ctx context.Context, repo ServingStateRepository) ([]int64, []int64, error) {
+func protectedSnapshots(ctx context.Context, repo ServingStateRepository, environment string) ([]int64, []int64, []int64, error) {
+	var foreign []int64
+	if provider, ok := repo.(foreignSnapshotProtectionRepository); ok {
+		var err error
+		foreign, err = provider.ForeignEnvironmentDuckLakeSnapshots(ctx, environment)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+	}
 	if split, ok := repo.(snapshotProtectionRepository); ok {
-		active, err := split.ActiveDuckLakeSnapshots(ctx)
+		active, err := split.ActiveDuckLakeSnapshots(ctx, environment)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		leased, err := split.LeasedDuckLakeSnapshots(ctx)
+		leased, err := split.LeasedDuckLakeSnapshots(ctx, environment)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		return positiveSnapshotIDs(active), positiveSnapshotIDs(leased), nil
+		return positiveSnapshotIDs(active), positiveSnapshotIDs(leased), positiveSnapshotIDs(foreign), nil
 	}
-	referenced, err := repo.ReferencedDuckLakeSnapshots(ctx)
+	referenced, err := repo.ReferencedDuckLakeSnapshots(ctx, environment)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return positiveSnapshotIDs(referenced), nil, nil
+	return positiveSnapshotIDs(referenced), nil, positiveSnapshotIDs(foreign), nil
 }
 
 func FormatSnapshotIDs(ids []int64) string {

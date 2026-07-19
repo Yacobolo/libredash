@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/Yacobolo/libredash/internal/analytics/materialize"
+	"github.com/Yacobolo/libredash/internal/refreshpipeline"
 	servingstate "github.com/Yacobolo/libredash/internal/servingstate"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
@@ -30,8 +33,9 @@ type RunRepository interface {
 }
 
 type LoadedArtifact struct {
-	Definition *workspace.Definition
-	Graph      workspace.AssetGraph
+	Definition           *workspace.Definition
+	Graph                workspace.AssetGraph
+	ManagedDataRevisions map[string]string
 }
 
 type ArtifactLoader interface {
@@ -57,34 +61,46 @@ type RuntimeHost interface {
 	Reload(ctx context.Context) error
 }
 
+type atomicRuntimeHost interface {
+	CommitPreparedWithActivation(servingstate.PreparedRuntime, func() error) error
+}
+
 type RetentionRunner interface {
 	Run(ctx context.Context, dryRun bool) error
 }
 
 type Publisher interface {
-	PublishRefreshTarget(ctx context.Context, workspaceID, targetType, targetID string)
+	PublishRefreshTarget(ctx context.Context, workspaceID, environment, targetType, targetID string)
+}
+
+type DataVersionRepository interface {
+	SaveDataVersion(context.Context, refreshpipeline.DataVersion) error
+}
+
+type CandidateValidationHook interface {
+	AfterArtifactValidation(context.Context, servingstate.State, servingstate.Validation) error
+}
+
+type atomicRefreshActivator interface {
+	ActivateRefresh(context.Context, servingstate.WorkspaceID, servingstate.Environment, servingstate.ID, refreshpipeline.DataVersion) (servingstate.State, error)
 }
 
 type Service struct {
-	ServingStates ServingStateRepository
-	Runs          RunRepository
-	Artifacts     ArtifactLoader
-	Materializer  Materializer
-	Runtime       RuntimeHost
-	Retention     RetentionRunner
-	Publisher     Publisher
+	ServingStates            ServingStateRepository
+	Runs                     RunRepository
+	Artifacts                ArtifactLoader
+	Materializer             Materializer
+	Runtime                  RuntimeHost
+	Retention                RetentionRunner
+	Publisher                Publisher
+	DataVersions             DataVersionRepository
+	CandidateValidationHooks []CandidateValidationHook
+	Now                      func() time.Time
 }
 
 type ServingState struct {
 	State    servingstate.State
 	Artifact servingstate.Artifact
-}
-
-type QueueAssetInput struct {
-	WorkspaceID string
-	Environment servingstate.Environment
-	PrincipalID string
-	Asset       workspace.AssetView
 }
 
 type QueueAssetResult struct {
@@ -93,20 +109,47 @@ type QueueAssetResult struct {
 	ServingStateID servingstate.ID
 }
 
-func (s Service) QueueAssetRefresh(ctx context.Context, input QueueAssetInput) (QueueAssetResult, error) {
-	if s.ServingStates == nil {
-		return QueueAssetResult{}, fmt.Errorf("serving state repository is required")
+type QueuePipelineInput struct {
+	WorkspaceID    string
+	Environment    servingstate.Environment
+	PrincipalID    string
+	PipelineID     string
+	TriggerType    string
+	RetryOf        string
+	ArtifactDigest string
+	Occurrence     *refreshpipeline.Occurrence
+}
+
+func (s Service) QueuePipelineRefresh(ctx context.Context, input QueuePipelineInput) (QueueAssetResult, error) {
+	if s.ServingStates == nil || s.Runs == nil || s.Artifacts == nil {
+		return QueueAssetResult{}, fmt.Errorf("serving state, refresh run, and artifact repositories are required")
 	}
-	if s.Runs == nil {
-		return QueueAssetResult{}, fmt.Errorf("refresh run repository is required")
+	input.WorkspaceID = strings.TrimSpace(input.WorkspaceID)
+	input.PipelineID = strings.TrimSpace(input.PipelineID)
+	if input.WorkspaceID == "" || input.PipelineID == "" {
+		return QueueAssetResult{}, fmt.Errorf("workspace id and pipeline id are required")
 	}
-	if s.Artifacts == nil {
-		return QueueAssetResult{}, fmt.Errorf("artifact loader is required")
+	if input.TriggerType == "" {
+		input.TriggerType = materialize.TriggerManual
 	}
+	switch input.TriggerType {
+	case materialize.TriggerManual, materialize.TriggerSchedule, materialize.TriggerRetry:
+	default:
+		return QueueAssetResult{}, fmt.Errorf("unsupported refresh pipeline trigger %q", input.TriggerType)
+	}
+	targetID := input.WorkspaceID + "." + input.PipelineID
 	environment := servingstate.NormalizeEnvironment(input.Environment)
+	if active, found, err := latestActivePipelineRun(ctx, s.Runs, input.WorkspaceID, string(environment), targetID); err != nil {
+		return QueueAssetResult{}, err
+	} else if found {
+		return QueueAssetResult{Run: active, ServingStateID: servingstate.ID(active.ServingStateID)}, nil
+	}
 	active, err := s.Active(ctx, input.WorkspaceID, environment)
 	if err != nil {
 		return QueueAssetResult{}, err
+	}
+	if input.ArtifactDigest != "" && input.ArtifactDigest != active.Artifact.Digest {
+		return QueueAssetResult{}, fmt.Errorf("refresh pipeline schedule belongs to superseded artifact %q", input.ArtifactDigest)
 	}
 	loaded, err := s.Artifacts.Load(ctx, active.Artifact)
 	if err != nil {
@@ -115,81 +158,78 @@ func (s Service) QueueAssetRefresh(ctx context.Context, input QueueAssetInput) (
 	if loaded.Definition == nil {
 		return QueueAssetResult{}, fmt.Errorf("compiled workspace definition is required")
 	}
-	plan, err := PlanForAsset(loaded.Definition, input.WorkspaceID, input.Asset)
+	pipeline, ok := loaded.Definition.RefreshPipelines[input.PipelineID]
+	if !ok {
+		return QueueAssetResult{}, fmt.Errorf("unknown refresh pipeline %q", input.PipelineID)
+	}
+	plan, err := PlanForPipeline(loaded.Definition, input.WorkspaceID, input.PipelineID)
 	if err != nil {
 		return QueueAssetResult{}, err
 	}
-	candidate := ServingState{}
-	rootRun := materialize.RunRecord{}
-	dependencyRuns := []materialize.RunRecord(nil)
-	finalized := false
-	defer func() {
-		if finalized {
-			return
-		}
-		cause := fmt.Errorf("refresh did not complete")
-		background := context.Background()
-		if rootRun.ID != "" {
-			_, _ = s.Runs.MarkRunFailed(background, input.WorkspaceID, rootRun.ID, cause.Error())
-		}
-		for _, run := range dependencyRuns {
-			if run.ID != "" {
-				_, _ = s.Runs.MarkRunFailed(background, input.WorkspaceID, run.ID, cause.Error())
-			}
-		}
-		_ = s.MarkFailed(background, candidate, cause)
-	}()
-	candidate, err = s.CreateRefreshCandidate(ctx, RefreshCandidateInput{
-		WorkspaceID:   input.WorkspaceID,
-		Environment:   environment,
-		CreatedBy:     input.PrincipalID,
-		Active:        active,
-		ArtifactGraph: loaded.Graph,
+	candidate, err := s.CreateRefreshCandidate(ctx, RefreshCandidateInput{
+		WorkspaceID: input.WorkspaceID, Environment: environment, CreatedBy: input.PrincipalID,
+		Active: active, ArtifactGraph: loaded.Graph, ManagedDataRevisions: loaded.ManagedDataRevisions,
 	})
 	if err != nil {
 		return QueueAssetResult{}, err
 	}
-	rootRun, err = s.Runs.CreateRun(ctx, materialize.RunInput{
-		WorkspaceID:    input.WorkspaceID,
-		ModelID:        plan.ModelID,
-		ServingStateID: string(candidate.State.ID),
-		PrincipalID:    input.PrincipalID,
-		TargetType:     plan.TargetType,
-		TargetID:       plan.TargetID,
-		TriggerType:    materialize.TriggerDirect,
-		JobKind:        materialize.JobKindWorkspaceAssetRefresh,
-		PayloadJSON:    fmt.Sprintf(`{"assetKey":%q,"assetType":%q}`, input.Asset.Key, input.Asset.Type),
-	})
+	payload, _ := json.Marshal(map[string]string{"pipelineId": input.PipelineID, "semanticModel": pipeline.SemanticModel})
+	rootInput := materialize.RunInput{
+		WorkspaceID: input.WorkspaceID, Environment: string(environment), ModelID: pipeline.SemanticModel, ServingStateID: string(candidate.State.ID),
+		PrincipalID: input.PrincipalID, TargetType: materialize.TargetRefreshPipeline, TargetID: targetID,
+		TriggerType: input.TriggerType, RetryOf: input.RetryOf, JobKind: materialize.JobKindRefreshPipeline,
+		PayloadJSON: string(payload),
+	}
+	var rootRun materialize.RunRecord
+	if input.Occurrence != nil {
+		creator, ok := s.Runs.(interface {
+			CreateScheduledRun(context.Context, materialize.RunInput, refreshpipeline.Occurrence) (materialize.RunRecord, error)
+		})
+		if !ok {
+			err = fmt.Errorf("refresh run repository does not support atomic scheduled runs")
+		} else {
+			rootRun, err = creator.CreateScheduledRun(ctx, rootInput, *input.Occurrence)
+		}
+	} else {
+		rootRun, err = s.Runs.CreateRun(ctx, rootInput)
+	}
 	if err != nil {
 		_ = s.MarkFailed(ctx, candidate, err)
+		if active, found, lookupErr := latestActivePipelineRun(ctx, s.Runs, input.WorkspaceID, string(environment), targetID); lookupErr == nil && found {
+			return QueueAssetResult{Run: active, ServingStateID: servingstate.ID(active.ServingStateID)}, nil
+		}
 		return QueueAssetResult{}, err
 	}
-	dependencyRuns = make([]materialize.RunRecord, 0, len(plan.DependencyTables))
+	children := make([]materialize.RunRecord, 0, len(plan.DependencyTables))
 	for _, table := range plan.DependencyTables {
 		run, err := s.Runs.CreateRun(ctx, materialize.RunInput{
-			WorkspaceID:    input.WorkspaceID,
-			ModelID:        WorkspaceRefreshModelID,
-			ServingStateID: string(candidate.State.ID),
-			PrincipalID:    input.PrincipalID,
-			TargetType:     materialize.TargetModelTable,
-			TargetID:       input.WorkspaceID + "." + table,
-			TriggerType:    plan.ChildTrigger,
-			ParentRunID:    rootRun.ID,
-			JobKind:        materialize.JobKindChildRun,
+			WorkspaceID: input.WorkspaceID, Environment: string(environment), ModelID: pipeline.SemanticModel, ServingStateID: string(candidate.State.ID),
+			PrincipalID: input.PrincipalID, TargetType: materialize.TargetModelTable, TargetID: input.WorkspaceID + "." + table,
+			TriggerType: materialize.TriggerDependency, ParentRunID: rootRun.ID, JobKind: materialize.JobKindChildRun,
 		})
 		if err != nil {
 			_, _ = s.Runs.MarkRunFailed(ctx, input.WorkspaceID, rootRun.ID, err.Error())
 			_ = s.MarkFailed(ctx, candidate, err)
 			return QueueAssetResult{}, err
 		}
-		dependencyRuns = append(dependencyRuns, run)
+		children = append(children, run)
 	}
-	s.publish(ctx, input.WorkspaceID, plan.TargetType, plan.TargetID)
-	for _, run := range dependencyRuns {
-		s.publish(ctx, input.WorkspaceID, run.TargetType, run.TargetID)
+	s.publish(ctx, input.WorkspaceID, string(environment), materialize.TargetRefreshPipeline, targetID)
+	return QueueAssetResult{Run: rootRun, DependencyRuns: children, ServingStateID: candidate.State.ID}, nil
+}
+
+func latestActivePipelineRun(ctx context.Context, runs RunRepository, workspaceID, environment, targetID string) (materialize.RunRecord, bool, error) {
+	repository, ok := runs.(interface {
+		LatestTargetRun(context.Context, string, string, string, string) (materialize.RunRecord, bool, error)
+	})
+	if !ok {
+		return materialize.RunRecord{}, false, nil
 	}
-	finalized = true
-	return QueueAssetResult{Run: rootRun, DependencyRuns: dependencyRuns, ServingStateID: candidate.State.ID}, nil
+	run, found, err := repository.LatestTargetRun(ctx, workspaceID, environment, materialize.TargetRefreshPipeline, targetID)
+	if err != nil || !found {
+		return run, false, err
+	}
+	return run, run.Status == materialize.RunStatusQueued || run.Status == materialize.RunStatusRunning, nil
 }
 
 func (s Service) ExecuteClaimedJob(ctx context.Context, job materialize.JobRecord) error {
@@ -231,8 +271,8 @@ func (s Service) ExecuteClaimedJob(ctx context.Context, job materialize.JobRecor
 	if loaded.Definition == nil {
 		return fmt.Errorf("compiled workspace definition is required")
 	}
-	asset := workspace.AssetView{Type: AssetTypeForRefreshTarget(job.TargetType), Key: job.TargetID, Title: job.TargetID}
-	plan, err := PlanForAsset(loaded.Definition, job.WorkspaceID, asset)
+	pipelineID := strings.TrimPrefix(job.TargetID, job.WorkspaceID+".")
+	plan, err := PlanForPipeline(loaded.Definition, job.WorkspaceID, pipelineID)
 	if err != nil {
 		return err
 	}
@@ -242,9 +282,8 @@ func (s Service) ExecuteClaimedJob(ctx context.Context, job materialize.JobRecor
 	}
 	for _, child := range childRuns {
 		_, _ = s.Runs.MarkRunRunning(ctx, job.WorkspaceID, child.ID)
-		s.publish(ctx, job.WorkspaceID, child.TargetType, child.TargetID)
 	}
-	s.publish(ctx, job.WorkspaceID, job.TargetType, job.TargetID)
+	s.publish(ctx, job.WorkspaceID, string(candidateState.Environment), job.TargetType, job.TargetID)
 	candidate := ServingState{State: candidateState, Artifact: candidateArtifact}
 	snapshotID, err := s.Materializer.Materialize(ctx, MaterializeInput{
 		Definition:  loaded.Definition,
@@ -270,57 +309,90 @@ func (s Service) ExecuteClaimedJob(ctx context.Context, job materialize.JobRecor
 			return err
 		}
 	}
-	if _, err := s.Activate(ctx, candidate); err != nil {
-		if prepared != nil {
-			_ = prepared.Close()
-		}
-		s.failJob(ctx, job, childRuns, candidate, err)
-		return err
+	now := time.Now()
+	if s.Now != nil {
+		now = s.Now()
+	}
+	dataVersion := refreshpipeline.DataVersion{
+		WorkspaceID: job.WorkspaceID, Environment: string(candidateState.Environment), SemanticModel: job.ModelID,
+		SnapshotID: snapshotID, ServingStateID: string(candidateState.ID), RefreshedAt: now.UTC(),
+		Source: refreshpipeline.DataVersionSourceRefresh, PipelineID: pipelineID, RunID: job.RunID,
 	}
 	if prepared != nil {
-		if err := s.Runtime.CommitPrepared(prepared); err != nil {
+		activate := func() error { return s.activateRefresh(ctx, candidate, dataVersion) }
+		if atomic, ok := s.Runtime.(atomicRuntimeHost); ok {
+			err = atomic.CommitPreparedWithActivation(prepared, activate)
+		} else if err = activate(); err == nil {
+			err = s.Runtime.CommitPrepared(prepared)
+		}
+		if err != nil {
 			_ = prepared.Close()
-			_, _ = s.Runs.MarkRunFailed(ctx, job.WorkspaceID, job.RunID, err.Error())
-			s.publish(ctx, job.WorkspaceID, job.TargetType, job.TargetID)
+			s.failJob(ctx, job, childRuns, candidate, err)
 			return err
 		}
-	} else if s.Runtime != nil {
-		_ = s.Runtime.Reload(ctx)
+	} else {
+		if err := s.activateRefresh(ctx, candidate, dataVersion); err != nil {
+			s.failJob(ctx, job, childRuns, candidate, err)
+			return err
+		}
+		if s.Runtime != nil {
+			_ = s.Runtime.Reload(ctx)
+		}
+	}
+	if job.TargetType == materialize.TargetRefreshPipeline && s.DataVersions != nil {
+		if publisher, ok := s.Publisher.(interface {
+			PublishSemanticModelVersion(context.Context, string, string, string)
+		}); ok {
+			publisher.PublishSemanticModelVersion(ctx, job.WorkspaceID, string(candidateState.Environment), job.ModelID)
+		}
 	}
 	if s.Retention != nil {
 		_ = s.Retention.Run(ctx, false)
 	}
 	for _, child := range childRuns {
 		_, _ = s.Runs.MarkRunSucceeded(ctx, job.WorkspaceID, child.ID)
-		s.publish(ctx, job.WorkspaceID, child.TargetType, child.TargetID)
 	}
 	_, err = s.Runs.MarkRunSucceeded(ctx, job.WorkspaceID, job.RunID)
-	s.publish(ctx, job.WorkspaceID, job.TargetType, job.TargetID)
+	s.publish(ctx, job.WorkspaceID, string(candidateState.Environment), job.TargetType, job.TargetID)
 	return err
+}
+
+func (s Service) activateRefresh(ctx context.Context, candidate ServingState, version refreshpipeline.DataVersion) error {
+	if activator, ok := s.ServingStates.(atomicRefreshActivator); ok {
+		_, err := activator.ActivateRefresh(ctx, candidate.State.WorkspaceID, candidate.State.Environment, candidate.State.ID, version)
+		return err
+	}
+	if _, err := s.Activate(ctx, candidate); err != nil {
+		return err
+	}
+	if s.DataVersions != nil {
+		return s.DataVersions.SaveDataVersion(ctx, version)
+	}
+	return nil
 }
 
 func (s Service) failJob(ctx context.Context, job materialize.JobRecord, childRuns []materialize.RunRecord, candidate ServingState, cause error) {
 	_, _ = s.Runs.MarkRunFailed(ctx, job.WorkspaceID, job.RunID, cause.Error())
 	for _, child := range childRuns {
 		_, _ = s.Runs.MarkRunFailed(ctx, job.WorkspaceID, child.ID, cause.Error())
-		s.publish(ctx, job.WorkspaceID, child.TargetType, child.TargetID)
 	}
 	_ = s.MarkFailed(ctx, candidate, cause)
-	s.publish(ctx, job.WorkspaceID, job.TargetType, job.TargetID)
+	s.publish(ctx, job.WorkspaceID, string(candidate.State.Environment), job.TargetType, job.TargetID)
 }
 
-func (s Service) publish(ctx context.Context, workspaceID, targetType, targetID string) {
+func (s Service) publish(ctx context.Context, workspaceID, environment, targetType, targetID string) {
 	if s.Publisher != nil {
-		s.Publisher.PublishRefreshTarget(ctx, workspaceID, targetType, targetID)
+		s.Publisher.PublishRefreshTarget(ctx, workspaceID, environment, targetType, targetID)
 	}
 }
 
 type RefreshCandidateInput struct {
-	WorkspaceID   string
-	Environment   servingstate.Environment
-	CreatedBy     string
-	Active        ServingState
-	ArtifactGraph workspace.AssetGraph
+	WorkspaceID          string
+	Environment          servingstate.Environment
+	CreatedBy            string
+	Active               ServingState
+	ArtifactGraph        workspace.AssetGraph
+	ManagedDataRevisions map[string]string
 }
 
 func (s Service) Active(ctx context.Context, workspaceID string, environment servingstate.Environment) (ServingState, error) {
@@ -361,20 +433,39 @@ func (s Service) CreateRefreshCandidate(ctx context.Context, input RefreshCandid
 		SizeBytes:      active.Artifact.SizeBytes,
 		CreatedAt:      active.Artifact.CreatedAt,
 	}
-	validated, err := s.ServingStates.SaveValidated(ctx, created.ID, servingstate.Validation{
-		Digest:            active.State.Digest,
-		ManifestJSON:      active.State.ManifestJSON,
-		ProjectID:         active.State.ProjectID,
-		ProjectDigest:     active.State.ProjectDigest,
-		ProjectWorkspaces: append([]string(nil), active.State.ProjectWorkspaces...),
-		AccessPolicy:      accessPolicy,
-		Graph:             RetargetAssetGraph(input.ArtifactGraph, workspace.WorkspaceID(input.WorkspaceID), workspace.ServingStateID(created.ID)),
-	}, candidateArtifact)
+	validation := servingstate.Validation{
+		Digest:               active.State.Digest,
+		ManifestJSON:         active.State.ManifestJSON,
+		ProjectID:            active.State.ProjectID,
+		ProjectDigest:        active.State.ProjectDigest,
+		ProjectWorkspaces:    append([]string(nil), active.State.ProjectWorkspaces...),
+		AccessPolicy:         accessPolicy,
+		ManagedDataRevisions: cloneStringMap(input.ManagedDataRevisions),
+		Graph:                RetargetAssetGraph(input.ArtifactGraph, workspace.WorkspaceID(input.WorkspaceID), workspace.ServingStateID(created.ID)),
+	}
+	for _, hook := range s.CandidateValidationHooks {
+		if hook == nil {
+			continue
+		}
+		if err := hook.AfterArtifactValidation(ctx, created, validation); err != nil {
+			_ = s.ServingStates.MarkFailed(ctx, created.ID, err)
+			return ServingState{}, err
+		}
+	}
+	validated, err := s.ServingStates.SaveValidated(ctx, created.ID, validation, candidateArtifact)
 	if err != nil {
 		_ = s.ServingStates.MarkFailed(ctx, created.ID, err)
 		return ServingState{}, err
 	}
 	return ServingState{State: validated, Artifact: candidateArtifact}, nil
+}
+
+func cloneStringMap(values map[string]string) map[string]string {
+	cloned := make(map[string]string, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func (s Service) RecordSnapshot(ctx context.Context, candidate ServingState, snapshotID int64) error {

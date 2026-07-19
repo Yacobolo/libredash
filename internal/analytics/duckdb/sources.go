@@ -508,7 +508,8 @@ func compileTypedConnectionSecret(name string, connection semanticmodel.Connecti
 	if err != nil {
 		return "", false, err
 	}
-	if len(auth) == 0 {
+	ambient := connection.Credentials.Provider == "ambient"
+	if len(auth) == 0 && !ambient {
 		return "", false, nil
 	}
 	secret, err := connectionSecretName(name)
@@ -517,7 +518,11 @@ func compileTypedConnectionSecret(name string, connection semanticmodel.Connecti
 	}
 	parts := []string{"TYPE " + secretType}
 	if secretType != "quack" {
-		parts = append(parts, "PROVIDER "+duckDBSecretProvider(secretType, auth))
+		provider := duckDBSecretProvider(secretType, auth)
+		if ambient {
+			provider = "credential_chain"
+		}
+		parts = append(parts, "PROVIDER "+provider)
 	}
 	for _, key := range sortedKeys(auth) {
 		if err := validateIdentifier(key); err != nil {

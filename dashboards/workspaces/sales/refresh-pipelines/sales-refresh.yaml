@@ -1,0 +1,11 @@
+apiVersion: libredash.dev/v1
+kind: RefreshPipeline
+metadata:
+  workspace: sales
+  name: sales-refresh
+spec:
+  semanticModel: sales
+  on:
+    schedule:
+      - cron: "0 6 * * *"
+        timezone: Europe/Copenhagen

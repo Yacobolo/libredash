@@ -17,6 +17,13 @@ package contracts
 	secret!:   string
 })
 
+#AmbientCredentials: close({
+	provider!:    "ambient"
+	region?:      string
+	endpoint?:    string
+	accountName?: string
+})
+
 #APIVersion: "libredash.dev/v1"
 
 #Metadata: close({
@@ -70,6 +77,7 @@ package contracts
 		dashboards!:     #IncludeList
 		access!:         #IncludeList
 		agentPolicy!:    #IncludeList
+		refreshPipelines?: #IncludeList
 	})
 })
 
@@ -155,6 +163,21 @@ package contracts
 	})
 })
 
+#RefreshPipelineResource: close({
+	apiVersion!: #APIVersion
+	kind!:       "RefreshPipeline"
+	metadata!:   #Metadata
+	spec!: close({
+		semanticModel!: #ResourceID
+		on?: close({
+			schedule?: [...close({
+				cron!:     string & !=""
+				timezone?: string & !=""
+			})]
+		})
+	})
+})
+
 #ModelTableResource: close({
 	apiVersion!: #APIVersion
 	kind!:       "ModelTable"
@@ -187,7 +210,7 @@ package contracts
 	database?:    string
 	username?:    string
 	sslMode?:     string
-	credentials?: #NoCredentials | #EnvCredentials
+	credentials?: #NoCredentials | #EnvCredentials | #AmbientCredentials
 	options?:     #AnyObject
 	defaults?: close({
 		options?: #AnyObject

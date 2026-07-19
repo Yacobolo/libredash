@@ -17,6 +17,27 @@ VALUES (?, ?, ?, ?, ?);
 -- name: GetProjectDeployment :one
 SELECT * FROM project_deployments WHERE id = ?;
 
+-- name: PersistPublishSemanticModelDataVersions :exec
+INSERT INTO semantic_model_data_versions (
+  workspace_id, environment, semantic_model_id, snapshot_id, serving_state_id, refreshed_at, source, pipeline_id, run_id
+)
+SELECT workspace_id, sqlc.arg(environment), substr(asset_key, instr(asset_key, '.') + 1), sqlc.arg(snapshot_id), serving_state_id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 'publish', NULL, NULL
+FROM assets
+WHERE assets.serving_state_id = sqlc.arg(target_serving_state_id) AND asset_type = 'semantic_model'
+ON CONFLICT (workspace_id, environment, semantic_model_id) DO UPDATE SET
+  snapshot_id = excluded.snapshot_id,
+  serving_state_id = excluded.serving_state_id,
+  refreshed_at = excluded.refreshed_at,
+  source = excluded.source,
+  pipeline_id = NULL,
+  run_id = NULL;
+
+-- name: DeleteUndeployedSemanticModelDataVersions :exec
+DELETE FROM semantic_model_data_versions
+WHERE workspace_id = sqlc.arg(workspace_id)
+  AND environment = sqlc.arg(environment)
+  AND serving_state_id <> sqlc.arg(target_serving_state_id);
+
 -- name: ListProjectDeploymentTargets :many
 SELECT * FROM project_deployment_targets
 WHERE deployment_id = ?

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Yacobolo/libredash/internal/api"
 	apigenapi "github.com/Yacobolo/libredash/internal/api/gen"
 	"github.com/Yacobolo/libredash/internal/asyncjob"
 	"github.com/Yacobolo/libredash/internal/cursorsigning"
@@ -90,10 +91,17 @@ func asyncEventResponses(rows []asyncjob.Event) ([]apigenapi.AsyncEventResponse,
 		if err := json.Unmarshal(row.Data, &data); err != nil {
 			return nil, err
 		}
+		createdAt, err := api.NormalizeTimestamp(row.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("normalize async event timestamp: %w", err)
+		}
+		if createdAt == "" {
+			return nil, fmt.Errorf("normalize async event timestamp: timestamp is required")
+		}
 		response := apigenapi.AsyncEventResponse{
 			Id: fmt.Sprintf("%020d", row.ID), Event: row.EventType,
 			ResourceType: row.ResourceKind, ResourceId: row.ResourceID,
-			Data: data, CreatedAt: row.CreatedAt,
+			Data: data, CreatedAt: createdAt,
 		}
 		if raw, ok := data["progress"].(map[string]any); ok {
 			encoded, _ := json.Marshal(raw)

@@ -38,6 +38,7 @@ func (s *Server) storageReadModel() adminstorage.Service {
 	return adminstorage.Service{
 		CatalogPath: s.duckLakeCatalogPath,
 		DataPath:    s.duckLakeDataPath,
+		Environment: s.defaultEnvironment,
 	}
 }
 

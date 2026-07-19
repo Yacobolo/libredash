@@ -328,8 +328,20 @@ func TestAPIGenOperationAuthCoverage(t *testing.T) {
 		t.Fatal("no generated operation contracts")
 	}
 	for operationID, contract := range contracts {
-		if contract.AuthzMode != "privilege" || !contract.Protected {
-			t.Fatalf("%s auth contract = mode %q protected %t, want privilege/protected", operationID, contract.AuthzMode, contract.Protected)
+		if !contract.Protected {
+			t.Fatalf("%s auth contract is not protected", operationID)
+		}
+		if operationID == "getInstance" {
+			if contract.AuthzMode != "authenticated" {
+				t.Fatalf("getInstance auth mode = %q, want authenticated", contract.AuthzMode)
+			}
+			if _, ok := apigenOperationPrivilege(operationID); ok {
+				t.Fatal("getInstance must not require a privilege mapping")
+			}
+			continue
+		}
+		if contract.AuthzMode != "privilege" {
+			t.Fatalf("%s auth contract mode = %q, want privilege", operationID, contract.AuthzMode)
 		}
 		if _, ok := apigenOperationPrivilege(operationID); !ok {
 			t.Fatalf("%s missing generated privilege metadata", operationID)
@@ -470,6 +482,12 @@ func TestAPIGenOperationExtensions(t *testing.T) {
 		authz, ok := contract.Extensions["x-authz"].(map[string]any)
 		if !ok {
 			t.Fatalf("%s missing generated x-authz extension: %#v", operationID, contract.Extensions["x-authz"])
+		}
+		if operationID == "getInstance" {
+			if got := authz["mode"]; got != "authenticated" {
+				t.Fatalf("getInstance x-authz mode = %#v, want authenticated", got)
+			}
+			continue
 		}
 		if got := authz["mode"]; got != "privilege" {
 			t.Fatalf("%s x-authz mode = %#v, want privilege", operationID, got)

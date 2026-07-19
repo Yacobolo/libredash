@@ -1349,10 +1349,10 @@
       "x-scope": "ui-qa"
     },
     "LIBREDASH_BOOTSTRAP_ADMIN_EMAIL": {
-      "description": "Email assigned to the production bootstrap administrator.",
+      "description": "Email assigned to the initial production administrator.",
       "type": "string",
       "x-lifecycle": "supported",
-      "x-scope": "admin bootstrap"
+      "x-scope": "instance initialization"
     },
     "LIBREDASH_BOOTSTRAP_CACHE_DIR": {
       "description": "Download cache directory used by dataset bootstrap tools.",
@@ -1501,6 +1501,12 @@
       "x-lifecycle": "supported",
       "x-scope": "serve,admin"
     },
+    "LIBREDASH_ENVIRONMENT": {
+      "description": "Single serving environment permanently bound to this LibreDash instance.",
+      "type": "string",
+      "x-lifecycle": "supported",
+      "x-scope": "serve,admin"
+    },
     "LIBREDASH_EXEC_JOB_LEASE_TIMEOUT": {
       "default": "2m",
       "description": "Lease duration before an abandoned refresh job may be reclaimed.",
@@ -1557,13 +1563,6 @@
       "x-lifecycle": "supported",
       "x-scope": "serve"
     },
-    "LIBREDASH_GID": {
-      "description": "Temporary container group identifier used during provisioning.",
-      "pattern": "^-?[0-9]+$",
-      "type": "string",
-      "x-lifecycle": "internal",
-      "x-scope": "Hetzner provisioner"
-    },
     "LIBREDASH_HEALTHCHECK_URL": {
       "description": "Explicit readiness URL used by the healthcheck command.",
       "type": "string",
@@ -1598,8 +1597,7 @@
       "x-scope": "serve"
     },
     "LIBREDASH_MANAGED_DATA_DIR": {
-      "default": ".libredash/managed-data",
-      "description": "Private local root for managed-data objects, upload staging, and verified runtime views; S3 deployments use it as the runtime cache.",
+      "description": "Private local root for managed-data objects, upload staging, and verified runtime views; defaults beneath LIBREDASH_HOME.",
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
@@ -1907,13 +1905,6 @@
       "type": "string",
       "x-lifecycle": "supported",
       "x-scope": "serve"
-    },
-    "LIBREDASH_UID": {
-      "description": "Temporary container user identifier used during provisioning.",
-      "pattern": "^-?[0-9]+$",
-      "type": "string",
-      "x-lifecycle": "internal",
-      "x-scope": "Hetzner provisioner"
     },
     "LIBREDASH_WAREHOUSE_DSN": {
       "description": "Example externally supplied warehouse connection credential.",

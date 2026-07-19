@@ -5,26 +5,18 @@ using TypeSpec.OpenAPI;
 namespace LibreDashAPI;
 
 model RefreshRunCreateRequest {
-  modelId?: string;
-  servingStateId?: string;
-  targetType?: string;
-  targetId?: string;
-  triggerType?: string;
-  parentRunId?: string;
+  pipelineId: string;
   retryOf?: string;
 }
 
 model RefreshRunResponse {
   id: string;
   workspaceId: string;
-  modelId: string;
-  servingStateId?: string;
+  pipelineId: string;
+  semanticModel: string;
   principalId?: string;
   principalDisplayName?: string;
-  targetType: string;
-  targetId: string;
-  triggerType: string;
-  parentRunId?: string;
+  trigger: string;
   retryOf?: string;
   status: string;
   error?: string;
@@ -44,7 +36,7 @@ alias ListRefreshRunsOK = OkJson<RefreshRunListResponse>;
 @summary("List refresh runs")
 @route("/workspaces/{workspace}/refresh-runs")
 @get
-@apigen.authz(#{ mode: "privilege", privilege: "REFRESH_DATA" })
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
 @apigen.tool(#{
   name: "list_refresh_runs",
   effect: "read",
@@ -55,7 +47,7 @@ alias ListRefreshRunsOK = OkJson<RefreshRunListResponse>;
   ] },
   output: #{
     mode: "project",
-    select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/modelId" }, #{ source: "/status" }, #{ source: "/createdAt" }] }],
+    select: #[#{ source: "/items", countAs: "count", select: #[#{ source: "/id" }, #{ source: "/pipelineId" }, #{ source: "/semanticModel" }, #{ source: "/status" }, #{ source: "/createdAt" }] }],
     cursor: #{ source: "/page/nextCursor" },
   },
 })
@@ -67,7 +59,7 @@ alias CreateRefreshRunAccepted = AcceptedJson<RefreshRunResponse>;
 @summary("Create a refresh run")
 @route("/workspaces/{workspace}/refresh-runs")
 @post
-@apigen.authz(#{ mode: "privilege", privilege: "REFRESH_DATA" })
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
 op createRefreshRun(@path workspace: string, @header("Idempotency-Key") idempotencyKey: IdempotencyKey, @body body: RefreshRunCreateRequest): CreateRefreshRunAccepted | CommonErrors;
 
 alias GetRefreshRunOK = OkJson<RefreshRunResponse>;
@@ -76,13 +68,13 @@ alias GetRefreshRunOK = OkJson<RefreshRunResponse>;
 @summary("Get a refresh run")
 @route("/workspaces/{workspace}/refresh-runs/{run}")
 @get
-@apigen.authz(#{ mode: "privilege", privilege: "REFRESH_DATA" })
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
 @apigen.tool(#{
   name: "get_refresh_run",
   effect: "read",
   tags: #["refresh"],
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
-  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/modelId" }, #{ source: "/servingStateId" }, #{ source: "/targetType" }, #{ source: "/targetId" }, #{ source: "/status" }, #{ source: "/error" }, #{ source: "/createdAt" }, #{ source: "/startedAt" }, #{ source: "/finishedAt" }] },
+  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/pipelineId" }, #{ source: "/semanticModel" }, #{ source: "/trigger" }, #{ source: "/status" }, #{ source: "/error" }, #{ source: "/createdAt" }, #{ source: "/startedAt" }, #{ source: "/finishedAt" }] },
 })
 op getRefreshRun(@path workspace: string, @path run: string): GetRefreshRunOK | CommonErrors;
 
@@ -90,12 +82,12 @@ op getRefreshRun(@path workspace: string, @path run: string): GetRefreshRunOK | 
 @summary("List or stream refresh run events")
 @route("/workspaces/{workspace}/refresh-runs/{run}/events")
 @get
-@apigen.authz(#{ mode: "privilege", privilege: "REFRESH_DATA" })
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
 op listRefreshRunEvents(@path workspace: string, @path run: string, @header accept?: string, @header("Last-Event-ID") lastEventId?: string, @query limit?: ListLimit, @query pageToken?: PageToken): EventHistoryResponse<AsyncEventListResponse> | CommonErrors;
 
 @tag("Refresh Runs")
 @summary("Cancel a refresh run")
 @route("/workspaces/{workspace}/refresh-runs/{run}/cancel")
 @post
-@apigen.authz(#{ mode: "privilege", privilege: "REFRESH_DATA" })
+@apigen.authz(#{ mode: "privilege", privilege: "USE_WORKSPACE" })
 op cancelRefreshRun(@path workspace: string, @path run: string, @header("Idempotency-Key") idempotencyKey: IdempotencyKey): AcceptedJson<RefreshRunResponse> | CommonErrors;

@@ -59,6 +59,7 @@ func planCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	cmd.Flags().StringVar(&opts.catalog, "project", filepath.Join("dashboards", "libredash.yaml"), "project path")
 	cmd.Flags().StringVar(&opts.target, "target", "", "LibreDash server URL for active deployment diff")
 	cmd.Flags().StringVar(&opts.token, "token", "", "API token")
+	cmd.Flags().StringVar(&opts.environment, "environment", "", "assert the target instance environment for active diff")
 	cmd.Flags().StringVar(&opts.workspaceID, "workspace", opts.workspaceID, "workspace id for active diff")
 	cmd.Flags().BoolVar(&opts.jsonOutput, "json", false, "emit JSON plan")
 	return cmd
@@ -185,6 +186,9 @@ func fetchActiveWorkspaceGraph(ctx context.Context, opts *rootOptions) (workspac
 func fetchActiveWorkspaceGraphFor(ctx context.Context, opts *rootOptions, workspaceID string) (workspace.AssetGraph, error) {
 	target, token, err := clientTargetAndToken(opts)
 	if err != nil {
+		return workspace.AssetGraph{}, err
+	}
+	if _, err := targetEnvironment(ctx, http.DefaultClient, target, token, opts.environment); err != nil {
 		return workspace.AssetGraph{}, err
 	}
 	endpoint, err := apiOperationURL(target, "getWorkspaceActiveAssetGraph", map[string]string{"workspace": workspaceID}, nil)

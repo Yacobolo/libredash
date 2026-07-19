@@ -7,15 +7,15 @@ sections:
         title: What is LibreDash?
         summary: Understand the problems LibreDash solves and its code-native model.
         source: articles/start/introduction.md
-      - slug: getting-started
-        title: Get started with LibreDash
-        summary: Bootstrap and run the included workspace.
-        source: getting-started.md
-        breadcrumb: Getting started
       - slug: installation
         title: Installation
-        summary: Prepare a local source checkout and build the application.
+        summary: Pull the public image locally or prepare a durable production instance.
         source: articles/start/installation.md
+      - slug: getting-started
+        title: Get started with LibreDash
+        summary: Bootstrap, edit, and run the included project from a source checkout.
+        source: getting-started.md
+        breadcrumb: Getting started
       - slug: first-dashboard
         title: Build your first dashboard
         summary: Change a model and dashboard and deploy it locally.

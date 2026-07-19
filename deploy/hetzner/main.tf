@@ -77,11 +77,14 @@ resource "hcloud_server" "libredash" {
   }
 
   user_data = templatefile("${path.module}/cloud-init.yaml.tftpl", {
-    compose_b64        = base64encode(file("${path.module}/files/compose.yaml"))
-    caddyfile_b64      = base64encode(file("${path.module}/files/Caddyfile"))
-    libredashctl_b64   = base64encode(file("${path.module}/files/libredashctl"))
-    backup_service_b64 = base64encode(file("${path.module}/files/libredash-backup.service"))
-    backup_timer_b64   = base64encode(file("${path.module}/files/libredash-backup.timer"))
+    compose_b64              = base64encode(file("${path.module}/../compose/compose.yaml"))
+    compose_https_b64        = base64encode(file("${path.module}/../compose/compose.https.yaml"))
+    caddyfile_b64            = base64encode(file("${path.module}/../compose/Caddyfile"))
+    deployment_example_b64   = base64encode(file("${path.module}/../compose/deployment.env.example"))
+    libredashctl_wrapper_b64 = base64encode(file("${path.module}/files/libredashctl-wrapper"))
+    backup_hook_b64          = base64encode(file("${path.module}/files/libredash-backup-hook"))
+    backup_service_b64       = base64encode(file("${path.module}/files/libredash-backup.service"))
+    backup_timer_b64         = base64encode(file("${path.module}/files/libredash-backup.timer"))
     provision_b64 = base64encode(templatefile("${path.module}/files/provision.sh.tftpl", {
       domain          = jsonencode(local.domain)
       admin_email     = jsonencode(var.admin_email)

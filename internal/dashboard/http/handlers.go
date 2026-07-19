@@ -31,7 +31,6 @@ type Metrics interface {
 	QueryDashboardPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters) (dashboard.Patch, error)
 	QueryTablePage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error)
 	Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool)
-	RefreshMaterializations(ctx context.Context, modelID string) error
 }
 
 type Handler struct {
@@ -48,6 +47,8 @@ type Handler struct {
 	AuthorizeListObject  func(ctx context.Context, principalID string, object access.ObjectRef) (bool, error)
 	CSRFToken            func(r *nethttp.Request) string
 	ChromeDecorators     func(r *nethttp.Request) []reportui.ChromeDecorator
+	Environment          func(*nethttp.Request) string
+	DataRefreshedAt      func(context.Context, string, string, string) string
 }
 
 func (h Handler) filterAuthorizedDashboards(ctx context.Context, principalID, workspaceID string, rows []api.DashboardSummary) ([]api.DashboardSummary, error) {

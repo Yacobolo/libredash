@@ -17,6 +17,11 @@ type WorkspaceID string
 
 type Environment string
 
+type ActiveScope struct {
+	WorkspaceID WorkspaceID
+	Environment Environment
+}
+
 type Status string
 
 const (

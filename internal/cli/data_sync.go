@@ -69,6 +69,9 @@ func dataSyncCommand(ctx context.Context, planner dataPlanner, opts *rootOptions
 			if err != nil {
 				return err
 			}
+			if _, err := targetEnvironment(ctx, http.DefaultClient, target, token, opts.environment); err != nil {
+				return err
+			}
 			return runDataSync(ctx, dataSyncRequest{
 				ProjectPath: projectPath, ProjectID: project.Name, Connection: connection, Root: plan.Root,
 				Target: target, Token: token, Plan: plan, Out: cmd.OutOrStdout(), HTTPClient: http.DefaultClient,
@@ -78,6 +81,7 @@ func dataSyncCommand(ctx context.Context, planner dataPlanner, opts *rootOptions
 	command.Flags().StringVar(&projectPath, "project", filepath.Join("dashboards", "libredash.yaml"), "project catalog path")
 	command.Flags().StringVar(&connection, "connection", "", "project-global managed connection")
 	command.Flags().StringVar(&from, "from", "", "local filesystem root to ingest")
+	command.Flags().StringVar(&opts.environment, "environment", "", "assert the target instance environment")
 	addTargetTokenFlags(command, opts)
 	return command
 }

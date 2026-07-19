@@ -60,7 +60,8 @@ COPY --from=web /src/static ./static
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/libredash ./cmd/libredash
+    CGO_ENABLED=1 go build -trimpath -ldflags="-s -w" -o /out/libredash ./cmd/libredash && \
+    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/libredashctl ./cmd/libredashctl
 
 FROM debian:bookworm-slim@sha256:60eac759739651111db372c07be67863818726f754804b8707c90979bda511df AS runtime
 
@@ -84,6 +85,7 @@ RUN groupadd --system libredash && \
 WORKDIR /app
 
 COPY --from=build /out/libredash /usr/local/bin/libredash
+COPY --from=build /out/libredashctl /usr/local/libexec/libredashctl
 COPY --from=web /src/static ./static
 COPY --from=build /src/schemas ./schemas
 COPY dashboards ./dashboards
@@ -94,8 +96,9 @@ RUN mkdir -p /var/lib/libredash && \
 USER libredash
 
 ENV LIBREDASH_ADDR=:8080 \
-    LIBREDASH_HOME=/var/lib/libredash \
-    LIBREDASH_MANAGED_DATA_DIR=/var/lib/libredash/managed-data \
+    LIBREDASH_ENVIRONMENT=prod \
+    LIBREDASH_HOME=/var/lib/libredash/home \
+    LIBREDASH_MANAGED_DATA_DIR=/var/lib/libredash/home/managed-data \
     LIBREDASH_PRODUCTION=1
 
 EXPOSE 8080

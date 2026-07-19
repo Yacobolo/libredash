@@ -1,6 +1,8 @@
 package connectors
 
 import (
+	"net/url"
+	pathpkg "path"
 	"sort"
 	"strings"
 )
@@ -276,9 +278,29 @@ func JoinScope(scope, path string) string {
 }
 
 func WithinScope(scope, path string) bool {
+	scopeURL, scopeErr := url.Parse(scope)
+	pathURL, pathErr := url.Parse(path)
+	if scopeErr == nil && pathErr == nil && (scopeURL.Scheme != "" || pathURL.Scheme != "") {
+		if scopeURL.Scheme == "" || pathURL.Scheme == "" || !strings.EqualFold(scopeURL.Scheme, pathURL.Scheme) || !strings.EqualFold(scopeURL.Host, pathURL.Host) {
+			return false
+		}
+		scopePath := cleanRemotePath(scopeURL.Path)
+		candidatePath := cleanRemotePath(pathURL.Path)
+		if scopePath == "/" {
+			return true
+		}
+		return candidatePath == scopePath || strings.HasPrefix(candidatePath, scopePath+"/")
+	}
 	scope = strings.TrimRight(scope, "/")
 	path = strings.TrimRight(path, "/")
 	return path == scope || strings.HasPrefix(path, scope+"/")
+}
+
+func cleanRemotePath(value string) string {
+	if value == "" {
+		return "/"
+	}
+	return pathpkg.Clean("/" + strings.TrimLeft(value, "/"))
 }
 
 func StorageExtension(path string) (string, bool) {

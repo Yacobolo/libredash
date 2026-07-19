@@ -41,6 +41,17 @@ func NewRepository(sqlDB *sql.DB) *Repository {
 	return &Repository{root: sqlDB, db: sqlDB, q: platformdb.New(sqlDB)}
 }
 
+// InsertPlatformSettingIfMissing participates in the repository's current
+// transaction and is used for one-shot instance initialization markers.
+func (r *Repository) InsertPlatformSettingIfMissing(ctx context.Context, key, value string) (bool, error) {
+	result, err := r.db.ExecContext(ctx, `INSERT INTO platform_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING`, key, value)
+	if err != nil {
+		return false, err
+	}
+	rows, err := result.RowsAffected()
+	return rows == 1, err
+}
+
 func (r *Repository) RunAuditedMutation(ctx context.Context, mutation func(access.Repository) (access.AuditEventInput, error)) error {
 	return r.RunAuditedMutationBatch(ctx, func(repo access.Repository) ([]access.AuditEventInput, error) {
 		input, err := mutation(repo)

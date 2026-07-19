@@ -1,102 +1,87 @@
 # Self-hosting
 
-LibreDash provides a supported small-instance topology for one independently managed node. The repository's Hetzner Terraform deployment runs LibreDash and Caddy together with automatic HTTPS, restricted SSH, generated production secrets, daily backups, and health-checked upgrades. It is not a high-availability topology.
+LibreDash v1 supports a single-instance topology. The public container image is the application distribution. The generic Docker Compose package is the recommended production operations layer, while the Hetzner Terraform module adds cloud provisioning, firewalling, scheduled backups, and Restic to the same application and initialization contracts.
 
 ## Before you begin
 
-Prepare a domain, immutable application image digest, Hetzner credentials, an SSH public key, off-host backup storage, and an operator email address. Decide whether the public documentation site will be deployed separately; it has no runtime dependency on the BI application.
+Choose one environment, DNS name, Compose project name, and persistent-volume boundary for the instance. Install Docker Engine with Compose, configure DNS before requesting public HTTPS, and arrange an encrypted off-host destination for backups.
 
-Use this production sequence:
+## Topology
 
-1. Build and publish immutable application and optional documentation-site images.
-2. Validate Terraform and the repository deployment contracts.
-3. Provision with narrow network access and HTTPS.
-4. Replace bootstrap credentials and deploy a revision-pinned project.
-5. Verify health, queries, backups, restore behavior, and upgrade rollback.
+One instance contains exactly one LibreDash process, environment, control-plane SQLite database, global DuckLake catalog, and analytical data store. The Compose stack mounts all local authoritative state beneath `/var/lib/libredash` and binds the application port to localhost. The optional Caddy overlay publishes ports 80 and 443 with automatic HTTPS.
 
-## Build immutable artifacts
+Horizontal replicas, a shared SQLite home, and a remote multi-writer DuckLake catalog are not supported in v1. Deploy another independent instance when you need another environment or capacity boundary.
 
-For application development, build from a clean checkout with pinned dependencies:
+## Deploy Compose
 
-```sh
-task generate
-task build
-go build ./cmd/libredash
-```
+For a localhost evaluation, follow the pull-and-run flow in [Installation](/docs/installation). For production, use the platform-specific versioned Compose archive attached to the application release. It consumes the same public image, embeds its immutable digest, and includes a native Go `libredashctl` binary that invokes Docker Compose.
 
-Production automation should publish an OCI image and record its digest. Deploy the digest, not a mutable tag. The public documentation site is a separate binary and can be built with `task site:binary` when it is part of the release.
-
-Build the public site image with `task site:image` (which uses `Dockerfile.site`). Set `LIBREDASH_SITE_BASE_URL` to its external HTTPS origin so canonical URLs, the sitemap, robots discovery, and HSTS describe the deployment rather than the internal listener. Point orchestration probes at `/healthz` and `/readyz` on port 8081.
-
-## Validate the deployment contract
-
-Run the repository deployment checks before provisioning:
+1. Copy the deployment template and review its image digest, localhost bind, domain, and memory limit.
+2. Initialize the persistent volume and offline administrator:
 
 ```sh
-task deploy:check
+cp deployment.env.example deployment.env
+./libredashctl init --admin-email admin@example.com --domain dash.example.com
 ```
 
-They cover Terraform formatting and validation plus security/lifecycle contracts such as bounded SSH access, immutable image references, backup wiring, and upgrade behavior.
-
-## Provision the Hetzner topology
-
-The deployment requires Terraform, a Hetzner Cloud token, an SSH public key, and an immutable LibreDash image reference. Copy the example variables file, set `admin_email`, `libredash_image`, and narrow `ssh_allowed_cidrs`, then apply the module from `deploy/hetzner`.
-
-Use a domain you control for a durable installation. The generated `sslip.io` address is intended for evaluation. World-open SSH and mutable image tags are rejected by the module.
-
-## Complete first login
-
-Provisioning creates a local platform administrator with a forced-change temporary password and a limited publisher token. Retrieve the one-time output using the Terraform output command documented by the module, change the password immediately, and store the short-lived publisher token with `libredash login` only long enough to establish normal administration.
-
-The unrestricted bootstrap credential should never become a reusable operator token.
-
-## Understand persistent paths
-
-The topology keeps application and analytical state beneath `/var/lib/libredash`, local managed objects beneath `/var/lib/libredash/managed-data`, and local backup archives beneath `/var/backups/libredash`. Generated service configuration lives outside the data root under `/etc/libredash`.
-
-Runtime extraction and temporary directories may be ephemeral, but the control-plane database, DuckLake catalog, analytical data, artifact bundles, managed source objects, and backup destination are durable boundaries.
-
-## Deploy a project
-
-Stage managed data first, then deploy the project with one revision pin per managed connection:
+3. Start the service and consume the one-time credentials:
 
 ```sh
-libredash deploy \
-  --project dashboards/libredash.yaml \
-  --revision "olist=sha256:<64-lowercase-hex>" \
-  --target https://dash.example.com \
-  --environment prod
+./libredashctl start
+./libredashctl first-login
 ```
 
-Verify the workspace catalog, a representative semantic query, and refresh behavior after activation.
+For an existing reverse proxy, pass `--no-https`, keep the application bound to localhost, and forward the original scheme and host. Do not expose the unencrypted application port publicly.
 
-## Operate and upgrade
+The controller is optional if an existing container platform already provides equivalent secret management, health checks, graceful shutdown, backup validation, and image-and-state rollback. Those contracts remain required even when Compose is not used.
 
-Use the Terraform output `operations_command` as the SSH prefix for status, logs, backups, restores, upgrades, and rollback. The upgrade command accepts an immutable image digest, waits for health, and automatically restores the previous image on failed health. Keep an independent backup before upgrading even when image rollback is available.
+## Persistent and external storage
 
-The default scheduled application backup stops the application briefly to capture a consistent local state archive. Hetzner server backup is an additional layer, not a replacement for exportable recovery copies. Configure Restic or another independent destination for off-host retention.
+The named state volume contains the control database, DuckLake catalog and Parquet data, deployed artifacts, runtime state, and local managed objects. Backups stop the application briefly and archive that complete boundary.
 
-## Verify the deployment
+Customer source data is configured per connection. Object storage is the recommended production source, but an instance may connect to many object stores, databases, and HTTP sources. External sources are direct reads and are not copied into instance backups. Use immutable object keys or versioned prefixes; use managed data when LibreDash must own a pinned revision.
 
-After provisioning, complete this acceptance check:
+When managed data uses S3, instance backups contain its metadata and cache rather than authoritative objects. Enable bucket versioning and independent backup or replication.
 
-1. Confirm HTTPS, allowed-host enforcement, and application health.
-2. Sign in as a non-administrator and verify only the intended workspace is visible.
-3. Query a representative semantic measure and exercise a dashboard filter.
-4. Trigger or observe a refresh and inspect its history and logs.
-5. Create a backup, restore it in an isolated location, and verify its manifest.
-6. Exercise the documented image rollback path before relying on it during an incident.
+## Operations
 
-For the documentation site, request `/sitemap.xml`, confirm every URL uses the public origin, and verify that stable assets revalidate while fingerprinted chunks receive immutable caching.
+```sh
+./libredashctl status
+./libredashctl logs
+archive="$(./libredashctl backup)"
+./libredashctl restore "$archive"
+./libredashctl upgrade ghcr.io/yacobolo/libredash@sha256:<digest>
+```
 
-## Know the limits
+Restore validates the archive and preserves the current state before replacement. Upgrade records the prior image and a pre-upgrade state checkpoint. Failed health checks reinstate both automatically. `rollback --confirm` restores the checkpoint after an otherwise successful upgrade and therefore discards later state.
 
-A single node has one failure and capacity domain. Schedule refreshes with query load, monitor disk and memory, and plan maintenance windows. If requirements demand horizontal serving, zero-downtime state migrations, or multi-region recovery, treat that as a different deployment architecture rather than stretching the single-node contract.
+Keep at least one encrypted off-host backup and rehearse restore into an isolated instance with the same environment identity.
+
+## Hetzner provider recipe
+
+The Terraform module under `deploy/hetzner` provisions the same single-instance application contract with Caddy, restricted SSH, provider backups, a systemd backup timer, and optional Restic replication. It consumes the canonical offline initializer, so no unrestricted bootstrap token crosses the HTTP boundary.
+
+Set `admin_email`, an immutable `libredash_image`, and restricted `ssh_allowed_cidrs`, then apply the module. Use its generated operations command for status, logs, backup, restore, upgrade, and rollback.
+
+## Validate
+
+Before exposing an instance:
+
+1. Verify HTTPS, allowed-host enforcement, `/healthz`, and `/readyz`.
+2. Consume the one-time credentials and change the temporary password.
+3. Deploy a representative project and verify a semantic query and dashboard filter.
+4. Refresh an external object source and confirm the previous snapshot survives a failed refresh.
+5. Create a backup and restore it into an isolated instance.
+6. Exercise failed-upgrade rollback before relying on it during an incident.
+
+## Verify
+
+After validation, sign in through the public URL, deploy a representative project, refresh one external source, and confirm the active dashboard continues to serve if a later refresh fails. Record the instance environment returned by `GET /api/v1/instance` in the deployment inventory.
 
 ## Troubleshooting
 
-If provisioning rejects the plan, fix mutable image references, world-open SSH ranges, or missing backup inputs instead of bypassing the contract. If the application is healthy internally but unreachable, inspect DNS, Caddy certificates, firewall rules, and allowed hosts in that order. If an upgrade fails health checks, preserve the failed logs and confirm automatic rollback restored the previous digest before attempting another change.
+Use `./libredashctl status` and `./libredashctl logs` for health failures. Environment mismatch errors mean the state volume belongs to another target instance; do not rewrite its identity. Restore or upgrade failures preserve a recovery archive in `backups/`; inspect that archive before attempting another state-changing operation.
 
 ## Next steps
 
-Complete [Production configuration](/docs/guides/operate/production-configuration), [Backup and restore](/docs/guides/operate/backup-restore), and [Health and observability](/docs/guides/operate/observability) before exposing the instance.
+Continue with [Production configuration](/docs/guides/operate/production-configuration), [Backup and restore](/docs/guides/operate/backup-restore), and [Health and observability](/docs/guides/operate/observability).

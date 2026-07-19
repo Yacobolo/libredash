@@ -39,6 +39,15 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name || github.sha }}
 
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+
       - name: Set up Buildx
         uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
 
@@ -54,9 +63,12 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         with:
           images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' && github.event.release.prerelease == false }}
             type=raw,value=${{ inputs.image_tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
             type=sha,prefix=sha-
 
@@ -65,7 +77,7 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
@@ -84,6 +96,13 @@ jobs:
           subject-digest: ${{ steps.publish.outputs.digest }}
           push-to-registry: true
 
+      - name: Verify anonymous image pull
+        env:
+          IMAGE_REFERENCE: ${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}
+        run: |
+          docker logout ghcr.io
+          docker buildx imagetools inspect "$IMAGE_REFERENCE"
+
       - name: Record immutable reference
         run: echo '${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}' >> "$GITHUB_STEP_SUMMARY"
 
@@ -93,4 +112,23 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           printf '%s\n' '${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}' > image-reference.txt
-          gh release upload '${{ github.event.release.tag_name }}' image-reference.txt --clobber
+          targets=(
+            "linux amd64"
+            "linux arm64"
+            "darwin amd64"
+            "darwin arm64"
+          )
+          for target in "${targets[@]}"; do
+            read -r os arch <<<"$target"
+            package="libredash-compose-${{ github.event.release.tag_name }}-${os}-${arch}"
+            mkdir -p "dist/$package"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags='-s -w' -o "dist/$package/libredashctl" ./cmd/libredashctl
+            cp deploy/compose/compose.yaml deploy/compose/compose.https.yaml deploy/compose/Caddyfile deploy/compose/README.md "dist/$package/"
+            cp deploy/compose/libredash.env.example "dist/$package/libredash.env.example"
+            sed "s|ghcr.io/yacobolo/libredash@sha256:<release-digest>|${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}|" deploy/compose/deployment.env.example > "dist/$package/deployment.env.example"
+            cp image-reference.txt "dist/$package/"
+            (cd "dist/$package" && sha256sum Caddyfile README.md compose.https.yaml compose.yaml deployment.env.example image-reference.txt libredash.env.example libredashctl > SHA256SUMS)
+            tar -C dist -czf "dist/$package.tar.gz" "$package"
+            sha256sum "dist/$package.tar.gz" > "dist/$package.tar.gz.sha256"
+          done
+          gh release upload '${{ github.event.release.tag_name }}' image-reference.txt dist/*.tar.gz dist/*.tar.gz.sha256 --clobber

@@ -1,0 +1,7 @@
+deployment.env
+libredash.env
+initial-credentials.json
+rollback.env
+.libredashctl.lock/
+backups/*
+!backups/.gitkeep

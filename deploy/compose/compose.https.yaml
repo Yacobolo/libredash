@@ -1,0 +1,29 @@
+services:
+  caddy:
+    image: ${CADDY_IMAGE:?set CADDY_IMAGE in deployment.env}
+    restart: unless-stopped
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 512m
+    stop_grace_period: 30s
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN:?set CADDY_DOMAIN in deployment.env}
+    depends_on:
+      libredash: {condition: service_healthy}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    tmpfs: [/tmp:rw,noexec,nosuid,nodev,size=64m]
+    logging:
+      driver: local
+      options: {max-size: 20m, max-file: "5"}
+
+volumes:
+  caddy-data:
+  caddy-config:

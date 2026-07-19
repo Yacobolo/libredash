@@ -141,7 +141,6 @@ func benchmarkDashboardCommandAttrs(catalog dashboard.Catalog, report reportdef.
 		g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
 		g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
 		g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/table-window", "runtime", "tableCommand")),
-		g.Attr("data-on:ld-refresh-materializations", uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/refresh-materializations?model="+model.Name+"&dashboard="+report.ID, "runtime")),
 	}
 }
 
