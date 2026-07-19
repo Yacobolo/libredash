@@ -39,6 +39,12 @@ jobs:
         with:
           ref: ${{ github.event.release.tag_name || github.sha }}
 
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
 
@@ -106,13 +112,23 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           printf '%s\n' '${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}' > image-reference.txt
-          package="libredash-compose-${{ github.event.release.tag_name }}"
-          mkdir -p "dist/$package"
-          cp deploy/compose/compose.yaml deploy/compose/compose.https.yaml deploy/compose/Caddyfile deploy/compose/libredashctl deploy/compose/README.md "dist/$package/"
-          cp deploy/compose/libredash.env.example "dist/$package/libredash.env.example"
-          sed "s|ghcr.io/yacobolo/libredash@sha256:<release-digest>|${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}|" deploy/compose/deployment.env.example > "dist/$package/deployment.env.example"
-          cp image-reference.txt "dist/$package/"
-          (cd "dist/$package" && sha256sum Caddyfile README.md compose.https.yaml compose.yaml deployment.env.example image-reference.txt libredash.env.example libredashctl > SHA256SUMS)
-          tar -C dist -czf "dist/$package.tar.gz" "$package"
-          sha256sum "dist/$package.tar.gz" > "dist/$package.tar.gz.sha256"
-          gh release upload '${{ github.event.release.tag_name }}' image-reference.txt "dist/$package.tar.gz" "dist/$package.tar.gz.sha256" --clobber
+          targets=(
+            "linux amd64"
+            "linux arm64"
+            "darwin amd64"
+            "darwin arm64"
+          )
+          for target in "${targets[@]}"; do
+            read -r os arch <<<"$target"
+            package="libredash-compose-${{ github.event.release.tag_name }}-${os}-${arch}"
+            mkdir -p "dist/$package"
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags='-s -w' -o "dist/$package/libredashctl" ./cmd/libredashctl
+            cp deploy/compose/compose.yaml deploy/compose/compose.https.yaml deploy/compose/Caddyfile deploy/compose/README.md "dist/$package/"
+            cp deploy/compose/libredash.env.example "dist/$package/libredash.env.example"
+            sed "s|ghcr.io/yacobolo/libredash@sha256:<release-digest>|${{ env.IMAGE_NAME }}@${{ steps.publish.outputs.digest }}|" deploy/compose/deployment.env.example > "dist/$package/deployment.env.example"
+            cp image-reference.txt "dist/$package/"
+            (cd "dist/$package" && sha256sum Caddyfile README.md compose.https.yaml compose.yaml deployment.env.example image-reference.txt libredash.env.example libredashctl > SHA256SUMS)
+            tar -C dist -czf "dist/$package.tar.gz" "$package"
+            sha256sum "dist/$package.tar.gz" > "dist/$package.tar.gz.sha256"
+          done
+          gh release upload '${{ github.event.release.tag_name }}' image-reference.txt dist/*.tar.gz dist/*.tar.gz.sha256 --clobber

@@ -14,7 +14,7 @@ Horizontal replicas, a shared SQLite home, and a remote multi-writer DuckLake ca
 
 ## Deploy Compose
 
-For a localhost evaluation, follow the pull-and-run flow in [Installation](/docs/installation). For production, use the versioned Compose archive attached to the application release. It consumes the same public image and embeds its immutable digest.
+For a localhost evaluation, follow the pull-and-run flow in [Installation](/docs/installation). For production, use the platform-specific versioned Compose archive attached to the application release. It consumes the same public image, embeds its immutable digest, and includes a native Go `libredashctl` binary that invokes Docker Compose.
 
 1. Copy the deployment template and review its image digest, localhost bind, domain, and memory limit.
 2. Initialize the persistent volume and offline administrator:

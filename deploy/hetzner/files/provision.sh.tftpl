@@ -15,6 +15,20 @@ install -d -m 0700 /etc/libredash /opt/libredash /opt/libredash/backups
 umask 077
 systemctl enable --now docker
 
+docker pull "$LIBREDASH_IMAGE"
+controller_container="$(docker create "$LIBREDASH_IMAGE")"
+cleanup_controller_container() {
+  if [[ -n "$controller_container" ]]; then
+    docker rm --force "$controller_container" >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup_controller_container EXIT
+docker cp "$controller_container:/usr/local/libexec/libredashctl" /opt/libredash/libredashctl
+chmod 0700 /opt/libredash/libredashctl
+docker rm "$controller_container" >/dev/null
+controller_container=""
+trap - EXIT
+
 if [[ ! -s /opt/libredash/libredash.env ]]; then
   cp /opt/libredash/deployment.env.example /opt/libredash/deployment.env
   tmp="$(mktemp /opt/libredash/.deployment.env.XXXXXX)"

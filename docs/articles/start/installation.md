@@ -51,8 +51,8 @@ Use `latest` for this disposable evaluation path. Pin a release version or diges
 
 The released Compose package is the recommended operations layer around the same public image. It is not a separate LibreDash distribution. It supplies hardened container settings, generated production secrets, optional Caddy HTTPS, validated backup and restore, and paired image-and-state rollback.
 
-1. Download the `libredash-compose-<version>.tar.gz` asset and checksum from a LibreDash release.
-2. Verify the checksum and extract the archive into the host directory. The archive contains an immutable application image reference, the base Compose stack, an optional Caddy HTTPS overlay, and `libredashctl`.
+1. Download the `libredash-compose-<version>-<os>-<arch>.tar.gz` asset and checksum matching the host from a LibreDash release.
+2. Verify the checksum and extract the archive into the host directory. The archive contains an immutable application image reference, the base Compose stack, an optional Caddy HTTPS overlay, and the native Go `libredashctl` operations binary.
 3. Copy the deployment template and initialize the instance:
 
 
@@ -73,7 +73,7 @@ cp deployment.env.example deployment.env
 
 Initialization generates production secrets, creates the persistent volume, validates configuration, and atomically creates a forced-change local administrator plus a restricted publisher token. `first-login` prints and deletes that one-time credential file.
 
-`libredashctl` is an optional production operations controller, not a prerequisite for pulling or running LibreDash. You may manage the image with your existing container platform if it preserves the same single-process, persistent-home, initialization, backup, and environment contracts.
+`libredashctl` is an optional production operations controller, not a prerequisite for pulling or running LibreDash. It invokes the installed Docker Compose CLI and does not require Bash or direct access to the Docker socket API. You may manage the image with your existing container platform if it preserves the same single-process, persistent-home, initialization, backup, and environment contracts.
 
 The Caddy overlay is enabled by default. Pass `--no-https` only when an existing trusted HTTPS proxy fronts the localhost-bound application port. Keep secure cookies and the public allowed host configured for that proxy.
 

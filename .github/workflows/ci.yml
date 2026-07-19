@@ -457,7 +457,6 @@ jobs:
         run: >-
           docker run --rm -v "$PWD:/mnt:ro"
           koalaman/shellcheck:stable@sha256:bb596a0d169b85ddd81d8b6d3a2ff6d5baf5fca10b97f575ebc647c3dff62b3d
-          deploy/compose/libredashctl
           deploy/hetzner/files/libredashctl-wrapper
           deploy/hetzner/files/libredash-backup-hook
           deploy/hetzner/files/provision.sh.tftpl

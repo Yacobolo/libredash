@@ -7,8 +7,6 @@ packages:
   - curl
   - docker.io
   - docker-compose-v2
-  - jq
-  - openssl
   - restic
   - unattended-upgrades
 
@@ -33,11 +31,6 @@ write_files:
     permissions: "0600"
     encoding: b64
     content: ${deployment_example_b64}
-  - path: /opt/libredash/libredashctl
-    owner: root:root
-    permissions: "0700"
-    encoding: b64
-    content: ${libredashctl_b64}
   - path: /usr/local/sbin/libredashctl
     owner: root:root
     permissions: "0700"

@@ -24,7 +24,9 @@ func TestTerraformProductionContracts(t *testing.T) {
 	}
 	requireMatch(t, main, `(?m)^\s*backups\s*=\s*true\s*$`)
 	requireMatch(t, main, `(?m)^\s*shutdown_before_deletion\s*=\s*true\s*$`)
-	requireContains(t, cloudInit, "libredashctl_b64")
+	if strings.Contains(cloudInit, "libredashctl_b64") {
+		t.Fatal("cloud-init must not embed a source-tree controller script")
+	}
 	if strings.Contains(cloudInit, "git clone") || strings.Contains(cloudInit, "docker build") {
 		t.Fatal("cloud-init must not clone or build application source")
 	}
@@ -38,16 +40,17 @@ func TestHetznerConsumesGenericComposeLifecycle(t *testing.T) {
 		`${path.module}/../compose/compose.yaml`,
 		`${path.module}/../compose/compose.https.yaml`,
 		`${path.module}/../compose/deployment.env.example`,
-		`${path.module}/../compose/libredashctl`,
 	} {
 		requireContains(t, main, fragment)
 	}
 	for _, fragment := range []string{"compose_https_b64", "deployment_example_b64", "libredashctl_wrapper_b64", "backup_hook_b64"} {
 		requireContains(t, cloudInit, fragment)
 	}
+	requireContains(t, provision, `docker cp "$controller_container:/usr/local/libexec/libredashctl" /opt/libredash/libredashctl`)
+	extract := strings.Index(provision, `docker cp "$controller_container:/usr/local/libexec/libredashctl"`)
 	initialize := strings.Index(provision, `libredashctl init`)
 	start := strings.Index(provision, `libredashctl start`)
-	if initialize < 0 || start < 0 || initialize > start {
+	if extract < 0 || initialize < 0 || start < 0 || extract > initialize || initialize > start {
 		t.Fatal("generic offline initialization must complete before start")
 	}
 	for _, forbidden := range []string{"/api/v1/me/api-tokens", "/api/v1/principals", "admin bootstrap", "docker compose"} {
@@ -81,7 +84,7 @@ func TestReleaseWorkflowPublishesComposeArchiveAndAttestedImage(t *testing.T) {
 	for _, fragment := range []string{
 		"release:", "packages: write", "attestations: write", "id-token: write",
 		"docker/build-push-action@", "actions/attest@", "push-to-registry: true",
-		"libredash-compose-", "deployment.env.example", ".tar.gz.sha256",
+		"libredash-compose-", "deployment.env.example", ".tar.gz.sha256", "./cmd/libredashctl",
 	} {
 		requireContains(t, workflow, fragment)
 	}

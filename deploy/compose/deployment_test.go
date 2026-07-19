@@ -27,10 +27,8 @@ func TestComposeSingleInstanceContract(t *testing.T) {
 	if strings.Contains(compose, "./backups:/backups") {
 		t.Fatal("backup archives must cross the container boundary as streams, not through a host bind with incompatible ownership")
 	}
-	for _, name := range []string{"libredash.env.example", "libredashctl"} {
-		if !strings.Contains(read(t, name), "LIBREDASH_HOME=/var/lib/libredash/home") {
-			t.Fatalf("%s must place LIBREDASH_HOME beneath the mounted volume so restore can replace it", name)
-		}
+	if !strings.Contains(read(t, "libredash.env.example"), "LIBREDASH_HOME=/var/lib/libredash/home") {
+		t.Fatal("libredash.env.example must place LIBREDASH_HOME beneath the mounted volume so restore can replace it")
 	}
 	https := read(t, "compose.https.yaml")
 	if !strings.Contains(https, "CADDY_IMAGE") || !strings.Contains(https, "443:443/udp") {
@@ -75,35 +73,43 @@ func TestPublicImageIsPrimaryOnboardingContract(t *testing.T) {
 	}
 }
 
-func TestControllerSyntaxAndLifecycleCommands(t *testing.T) {
-	controller := filepath.Join("libredashctl")
-	if output, err := exec.Command("bash", "-n", controller).CombinedOutput(); err != nil {
-		t.Fatalf("bash -n: %v\n%s", err, output)
+func TestControllerBuildAndLifecycleCommands(t *testing.T) {
+	root := t.TempDir()
+	controller := buildController(t, root)
+	output, err := exec.Command(controller, "help").CombinedOutput()
+	if err != nil {
+		t.Fatalf("libredashctl help: %v\n%s", err, output)
 	}
-	contents := read(t, controller)
-	for _, command := range []string{"init)", "start)", "status)", "logs)", "first-login)", "backup)", "restore)", "upgrade)", "rollback)"} {
-		if !strings.Contains(contents, command) {
-			t.Fatalf("controller missing %s", command)
+	for _, command := range []string{"init", "start", "status", "logs", "first-login", "backup", "restore", "upgrade", "rollback"} {
+		if !strings.Contains(string(output), command) {
+			t.Fatalf("controller help missing %s:\n%s", command, output)
 		}
 	}
-	if !strings.Contains(contents, "admin initialize --format json") || !strings.Contains(contents, "pre-upgrade-") {
-		t.Fatal("controller does not use offline initialization and state-aware upgrades")
-	}
+}
+
+func TestControllerReleasePackagingContract(t *testing.T) {
+	release := read(t, filepath.Join("..", "..", ".github", "workflows", "release.yml"))
 	for _, required := range []string{
-		"flock -n",
-		"admin backup --out -",
-		"admin restore --from -",
-		"admin initialize --acknowledge-credentials",
+		"./cmd/libredashctl",
+		"CGO_ENABLED=0",
+		"linux amd64",
+		"linux arm64",
+		"darwin amd64",
+		"darwin arm64",
 	} {
-		if !strings.Contains(contents, required) {
-			t.Fatalf("controller missing resilient lifecycle contract %q", required)
+		if !strings.Contains(release, required) {
+			t.Fatalf("release workflow missing Go controller packaging contract %q", required)
 		}
+	}
+	dockerfile := read(t, filepath.Join("..", "..", "Dockerfile"))
+	if !strings.Contains(dockerfile, "/usr/local/libexec/libredashctl") {
+		t.Fatal("application image must carry the matching Linux controller for provider extraction")
 	}
 }
 
 func TestControllerLifecycleWithStateAwareUpgradeRollback(t *testing.T) {
 	root := t.TempDir()
-	copyDeploymentFile(t, root, "libredashctl", 0o700)
+	buildController(t, root)
 	copyDeploymentFile(t, root, "deployment.env.example", 0o600)
 	fakeDocker := filepath.Join(root, "fake-docker")
 	if err := os.WriteFile(fakeDocker, []byte(`#!/usr/bin/env bash
@@ -111,6 +117,10 @@ set -euo pipefail
 root="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 printf '%s\n' "$*" >>"$root/docker.log"
 if [[ -n "${FAKE_DOCKER_FAIL_COMMAND:-}" && " $* " == *" ${FAKE_DOCKER_FAIL_COMMAND} "* ]]; then exit 42; fi
+if [[ "${FAKE_DOCKER_FAIL_RESTORE_ONCE:-}" == 1 && " $* " == *' admin restore '* && ! -e "$root/restore-failed-once" ]]; then
+  touch "$root/restore-failed-once"
+  exit 42
+fi
 if [[ "${1:-}" == inspect ]]; then
   template="${3:-}"
   if [[ "$template" == *Running* ]]; then printf 'true\n'; exit 0; fi
@@ -192,6 +202,12 @@ esac
 	requireDeploymentImage(t, root, oldImage)
 	runController(t, root, fakeDocker, "", "upgrade", newImage)
 	requireDeploymentImage(t, root, newImage)
+	t.Setenv("FAKE_DOCKER_FAIL_RESTORE_ONCE", "1")
+	if output, err := runControllerResult(root, fakeDocker, "", "rollback", "--confirm"); err == nil || !strings.Contains(output, "pre-rollback image and state were reinstated") {
+		t.Fatalf("failed rollback result = %v, %s", err, output)
+	}
+	requireDeploymentImage(t, root, newImage)
+	t.Setenv("FAKE_DOCKER_FAIL_RESTORE_ONCE", "")
 	runController(t, root, fakeDocker, "", "rollback", "--confirm")
 	requireDeploymentImage(t, root, oldImage)
 	log, err := os.ReadFile(filepath.Join(root, "docker.log"))
@@ -205,7 +221,7 @@ func TestControllerInitializationIsRetryableAndRequiresPinnedProxy(t *testing.T)
 	setup := func(t *testing.T) (string, string) {
 		t.Helper()
 		root := t.TempDir()
-		copyDeploymentFile(t, root, "libredashctl", 0o700)
+		buildController(t, root)
 		copyDeploymentFile(t, root, "deployment.env.example", 0o600)
 		fakeDocker := filepath.Join(root, "fake-docker")
 		if err := os.WriteFile(fakeDocker, []byte(`#!/usr/bin/env bash
@@ -273,6 +289,17 @@ func copyDeploymentFile(t *testing.T, targetDir, name string, mode os.FileMode) 
 	}
 }
 
+func buildController(t *testing.T, targetDir string) string {
+	t.Helper()
+	target := filepath.Join(targetDir, "libredashctl")
+	command := exec.Command("go", "build", "-o", target, "./cmd/libredashctl")
+	command.Dir = filepath.Join("..", "..")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build libredashctl: %v\n%s", err, output)
+	}
+	return target
+}
+
 func runController(t *testing.T, root, docker, failImage string, args ...string) string {
 	t.Helper()
 	output, err := runControllerResult(root, docker, failImage, args...)
@@ -283,9 +310,9 @@ func runController(t *testing.T, root, docker, failImage string, args ...string)
 }
 
 func runControllerResult(root, docker, failImage string, args ...string) (string, error) {
-	command := exec.Command("bash", append([]string{filepath.Join(root, "libredashctl")}, args...)...)
+	command := exec.Command(filepath.Join(root, "libredashctl"), args...)
 	command.Dir = root
-	command.Env = append(os.Environ(), "LIBREDASHCTL_DOCKER_BIN="+docker, "FAKE_DOCKER_FAIL_IMAGE="+failImage)
+	command.Env = append(os.Environ(), "LIBREDASHCTL_ROOT="+root, "LIBREDASHCTL_DOCKER_BIN="+docker, "FAKE_DOCKER_FAIL_IMAGE="+failImage)
 	output, err := command.CombinedOutput()
 	return string(output), err
 }

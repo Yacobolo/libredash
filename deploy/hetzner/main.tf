@@ -81,7 +81,6 @@ resource "hcloud_server" "libredash" {
     compose_https_b64        = base64encode(file("${path.module}/../compose/compose.https.yaml"))
     caddyfile_b64            = base64encode(file("${path.module}/../compose/Caddyfile"))
     deployment_example_b64   = base64encode(file("${path.module}/../compose/deployment.env.example"))
-    libredashctl_b64         = base64encode(file("${path.module}/../compose/libredashctl"))
     libredashctl_wrapper_b64 = base64encode(file("${path.module}/files/libredashctl-wrapper"))
     backup_hook_b64          = base64encode(file("${path.module}/files/libredash-backup-hook"))
     backup_service_b64       = base64encode(file("${path.module}/files/libredash-backup.service"))

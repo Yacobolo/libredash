@@ -3,7 +3,8 @@
 This is the production operations package for the public LibreDash image. It
 runs exactly one application process with one named state volume and one
 configured environment, and adds hardened defaults, HTTPS, backups, and paired
-image-and-state rollback.
+image-and-state rollback. The included `libredashctl` is a standalone Go
+operations binary for the archive's operating system and architecture.
 
 ```sh
 cp deployment.env.example deployment.env
