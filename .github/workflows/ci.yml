@@ -186,12 +186,15 @@ jobs:
             --env MINIO_ROOT_PASSWORD=libredash-integration-secret \
             minio/minio@sha256:14cea493d9a34af32f524e538b8346cf79f3321eff8e708c1e2960462bd8936e \
             server /data --address :9000
-          for attempt in $(seq 1 60); do
-            curl --fail --silent http://127.0.0.1:9000/minio/health/ready >/dev/null && exit 0
+          attempt=0
+          until curl --fail --silent http://127.0.0.1:9000/minio/health/ready >/dev/null; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 60 ]; then
+              docker logs libredash-minio
+              exit 1
+            fi
             sleep 1
           done
-          docker logs libredash-minio
-          exit 1
 
       - name: Run Go tests
         env:
