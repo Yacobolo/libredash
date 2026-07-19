@@ -1,23 +1,75 @@
 # Donut chart
 
-Use a donut chart for part-to-whole data when the center label adds context.
+Use a donut chart for part-to-whole comparisons that benefit from a central annotation.
 
-{{< chart >}}
+Every preview on this page is generated from the YAML shown below it using a fixed documentation dataset.
 
-## Configuration
+## Basic
 
-```yaml
+Use one categorical dimension and one measure to show each status as a share of the whole, with the center left open for visual breathing room.
+
+{{< chart id="orders" >}}
+
+```yaml visual-example=orders
 visuals:
-  revenue_share:
-    title: Revenue share by segment
-    shape: category_value
-    renderer: echarts
+  orders:
+    title: Orders by status
+    description: Breaks down orders by lifecycle status.
     type: donut
-    options:
-      center_label: Revenue
     query:
       dimensions:
-        segment: customers.segment
+        status: orders.status
+      measures:
+        order_count: null
+      sort:
+        - field: value
+          direction: desc
+```
+
+## Alternate measure
+
+Replace the category and measure to compare revenue composition without changing the donut renderer or query shape.
+
+{{< chart id="category_donut" >}}
+
+```yaml visual-example=category_donut
+visuals:
+  category_donut:
+    title: Revenue by category donut
+    type: donut
+    query:
+      dimensions:
+        category: orders.category
       measures:
         revenue: null
+      sort:
+        - field: value
+          direction: desc
+      limit: 8
+```
+
+## Center label
+
+Set `options.center_label` to state the total represented by the ring, and adjust `options.radius` to control the inner and outer diameters.
+
+{{< chart id="orders_donut_center" >}}
+
+```yaml visual-example=orders_donut_center
+visuals:
+  orders_donut_center:
+    title: Orders donut with center label
+    type: donut
+    options:
+      center_label: Orders
+      radius:
+        - 54%
+        - 76%
+    query:
+      dimensions:
+        status: orders.status
+      measures:
+        order_count: null
+      sort:
+        - field: value
+          direction: desc
 ```

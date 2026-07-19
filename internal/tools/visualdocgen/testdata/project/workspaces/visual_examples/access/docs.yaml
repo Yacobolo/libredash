@@ -1,0 +1,8 @@
+apiVersion: libredash.dev/v1
+kind: WorkspaceGroup
+metadata:
+  workspace: visual_examples
+  name: documentation-readers
+spec:
+  members:
+  - email: reader@example.com

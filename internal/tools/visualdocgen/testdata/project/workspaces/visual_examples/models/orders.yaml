@@ -1,0 +1,33 @@
+apiVersion: libredash.dev/v1
+kind: ModelTable
+metadata:
+  workspace: visual_examples
+  name: orders
+  title: Documentation orders
+spec:
+  primaryKey: order_id
+  sources:
+  - docs.orders
+  fields:
+    order_id: {label: Order ID}
+    purchase_month: {label: Purchase month}
+    status: {label: Status}
+    category: {label: Category}
+    state: {label: State}
+    revenue: {label: Revenue}
+    review_score: {label: Review score}
+    delivery_days: {label: Delivery days}
+    delivery_bucket: {label: Delivery speed}
+  transform:
+    sql: |
+      SELECT
+        order_id,
+        purchase_month,
+        status,
+        category,
+        state,
+        CAST(revenue AS DOUBLE) AS revenue,
+        CAST(review_score AS DOUBLE) AS review_score,
+        CAST(delivery_days AS DOUBLE) AS delivery_days,
+        delivery_bucket
+      FROM source."docs.orders"

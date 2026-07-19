@@ -1,0 +1,94 @@
+apiVersion: libredash.dev/v1
+kind: SemanticModel
+metadata:
+  workspace: visual_examples
+  name: visual_examples
+  title: Visual documentation examples
+spec:
+  tables:
+  - orders
+  measures:
+    order_count:
+      label: Orders
+      fact: orders
+      aggregation: count_distinct
+      input: {field: orders.order_id}
+      empty: zero
+      unit: orders
+      format: integer
+    revenue:
+      label: Revenue
+      fact: orders
+      aggregation: sum
+      input: {field: orders.revenue}
+      empty: zero
+      unit: USD
+      format: currency
+    revenue_min:
+      label: Revenue minimum
+      fact: orders
+      aggregation: min
+      input: {field: orders.revenue}
+      empty: "null"
+      unit: USD
+      format: currency
+    revenue_max:
+      label: Revenue maximum
+      fact: orders
+      aggregation: max
+      input: {field: orders.revenue}
+      empty: "null"
+      unit: USD
+      format: currency
+    review_score:
+      label: Review score
+      fact: orders
+      aggregation: avg
+      input: {field: orders.review_score}
+      empty: "null"
+      format: decimal
+    delivery_days:
+      label: Delivery days
+      fact: orders
+      aggregation: avg
+      input: {field: orders.delivery_days}
+      empty: "null"
+      format: decimal
+    delivery_days_min:
+      label: Delivery minimum
+      fact: orders
+      aggregation: min
+      input: {field: orders.delivery_days}
+      empty: "null"
+      format: decimal
+    delivery_days_max:
+      label: Delivery maximum
+      fact: orders
+      aggregation: max
+      input: {field: orders.delivery_days}
+      empty: "null"
+      format: decimal
+  metrics:
+    aov:
+      label: Average order value
+      expression: safe_divide(${revenue}, ${order_count})
+      unit: USD
+      format: currency
+    revenue_q1:
+      label: Revenue open
+      expression: ${revenue_min}
+      unit: USD
+      format: currency
+    revenue_q3:
+      label: Revenue close
+      expression: ${revenue_max}
+      unit: USD
+      format: currency
+    delivery_days_q1:
+      label: Delivery open
+      expression: ${delivery_days_min}
+      format: decimal
+    delivery_days_q3:
+      label: Delivery close
+      expression: ${delivery_days_max}
+      format: decimal

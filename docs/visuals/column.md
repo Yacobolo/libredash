@@ -1,14 +1,18 @@
 # Column chart
 
-Use a column chart to compare categories when the category labels are short and naturally ordered.
+Use a column chart to compare categories or ordered periods with vertical bars.
 
-{{< chart >}}
+Every preview on this page is generated from the YAML shown below it using a fixed documentation dataset.
 
-## Configuration
+## Basic
 
-```yaml
+Use one ordered category and one measure for a direct vertical comparison. Ascending month order makes changes over time easy to scan.
+
+{{< chart id="orders_by_month_column" >}}
+
+```yaml visual-example=orders_by_month_column
 visuals:
-  orders_by_month:
+  orders_by_month_column:
     title: Orders by month
     type: column
     query:
@@ -17,6 +21,66 @@ visuals:
       measures:
         order_count: null
       sort:
-      - field: purchase_month
-        direction: asc
+        - field: purchase_month
+          direction: asc
+      limit: 30
+```
+
+## Stacked series
+
+Map status through `query.series` and enable `options.stacked` to show both the monthly total and each status contribution.
+
+{{< chart id="orders_by_month_status" >}}
+
+```yaml visual-example=orders_by_month_status
+visuals:
+  orders_by_month_status:
+    title: Orders by month and status
+    description: Compares monthly order volume split by status.
+    shape: category_series_value
+    renderer: echarts
+    type: column
+    options:
+      stacked: true
+    query:
+      dimensions:
+        purchase_month: orders.purchase_month
+      series:
+        field: orders.status
+        alias: status
+      measures:
+        order_count: null
+      sort:
+        - field: purchase_month
+          direction: asc
+      limit: 40
+```
+
+## Grouped series
+
+Keep the series unstacked to place statuses side by side, and use `options.legend` to position the series key above the plot.
+
+{{< chart id="orders_by_month_status_grouped" >}}
+
+```yaml visual-example=orders_by_month_status_grouped
+visuals:
+  orders_by_month_status_grouped:
+    title: Orders by month and status grouped
+    shape: category_series_value
+    renderer: echarts
+    type: column
+    options:
+      legend: true
+    query:
+      dimensions:
+        purchase_month: orders.purchase_month
+      series:
+        field: orders.status
+        alias: status
+      measures:
+        order_count: null
+      sort:
+        - field: purchase_month
+          direction: asc
+      limit: 60
 ```

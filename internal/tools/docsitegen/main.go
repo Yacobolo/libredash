@@ -70,7 +70,6 @@ type documentSpec struct {
 	Summary         string `yaml:"summary" json:"summary"`
 	Source          string `yaml:"source" json:"source"`
 	Breadcrumb      string `yaml:"breadcrumb" json:"breadcrumb,omitempty"`
-	ChartID         string `yaml:"chartID" json:"chartID,omitempty"`
 	Generated       bool   `yaml:"generated,omitempty" json:"generated,omitempty"`
 }
 
@@ -271,7 +270,7 @@ func validateNoOrphanMarkdown(root string, seenSources map[string]struct{}) erro
 }
 
 var internalDocumentationLink = regexp.MustCompile(`\]\((/docs(?:/[^\s)#?]+)?)`)
-var yamlCodeFence = regexp.MustCompile("(?ms)```ya?ml[ \\t]*\\n(.*?)\\n```")
+var yamlCodeFence = regexp.MustCompile("(?ms)```ya?ml(?:[ \\t]+[^\\n]*)?\\n(.*?)\\n```")
 
 func validateInternalLinks(root string, seenSources, seenSlugs map[string]struct{}) error {
 	for source := range seenSources {
@@ -364,7 +363,6 @@ func visualDocument(collection collectionSpec, source, title, breadcrumb string)
 		Summary:    "Configuration and query shape for the " + title + " visual.",
 		Source:     filepath.ToSlash(filepath.Join(collection.SourceDir, source+".md")),
 		Breadcrumb: breadcrumb,
-		ChartID:    source,
 		Generated:  true,
 	}
 }

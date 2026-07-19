@@ -1,23 +1,75 @@
 # Pie chart
 
-Use a pie chart for a small set of categories that form one whole.
+Use a pie chart for a small number of categories that form a meaningful whole.
 
-{{< chart >}}
+Every preview on this page is generated from the YAML shown below it using a fixed documentation dataset.
 
-## Configuration
+## Basic
 
-```yaml
+Use one categorical dimension and one measure for a part-to-whole comparison, sorting by value to keep the largest sectors easy to find.
+
+{{< chart id="status_pie" >}}
+
+```yaml visual-example=status_pie
 visuals:
-  revenue_share:
-    title: Revenue share by segment
-    shape: category_value
-    renderer: echarts
+  status_pie:
+    title: Orders by status pie
+    type: pie
+    query:
+      dimensions:
+        status: orders.status
+      measures:
+        order_count: null
+      sort:
+        - field: value
+          direction: desc
+```
+
+## Rose sectors
+
+Set `options.rose_type: radius` to encode values through sector radius as well as angle, and show labels so the less familiar form remains readable.
+
+{{< chart id="status_pie_rose" >}}
+
+```yaml visual-example=status_pie_rose
+visuals:
+  status_pie_rose:
+    title: Orders by status rose pie
     type: pie
     options:
+      rose_type: radius
       show_labels: true
     query:
       dimensions:
-        segment: customers.segment
+        status: orders.status
+      measures:
+        order_count: null
+      sort:
+        - field: value
+          direction: desc
+```
+
+## Compact labels
+
+Move labels inside the sectors for a compact presentation; keep the category count low enough that internal labels do not collide.
+
+{{< chart id="category_pie_inside" >}}
+
+```yaml visual-example=category_pie_inside
+visuals:
+  category_pie_inside:
+    title: Compact category pie
+    type: pie
+    options:
+      show_labels: true
+      label_position: inside
+    query:
+      dimensions:
+        category: orders.category
       measures:
         revenue: null
+      sort:
+        - field: value
+          direction: desc
+      limit: 6
 ```

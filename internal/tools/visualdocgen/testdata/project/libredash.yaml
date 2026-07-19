@@ -1,0 +1,14 @@
+apiVersion: libredash.dev/v1
+kind: Project
+metadata:
+  name: visual-documentation
+spec:
+  connections:
+    include:
+    - connections/*.yaml
+  sources:
+    include:
+    - sources/*.yaml
+  workspaces:
+    include:
+    - workspaces/*/workspace.yaml

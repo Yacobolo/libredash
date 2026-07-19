@@ -298,11 +298,19 @@ func docsConfigurationSchema(w http.ResponseWriter, r *http.Request) {
 }
 
 func updates(w http.ResponseWriter, r *http.Request) {
-	stream := pagestream.NewSignalStream(w, r)
 	patch := pagestream.SignalPatch{"site": map[string]any{"ready": true}}
-	if r.URL.Query().Get("view") == "charts" {
+	switch r.URL.Query().Get("view") {
+	case "charts":
 		patch = chartShowcasePatch()
+	case "visual-docs":
+		examples, ok := visualExamplesForDocument(r.URL.Query().Get("document"))
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		patch = pagestream.SignalPatch{"charts": examples}
 	}
+	stream := pagestream.NewSignalStream(w, r)
 	if err := stream.Patch(patch); err != nil {
 		return
 	}

@@ -3,59 +3,7 @@ package http
 import "github.com/Yacobolo/libredash/pkg/pagestream"
 
 func chartShowcasePatch() pagestream.SignalPatch {
-	return pagestream.SignalPatch{"charts": chartShowcase(), "tables": tableShowcase()}
-}
-
-func chartShowcase() []map[string]any {
-	category := []map[string]any{{"label": "Jan", "value": 42}, {"label": "Feb", "value": 57}, {"label": "Mar", "value": 49}, {"label": "Apr", "value": 68}, {"label": "May", "value": 74}}
-	partToWhole := []map[string]any{{"label": "Enterprise", "value": 48}, {"label": "Growth", "value": 31}, {"label": "Starter", "value": 21}}
-	flow := []map[string]any{{"source": "Visit", "target": "Explore", "value": 120}, {"source": "Explore", "target": "Trial", "value": 76}, {"source": "Trial", "target": "Customer", "value": 42}, {"source": "Visit", "target": "Trial", "value": 18}}
-	hierarchy := []map[string]any{{"path": "Revenue/Enterprise", "value": 48}, {"path": "Revenue/Growth", "value": 31}, {"path": "Revenue/Starter", "value": 21}}
-	return []map[string]any{
-		showcaseChart("line", "Line", "category_value", "line", category, nil),
-		showcaseChart("area", "Area", "category_value", "area", category, nil),
-		showcaseChart("bar", "Bar", "category_value", "bar", category, nil),
-		showcaseChart("column", "Column", "category_value", "column", category, nil),
-		showcaseChart("pie", "Pie", "category_value", "pie", partToWhole, map[string]any{"show_labels": true}),
-		showcaseChart("donut", "Donut", "category_value", "donut", partToWhole, map[string]any{"center_label": "Segments"}),
-		showcaseChart("scatter", "Scatter", "category_value", "scatter", category, nil),
-		showcaseChart("funnel", "Funnel", "category_value", "funnel", []map[string]any{{"label": "Visit", "value": 120}, {"label": "Explore", "value": 94}, {"label": "Trial", "value": 61}, {"label": "Customer", "value": 42}}, nil),
-		showcaseChart("treemap", "Treemap", "category_value", "treemap", partToWhole, nil),
-		showcaseChart("gauge", "Gauge", "single_value", "gauge", []map[string]any{{"label": "Target", "value": 72}}, map[string]any{"max": 100}),
-		showcaseChart("heatmap", "Heatmap", "matrix", "heatmap", []map[string]any{{"row": "North", "column": "Jan", "value": 24}, {"row": "North", "column": "Feb", "value": 52}, {"row": "South", "column": "Jan", "value": 66}, {"row": "South", "column": "Feb", "value": 38}}, nil),
-		showcaseChart("sankey", "Sankey", "graph", "sankey", flow, nil),
-		showcaseChart("graph", "Graph", "graph", "graph", flow, map[string]any{"roam": false}),
-		showcaseChart("map", "Map", "geo", "map", []map[string]any{{"name": "SP", "value": 88}, {"name": "RJ", "value": 64}, {"name": "MG", "value": 52}, {"name": "BA", "value": 39}}, map[string]any{"map": "brazil_states", "roam": false}),
-		showcaseChart("candlestick", "Candlestick", "ohlc", "candlestick", []map[string]any{{"label": "Mon", "open": 42, "close": 48, "low": 39, "high": 51}, {"label": "Tue", "open": 48, "close": 45, "low": 43, "high": 50}, {"label": "Wed", "open": 45, "close": 54, "low": 44, "high": 56}, {"label": "Thu", "open": 54, "close": 58, "low": 51, "high": 61}}, nil),
-		showcaseChart("boxplot", "Boxplot", "distribution", "boxplot", []map[string]any{{"label": "North", "min": 12, "q1": 22, "median": 32, "q3": 48, "max": 60}, {"label": "South", "min": 18, "q1": 28, "median": 42, "q3": 54, "max": 72}}, nil),
-		showcaseChart("combo", "Combo", "category_multi_measure", "combo", []map[string]any{{"label": "Jan", "series": "Revenue", "value": 42}, {"label": "Jan", "series": "Margin", "value": 28}, {"label": "Feb", "series": "Revenue", "value": 57}, {"label": "Feb", "series": "Margin", "value": 35}, {"label": "Mar", "series": "Revenue", "value": 49}, {"label": "Mar", "series": "Margin", "value": 31}}, map[string]any{"series_types": map[string]any{"Revenue": "bar", "Margin": "line"}}),
-		showcaseChart("waterfall", "Waterfall", "category_delta", "waterfall", []map[string]any{{"label": "Start", "start": 0, "value": 120}, {"label": "Expansion", "start": 120, "value": 32}, {"label": "Churn", "start": 128, "value": -24}, {"label": "End", "start": 0, "value": 128}}, nil),
-		showcaseChart("histogram", "Histogram", "binned_measure", "histogram", []map[string]any{{"label": "0–10", "value": 12}, {"label": "10–20", "value": 28}, {"label": "20–30", "value": 46}, {"label": "30–40", "value": 31}, {"label": "40–50", "value": 16}}, nil),
-		showcaseChart("radar", "Radar", "category_value", "radar", []map[string]any{{"label": "Reach", "value": 78}, {"label": "Speed", "value": 64}, {"label": "Quality", "value": 82}, {"label": "Cost", "value": 53}, {"label": "Trust", "value": 71}}, nil),
-		showcaseChart("tree", "Tree", "hierarchy", "tree", hierarchy, map[string]any{"roam": false}),
-		showcaseChart("sunburst", "Sunburst", "hierarchy", "sunburst", hierarchy, nil),
-		showcaseChart("kpi", "KPI", "single_value", "kpi", []map[string]any{{"label": "Active workspaces", "value": 128}}, map[string]any{"tone": "green", "note": "This month"}),
-	}
-}
-
-func showcaseChart(id, title, shape, chartType string, data []map[string]any, options map[string]any) map[string]any {
-	renderer := "echarts"
-	kind := "chart"
-	if chartType == "kpi" {
-		renderer = "html"
-		kind = "kpi"
-	}
-	return map[string]any{
-		"version":  3,
-		"id":       id,
-		"kind":     kind,
-		"shape":    shape,
-		"renderer": renderer,
-		"type":     chartType,
-		"title":    title,
-		"data":     data,
-		"options":  options,
-	}
+	return pagestream.SignalPatch{"charts": visualDocumentation.Showcase, "tables": tableShowcase()}
 }
 
 func tableShowcase() []map[string]any {

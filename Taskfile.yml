@@ -173,6 +173,8 @@ tasks:
   docs:render:
     internal: true
     method: checksum
+    deps:
+      - visual-docs:generate
     sources:
       - Taskfile.yml
       - docs/navigation.yaml
@@ -201,7 +203,31 @@ tasks:
       - node:deps
     cmds:
       - bun run docs:validate-diagrams
+      - go run ./internal/tools/visualdocgen --check
       - go run ./internal/tools/docsitegen --check
+
+  visual-docs:generate:
+    desc: Compile executable visual documentation examples into browser payloads
+    deps:
+      - db:generate
+      - config:generate
+      - api:generate
+      - ui-signals:generate
+    method: checksum
+    sources:
+      - Taskfile.yml
+      - docs/visuals/*.md
+      - docs/visuals/catalog.json
+      - internal/tools/visualdocgen/**/*.go
+      - internal/tools/visualdocgen/testdata/**/*
+      - internal/visualdocs/**/*.go
+      - internal/dashboard/**/*.go
+      - internal/analytics/**/*.go
+      - internal/workspace/compiler/**/*.go
+    generates:
+      - docs/visuals/examples.gen.json
+    cmds:
+      - go run ./internal/tools/visualdocgen
 
   cli-docs:generate:
     desc: Generate public CLI reference documentation from Cobra commands

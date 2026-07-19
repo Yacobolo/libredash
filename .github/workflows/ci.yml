@@ -53,7 +53,7 @@ jobs:
 
       - name: Check generated build inputs are untracked
         run: |
-          tracked="$(git ls-files -- docs/catalog.json docs/search-index.sqlite3 docs/configuration.md 'docs/api/*.md' docs/reference/cli docs/reference/config internal/config/config_gen.go internal/configspec/names_gen.go web/generated)"
+          tracked="$(git ls-files -- docs/catalog.json docs/search-index.sqlite3 docs/configuration.md docs/visuals/examples.gen.json 'docs/api/*.md' docs/reference/cli docs/reference/config internal/config/config_gen.go internal/configspec/names_gen.go web/generated)"
           if [ -n "$tracked" ]; then
             printf 'derived build inputs must be generated, not committed:\n%s\n' "$tracked" >&2
             exit 1
@@ -84,6 +84,7 @@ jobs:
             docs/reference/cli
             docs/reference/config
             docs/search-index.sqlite3
+            docs/visuals/examples.gen.json
             internal/api/gen
             internal/cli/gen
             internal/config/config_gen.go
@@ -113,6 +114,7 @@ jobs:
             docs/catalog.json \
             docs/configuration.md \
             docs/search-index.sqlite3 \
+            docs/visuals/examples.gen.json \
             internal/config/config_gen.go \
             internal/configspec/names_gen.go \
             internal/platform/db/db.go \
@@ -147,6 +149,7 @@ jobs:
             internal/ui/signals/models.gen.go
             docs/catalog.json
             docs/search-index.sqlite3
+            docs/visuals/examples.gen.json
             docs/configuration.md
             docs/api/*.md
             docs/reference/cli/

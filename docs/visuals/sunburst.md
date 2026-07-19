@@ -1,22 +1,85 @@
 # Sunburst
 
-Use a sunburst to explore a hierarchy while preserving each level's share of the whole.
+Use a sunburst to compare hierarchical levels as concentric part-to-whole rings.
 
-{{< chart >}}
+Every preview on this page is generated from the YAML shown below it using a fixed documentation dataset.
 
-## Configuration
+## Two-level hierarchy
 
-```yaml
+Order two dimensions from parent to child and provide one measure for sector size to show category composition by status.
+
+{{< chart id="category_status_sunburst" >}}
+
+```yaml visual-example=category_status_sunburst
 visuals:
-  category_hierarchy:
-    title: Category hierarchy
+  category_status_sunburst:
+    title: Category and status hierarchy
+    description: Shows category and status hierarchy by order count.
     shape: hierarchy
     renderer: echarts
     type: sunburst
     query:
       dimensions:
         category: orders.category
-        subcategory: orders.subcategory
+        status: orders.status
       measures:
-        revenue: null
+        order_count: null
+      sort:
+        - field: value
+          direction: desc
+      limit: 80
+```
+
+## Alternate hierarchy
+
+Replace the parent dimension with state to reuse the hierarchy contract for a geographic breakdown.
+
+{{< chart id="state_status_sunburst" >}}
+
+```yaml visual-example=state_status_sunburst
+visuals:
+  state_status_sunburst:
+    title: State and status sunburst
+    shape: hierarchy
+    renderer: echarts
+    type: sunburst
+    query:
+      dimensions:
+        state: orders.state
+        status: orders.status
+      measures:
+        order_count: null
+      sort:
+        - field: value
+          direction: desc
+      limit: 80
+```
+
+## Three-level hierarchy
+
+Add a third ordered dimension for deeper nesting, set `initial_depth` to control the first visible level, and enable roaming for exploration.
+
+{{< chart id="category_state_status_sunburst" >}}
+
+```yaml visual-example=category_state_status_sunburst
+visuals:
+  category_state_status_sunburst:
+    title: Category, state, and status sunburst
+    shape: hierarchy
+    renderer: echarts
+    type: sunburst
+    options:
+      initial_depth: 2
+      roam: true
+    query:
+      dimensions:
+        category: orders.category
+        state: orders.state
+        status: orders.status
+      measures:
+        order_count: null
+      sort:
+        - field: value
+          direction: desc
+      limit: 120
 ```

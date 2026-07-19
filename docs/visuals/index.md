@@ -1,6 +1,8 @@
 # Chart types
 
-LibreDash visuals are defined in dashboard YAML. Every chart has a `type`, a query, and optional renderer settings. Choose the chart that best fits the shape of the result, then keep the query in the semantic model vocabulary.
+LibreDash visuals are defined in dashboard YAML. Every chart has a `type`, a query, and optional renderer settings. Choose the chart that best fits the result shape, then use the live variations on each page to see how the same YAML contract changes the rendered component.
+
+Every preview is compiled and queried from the YAML printed beside it against a fixed documentation dataset. Invalid or stale examples fail documentation generation.
 
 ## Available charts
 

@@ -748,7 +748,7 @@ ld-site-search:not(:defined) > .site-search-active-input {
 .site-docs-article :not(pre) > code {
   border-radius: var(--site-docs-code-radius);
   background: var(--ld-bg-control);
-  color: var(--ld-fg-accent);
+  color: var(--ld-fg-default);
   padding: var(--site-docs-code-padding-block)
     var(--site-docs-code-padding-inline);
   font-size: var(--site-docs-code-size);
@@ -827,10 +827,63 @@ ld-site-search:not(:defined) > .site-search-active-input {
   margin: 0 0 var(--base-size-4);
 }
 
+.site-visual-key-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--base-size-8);
+  margin-block: calc(var(--base-size-8) * -1) var(--base-size-12);
+  border-left: var(--base-size-4) solid var(--ld-line-accent-muted);
+  border-radius: var(--ld-radius-default);
+  background: var(--ld-bg-accent-muted);
+  padding: var(--base-size-8) var(--base-size-12);
+  color: var(--ld-fg-muted);
+  font-size: var(--ld-text-body-sm-size);
+}
+
+.site-visual-key-fields strong {
+  color: var(--ld-fg-default);
+}
+
+.site-visual-key-field {
+  display: inline-flex;
+  min-height: var(--control-small-size);
+  align-items: center;
+  border: var(--ld-border-muted);
+  border-radius: var(--ld-radius-default);
+  background: var(--ld-bg-panel);
+  color: var(--ld-fg-accent);
+  cursor: pointer;
+  font: inherit;
+  padding-inline: var(--base-size-8);
+}
+
+.site-visual-key-field:hover,
+.site-visual-key-field:focus-visible {
+  border-color: var(--ld-line-accent);
+  background: var(--ld-bg-control-hover);
+  outline: 0;
+}
+
+.site-visual-key-field:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.site-docs-article .site-visual-key-field > code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
 .site-docs-article a {
   color: var(--ld-fg-accent);
   text-decoration-thickness: var(--site-docs-link-underline-thickness);
   text-underline-offset: var(--site-docs-link-underline-offset);
+}
+
+.site-docs-article a code {
+  color: inherit;
 }
 
 .site-docs-article hr {

@@ -726,7 +726,7 @@ test('documentation search finds authored and generated content', async () => {
   }
 })
 
-test('chart documentation exposes a chart-specific configuration block', async () => {
+test('chart documentation renders every executable variation from its YAML', async () => {
   const page = await browser.newPage()
   try {
     await page.goto(`${baseURL}/docs/charts/line`)
@@ -743,18 +743,155 @@ test('chart documentation exposes a chart-specific configuration block', async (
     expect(await breadcrumb.getByRole('link', { name: 'Charts' }).getAttribute('href')).toBe('/docs/charts/overview')
     expect(await breadcrumb.getByRole('link', { name: 'Documentation' }).count()).toBe(0)
     expect(await page.getByRole('heading', { name: 'Line chart' }).isVisible()).toBe(true)
-    expect(await page.getByRole('heading', { name: 'Configuration' }).isVisible()).toBe(true)
-    await page.waitForFunction(() => {
-      const chart = document.querySelector('ld-site-doc-chart') as HTMLElement & { shadowRoot: ShadowRoot }
-      const visual = chart?.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { title?: string } }
-      return visual?.chart?.title === 'Line'
+    expect(await page.getByRole('heading', { name: 'API reference' }).isVisible()).toBe(true)
+    expect(await page.locator('.site-visual-api-summary').count()).toBe(0)
+    const articleHeadings = await page.locator('.site-docs-article h2').allTextContents()
+    expect(articleHeadings.indexOf('API reference')).toBeGreaterThan(articleHeadings.indexOf('Stepped line'))
+    expect(articleHeadings.indexOf('About this page')).toBeGreaterThan(articleHeadings.indexOf('API reference'))
+    const fieldReference = page.getByRole('table', { name: 'API reference' })
+    expect(await fieldReference.getByRole('columnheader').allTextContents()).toEqual(['Field', 'Type', 'Default', 'Allowed values', 'Description'])
+    const stepReference = fieldReference.getByRole('row').filter({ hasText: 'options.step' })
+    expect(await stepReference.count()).toBe(1)
+    expect(await stepReference.textContent()).toContain('string | boolean')
+    expect(await stepReference.textContent()).toContain('start')
+    const referenceColors = await page.locator('.site-docs-article').evaluate((article) => {
+      const summaryCode = article.querySelector('#site-visual-api-reference + p code')
+      const fieldCode = article.querySelector('table[aria-labelledby="site-visual-api-reference"] tbody th code')
+      const keyField = article.querySelector('.site-visual-key-field')
+      const keyFieldCode = keyField?.querySelector('code')
+      if (!summaryCode || !fieldCode || !keyField || !keyFieldCode) throw new Error('visual reference color targets are missing')
+      return {
+        article: getComputedStyle(article).color,
+        field: getComputedStyle(fieldCode).color,
+        interactive: getComputedStyle(keyField).color,
+        interactiveCode: getComputedStyle(keyFieldCode).color,
+        summary: getComputedStyle(summaryCode).color,
+      }
     })
-    expect(await page.locator('ld-site-doc-chart').getAttribute('chart-id')).toBe('line')
-    expect(await page.locator('.site-docs-article pre code').allTextContents()).toContain('visuals:\n  revenue_by_month:\n    title: Revenue by month\n    type: line\n    query:\n      dimensions:\n        purchase_month: orders.purchase_month\n      measures:\n        revenue: null\n      sort:\n      - field: purchase_month\n        direction: asc\n      limit: 30\n')
+    expect(referenceColors.summary).toBe(referenceColors.article)
+    expect(referenceColors.field).toBe(referenceColors.article)
+    expect(referenceColors.interactiveCode).toBe(referenceColors.interactive)
+    expect(referenceColors.interactive).not.toBe(referenceColors.article)
+    expect(await page.getByRole('heading', { name: 'Basic' }).isVisible()).toBe(true)
+    expect(await page.getByRole('heading', { name: 'Multiple series' }).isVisible()).toBe(true)
+    expect(await page.getByRole('heading', { name: 'Stepped line' }).isVisible()).toBe(true)
+    await page.waitForFunction(() => {
+      const examples = [...document.querySelectorAll('ld-site-visual-example')] as Array<HTMLElement & { shadowRoot: ShadowRoot }>
+      return examples.length === 3 && examples.every((example) => {
+        const visual = example.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { data?: unknown[] } }
+        return Boolean(visual?.chart?.data?.length)
+      })
+    })
+    expect(await page.locator('ld-site-visual-example').count()).toBe(3)
+    expect(await page.locator('ld-site-visual-example').nth(0).getAttribute('example-id')).toBe('revenue_line')
+    expect(await page.locator('ld-site-visual-example').nth(2).getAttribute('example-id')).toBe('revenue_line_step')
+    const configurations = await page.locator('.site-docs-article pre code').allTextContents()
+    expect(configurations.some((source) => source.includes('visuals:\n  revenue_line:'))).toBe(true)
+    expect(configurations.some((source) => source.includes('shape: category_series_value'))).toBe(true)
+    expect(configurations.some((source) => source.includes('step: middle'))).toBe(true)
+    const keyFields = await page.locator('.site-visual-key-fields').allTextContents()
+    expect(keyFields).toHaveLength(3)
+    expect(keyFields[2]).toContain('options.step')
+    await page.waitForFunction(() => document.querySelectorAll('ld-code-block[data-visual-example="revenue_line_step"] .code-block-highlighted-line').length === 3)
+    const steppedConfiguration = page.locator('ld-code-block[data-visual-example="revenue_line_step"]')
+    expect(await steppedConfiguration.getAttribute('data-highlighted-fields')).toBe('options.data_zoom,options.show_symbols,options.step')
+    expect(await steppedConfiguration.locator('.code-block-highlighted-line').allTextContents()).toEqual([
+      '      step: middle',
+      '      show_symbols: false',
+      '      data_zoom: true',
+    ])
+    expect(await steppedConfiguration.locator('.code-block-highlighted-line').first().evaluate((line) => ({
+      display: getComputedStyle(line).display,
+      marker: getComputedStyle(line, '::before').width,
+      padding: getComputedStyle(line).paddingInlineStart,
+    }))).toEqual({ display: 'inline-block', marker: '4px', padding: '0px' })
+    const stepField = page.getByRole('button', { name: 'Highlight options.step in YAML' })
+    expect(await stepField.count()).toBe(1)
+    expect(await stepField.getAttribute('aria-controls')).toBe('visual-example-revenue_line_step-yaml')
+    await stepField.focus()
+    await page.waitForFunction(() => document.querySelectorAll('ld-code-block[data-visual-example="revenue_line_step"] .code-block-focused-line').length === 1)
+    expect(await steppedConfiguration.locator('.code-block-focused-line').allTextContents()).toEqual(['      step: middle'])
+    await stepField.blur()
+    await page.waitForFunction(() => document.querySelectorAll('ld-code-block[data-visual-example="revenue_line_step"] .code-block-focused-line').length === 0)
+    const stepped = await page.locator('ld-site-visual-example').nth(2).evaluate((element) => {
+      const visual = element.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { options?: Record<string, unknown> } }
+      return visual?.chart?.options?.step
+    })
+    expect(stepped).toBe('middle')
   } finally {
     await page.close()
   }
 })
+
+test('KPI documentation uses compact example frames', async () => {
+  const page = await browser.newPage()
+  try {
+    await page.goto(`${baseURL}/docs/charts/kpi`)
+    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example[kind="kpi"]').length === 4)
+    const heights = await page.locator('ld-site-visual-example[kind="kpi"]').evaluateAll((examples) =>
+      examples.map((example) => Math.round(example.getBoundingClientRect().height)),
+    )
+    expect(heights.every((height) => height >= 180 && height <= 240)).toBe(true)
+  } finally {
+    await page.close()
+  }
+})
+
+test('every chart documentation page mounts its generated production payloads', async () => {
+  const page = await browser.newPage()
+  const chartTypes = ['line', 'area', 'bar', 'column', 'pie', 'donut', 'scatter', 'funnel', 'treemap', 'gauge', 'heatmap', 'sankey', 'graph', 'map', 'candlestick', 'boxplot', 'combo', 'waterfall', 'histogram', 'radar', 'tree', 'sunburst', 'kpi']
+  try {
+    for (const chartType of chartTypes) {
+      await page.goto(`${baseURL}/docs/charts/${chartType}`)
+      const expected = chartType === 'candlestick' ? 2 : chartType === 'kpi' ? 4 : 3
+      await page.waitForFunction(
+        ({ count }) => {
+          const examples = [...document.querySelectorAll('ld-site-visual-example')]
+          return examples.length === count && examples.every((example) => {
+            const visual = example.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { data?: unknown[] } } | null
+            const kpi = example.shadowRoot?.querySelector('ld-kpi-card') as HTMLElement & { visual?: { data?: unknown[] } } | null
+            return Boolean(visual?.chart?.data?.length || kpi?.visual?.data?.length)
+          })
+        },
+        { count: expected },
+      )
+      expect(await page.locator('ld-site-visual-example').count()).toBe(expected)
+    }
+
+    await page.goto(`${baseURL}/docs/charts/gauge`)
+    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 3)
+    const thresholds = await page.locator('ld-site-visual-example').nth(2).evaluate((element) => {
+      const visual = element.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { options?: { thresholds?: unknown[] } } }
+      return visual.chart?.options?.thresholds?.length
+    })
+    expect(thresholds).toBe(3)
+
+    await page.goto(`${baseURL}/docs/charts/map`)
+    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 3)
+    expect(await page.locator('ld-site-visual-example').first().evaluate((element) => {
+      const visual = element.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { shape?: string; options?: { map?: string }; data?: Array<{ name?: string }> } }
+      return [visual.chart?.shape, visual.chart?.options?.map, visual.chart?.data?.length, new Set(visual.chart?.data?.map((row) => row.name)).size]
+    })).toEqual(['geo', 'brazil_states', 27, 27])
+    await page.waitForFunction(() => {
+      const example = document.querySelector('ld-site-visual-example') as HTMLElement & { shadowRoot: ShadowRoot }
+      const chart = example?.shadowRoot?.querySelector('ld-echart') as HTMLElement & { shadowRoot: ShadowRoot }
+      return Boolean(chart?.shadowRoot?.querySelector('.canvas[aria-label], .canvas [aria-label]'))
+    })
+    expect(await page.locator('ld-site-visual-example').first().evaluate((element) => {
+      const chart = element.shadowRoot?.querySelector('ld-echart') as HTMLElement & { shadowRoot: ShadowRoot }
+      return chart?.shadowRoot?.querySelector('.canvas[aria-label], .canvas [aria-label]')?.getAttribute('aria-label')
+    })).not.toContain('NaN')
+
+    await page.goto(`${baseURL}/docs/charts/combo`)
+    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 3)
+    expect(await page.locator('ld-site-visual-example').first().evaluate((element) => {
+      const visual = element.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { shape?: string; data?: Array<{ series?: string }> } }
+      return [visual.chart?.shape, new Set(visual.chart?.data?.map((row) => row.series)).size]
+    })).toEqual(['category_multi_measure', 2])
+  } finally {
+    await page.close()
+  }
+}, 30_000)
 
 test('documentation articles apply the shared Markdown treatment', async () => {
   const page = await browser.newPage()
@@ -1463,7 +1600,7 @@ test('chart showcase renders every supported visual type', async () => {
       }
     })
     expect(visuals).toEqual({ cards: 23, charts: 22, kpis: 1 })
-    expect(await page.getByRole('heading', { name: 'Sunburst' }).isVisible()).toBe(true)
+    expect(await page.getByRole('heading', { name: 'Category and status hierarchy' }).isVisible()).toBe(true)
     await page.waitForFunction(() => {
       const showcase = document.querySelector('ld-site-chart-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
       return showcase?.shadowRoot?.querySelectorAll('ld-report-table').length === 9

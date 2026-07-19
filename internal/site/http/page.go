@@ -1,6 +1,7 @@
 package http
 
 import (
+	"net/url"
 	"strings"
 	"time"
 
@@ -235,8 +236,8 @@ func docsSearchPage(query string, metadata sitePageMetadata) g.Node {
 
 func docsArticlePage(document siteDocument, metadata sitePageMetadata) g.Node {
 	updatesURL := "/updates"
-	if document.chartID != "" {
-		updatesURL = "/updates?view=charts"
+	if _, ok := visualExamplesForDocument(document.slug); ok {
+		updatesURL = "/updates?view=visual-docs&document=" + url.QueryEscape(document.slug)
 	}
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title:             metadata.title,

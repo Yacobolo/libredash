@@ -1,0 +1,12 @@
+apiVersion: libredash.dev/v1
+kind: Connection
+metadata:
+  name: docs
+  title: Documentation fixtures
+spec:
+  kind: managed
+  credentials:
+    provider: none
+  defaults:
+    options:
+      header: true

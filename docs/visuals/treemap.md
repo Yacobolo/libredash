@@ -1,21 +1,74 @@
 # Treemap
 
-Use a treemap to compare part-to-whole values when there are many categories.
+Use a treemap to compare part-to-whole values when rectangular area communicates magnitude.
 
-{{< chart >}}
+Every preview on this page is generated from the YAML shown below it using a fixed documentation dataset.
 
-## Configuration
+## Basic
 
-```yaml
+Use one categorical dimension and one measure to size rectangular areas, making dominant categories visible within limited space.
+
+{{< chart id="category_treemap" >}}
+
+```yaml visual-example=category_treemap
 visuals:
-  revenue_by_segment:
-    title: Revenue by segment
-    shape: category_value
-    renderer: echarts
+  category_treemap:
+    title: Category revenue treemap
     type: treemap
     query:
       dimensions:
-        segment: customers.segment
+        category: orders.category
       measures:
         revenue: null
+      sort:
+        - field: value
+          direction: desc
+      limit: 18
+```
+
+## Alternate measure
+
+Replace the dimension and measure to compare revenue by state without changing the category-value shape.
+
+{{< chart id="state_treemap" >}}
+
+```yaml visual-example=state_treemap
+visuals:
+  state_treemap:
+    title: State revenue treemap
+    type: treemap
+    query:
+      dimensions:
+        state: orders.state
+      measures:
+        revenue: null
+      sort:
+        - field: value
+          direction: desc
+      limit: 18
+```
+
+## Navigable hierarchy
+
+Enable `breadcrumb` and `roam` when readers should navigate into dense or nested rectangles instead of viewing a fixed overview.
+
+{{< chart id="category_treemap_roam" >}}
+
+```yaml visual-example=category_treemap_roam
+visuals:
+  category_treemap_roam:
+    title: Navigable category treemap
+    type: treemap
+    options:
+      roam: true
+      breadcrumb: true
+    query:
+      dimensions:
+        category: orders.category
+      measures:
+        revenue: null
+      sort:
+        - field: value
+          direction: desc
+      limit: 18
 ```

@@ -75,10 +75,14 @@ test('code block highlights product and documentation languages with GitHub them
       const yaml = document.createElement('ld-code-block') as any
       yaml.language = 'yaml'
       yaml.code = 'apiVersion: libredash.dev/v1\nkind: Project'
+      yaml.highlightedLines = [2]
       yaml.copy = true
       yaml.toolbar = true
       document.body.append(yaml)
       await waitFor(() => Boolean(yaml.querySelector('.shiki.github-light')))
+      yaml.focusLines([2])
+      const yamlFocusedLines = [...yaml.querySelectorAll('.line.code-block-focused-line')].map((line) => line.textContent?.trim())
+      yaml.clearFocusedLines()
 
       Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
       document.execCommand = (command) => {
@@ -134,6 +138,10 @@ test('code block highlights product and documentation languages with GitHub them
         toonText: toon.textContent || '',
         yamlText: yaml.textContent || '',
         yamlLanguage: yaml.querySelector('.code-block-language')?.textContent || '',
+        yamlHighlightedLines: [...yaml.querySelectorAll('.line.code-block-highlighted-line')].map((line) => line.textContent?.trim()),
+        yamlFocusedLines,
+        yamlFocusCleared: !yaml.hasAttribute('data-line-focus') && !yaml.querySelector('.code-block-focused-line'),
+        yamlHighlightMarkerWidth: getComputedStyle(yaml.querySelector('.line.code-block-highlighted-line')!, '::before').width,
         yamlCopyLabel: yaml.querySelector('.code-block-copy')?.getAttribute('aria-label') || '',
         copiedCode: document.documentElement.dataset.copiedCode || '',
         textFallback: Boolean(text.querySelector('.code-block-fallback')),
@@ -156,6 +164,10 @@ test('code block highlights product and documentation languages with GitHub them
     expect(state.toonText).toContain('items[2]{id,title}:')
     expect(state.yamlText).toContain('apiVersion: libredash.dev/v1')
     expect(state.yamlLanguage).toBe('YAML')
+    expect(state.yamlHighlightedLines).toEqual(['kind: Project'])
+    expect(state.yamlFocusedLines).toEqual(['kind: Project'])
+    expect(state.yamlFocusCleared).toBe(true)
+    expect(state.yamlHighlightMarkerWidth).toBe('4px')
     expect(state.yamlCopyLabel).toBe('Code copied')
     expect(state.copiedCode).toBe('apiVersion: libredash.dev/v1\nkind: Project')
     expect(state.textFallback).toBe(true)
@@ -177,7 +189,7 @@ function testDocument(): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --ld-bg-panel-muted: #f6f8fa; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-border-muted: 1px solid #d8dee4; --borderRadius-medium: 6px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-line-height-snug: 1.35; }
+          body { --fontStack-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; --ld-bg-panel-muted: #f6f8fa; --ld-fg-default: #24292f; --ld-fg-muted: #57606a; --ld-border-muted: 1px solid #d8dee4; --borderRadius-medium: 6px; --base-size-4: 4px; --base-size-8: 8px; --base-size-12: 12px; --base-size-16: 16px; --ld-font-size-caption: 12px; --ld-font-size-body-sm: 14px; --ld-line-height-snug: 1.35; }
           ld-code-block { display: block; width: 760px; margin: 24px; }
         </style>
       </head>

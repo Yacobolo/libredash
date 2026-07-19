@@ -17,6 +17,7 @@ internal/cli/gen/
 internal/platform/db/db.go
 internal/platform/db/models.go
 internal/platform/db/*.sql.go
+docs/visuals/examples.gen.json
 web/generated/
 docs/catalog.json
 docs/search-index.sqlite3

@@ -1,0 +1,11 @@
+apiVersion: libredash.dev/v1
+kind: WorkspaceAgentPolicy
+metadata:
+  workspace: visual_examples
+  name: default
+spec:
+  enabled: false
+  tools:
+    allow: []
+    deny: []
+  instructions: Documentation fixture only.

@@ -1,0 +1,26 @@
+apiVersion: libredash.dev/v1
+kind: Dashboard
+metadata:
+  workspace: visual_examples
+  name: visual-docs
+  title: Visual documentation
+spec:
+  semanticModel: visual_examples
+  visuals:
+    placeholder:
+      kind: kpi
+      query:
+        measures:
+          order_count: null
+  pages:
+  - name: placeholder
+    title: Placeholder
+    visuals:
+    - id: placeholder
+      kind: kpi_card
+      visual: placeholder
+      placement:
+        col: 1
+        row: 1
+        col_span: 3
+        row_span: 2
