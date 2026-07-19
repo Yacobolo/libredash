@@ -228,21 +228,21 @@ func siteOpenAPISpecification() []byte {
 	return specification
 }
 
-var docsChartShortcode = regexp.MustCompile(`\{\{<\s*chart\s+id="([a-z0-9_]+)"\s*>}}`)
+var docsVisualShortcode = regexp.MustCompile(`\{\{<\s*visual\s+id="([a-z0-9_]+)"\s*>}}`)
 
 func siteDocsArticle(document siteDocument) g.Node {
 	source := document.markdown
-	shortcodes := docsChartShortcode.FindAllStringSubmatch(source, -1)
+	shortcodes := docsVisualShortcode.FindAllStringSubmatch(source, -1)
 	for index, shortcode := range shortcodes {
 		id := shortcode[1]
 		if !documentHasVisualExample(document.slug, id) {
-			panic(fmt.Sprintf("chart shortcode %q is not generated for documentation %s", id, document.slug))
+			panic(fmt.Sprintf("visual shortcode %q is not generated for documentation %s", id, document.slug))
 		}
 		placeholder := fmt.Sprintf("LIBREDASH_DOCS_CHART_PLACEHOLDER_%d", index)
 		source = strings.Replace(source, shortcode[0], placeholder, 1)
 	}
-	if strings.Contains(source, "{{< chart") {
-		panic(fmt.Sprintf("invalid chart shortcode in documentation: %s", document.slug))
+	if strings.Contains(source, "{{< visual") {
+		panic(fmt.Sprintf("invalid visual shortcode in documentation: %s", document.slug))
 	}
 
 	var rendered bytes.Buffer
@@ -253,21 +253,17 @@ func siteDocsArticle(document siteDocument) g.Node {
 	for index, shortcode := range shortcodes {
 		placeholderID := fmt.Sprintf("LIBREDASH_DOCS_CHART_PLACEHOLDER_%d", index)
 		placeholder := "<p>" + placeholderID + "</p>\n"
-		payload, ok := visualExampleForDocument(document.slug, shortcode[1])
+		_, ok := visualExampleForDocument(document.slug, shortcode[1])
 		if !ok {
 			panic(fmt.Sprintf("generated visual example %q is missing for documentation: %s", shortcode[1], document.slug))
-		}
-		kind := ""
-		if payload.Type == "kpi" {
-			kind = ` kind="kpi"`
 		}
 		exampleReference, ok := visualExampleReferenceForDocument(document.slug, shortcode[1])
 		if !ok {
 			panic(fmt.Sprintf("generated visual example reference %q is missing for documentation: %s", shortcode[1], document.slug))
 		}
-		component := fmt.Sprintf("<ld-site-visual-example example-id=\"%s\"%s></ld-site-visual-example>\n%s", shortcode[1], kind, renderVisualKeyFields(exampleReference.KeyFields))
+		component := fmt.Sprintf("<ld-site-visual-example example-id=\"%s\"></ld-site-visual-example>\n%s", shortcode[1], renderVisualKeyFields(exampleReference.KeyFields))
 		if !strings.Contains(renderedHTML, placeholder) {
-			panic(fmt.Sprintf("render chart shortcode %q for documentation: %s", shortcode[1], document.slug))
+			panic(fmt.Sprintf("render visual shortcode %q for documentation: %s", shortcode[1], document.slug))
 		}
 		renderedHTML = strings.Replace(renderedHTML, placeholder, component, 1)
 	}

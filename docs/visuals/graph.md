@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Map two dimensions to source and target nodes, then use the measure as edge weight to reveal relationships between statuses and delivery buckets.
 
-{{< chart id="status_delivery_graph" >}}
+{{< visual id="status_delivery_graph" >}}
 
 ```yaml visual-example=status_delivery_graph
 visuals:
@@ -34,7 +34,7 @@ visuals:
 
 Replace the source dimension with category to inspect a different relationship while retaining the same weighted graph shape.
 
-{{< chart id="category_status_graph" >}}
+{{< visual id="category_status_graph" >}}
 
 ```yaml visual-example=category_status_graph
 visuals:
@@ -59,7 +59,7 @@ visuals:
 
 Set `options.layout: circular` for a stable ring, curve overlapping edges, and use `focus: adjacency` to emphasize connected nodes on interaction.
 
-{{< chart id="category_status_graph_circular" >}}
+{{< visual id="category_status_graph_circular" >}}
 
 ```yaml visual-example=category_status_graph_circular
 visuals:

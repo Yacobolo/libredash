@@ -54,7 +54,7 @@ func TestDashboardEnvelopeRejectsMissingReferencedPayload(t *testing.T) {
 func TestDashboardEnvelopeRejectsUnusedPayload(t *testing.T) {
 	report := testDashboardReport()
 	envelope := DashboardInitialEnvelope("client", "stream-instance", dashboard.Catalog{}, report, testSemanticModel(), report.Pages, report.Pages[0], dashboard.Filters{})
-	envelope.Visuals["off_page_chart"] = DashboardVisual{ID: "off_page_chart"}
+	envelope.Visuals["off_page_chart"] = DashboardVisualFromDashboard(dashboard.Visual{ID: "off_page_chart", Type: "bar"})
 
 	err := ValidateDashboardEnvelope(envelope)
 	if err == nil || !strings.Contains(err.Error(), `unused visual payload "off_page_chart"`) {
@@ -154,7 +154,6 @@ func testChatViewState(signal ChatSignal) ChatViewState {
 	return ChatViewState{
 		Agent:   signal,
 		Visuals: map[string]DashboardVisual{},
-		Tables:  map[string]DashboardTable{},
 	}
 }
 

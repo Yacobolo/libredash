@@ -209,19 +209,11 @@ func TestDashboardDataCommandsUseGeneratedURLsAndBodies(t *testing.T) {
 		},
 		{
 			name:     "visual data",
-			args:     []string{"visual-data", "executive-sales", "overview", "orders", "--filters-json", `{"controls":{"state":{"values":["SP"]}}}`},
+			args:     []string{"visual-data", "executive-sales", "overview", "orders", "--count", "7", "--filters-json", `{"controls":{"state":{"values":["SP"]}}}`},
 			method:   http.MethodPost,
 			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/orders/query",
-			wantBody: []string{`"filters"`, `"state"`},
+			wantBody: []string{`"filters"`, `"state"`, `"limit":7`},
 			response: map[string]any{"id": "orders", "data": []map[string]any{}},
-		},
-		{
-			name:     "table data",
-			args:     []string{"table-data", "executive-sales", "overview", "orders", "--count", "7"},
-			method:   http.MethodPost,
-			path:     "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/tables/orders/query",
-			wantBody: []string{`"count":7`},
-			response: map[string]any{"title": "Orders", "blocks": map[string]any{}},
 		},
 		{
 			name:     "filter options",
@@ -373,7 +365,7 @@ func TestAgentToolsCommandListsGeneratedTools(t *testing.T) {
 			t.Fatalf("agent tools: %v", err)
 		}
 	})
-	for _, want := range []string{"NAME", "PRIVILEGE", "list_dashboards", "VIEW_ITEM", "list_assets", "describe_asset", "asset_lineage", "search_workspace", "query_dashboard_visual_data", "query_semantic_model", "explain_semantic_model_query"} {
+	for _, want := range []string{"NAME", "PRIVILEGE", "list_dashboards", "VIEW_ITEM", "list_assets", "describe_asset", "asset_lineage", "search_workspace", "query_dashboard_visual", "query_semantic_model", "explain_semantic_model_query"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("agent tools output missing %q:\n%s", want, output)
 		}

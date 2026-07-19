@@ -7,6 +7,7 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	dashboardstream "github.com/Yacobolo/libredash/internal/dashboard/stream"
+	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 )
 
@@ -62,20 +63,24 @@ func DashboardPatch(patch dashboard.Patch) pagestream.SignalPatch {
 		"filters":       patch.Filters,
 		"filterOptions": patch.FilterOptions,
 		"status":        patch.Status,
-		"visuals":       patch.Visuals,
+		"visuals":       visualSignals(patch.Visuals),
 	}
 }
 
 func TablePatch(name string, table dashboard.Table) pagestream.SignalPatch {
 	return pagestream.SignalPatch{
-		"tables": map[string]dashboard.Table{
-			name: table,
+		"visuals": map[string]dashboard.TabularVisual{
+			name: dashboard.NewTabularVisual(name, table),
 		},
 	}
 }
 
 func TablesPatch(tables map[string]dashboard.Table) pagestream.SignalPatch {
-	return pagestream.SignalPatch{"tables": tables}
+	visuals := make(map[string]dashboard.TabularVisual, len(tables))
+	for id, table := range tables {
+		visuals[id] = dashboard.NewTabularVisual(id, table)
+	}
+	return pagestream.SignalPatch{"visuals": visuals}
 }
 
 func LoadingPatch() pagestream.SignalPatch {
@@ -115,8 +120,8 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 	case dashboardstream.RefreshEventStart:
 		components := map[string]any{}
 		for _, target := range event.Targets {
-			if strings.HasPrefix(target, "visual:") || strings.HasPrefix(target, "table:") {
-				components[target] = component(true, "")
+			if strings.HasPrefix(target, "visual:") {
+				components[visualStatusKey(target)] = component(true, "")
 			}
 		}
 		return pagestream.SignalPatch{
@@ -133,19 +138,19 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 		visual, _ := event.Value.(dashboard.Visual)
 		key := "visual:" + event.Target
 		return pagestream.SignalPatch{
-			"visuals":         map[string]dashboard.Visual{event.Target: visual},
+			"visuals":         map[string]uisignals.DashboardVisual{event.Target: uisignals.DashboardVisualFromDashboard(visual)},
 			"componentStatus": map[string]any{key: component(false, "")},
 		}
 	case dashboardstream.RefreshEventTable:
 		table, _ := event.Value.(dashboard.Table)
-		key := "table:" + event.Target
+		key := "visual:" + event.Target
 		return pagestream.SignalPatch{
-			"tables":          map[string]dashboard.Table{event.Target: table},
+			"visuals":         map[string]dashboard.TabularVisual{event.Target: dashboard.NewTabularVisual(event.Target, table)},
 			"componentStatus": map[string]any{key: component(false, "")},
 		}
 	case dashboardstream.RefreshEventTableMetadata:
 		table, _ := event.Value.(dashboard.Table)
-		return pagestream.SignalPatch{"tables": map[string]dashboard.Table{event.Target: table}}
+		return pagestream.SignalPatch{"visuals": map[string]dashboard.TabularVisual{event.Target: dashboard.NewTabularVisual(event.Target, table)}}
 	case dashboardstream.RefreshEventTargetError:
 		if event.Target == "refresh" {
 			return pagestream.SignalPatch{"status": status(false, event.Err)}
@@ -154,12 +159,20 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 		if event.Err != nil {
 			message = event.Err.Error()
 		}
-		return pagestream.SignalPatch{"componentStatus": map[string]any{event.Target: component(false, message)}}
+		return pagestream.SignalPatch{"componentStatus": map[string]any{visualStatusKey(event.Target): component(false, message)}}
 	case dashboardstream.RefreshEventComplete:
 		return pagestream.SignalPatch{"status": status(false, event.Err)}
 	default:
 		return pagestream.SignalPatch{}
 	}
+}
+
+func visualSignals(values map[string]dashboard.Visual) map[string]uisignals.DashboardVisual {
+	out := make(map[string]uisignals.DashboardVisual, len(values))
+	for id, visual := range values {
+		out[id] = uisignals.DashboardVisualFromDashboard(visual)
+	}
+	return out
 }
 
 // RefreshEventEnvelope keeps refresh ordering and mailbox behavior outside the
@@ -196,7 +209,11 @@ func RefreshEventEnvelope(event dashboardstream.RefreshEvent) pagestream.Envelop
 }
 
 func dashboardMergeRoots() []string {
-	return []string{"componentStatus", "filterOptions", "tables", "visuals"}
+	return []string{"componentStatus", "filterOptions", "visuals"}
+}
+
+func visualStatusKey(target string) string {
+	return strings.TrimPrefix(target, "visual:visual:")
 }
 
 func errorSetupRequired(err error) bool {

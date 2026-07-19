@@ -13,9 +13,9 @@ import (
 
 type commandPrepare func(command.Service, command.Request, dashboard.Filters) (command.PreparedRefresh, error)
 
-func (h Handler) TableWindow(w nethttp.ResponseWriter, r *nethttp.Request) {
+func (h Handler) VisualWindow(w nethttp.ResponseWriter, r *nethttp.Request) {
 	h.handleCommand(w, r, func(service command.Service, request command.Request, current dashboard.Filters) (command.PreparedRefresh, error) {
-		return service.PrepareTableWindow(request, current)
+		return service.PrepareVisualWindow(request, current)
 	})
 }
 
@@ -66,12 +66,12 @@ func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Re
 	modelID := lddatastar.ModelID(r, signals, dashboardID, metrics.ModelIDForDashboard)
 	streamID := lddatastar.ClientStreamID(r, signals, dashboardID, pageID)
 	request := command.Request{
-		DashboardID:        dashboardID,
-		PageID:             pageID,
-		ModelID:            modelID,
-		Filters:            signals.Filters,
-		TableCommand:       signals.TableCommand,
-		InteractionCommand: signals.InteractionCommand,
+		DashboardID:         dashboardID,
+		PageID:              pageID,
+		ModelID:             modelID,
+		Filters:             signals.Filters,
+		VisualWindowCommand: signals.VisualWindowCommand,
+		InteractionCommand:  signals.InteractionCommand,
 	}
 
 	registry := h.Coordinators
@@ -129,7 +129,7 @@ func (h Handler) handleCommandWithBefore(w nethttp.ResponseWriter, r *nethttp.Re
 func streamPreparation(prepared command.PreparedRefresh) dashboardstream.RefreshPreparation {
 	targets := make([]string, 0, len(prepared.Plan.Targets))
 	for _, target := range prepared.Plan.Targets {
-		targets = append(targets, string(target.Kind)+":"+target.ID)
+		targets = append(targets, target.Key())
 	}
 	return dashboardstream.RefreshPreparation{
 		Filters: prepared.Filters,

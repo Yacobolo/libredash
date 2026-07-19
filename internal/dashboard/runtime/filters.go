@@ -108,7 +108,7 @@ func (s *FilterService) semanticFilters(ctx context.Context, runtime *modelRunti
 			continue
 		}
 		wantInteractionKind := "point_selection"
-		if selection.SourceKind == "table" {
+		if _, ok := report.Tables[selection.SourceID]; ok && selection.SourceKind == "visual" {
 			wantInteractionKind = "row_selection"
 		}
 		if selection.InteractionKind != wantInteractionKind {
@@ -225,7 +225,7 @@ func selectionMappingFilters(mapping reportmodel.ResolvedSelectionMapping, value
 }
 
 func isUIOnlyRowSelection(selection dashboard.InteractionSelection) bool {
-	if selection.SourceKind != "table" || selection.InteractionKind != "row_selection" || len(selection.Entries) == 0 {
+	if selection.SourceKind != "visual" || selection.InteractionKind != "row_selection" || len(selection.Entries) == 0 {
 		return false
 	}
 	for _, entry := range selection.Entries {

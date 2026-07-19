@@ -8,7 +8,7 @@ export type {
 
 export type SortDirection = 'asc' | 'desc'
 export type BlockID = 'a' | 'b' | 'c'
-export type TableKind = 'data_table' | 'matrix_table' | 'pivot_table'
+export type TabularVisualType = 'table' | 'matrix' | 'pivot'
 export type TableCardinalityKind = 'unknown' | 'lower_bound' | 'estimated' | 'exact'
 
 export interface TableCardinality {
@@ -69,8 +69,9 @@ export interface TableBlock {
 }
 
 export interface TableSignal {
+  id?: string
   version: number
-  kind: TableKind
+  type: TabularVisualType
   title: string
   style: TableStyle
   interaction: InteractionConfig
@@ -89,8 +90,8 @@ export interface TableSignal {
   error: string
 }
 
-export interface TableBlockCommand {
-  table: string
+export interface VisualWindowCommand {
+  visual: string
   block: BlockID | 'all'
   start: number
   count: number

@@ -164,7 +164,6 @@ type WorkspaceAccessResponse struct {
 type ChatViewState struct {
 	Agent   ChatSignal
 	Visuals map[string]DashboardVisual
-	Tables  map[string]DashboardTable
 }
 
 func ChatTranscriptItems(items []agent.ChatTranscriptItem) []ChatTranscriptItemSignal {
@@ -199,7 +198,7 @@ func ChatTranscriptItem(item agent.ChatTranscriptItem) ChatTranscriptItemSignal 
 	}
 	if item.Artifact != nil {
 		out.Artifact = &ChatArtifactSignal{
-			Kind:    item.Artifact.Kind,
+			Type:    item.Artifact.Type,
 			ID:      item.Artifact.ID,
 			Summary: optionalValue(item.Artifact.Summary),
 		}
@@ -242,16 +241,18 @@ func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboa
 			PageID:           optionalValue(activePage.ID),
 			ModelID:          optionalValue(modelID),
 		},
-		ComponentStatus:    map[string]DashboardComponentStatus{},
-		FilterConfig:       ReportFilterConfigsFromReport(report.FilterConfigForPage(activePage.ID)),
-		Filters:            DashboardFiltersFromDashboard(initialFilters),
-		URLParams:          report.URLParamsFromFiltersForPage(activePage.ID, initialFilters),
-		URLParamShape:      report.URLParamShapeForPage(activePage.ID),
-		FilterOptions:      map[string][]DashboardFilterOption{},
-		InteractionCommand: DashboardInteractionCommandFromDashboard(dashboard.InteractionCommand{Toggle: true, Mappings: []dashboard.InteractionCommandMapping{}}),
-		TableCommand:       DashboardTableRequestFromDashboard(tableRequest),
-		Tables:             DashboardTablesFromDashboard(TableSignals(report, activePage, tableRequest)),
-		Visuals:            DashboardVisualsFromDashboard(VisualSignals(report, model, activePage)),
+		ComponentStatus:     map[string]DashboardComponentStatus{},
+		FilterConfig:        ReportFilterConfigsFromReport(report.FilterConfigForPage(activePage.ID)),
+		Filters:             DashboardFiltersFromDashboard(initialFilters),
+		URLParams:           report.URLParamsFromFiltersForPage(activePage.ID, initialFilters),
+		URLParamShape:       report.URLParamShapeForPage(activePage.ID),
+		FilterOptions:       map[string][]DashboardFilterOption{},
+		InteractionCommand:  DashboardInteractionCommandFromDashboard(dashboard.InteractionCommand{Toggle: true, Mappings: []dashboard.InteractionCommandMapping{}}),
+		VisualWindowCommand: DashboardVisualWindowRequestFromDashboard(tableRequest),
+		Visuals: DashboardVisualsFromDashboard(
+			VisualSignals(report, model, activePage),
+			TableSignals(report, activePage, tableRequest),
+		),
 		Status: DashboardStatusFromDashboard(dashboard.Status{
 			Loading:       false,
 			Error:         "",
@@ -270,7 +271,6 @@ func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, roleLabel, view
 		Runtime: RouteRuntimeSignal{Kind: RouteChat},
 		Agent:   state.Agent,
 		Visuals: state.Visuals,
-		Tables:  state.Tables,
 	}
 }
 
@@ -475,7 +475,6 @@ func ValidateDashboardEnvelope(envelope DashboardEnvelope) error {
 		return fmt.Errorf("dashboard envelope requires dashboardId and pageId")
 	}
 	usedVisuals := map[string]struct{}{}
-	usedTables := map[string]struct{}{}
 	usedFilters := map[string]struct{}{}
 	for _, component := range envelope.Page.Components {
 		switch {
@@ -483,11 +482,6 @@ func ValidateDashboardEnvelope(envelope DashboardEnvelope) error {
 			usedVisuals[*component.Visual] = struct{}{}
 			if _, ok := envelope.Visuals[*component.Visual]; !ok {
 				return fmt.Errorf("component %q references missing visual %q", component.ID, *component.Visual)
-			}
-		case component.Table != nil && *component.Table != "":
-			usedTables[*component.Table] = struct{}{}
-			if _, ok := envelope.Tables[*component.Table]; !ok {
-				return fmt.Errorf("component %q references missing table %q", component.ID, *component.Table)
 			}
 		case component.Filter != nil && *component.Filter != "":
 			usedFilters[*component.Filter] = struct{}{}
@@ -502,11 +496,6 @@ func ValidateDashboardEnvelope(envelope DashboardEnvelope) error {
 	for id := range envelope.Visuals {
 		if _, ok := usedVisuals[id]; !ok {
 			return fmt.Errorf("unused visual payload %q", id)
-		}
-	}
-	for id := range envelope.Tables {
-		if _, ok := usedTables[id]; !ok {
-			return fmt.Errorf("unused table payload %q", id)
 		}
 	}
 	return nil
@@ -541,11 +530,20 @@ func dashboardPageNav(workspaceID, reportID string, pages []dashboard.Page, acti
 func dashboardComponents(page dashboard.Page) []DashboardComponentSignal {
 	components := make([]DashboardComponentSignal, 0, len(page.Visuals))
 	for _, visual := range page.PlacedVisuals() {
+		kind := visual.Kind
+		visualID := visual.Visual
+		if visual.Table != "" {
+			kind = "visual"
+			visualID = visual.Table
+		} else if visual.Visual != "" {
+			kind = "visual"
+		} else if visual.Filter != "" {
+			kind = "filter"
+		}
 		components = append(components, DashboardComponentSignal{
 			ID:          visual.ID,
-			Kind:        visual.Kind,
-			Visual:      optionalValue(visual.Visual),
-			Table:       optionalValue(visual.Table),
+			Kind:        kind,
+			Visual:      optionalValue(visualID),
 			Filter:      optionalValue(visual.Filter),
 			Description: optionalValue(visual.Description),
 			Placement:   DashboardPagePlacementFromDashboard(visual.Placement),

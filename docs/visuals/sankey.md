@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Map two dimensions to source and target nodes and one measure to link width, revealing how orders flow from status to delivery speed.
 
-{{< chart id="status_delivery_flow" >}}
+{{< visual id="status_delivery_flow" >}}
 
 ```yaml visual-example=status_delivery_flow
 visuals:
@@ -34,7 +34,7 @@ visuals:
 
 Replace the source and target dimensions to inspect category-to-status flow without changing the weighted graph contract.
 
-{{< chart id="category_status_flow" >}}
+{{< visual id="category_status_flow" >}}
 
 ```yaml visual-example=category_status_flow
 visuals:
@@ -59,7 +59,7 @@ visuals:
 
 Increase `options.node_gap` when labels or links feel crowded, and tune `curveness` to keep parallel flows visually distinct.
 
-{{< chart id="category_status_flow_spacious" >}}
+{{< visual id="category_status_flow_spacious" >}}
 
 ```yaml visual-example=category_status_flow_spacious
 visuals:

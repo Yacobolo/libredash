@@ -15,9 +15,38 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/agent"
 	"github.com/Yacobolo/libredash/internal/api"
+	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
 )
+
+func TestTypedChatArtifactsPreserveTabularTypeAcrossJSON(t *testing.T) {
+	for _, visualType := range []string{"table", "matrix", "pivot"} {
+		t.Run(visualType, func(t *testing.T) {
+			kind := map[string]string{"table": "data_table", "matrix": "matrix_table", "pivot": "pivot_table"}[visualType]
+			stored, err := json.Marshal(dashboard.NewTabularVisual("orders", dashboard.Table{
+				Kind: kind, Title: "Orders", Style: dashboard.TableStyle{}.WithDefaults(),
+				Interaction: dashboard.InteractionConfig{}, Selection: []dashboard.InteractionSelectionEntry{},
+				Columns: []dashboard.TableColumn{}, Cardinality: dashboard.ExactCardinality(0), Blocks: map[string]dashboard.TableBlock{},
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var persisted any
+			if err := json.Unmarshal(stored, &persisted); err != nil {
+				t.Fatal(err)
+			}
+			visuals := typedChatArtifacts(agent.ChatArtifactSignals{Visuals: map[string]any{"orders": persisted}})
+			encoded, err := json.Marshal(visuals["orders"])
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(encoded), `"type":"`+visualType+`"`) {
+				t.Fatalf("round-tripped visual = %s, want type %q", encoded, visualType)
+			}
+		})
+	}
+}
 
 func TestChatPageRequiresAuthAndRendersComponents(t *testing.T) {
 	store := testStore(t)
@@ -363,8 +392,8 @@ func TestChatConversationRouteLoadsArtifactSignalsOutsideTranscript(t *testing.T
 		PrincipalID:    owner.ID,
 		ConversationID: conversation.ID,
 		Role:           agent.MessageRoleTool,
-		ContentText:    `{"ok":true,"kind":"chart","id":"agent_chart_123","summary":"Created chart.","signal":"visuals.agent_chart_123"}`,
-		ContentJSON:    `{"display_content":{"kind":"chart","id":"agent_chart_123","patch":{"visuals":{"agent_chart_123":{"title":"Orders","data":[{"label":"delivered","value":42}]}}},"summary":"Created chart."}}`,
+		ContentText:    `{"ok":true,"type":"bar","id":"agent_visual_123","summary":"Created chart.","signal":"visuals.agent_visual_123"}`,
+		ContentJSON:    `{"display_content":{"type":"bar","id":"agent_visual_123","patch":{"visuals":{"agent_visual_123":{"id":"agent_visual_123","type":"bar","title":"Orders","data":[{"label":"delivered","value":42}]}}},"summary":"Created chart."}}`,
 		ToolCallID:     "call_1",
 		ToolName:       "query_visual",
 	}); err != nil {
@@ -382,14 +411,13 @@ func TestChatConversationRouteLoadsArtifactSignalsOutsideTranscript(t *testing.T
 	if strings.Contains(body, `"visuals"`) || strings.Contains(body, `data-attr:visuals="$visuals"`) {
 		t.Fatalf("chat page should not embed artifact signals in HTML:\n%s", body)
 	}
-	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&view=conversation&conversation="+url.QueryEscape(conversation.ID), token, `"visuals":{"agent_chart_123":`, `"artifact":{"id":"agent_chart_123","kind":"chart"`)
+	updatesBody := readUpdatesUntil(t, server, "/updates?route=chat&view=conversation&conversation="+url.QueryEscape(conversation.ID), token, `"visuals":{"agent_visual_123":`, `"artifact":{"id":"agent_visual_123","type":"bar"`)
 	for _, want := range []string{
-		`"visuals":{"agent_chart_123":`,
+		`"visuals":{"agent_visual_123":`,
 		`"title":"Orders"`,
 		`"data":[{"label":"delivered","value":42}]`,
-		`"tables":{}`,
-		`"artifact":{"id":"agent_chart_123","kind":"chart","summary":"Created chart."}`,
-		`"resultJson":"{\n  \"ok\": true,\n  \"kind\": \"chart\"`,
+		`"artifact":{"id":"agent_visual_123","type":"bar","summary":"Created chart."}`,
+		`"resultJson":"{\n  \"ok\": true,\n  \"type\": \"bar\"`,
 	} {
 		if !strings.Contains(updatesBody, want) {
 			t.Fatalf("chat stream missing %q:\n%s", want, updatesBody)

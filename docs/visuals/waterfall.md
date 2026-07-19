@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use an ordered dimension and one measure with `shape: category_delta` to show how each period contributes to the running total.
 
-{{< chart id="revenue_waterfall" >}}
+{{< visual id="revenue_waterfall" >}}
 
 ```yaml visual-example=revenue_waterfall
 visuals:
@@ -33,7 +33,7 @@ visuals:
 
 Replace revenue with order count to reuse the same running-contribution structure for volume rather than value.
 
-{{< chart id="orders_waterfall" >}}
+{{< visual id="orders_waterfall" >}}
 
 ```yaml visual-example=orders_waterfall
 visuals:
@@ -57,7 +57,7 @@ visuals:
 
 Enable `show_labels` for exact contributions and `data_zoom` when many categories make the running sequence too dense.
 
-{{< chart id="revenue_waterfall_labeled" >}}
+{{< visual id="revenue_waterfall_labeled" >}}
 
 ```yaml visual-example=revenue_waterfall_labeled
 visuals:

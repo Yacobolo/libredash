@@ -178,24 +178,24 @@ func sitePage(metadata sitePageMetadata) g.Node {
 	})
 }
 
-func chartsPage(metadata sitePageMetadata) g.Node {
+func visualsPage(metadata sitePageMetadata) g.Node {
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title:             metadata.title,
 		HTMLAttrs:         siteHTMLAttrs(),
 		Head:              siteHead(metadata),
 		MainAttrs:         []g.Node{h.Class("site-page")},
 		DatastarScriptURL: siteDatastarScriptURL,
-		UpdatesURL:        "/updates?view=charts",
+		UpdatesURL:        "/updates?view=visuals",
 		Body: []g.Node{
 			h.A(h.Class("skip-link"), h.Href("#main-content"), g.Text("Skip to content")),
 			siteHeader(false),
 			h.Div(h.Class("site-shell site-showcase-shell"),
 				h.Section(h.ID("main-content"), h.Class("site-showcase-intro"),
 					h.P(h.Class("site-eyebrow"), g.Text(siteBrandName+" visual system")),
-					h.H1(g.Text("Every chart type, using one contract.")),
-					h.P(h.Class("site-lede"), g.Text("Each visual below is a real "+siteBrandName+" component rendered from the same renderer-neutral chart payload shape.")),
+					h.H1(g.Text("Every visual type, using one contract.")),
+					h.P(h.Class("site-lede"), g.Text("Each item below is a real "+siteBrandName+" visual rendered from the same type-discriminated payload contract.")),
 				),
-				g.El("ld-site-chart-showcase"),
+				g.El("ld-site-visual-showcase"),
 			),
 			siteFooter(),
 		},
@@ -314,7 +314,7 @@ func siteHeader(isDocs bool) g.Node {
 	} else {
 		actions = append(actions, h.Div(h.Class("site-nav-links"),
 			h.A(h.Href("/docs"), g.Text("Docs")),
-			h.A(h.Href("/charts"), g.Text("Charts")),
+			h.A(h.Href("/visuals"), g.Text("Visuals")),
 		))
 	}
 	actions = append(actions, g.El("ld-site-theme-toggle"))
@@ -570,7 +570,7 @@ func siteFooter() g.Node {
 			siteFooterGroup("Explore", []siteFooterLink{
 				{label: "Documentation", href: "/docs"},
 				{label: "Getting started", href: "/docs/getting-started"},
-				{label: "Visual gallery", href: "/charts"},
+				{label: "Visual gallery", href: "/visuals"},
 			}),
 			siteFooterGroup("Project", []siteFooterLink{
 				{label: "GitHub", href: "https://github.com/Yacobolo/libredash"},

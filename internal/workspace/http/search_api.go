@@ -230,22 +230,22 @@ func dashboardComponentSearchDocument(report reportdef.Dashboard, page dashboard
 	case component.Table != "":
 		table := report.Tables[component.Table]
 		name := firstNonEmpty(component.Title, table.Title, component.Table)
-		description := firstNonEmpty(component.Description, table.Description, "Table "+component.Table+" on "+firstNonEmpty(page.Title, page.ID))
+		description := firstNonEmpty(component.Description, table.Description, "Visual "+component.Table+" on "+firstNonEmpty(page.Title, page.ID))
 		return search.Document{
-			ID:          "table:" + report.ID + "." + page.ID + "." + component.Table,
-			Type:        "table",
+			ID:          "visual:" + report.ID + "." + page.ID + "." + component.Table,
+			Type:        "visual",
 			Name:        name,
 			Description: description,
 			Refs: search.Refs{
 				DashboardID: report.ID,
 				PageID:      page.ID,
-				TableID:     component.Table,
+				VisualID:    component.Table,
 				ModelID:     report.SemanticModel,
 				DatasetID:   table.Query.Table,
 			},
 			Terms: []string{
 				report.ID, report.Title, page.ID, page.Title, component.ID, component.Kind,
-				component.Table, component.Title, component.Description, table.Title, table.Description,
+				component.Table, component.Title, component.Description, table.Title, table.Description, table.KindOrDefault(),
 				table.Query.Table, strings.Join(table.Query.Fields, " "), strings.Join(fieldRefTerms(table.Query.Columns), " "),
 				strings.Join(fieldRefTerms(table.Query.Rows), " "), strings.Join(fieldRefTerms(table.Query.Measures), " "),
 			},

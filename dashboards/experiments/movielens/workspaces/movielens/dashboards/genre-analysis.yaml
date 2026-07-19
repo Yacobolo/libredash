@@ -45,7 +45,7 @@ spec:
       field: rating_genres.release_decade
   visuals:
     genre_rating_count:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -54,7 +54,7 @@ spec:
         note: Rating-genre rows
         tone: ink
     average_rating:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -63,7 +63,7 @@ spec:
         note: Mean rating
         tone: amber
     active_users:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -72,7 +72,7 @@ spec:
         note: Distinct users
         tone: green
     rated_movies:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -141,7 +141,7 @@ spec:
             direction: asc
         limit: 240
   pages:
-    - name: overview
+    - id: overview
       title: Overview
       canvas:
         width: 1366
@@ -151,48 +151,48 @@ spec:
         row_height: 48
         gap: 16
         padding: 16
-      visuals:
+      components:
         - id: rating-date-filter
-          kind: filter_card
+          kind: filter
           filter: rating_date
           placement: {col: 1, row: 1, col_span: 4, row_span: 2}
         - id: genre-filter
-          kind: filter_card
+          kind: filter
           filter: genre
           placement: {col: 5, row: 1, col_span: 4, row_span: 2}
         - id: decade-filter
-          kind: filter_card
+          kind: filter
           filter: release_decade
           placement: {col: 9, row: 1, col_span: 4, row_span: 2}
         - id: genre-ratings
-          kind: kpi_card
+          kind: visual
           visual: genre_rating_count
           placement: {col: 1, row: 4, col_span: 3, row_span: 3}
         - id: average-rating
-          kind: kpi_card
+          kind: visual
           visual: average_rating
           placement: {col: 4, row: 4, col_span: 3, row_span: 3}
         - id: active-users
-          kind: kpi_card
+          kind: visual
           visual: active_users
           placement: {col: 7, row: 4, col_span: 3, row_span: 3}
         - id: rated-movies
-          kind: kpi_card
+          kind: visual
           visual: rated_movies
           placement: {col: 10, row: 4, col_span: 3, row_span: 3}
         - id: ratings-by-genre
-          kind: bar_chart
+          kind: visual
           visual: ratings_by_genre
           placement: {col: 1, row: 8, col_span: 6, row_span: 7}
         - id: average-by-genre
-          kind: bar_chart
+          kind: visual
           visual: average_by_genre
           placement: {col: 7, row: 8, col_span: 6, row_span: 7}
         - id: genre-trend
-          kind: column_chart
+          kind: visual
           visual: genre_trend
           placement: {col: 1, row: 16, col_span: 6, row_span: 7}
         - id: decade-genres
-          kind: heatmap_chart
+          kind: visual
           visual: decade_genres
           placement: {col: 7, row: 16, col_span: 6, row_span: 7}

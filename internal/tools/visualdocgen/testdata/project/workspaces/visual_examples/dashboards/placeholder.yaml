@@ -8,16 +8,16 @@ spec:
   semanticModel: visual_examples
   visuals:
     placeholder:
-      kind: kpi
+      type: kpi
       query:
         measures:
           order_count: null
   pages:
-  - name: placeholder
+  - id: placeholder
     title: Placeholder
-    visuals:
+    components:
     - id: placeholder
-      kind: kpi_card
+      kind: visual
       visual: placeholder
       placement:
         col: 1

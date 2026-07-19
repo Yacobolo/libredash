@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use the `single_value` shape with one measure when the value is meaningful against an implied range.
 
-{{< chart id="total_orders_gauge" >}}
+{{< visual id="total_orders_gauge" >}}
 
 ```yaml visual-example=total_orders_gauge
 visuals:
@@ -26,7 +26,7 @@ visuals:
 
 Use a bounded measure such as review score so the gauge position has an immediately understood minimum and maximum.
 
-{{< chart id="review_gauge" >}}
+{{< visual id="review_gauge" >}}
 
 ```yaml visual-example=review_gauge
 visuals:
@@ -44,7 +44,7 @@ visuals:
 
 Declare `min` and `max`, then add ordered `thresholds` to give score ranges semantic tones; `progress_width` controls the arc weight.
 
-{{< chart id="review_gauge_thresholds" >}}
+{{< visual id="review_gauge_thresholds" >}}
 
 ```yaml visual-example=review_gauge_thresholds
 visuals:

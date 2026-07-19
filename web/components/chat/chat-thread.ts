@@ -1,7 +1,7 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { property, state } from 'lit/decorators.js'
-import { Box, ChevronRight, FileText, LayoutDashboard, LayoutPanelTop, Table2, Wrench, type IconNode } from 'lucide'
-import type { ChatArtifactSignal, ChatStatus, ChatTranscriptItemSignal, DashboardTable, DashboardVisual } from '../../generated/signals'
+import { Box, ChevronRight, FileText, LayoutDashboard, LayoutPanelTop, Wrench, type IconNode } from 'lucide'
+import type { ChatArtifactSignal, ChatStatus, ChatTranscriptItemSignal, DashboardVisual } from '../../generated/signals'
 import { lucideIcon } from '../shared/lucide-icons'
 import '../shared/code-block'
 import '../shared/markdown-view'
@@ -10,13 +10,6 @@ import '../shared/visual-artifact'
 type ChatRenderUnit =
   | { kind: 'user'; item: ChatTranscriptItemSignal }
   | { kind: 'agent'; items: ChatTranscriptItemSignal[] }
-
-type LegacyArtifact = ChatArtifactSignal & {
-  patch?: {
-    visuals?: Record<string, DashboardVisual>
-    tables?: Record<string, DashboardTable>
-  }
-}
 
 type ToolPreviewLanguage = 'json' | 'toon' | 'text'
 type ChatTranscriptItemWithFormats = ChatTranscriptItemSignal & {
@@ -43,8 +36,6 @@ class ChatThread extends LitElement {
   @property({ attribute: 'transcript', converter: jsonConverter<ChatTranscriptItemSignal[]>([]) }) transcriptAttribute: ChatTranscriptItemSignal[] = []
   @property({ attribute: false }) visuals: Record<string, DashboardVisual> = {}
   @property({ attribute: 'visuals', converter: jsonConverter<Record<string, DashboardVisual>>({}) }) visualsAttribute: Record<string, DashboardVisual> = {}
-  @property({ attribute: false }) tables: Record<string, DashboardTable> = {}
-  @property({ attribute: 'tables', converter: jsonConverter<Record<string, DashboardTable>>({}) }) tablesAttribute: Record<string, DashboardTable> = {}
   @property({ attribute: 'status', converter: jsonConverter<ChatStatus>({ enabled: false, running: false }) }) status: ChatStatus = { enabled: false, running: false }
   @property({ attribute: 'conversation-id' }) conversationId = ''
   @state() private expandedToolCalls = new Set<string>()
@@ -341,11 +332,11 @@ class ChatThread extends LitElement {
       overflow: hidden;
     }
 
-    ld-visual-artifact[kind='chart'] {
+    ld-visual-artifact:not([type='table']):not([type='matrix']):not([type='pivot']) {
       height: 18rem;
     }
 
-    ld-visual-artifact[kind='table'] {
+    ld-visual-artifact:is([type='table'], [type='matrix'], [type='pivot']) {
       height: 22rem;
     }
 
@@ -414,10 +405,6 @@ class ChatThread extends LitElement {
 
   private get resolvedVisuals(): Record<string, DashboardVisual> {
     return hasKeys(this.visuals) ? this.visuals : this.visualsAttribute
-  }
-
-  private get resolvedTables(): Record<string, DashboardTable> {
-    return hasKeys(this.tables) ? this.tables : this.tablesAttribute
   }
 
   private scheduleScrollToBottom() {
@@ -504,13 +491,8 @@ class ChatThread extends LitElement {
   }
 
   private renderArtifact(artifact: ChatArtifactSignal) {
-    const legacyArtifact = artifact as LegacyArtifact
-    const payload = artifact.kind === 'chart'
-      ? this.resolvedVisuals[artifact.id] || legacyArtifact.patch?.visuals?.[artifact.id]
-      : artifact.kind === 'table'
-        ? this.resolvedTables[artifact.id] || legacyArtifact.patch?.tables?.[artifact.id]
-        : null
-    return html`<ld-visual-artifact kind=${artifact.kind} artifact-id=${artifact.id} .payload=${payload ?? null}></ld-visual-artifact>`
+    const payload = this.resolvedVisuals[artifact.id] || null
+    return html`<ld-visual-artifact type=${artifact.type} artifact-id=${artifact.id} .payload=${payload ?? null}></ld-visual-artifact>`
   }
 
   private renderToolDetails(item: ChatTranscriptItemSignal, detailsID: string) {
@@ -588,7 +570,8 @@ const toolIconContent: Record<string, IconNode> = {
   list_semantic_models: Box,
   describe_model: Box,
   query_dashboard_page: LayoutPanelTop,
-  query_table: Table2,
+  query_dashboard_visual: LayoutPanelTop,
+  query_visual: LayoutPanelTop,
 }
 
 function toolIcon(name = '') {

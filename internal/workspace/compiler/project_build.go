@@ -47,16 +47,35 @@ func projectModelTable(spec projectModelTableSpec) semanticmodel.Table {
 	return table
 }
 
-func projectDashboardPages(pages []projectDashboardPage) []dashboard.Page {
+func projectDashboardPages(pages []projectDashboardPage, visuals map[string]dashboardVisualSpec) []dashboard.Page {
 	out := make([]dashboard.Page, 0, len(pages))
 	for _, page := range pages {
+		components := make([]dashboard.PageVisual, 0, len(page.Components))
+		for _, component := range page.Components {
+			switch component.Kind {
+			case "visual":
+				definition := visuals[component.Visual]
+				if definition.Tabular != nil {
+					component.Kind = "table"
+					component.Table = component.Visual
+					component.Visual = ""
+				} else if definition.Type == "kpi" {
+					component.Kind = "kpi_card"
+				} else {
+					component.Kind = definition.Type + "_chart"
+				}
+			case "filter":
+				component.Kind = "filter_card"
+			}
+			components = append(components, component)
+		}
 		out = append(out, dashboard.Page{
-			ID:          page.Name,
+			ID:          page.ID,
 			Title:       page.Title,
 			Description: page.Description,
 			Canvas:      page.Canvas,
 			Grid:        page.Grid,
-			Visuals:     page.Visuals,
+			Visuals:     components,
 		})
 	}
 	return out

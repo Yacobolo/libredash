@@ -23,10 +23,9 @@ func TestDashboardTelemetryObservesAcceptedProgressiveTargetEvents(t *testing.T)
 	want := map[string]float64{
 		"filter_options:success": 1,
 		"refresh:error":          1,
-		"table:success":          1,
-		"table_count:error":      1,
+		"visual_count:error":     1,
 		"visual:error":           1,
-		"visual:success":         1,
+		"visual:success":         2,
 	}
 	got := dashboardTargetMetricValues(t, telemetry)
 	if len(got) != len(want) {

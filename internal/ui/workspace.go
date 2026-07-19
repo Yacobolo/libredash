@@ -2544,7 +2544,6 @@ func dashboardDetailModel(model *assetDetailModel, asset workspaceview.AssetView
 	pages := childrenByType(asset.ID, "page", assets)
 	filters := childrenByType(asset.ID, "filter", assets)
 	visuals := childrenByType(asset.ID, "visual", assets)
-	tables := childrenByType(asset.ID, "table", assets)
 	model.Overview = append(model.Overview,
 		definitionFact{Label: "Semantic model", Value: metaString(asset.Payload, "SemanticModel", "semantic_model")},
 		definitionFact{Label: "Tags", Value: strings.Join(stringSlice(metaValue(asset.Payload, "Tags", "tags")), ", ")},
@@ -2553,7 +2552,6 @@ func dashboardDetailModel(model *assetDetailModel, asset workspaceview.AssetView
 		assetDetailSection{Title: fmt.Sprintf("Pages (%d)", len(pages)), Signal: "assetDetailsPagesTable", Table: dashboardPagesTable(asset, pages)},
 		assetDetailSection{Title: fmt.Sprintf("Filters (%d)", len(filters)), Signal: "assetDetailsFiltersTable", Table: dashboardFiltersTable(asset, filters)},
 		assetDetailSection{Title: fmt.Sprintf("Visuals (%d)", len(visuals)), Signal: "assetDetailsVisualsTable", Table: dashboardVisualsTable(asset, visuals)},
-		assetDetailSection{Title: fmt.Sprintf("Tables (%d)", len(tables)), Signal: "assetDetailsTablesTable", Table: dashboardTablesTable(asset, tables)},
 	)
 }
 
@@ -2617,7 +2615,7 @@ func dashboardVisualsTable(parent workspaceview.AssetView, visuals []workspacevi
 			"visual":     assetTitle(visual),
 			"visualHref": assetnav.WorkspaceAssetSectionHref(parent.WorkspaceID, visual.ID, "details"),
 			"key":        assetChildName(parent, visual),
-			"type":       emptyDash(firstNonEmpty(metaString(visual.Payload, "Shape", "shape"), metaString(visual.Payload, "Type", "type"), metaString(visual.Payload, "Kind", "kind"))),
+			"type":       emptyDash(firstNonEmpty(metaString(visual.Payload, "Type", "type"), metaString(visual.Payload, "Shape", "shape"))),
 			"measures":   emptyDash(strings.Join(stringSlice(metaValue(query, "Measures", "measures")), ", ")),
 			"dimensions": emptyDash(strings.Join(stringSlice(metaValue(query, "Dimensions", "dimensions")), ", ")),
 		})
@@ -2633,33 +2631,6 @@ func dashboardVisualsTable(parent workspaceview.AssetView, visuals []workspacevi
 		Rows:     rows,
 		Empty:    "No visuals are defined for this dashboard.",
 		MinWidth: uisignals.Pointer("1040px"),
-	}
-}
-
-func dashboardTablesTable(parent workspaceview.AssetView, tables []workspaceview.AssetView) recordTable {
-	sortAssetChildren(parent, tables)
-	rows := make([]map[string]any, 0, len(tables))
-	for _, table := range tables {
-		rows = append(rows, map[string]any{
-			"table":      assetTitle(table),
-			"tableHref":  assetnav.WorkspaceAssetSectionHref(parent.WorkspaceID, table.ID, "details"),
-			"key":        assetChildName(parent, table),
-			"scopeTable": emptyDash(metaString(metaMap(table.Payload, "Query", "query"), "Table", "table")),
-			"rows":       emptyDash(strings.Join(stringSlice(metaValue(table.Payload, "Rows", "rows")), ", ")),
-			"measures":   emptyDash(strings.Join(stringSlice(metaValue(table.Payload, "Measures", "measures")), ", ")),
-		})
-	}
-	return recordTable{
-		Columns: []recordTableColumn{
-			{ID: "table", Header: "Table", Kind: uisignals.Pointer("link"), HrefKey: uisignals.Pointer("tableHref"), Width: uisignals.Pointer("220px")},
-			{ID: "key", Header: "Key", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("170px")},
-			{ID: "scopeTable", Header: "Table scope", Kind: uisignals.Pointer("code"), Width: uisignals.Pointer("140px")},
-			{ID: "rows", Header: "Rows", Kind: uisignals.Pointer("expression"), Width: uisignals.Pointer("280px")},
-			{ID: "measures", Header: "Measures", Kind: uisignals.Pointer("expression")},
-		},
-		Rows:     rows,
-		Empty:    "No tables are defined for this dashboard.",
-		MinWidth: uisignals.Pointer("920px"),
 	}
 }
 

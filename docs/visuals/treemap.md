@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use one categorical dimension and one measure to size rectangular areas, making dominant categories visible within limited space.
 
-{{< chart id="category_treemap" >}}
+{{< visual id="category_treemap" >}}
 
 ```yaml visual-example=category_treemap
 visuals:
@@ -30,7 +30,7 @@ visuals:
 
 Replace the dimension and measure to compare revenue by state without changing the category-value shape.
 
-{{< chart id="state_treemap" >}}
+{{< visual id="state_treemap" >}}
 
 ```yaml visual-example=state_treemap
 visuals:
@@ -52,7 +52,7 @@ visuals:
 
 Enable `breadcrumb` and `roam` when readers should navigate into dense or nested rectangles instead of viewing a fixed overview.
 
-{{< chart id="category_treemap_roam" >}}
+{{< visual id="category_treemap_roam" >}}
 
 ```yaml visual-example=category_treemap_roam
 visuals:

@@ -326,7 +326,7 @@ func TestCoordinatorSummaryIncludesTargetsCachesAndCancellationReason(t *testing
 
 	release := make(chan struct{})
 	if _, err := coordinator.BeginPrepared(func(current dashboard.Filters) (RefreshPreparation, error) {
-		return RefreshPreparation{Filters: current, Command: "select", Targets: []string{"visual:a", "table:b"}}, nil
+		return RefreshPreparation{Filters: current, Command: "select", Targets: []string{"visual:a", "visual:b"}}, nil
 	}, func(RefreshPreparation) RefreshWork {
 		return func(_ context.Context, publish RefreshPublisher) {
 			<-release
@@ -338,7 +338,7 @@ func TestCoordinatorSummaryIncludesTargetsCachesAndCancellationReason(t *testing
 	if _, err := coordinator.Begin(nil, func(_ context.Context, publish RefreshPublisher) {
 		publish(RefreshEvent{Type: RefreshEventCacheOutcome, CacheOutcome: dataquery.CacheHit})
 		publish(RefreshEvent{Type: RefreshEventVisual, Target: "current"})
-		publish(RefreshEvent{Type: RefreshEventTargetError, Target: "table:bad", Err: errors.New("bad")})
+		publish(RefreshEvent{Type: RefreshEventTargetError, Target: "visual:bad", Err: errors.New("bad")})
 	}); err != nil {
 		t.Fatal(err)
 	}

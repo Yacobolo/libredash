@@ -107,7 +107,7 @@ func TestWorkspaceAssetDetailSignalsUseSharedGridShape(t *testing.T) {
 	assertNoDetailSection(t, semanticPage.Details.Sections, "Fields")
 
 	dashboardPage := workspaceAssetPageSignal(workspace, byType["dashboard"], assets, edges, "details", assetLineage(workspace.ID, byType["dashboard"], assets, edges))
-	for _, title := range []string{"Pages", "Filters", "Visuals", "Tables"} {
+	for _, title := range []string{"Pages", "Filters", "Visuals"} {
 		detailSectionTable(t, dashboardPage.Details.Sections, title)
 	}
 
@@ -495,7 +495,7 @@ func TestAssetLineageDashboardDerivesMeasureConsumers(t *testing.T) {
 	if uisignals.ValueOrZero(node.UsesCount) != 1 || uisignals.ValueOrZero(node.UsedByCount) != 0 {
 		t.Fatalf("dashboard full-fidelity counts = uses %d usedBy %d, want 1/0: %#v", uisignals.ValueOrZero(node.UsesCount), uisignals.ValueOrZero(node.UsedByCount), node)
 	}
-	if uisignals.ValueOrZero(node.ContainedCount) != 4 || uisignals.ValueOrZero(node.ContainedSummary) != "1 filter, 1 page, 1 table, 1 visual" {
+	if uisignals.ValueOrZero(node.ContainedCount) != 4 || uisignals.ValueOrZero(node.ContainedSummary) != "1 filter, 1 page, 2 visuals" {
 		t.Fatalf("dashboard contained summary = %d %q, want 4 dashboard children: %#v", uisignals.ValueOrZero(node.ContainedCount), uisignals.ValueOrZero(node.ContainedSummary), node)
 	}
 	assertTableRelations(t, lineage.Uses, []string{"Powers dashboard"})
@@ -1027,7 +1027,7 @@ var testAssetAliases = map[string]string{
 	"page-item":       "page_item:executive-sales.overview.revenue",
 	"filter":          "filter:executive-sales.state",
 	"visual":          "visual:executive-sales.revenue",
-	"table":           "table:executive-sales.orders",
+	"table":           "visual:executive-sales.orders",
 }
 
 func detailSectionTable(t *testing.T, sections []uisignals.WorkspaceDetailSectionSignal, title string) recordTable {
@@ -1376,7 +1376,7 @@ func testWorkspaceAssetFixtures() (workspaceview.WorkspaceView, dashboard.Catalo
 		{ID: "page_item:executive-sales.overview.revenue", WorkspaceID: workspace.ID, Type: "page_item", Key: "executive-sales.overview.revenue", ParentID: "page:executive-sales.overview", Title: "Revenue tile"},
 		{ID: "filter:executive-sales.state", WorkspaceID: workspace.ID, Type: "filter", Key: "executive-sales.state", ParentID: "dashboard:executive-sales", Title: "State", Payload: map[string]any{"Field": "orders.state", "Type": "multi_select"}},
 		{ID: "visual:executive-sales.revenue", WorkspaceID: workspace.ID, Type: "visual", Key: "executive-sales.revenue", ParentID: "dashboard:executive-sales", Title: "Revenue by month", Payload: map[string]any{"Type": "line"}},
-		{ID: "table:executive-sales.orders", WorkspaceID: workspace.ID, Type: "table", Key: "executive-sales.orders", ParentID: "dashboard:executive-sales", Title: "Orders", Payload: map[string]any{"Table": "orders"}},
+		{ID: "visual:executive-sales.orders", WorkspaceID: workspace.ID, Type: "visual", Key: "executive-sales.orders", ParentID: "dashboard:executive-sales", Title: "Orders", Payload: map[string]any{"Type": "table", "Query": map[string]any{"Table": "orders"}}},
 	}
 	edges := []workspaceview.AssetEdgeView{
 		{ID: "catalog-model", FromAssetID: "catalog:libredash", ToAssetID: "semantic_model:olist", Type: "contains"},
@@ -1397,15 +1397,15 @@ func testWorkspaceAssetFixtures() (workspaceview.WorkspaceView, dashboard.Catalo
 		{ID: "dashboard-page", FromAssetID: "dashboard:executive-sales", ToAssetID: "page:executive-sales.overview", Type: "contains"},
 		{ID: "dashboard-filter", FromAssetID: "dashboard:executive-sales", ToAssetID: "filter:executive-sales.state", Type: "contains"},
 		{ID: "dashboard-visual", FromAssetID: "dashboard:executive-sales", ToAssetID: "visual:executive-sales.revenue", Type: "contains"},
-		{ID: "dashboard-table", FromAssetID: "dashboard:executive-sales", ToAssetID: "table:executive-sales.orders", Type: "contains"},
+		{ID: "dashboard-table", FromAssetID: "dashboard:executive-sales", ToAssetID: "visual:executive-sales.orders", Type: "contains"},
 		{ID: "page-item-edge", FromAssetID: "page:executive-sales.overview", ToAssetID: "page_item:executive-sales.overview.revenue", Type: "contains"},
 		{ID: "page-item-visual", FromAssetID: "page_item:executive-sales.overview.revenue", ToAssetID: "visual:executive-sales.revenue", Type: "uses_visual"},
-		{ID: "page-item-table", FromAssetID: "page_item:executive-sales.overview.revenue", ToAssetID: "table:executive-sales.orders", Type: "uses_table"},
+		{ID: "page-item-table", FromAssetID: "page_item:executive-sales.overview.revenue", ToAssetID: "visual:executive-sales.orders", Type: "uses_visual"},
 		{ID: "page-item-filter", FromAssetID: "page_item:executive-sales.overview.revenue", ToAssetID: "filter:executive-sales.state", Type: "uses_filter"},
 		{ID: "visual-measure", FromAssetID: "visual:executive-sales.revenue", ToAssetID: "measure:olist.revenue", Type: "uses_measure"},
 		{ID: "visual-field", FromAssetID: "visual:executive-sales.revenue", ToAssetID: "field:olist.orders.state", Type: "uses_field"},
-		{ID: "table-semantic-table", FromAssetID: "table:executive-sales.orders", ToAssetID: "semantic_table:olist.orders", Type: "uses_semantic_table"},
-		{ID: "table-field", FromAssetID: "table:executive-sales.orders", ToAssetID: "field:olist.orders.state", Type: "uses_field"},
+		{ID: "table-semantic-table", FromAssetID: "visual:executive-sales.orders", ToAssetID: "semantic_table:olist.orders", Type: "uses_semantic_table"},
+		{ID: "table-field", FromAssetID: "visual:executive-sales.orders", ToAssetID: "field:olist.orders.state", Type: "uses_field"},
 		{ID: "filter-field", FromAssetID: "filter:executive-sales.state", ToAssetID: "field:olist.orders.state", Type: "filters_field"},
 	}
 	return workspace, catalog, assets, edges

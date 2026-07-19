@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use one categorical dimension and one measure for a part-to-whole comparison, sorting by value to keep the largest sectors easy to find.
 
-{{< chart id="status_pie" >}}
+{{< visual id="status_pie" >}}
 
 ```yaml visual-example=status_pie
 visuals:
@@ -29,7 +29,7 @@ visuals:
 
 Set `options.rose_type: radius` to encode values through sector radius as well as angle, and show labels so the less familiar form remains readable.
 
-{{< chart id="status_pie_rose" >}}
+{{< visual id="status_pie_rose" >}}
 
 ```yaml visual-example=status_pie_rose
 visuals:
@@ -53,7 +53,7 @@ visuals:
 
 Move labels inside the sectors for a compact presentation; keep the category count low enough that internal labels do not collide.
 
-{{< chart id="category_pie_inside" >}}
+{{< visual id="category_pie_inside" >}}
 
 ```yaml visual-example=category_pie_inside
 visuals:

@@ -319,7 +319,7 @@ model AdminStorageTableSignal {
 
 model AssetLineageEdgeSignal {
   `id`: string;
-  `kind`: string;
+  `kind`: "visual" | "filter" | "header";
   `label`?: string;
   `source`: string;
   `target`: string;
@@ -383,7 +383,7 @@ model CatalogPageSignal {
 
 model ChatArtifactSignal {
   `id`: string;
-  `kind`: string;
+  `type`: string;
   `summary`?: string;
 }
 
@@ -412,8 +412,6 @@ model ChatEnvelope {
   `page`: ChatPageSignal;
   @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "runtime" })
   `runtime`: RouteRuntimeSignal;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "tables" })
-  `tables`: Record<DashboardTable>;
   @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "visuals" })
   `visuals`: Record<DashboardVisual>;
 }
@@ -514,7 +512,6 @@ model DashboardComponentSignal {
   `kind`: string;
   `placement`: DashboardPagePlacement;
   `subtitle`?: string;
-  `table`?: string;
   `title`?: string;
   `visual`?: string;
   `width`: float64;
@@ -522,7 +519,7 @@ model DashboardComponentSignal {
   `y`: float64;
 }
 
-/** Progressive refresh state for one visual or table target. */
+/** Progressive refresh state for one visual target. */
 model DashboardComponentStatus {
   `error`: string;
   `generation`: int64;
@@ -550,10 +547,8 @@ model DashboardEnvelope {
   `runtime`: RouteRuntimeSignal;
   @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "status" })
   `status`: DashboardStatus;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "tableCommand" })
-  `tableCommand`: DashboardTableRequest;
-  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "tables" })
-  `tables`: Record<DashboardTable>;
+  @apigen.`metadata`(#{ `x-libredash-patch-mode`: "replace", `x-libredash-signal-key`: "visualWindowCommand" })
+  `visualWindowCommand`: DashboardVisualWindowRequest;
   @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "urlParamShape" })
   `urlParamShape`: Record<unknown>;
   @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "urlParams" })
@@ -587,7 +582,7 @@ model DashboardInteractionCommand {
   `interactionKind`: string;
   `mappings`: DashboardInteractionCommandMapping[];
   `sourceId`: string;
-  `sourceKind`: string;
+  `sourceKind`: "visual";
   `toggle`: boolean;
 }
 
@@ -622,7 +617,7 @@ model DashboardInteractionSelection {
   `label`: string;
   `order`: int64;
   `sourceId`: string;
-  `sourceKind`: string;
+  `sourceKind`: "visual";
 }
 
 model DashboardInteractionSelectionEntry {
@@ -697,45 +692,24 @@ model DashboardStatus {
   `setupRequired`: boolean;
 }
 
-model DashboardTable {
-  `availableRows`: int64;
-  `blocks`: Record<DashboardTableBlock>;
-  `chunkSize`: int64;
-  `columns`: DashboardTableColumn[];
-  `error`: string;
-  `interaction`: DashboardInteractionConfig;
-  `isCapped`: boolean;
-  `kind`: string;
-  `loadingBlock`: string;
-  `resetVersion`: int64;
-  `rowCap`: int64;
-  `rowHeight`: int64;
-  `selection`: DashboardInteractionSelectionEntry[];
-  `sort`: DashboardTableSort;
-  `style`: DashboardTableStyle;
-  `title`: string;
-  `cardinality`: DashboardTableCardinality;
-  `version`: int64;
-}
-
-model DashboardTableCardinality {
+model DashboardVisualCardinality {
   `kind`: "unknown" | "lower_bound" | "estimated" | "exact";
   `value`: int64;
 }
 
-model DashboardTableBlock {
+model DashboardVisualBlock {
   `requestSeq`: int64;
   `resetVersion`: int64;
   `rows`: Record<unknown>[];
-  `sort`: DashboardTableSort;
+  `sort`: DashboardVisualSort;
   `start`: int64;
 }
 
-model DashboardTableColumn {
+model DashboardVisualColumn {
   `align`?: string;
   `columnValue`?: string;
   `format`?: string;
-  `formatting`?: DashboardTableFormattingRule[];
+  `formatting`?: DashboardVisualFormattingRule[];
   `group`?: string;
   `key`: string;
   `label`: string;
@@ -744,7 +718,7 @@ model DashboardTableColumn {
   `width`?: int64;
 }
 
-model DashboardTableFormattingRule {
+model DashboardVisualFormattingRule {
   `background`?: string;
   `color`?: string;
   `highColor`?: string;
@@ -755,47 +729,87 @@ model DashboardTableFormattingRule {
   `values`?: Record<string>;
 }
 
-model DashboardTableRequest {
+model DashboardVisualWindowRequest {
   `block`: string;
   `count`: int64;
   `requestSeq`: int64;
   `resetVersion`: int64;
-  `sort`: DashboardTableSort;
+  `sort`: DashboardVisualSort;
   `start`: int64;
-  `table`: string;
+  `visual`: string;
 }
 
-model DashboardTableSort {
+model DashboardVisualSort {
   `direction`: string;
   `key`: string;
 }
 
-model DashboardTableStyle {
+model DashboardVisualStyle {
   `density`: string;
   `grid`: string;
   `zebra`: boolean;
 }
 
+@discriminator("type")
 model DashboardVisual {
-  `data`: Record<unknown>[];
-  `dimensions`: string[];
+  `availableRows`?: int64;
+  `blocks`?: Record<DashboardVisualBlock>;
+  `cardinality`?: DashboardVisualCardinality;
+  `chunkSize`?: int64;
+  `columns`?: DashboardVisualColumn[];
+  `data`?: Record<unknown>[];
+  `dimensions`?: string[];
+  `error`?: string;
   `format`?: string;
   `id`: string;
   `interaction`: DashboardInteractionConfig;
-  `kind`: string;
-  `measure`: string;
-  `measures`: string[];
-  `options`: Record<unknown>;
-  `renderer`: string;
-  `rendererOptions`: Record<Record<unknown>>;
+  `isCapped`?: boolean;
+  `loadingBlock`?: string;
+  `measure`?: string;
+  `measures`?: string[];
+  `options`?: Record<unknown>;
+  `renderer`?: string;
+  `rendererOptions`?: Record<Record<unknown>>;
+  `resetVersion`?: int64;
+  `rowCap`?: int64;
+  `rowHeight`?: int64;
   `selection`: DashboardInteractionSelectionEntry[];
-  `series`: string[];
-  `shape`: string;
+  `series`?: string[];
+  `shape`?: string;
+  `sort`?: DashboardVisualSort;
+  `style`?: DashboardVisualStyle;
   `title`: string;
   `type`: string;
-  `unit`: string;
   `version`: int64;
+  `unit`: string;
 }
+
+model LineDashboardVisual extends DashboardVisual { `type`: "line"; }
+model AreaDashboardVisual extends DashboardVisual { `type`: "area"; }
+model BarDashboardVisual extends DashboardVisual { `type`: "bar"; }
+model ColumnDashboardVisual extends DashboardVisual { `type`: "column"; }
+model PieDashboardVisual extends DashboardVisual { `type`: "pie"; }
+model DonutDashboardVisual extends DashboardVisual { `type`: "donut"; }
+model ScatterDashboardVisual extends DashboardVisual { `type`: "scatter"; }
+model FunnelDashboardVisual extends DashboardVisual { `type`: "funnel"; }
+model TreemapDashboardVisual extends DashboardVisual { `type`: "treemap"; }
+model GaugeDashboardVisual extends DashboardVisual { `type`: "gauge"; }
+model HeatmapDashboardVisual extends DashboardVisual { `type`: "heatmap"; }
+model SankeyDashboardVisual extends DashboardVisual { `type`: "sankey"; }
+model GraphDashboardVisual extends DashboardVisual { `type`: "graph"; }
+model MapDashboardVisual extends DashboardVisual { `type`: "map"; }
+model CandlestickDashboardVisual extends DashboardVisual { `type`: "candlestick"; }
+model BoxplotDashboardVisual extends DashboardVisual { `type`: "boxplot"; }
+model ComboDashboardVisual extends DashboardVisual { `type`: "combo"; }
+model WaterfallDashboardVisual extends DashboardVisual { `type`: "waterfall"; }
+model HistogramDashboardVisual extends DashboardVisual { `type`: "histogram"; }
+model RadarDashboardVisual extends DashboardVisual { `type`: "radar"; }
+model TreeDashboardVisual extends DashboardVisual { `type`: "tree"; }
+model SunburstDashboardVisual extends DashboardVisual { `type`: "sunburst"; }
+model KPIDashboardVisual extends DashboardVisual { `type`: "kpi"; }
+model TableDashboardVisual extends DashboardVisual { `type`: "table"; }
+model MatrixDashboardVisual extends DashboardVisual { `type`: "matrix"; }
+model PivotDashboardVisual extends DashboardVisual { `type`: "pivot"; }
 
 @apigen.contract(#{ kind: "ui-command", tags: #["data", "command"] })
 @apigen.`metadata`(#{ `x-libredash-contract-role`: "command", `x-libredash-surface`: "data" })
@@ -1099,7 +1113,6 @@ model ReportFilterPreset {
 }
 
 model ReportFilterTargets {
-  `tables`?: string[];
   `visuals`?: string[];
 }
 

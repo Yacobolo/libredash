@@ -39,7 +39,7 @@ export interface InteractionConfigLike {
 }
 
 export interface OptimisticInteractionCommand {
-  sourceKind: 'visual' | 'table'
+  sourceKind: 'visual'
   sourceId: string
   interactionKind: string
   action: 'set' | 'replace' | 'clear'
@@ -49,7 +49,7 @@ export interface OptimisticInteractionCommand {
 
 export function canonicalSelectionEntriesForSource(
   selections: readonly CanonicalInteractionSelection[] | undefined,
-  sourceKind: 'visual' | 'table',
+  sourceKind: 'visual',
   sourceId: string,
 ): InteractionSelectionEntry[] {
   if (!sourceId) return []
@@ -86,14 +86,14 @@ export function validateInteractionCommand(
   command: OptimisticInteractionCommand,
   configured: InteractionConfigLike | undefined,
 ): boolean {
-  if (!configured || !command.sourceId || !['visual', 'table'].includes(command.sourceKind)) return false
+  if (!configured || !command.sourceId || command.sourceKind !== 'visual') return false
   if (!['set', 'replace', 'clear'].includes(command.action)) return false
-  if (command.interactionKind !== (configured.kind || (command.sourceKind === 'table' ? 'row_selection' : 'point_selection'))) return false
+  if (command.interactionKind !== (configured.kind || 'point_selection')) return false
   if (command.action === 'clear') return command.mappings.length === 0
 
   const mappings = configured.mappings ?? []
   if (mappings.length === 0) {
-    return command.sourceKind === 'table'
+    return command.interactionKind === 'row_selection'
       && command.mappings.length === 1
       && command.mappings[0]?.field === '__libredash.rowKey'
       && !command.mappings[0]?.fact

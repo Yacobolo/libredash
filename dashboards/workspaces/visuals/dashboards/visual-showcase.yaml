@@ -62,7 +62,7 @@ spec:
       field: orders.category
   visuals:
     total_orders:
-      kind: kpi
+      type: kpi
       description: Shows the filtered count of distinct orders.
       shape: single_value
       query:
@@ -72,7 +72,7 @@ spec:
         note: Filtered order count
         tone: ink
     revenue_kpi:
-      kind: kpi
+      type: kpi
       description: Shows filtered total payment revenue.
       shape: single_value
       query:
@@ -82,7 +82,7 @@ spec:
         note: Payment value
         tone: green
     aov_kpi:
-      kind: kpi
+      type: kpi
       description: Shows average order value for the current filters.
       shape: single_value
       query:
@@ -92,7 +92,7 @@ spec:
         note: Revenue per order
         tone: amber
     review_kpi:
-      kind: kpi
+      type: kpi
       description: Shows average review score for the current filters.
       shape: single_value
       query:
@@ -1161,9 +1161,8 @@ spec:
         - field: value
           direction: desc
         limit: 120
-  tables:
     orders_table:
-      kind: data_table
+      type: table
       title: Orders
       description: Detailed order records with status, geography, revenue, review, and delivery columns.
       interaction:
@@ -1242,7 +1241,7 @@ spec:
         - orders.review_score
         - orders.delivery_days
     orders_compact:
-      kind: data_table
+      type: table
       title: Orders compact
       description: Compact order table for dense scanning.
       style:
@@ -1290,7 +1289,7 @@ spec:
         - orders.revenue
         - orders.review_score
     orders_spacious:
-      kind: data_table
+      type: table
       title: Orders spacious
       description: Spacious order table focused on date, category, revenue, and delivery.
       style:
@@ -1338,7 +1337,7 @@ spec:
         - orders.revenue
         - orders.delivery_days
     orders_full_grid:
-      kind: data_table
+      type: table
       title: Orders full grid
       description: Full-grid order table with visible row and column borders.
       style:
@@ -1392,7 +1391,7 @@ spec:
         - orders.revenue
         - orders.delivery_days
     orders_conditional:
-      kind: data_table
+      type: table
       title: Orders conditional formatting
       description: Order table demonstrating badges, data bars, and threshold formatting.
       style:
@@ -1472,7 +1471,7 @@ spec:
         - orders.review_score
         - orders.delivery_days
     state_status_matrix:
-      kind: matrix_table
+      type: matrix
       title: State status matrix
       description: Matrix of orders and revenue by customer state and order status.
       default_sort:
@@ -1487,7 +1486,7 @@ spec:
           order_count: null
           revenue: null
     category_status_pivot:
-      kind: pivot_table
+      type: pivot
       title: Category status pivot
       description: Pivot of order count by product category and order status.
       default_sort:
@@ -1501,7 +1500,7 @@ spec:
         measures:
           order_count: null
     state_status_matrix_formatted:
-      kind: matrix_table
+      type: matrix
       title: State/category matrix formatted
       description: Formatted matrix combining geography, category, status, and measures.
       style:
@@ -1549,7 +1548,7 @@ spec:
           order_count: null
           revenue: null
     category_status_pivot_heat:
-      kind: pivot_table
+      type: pivot
       title: Category status pivot heat
       description: Heat-formatted pivot of category and status performance.
       style:
@@ -1583,9 +1582,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       description: Period filter placement in the overview header.
       placement:
@@ -1594,7 +1593,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       description: State filter placement in the overview header.
       placement:
@@ -1603,7 +1602,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: total-orders
-      kind: kpi_card
+      kind: visual
       visual: total_orders
       description: Total orders KPI placement on the overview page.
       placement:
@@ -1612,7 +1611,7 @@ spec:
         col_span: 3
         row_span: 2
     - id: revenue-kpi
-      kind: kpi_card
+      kind: visual
       visual: revenue_kpi
       description: Revenue KPI placement on the overview page.
       placement:
@@ -1621,7 +1620,7 @@ spec:
         col_span: 3
         row_span: 2
     - id: aov-kpi
-      kind: kpi_card
+      kind: visual
       visual: aov_kpi
       description: Average order value KPI placement on the overview page.
       placement:
@@ -1630,7 +1629,7 @@ spec:
         col_span: 3
         row_span: 2
     - id: review-kpi
-      kind: kpi_card
+      kind: visual
       visual: review_kpi
       description: Review score KPI placement on the overview page.
       placement:
@@ -1639,7 +1638,7 @@ spec:
         col_span: 3
         row_span: 2
     - id: revenue
-      kind: line_chart
+      kind: visual
       visual: revenue
       description: Revenue trend chart placement on the overview page.
       placement:
@@ -1648,7 +1647,7 @@ spec:
         col_span: 6
         row_span: 5
     - id: orders
-      kind: bar_chart
+      kind: visual
       visual: orders
       description: Order status chart placement on the overview page.
       placement:
@@ -1657,7 +1656,7 @@ spec:
         col_span: 3
         row_span: 5
     - id: delivery
-      kind: bar_chart
+      kind: visual
       visual: delivery
       description: Delivery speed chart placement on the overview page.
       placement:
@@ -1666,7 +1665,7 @@ spec:
         col_span: 3
         row_span: 5
     - id: categories
-      kind: bar_chart
+      kind: visual
       visual: categories
       description: Product category chart placement on the overview page.
       placement:
@@ -1675,15 +1674,15 @@ spec:
         col_span: 6
         row_span: 6
     - id: orders-table
-      kind: table
-      table: orders_table
+      kind: visual
+      visual: orders_table
       description: Orders table placement on the overview page.
       placement:
         col: 7
         row: 9
         col_span: 6
         row_span: 6
-    name: overview
+    id: overview
   - title: Line
     description: Single and multi-series line chart variations
     canvas:
@@ -1694,9 +1693,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -1704,7 +1703,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -1712,7 +1711,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: revenue-line
-      kind: line_chart
+      kind: visual
       visual: revenue_line
       placement:
         col: 1
@@ -1720,7 +1719,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: revenue-line-status
-      kind: line_chart
+      kind: visual
       visual: revenue_line_status
       placement:
         col: 5
@@ -1728,14 +1727,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: revenue-line-step
-      kind: line_chart
+      kind: visual
       visual: revenue_line_step
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-line
+    id: chart-line
   - title: Area
     description: Single and stacked area chart variations
     canvas:
@@ -1746,9 +1745,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -1756,7 +1755,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -1764,7 +1763,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: revenue-area
-      kind: area_chart
+      kind: visual
       visual: revenue
       placement:
         col: 1
@@ -1772,7 +1771,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: revenue-area-status
-      kind: area_chart
+      kind: visual
       visual: revenue_area_status
       placement:
         col: 5
@@ -1780,14 +1779,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: revenue-area-smooth
-      kind: area_chart
+      kind: visual
       visual: revenue_area_smooth
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-area
+    id: chart-area
   - title: Bar
     description: Horizontal bar chart variations
     canvas:
@@ -1798,9 +1797,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -1808,7 +1807,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -1816,7 +1815,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: categories
-      kind: bar_chart
+      kind: visual
       visual: categories
       placement:
         col: 1
@@ -1824,7 +1823,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: delivery
-      kind: bar_chart
+      kind: visual
       visual: delivery
       placement:
         col: 5
@@ -1832,14 +1831,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: categories-by-status
-      kind: bar_chart
+      kind: visual
       visual: categories_by_status_bar
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-bar
+    id: chart-bar
   - title: Column
     description: Vertical and stacked column chart variations
     canvas:
@@ -1850,9 +1849,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -1860,7 +1859,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -1868,7 +1867,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: orders-column
-      kind: column_chart
+      kind: visual
       visual: orders_by_month_column
       placement:
         col: 1
@@ -1876,7 +1875,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: orders-column-status
-      kind: column_chart
+      kind: visual
       visual: orders_by_month_status
       placement:
         col: 5
@@ -1884,14 +1883,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: orders-column-status-grouped
-      kind: column_chart
+      kind: visual
       visual: orders_by_month_status_grouped
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-column
+    id: chart-column
   - title: Pie
     description: Pie chart variations
     canvas:
@@ -1902,9 +1901,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -1912,7 +1911,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -1920,7 +1919,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: status-pie
-      kind: pie_chart
+      kind: visual
       visual: status_pie
       placement:
         col: 1
@@ -1928,7 +1927,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: status-pie-rose
-      kind: pie_chart
+      kind: visual
       visual: status_pie_rose
       placement:
         col: 5
@@ -1936,14 +1935,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-pie-inside
-      kind: pie_chart
+      kind: visual
       visual: category_pie_inside
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-pie
+    id: chart-pie
   - title: Donut
     description: Donut chart variations
     canvas:
@@ -1954,9 +1953,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -1964,7 +1963,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -1972,7 +1971,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: status-donut
-      kind: donut_chart
+      kind: visual
       visual: orders
       placement:
         col: 1
@@ -1980,7 +1979,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-donut
-      kind: donut_chart
+      kind: visual
       visual: category_donut
       placement:
         col: 5
@@ -1988,14 +1987,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: orders-donut-center
-      kind: donut_chart
+      kind: visual
       visual: orders_donut_center
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-donut
+    id: chart-donut
   - title: Scatter
     description: Single and multi-series scatter chart variations
     canvas:
@@ -2006,9 +2005,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2016,7 +2015,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2024,7 +2023,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: delivery-scatter
-      kind: scatter_chart
+      kind: visual
       visual: delivery_scatter
       placement:
         col: 1
@@ -2032,7 +2031,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: delivery-scatter-status
-      kind: scatter_chart
+      kind: visual
       visual: delivery_scatter_status
       placement:
         col: 5
@@ -2040,14 +2039,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: delivery-scatter-labeled
-      kind: scatter_chart
+      kind: visual
       visual: delivery_scatter_labeled
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-scatter
+    id: chart-scatter
   - title: Funnel
     description: Funnel chart variations
     canvas:
@@ -2058,9 +2057,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2068,7 +2067,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2076,7 +2075,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: status-funnel
-      kind: funnel_chart
+      kind: visual
       visual: status_funnel
       placement:
         col: 1
@@ -2084,7 +2083,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: delivery-funnel
-      kind: funnel_chart
+      kind: visual
       visual: delivery_funnel
       placement:
         col: 5
@@ -2092,14 +2091,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: status-funnel-left
-      kind: funnel_chart
+      kind: visual
       visual: status_funnel_left
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-funnel
+    id: chart-funnel
   - title: Treemap
     description: Treemap chart variations
     canvas:
@@ -2110,9 +2109,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2120,7 +2119,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2128,7 +2127,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: category-treemap
-      kind: treemap_chart
+      kind: visual
       visual: category_treemap
       placement:
         col: 1
@@ -2136,7 +2135,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: state-treemap
-      kind: treemap_chart
+      kind: visual
       visual: state_treemap
       placement:
         col: 5
@@ -2144,14 +2143,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-treemap-roam
-      kind: treemap_chart
+      kind: visual
       visual: category_treemap_roam
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-treemap
+    id: chart-treemap
   - title: Gauge
     description: Single value gauge variations
     canvas:
@@ -2162,9 +2161,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2172,7 +2171,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2180,7 +2179,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: orders-gauge
-      kind: gauge_chart
+      kind: visual
       visual: total_orders_gauge
       placement:
         col: 1
@@ -2188,7 +2187,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: review-gauge
-      kind: gauge_chart
+      kind: visual
       visual: review_gauge
       placement:
         col: 5
@@ -2196,14 +2195,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: review-gauge-thresholds
-      kind: gauge_chart
+      kind: visual
       visual: review_gauge_thresholds
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-gauge
+    id: chart-gauge
   - title: Heatmap
     description: Matrix heatmap variations
     canvas:
@@ -2214,9 +2213,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2224,7 +2223,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2232,7 +2231,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-status-heatmap
-      kind: heatmap_chart
+      kind: visual
       visual: state_status_heatmap
       placement:
         col: 1
@@ -2240,7 +2239,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-status-heatmap
-      kind: heatmap_chart
+      kind: visual
       visual: category_status_heatmap
       placement:
         col: 5
@@ -2248,14 +2247,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-status-heatmap-labels
-      kind: heatmap_chart
+      kind: visual
       visual: category_status_heatmap_labels
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-heatmap
+    id: chart-heatmap
   - title: Sankey
     description: Flow chart variations
     canvas:
@@ -2266,9 +2265,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2276,7 +2275,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2284,7 +2283,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: status-delivery-flow
-      kind: sankey_chart
+      kind: visual
       visual: status_delivery_flow
       placement:
         col: 1
@@ -2292,7 +2291,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-status-flow
-      kind: sankey_chart
+      kind: visual
       visual: category_status_flow
       placement:
         col: 5
@@ -2300,14 +2299,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-status-flow-spacious
-      kind: sankey_chart
+      kind: visual
       visual: category_status_flow_spacious
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-sankey
+    id: chart-sankey
   - title: Graph
     description: Network chart variations
     canvas:
@@ -2318,9 +2317,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2328,7 +2327,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2336,7 +2335,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: status-delivery-graph
-      kind: graph_chart
+      kind: visual
       visual: status_delivery_graph
       placement:
         col: 1
@@ -2344,7 +2343,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-status-graph
-      kind: graph_chart
+      kind: visual
       visual: category_status_graph
       placement:
         col: 5
@@ -2352,14 +2351,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-status-graph-circular
-      kind: graph_chart
+      kind: visual
       visual: category_status_graph_circular
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-graph
+    id: chart-graph
   - title: Map
     description: Geo map variations
     canvas:
@@ -2370,9 +2369,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2380,7 +2379,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2388,7 +2387,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-order-map
-      kind: map_chart
+      kind: visual
       visual: state_order_map
       placement:
         col: 1
@@ -2396,7 +2395,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: state-revenue-map
-      kind: map_chart
+      kind: visual
       visual: state_revenue_map
       placement:
         col: 5
@@ -2404,14 +2403,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: state-revenue-map-labeled
-      kind: map_chart
+      kind: visual
       visual: state_revenue_map_labeled
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-map
+    id: chart-map
   - title: Candlestick
     description: OHLC chart examples
     canvas:
@@ -2422,9 +2421,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2432,7 +2431,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2440,7 +2439,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: delivery-candlestick
-      kind: candlestick_chart
+      kind: visual
       visual: delivery_candlestick
       placement:
         col: 1
@@ -2448,14 +2447,14 @@ spec:
         col_span: 6
         row_span: 8
     - id: revenue-candlestick
-      kind: candlestick_chart
+      kind: visual
       visual: revenue_candlestick
       placement:
         col: 7
         row: 2
         col_span: 6
         row_span: 8
-    name: chart-candlestick
+    id: chart-candlestick
   - title: Boxplot
     description: Distribution chart variations
     canvas:
@@ -2466,9 +2465,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2476,7 +2475,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2484,7 +2483,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: delivery-distribution
-      kind: boxplot_chart
+      kind: visual
       visual: delivery_distribution
       placement:
         col: 1
@@ -2492,7 +2491,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: review-distribution
-      kind: boxplot_chart
+      kind: visual
       visual: review_distribution
       placement:
         col: 5
@@ -2500,14 +2499,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: revenue-distribution
-      kind: boxplot_chart
+      kind: visual
       visual: revenue_distribution
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-boxplot
+    id: chart-boxplot
   - title: Combo
     description: Multi-measure combo chart variations
     canvas:
@@ -2518,9 +2517,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2528,7 +2527,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2536,7 +2535,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: revenue-orders-combo
-      kind: combo_chart
+      kind: visual
       visual: revenue_orders_combo
       placement:
         col: 1
@@ -2544,7 +2543,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: review-delivery-combo
-      kind: combo_chart
+      kind: visual
       visual: review_delivery_combo
       placement:
         col: 5
@@ -2552,14 +2551,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: revenue-orders-dual-axis-combo
-      kind: combo_chart
+      kind: visual
       visual: revenue_orders_dual_axis_combo
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-combo
+    id: chart-combo
   - title: Waterfall
     description: Delta chart variations
     canvas:
@@ -2570,9 +2569,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2580,7 +2579,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2588,7 +2587,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: revenue-waterfall
-      kind: waterfall_chart
+      kind: visual
       visual: revenue_waterfall
       placement:
         col: 1
@@ -2596,7 +2595,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: orders-waterfall
-      kind: waterfall_chart
+      kind: visual
       visual: orders_waterfall
       placement:
         col: 5
@@ -2604,14 +2603,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: revenue-waterfall-labeled
-      kind: waterfall_chart
+      kind: visual
       visual: revenue_waterfall_labeled
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-waterfall
+    id: chart-waterfall
   - title: Histogram
     description: Binned measure chart variations
     canvas:
@@ -2622,9 +2621,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2632,7 +2631,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2640,7 +2639,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: delivery-histogram
-      kind: histogram_chart
+      kind: visual
       visual: delivery_histogram
       placement:
         col: 1
@@ -2648,7 +2647,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: revenue-histogram
-      kind: histogram_chart
+      kind: visual
       visual: revenue_histogram
       placement:
         col: 5
@@ -2656,14 +2655,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: review-histogram
-      kind: histogram_chart
+      kind: visual
       visual: review_histogram
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-histogram
+    id: chart-histogram
   - title: Radar
     description: Radar chart variations
     canvas:
@@ -2674,9 +2673,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2684,7 +2683,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2692,7 +2691,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: status-radar
-      kind: radar_chart
+      kind: visual
       visual: status_radar
       placement:
         col: 1
@@ -2700,7 +2699,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: delivery-radar
-      kind: radar_chart
+      kind: visual
       visual: delivery_radar
       placement:
         col: 5
@@ -2708,14 +2707,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: state-radar
-      kind: radar_chart
+      kind: visual
       visual: state_radar
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-radar
+    id: chart-radar
   - title: Tree
     description: Tree hierarchy variations
     canvas:
@@ -2726,9 +2725,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2736,7 +2735,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2744,7 +2743,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-status-tree
-      kind: tree_chart
+      kind: visual
       visual: state_status_tree
       placement:
         col: 1
@@ -2752,7 +2751,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-status-tree
-      kind: tree_chart
+      kind: visual
       visual: category_status_tree
       placement:
         col: 5
@@ -2760,14 +2759,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-state-status-tree
-      kind: tree_chart
+      kind: visual
       visual: category_state_status_tree
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-tree
+    id: chart-tree
   - title: Sunburst
     description: Sunburst hierarchy variations
     canvas:
@@ -2778,9 +2777,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2788,7 +2787,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2796,7 +2795,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: category-status-sunburst
-      kind: sunburst_chart
+      kind: visual
       visual: category_status_sunburst
       placement:
         col: 1
@@ -2804,7 +2803,7 @@ spec:
         col_span: 4
         row_span: 8
     - id: state-status-sunburst
-      kind: sunburst_chart
+      kind: visual
       visual: state_status_sunburst
       placement:
         col: 5
@@ -2812,14 +2811,14 @@ spec:
         col_span: 4
         row_span: 8
     - id: category-state-status-sunburst
-      kind: sunburst_chart
+      kind: visual
       visual: category_state_status_sunburst
       placement:
         col: 9
         row: 2
         col_span: 4
         row_span: 8
-    name: chart-sunburst
+    id: chart-sunburst
   - title: Tables
     description: Detail, matrix, and pivot table variations
     canvas:
@@ -2830,9 +2829,9 @@ spec:
       row_height: 48
       gap: 16
       padding: 16
-    visuals:
+    components:
     - id: period-filter
-      kind: filter_card
+      kind: filter
       filter: purchase_date
       placement:
         col: 1
@@ -2840,7 +2839,7 @@ spec:
         col_span: 3
         row_span: 1
     - id: state-filter
-      kind: filter_card
+      kind: filter
       filter: state
       placement:
         col: 4
@@ -2848,75 +2847,75 @@ spec:
         col_span: 3
         row_span: 1
     - id: orders-table
-      kind: table
-      table: orders_table
+      kind: visual
+      visual: orders_table
       placement:
         col: 1
         row: 2
         col_span: 12
         row_span: 7
     - id: orders-compact
-      kind: table
-      table: orders_compact
+      kind: visual
+      visual: orders_compact
       placement:
         col: 1
         row: 9
         col_span: 6
         row_span: 6
     - id: orders-spacious
-      kind: table
-      table: orders_spacious
+      kind: visual
+      visual: orders_spacious
       placement:
         col: 7
         row: 9
         col_span: 6
         row_span: 6
     - id: orders-full-grid
-      kind: table
-      table: orders_full_grid
+      kind: visual
+      visual: orders_full_grid
       placement:
         col: 1
         row: 15
         col_span: 6
         row_span: 7
     - id: orders-conditional
-      kind: table
-      table: orders_conditional
+      kind: visual
+      visual: orders_conditional
       placement:
         col: 7
         row: 15
         col_span: 6
         row_span: 7
     - id: state-status-matrix
-      kind: table
-      table: state_status_matrix
+      kind: visual
+      visual: state_status_matrix
       placement:
         col: 1
         row: 22
         col_span: 6
         row_span: 7
     - id: category-status-pivot
-      kind: table
-      table: category_status_pivot
+      kind: visual
+      visual: category_status_pivot
       placement:
         col: 7
         row: 22
         col_span: 6
         row_span: 7
     - id: state-status-matrix-formatted
-      kind: table
-      table: state_status_matrix_formatted
+      kind: visual
+      visual: state_status_matrix_formatted
       placement:
         col: 1
         row: 29
         col_span: 6
         row_span: 8
     - id: category-status-pivot-heat
-      kind: table
-      table: category_status_pivot_heat
+      kind: visual
+      visual: category_status_pivot_heat
       placement:
         col: 7
         row: 29
         col_span: 6
         row_span: 8
-    name: tables
+    id: tables

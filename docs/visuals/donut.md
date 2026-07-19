@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use one categorical dimension and one measure to show each status as a share of the whole, with the center left open for visual breathing room.
 
-{{< chart id="orders" >}}
+{{< visual id="orders" >}}
 
 ```yaml visual-example=orders
 visuals:
@@ -30,7 +30,7 @@ visuals:
 
 Replace the category and measure to compare revenue composition without changing the donut renderer or query shape.
 
-{{< chart id="category_donut" >}}
+{{< visual id="category_donut" >}}
 
 ```yaml visual-example=category_donut
 visuals:
@@ -52,7 +52,7 @@ visuals:
 
 Set `options.center_label` to state the total represented by the ring, and adjust `options.radius` to control the inner and outer diameters.
 
-{{< chart id="orders_donut_center" >}}
+{{< visual id="orders_donut_center" >}}
 
 ```yaml visual-example=orders_donut_center
 visuals:

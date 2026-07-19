@@ -110,9 +110,9 @@ for (const viewport of [
         const viewport = root.querySelector('.viewport') as HTMLElement
         const frame = root.querySelector('.frame') as HTMLElement
         const assigned = (root.querySelector('slot') as HTMLSlotElement).assignedElements() as HTMLElement[]
-        const kpi = assigned.find((item) => item.dataset.componentKind === 'kpi_card')
-        const chart = assigned.find((item) => item.dataset.componentKind === 'bar_chart')
-        const table = assigned.find((item) => item.dataset.componentKind === 'table')
+        const kpi = assigned.find((item) => item.querySelector('ld-kpi-card'))
+        const chart = assigned.find((item) => item.querySelector('ld-echart'))
+        const table = assigned.find((item) => item.querySelector('ld-report-table'))
         const rect = (item?: HTMLElement) => item ? item.getBoundingClientRect() : null
         return {
           mode: surface.dataset.presentationMode,
@@ -130,6 +130,7 @@ for (const viewport of [
         expect(layout.scale).toBe(1)
         expect(layout.framePosition).toBe('relative')
         expect(layout.kpi?.width ?? 0).toBeGreaterThanOrEqual(300)
+        expect(layout.kpi?.height ?? 0).toBeLessThan(300)
         expect(layout.chart?.height ?? 0).toBeGreaterThanOrEqual(280)
         expect(layout.table?.height ?? 0).toBeLessThanOrEqual(700)
         expect(layout.table?.top ?? 0).toBeGreaterThan(layout.chart?.bottom ?? 0)
@@ -175,7 +176,7 @@ for (const viewport of [
       const progressiveState = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
         const root = element.shadowRoot
         const chartFrame = root.querySelector('[data-component-status-key="visual:orders_chart"]') as any
-        const tableFrame = root.querySelector('[data-component-status-key="table:orders"]') as any
+        const tableFrame = root.querySelector('[data-component-status-key="visual:orders"]') as any
         const kpiFrame = root.querySelector('[data-component-status-key="visual:orders_kpi"]') as any
         const chart = chartFrame?.querySelector('ld-echart') as any
         const table = tableFrame?.querySelector('ld-report-table') as any
@@ -229,7 +230,7 @@ for (const viewport of [
           chart.renderChart = () => { rendererUpdates += 1 }
           const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
 
-          mergePatch({ componentStatus: { 'table:orders': { generation: 3, loading: true, error: '' } } })
+          mergePatch({ componentStatus: { 'visual:orders': { generation: 3, loading: true, error: '' } } })
           await element.updateComplete
           await chart.updateComplete
           const afterUnrelatedPatch = rendererUpdates
@@ -266,7 +267,7 @@ for (const viewport of [
           await chart.updateComplete
 
           const kpiFrame = root.querySelector('[data-component-status-key="visual:orders_kpi"]') as any
-          const tableFrame = root.querySelector('[data-component-status-key="table:orders"]') as any
+          const tableFrame = root.querySelector('[data-component-status-key="visual:orders"]') as any
           await Promise.all([kpiFrame.updateComplete, tableFrame.updateComplete])
           const pending = {
             selection: chart.chart.selection,
@@ -426,7 +427,7 @@ test('dashboard refresh progress follows only the latest generation', async () =
       mergePatch({
         componentStatus: {
           'visual:orders_kpi': { generation: 4, loading: false, error: 'Query failed' },
-          'table:orders': { generation: 4, loading: false, error: '' },
+          'visual:orders': { generation: 4, loading: false, error: '' },
         },
         status: {
           generation: 4,
@@ -522,10 +523,10 @@ function testDocument(): string {
     pages: [{ id: 'overview', title: 'Overview', href: '/dashboards/executive-sales/pages/overview', active: true }],
     components: [
       { id: 'title', kind: 'header', x: 16, y: 16, width: 456, height: 88, title: 'Executive Sales', eyebrow: 'LibreDash report', badges: ['Sales'] },
-      { id: 'state-filter', kind: 'filter_card', filter: 'state', x: 488, y: 16, width: 216, height: 88 },
-      { id: 'orders-kpi', kind: 'kpi_card', visual: 'orders_kpi', x: 720, y: 16, width: 240, height: 88 },
-      { id: 'orders-chart', kind: 'bar_chart', visual: 'orders_chart', x: 16, y: 128, width: 456, height: 280 },
-      { id: 'orders-table', kind: 'table', table: 'orders', x: 16, y: 760, width: 944, height: 280 },
+      { id: 'state-filter', kind: 'filter', filter: 'state', x: 488, y: 16, width: 216, height: 88 },
+      { id: 'orders-kpi', kind: 'visual', visual: 'orders_kpi', x: 720, y: 16, width: 240, height: 88 },
+      { id: 'orders-chart', kind: 'visual', visual: 'orders_chart', x: 16, y: 128, width: 456, height: 280 },
+      { id: 'orders-table', kind: 'visual', visual: 'orders', x: 16, y: 760, width: 944, height: 280 },
     ],
   }
   const filterConfig = [{
@@ -550,8 +551,8 @@ function testDocument(): string {
         entries: [{ mappings: [{ field: 'orders.status', value: 'delivered', label: 'Delivered' }], label: 'Delivered' }],
       },
       {
-        id: 'table:orders:row_selection',
-        sourceKind: 'table',
+        id: 'visual:orders:row_selection',
+        sourceKind: 'visual',
         sourceId: 'orders',
         interactionKind: 'row_selection',
         label: 'o1',
@@ -564,7 +565,6 @@ function testDocument(): string {
     orders_kpi: {
       version: 3,
       id: 'orders_kpi',
-      kind: 'kpi',
       shape: 'single_value',
       renderer: 'html',
       type: 'kpi',
@@ -583,7 +583,6 @@ function testDocument(): string {
     orders_chart: {
       version: 3,
       id: 'orders_chart',
-      kind: 'visual',
       shape: 'category_value',
       renderer: 'echarts',
       type: 'bar',
@@ -599,11 +598,10 @@ function testDocument(): string {
       selection: [{ mappings: [{ field: 'orders.status', value: 'shipped', label: 'Shipped' }], label: 'Shipped' }],
       data: [{ label: 'delivered', value: 42 }, { label: 'shipped', value: 7 }],
     },
-  }
-  const tables = {
     orders: {
       version: 2,
-      kind: 'data_table',
+      id: 'orders',
+      type: 'table',
       title: 'Orders',
       style: { density: 'compact', zebra: true, grid: 'full' },
       interaction: { kind: 'row_selection', toggle: false, mappings: [{ field: 'orders.order_id', value: 'order_id' }] },
@@ -637,7 +635,7 @@ function testDocument(): string {
   }
   const componentStatus = {
     'visual:orders_chart': { generation: 3, loading: true, error: '' },
-    'table:orders': { generation: 3, loading: false, error: 'Ratings query failed' },
+    'visual:orders': { generation: 3, loading: false, error: 'Ratings query failed' },
   }
   const signals = {
     page,
@@ -646,7 +644,6 @@ function testDocument(): string {
     filterOptions: { state: [{ value: 'SP', label: 'SP' }] },
     componentStatus,
     visuals,
-    tables,
     status,
   }
   const attr = (value: unknown) => escapeHTML(JSON.stringify(value))

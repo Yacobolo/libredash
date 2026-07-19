@@ -122,8 +122,8 @@ test('canonical selections are projected only to their source component', () => 
       entries: [{ mappings: [{ field: 'rating_bucket', fact: 'ratings', value: 1 }] }],
     },
     {
-      id: 'table:movies:row_selection',
-      sourceKind: 'table',
+      id: 'visual:movies:row_selection',
+      sourceKind: 'visual',
       sourceId: 'movies',
       interactionKind: 'row_selection',
       label: 'Movie 1',
@@ -135,8 +135,7 @@ test('canonical selections are projected only to their source component', () => 
   expect(canonicalSelectionEntriesForSource(selections, 'visual', 'ratings')).toEqual([
     { mappings: [{ field: 'rating_bucket', fact: 'ratings', value: 1 }] },
   ])
-  expect(canonicalSelectionEntriesForSource(selections, 'visual', 'movies')).toEqual([])
-  expect(canonicalSelectionEntriesForSource(selections, 'table', 'movies')).toEqual([
+  expect(canonicalSelectionEntriesForSource(selections, 'visual', 'movies')).toEqual([
     { mappings: [{ field: 'movies.movie_id', fact: 'movies', value: 1 }] },
   ])
 })

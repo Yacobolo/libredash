@@ -1,5 +1,5 @@
 import { LitElement, css, html } from 'lit'
-import type { ChatConversationSummary, ChatPageSignal, ChatSignal, DashboardTable, DashboardVisual } from '../../generated/signals'
+import type { ChatConversationSummary, ChatPageSignal, ChatSignal, DashboardVisual } from '../../generated/signals'
 import { DatastarLit } from '../shared/datastar-lit'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../dashboard/visual-modal'
@@ -203,10 +203,6 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
     return this.signal<Record<string, DashboardVisual>>('visuals', {})
   }
 
-  get tables(): Record<string, DashboardTable> {
-    return this.signal<Record<string, DashboardTable>>('tables', {})
-  }
-
   get pending(): boolean {
     return this.signal<boolean>('agentTurnPending', false) || Boolean(this.agent.status?.running)
   }
@@ -270,7 +266,6 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
         <ld-chat-thread
           .transcript=${agent.transcript ?? []}
           .visuals=${this.visuals ?? {}}
-          .tables=${this.tables ?? {}}
           .status=${status}
           conversation-id=${agent.activeConversationId ?? ''}
         >${status.error ?? ''}</ld-chat-thread>

@@ -100,13 +100,13 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 	if activePage.ID == "" {
 		activePage = defaultPage()
 	}
-	tableReset := tableResetExpression()
+	visualReset := visualResetExpression()
 	initialFilters = report.NormalizeFiltersForPage(activePage.ID, initialFilters)
 	initialURLParams := report.URLParamsFromFiltersForPage(activePage.ID, initialFilters)
 	initialURLParams["streamInstance"] = newStreamInstanceID()
 	dashboardUpdatesURL := updatesURLWithParams(catalog.Workspace.ID, report.ID, activePage.ID, initialURLParams)
 	reloadAction := uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reload", "runtime", "filters.controls")
-	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + tableReset
+	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + visualReset
 	return pagestream.RenderPage(pagestream.PageSpec{
 		Title:             "LibreDash",
 		DatastarScriptURL: datastarScriptURL(),
@@ -125,7 +125,7 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 		MainAttrs: []g.Node{
 			h.ID("dashboard"),
 			h.Class(appRootClass),
-			g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+tableReset+reloadAction),
+			g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+visualReset+reloadAction),
 		},
 		UpdatesURL: dashboardUpdatesURL,
 		Body: []g.Node{
@@ -140,7 +140,7 @@ func Page(clientID, csrfToken string, catalog dashboard.Catalog, report reportde
 					g.Attr("data-on:ld-filters-refresh", reloadAction),
 					g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
 					g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
-					g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/table-window", "runtime", "tableCommand")),
+					g.Attr("data-on:ld-visual-window-change", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
 				),
 			),
 			inspectorElement(),
@@ -166,20 +166,19 @@ func BootstrapSignals(clientID, streamInstanceID string, catalog dashboard.Catal
 		}
 	}
 	return map[string]any{
-		"chrome":             envelope.Chrome,
-		"componentStatus":    envelope.ComponentStatus,
-		"page":               envelope.Page,
-		"runtime":            envelope.Runtime,
-		"filterConfig":       envelope.FilterConfig,
-		"filters":            envelope.Filters,
-		"urlParams":          envelope.URLParams,
-		"urlParamShape":      envelope.URLParamShape,
-		"filterOptions":      envelope.FilterOptions,
-		"interactionCommand": envelope.InteractionCommand,
-		"tableCommand":       envelope.TableCommand,
-		"tables":             envelope.Tables,
-		"visuals":            envelope.Visuals,
-		"status":             envelope.Status,
+		"chrome":              envelope.Chrome,
+		"componentStatus":     envelope.ComponentStatus,
+		"page":                envelope.Page,
+		"runtime":             envelope.Runtime,
+		"filterConfig":        envelope.FilterConfig,
+		"filters":             envelope.Filters,
+		"urlParams":           envelope.URLParams,
+		"urlParamShape":       envelope.URLParamShape,
+		"filterOptions":       envelope.FilterOptions,
+		"interactionCommand":  envelope.InteractionCommand,
+		"visualWindowCommand": envelope.VisualWindowCommand,
+		"visuals":             envelope.Visuals,
+		"status":              envelope.Status,
 	}
 }
 
@@ -191,7 +190,7 @@ func newStreamInstanceID() string {
 	return hex.EncodeToString([]byte(time.Now().UTC().Format(time.RFC3339Nano)))
 }
 
-func tableResetExpression() string {
+func visualResetExpression() string {
 	count := strconv.Itoa(dashboard.TableChunkSize)
-	return "$tableCommand.block = 'all'; $tableCommand.start = 0; $tableCommand.count = " + count + "; $tableCommand.resetVersion = ($tableCommand.resetVersion || 0) + 1; "
+	return "$visualWindowCommand.block = 'all'; $visualWindowCommand.start = 0; $visualWindowCommand.count = " + count + "; $visualWindowCommand.resetVersion = ($visualWindowCommand.resetVersion || 0) + 1; "
 }

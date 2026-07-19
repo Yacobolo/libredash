@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use one categorical dimension to create the radar indicators and one measure to set each spoke length.
 
-{{< chart id="status_radar" >}}
+{{< visual id="status_radar" >}}
 
 ```yaml visual-example=status_radar
 visuals:
@@ -33,7 +33,7 @@ visuals:
 
 Replace status with delivery buckets to compare a different categorical profile while preserving the same category-value shape.
 
-{{< chart id="delivery_radar" >}}
+{{< visual id="delivery_radar" >}}
 
 ```yaml visual-example=delivery_radar
 visuals:
@@ -56,7 +56,7 @@ visuals:
 
 Enable `options.area` to emphasize the overall revenue profile across states rather than only the outline between individual values.
 
-{{< chart id="state_radar" >}}
+{{< visual id="state_radar" >}}
 
 ```yaml visual-example=state_radar
 visuals:

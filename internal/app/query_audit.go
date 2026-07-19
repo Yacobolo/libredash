@@ -256,7 +256,7 @@ func requestQueryOperation(operation, objectType string) string {
 		return operation
 	}
 	switch objectType {
-	case "dashboard_page", "dashboard_table", "dashboard_visual", "dashboard_filter":
+	case "dashboard_page", "dashboard_visual", "dashboard_filter":
 		return ""
 	default:
 		return operation

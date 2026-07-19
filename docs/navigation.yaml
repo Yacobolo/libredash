@@ -310,20 +310,20 @@ sections:
             source: api/index.md
             generated: true
       - id: visuals
-        title: Charts
+        title: Visuals
         summary: Configuration and live examples for every visual type.
         collection:
           kind: visual
           catalog: visuals/catalog.json
           sourceDir: visuals
-          slugPrefix: charts
+          slugPrefix: visuals
           index:
-            slug: charts/overview
-            title: Chart types
+            slug: visuals/overview
+            title: Visual types
             navigationTitle: Overview
             summary: Choose from every supported LibreDash visual type.
             source: visuals/index.md
-            breadcrumb: Charts
+            breadcrumb: Visuals
 
   - id: architecture
     title: Architecture and contributing

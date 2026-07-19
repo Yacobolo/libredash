@@ -28,9 +28,9 @@ func TestIdealV1Surface(t *testing.T) {
 		"/api/v1/projects/{project}/deployments/{deployment}/rollback":                               {"post"},
 		"/api/v1/workspaces/{workspace}":                                                             {"get"},
 		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}":                         {"get"},
-		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}":          {"get"},
+		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/visuals/{visual}":        {"get"},
 		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}":        {"get"},
-		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}/query":    {"post"},
+		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/visuals/{visual}/query":  {"post"},
 		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}/values": {"post"},
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/relationships":                       {"get"},
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/sources":                             {"get"},
@@ -53,6 +53,8 @@ func TestIdealV1Surface(t *testing.T) {
 		"/api/v1/projects/{project}/deployments/{deployment}/activate",
 		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/components",
 		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/tables/{table}/query",
+		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}",
+		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}/query",
 		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}/data",
 		"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/filters/{filter}/options",
 		"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/query",
@@ -107,7 +109,7 @@ func TestIdealQueryAndEventRepresentations(t *testing.T) {
 	}{
 		{"/api/v1/workspaces/{workspace}/semantic-models/{model}/query", "post", "application/vnd.apache.arrow.stream"},
 		{"/api/v1/workspaces/{workspace}/semantic-models/{model}/datasets/{dataset}/preview", "post", "application/vnd.apache.arrow.stream"},
-		{"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}/query", "post", "application/vnd.apache.arrow.stream"},
+		{"/api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/visuals/{visual}/query", "post", "application/vnd.apache.arrow.stream"},
 		{"/api/v1/projects/{project}/releases/{release}/events", "get", "text/event-stream"},
 		{"/api/v1/projects/{project}/deployments/{deployment}/events", "get", "text/event-stream"},
 		{"/api/v1/workspaces/{workspace}/refresh-runs/{run}/events", "get", "text/event-stream"},
@@ -130,28 +132,25 @@ func TestIdealQueryAndEventRepresentations(t *testing.T) {
 	}
 }
 
-func TestDashboardVisualResponsesAreShapeDiscriminated(t *testing.T) {
+func TestDashboardVisualResponsesUseTypeAsSoleDiscriminator(t *testing.T) {
 	spec := managedDataOpenAPISpec(t)
 	schemas := openAPIMap(t, openAPIMap(t, spec, "components"), "schemas")
-	visual := openAPISchema(t, schemas, "DashboardVisualDataResponse")
+	data := openAPISchema(t, schemas, "DashboardVisualDataResponse")
+	if discriminator, ok := data["discriminator"]; ok {
+		t.Fatalf("chart result shape must remain metadata, got discriminator %#v", discriminator)
+	}
+	visual := openAPISchema(t, schemas, "DashboardVisualQueryResponse")
 	discriminator, _ := visual["discriminator"].(map[string]any)
-	if discriminator["propertyName"] != "shape" {
-		t.Fatalf("visual response discriminator = %#v", discriminator)
+	if discriminator["propertyName"] != "type" {
+		t.Fatalf("visual query response discriminator = %#v", discriminator)
 	}
 	variants, _ := visual["oneOf"].([]any)
-	if len(variants) != 12 {
-		t.Fatalf("visual response variants = %d, want 12: %#v", len(variants), visual)
+	if len(variants) != 26 {
+		t.Fatalf("visual query response variants = %d, want 26: %#v", len(variants), visual)
 	}
-	for _, name := range []string{
-		"CategoryValueVisualDatum", "CategorySeriesValueVisualDatum", "CategoryMultiMeasureVisualDatum",
-		"CategoryDeltaVisualDatum", "BinnedMeasureVisualDatum", "HierarchyVisualDatum",
-		"SingleValueVisualDatum", "MatrixVisualDatum", "GraphVisualDatum", "GeoVisualDatum",
-		"OHLCVisualDatum", "DistributionVisualDatum",
-	} {
-		schema := openAPISchema(t, schemas, name)
-		if len(openAPIMap(t, schema, "properties")) == 0 {
-			t.Errorf("%s has no explicit fields", name)
-		}
+	datum := openAPISchema(t, schemas, "DashboardVisualDatum")
+	if len(openAPIMap(t, datum, "properties")) == 0 {
+		t.Fatalf("visual datum has no explicit result-shape fields: %#v", datum)
 	}
 }
 
@@ -167,7 +166,7 @@ func TestDashboardPageComponentsAreKindDiscriminated(t *testing.T) {
 	if len(variants) != 3 {
 		t.Fatalf("page component variants = %d, want 3: %#v", len(variants), component)
 	}
-	for _, name := range []string{"DashboardVisualComponentResponse", "DashboardTableComponentResponse", "DashboardFilterComponentResponse"} {
+	for _, name := range []string{"DashboardVisualComponentResponse", "DashboardFilterComponentResponse", "DashboardHeaderComponentResponse"} {
 		variant := openAPISchema(t, schemas, name)
 		allOf, _ := variant["allOf"].([]any)
 		base, _ := firstOpenAPIRef(allOf)
@@ -273,7 +272,7 @@ func TestIdealAPIUsesBoundedInputsAndBodylessDeletes(t *testing.T) {
 	if queryLimit["minimum"] != float64(1) || queryLimit["maximum"] != float64(1000) {
 		t.Fatalf("query limit schema = %#v", queryLimit)
 	}
-	visual := openAPISchema(t, schemas, "DashboardVisualDataResponseBase")
+	visual := openAPISchema(t, schemas, "DashboardVisualDataResponse")
 	properties := openAPIMap(t, visual, "properties")
 	if _, ok := properties["rendererOptions"]; ok {
 		t.Fatalf("renderer-specific options leaked at the top level: %#v", properties)

@@ -28,24 +28,29 @@ type VisualAggregateRowsFunc func(ctx context.Context, workspaceID, modelID stri
 
 type VisualPreviewRowsFunc func(ctx context.Context, workspaceID, modelID string, request reportdef.RowQuery) (reportdef.QueryRows, error)
 
+type VisualHistogramFunc func(ctx context.Context, workspaceID, modelID string, request reportdef.RawValueQuery, binCount int) ([]reportdef.HistogramBin, error)
+
+type VisualDistributionFunc func(ctx context.Context, workspaceID, modelID string, request reportdef.RawValueQuery, sort []reportdef.QuerySort, limit int) (reportdef.QueryRows, error)
+
 type VisualProvider struct {
 	Authorize     VisualAuthorizeFunc
 	SemanticModel VisualModelFunc
 	AggregateRows VisualAggregateRowsFunc
 	PreviewRows   VisualPreviewRowsFunc
+	Histogram     VisualHistogramFunc
+	Distribution  VisualDistributionFunc
 }
 
 type VisualAuthorizationRequest struct {
 	ToolName string
 	CallID   string
-	Kind     string
+	Type     string
 	Model    string
 	Dataset  string
 }
 
 type agentVisualInput struct {
 	Workspace       string                    `json:"workspace"`
-	Kind            string                    `json:"kind"`
 	Model           string                    `json:"model"`
 	Dataset         string                    `json:"dataset"`
 	Title           string                    `json:"title"`
@@ -74,7 +79,7 @@ type agentVisualSort struct {
 }
 
 type agentVisualResult struct {
-	Kind    string         `json:"kind"`
+	Type    string         `json:"type"`
 	ID      string         `json:"id"`
 	Patch   map[string]any `json:"patch"`
 	Summary string         `json:"summary"`
@@ -87,7 +92,7 @@ func (p VisualProvider) Definitions(scope Scope) []agentcore.ToolDefinition {
 	}
 	return []agentcore.ToolDefinition{{
 		Name:        agentVisualToolName,
-		Description: "Create one read-only chart or BI table artifact from LibreDash semantic model fields. Data is queried from semantic models; do not provide inline data.",
+		Description: "Create one read-only visual from LibreDash semantic model fields. Data is queried from semantic models; do not provide inline data.",
 		InputSchema: inputSchema,
 		Handler: agentcore.ToolHandlerFunc(func(ctx context.Context, call agentcore.ToolCall) (agentcore.ToolResult, error) {
 			return p.Run(ctx, scope, call), nil
@@ -123,23 +128,23 @@ func (p VisualProvider) Run(ctx context.Context, scope Scope, call agentcore.Too
 	if errResult, ok := p.Authorize(ctx, runScope, VisualAuthorizationRequest{
 		ToolName: agentVisualToolName,
 		CallID:   call.ID,
-		Kind:     input.Kind,
+		Type:     input.Type,
 		Model:    input.Model,
 		Dataset:  input.Dataset,
 	}); !ok {
 		return errResult
 	}
-	result, err := p.queryAgentVisual(ctx, runScope.WorkspaceID, input, agentVisualID(input.Kind, call.ID))
+	result, err := p.queryAgentVisual(ctx, runScope.WorkspaceID, input, agentVisualID(call.ID))
 	if err != nil {
 		return apigenAgentToolError("query_visual_failed", err.Error())
 	}
 	return agentcore.ToolResult{
 		Content: map[string]any{
 			"ok":      true,
-			"kind":    result.Kind,
+			"type":    result.Type,
 			"id":      result.ID,
 			"summary": result.Summary,
-			"signal":  agentVisualSignal(result.Kind, result.ID),
+			"signal":  "visuals." + result.ID,
 		},
 		DisplayContent: result,
 	}
@@ -159,14 +164,13 @@ func decodeAgentVisualInput(rawArgs json.RawMessage) (agentVisualInput, error) {
 	if err := json.Unmarshal(rawArgs, &input); err != nil {
 		return agentVisualInput{}, err
 	}
-	input.Kind = strings.ToLower(strings.TrimSpace(input.Kind))
 	input.Model = strings.TrimSpace(input.Model)
 	input.Dataset = strings.TrimSpace(input.Dataset)
 	input.Title = strings.TrimSpace(input.Title)
 	input.Type = strings.ToLower(strings.TrimSpace(input.Type))
 	input.Shape = strings.ToLower(strings.TrimSpace(input.Shape))
-	if input.Kind != "chart" && input.Kind != "table" {
-		return agentVisualInput{}, fmt.Errorf("kind must be chart or table")
+	if !isAgentVisualType(input.Type) {
+		return agentVisualInput{}, fmt.Errorf("type must be a supported visual type")
 	}
 	if input.Model == "" {
 		return agentVisualInput{}, fmt.Errorf("model is required")
@@ -176,6 +180,15 @@ func decodeAgentVisualInput(rawArgs json.RawMessage) (agentVisualInput, error) {
 	}
 	input.Limit = agentVisualLimit(input.Limit)
 	return input, nil
+}
+
+func isAgentVisualType(value string) bool {
+	switch value {
+	case "line", "area", "bar", "column", "pie", "donut", "scatter", "funnel", "treemap", "gauge", "heatmap", "sankey", "graph", "map", "candlestick", "boxplot", "combo", "waterfall", "histogram", "radar", "tree", "sunburst", "kpi", "table", "matrix", "pivot":
+		return true
+	default:
+		return false
+	}
 }
 
 func (p VisualProvider) queryAgentVisual(ctx context.Context, workspaceID string, input agentVisualInput, id string) (agentVisualResult, error) {
@@ -189,34 +202,19 @@ func (p VisualProvider) queryAgentVisual(ctx context.Context, workspaceID string
 	if _, ok := model.Tables[input.Dataset]; !ok {
 		return agentVisualResult{}, fmt.Errorf("unknown dataset %q", input.Dataset)
 	}
-	switch input.Kind {
-	case "chart":
-		return p.queryAgentChart(ctx, workspaceID, model, input, id)
-	case "table":
+	switch input.Type {
+	case "table", "matrix", "pivot":
 		return p.queryAgentTable(ctx, workspaceID, model, input, id)
 	default:
-		return agentVisualResult{}, fmt.Errorf("kind must be chart or table")
+		return p.queryAgentChart(ctx, workspaceID, model, input, id)
 	}
 }
 
 func (p VisualProvider) queryAgentChart(ctx context.Context, workspaceID string, model *semanticmodel.Model, input agentVisualInput, id string) (agentVisualResult, error) {
-	if len(input.Measures) == 0 {
-		return agentVisualResult{}, fmt.Errorf("chart requires at least one measure")
-	}
-	shape := input.Shape
-	if shape == "" {
-		if len(input.Dimensions) == 0 {
-			shape = "single_value"
-		} else if input.Series != nil && input.Series.Field != "" {
-			shape = "category_series_value"
-		} else if len(input.Measures) > 1 {
-			shape = "category_multi_measure"
-		} else {
-			shape = "category_value"
-		}
-	}
-	if shape != "single_value" && len(input.Dimensions) == 0 {
-		return agentVisualResult{}, fmt.Errorf("chart shape %q requires at least one dimension", shape)
+	shape := agentVisualShape(input)
+	input.Shape = shape
+	if err := validateAgentChartContract(input); err != nil {
+		return agentVisualResult{}, err
 	}
 	data, err := p.agentChartData(ctx, workspaceID, input, shape, model)
 	if err != nil {
@@ -227,23 +225,14 @@ func (p VisualProvider) queryAgentChart(ctx context.Context, workspaceID string,
 	if title == "" {
 		title = measureLabelForAgent(input.Measures[0].Field, measure)
 	}
+	contract := agentReportVisual(input)
 	chartType := input.Type
-	if chartType == "" {
-		if shape == "single_value" {
-			chartType = "gauge"
-		} else {
-			chartType = "bar"
-		}
-	}
-	if chartType == "kpi" {
-		return agentVisualResult{}, fmt.Errorf("kpi cards are not supported by %s", agentVisualToolName)
-	}
 	visual := dashboard.Visual{
 		Version:         3,
 		ID:              id,
-		Kind:            "chart",
+		Kind:            contract.KindOrDefault(),
 		Shape:           shape,
-		Renderer:        "echarts",
+		Renderer:        contract.RendererOrDefault(),
 		Type:            chartType,
 		Title:           title,
 		Unit:            measure.Unit,
@@ -259,14 +248,92 @@ func (p VisualProvider) queryAgentChart(ctx context.Context, workspaceID string,
 		Data:            data,
 	}
 	return agentVisualResult{
-		Kind:    "chart",
+		Type:    chartType,
 		ID:      id,
 		Patch:   map[string]any{"visuals": map[string]dashboard.Visual{id: visual}},
 		Summary: fmt.Sprintf("Created chart %q with %d data points.", title, len(data)),
 	}, nil
 }
 
+func agentVisualShape(input agentVisualInput) string {
+	return agentReportVisual(input).ShapeOrDefault()
+}
+
+func agentReportVisual(input agentVisualInput) reportdef.Visual {
+	dimensions := make([]reportdef.FieldRef, len(input.Dimensions))
+	for index, field := range input.Dimensions {
+		dimensions[index] = reportdef.FieldRef{Field: field.Field, Alias: field.Alias}
+	}
+	measures := make([]reportdef.FieldRef, len(input.Measures))
+	for index, field := range input.Measures {
+		measures[index] = reportdef.FieldRef{Field: field.Field, Alias: field.Alias}
+	}
+	series := reportdef.FieldRef{}
+	if input.Series != nil {
+		series = reportdef.FieldRef{Field: input.Series.Field, Alias: input.Series.Alias}
+	}
+	return reportdef.Visual{
+		Title: firstNonEmpty(input.Title, "Agent visual"), Shape: input.Shape, Type: input.Type,
+		Query:   reportdef.VisualQuery{Table: input.Dataset, Dimensions: dimensions, Series: series, Measures: measures, Limit: input.Limit},
+		Options: input.Options,
+	}
+}
+
+func validateAgentChartContract(input agentVisualInput) error {
+	visual := agentReportVisual(input)
+	visual.Shape = visual.ShapeOrDefault()
+	componentKind := visual.Type + "_chart"
+	if visual.Type == "kpi" {
+		componentKind = "kpi_card"
+	}
+	definition := reportdef.Dashboard{
+		ID: "agent-visual", Title: "Agent visual", SemanticModel: "agent",
+		Visuals: map[string]reportdef.Visual{"visual": visual},
+		Pages: []dashboard.Page{{
+			ID: "page", Title: "Page",
+			Visuals: []dashboard.PageVisual{{ID: "visual", Kind: componentKind, Visual: "visual", Placement: dashboard.PagePlacement{Col: 1, Row: 1, ColSpan: 6, RowSpan: 4}}},
+		}},
+	}
+	if err := definition.ValidateContract(); err != nil {
+		return fmt.Errorf("invalid %s visual query: %w", input.Type, err)
+	}
+	return nil
+}
+
 func (p VisualProvider) agentChartData(ctx context.Context, workspaceID string, input agentVisualInput, shape string, model *semanticmodel.Model) ([]dashboard.Datum, error) {
+	if shape == "binned_measure" {
+		if p.Histogram == nil {
+			return nil, fmt.Errorf("histogram query provider is not configured")
+		}
+		binCount := 20
+		if value, ok := input.Options["bin_count"].(float64); ok {
+			binCount = max(5, min(60, int(value)))
+		} else if value, ok := input.Options["bin_count"].(int); ok {
+			binCount = max(5, min(60, value))
+		}
+		bins, err := p.Histogram(ctx, workspaceID, input.Model, reportdef.RawValueQuery{
+			Table: input.Dataset, Measure: reportdef.QueryField{Field: input.Measures[0].Field, Alias: "value"},
+		}, binCount)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]dashboard.Datum, 0, len(bins))
+		for _, bin := range bins {
+			out = append(out, dashboard.Datum{"label": fmt.Sprintf("%g–%g", bin.Start, bin.End), "binStart": bin.Start, "binEnd": bin.End, "value": bin.Count})
+		}
+		return out, nil
+	}
+	if shape == "distribution" {
+		if p.Distribution == nil {
+			return nil, fmt.Errorf("distribution query provider is not configured")
+		}
+		rows, err := p.Distribution(ctx, workspaceID, input.Model, reportdef.RawValueQuery{
+			Table:      input.Dataset,
+			Dimensions: []reportdef.QueryField{{Field: input.Dimensions[0].Field, Alias: "label"}},
+			Measure:    reportdef.QueryField{Field: input.Measures[0].Field, Alias: "value"},
+		}, agentVisualSorts(input.Sort, input.Dimensions, input.Series, input.Measures), input.Limit)
+		return agentDatums(rows), err
+	}
 	if p.AggregateRows == nil {
 		return nil, fmt.Errorf("aggregate query provider is not configured")
 	}
@@ -286,6 +353,18 @@ func (p VisualProvider) agentChartData(ctx context.Context, workspaceID string, 
 		return []dashboard.Datum{{"label": firstNonEmpty(input.Title, measureLabelForAgent(input.Measures[0].Field, mustResolveMeasure(model, input.Measures[0].Field))), "value": value}}, nil
 	}
 	if shape == "category_multi_measure" || len(input.Measures) > 1 {
+		if shape == "ohlc" {
+			aliases := []string{"open", "close", "low", "high"}
+			measures := make([]reportdef.QueryField, len(input.Measures))
+			for index, measure := range input.Measures {
+				measures[index] = reportdef.QueryField{Field: measure.Field, Alias: aliases[index]}
+			}
+			rows, err := p.AggregateRows(ctx, workspaceID, input.Model, reportdef.AggregateQuery{
+				Table: input.Dataset, Dimensions: []reportdef.QueryField{{Field: input.Dimensions[0].Field, Alias: "label"}},
+				Measures: measures, Sort: agentVisualSorts(input.Sort, input.Dimensions, input.Series, input.Measures), Limit: input.Limit,
+			})
+			return agentDatums(rows), err
+		}
 		out := []dashboard.Datum{}
 		for _, measureRef := range input.Measures {
 			rows, err := p.AggregateRows(ctx, workspaceID, input.Model, reportdef.AggregateQuery{
@@ -309,6 +388,48 @@ func (p VisualProvider) agentChartData(ctx context.Context, workspaceID string, 
 		}
 		return out, nil
 	}
+	if shape == "hierarchy" {
+		dimensions := make([]reportdef.QueryField, len(input.Dimensions))
+		for index, dimension := range input.Dimensions {
+			dimensions[index] = reportdef.QueryField{Field: dimension.Field, Alias: fmt.Sprintf("level_%d", index)}
+		}
+		rows, err := p.AggregateRows(ctx, workspaceID, input.Model, reportdef.AggregateQuery{
+			Table: input.Dataset, Dimensions: dimensions, Measures: []reportdef.QueryField{{Field: input.Measures[0].Field, Alias: "value"}}, Limit: input.Limit,
+		})
+		if err != nil {
+			return nil, err
+		}
+		out := make([]dashboard.Datum, 0, len(rows))
+		for _, row := range rows {
+			path := make([]string, 0, len(dimensions))
+			for index := range dimensions {
+				if value := fmt.Sprint(row[fmt.Sprintf("level_%d", index)]); value != "" && value != "<nil>" {
+					path = append(path, value)
+				}
+			}
+			out = append(out, dashboard.Datum{"path": path, "value": row["value"]})
+		}
+		return out, nil
+	}
+	if shape == "matrix" || shape == "graph" {
+		left, right := "row", "column"
+		if shape == "graph" {
+			left, right = "source", "target"
+		}
+		rows, err := p.AggregateRows(ctx, workspaceID, input.Model, reportdef.AggregateQuery{
+			Table:      input.Dataset,
+			Dimensions: []reportdef.QueryField{{Field: input.Dimensions[0].Field, Alias: left}, {Field: input.Dimensions[1].Field, Alias: right}},
+			Measures:   []reportdef.QueryField{{Field: input.Measures[0].Field, Alias: "value"}}, Limit: input.Limit,
+		})
+		return agentDatums(rows), err
+	}
+	if shape == "geo" {
+		rows, err := p.AggregateRows(ctx, workspaceID, input.Model, reportdef.AggregateQuery{
+			Table: input.Dataset, Dimensions: []reportdef.QueryField{{Field: input.Dimensions[0].Field, Alias: "name"}},
+			Measures: []reportdef.QueryField{{Field: input.Measures[0].Field, Alias: "value"}}, Limit: input.Limit,
+		})
+		return agentDatums(rows), err
+	}
 	dimensions := []reportdef.QueryField{{Field: input.Dimensions[0].Field, Alias: "label"}}
 	if input.Series != nil && input.Series.Field != "" {
 		dimensions = append(dimensions, reportdef.QueryField{Field: input.Series.Field, Alias: "series"})
@@ -331,7 +452,44 @@ func (p VisualProvider) agentChartData(ctx context.Context, workspaceID string, 
 		}
 		out = append(out, datum)
 	}
+	if shape == "category_delta" {
+		cumulative := 0.0
+		for _, datum := range out {
+			value := agentFloat(datum["value"])
+			datum["start"] = cumulative
+			cumulative += value
+			datum["end"] = cumulative
+			datum["positive"] = value >= 0
+		}
+	}
 	return out, nil
+}
+
+func agentDatums(rows reportdef.QueryRows) []dashboard.Datum {
+	out := make([]dashboard.Datum, 0, len(rows))
+	for _, row := range rows {
+		datum := dashboard.Datum{}
+		for key, value := range row {
+			datum[key] = value
+		}
+		out = append(out, datum)
+	}
+	return out
+}
+
+func agentFloat(value any) float64 {
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	default:
+		return 0
+	}
 }
 
 func (p VisualProvider) queryAgentTable(ctx context.Context, workspaceID string, model *semanticmodel.Model, input agentVisualInput, id string) (agentVisualResult, error) {
@@ -384,9 +542,10 @@ func (p VisualProvider) queryAgentTable(ctx context.Context, workspaceID string,
 	if len(input.Sort) > 0 {
 		sortSpec = dashboard.TableSort{Key: agentFieldAlias(input.Sort[0].Field), Direction: normalizedSortDirection(input.Sort[0].Direction)}
 	}
+	internalType := map[string]string{"table": "data_table", "matrix": "matrix_table", "pivot": "pivot_table"}[input.Type]
 	table := dashboard.Table{
 		Version:       2,
-		Kind:          "data_table",
+		Kind:          internalType,
 		Title:         title,
 		Style:         dashboard.TableStyle{}.WithDefaults(),
 		Interaction:   dashboard.InteractionConfig{},
@@ -407,9 +566,9 @@ func (p VisualProvider) queryAgentTable(ctx context.Context, workspaceID string,
 		Error:        "",
 	}
 	return agentVisualResult{
-		Kind:    "table",
+		Type:    input.Type,
 		ID:      id,
-		Patch:   map[string]any{"tables": map[string]dashboard.Table{id: table}},
+		Patch:   map[string]any{"visuals": map[string]dashboard.TabularVisual{id: dashboard.NewTabularVisual(id, table)}},
 		Summary: fmt.Sprintf("Created table %q with %d rows.", title, len(tableRows)),
 	}, nil
 }
@@ -449,17 +608,6 @@ func agentVisualLimit(limit int) int {
 		return maxVisualRows
 	}
 	return limit
-}
-
-func agentVisualSignal(kind, id string) string {
-	switch kind {
-	case "chart":
-		return "visuals." + id
-	case "table":
-		return "tables." + id
-	default:
-		return id
-	}
 }
 
 func agentVisualSorts(sorts []agentVisualSort, dimensions []agentVisualFieldRef, series *agentVisualFieldRef, measures []agentVisualFieldRef) []reportdef.QuerySort {
@@ -524,12 +672,12 @@ func normalizedSortDirection(direction string) string {
 	return "asc"
 }
 
-func agentVisualID(kind, seed string) string {
+func agentVisualID(seed string) string {
 	suffix := sanitizeAgentVisualIDSeed(seed)
 	if suffix == "" {
 		suffix = randomAgentVisualIDSuffix()
 	}
-	return "agent_" + kind + "_" + suffix
+	return "agent_visual_" + suffix
 }
 
 func sanitizeAgentVisualIDSeed(seed string) string {
@@ -680,13 +828,12 @@ func cloneNestedMap(in map[string]map[string]any) map[string]map[string]any {
 const agentVisualToolSchema = `{
   "type": "object",
   "additionalProperties": false,
-  "required": ["kind", "model", "dataset"],
+  "required": ["type", "model", "dataset"],
   "properties": {
-    "kind": {"type": "string", "enum": ["chart", "table"], "description": "Artifact kind to create."},
     "model": {"type": "string", "minLength": 1, "description": "Semantic model ID."},
     "dataset": {"type": "string", "minLength": 1, "description": "Semantic dataset/table ID."},
     "title": {"type": "string", "description": "Optional display title."},
-    "type": {"type": "string", "description": "Optional chart or table renderer type."},
+    "type": {"type": "string", "enum": ["line", "area", "bar", "column", "pie", "donut", "scatter", "funnel", "treemap", "gauge", "heatmap", "sankey", "graph", "map", "candlestick", "boxplot", "combo", "waterfall", "histogram", "radar", "tree", "sunburst", "kpi", "table", "matrix", "pivot"], "description": "Visual type."},
     "shape": {"type": "string", "description": "Optional visual shape override."},
     "dimensions": {
       "type": "array",

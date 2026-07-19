@@ -911,7 +911,7 @@ relogios_presentes,watches_gifts
 
 	selectedRowTable, err := metrics.QueryTable(context.Background(), "executive-sales", dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
-			interactionSelection("table", "orders_table", "row_selection", "orders.order_id", "o1"),
+			interactionSelection("visual", "orders_table", "row_selection", "orders.order_id", "o1"),
 		},
 	}, dashboard.TableRequest{Table: "orders_table", Block: "all", Count: 10, RequestSeq: 10})
 	if err != nil {
@@ -926,7 +926,7 @@ relogios_presentes,watches_gifts
 
 	uiOnlyRowSelection := dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
-			interactionSelection("table", "orders_table", "row_selection", dashboard.UIRowSelectionField, "o1"),
+			interactionSelection("visual", "orders_table", "row_selection", dashboard.UIRowSelectionField, "o1"),
 		},
 	}
 	uiOnlyRowTable, err := metrics.QueryTable(context.Background(), "executive-sales", uiOnlyRowSelection, dashboard.TableRequest{Table: "orders_table", Block: "all", Count: 10, RequestSeq: 11})
@@ -949,7 +949,7 @@ relogios_presentes,watches_gifts
 
 	multiRowSelection := dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
-			interactionSelection("table", "orders_table", "row_selection", "orders.order_id", "o1", "o2"),
+			interactionSelection("visual", "orders_table", "row_selection", "orders.order_id", "o1", "o2"),
 		},
 	}
 	multiRowPatch, err := metrics.QueryDashboardPage(context.Background(), "executive-sales", "overview", multiRowSelection)
@@ -1114,7 +1114,7 @@ relogios_presentes,watches_gifts
 
 	filters := dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
-			compositeInteractionSelection("table", "orders_table", "row_selection",
+			compositeInteractionSelection("visual", "orders_table", "row_selection",
 				map[string]string{"orders.order_id": "o1", "orders.status": "delivered", "orders.category": "health_beauty"},
 				map[string]string{"orders.order_id": "o4", "orders.status": "shipped", "orders.category": "watches_gifts"},
 			),
@@ -1139,7 +1139,7 @@ relogios_presentes,watches_gifts
 
 	malformedFilters := dashboard.Filters{
 		Selections: []dashboard.InteractionSelection{
-			compositeInteractionSelection("table", "orders_table", "row_selection",
+			compositeInteractionSelection("visual", "orders_table", "row_selection",
 				map[string]string{"orders.order_id": "o1", "orders.status": "delivered", "orders.unknown": "health_beauty"},
 				map[string]string{"orders.order_id": "o4", "orders.status": "shipped", "orders.category": "watches_gifts"},
 			),

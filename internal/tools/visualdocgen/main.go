@@ -17,6 +17,7 @@ import (
 	"strings"
 
 	dashboardadapter "github.com/Yacobolo/libredash/internal/analytics/duckdb/dashboardadapter"
+	"github.com/Yacobolo/libredash/internal/configschema"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	dashboardruntime "github.com/Yacobolo/libredash/internal/dashboard/runtime"
@@ -26,18 +27,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var chartShortcodePattern = regexp.MustCompile(`^\s*\{\{<\s*chart\s+id="([a-z0-9_]+)"\s*>}}\s*$`)
+var visualShortcodePattern = regexp.MustCompile(`^\s*\{\{<\s*visual\s+id="([a-z0-9_]+)"\s*>}}\s*$`)
 var visualFencePattern = regexp.MustCompile("^```ya?ml[ \\t]+visual-example=([a-z0-9_]+)[ \\t]*$")
 
 type visualExample struct {
-	ID     string
-	Source string
-	Line   int
-	Visual reportdef.Visual
+	ID      string
+	Source  string
+	Line    int
+	Chart   *reportdef.Visual
+	Tabular *reportdef.TableVisual
 }
 
 type visualExampleFragment struct {
-	Visuals map[string]reportdef.Visual `yaml:"visuals"`
+	Visuals map[string]yaml.Node `yaml:"visuals"`
 }
 
 type visualCatalog struct {
@@ -152,7 +154,7 @@ func generateVisualExamples(docsDir, projectPath, dataRoot string) (visualExampl
 	}
 	defer service.Close()
 
-	artifact := visualExamplesArtifact{Version: visualdocs.ArtifactVersion, Documents: map[string][]dashboard.Visual{}, References: map[string]visualDocumentReference{}, Showcase: make([]dashboard.Visual, 0, len(catalog.Documents))}
+	artifact := visualExamplesArtifact{Version: visualdocs.ArtifactVersion, Documents: map[string][]visualdocs.Payload{}, References: map[string]visualDocumentReference{}, Showcase: make([]visualdocs.Payload, 0, len(catalog.Documents))}
 	for _, document := range catalog.Documents {
 		patch, err := service.QueryDashboardPage(context.Background(), report.ID, document.Source, dashboard.Filters{})
 		if err != nil {
@@ -161,22 +163,30 @@ func generateVisualExamples(docsDir, projectPath, dataRoot string) (visualExampl
 		if patch.Status.Error != "" {
 			return visualExamplesArtifact{}, fmt.Errorf("query %s examples: %s", document.Source, patch.Status.Error)
 		}
-		payloads := make([]dashboard.Visual, 0, len(examplesByPage[document.Source]))
+		payloads := make([]visualdocs.Payload, 0, len(examplesByPage[document.Source]))
 		for _, example := range examplesByPage[document.Source] {
-			payload, ok := patch.Visuals[example.ID]
-			if !ok {
-				return visualExamplesArtifact{}, fmt.Errorf("query %s did not return visual %q", document.Source, example.ID)
+			if example.Chart != nil {
+				payload, ok := patch.Visuals[example.ID]
+				if !ok || len(payload.Data) == 0 {
+					return visualExamplesArtifact{}, fmt.Errorf("query %s did not return visual %q data", document.Source, example.ID)
+				}
+				if err := validateVisualPayload(example, payload); err != nil {
+					return visualExamplesArtifact{}, err
+				}
+				canonicalizePayloadData(*example.Chart, &payload)
+				payloads = append(payloads, visualdocs.ChartPayload(payload))
+				continue
 			}
-			if len(payload.Data) == 0 {
-				return visualExamplesArtifact{}, fmt.Errorf("visual example %q returned no data", example.ID)
+			table, err := service.QueryTablePage(context.Background(), report.ID, document.Source, dashboard.Filters{}, dashboard.TableRequest{Table: example.ID, Block: "a", Start: 0, Count: dashboard.TableMaxRequestCount})
+			if err != nil {
+				return visualExamplesArtifact{}, fmt.Errorf("query %s visual %q: %w", document.Source, example.ID, err)
 			}
-			if err := validateVisualPayload(example, payload); err != nil {
-				return visualExamplesArtifact{}, err
+			if len(table.Blocks["a"].Rows) == 0 {
+				return visualExamplesArtifact{}, fmt.Errorf("visual example %q returned no rows", example.ID)
 			}
-			canonicalizePayloadData(example.Visual, &payload)
-			payloads = append(payloads, payload)
+			payloads = append(payloads, visualdocs.TabularPayload(dashboard.NewTabularVisual(example.ID, table)))
 		}
-		slug := "charts/" + document.Source
+		slug := "visuals/" + document.Source
 		artifact.Documents[slug] = payloads
 		reference, err := buildVisualDocumentReference(examplesByPage[document.Source])
 		if err != nil {
@@ -213,10 +223,10 @@ func validateVisualPayload(example visualExample, payload dashboard.Visual) erro
 	if finiteNumbers == 0 {
 		return fmt.Errorf("visual example %q has no finite numeric values", example.ID)
 	}
-	if example.Visual.ShapeOrDefault() != "geo" {
+	if example.Chart.ShapeOrDefault() != "geo" {
 		return nil
 	}
-	mapID, _ := example.Visual.Options["map"].(string)
+	mapID, _ := example.Chart.Options["map"].(string)
 	regions, ok := visualDocMapRegions[mapID]
 	if !ok {
 		return fmt.Errorf("visual example %q uses unsupported documentation map %q", example.ID, mapID)
@@ -284,6 +294,20 @@ func inspectPayloadValue(value any, path string, finiteNumbers *int) error {
 }
 
 func buildVisualDocumentReference(examples []visualExample) (visualDocumentReference, error) {
+	if len(examples) > 0 && examples[0].Tabular != nil {
+		visualType := dashboard.NewTabularVisual("reference", dashboard.Table{Kind: examples[0].Tabular.Kind}).Type
+		return visualDocumentReference{
+			Kind: "visual", Renderer: "tabular", Shapes: []string{visualType},
+			QueryFields: []string{"table", "fields", "rows", "columns", "measures"},
+			Fields: []visualdocs.FieldReference{
+				{Path: "type", Type: "string", AllowedValues: []string{"table", "matrix", "pivot"}, Description: "Selects the tabular visual behavior."},
+				{Path: "query", Type: "tabular query", Description: "Selects record fields or grouped row, column, and measure fields."},
+				{Path: "cardinality", Type: "string", AllowedValues: []string{"bounded", "exact"}, Description: "Controls whether the visual resolves an exact row count."},
+			},
+			Accessibility: "Tabular visuals expose semantic headers and virtualized rows while preserving keyboard navigation.",
+			Examples:      map[string]visualExampleReference{examples[0].ID: {KeyFields: []string{"type", "query", "columns"}}},
+		}, nil
+	}
 	kinds := map[string]struct{}{}
 	renderers := map[string]struct{}{}
 	shapes := map[string]struct{}{}
@@ -292,7 +316,7 @@ func buildVisualDocumentReference(examples []visualExample) (visualDocumentRefer
 	reference := visualDocumentReference{Examples: make(map[string]visualExampleReference, len(examples))}
 	var previous *reportdef.Visual
 	for index := range examples {
-		visual := examples[index].Visual
+		visual := *examples[index].Chart
 		kinds[visual.KindOrDefault()] = struct{}{}
 		renderers[visual.RendererOrDefault()] = struct{}{}
 		shapes[visual.ShapeOrDefault()] = struct{}{}
@@ -301,19 +325,19 @@ func buildVisualDocumentReference(examples []visualExample) (visualDocumentRefer
 			options[key] = struct{}{}
 		}
 		reference.Examples[examples[index].ID] = visualExampleReference{KeyFields: visualKeyFields(previous, visual)}
-		previous = &examples[index].Visual
+		previous = examples[index].Chart
 	}
 	reference.Kind = strings.Join(sortedSet(kinds), ", ")
 	reference.Renderer = strings.Join(sortedSet(renderers), ", ")
 	reference.Shapes = sortedSet(shapes)
 	reference.QueryFields = sortedSet(queryFields)
 	reference.Options = sortedSet(options)
-	fields, err := visualFieldReferences(reference.QueryFields, reference.Options, examples[0].Visual.Type)
+	fields, err := visualFieldReferences(reference.QueryFields, reference.Options, examples[0].Chart.Type)
 	if err != nil {
 		return visualDocumentReference{}, err
 	}
 	reference.Fields = fields
-	reference.Accessibility = visualAccessibilityGuidance(examples[0].Visual)
+	reference.Accessibility = visualAccessibilityGuidance(*examples[0].Chart)
 	return reference, nil
 }
 
@@ -510,16 +534,22 @@ func payloadNumber(value any) (float64, bool) {
 }
 
 func buildExampleDashboard(catalog visualCatalog, examplesByPage map[string][]visualExample) *reportdef.Dashboard {
-	report := &reportdef.Dashboard{ID: "visual-docs", Title: "Visual documentation", Description: "Executable documentation examples.", SemanticModel: "visual_examples", Visuals: map[string]reportdef.Visual{}, Pages: make([]dashboard.Page, 0, len(catalog.Documents))}
+	report := &reportdef.Dashboard{ID: "visual-docs", Title: "Visual documentation", Description: "Executable documentation examples.", SemanticModel: "visual_examples", Visuals: map[string]reportdef.Visual{}, Tables: map[string]reportdef.TableVisual{}, Pages: make([]dashboard.Page, 0, len(catalog.Documents))}
 	for _, document := range catalog.Documents {
 		page := dashboard.Page{ID: document.Source, Title: document.Title, Canvas: dashboard.PageCanvas{Width: 1366, Height: 3000}, Grid: dashboard.PageGrid{Columns: 12, RowHeight: 48, Gap: 16, Padding: 16}, Visuals: make([]dashboard.PageVisual, 0, len(examplesByPage[document.Source]))}
 		for index, example := range examplesByPage[document.Source] {
-			report.Visuals[example.ID] = example.Visual
-			kind := example.Visual.Type + "_chart"
-			if example.Visual.KindOrDefault() == "kpi" {
-				kind = "kpi_card"
+			component := dashboard.PageVisual{ID: example.ID, Placement: dashboard.PagePlacement{Col: 1, Row: 1 + index*8, ColSpan: 6, RowSpan: 7}}
+			if example.Chart != nil {
+				report.Visuals[example.ID] = *example.Chart
+				component.Kind, component.Visual = example.Chart.Type+"_chart", example.ID
+				if example.Chart.KindOrDefault() == "kpi" {
+					component.Kind = "kpi_card"
+				}
+			} else {
+				report.Tables[example.ID] = *example.Tabular
+				component.Kind, component.Table = "table", example.ID
 			}
-			page.Visuals = append(page.Visuals, dashboard.PageVisual{ID: example.ID, Kind: kind, Visual: example.ID, Placement: dashboard.PagePlacement{Col: 1, Row: 1 + index*8, ColSpan: 6, RowSpan: 7}})
+			page.Visuals = append(page.Visuals, component)
 		}
 		report.Pages = append(report.Pages, page)
 	}
@@ -552,10 +582,10 @@ func parseVisualExamples(filename string, source []byte) ([]visualExample, error
 
 	for index := 0; index < len(lines); index++ {
 		line := lines[index]
-		if match := chartShortcodePattern.FindStringSubmatch(line); len(match) == 2 {
+		if match := visualShortcodePattern.FindStringSubmatch(line); len(match) == 2 {
 			id := match[1]
 			if previous := shortcodes[id]; previous > 0 {
-				return nil, fmt.Errorf("%s:%d: duplicate chart shortcode %q (first declared on line %d)", filename, index+1, id, previous)
+				return nil, fmt.Errorf("%s:%d: duplicate visual shortcode %q (first declared on line %d)", filename, index+1, id, previous)
 			}
 			shortcodes[id] = index + 1
 			continue
@@ -589,7 +619,7 @@ func parseVisualExamples(filename string, source []byte) ([]visualExample, error
 		if len(fragment.Visuals) != 1 {
 			return nil, fmt.Errorf("%s:%d: visual example %q must contain exactly one visual", filename, index+1, id)
 		}
-		visual, ok := fragment.Visuals[id]
+		visualNode, ok := fragment.Visuals[id]
 		if !ok {
 			keys := make([]string, 0, len(fragment.Visuals))
 			for key := range fragment.Visuals {
@@ -599,7 +629,11 @@ func parseVisualExamples(filename string, source []byte) ([]visualExample, error
 			return nil, fmt.Errorf("%s:%d: visual example %q must use visual key %q, got %q", filename, index+1, id, id, strings.Join(keys, ", "))
 		}
 		seenExamples[id] = index + 1
-		examples = append(examples, visualExample{ID: id, Source: filename, Line: index + 1, Visual: visual})
+		example, err := decodeVisualExample(id, filename, index+1, visualNode)
+		if err != nil {
+			return nil, err
+		}
+		examples = append(examples, example)
 		index = closing
 	}
 
@@ -614,4 +648,69 @@ func parseVisualExamples(filename string, source []byte) ([]visualExample, error
 		}
 	}
 	return examples, nil
+}
+
+func decodeVisualExample(id, filename string, line int, node yaml.Node) (visualExample, error) {
+	var tag struct {
+		Type string `yaml:"type"`
+	}
+	if err := node.Decode(&tag); err != nil {
+		return visualExample{}, err
+	}
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		if node.Content[index].Value == "kind" {
+			return visualExample{}, fmt.Errorf("%s:%d: visual %q uses removed field kind; use type", filename, line, id)
+		}
+	}
+	if strings.TrimSpace(tag.Type) == "" {
+		return visualExample{}, fmt.Errorf("%s:%d: visual %q requires type", filename, line, id)
+	}
+	if err := validateVisualExampleContract(id, filename, node); err != nil {
+		return visualExample{}, fmt.Errorf("%s:%d: visual %q: %w", filename, line, id, err)
+	}
+	example := visualExample{ID: id, Source: filename, Line: line}
+	switch tag.Type {
+	case "table", "matrix", "pivot":
+		var value reportdef.TableVisual
+		if err := node.Decode(&value); err != nil {
+			return visualExample{}, fmt.Errorf("%s:%d: decode visual %q: %w", filename, line, id, err)
+		}
+		value.Kind = map[string]string{"table": "data_table", "matrix": "matrix_table", "pivot": "pivot_table"}[tag.Type]
+		example.Tabular = &value
+	default:
+		var value reportdef.Visual
+		if err := node.Decode(&value); err != nil {
+			return visualExample{}, fmt.Errorf("%s:%d: decode visual %q: %w", filename, line, id, err)
+		}
+		example.Chart = &value
+	}
+	return example, nil
+}
+
+func validateVisualExampleContract(id, filename string, node yaml.Node) error {
+	var visual any
+	if err := node.Decode(&visual); err != nil {
+		return err
+	}
+	resource := map[string]any{
+		"apiVersion": "libredash.dev/v1",
+		"kind":       "Dashboard",
+		"metadata":   map[string]any{"name": "visual-doc-example"},
+		"spec": map[string]any{
+			"semanticModel": "visual_examples",
+			"visuals":       map[string]any{id: visual},
+			"pages": []any{map[string]any{
+				"id": "example", "title": "Example",
+				"components": []any{map[string]any{
+					"id": id, "kind": "visual", "visual": id,
+					"placement": map[string]int{"col": 1, "row": 1, "col_span": 6, "row_span": 4},
+				}},
+			}},
+		},
+	}
+	content, err := yaml.Marshal(resource)
+	if err != nil {
+		return err
+	}
+	return configschema.ValidateBytes(configschema.KindDashboardResource, filename, content)
 }

@@ -54,4 +54,4 @@ Tables use a distinct stable signal contract for columns, bounded rows, total/wi
 
 An unknown renderer or unsupported payload should fail visibly and predictably. Empty data clears the renderer and shows product empty state. Theme and resize changes update the mounted instance. Disconnect always releases observers and library resources.
 
-The [visual catalog](/docs/charts/overview) exercises production lazy loading, each documented type, theme behavior, and live renderer integration.
+The [visual catalog](/docs/visuals/overview) exercises production lazy loading, each documented type, theme behavior, and live renderer integration.

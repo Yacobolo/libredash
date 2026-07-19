@@ -29,7 +29,7 @@ test('buildRowSelectionCommand emits configured semantic mappings', () => {
   })
 
   expect(command).toEqual({
-    sourceKind: 'table',
+    sourceKind: 'visual',
     sourceId: 'orders_table',
     interactionKind: 'row_selection',
     action: 'replace',
@@ -80,7 +80,7 @@ test('buildRowSelectionCommand emits UI-only row key mappings without semantic m
   })
 
   expect(command).toEqual({
-    sourceKind: 'table',
+    sourceKind: 'visual',
     sourceId: 'orders_table',
     interactionKind: 'row_selection',
     action: 'set',

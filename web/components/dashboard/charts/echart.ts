@@ -316,7 +316,6 @@ class ChartVisual extends LitElement {
     return {
       version: chart.version ?? 3,
       id: chart.id || this.visualId,
-      kind: chart.kind || 'chart',
       shape: normalizeShape(chart.shape, type, Boolean(chart.series?.length)),
       renderer: chart.renderer || 'echarts',
       type,
@@ -500,7 +499,6 @@ class KPICard extends LitElement {
     return {
       version: this.visual?.version ?? 3,
       id: this.visual?.id || this.visualId,
-      kind: this.visual?.kind || 'kpi',
       shape: this.visual?.shape || 'single_value',
       renderer: this.visual?.renderer || 'html',
       type: this.visual?.type || 'kpi',

@@ -18,12 +18,12 @@ type Service struct {
 }
 
 type Request struct {
-	DashboardID        string
-	PageID             string
-	ModelID            string
-	Filters            dashboard.Filters
-	TableCommand       dashboard.TableRequest
-	InteractionCommand dashboard.InteractionCommand
+	DashboardID         string
+	PageID              string
+	ModelID             string
+	Filters             dashboard.Filters
+	VisualWindowCommand dashboard.TableRequest
+	InteractionCommand  dashboard.InteractionCommand
 }
 
 func canonicalInteractionCommand(metrics Metrics, dashboardID string, command dashboard.InteractionCommand) (dashboard.InteractionCommand, error) {
@@ -36,20 +36,16 @@ func canonicalInteractionCommand(metrics Metrics, dashboardID string, command da
 	semanticMappingCount := 0
 	switch command.SourceKind {
 	case "visual":
-		source, ok := definition.Visuals[command.SourceID]
-		if !ok {
+		if source, ok := definition.Visuals[command.SourceID]; ok {
+			toggle = source.Interaction.PointSelection.Toggle
+			semanticMappingCount = len(source.Interaction.PointSelection.Mappings)
+		} else if source, ok := definition.Tables[command.SourceID]; ok {
+			wantKind = "row_selection"
+			toggle = source.Interaction.RowSelection.Toggle
+			semanticMappingCount = len(source.Interaction.RowSelection.Mappings)
+		} else {
 			return dashboard.InteractionCommand{}, fmt.Errorf("unknown source visual %q", command.SourceID)
 		}
-		toggle = source.Interaction.PointSelection.Toggle
-		semanticMappingCount = len(source.Interaction.PointSelection.Mappings)
-	case "table":
-		wantKind = "row_selection"
-		source, ok := definition.Tables[command.SourceID]
-		if !ok {
-			return dashboard.InteractionCommand{}, fmt.Errorf("unknown source table %q", command.SourceID)
-		}
-		toggle = source.Interaction.RowSelection.Toggle
-		semanticMappingCount = len(source.Interaction.RowSelection.Mappings)
 	default:
 		return dashboard.InteractionCommand{}, fmt.Errorf("unknown source kind %q", command.SourceKind)
 	}
@@ -64,7 +60,7 @@ func canonicalInteractionCommand(metrics Metrics, dashboardID string, command da
 		command.Mappings = nil
 		return command, nil
 	}
-	if command.SourceKind == "table" && semanticMappingCount == 0 {
+	if wantKind == "row_selection" && semanticMappingCount == 0 {
 		if len(command.Mappings) != 1 || command.Mappings[0].Field != dashboard.UIRowSelectionField || command.Mappings[0].Fact != "" || command.Mappings[0].Grain != "" || !dashboard.IsInteractionSelectionScalar(command.Mappings[0].Value) {
 			return dashboard.InteractionCommand{}, fmt.Errorf("table %q without semantic selection mappings accepts only the UI row key", command.SourceID)
 		}

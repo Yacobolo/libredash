@@ -14,7 +14,7 @@ func TestConsumerTableCountIsExplicitlyOptIn(t *testing.T) {
 	if !consumerTableNeedsExactCount("selection", initial, true) {
 		t.Fatal("exact table did not schedule its requested count")
 	}
-	if consumerTableNeedsExactCount("table_window", initial, true) {
+	if consumerTableNeedsExactCount("visual_window", initial, true) {
 		t.Fatal("scrolling window scheduled a count")
 	}
 }

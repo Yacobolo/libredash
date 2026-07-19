@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use an ordered category and numeric measure to place one point per period, making isolated delivery values and gaps easy to spot.
 
-{{< chart id="delivery_scatter" >}}
+{{< visual id="delivery_scatter" >}}
 
 ```yaml visual-example=delivery_scatter
 visuals:
@@ -30,7 +30,7 @@ visuals:
 
 Map status through `query.series` to split points into comparable groups while retaining the same axes.
 
-{{< chart id="delivery_scatter_status" >}}
+{{< visual id="delivery_scatter_status" >}}
 
 ```yaml visual-example=delivery_scatter_status
 visuals:
@@ -57,7 +57,7 @@ visuals:
 
 Enable labels and place them above larger symbols when exact point values matter and the dataset is small enough to avoid overlap.
 
-{{< chart id="delivery_scatter_labeled" >}}
+{{< visual id="delivery_scatter_labeled" >}}
 
 ```yaml visual-example=delivery_scatter_labeled
 visuals:

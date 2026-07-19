@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	content "github.com/Yacobolo/libredash/docs"
-	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/visualdocs"
 )
 
@@ -73,7 +72,7 @@ func visualExampleReferenceForDocument(slug, id string) (visualdocs.ExampleRefer
 	return example, ok
 }
 
-func visualExamplesForDocument(slug string) ([]dashboard.Visual, bool) {
+func visualExamplesForDocument(slug string) ([]visualdocs.Payload, bool) {
 	examples, ok := visualDocumentation.Documents[slug]
 	return examples, ok
 }
@@ -87,13 +86,13 @@ func documentHasVisualExample(slug, id string) bool {
 	return false
 }
 
-func visualExampleForDocument(slug, id string) (dashboard.Visual, bool) {
+func visualExampleForDocument(slug, id string) (visualdocs.Payload, bool) {
 	for _, example := range visualDocumentation.Documents[slug] {
 		if example.ID == id {
 			return example, true
 		}
 	}
-	return dashboard.Visual{}, false
+	return visualdocs.Payload{}, false
 }
 
 func validateVisualDocumentationCatalog() bool {
@@ -104,7 +103,7 @@ func validateVisualDocumentationCatalog() bool {
 		if !ok {
 			panic(fmt.Sprintf("visual documentation %q has no generated examples", document.slug))
 		}
-		shortcodes := docsChartShortcode.FindAllStringSubmatch(document.markdown, -1)
+		shortcodes := docsVisualShortcode.FindAllStringSubmatch(document.markdown, -1)
 		if len(shortcodes) != len(examples) {
 			panic(fmt.Sprintf("visual documentation %q has %d shortcodes and %d generated examples", document.slug, len(shortcodes), len(examples)))
 		}
@@ -113,8 +112,8 @@ func validateVisualDocumentationCatalog() bool {
 				panic(fmt.Sprintf("visual documentation %q shortcode %d = %q, generated id = %q", document.slug, index, shortcode[1], examples[index].ID))
 			}
 		}
-		if strings.Contains(docsChartShortcode.ReplaceAllString(document.markdown, ""), "{{< chart") {
-			panic(fmt.Sprintf("visual documentation %q has an invalid chart shortcode", document.slug))
+		if strings.Contains(docsVisualShortcode.ReplaceAllString(document.markdown, ""), "{{< visual") {
+			panic(fmt.Sprintf("visual documentation %q has an invalid visual shortcode", document.slug))
 		}
 	}
 	for slug := range visualDocumentation.Documents {

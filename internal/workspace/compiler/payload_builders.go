@@ -307,14 +307,15 @@ func filterOptionsPayload(options []reportdef.FilterOption) []filterOptionPayloa
 }
 
 func filterTargetsPayload(targets reportdef.FilterTargets) filterTargetsPayloadV1 {
-	return filterTargetsPayloadV1{Visuals: targets.Visuals, Tables: targets.Tables}
+	visuals := append([]string{}, targets.Visuals...)
+	visuals = append(visuals, targets.Tables...)
+	return filterTargetsPayloadV1{Visuals: visuals}
 }
 
 func visualPayload(visual reportdef.Visual) visualPayloadV1 {
 	return visualPayloadV1{
 		Title:           visual.Title,
 		Description:     visual.Description,
-		Kind:            visual.KindOrDefault(),
 		Shape:           visual.ShapeOrDefault(),
 		Renderer:        visual.RendererOrDefault(),
 		Type:            visual.Type,
@@ -388,7 +389,7 @@ func tableVisualPayload(table reportdef.TableVisual) tablePayloadV1 {
 	return tablePayloadV1{
 		Title:       table.Title,
 		Description: table.Description,
-		Kind:        table.KindOrDefault(),
+		Type:        tabularVisualType(table.KindOrDefault()),
 		Query: tableQueryPayloadV1{
 			Table:    table.Query.Table,
 			Measures: fieldRefStrings(table.Query.Measures),
@@ -399,6 +400,17 @@ func tableVisualPayload(table reportdef.TableVisual) tablePayloadV1 {
 		Style:       tableStylePayload(table.Style),
 		DefaultSort: tableSortPayload(table.DefaultSort),
 		Interaction: selectionPayload(table.Interaction.RowSelection),
+	}
+}
+
+func tabularVisualType(kind string) string {
+	switch kind {
+	case "matrix_table":
+		return "matrix"
+	case "pivot_table":
+		return "pivot"
+	default:
+		return "table"
 	}
 }
 

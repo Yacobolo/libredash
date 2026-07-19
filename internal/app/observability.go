@@ -147,9 +147,9 @@ func (t *httpTelemetry) dashboardRefreshEventObserved(event dashboardstream.Refr
 	case dashboardstream.RefreshEventVisual:
 		t.dashboardTargetObserved("visual", "success")
 	case dashboardstream.RefreshEventTable:
-		t.dashboardTargetObserved("table", "success")
+		t.dashboardTargetObserved("visual", "success")
 	case dashboardstream.RefreshEventTableCountErr:
-		t.dashboardTargetObserved("table_count", "error")
+		t.dashboardTargetObserved("visual_count", "error")
 	case dashboardstream.RefreshEventTargetError:
 		kind := event.Target
 		if prefix, _, ok := strings.Cut(kind, ":"); ok {
@@ -162,7 +162,7 @@ func (t *httpTelemetry) dashboardRefreshEventObserved(event dashboardstream.Refr
 func dashboardCommandLabel(value string) string {
 	value = normalizedMetricLabel(value)
 	switch value {
-	case "initial", "reload", "reset_filters", "filter_change", "select", "clear_selection", "table_window", "refresh_materializations":
+	case "initial", "reload", "reset_filters", "filter_change", "select", "clear_selection", "visual_window", "refresh_materializations":
 		return value
 	default:
 		return "other"
@@ -202,7 +202,7 @@ func dashboardCacheLabel(value string) string {
 func dashboardTargetKindLabel(value string) string {
 	value = normalizedMetricLabel(value)
 	switch value {
-	case "filter_options", "visual", "table", "table_count", "refresh":
+	case "filter_options", "visual", "visual_count", "refresh":
 		return value
 	default:
 		return "other"

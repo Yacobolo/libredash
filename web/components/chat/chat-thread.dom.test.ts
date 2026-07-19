@@ -150,7 +150,6 @@ test('chat thread renders visual artifacts with dashboard web components', async
       agent_chart_1: {
         version: 3,
         id: 'agent_chart_1',
-        kind: 'chart',
         shape: 'category_value',
         renderer: 'echarts',
         type: 'bar',
@@ -167,10 +166,12 @@ test('chat thread renders visual artifacts with dashboard web components', async
         data: [{ label: 'delivered', value: 42 }],
       },
     }
-    thread.tables = {
+    thread.visuals = {
+      ...thread.visuals,
       agent_table_1: {
         version: 2,
-        kind: 'data_table',
+        id: 'agent_table_1',
+        type: 'table',
         title: 'Orders',
         style: { density: 'comfortable', zebra: true, grid: 'rows' },
         interaction: {},
@@ -197,9 +198,9 @@ test('chat thread renders visual artifacts with dashboard web components', async
         kind: 'tool',
         name: 'query_visual',
         status: 'complete',
-        resultJson: '{\n  "ok": true,\n  "kind": "chart",\n  "id": "agent_chart_1",\n  "signal": "visuals.agent_chart_1"\n}',
+        resultJson: '{\n  "ok": true,\n  "type": "bar",\n  "id": "agent_chart_1",\n  "signal": "visuals.agent_chart_1"\n}',
         artifact: {
-          kind: 'chart',
+          type: 'bar',
           id: 'agent_chart_1',
           summary: 'Created chart.',
         },
@@ -209,9 +210,9 @@ test('chat thread renders visual artifacts with dashboard web components', async
         kind: 'tool',
         name: 'query_visual',
         status: 'complete',
-        resultJson: '{\n  "ok": true,\n  "kind": "table",\n  "id": "agent_table_1",\n  "signal": "tables.agent_table_1"\n}',
+        resultJson: '{\n  "ok": true,\n  "type": "table",\n  "id": "agent_table_1",\n  "signal": "visuals.agent_table_1"\n}',
         artifact: {
-          kind: 'table',
+          type: 'table',
           id: 'agent_table_1',
           summary: 'Created table.',
         },
@@ -413,7 +414,7 @@ test('chat thread renders assistant markdown through shared markdown view', asyn
   await page.close()
 })
 
-test('chat thread still renders legacy embedded artifact patches', async () => {
+test('chat thread rejects payloads embedded in artifact metadata', async () => {
   const page = await browser.newPage()
   await page.goto(baseURL)
   await page.evaluate(async () => {
@@ -425,14 +426,13 @@ test('chat thread still renders legacy embedded artifact patches', async () => {
       name: 'query_visual',
       status: 'complete',
       artifact: {
-        kind: 'chart',
+        type: 'bar',
         id: 'legacy_chart_1',
         patch: {
           visuals: {
             legacy_chart_1: {
               version: 3,
               id: 'legacy_chart_1',
-              kind: 'chart',
               shape: 'category_value',
               renderer: 'echarts',
               type: 'bar',
@@ -454,15 +454,13 @@ test('chat thread still renders legacy embedded artifact patches', async () => {
     }]
     await thread.updateComplete
   })
-  await page.waitForFunction(() => Boolean(
-    document.querySelector('ld-chat-thread')!
-      .shadowRoot!
-      .querySelector('ld-visual-artifact[artifact-id="legacy_chart_1"]')
-      ?.shadowRoot
-      ?.querySelector('ld-echart[visual-id="legacy_chart_1"]'),
-  ))
-
-  const hasChart = await page.evaluate(() => Boolean(document.querySelector('ld-chat-thread')!.shadowRoot!.querySelector('ld-visual-artifact[artifact-id="legacy_chart_1"]')?.shadowRoot?.querySelector('ld-echart[visual-id="legacy_chart_1"]')))
-  expect(hasChart).toBe(true)
+  const artifact = page.locator('ld-chat-thread').locator('ld-visual-artifact[artifact-id="legacy_chart_1"]')
+  await artifact.waitFor()
+  const state = await artifact.evaluate((element) => ({
+    hasChart: Boolean(element.shadowRoot?.querySelector('ld-echart')),
+    text: element.shadowRoot?.textContent?.trim(),
+  }))
+  expect(state.hasChart).toBe(false)
+  expect(state.text).toBe('Artifact data is unavailable.')
   await page.close()
 })

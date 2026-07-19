@@ -20,7 +20,7 @@ import (
 
 const dashboardArrowMediaType = "application/vnd.apache.arrow.stream"
 
-func dashboardTableRowset(table dashboard.Table, block string, start, limit int, scope, snapshot string) api.DashboardTableQueryResponse {
+func dashboardTableRowset(id string, table dashboard.Table, block string, start, limit int, scope, snapshot string) api.DashboardTableQueryResponse {
 	rows := table.Blocks[block].Rows
 	if len(rows) > limit {
 		rows = rows[:limit]
@@ -43,6 +43,7 @@ func dashboardTableRowset(table dashboard.Table, block string, start, limit int,
 	}
 	queryDigest := sha256String(scope)
 	return api.DashboardTableQueryResponse{
+		ID: id, Type: dashboard.NewTabularVisual(id, table).Type,
 		QueryID: "query_" + queryDigest[:24], ServingSnapshot: snapshot, Title: table.Title,
 		Columns: columns, Rows: encodedRows, AvailableRows: table.AvailableRows, Page: api.PageInfo{NextCursor: next},
 	}

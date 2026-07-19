@@ -37,7 +37,7 @@ func TestGeneratedCLIRegistryContainsCoreCommands(t *testing.T) {
 	for _, spec := range cligen.APIGeneratedCommandSpecs {
 		commands[spec.OperationID] = true
 	}
-	for _, operationID := range []string{"listAgentConversations", "listDashboards", "getDashboard", "queryDashboardPage", "queryDashboardTable", "listSemanticModels", "getSemanticModel"} {
+	for _, operationID := range []string{"listAgentConversations", "listDashboards", "getDashboard", "queryDashboardPage", "queryDashboardVisualData", "listSemanticModels", "getSemanticModel"} {
 		if !commands[operationID] {
 			t.Fatalf("generated CLI registry missing %s", operationID)
 		}
@@ -49,8 +49,8 @@ func TestGeneratedVisualCLIUsesUnionCollectionMetadata(t *testing.T) {
 		if spec.OperationID != "queryDashboardVisualData" {
 			continue
 		}
-		if spec.Output.Mode != "collection" || spec.Pagination == nil || spec.Pagination.ItemsField != "data" {
-			t.Fatalf("visual CLI metadata = output %#v pagination %#v, want data collection", spec.Output, spec.Pagination)
+		if spec.Output.Mode != "raw" || spec.Pagination != nil {
+			t.Fatalf("visual CLI metadata = output %#v pagination %#v, want raw union output", spec.Output, spec.Pagination)
 		}
 		return
 	}

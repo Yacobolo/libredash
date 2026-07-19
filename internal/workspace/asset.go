@@ -238,8 +238,6 @@ func PayloadSchemaForAssetType(typ AssetType) string {
 		return "filter.v1"
 	case AssetTypeVisual:
 		return "visual.v1"
-	case AssetTypeTable:
-		return "table.v1"
 	case AssetTypeWorkspaceGroup:
 		return "workspace_group.v1"
 	case AssetTypeWorkspaceRoleBinding:

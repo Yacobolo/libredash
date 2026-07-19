@@ -45,16 +45,16 @@ spec:
             direction: asc
         limit: 30
   pages:
-    - name: overview
+    - id: overview
       title: Overview
       grid:
         columns: 12
         row_height: 48
         gap: 16
         padding: 16
-      visuals:
+      components:
         - id: revenue-trend
-          kind: area_chart
+          kind: visual
           visual: revenue_by_month
           placement: {col: 1, row: 1, col_span: 12, row_span: 8}
 ```
@@ -74,7 +74,7 @@ KPI visuals use a single-value shape:
 ```yaml
 visuals:
   total_revenue:
-    kind: kpi
+    type: kpi
     shape: single_value
     query:
       measures:
@@ -84,7 +84,7 @@ visuals:
       tone: green
 ```
 
-Place it on the page with `kind: kpi_card` and `visual: total_revenue`. The semantic measure supplies empty and formatting behavior; the dashboard supplies context-specific note and tone.
+Place it on the page with `kind: visual` and `visual: total_revenue`. Its `type: kpi` selects the KPI renderer. The semantic measure supplies empty and formatting behavior; the dashboard supplies context-specific note and tone.
 
 ### Add filters after the base query works
 
@@ -121,4 +121,4 @@ If a visual is empty, first run its semantic query without dashboard filters, th
 
 ## Next steps
 
-Continue with [Pages and layout](/docs/guides/build/pages-layout), [Filters and interactions](/docs/guides/build/filters-interactions), and [Tables, matrices, and pivots](/docs/guides/build/tables). Use [Dashboard configuration](/docs/config/dashboard) and [Visual types](/docs/charts/overview) for exact contracts.
+Continue with [Pages and layout](/docs/guides/build/pages-layout), [Filters and interactions](/docs/guides/build/filters-interactions), and [Tables, matrices, and pivots](/docs/guides/build/tables). Use [Dashboard configuration](/docs/config/dashboard) and [Visual types](/docs/visuals/overview) for exact contracts.

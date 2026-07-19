@@ -8,10 +8,10 @@ import (
 )
 
 type Signals struct {
-	Filters            Filters            `json:"filters"`
-	Runtime            Runtime            `json:"runtime"`
-	TableCommand       TableRequest       `json:"tableCommand"`
-	InteractionCommand InteractionCommand `json:"interactionCommand"`
+	Filters             Filters            `json:"filters"`
+	Runtime             Runtime            `json:"runtime"`
+	VisualWindowCommand TableRequest       `json:"visualWindowCommand"`
+	InteractionCommand  InteractionCommand `json:"interactionCommand"`
 }
 
 type Catalog struct {
@@ -624,7 +624,7 @@ func NormalizeProgressPercent(percent *float64, loading bool) *float64 {
 type Visual struct {
 	Version         int                         `json:"version"`
 	ID              string                      `json:"id"`
-	Kind            string                      `json:"kind"`
+	Kind            string                      `json:"-"`
 	Shape           string                      `json:"shape"`
 	Renderer        string                      `json:"renderer"`
 	Type            string                      `json:"type"`
@@ -660,7 +660,7 @@ type InteractionConfigMapping struct {
 }
 
 type TableRequest struct {
-	Table        string    `json:"table"`
+	Table        string    `json:"visual"`
 	Block        string    `json:"block"`
 	Start        int       `json:"start"`
 	Count        int       `json:"count"`
@@ -767,7 +767,7 @@ type TableSort struct {
 
 type Table struct {
 	Version       int                         `json:"version"`
-	Kind          string                      `json:"kind"`
+	Kind          string                      `json:"-"`
 	Title         string                      `json:"title"`
 	Style         TableStyle                  `json:"style"`
 	Interaction   InteractionConfig           `json:"interaction"`
@@ -784,6 +784,25 @@ type Table struct {
 	Blocks        map[string]TableBlock       `json:"blocks"`
 	LoadingBlock  string                      `json:"loadingBlock"`
 	Error         string                      `json:"error"`
+}
+
+// TabularVisual is the wire representation of a table, matrix, or pivot in
+// the unified visual namespace. Table remains the specialized runtime state.
+type TabularVisual struct {
+	Table
+	ID   string `json:"id"`
+	Type string `json:"type"`
+}
+
+func NewTabularVisual(id string, table Table) TabularVisual {
+	visualType := "table"
+	switch table.Kind {
+	case "matrix_table":
+		visualType = "matrix"
+	case "pivot_table":
+		visualType = "pivot"
+	}
+	return TabularVisual{Table: table, ID: id, Type: visualType}
 }
 
 type TableCardinality struct {

@@ -145,29 +145,23 @@ class ReportCanvas extends LitElement {
         overflow: visible;
       }
 
-      ::slotted([data-component-kind='heading']) {
+      ::slotted([data-component-kind='header']) {
         min-height: 96px;
       }
 
-      ::slotted([data-component-kind='filter_card']) {
+      ::slotted([data-component-kind='filter']) {
         min-height: 88px;
       }
 
-      ::slotted([data-component-kind='kpi_card']) {
+      ::slotted([data-component-kind='visual'][data-visual-type='kpi']) {
+        height: auto !important;
         min-height: 144px;
+        overflow: hidden;
       }
 
-      ::slotted([data-component-kind='line_chart']),
-      ::slotted([data-component-kind='bar_chart']),
-      ::slotted([data-component-kind='area_chart']),
-      ::slotted([data-component-kind='pie_chart']),
-      ::slotted([data-component-kind='scatter_chart']) {
-        min-height: 320px;
-      }
-
-      ::slotted([data-component-kind='table']) {
+      ::slotted([data-component-kind='visual']:not([data-visual-type='kpi'])) {
         height: 520px !important;
-        min-height: 420px;
+        min-height: 320px;
         overflow: hidden;
       }
     }

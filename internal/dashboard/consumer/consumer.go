@@ -24,6 +24,15 @@ type Target struct {
 	ExactCardinality bool
 }
 
+// Key is the renderer-neutral identity used by status, audit, and
+// observability surfaces. Kind remains internal execution metadata.
+func (t Target) Key() string {
+	if t.Kind == KindVisual || t.Kind == KindTable {
+		return "visual:" + t.ID
+	}
+	return string(t.Kind) + ":" + t.ID
+}
+
 type Request struct {
 	DashboardID string
 	PageID      string

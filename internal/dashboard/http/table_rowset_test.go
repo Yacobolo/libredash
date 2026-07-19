@@ -15,7 +15,7 @@ func TestDashboardTableRowsetIsTypedPrecisionSafeAndCursorPaged(t *testing.T) {
 		Columns: []dashboard.TableColumn{{Key: "order_id"}, {Key: "amount"}},
 		Blocks:  map[string]dashboard.TableBlock{"a": {Rows: []map[string]any{{"order_id": int64(9007199254740993), "amount": 12.5}}}},
 	}
-	response := dashboardTableRowset(table, "a", 0, 1, "scope-a", "snapshot-a")
+	response := dashboardTableRowset("orders", table, "a", 0, 1, "scope-a", "snapshot-a")
 	if len(response.Columns) != 2 || response.Columns[0].Type != "int64" || response.Columns[1].Type != "float64" {
 		t.Fatalf("columns = %#v", response.Columns)
 	}
@@ -33,7 +33,7 @@ func TestDashboardTableArrowMatchesJSONAndCarriesSnapshotMetadata(t *testing.T) 
 		Columns: []dashboard.TableColumn{{Key: "order_id"}},
 		Blocks:  map[string]dashboard.TableBlock{"a": {Rows: []map[string]any{{"order_id": int64(9007199254740993)}}}},
 	}
-	response := dashboardTableRowset(table, "a", 0, 100, "scope-a", "snapshot-a")
+	response := dashboardTableRowset("orders", table, "a", 0, 100, "scope-a", "snapshot-a")
 	payload, err := encodeDashboardTableArrow(response)
 	if err != nil {
 		t.Fatalf("encode Arrow: %v", err)

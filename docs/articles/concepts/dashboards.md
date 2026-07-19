@@ -1,6 +1,6 @@
 # Dashboards, pages, and visuals
 
-A dashboard is a workspace-owned presentation resource backed by one semantic model. It defines reusable filters, visual queries, tabular queries, and one or more report pages that place those definitions on a canvas.
+A dashboard is a workspace-owned presentation resource backed by one semantic model. It defines reusable filters, visuals, and one or more report pages that place those definitions on a canvas.
 
 ## Dashboard identity
 
@@ -35,7 +35,7 @@ visuals:
       limit: 30
 ```
 
-The browser renderer receives a presentation-shaped payload; it does not parse semantic expressions or execute SQL. See the [visual reference](/docs/charts/overview) for supported shapes and focused examples.
+The browser renderer receives a presentation-shaped payload; it does not parse semantic expressions or execute SQL. See the [visual reference](/docs/visuals/overview) for supported shapes and focused examples.
 
 ## Tables, matrices, and pivots
 
@@ -47,7 +47,7 @@ Always bound tabular results. Large exports and analytical exploration require a
 
 Pages divide a dashboard into focused report surfaces. Each page declares canvas and grid settings and places components using row, column, span, and stable component IDs.
 
-Page components can reference filters, visuals, or tables. The component `kind` tells the page which host to render; the referenced definition supplies query and presentation state. This separation lets the same visual query move on a page without being redefined.
+Page components reference filters, visuals, or headers. Every chart, KPI, table, matrix, and pivot uses `kind: visual`; the referenced visual's `type` selects its renderer. This separation lets the same visual query move on a page without being redefined.
 
 Design the page in reading order as well as visual order. Stable IDs, meaningful titles, and a predictable grid improve keyboard navigation, testing, and future migrations.
 
@@ -63,7 +63,7 @@ Review a dashboard in layers:
 
 1. Validate resource syntax and references.
 2. Query the semantic fields independently.
-3. Verify each visual or table payload.
+3. Verify each visual payload.
 4. Check page layout at desktop and compact widths.
 5. Exercise filters, selections, empty results, and error states.
 

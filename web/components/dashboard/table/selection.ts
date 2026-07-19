@@ -11,7 +11,7 @@ export const UI_ROW_SELECTION_FIELD = '__libredash.rowKey'
 export type RowSelectionState = Record<string, boolean>
 
 export interface RowSelectionCommand {
-  sourceKind: 'table'
+  sourceKind: 'visual'
   sourceId: string
   interactionKind: string
   action: 'replace' | 'set'
@@ -68,7 +68,7 @@ export function buildRowSelectionCommand(input: {
   if (mappings.length > 0 && commandMappings.length !== mappings.length) return null
 
   return {
-    sourceKind: 'table',
+    sourceKind: 'visual',
     sourceId,
     interactionKind: interaction.kind || 'row_selection',
     action: input.selectionAction.action,

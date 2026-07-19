@@ -82,7 +82,7 @@ func (s *Server) Routes() http.Handler {
 		dashboardHTTP := s.dashboardHTTP()
 		r.Get("/workspaces/{workspace}/dashboards/{dashboard}", s.protectedWithObjects(access.PrivilegeViewItem, dashboardhttp.DashboardObjectRefs, dashboardHTTP.Dashboard))
 		r.Get("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}", s.protectedWithObjects(access.PrivilegeViewItem, dashboardhttp.DashboardObjectRefs, dashboardHTTP.Page))
-		r.Post("/workspaces/{workspace}/commands/table-window", s.protected(access.PrivilegeViewItem, dashboardHTTP.TableWindow))
+		r.Post("/workspaces/{workspace}/commands/visual-window", s.protected(access.PrivilegeViewItem, dashboardHTTP.VisualWindow))
 		r.Post("/workspaces/{workspace}/commands/select", s.protected(access.PrivilegeViewItem, dashboardHTTP.Select))
 		r.Post("/workspaces/{workspace}/commands/clear-selection", s.protected(access.PrivilegeViewItem, dashboardHTTP.ClearSelection))
 		r.Post("/workspaces/{workspace}/commands/reload", s.protected(access.PrivilegeViewItem, dashboardHTTP.Reload))

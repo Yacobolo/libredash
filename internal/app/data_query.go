@@ -38,6 +38,49 @@ func executePreviewRows(ctx context.Context, metrics QueryMetrics, modelID strin
 	return queryRowsFromDataResult(result.Rows), err
 }
 
+func executeHistogram(ctx context.Context, metrics QueryMetrics, modelID string, request reportdef.RawValueQuery, binCount int) ([]reportdef.HistogramBin, error) {
+	result, err := metrics.ExecuteDataQuery(ctx, dataquery.SemanticHistogram(
+		modelID, request.Table, queryFieldsToDataFields(request.Dimensions),
+		dataquery.Field{Field: request.Measure.Field, Alias: request.Measure.Alias}, queryFiltersToDataFilters(request.Filters), binCount,
+	))
+	if err != nil {
+		return nil, err
+	}
+	bins := make([]reportdef.HistogramBin, 0, len(result.Rows))
+	for _, row := range result.Rows {
+		bins = append(bins, reportdef.HistogramBin{
+			Bucket: int(dataQueryNumber(row["bucket"])), Count: int(dataQueryNumber(row["count"])),
+			Start: dataQueryNumber(row["start"]), End: dataQueryNumber(row["end"]),
+		})
+	}
+	return bins, nil
+}
+
+func executeDistribution(ctx context.Context, metrics QueryMetrics, modelID string, request reportdef.RawValueQuery, sort []reportdef.QuerySort, limit int) (reportdef.QueryRows, error) {
+	result, err := metrics.ExecuteDataQuery(ctx, dataquery.SemanticDistribution(
+		modelID, request.Table, queryFieldsToDataFields(request.Dimensions),
+		dataquery.Field{Field: request.Measure.Field, Alias: request.Measure.Alias}, queryFiltersToDataFilters(request.Filters), querySortToDataSort(sort), limit,
+	))
+	return queryRowsFromDataResult(result.Rows), err
+}
+
+func dataQueryNumber(value any) float64 {
+	switch typed := value.(type) {
+	case float64:
+		return typed
+	case float32:
+		return float64(typed)
+	case int:
+		return float64(typed)
+	case int32:
+		return float64(typed)
+	case int64:
+		return float64(typed)
+	default:
+		return 0
+	}
+}
+
 func queryFieldsToDataFields(fields []reportdef.QueryField) []dataquery.Field {
 	out := make([]dataquery.Field, 0, len(fields))
 	for _, field := range fields {

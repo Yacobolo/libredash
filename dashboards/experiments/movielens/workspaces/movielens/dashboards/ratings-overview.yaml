@@ -58,7 +58,7 @@ spec:
       field: movie_title
   visuals:
     rating_count:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -67,7 +67,7 @@ spec:
         note: Rating events
         tone: ink
     average_rating:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -76,7 +76,7 @@ spec:
         note: Mean rating
         tone: amber
     active_users:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -85,7 +85,7 @@ spec:
         note: Distinct users
         tone: green
     rated_movies:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -94,7 +94,7 @@ spec:
         note: Distinct movies
         tone: coral
     tags_per_rating:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -237,10 +237,9 @@ spec:
           - field: release_decade
             direction: asc
         limit: 20
-  tables:
     movie_table:
       title: Movie ratings
-      kind: data_table
+      type: table
       query:
         table: ratings
         fields:
@@ -268,7 +267,7 @@ spec:
           label: Rating value
           align: right
   pages:
-    - name: overview
+    - id: overview
       title: Overview
       canvas:
         width: 1366
@@ -278,68 +277,68 @@ spec:
         row_height: 48
         gap: 16
         padding: 16
-      visuals:
+      components:
         - id: rating-date-filter
-          kind: filter_card
+          kind: filter
           filter: rating_date
           placement: {col: 1, row: 1, col_span: 3, row_span: 2}
         - id: decade-filter
-          kind: filter_card
+          kind: filter
           filter: release_decade
           placement: {col: 4, row: 1, col_span: 3, row_span: 2}
         - id: rating-filter
-          kind: filter_card
+          kind: filter
           filter: rating_bucket
           placement: {col: 7, row: 1, col_span: 3, row_span: 2}
         - id: title-filter
-          kind: filter_card
+          kind: filter
           filter: title
           placement: {col: 10, row: 1, col_span: 3, row_span: 2}
         - id: rating-count
-          kind: kpi_card
+          kind: visual
           visual: rating_count
           placement: {col: 1, row: 4, col_span: 3, row_span: 3}
         - id: average-rating
-          kind: kpi_card
+          kind: visual
           visual: average_rating
           placement: {col: 4, row: 4, col_span: 3, row_span: 3}
         - id: active-users
-          kind: kpi_card
+          kind: visual
           visual: active_users
           placement: {col: 7, row: 4, col_span: 3, row_span: 3}
         - id: rated-movies
-          kind: kpi_card
+          kind: visual
           visual: rated_movies
           placement: {col: 10, row: 4, col_span: 3, row_span: 3}
         - id: ratings-trend
-          kind: area_chart
+          kind: visual
           visual: ratings_by_month
           placement: {col: 1, row: 8, col_span: 8, row_span: 6}
         - id: rating-distribution
-          kind: bar_chart
+          kind: visual
           visual: rating_distribution
           placement: {col: 9, row: 8, col_span: 4, row_span: 6}
         - id: top-movies
-          kind: bar_chart
+          kind: visual
           visual: top_movies
           placement: {col: 1, row: 15, col_span: 6, row_span: 7}
         - id: decade-average
-          kind: bar_chart
+          kind: visual
           visual: average_by_decade
           placement: {col: 7, row: 15, col_span: 6, row_span: 7}
         - id: movie-table
-          kind: table
-          table: movie_table
+          kind: visual
+          visual: movie_table
           placement: {col: 1, row: 23, col_span: 12, row_span: 8}
         - id: tags-per-rating
-          kind: kpi_card
+          kind: visual
           visual: tags_per_rating
           placement: {col: 1, row: 32, col_span: 3, row_span: 3}
         - id: activity-by-month
-          kind: bar_chart
+          kind: visual
           visual: activity_by_month
           placement: {col: 4, row: 32, col_span: 9, row_span: 7}
         - id: tags-per-rating-by-decade
-          kind: bar_chart
+          kind: visual
           visual: tags_per_rating_by_decade
           placement: {col: 1, row: 40, col_span: 12, row_span: 7}

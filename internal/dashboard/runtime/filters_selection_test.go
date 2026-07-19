@@ -141,7 +141,7 @@ func TestSemanticFiltersPreserveOROfCompositeEntries(t *testing.T) {
 func TestSemanticFiltersIgnoreUIOnlyRowSelections(t *testing.T) {
 	report, model := selectionFilterFixture()
 	selection := dashboard.InteractionSelection{
-		SourceKind: "table", SourceID: "plain_table", InteractionKind: "row_selection",
+		SourceKind: "visual", SourceID: "plain_table", InteractionKind: "row_selection",
 		Entries: []dashboard.InteractionSelectionEntry{{Mappings: []dashboard.InteractionSelectionMapping{{Field: dashboard.UIRowSelectionField, Value: "row-1"}}}},
 	}
 	filters, err := (&FilterService{}).semanticFilters(context.Background(), &modelRuntime{model: model}, report, dashboard.Filters{Selections: []dashboard.InteractionSelection{selection}}, "visual", "cross")

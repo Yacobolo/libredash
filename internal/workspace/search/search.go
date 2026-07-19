@@ -17,7 +17,6 @@ var allowedTypes = map[string]struct{}{
 	"page":           {},
 	"semantic_model": {},
 	"source":         {},
-	"table":          {},
 	"visual":         {},
 }
 

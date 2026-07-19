@@ -120,7 +120,7 @@ func TestBIAPIQueriesBoundRowsAndPageData(t *testing.T) {
 		t.Fatalf("page query status=%d body=%s", pageRec.Code, pageRec.Body.String())
 	}
 
-	tableReq := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/tables/orders/query", strings.NewReader(`{"limit":500}`))
+	tableReq := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/order_rows/query", strings.NewReader(`{"limit":500}`))
 	tableReq.Header.Set("Accept", "application/json")
 	tableReq.Header.Set("Content-Type", "application/json")
 	tableRec := httptest.NewRecorder()
@@ -184,7 +184,7 @@ func TestBIAPIDashboardVisualDataSurface(t *testing.T) {
 		t.Fatalf("visual data status=%d body=%s", dataRec.Code, dataRec.Body.String())
 	}
 
-	tableReq := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/tables/orders/query", strings.NewReader(`{"limit":10}`))
+	tableReq := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/order_rows/query", strings.NewReader(`{"limit":10}`))
 	tableReq.Header.Set("Accept", "application/json")
 	tableReq.Header.Set("Content-Type", "application/json")
 	tableRec := httptest.NewRecorder()
@@ -270,7 +270,7 @@ func TestDashboardPageQueryWritesQueryEvents(t *testing.T) {
 
 func TestDashboardTableWindowWritesQueryEvents(t *testing.T) {
 	server := NewWithOptions(auditedDashboardMetrics{fakeMetrics: fakeMetrics{}}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
-	req := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/tables/orders/query", strings.NewReader(`{"limit":10}`))
+	req := newPublicAPIRequest(http.MethodPost, "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/order_rows/query", strings.NewReader(`{"limit":10}`))
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer dev")
 	req.Header.Set("Content-Type", "application/json")
@@ -286,7 +286,7 @@ func TestDashboardTableWindowWritesQueryEvents(t *testing.T) {
 	if len(events) != 1 {
 		t.Fatalf("events = %d, want 1: %#v", len(events), events)
 	}
-	if events[0].Surface != dataquery.SurfaceAPI || events[0].Operation != dataquery.OperationDashboardRows || events[0].ObjectType != "dashboard_table" {
+	if events[0].Surface != dataquery.SurfaceAPI || events[0].Operation != dataquery.OperationDashboardRows || events[0].ObjectType != "dashboard_visual" {
 		t.Fatalf("dashboard table event = %#v", events[0])
 	}
 }
@@ -300,7 +300,7 @@ func TestBIAPIDashboardVisualDataSurfaceNotFoundAndMalformedBody(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/missing"},
 		{method: http.MethodPost, path: "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/missing/query"},
-		{method: http.MethodPost, path: "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/tables/missing/query"},
+		{method: http.MethodPost, path: "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/visuals/missing/query"},
 		{method: http.MethodPost, path: "/api/v1/workspaces/test/dashboards/executive-sales/pages/overview/filters/missing/values"},
 	} {
 		req := newPublicAPIRequest(tc.method, tc.path, strings.NewReader(`{}`))

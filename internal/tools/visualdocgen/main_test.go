@@ -20,7 +20,7 @@ func TestParseVisualExamplesUsesMarkedYAMLAsSource(t *testing.T) {
 	source := []byte("" +
 		"# Line chart\n\n" +
 		"## Basic\n\n" +
-		"{{< chart id=\"line_basic\" >}}\n\n" +
+		"{{< visual id=\"line_basic\" >}}\n\n" +
 		"```yaml visual-example=line_basic\n" +
 		"visuals:\n" +
 		"  line_basic:\n" +
@@ -41,10 +41,10 @@ func TestParseVisualExamplesUsesMarkedYAMLAsSource(t *testing.T) {
 		t.Fatalf("examples = %d, want %d", got, want)
 	}
 	example := examples[0]
-	if example.ID != "line_basic" || example.Visual.Type != "line" {
+	if example.ID != "line_basic" || example.Chart == nil || example.Chart.Type != "line" {
 		t.Fatalf("example = %#v", example)
 	}
-	if got := example.Visual.Query.Dimensions[0].Field; got != "orders.month" {
+	if got := example.Chart.Query.Dimensions[0].Field; got != "orders.month" {
 		t.Fatalf("dimension = %q, want orders.month", got)
 	}
 }
@@ -55,10 +55,10 @@ func TestGenerateVisualExamplesExecutesEveryDocumentedQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := artifact.Version, 3; got != want {
+	if got, want := artifact.Version, visualdocs.ArtifactVersion; got != want {
 		t.Fatalf("version = %d, want %d", got, want)
 	}
-	lineReference := artifact.References["charts/line"]
+	lineReference := artifact.References["visuals/line"]
 	if got, want := lineReference.Kind, "chart"; got != want {
 		t.Fatalf("line reference kind = %q, want %q", got, want)
 	}
@@ -87,13 +87,13 @@ func TestGenerateVisualExamplesExecutesEveryDocumentedQuery(t *testing.T) {
 	if fields["options.step"].Description == "" {
 		t.Fatal("options.step description is empty")
 	}
-	if got := artifact.References["charts/map"].Accessibility; !strings.Contains(got, "map identifiers") {
+	if got := artifact.References["visuals/map"].Accessibility; !strings.Contains(got, "map identifiers") {
 		t.Fatalf("map accessibility guidance = %q", got)
 	}
-	if got := artifact.References["charts/kpi"].Accessibility; !strings.Contains(got, "tone as the only") {
+	if got := artifact.References["visuals/kpi"].Accessibility; !strings.Contains(got, "tone as the only") {
 		t.Fatalf("KPI accessibility guidance = %q", got)
 	}
-	if got, want := len(artifact.Documents), 23; got != want {
+	if got, want := len(artifact.Documents), 26; got != want {
 		t.Fatalf("documents = %d, want %d", got, want)
 	}
 	count := 0
@@ -103,22 +103,25 @@ func TestGenerateVisualExamplesExecutesEveryDocumentedQuery(t *testing.T) {
 		}
 		for _, example := range examples {
 			count++
-			if len(example.Data) == 0 {
+			if example.Chart != nil && len(example.Chart.Data) == 0 {
 				t.Fatalf("%s/%s has no query data", slug, example.ID)
+			}
+			if example.Tabular != nil && len(example.Tabular.Blocks["a"].Rows) == 0 {
+				t.Fatalf("%s/%s has no query rows", slug, example.ID)
 			}
 		}
 	}
-	if got, want := count, 69; got != want {
+	if got, want := count, 72; got != want {
 		t.Fatalf("examples = %d, want %d", got, want)
 	}
-	if got, want := len(artifact.Showcase), 23; got != want {
+	if got, want := len(artifact.Showcase), 26; got != want {
 		t.Fatalf("showcase examples = %d, want %d", got, want)
 	}
-	line := artifact.Documents["charts/line"]
-	if got := line[1].Shape; got != "category_series_value" {
+	line := artifact.Documents["visuals/line"]
+	if got := line[1].Chart.Shape; got != "category_series_value" {
 		t.Fatalf("series line shape = %q", got)
 	}
-	if got := line[2].Options["step"]; got != "middle" {
+	if got := line[2].Chart.Options["step"]; got != "middle" {
 		t.Fatalf("stepped line option = %#v", got)
 	}
 	first, err := json.Marshal(artifact)
@@ -149,25 +152,25 @@ func TestValidateVisualPayloadRejectsInvalidGeneratedData(t *testing.T) {
 	}{
 		{
 			name:    "non finite metric",
-			visual:  visualExample{ID: "bad_number", Visual: reportVisual("category_value", "line", nil)},
+			visual:  visualExample{ID: "bad_number", Chart: reportVisualPointer("category_value", "line", nil)},
 			payload: dashboard.Visual{Data: []dashboard.Datum{{"label": "Jan", "value": math.NaN()}}},
 			want:    `non-finite number at data[0].value`,
 		},
 		{
 			name:    "unknown map region",
-			visual:  visualExample{ID: "bad_map", Visual: reportVisual("geo", "map", map[string]any{"map": "brazil_states"})},
+			visual:  visualExample{ID: "bad_map", Chart: reportVisualPointer("geo", "map", map[string]any{"map": "brazil_states"})},
 			payload: dashboard.Visual{Data: []dashboard.Datum{{"name": "CA", "value": 2.0}}},
 			want:    `region "CA" is not defined by map "brazil_states"`,
 		},
 		{
 			name:    "incomplete map coverage",
-			visual:  visualExample{ID: "incomplete_map", Visual: reportVisual("geo", "map", map[string]any{"map": "brazil_states"})},
+			visual:  visualExample{ID: "incomplete_map", Chart: reportVisualPointer("geo", "map", map[string]any{"map": "brazil_states"})},
 			payload: dashboard.Visual{Data: []dashboard.Datum{{"name": "SP", "value": 2.0}}},
 			want:    `does not provide data for map region`,
 		},
 		{
 			name:    "no numeric values",
-			visual:  visualExample{ID: "empty_series", Visual: reportVisual("category_value", "line", nil)},
+			visual:  visualExample{ID: "empty_series", Chart: reportVisualPointer("category_value", "line", nil)},
 			payload: dashboard.Visual{Data: []dashboard.Datum{{"label": "Jan"}}},
 			want:    `has no finite numeric values`,
 		},
@@ -187,10 +190,15 @@ func reportVisual(shape, visualType string, options map[string]any) reportdef.Vi
 	return reportdef.Visual{Shape: shape, Type: visualType, Options: options}
 }
 
+func reportVisualPointer(shape, visualType string, options map[string]any) *reportdef.Visual {
+	value := reportVisual(shape, visualType, options)
+	return &value
+}
+
 func TestPersistVisualExamplesCheckDetectsStaleArtifact(t *testing.T) {
 	t.Parallel()
 	path := filepath.Join(t.TempDir(), "examples.gen.json")
-	artifact := visualExamplesArtifact{Version: 2, Documents: map[string][]dashboard.Visual{}, Showcase: []dashboard.Visual{}}
+	artifact := visualExamplesArtifact{Version: 2, Documents: map[string][]visualdocs.Payload{}, Showcase: []visualdocs.Payload{}}
 	if err := persistVisualExamples(path, artifact, false); err != nil {
 		t.Fatal(err)
 	}
@@ -253,28 +261,38 @@ func TestParseVisualExamplesRejectsBrokenContracts(t *testing.T) {
 	}{
 		{
 			name: "missing fence",
-			body: `{{< chart id="line_basic" >}}`,
+			body: `{{< visual id="line_basic" >}}`,
 			want: `shortcode "line_basic" has no matching visual example`,
 		},
 		{
 			name: "missing shortcode",
-			body: "```yaml visual-example=line_basic\nvisuals:\n  line_basic:\n    type: line\n```",
+			body: "```yaml visual-example=line_basic\nvisuals:\n  line_basic:\n    title: Line\n    type: line\n    query:\n      dimensions: [orders.month]\n      measures: [revenue]\n```",
 			want: `visual example "line_basic" has no matching shortcode`,
 		},
 		{
 			name: "multiple visuals",
-			body: "{{< chart id=\"line_basic\" >}}\n```yaml visual-example=line_basic\nvisuals:\n  line_basic: {type: line}\n  other: {type: line}\n```",
+			body: "{{< visual id=\"line_basic\" >}}\n```yaml visual-example=line_basic\nvisuals:\n  line_basic: {type: line}\n  other: {type: line}\n```",
 			want: `must contain exactly one visual`,
 		},
 		{
 			name: "key mismatch",
-			body: "{{< chart id=\"line_basic\" >}}\n```yaml visual-example=line_basic\nvisuals:\n  other: {type: line}\n```",
+			body: "{{< visual id=\"line_basic\" >}}\n```yaml visual-example=line_basic\nvisuals:\n  other: {type: line}\n```",
 			want: `must use visual key "line_basic"`,
 		},
 		{
 			name: "duplicate shortcode",
-			body: "{{< chart id=\"line_basic\" >}}\n{{< chart id=\"line_basic\" >}}\n```yaml visual-example=line_basic\nvisuals:\n  line_basic: {type: line}\n```",
-			want: `duplicate chart shortcode "line_basic"`,
+			body: "{{< visual id=\"line_basic\" >}}\n{{< visual id=\"line_basic\" >}}\n```yaml visual-example=line_basic\nvisuals:\n  line_basic: {type: line}\n```",
+			want: `duplicate visual shortcode "line_basic"`,
+		},
+		{
+			name: "missing type",
+			body: "{{< visual id=\"total\" >}}\n```yaml visual-example=total\nvisuals:\n  total:\n    shape: single_value\n    query:\n      measures: [revenue]\n```",
+			want: `type`,
+		},
+		{
+			name: "legacy kind",
+			body: "{{< visual id=\"total\" >}}\n```yaml visual-example=total\nvisuals:\n  total:\n    kind: kpi\n    shape: single_value\n    query:\n      measures: [revenue]\n```",
+			want: `kind`,
 		},
 	}
 

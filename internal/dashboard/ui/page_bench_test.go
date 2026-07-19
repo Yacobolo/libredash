@@ -52,8 +52,8 @@ func benchmarkDashboardBridge(b *testing.B, legacy bool) {
 func benchmarkDashboardDocument(catalog dashboard.Catalog, report reportdef.Dashboard, model *semanticmodel.Model, activePage dashboard.Page, signals map[string]any, legacy bool) g.Node {
 	dashboardUpdatesURL := updatesURL(catalog.Workspace.ID, report.ID, activePage.ID)
 	reloadAction := uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/reload", "runtime", "filters.controls")
-	tableReset := tableResetExpression()
-	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + tableReset
+	visualReset := visualResetExpression()
+	filtersUpdate := "$filters = evt.detail.filters; $urlParams = evt.detail.urlParams; window.DatastarURLSync && window.DatastarURLSync.replace($urlParams); " + visualReset
 	body := benchmarkDatastarLitDashboardRoot(catalog, report, model, filtersUpdate, reloadAction)
 	if legacy {
 		body = benchmarkLegacyDashboardRoot(catalog, report, model, signals, filtersUpdate, reloadAction)
@@ -61,7 +61,7 @@ func benchmarkDashboardDocument(catalog dashboard.Catalog, report reportdef.Dash
 	mainAttrs := []g.Node{
 		h.ID("dashboard"),
 		h.Class(appRootClass),
-		g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+tableReset+reloadAction),
+		g.Attr("data-on:datastar-url-params-sync__window", "$urlParams = evt.detail.params; $filters = window.LibreDashFilterURL.fromParams($filterConfig, $filters, $urlParams); "+visualReset+reloadAction),
 	}
 	if legacy {
 		mainAttrs = append(mainAttrs,
@@ -140,7 +140,7 @@ func benchmarkDashboardCommandAttrs(catalog dashboard.Catalog, report reportdef.
 		g.Attr("data-on:ld-filters-refresh", reloadAction),
 		g.Attr("data-on:ld-selection-clear", "$filters.selections = []; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/clear-selection", "runtime")),
 		g.Attr("data-on:ld-interaction-select", "$interactionCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/select", "runtime", "interactionCommand")),
-		g.Attr("data-on:ld-table-window-change", "$tableCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/table-window", "runtime", "tableCommand")),
+		g.Attr("data-on:ld-visual-window-change", "$visualWindowCommand = evt.detail; "+uiactions.Post("/workspaces/"+catalog.Workspace.ID+"/commands/visual-window", "runtime", "visualWindowCommand")),
 	}
 }
 

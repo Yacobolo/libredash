@@ -25,20 +25,20 @@ func TestRankMatchesAndOrdersProgressiveDiscoveryDocuments(t *testing.T) {
 }
 
 func TestRankFiltersByTypeAndUsesStableTies(t *testing.T) {
-	types, err := ParseTypes("table, visual")
+	types, err := ParseTypes("visual")
 	if err != nil {
 		t.Fatalf("parse types: %v", err)
 	}
 	documents := []Document{
-		{ID: "table.b", Type: "table", Name: "Orders B", Weight: 10},
+		{ID: "visual.b", Type: "visual", Name: "Orders B", Weight: 10},
 		{ID: "visual.a", Type: "visual", Name: "Orders A", Weight: 10},
 		{ID: "dashboard.c", Type: "dashboard", Name: "Orders C", Weight: 100},
-		{ID: "table.a", Type: "table", Name: "Orders A", Weight: 10},
+		{ID: "visual.c", Type: "visual", Name: "Orders C", Weight: 10},
 	}
 
 	results := Rank(documents, Query{Text: "orders", Types: types})
 	got := resultIDs(results)
-	want := []string{"table.a", "table.b", "visual.a"}
+	want := []string{"visual.a", "visual.b", "visual.c"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("result IDs = %#v, want %#v", got, want)
 	}

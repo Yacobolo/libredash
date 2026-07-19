@@ -21,6 +21,8 @@ import (
 	securejoin "github.com/cyphar/filepath-securejoin"
 )
 
+const compiledWorkspaceArtifactVersion = 2
+
 type Manifest struct {
 	Version        int            `json:"version"`
 	WorkspaceID    string         `json:"workspaceId"`
@@ -132,7 +134,7 @@ func PackProject(projectPath string, options PackProjectOptions, out io.Writer) 
 	}
 	sort.Strings(projectWorkspaces)
 	compiledArtifact := CompiledWorkspaceArtifact{
-		Version:              1,
+		Version:              compiledWorkspaceArtifactVersion,
 		ProjectID:            compiled.Project.Name,
 		ProjectDigest:        projectDigest,
 		ProjectWorkspaces:    projectWorkspaces,
@@ -687,8 +689,8 @@ func readCompiledWorkspaceArtifact(root string, manifest Manifest) (CompiledWork
 	if err := json.Unmarshal(bytes, &compiled); err != nil {
 		return CompiledWorkspaceArtifact{}, err
 	}
-	if compiled.Version != 1 {
-		return CompiledWorkspaceArtifact{}, fmt.Errorf("compiled artifact version = %d, want 1", compiled.Version)
+	if compiled.Version != compiledWorkspaceArtifactVersion {
+		return CompiledWorkspaceArtifact{}, fmt.Errorf("compiled artifact version = %d, want %d; redeploy the workspace", compiled.Version, compiledWorkspaceArtifactVersion)
 	}
 	if err := ValidateCompiledWorkspaceArtifact(compiled); err != nil {
 		return CompiledWorkspaceArtifact{}, err

@@ -34,7 +34,7 @@ Headless operations cover semantic model and dataset discovery, field listing, r
 
 Dashboards support report pages, deterministic grid placement, date-range, multi-select, and text filters, KPI cards, renderer-neutral chart visuals, data tables, matrices, pivots, conditional formatting, and semantic point/row selections.
 
-The [visual catalog](/docs/charts/overview) lists every documented registered chart type and renders a live example. Dashboard configuration lists accepted page component kinds and query shapes.
+The [visual catalog](/docs/visuals/overview) lists every documented registered chart type and renders a live example. Dashboard configuration lists accepted page component kinds and query shapes.
 
 ## Identity and access
 
@@ -61,4 +61,4 @@ The supported Hetzner module provides a single-node production topology with Cad
 
 LibreDash is dashboards-as-code: browser edits are not the durable authoring source. Browser clients do not receive unrestricted SQL or credentials. DuckLake snapshots are internal serving consistency and cleanup boundaries, not a general customer-facing time-travel/version browser. The provided single-node deployment is not horizontal high availability.
 
-Use the generated [Configuration](/docs/config/project), [CLI](/docs/cli/reference), [API](/docs/api), and [visual](/docs/charts/overview) catalogs to confirm exact support in the current version.
+Use the generated [Configuration](/docs/config/project), [CLI](/docs/cli/reference), [API](/docs/api), and [visual](/docs/visuals/overview) catalogs to confirm exact support in the current version.

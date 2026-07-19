@@ -61,13 +61,9 @@ func transcriptStateFromMessages(conversationID string, messages []Message) Chat
 				})
 			}
 		case MessageRoleTool:
-			artifact, artifactSignals, compactArtifactResult := toolArtifact(message.ContentText, message.ContentJSON)
+			artifact, artifactSignals := toolArtifact(message.ContentJSON)
 			mergeChatArtifactSignals(&artifacts, artifactSignals)
-			resultContent := message.ContentText
-			if compactArtifactResult != "" {
-				resultContent = compactArtifactResult
-			}
-			resultJSON := formatJSONPreview(resultContent, maxToolResultPreviewBytes)
+			resultJSON := formatJSONPreview(message.ContentText, maxToolResultPreviewBytes)
 			item := ChatTranscriptItem{
 				ID:             message.ID,
 				Kind:           "tool",
@@ -78,7 +74,7 @@ func transcriptStateFromMessages(conversationID string, messages []Message) Chat
 				Summary:        toolSummary(message.ContentText),
 				ResultSummary:  toolSummary(message.ContentText),
 				ResultJSON:     resultJSON,
-				ResultFormat:   toolPreviewFormat(resultContent),
+				ResultFormat:   toolPreviewFormat(message.ContentText),
 				Artifact:       artifact,
 				ConversationID: conversationID,
 				RunID:          message.RunID,
@@ -144,72 +140,30 @@ func mergeToolTranscriptItem(started, finished ChatTranscriptItem) ChatTranscrip
 	return started
 }
 
-func toolArtifact(rawText, rawJSON string) (*ChatArtifact, ChatArtifactSignals, string) {
+func toolArtifact(rawJSON string) (*ChatArtifact, ChatArtifactSignals) {
 	raw := displayContentJSON(rawJSON)
-	legacyVerbose := raw == ""
-	if legacyVerbose {
-		raw = rawText
+	if raw == "" {
+		return nil, emptyChatArtifactSignals()
 	}
 	var payload struct {
-		Kind    string         `json:"kind"`
+		Type    string         `json:"type"`
 		ID      string         `json:"id"`
 		Patch   map[string]any `json:"patch"`
 		Summary string         `json:"summary"`
 	}
 	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
-		return nil, emptyChatArtifactSignals(), ""
+		return nil, emptyChatArtifactSignals()
 	}
 	if payload.ID == "" || payload.Patch == nil {
-		return nil, emptyChatArtifactSignals(), ""
+		return nil, emptyChatArtifactSignals()
 	}
 	signals := emptyChatArtifactSignals()
-	switch payload.Kind {
-	case "chart":
-		visuals, ok := payload.Patch["visuals"].(map[string]any)
-		if !ok {
-			return nil, emptyChatArtifactSignals(), ""
-		}
-		mergeMap(signals.Visuals, visuals)
-	case "table":
-		tables, ok := payload.Patch["tables"].(map[string]any)
-		if !ok {
-			return nil, emptyChatArtifactSignals(), ""
-		}
-		mergeMap(signals.Tables, tables)
-	default:
-		return nil, emptyChatArtifactSignals(), ""
+	visuals, ok := payload.Patch["visuals"].(map[string]any)
+	if payload.Type == "" || !ok {
+		return nil, emptyChatArtifactSignals()
 	}
-	compactResult := ""
-	if legacyVerbose {
-		compactResult = compactToolArtifactResultJSON(payload.Kind, payload.ID, payload.Summary)
-	}
-	return &ChatArtifact{Kind: payload.Kind, ID: payload.ID, Summary: payload.Summary}, signals, compactResult
-}
-
-func compactToolArtifactResultJSON(kind, id, summary string) string {
-	payload := map[string]any{
-		"ok":      true,
-		"kind":    kind,
-		"id":      id,
-		"summary": summary,
-		"signal":  toolArtifactSignal(kind, id),
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return ""
-	}
-	return string(raw)
-}
-
-func toolArtifactSignal(kind, id string) string {
-	switch kind {
-	case "chart":
-		return "visuals." + id
-	case "table":
-		return "tables." + id
-	default:
-		return id
-	}
+	mergeMap(signals.Visuals, visuals)
+	return &ChatArtifact{Type: payload.Type, ID: payload.ID, Summary: payload.Summary}, signals
 }
 
 func displayContentJSON(raw string) string {
@@ -223,18 +177,14 @@ func displayContentJSON(raw string) string {
 }
 
 func emptyChatArtifactSignals() ChatArtifactSignals {
-	return ChatArtifactSignals{Visuals: map[string]any{}, Tables: map[string]any{}}
+	return ChatArtifactSignals{Visuals: map[string]any{}}
 }
 
 func mergeChatArtifactSignals(target *ChatArtifactSignals, source ChatArtifactSignals) {
 	if target.Visuals == nil {
 		target.Visuals = map[string]any{}
 	}
-	if target.Tables == nil {
-		target.Tables = map[string]any{}
-	}
 	mergeMap(target.Visuals, source.Visuals)
-	mergeMap(target.Tables, source.Tables)
 }
 
 func mergeMap(target, source map[string]any) {

@@ -24,14 +24,13 @@ type ChatTranscriptItem struct {
 }
 
 type ChatArtifact struct {
-	Kind    string `json:"kind"`
+	Type    string `json:"type"`
 	ID      string `json:"id"`
 	Summary string `json:"summary,omitempty"`
 }
 
 type ChatArtifactSignals struct {
 	Visuals map[string]any `json:"visuals"`
-	Tables  map[string]any `json:"tables"`
 }
 
 type ChatTranscriptState struct {

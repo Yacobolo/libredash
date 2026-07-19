@@ -9,7 +9,6 @@ import type {
   DashboardPageNavSignal,
   DashboardPageSignal,
   DashboardStatus,
-  DashboardTable,
   DashboardVisual,
   ReportFilterConfig,
 } from '../../generated/signals'
@@ -21,6 +20,8 @@ import './report-canvas'
 import './report-footer'
 import './visual-modal'
 import { loadDashboardComponent } from './registry'
+import { normalizeTable } from './table/block-source'
+import type { TableSignal } from './table/types'
 import {
   applyOptimisticInteraction,
   canonicalSelectionEntriesForSource,
@@ -47,7 +48,6 @@ type DashboardRenderSnapshot = {
   filters: DashboardFilters
   filterOptions: Record<string, unknown>
   visuals: Record<string, DashboardVisual>
-  tables: Record<string, DashboardTable>
   status: DashboardStatus
   componentStatus: Record<string, DashboardComponentStatus>
 }
@@ -67,7 +67,7 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
   private optimisticRollbackTimer?: ReturnType<typeof setTimeout>
   private renderSnapshot?: DashboardRenderSnapshot
   private visualProjectionCache = new Map<string, { signature: string; value: DashboardVisual }>()
-  private tableProjectionCache = new Map<string, { signature: string; value: DashboardTable }>()
+  private tableProjectionCache = new Map<string, { signature: string; value: TableSignal }>()
 
   static styles = css`
     :host {
@@ -362,10 +362,6 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
     return this.signal<Record<string, DashboardVisual>>('visuals', {})
   }
 
-  private get tables(): Record<string, DashboardTable> {
-    return this.signal<Record<string, DashboardTable>>('tables', {})
-  }
-
   private get status(): DashboardStatus {
     return this.signal<DashboardStatus>('status', emptyStatus)
   }
@@ -383,7 +379,6 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
       filters: this.filters,
       filterOptions: this.filterOptions,
       visuals: this.visuals,
-      tables: this.tables,
       status: this.status,
       componentStatus: this.componentStatus,
     }
@@ -467,13 +462,15 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
   }
 
   private renderCanvasComponent(component: DashboardComponentSignal) {
-    const filterVisual = component.kind === 'filter_card'
+    const filterVisual = component.kind === 'filter'
+    const visualType = component.visual ? this.visuals[component.visual]?.type ?? '' : ''
     const statusKey = this.componentStatusKey(component)
     const componentRefreshStatus = statusKey ? this.refreshStatusFor(statusKey) : undefined
     return html`
               <ld-dashboard-visual-frame
                 data-canvas-visual
                 data-component-kind=${component.kind}
+                data-visual-type=${visualType}
         ?data-canvas-filter-visual=${filterVisual}
         data-x=${component.x}
         data-y=${component.y}
@@ -492,14 +489,16 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
     switch (component.kind) {
       case 'header':
         return this.renderHeadingComponent(component)
-      case 'filter_card':
+      case 'filter':
         return this.renderFilterCard(component)
-      case 'kpi_card':
-        return this.renderKPI(component)
-      case 'table':
-        return this.renderTable(component)
+      case 'visual': {
+        const visual = this.visualFor(component)
+        if (!visual) return this.missingPayload('visual')
+        if (visual.type === 'kpi') return this.renderKPI(component, visual)
+        if (isTabularVisualType(visual.type)) return this.renderTable(component, visual)
+        return this.renderChart(component, visual)
+      }
       default:
-        if (isChartKind(component.kind)) return this.renderChart(component)
         return html`<div class="unsupported">Unsupported dashboard component: ${component.kind}</div>`
     }
   }
@@ -531,22 +530,17 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
     `
   }
 
-  private renderKPI(component: DashboardComponentSignal) {
-    const visual = this.visualFor(component)
-    if (!visual) return this.missingPayload('visual')
+  private renderKPI(component: DashboardComponentSignal, visual: DashboardVisual) {
     return html`<ld-kpi-card visual-id=${component.visual ?? ''} .visual=${visual}></ld-kpi-card>`
   }
 
-  private renderChart(component: DashboardComponentSignal) {
-    const visual = this.visualFor(component)
-    if (!visual) return this.missingPayload('visual')
+  private renderChart(component: DashboardComponentSignal, visual: DashboardVisual) {
     return html`<ld-echart visual-id=${component.visual ?? ''} .chart=${visual}></ld-echart>`
   }
 
-  private renderTable(component: DashboardComponentSignal) {
-    const table = this.tableFor(component)
-    if (!table) return this.missingPayload('table')
-    return html`<ld-report-table table-id=${component.table ?? ''} .table=${table}></ld-report-table>`
+  private renderTable(component: DashboardComponentSignal, visual: DashboardVisual) {
+    const table = this.tableFor(component, visual)
+    return html`<ld-report-table table-id=${component.visual ?? ''} .table=${table}></ld-report-table>`
   }
 
   private renderFilterDock() {
@@ -580,21 +574,18 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
     return value
   }
 
-  private tableFor(component: DashboardComponentSignal): DashboardTable | undefined {
-    const tables = this.renderSnapshot?.tables ?? this.tables
-    const table = component.table ? tables[component.table] : undefined
-    if (!table) return undefined
-    const selection = generatedSelectionEntries(canonicalSelectionEntriesForSource(this.effectiveFilters.selections, 'table', component.table ?? ''))
-    const signature = stableSignature([table, selection])
-    const cached = this.tableProjectionCache.get(component.table ?? '')
+  private tableFor(component: DashboardComponentSignal, visual: DashboardVisual): TableSignal {
+    const visualID = component.visual ?? ''
+    const selection = generatedSelectionEntries(canonicalSelectionEntriesForSource(this.effectiveFilters.selections, 'visual', visualID))
+    const signature = stableSignature([visual, selection])
+    const cached = this.tableProjectionCache.get(visualID)
     if (cached?.signature === signature) return cached.value
-    const value = { ...table, selection }
-    this.tableProjectionCache.set(component.table ?? '', { signature, value })
+    const value = normalizeTable({ ...(visual as unknown as Partial<TableSignal>), selection })
+    this.tableProjectionCache.set(visualID, { signature, value })
     return value
   }
 
   private componentStatusKey(component: DashboardComponentSignal): string {
-    if (component.table) return `table:${component.table}`
     if (component.visual) return `visual:${component.visual}`
     return ''
   }
@@ -631,9 +622,8 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
     this.scheduleOptimisticRollback()
   }
 
-  private interactionConfigFor(sourceKind: 'visual' | 'table', sourceId: string): InteractionConfigLike | undefined {
-    if (sourceKind === 'visual') return this.visuals[sourceId]?.interaction
-    return this.tables[sourceId]?.interaction
+  private interactionConfigFor(sourceKind: 'visual', sourceId: string): InteractionConfigLike | undefined {
+    return this.visuals[sourceId]?.interaction
   }
 
   private targetStatusKeys(targets: readonly string[]): Set<string> {
@@ -642,9 +632,6 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
     for (const component of this.page?.components ?? []) {
       if (component.visual && (wanted.has(component.visual) || wanted.has(component.id))) {
         keys.add(`visual:${component.visual}`)
-      }
-      if (component.table && (wanted.has(component.table) || wanted.has(component.id))) {
-        keys.add(`table:${component.table}`)
       }
     }
     return keys
@@ -670,7 +657,7 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
   private loadRenderedComponents(): void {
     const kinds = new Set<string>(['ld-filter-panel'])
     for (const component of this.page?.components ?? []) {
-      const tag = tagForComponent(component)
+      const tag = tagForComponent(component, this.visuals)
       if (tag) kinds.add(tag)
     }
     for (const kind of kinds) {
@@ -693,7 +680,7 @@ function generatedSelectionEntries(entries: ReturnType<typeof canonicalSelection
 function optimisticCommand(value: unknown): OptimisticInteractionCommand | undefined {
   if (!value || typeof value !== 'object') return undefined
   const command = value as Partial<OptimisticInteractionCommand>
-  if (command.sourceKind !== 'visual' && command.sourceKind !== 'table') return undefined
+  if (command.sourceKind !== 'visual') return undefined
   if (typeof command.sourceId !== 'string' || typeof command.interactionKind !== 'string') return undefined
   if (command.action !== 'set' && command.action !== 'replace' && command.action !== 'clear') return undefined
   if (typeof command.toggle !== 'boolean' || !Array.isArray(command.mappings)) return undefined
@@ -822,44 +809,23 @@ class DashboardVisualFrame extends LitElement {
   }
 }
 
-function tagForComponent(component: DashboardComponentSignal): string {
+function tagForComponent(component: DashboardComponentSignal, visuals: Record<string, DashboardVisual>): string {
   switch (component.kind) {
-    case 'filter_card':
+    case 'filter':
       return 'ld-filter-card'
-    case 'kpi_card':
-      return 'ld-kpi-card'
-    case 'table':
-      return 'ld-report-table'
+    case 'visual': {
+      const visualType = component.visual ? visuals[component.visual]?.type : undefined
+      if (visualType === 'kpi') return 'ld-kpi-card'
+      if (isTabularVisualType(visualType)) return 'ld-report-table'
+      return visualType ? 'ld-echart' : ''
+    }
     default:
-      return isChartKind(component.kind) ? 'ld-echart' : ''
+      return ''
   }
 }
 
-function isChartKind(kind: string): boolean {
-  return [
-    'line_chart',
-    'area_chart',
-    'bar_chart',
-    'column_chart',
-    'pie_chart',
-    'donut_chart',
-    'scatter_chart',
-    'funnel_chart',
-    'treemap_chart',
-    'gauge_chart',
-    'heatmap_chart',
-    'sankey_chart',
-    'graph_chart',
-    'map_chart',
-    'candlestick_chart',
-    'boxplot_chart',
-    'combo_chart',
-    'waterfall_chart',
-    'histogram_chart',
-    'radar_chart',
-    'tree_chart',
-    'sunburst_chart',
-  ].includes(kind)
+function isTabularVisualType(type: string | undefined): boolean {
+  return type === 'table' || type === 'matrix' || type === 'pivot'
 }
 
 function json(value: unknown): string {

@@ -119,7 +119,7 @@ func executeConsumers(ctx context.Context, executor consumer.Executor, request W
 				return false
 			}
 			event.Type = RefreshEventTargetError
-			event.Target = string(result.Target.Kind) + ":" + result.Target.ID
+			event.Target = result.Target.Key()
 			event.Err = result.Err
 			return publish(event)
 		}

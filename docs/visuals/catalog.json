@@ -1,9 +1,9 @@
 {
-  "section": "Charts",
+  "section": "Visuals",
   "overview": {
     "source": "index",
-    "title": "Chart types",
-    "breadcrumb": "Charts"
+    "title": "Visual types",
+    "breadcrumb": "Visuals"
   },
   "documents": [
     { "source": "line", "title": "Line chart" },
@@ -28,6 +28,9 @@
     { "source": "radar", "title": "Radar chart" },
     { "source": "tree", "title": "Tree" },
     { "source": "sunburst", "title": "Sunburst" },
-    { "source": "kpi", "title": "KPI" }
+    { "source": "kpi", "title": "KPI" },
+    { "source": "table", "title": "Table" },
+    { "source": "matrix", "title": "Matrix" },
+    { "source": "pivot", "title": "Pivot" }
   ]
 }

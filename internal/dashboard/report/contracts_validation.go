@@ -207,7 +207,7 @@ func (d *Dashboard) validateContract() error {
 			return fmt.Errorf("table %q does not support point_selection", name)
 		}
 		if !table.Interaction.RowSelection.IsZero() {
-			if err := d.validateSelectionInteraction("table", name, "row_selection", table.Interaction.RowSelection); err != nil {
+			if err := d.validateSelectionInteraction("visual", name, "row_selection", table.Interaction.RowSelection); err != nil {
 				return err
 			}
 		}

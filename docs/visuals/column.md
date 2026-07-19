@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use one ordered category and one measure for a direct vertical comparison. Ascending month order makes changes over time easy to scan.
 
-{{< chart id="orders_by_month_column" >}}
+{{< visual id="orders_by_month_column" >}}
 
 ```yaml visual-example=orders_by_month_column
 visuals:
@@ -30,7 +30,7 @@ visuals:
 
 Map status through `query.series` and enable `options.stacked` to show both the monthly total and each status contribution.
 
-{{< chart id="orders_by_month_status" >}}
+{{< visual id="orders_by_month_status" >}}
 
 ```yaml visual-example=orders_by_month_status
 visuals:
@@ -60,7 +60,7 @@ visuals:
 
 Keep the series unstacked to place statuses side by side, and use `options.legend` to position the series key above the plot.
 
-{{< chart id="orders_by_month_status_grouped" >}}
+{{< visual id="orders_by_month_status_grouped" >}}
 
 ```yaml visual-example=orders_by_month_status_grouped
 visuals:

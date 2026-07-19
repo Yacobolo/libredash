@@ -57,7 +57,7 @@ func (s Service) PrepareClearSelection(request Request, authoritative dashboard.
 			return PreparedRefresh{}, err
 		}
 		for _, target := range selectionTargets {
-			key := string(target.Kind) + ":" + target.ID
+			key := target.Key()
 			if _, ok := seen[key]; ok {
 				continue
 			}
@@ -84,12 +84,12 @@ func (s Service) PrepareInitial(request Request, initial dashboard.Filters) (Pre
 	return PreparedRefresh{Filters: filters, Plan: s.fullPlan(request, "initial")}, nil
 }
 
-func (s Service) PrepareTableWindow(request Request, authoritative dashboard.Filters) (PreparedRefresh, error) {
+func (s Service) PrepareVisualWindow(request Request, authoritative dashboard.Filters) (PreparedRefresh, error) {
 	filters := report.NormalizeFilters(s.Metrics, request.DashboardID, request.PageID, authoritative)
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.TableCommand)
+	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.VisualWindowCommand)
 	return PreparedRefresh{
 		Filters: filters,
-		Plan: RefreshPlan{Command: "table_window", Targets: []Target{{
+		Plan: RefreshPlan{Command: "visual_window", Targets: []Target{{
 			Kind:         TargetTable,
 			ID:           tableRequest.Table,
 			TableRequest: tableRequest,
@@ -106,7 +106,7 @@ func (s Service) fullPlan(request Request, commandName string) RefreshPlan {
 	if !ok {
 		return RefreshPlan{Command: commandName}
 	}
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.TableCommand).Reset()
+	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.VisualWindowCommand).Reset()
 	targets := make([]Target, 0, len(page.Visuals))
 	seen := map[string]struct{}{}
 	for _, item := range page.Visuals {
@@ -123,7 +123,7 @@ func (s Service) fullPlan(request Request, commandName string) RefreshPlan {
 		default:
 			continue
 		}
-		key := string(target.Kind) + ":" + target.ID
+		key := target.Key()
 		if _, ok := seen[key]; ok {
 			continue
 		}
@@ -151,21 +151,17 @@ func (s Service) selectionTargets(request Request, sourceKind, sourceID string) 
 	var ids []string
 	switch sourceKind {
 	case "visual":
-		visual, ok := definition.Visuals[sourceID]
-		if !ok {
+		if visual, ok := definition.Visuals[sourceID]; ok {
+			ids = visual.Interaction.PointSelection.Targets
+		} else if visual, ok := definition.Tables[sourceID]; ok {
+			ids = visual.Interaction.RowSelection.Targets
+		} else {
 			return nil, fmt.Errorf("unknown source visual %q", sourceID)
 		}
-		ids = visual.Interaction.PointSelection.Targets
-	case "table":
-		table, ok := definition.Tables[sourceID]
-		if !ok {
-			return nil, fmt.Errorf("unknown source table %q", sourceID)
-		}
-		ids = table.Interaction.RowSelection.Targets
 	default:
 		return nil, fmt.Errorf("unknown source kind %q", sourceKind)
 	}
-	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.TableCommand).Reset()
+	tableRequest := s.Metrics.NormalizeTableRequest(request.DashboardID, request.VisualWindowCommand).Reset()
 	targets := make([]Target, 0, len(ids))
 	seen := map[string]struct{}{}
 	for _, id := range ids {
@@ -179,7 +175,7 @@ func (s Service) selectionTargets(request Request, sourceKind, sourceID string) 
 		} else {
 			return nil, fmt.Errorf("interaction references unknown target %q", id)
 		}
-		key := string(target.Kind) + ":" + target.ID
+		key := target.Key()
 		if _, duplicate := seen[key]; duplicate {
 			continue
 		}

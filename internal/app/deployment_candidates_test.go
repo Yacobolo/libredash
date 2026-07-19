@@ -288,7 +288,7 @@ func TestCSRFMiddlewareCookieCoversDashboardCommands(t *testing.T) {
 		t.Fatalf("GET did not set %s cookie", csrfCookieName)
 	}
 
-	postReq := httptest.NewRequest(http.MethodPost, "http://localhost:8120/workspaces/test/commands/table-window", nil)
+	postReq := httptest.NewRequest(http.MethodPost, "http://localhost:8120/workspaces/test/commands/visual-window", nil)
 	postReq.Header.Set("X-CSRF-Token", getRec.Body.String())
 	postReq.Header.Set("Referer", "http://localhost:8120/workspaces/test-workspace/dashboards/executive-sales/pages/overview")
 	for _, cookie := range cookies {

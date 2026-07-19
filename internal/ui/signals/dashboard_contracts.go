@@ -109,10 +109,10 @@ func DashboardInteractionCommandFromDashboard(value dashboard.InteractionCommand
 	}
 }
 
-func DashboardTableRequestFromDashboard(value dashboard.TableRequest) DashboardTableRequest {
-	return DashboardTableRequest{
-		Table: value.Table, Block: value.Block, Start: int64(value.Start), Count: int64(value.Count),
-		RequestSeq: int64(value.RequestSeq), Sort: dashboardTableSort(value.Sort), ResetVersion: int64(value.ResetVersion),
+func DashboardVisualWindowRequestFromDashboard(value dashboard.TableRequest) DashboardVisualWindowRequest {
+	return DashboardVisualWindowRequest{
+		Visual: value.Table, Block: value.Block, Start: int64(value.Start), Count: int64(value.Count),
+		RequestSeq: int64(value.RequestSeq), Sort: dashboardVisualSort(value.Sort), ResetVersion: int64(value.ResetVersion),
 	}
 }
 
@@ -121,43 +121,47 @@ func DashboardVisualFromDashboard(value dashboard.Visual) DashboardVisual {
 	for index, datum := range value.Data {
 		data[index] = map[string]any(datum)
 	}
-	return DashboardVisual{
-		Version: int64(value.Version), ID: value.ID, Kind: value.Kind, Shape: value.Shape, Renderer: value.Renderer,
+	base := DashboardVisualBase{
+		Version: int64(value.Version), ID: value.ID, Shape: optionalValue(value.Shape), Renderer: optionalValue(value.Renderer),
 		Type: value.Type, Title: value.Title, Unit: value.Unit, Format: optionalValue(value.Format),
-		Interaction: dashboardInteractionConfig(value.Interaction), Dimensions: append([]string(nil), value.Dimensions...),
-		Measure: value.Measure, Measures: append([]string(nil), value.Measures...), Series: append([]string(nil), value.Series...),
-		Options: value.Options, RendererOptions: value.RendererOptions, Selection: dashboardInteractionSelectionEntries(value.Selection), Data: data,
+		Interaction: dashboardInteractionConfig(value.Interaction), Dimensions: optionalSlice(value.Dimensions),
+		Measure: optionalValue(value.Measure), Measures: optionalSlice(value.Measures), Series: optionalSlice(value.Series),
+		Options: optionalMap(value.Options), RendererOptions: optionalMap(value.RendererOptions), Selection: dashboardInteractionSelectionEntries(value.Selection), Data: optionalSlice(data),
 	}
+	return dashboardVisualVariant(value.Type, base)
 }
 
-func DashboardVisualsFromDashboard(values map[string]dashboard.Visual) map[string]DashboardVisual {
-	out := make(map[string]DashboardVisual, len(values))
+func DashboardVisualsFromDashboard(values map[string]dashboard.Visual, tables map[string]dashboard.Table) map[string]DashboardVisual {
+	out := make(map[string]DashboardVisual, len(values)+len(tables))
 	for key, value := range values {
 		out[key] = DashboardVisualFromDashboard(value)
+	}
+	for key, value := range tables {
+		out[key] = DashboardTabularVisualFromDashboard(key, value)
 	}
 	return out
 }
 
-func DashboardTableFromDashboard(value dashboard.Table) DashboardTable {
-	blocks := make(map[string]DashboardTableBlock, len(value.Blocks))
+func DashboardTabularVisualFromDashboard(id string, value dashboard.Table) DashboardVisual {
+	blocks := make(map[string]DashboardVisualBlock, len(value.Blocks))
 	for key, block := range value.Blocks {
-		blocks[key] = DashboardTableBlock{
+		blocks[key] = DashboardVisualBlock{
 			Start: int64(block.Start), RequestSeq: int64(block.RequestSeq), ResetVersion: int64(block.ResetVersion),
-			Sort: dashboardTableSort(block.Sort), Rows: block.Rows,
+			Sort: dashboardVisualSort(block.Sort), Rows: block.Rows,
 		}
 	}
-	columns := make([]DashboardTableColumn, len(value.Columns))
+	columns := make([]DashboardVisualColumn, len(value.Columns))
 	for index, column := range value.Columns {
-		formatting := make([]DashboardTableFormattingRule, len(column.Formatting))
+		formatting := make([]DashboardVisualFormattingRule, len(column.Formatting))
 		for ruleIndex, rule := range column.Formatting {
-			formatting[ruleIndex] = DashboardTableFormattingRule{
+			formatting[ruleIndex] = DashboardVisualFormattingRule{
 				Kind: rule.Kind, Values: optionalMap(rule.Values), Min: rule.Min, Max: rule.Max,
 				Color: optionalValue(rule.Color), Background: optionalValue(rule.Background),
 				LowColor: optionalValue(rule.LowColor), HighColor: optionalValue(rule.HighColor),
 			}
 		}
 		width := int64(column.Width)
-		columns[index] = DashboardTableColumn{
+		columns[index] = DashboardVisualColumn{
 			Key: column.Key, Label: column.Label, Align: optionalValue(column.Align), Role: optionalValue(column.Role),
 			Group: optionalValue(column.Group), Measure: optionalValue(column.Measure), ColumnValue: optionalValue(column.ColumnValue),
 			Width: optionalValue(width), Format: optionalValue(column.Format), Formatting: optionalSlice(formatting),
@@ -167,22 +171,76 @@ func DashboardTableFromDashboard(value dashboard.Table) DashboardTable {
 	if value.Style.Zebra != nil {
 		zebra = *value.Style.Zebra
 	}
-	return DashboardTable{
-		Version: int64(value.Version), Kind: value.Kind, Title: value.Title,
-		Style:       DashboardTableStyle{Density: value.Style.Density, Zebra: zebra, Grid: value.Style.Grid},
+	visualType := map[string]string{"data_table": "table", "matrix_table": "matrix", "pivot_table": "pivot"}[value.Kind]
+	base := DashboardVisualBase{
+		Version: int64(value.Version), ID: id, Type: visualType, Title: value.Title, Unit: "",
+		Style:       &DashboardVisualStyle{Density: value.Style.Density, Zebra: zebra, Grid: value.Style.Grid},
 		Interaction: dashboardInteractionConfig(value.Interaction), Selection: dashboardInteractionSelectionEntries(value.Selection),
-		Columns: columns, Cardinality: DashboardTableCardinality{Kind: value.Cardinality.Kind, Value: int64(value.Cardinality.Value)}, AvailableRows: int64(value.AvailableRows), IsCapped: value.IsCapped,
-		RowCap: int64(value.RowCap), ChunkSize: int64(value.ChunkSize), RowHeight: int64(value.RowHeight), ResetVersion: int64(value.ResetVersion),
-		Sort: dashboardTableSort(value.Sort), Blocks: blocks, LoadingBlock: value.LoadingBlock, Error: value.Error,
+		Columns: &columns, Cardinality: &DashboardVisualCardinality{Kind: value.Cardinality.Kind, Value: int64(value.Cardinality.Value)}, AvailableRows: optionalValue(int64(value.AvailableRows)), IsCapped: optionalValue(value.IsCapped),
+		RowCap: optionalValue(int64(value.RowCap)), ChunkSize: optionalValue(int64(value.ChunkSize)), RowHeight: optionalValue(int64(value.RowHeight)), ResetVersion: optionalValue(int64(value.ResetVersion)),
+		Sort: optionalValue(dashboardVisualSort(value.Sort)), Blocks: &blocks, LoadingBlock: optionalValue(value.LoadingBlock), Error: optionalValue(value.Error),
 	}
+	return dashboardVisualVariant(visualType, base)
 }
 
-func DashboardTablesFromDashboard(values map[string]dashboard.Table) map[string]DashboardTable {
-	out := make(map[string]DashboardTable, len(values))
-	for key, value := range values {
-		out[key] = DashboardTableFromDashboard(value)
+func dashboardVisualVariant(visualType string, base DashboardVisualBase) DashboardVisual {
+	base.Type = visualType
+	switch visualType {
+	case "line":
+		return DashboardVisual{Value: LineDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "area":
+		return DashboardVisual{Value: AreaDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "bar":
+		return DashboardVisual{Value: BarDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "column":
+		return DashboardVisual{Value: ColumnDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "pie":
+		return DashboardVisual{Value: PieDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "donut":
+		return DashboardVisual{Value: DonutDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "scatter":
+		return DashboardVisual{Value: ScatterDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "funnel":
+		return DashboardVisual{Value: FunnelDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "treemap":
+		return DashboardVisual{Value: TreemapDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "gauge":
+		return DashboardVisual{Value: GaugeDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "heatmap":
+		return DashboardVisual{Value: HeatmapDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "sankey":
+		return DashboardVisual{Value: SankeyDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "graph":
+		return DashboardVisual{Value: GraphDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "map":
+		return DashboardVisual{Value: MapDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "candlestick":
+		return DashboardVisual{Value: CandlestickDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "boxplot":
+		return DashboardVisual{Value: BoxplotDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "combo":
+		return DashboardVisual{Value: ComboDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "waterfall":
+		return DashboardVisual{Value: WaterfallDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "histogram":
+		return DashboardVisual{Value: HistogramDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "radar":
+		return DashboardVisual{Value: RadarDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "tree":
+		return DashboardVisual{Value: TreeDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "sunburst":
+		return DashboardVisual{Value: SunburstDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "kpi":
+		return DashboardVisual{Value: KPIDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "table":
+		return DashboardVisual{Value: TableDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "matrix":
+		return DashboardVisual{Value: MatrixDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	case "pivot":
+		return DashboardVisual{Value: PivotDashboardVisual{DashboardVisualBase: base, Type: visualType}}
+	default:
+		panic("unsupported dashboard visual type: " + visualType)
 	}
-	return out
 }
 
 func dashboardInteractionConfig(value dashboard.InteractionConfig) DashboardInteractionConfig {
@@ -222,8 +280,8 @@ func dashboardInteractionSelectionEntries(values []dashboard.InteractionSelectio
 	return out
 }
 
-func dashboardTableSort(value dashboard.TableSort) DashboardTableSort {
-	return DashboardTableSort{Key: value.Key, Direction: value.Direction}
+func dashboardVisualSort(value dashboard.TableSort) DashboardVisualSort {
+	return DashboardVisualSort{Key: value.Key, Direction: value.Direction}
 }
 
 func ReportFilterConfigsFromReport(values []reportdef.FilterConfig) []ReportFilterConfig {
@@ -243,7 +301,8 @@ func ReportFilterConfigsFromReport(values []reportdef.FilterConfig) []ReportFilt
 		}
 		var targets *ReportFilterTargets
 		if len(definition.Targets.Visuals) > 0 || len(definition.Targets.Tables) > 0 {
-			targets = &ReportFilterTargets{Visuals: optionalSlice(definition.Targets.Visuals), Tables: optionalSlice(definition.Targets.Tables)}
+			allTargets := append(append([]string{}, definition.Targets.Visuals...), definition.Targets.Tables...)
+			targets = &ReportFilterTargets{Visuals: optionalSlice(allTargets)}
 		}
 		var filterValues *ReportFilterValues
 		if definition.Values.Source != "" || definition.Values.Limit != 0 {

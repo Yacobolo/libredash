@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Set `query.table` and one numeric measure so LibreDash can bin raw delivery values and count observations in each interval.
 
-{{< chart id="delivery_histogram" >}}
+{{< visual id="delivery_histogram" >}}
 
 ```yaml visual-example=delivery_histogram
 visuals:
@@ -30,7 +30,7 @@ visuals:
 
 Change the raw measure to revenue and use `options.bin_count` to balance distribution detail against the available chart width.
 
-{{< chart id="revenue_histogram" >}}
+{{< visual id="revenue_histogram" >}}
 
 ```yaml visual-example=revenue_histogram
 visuals:
@@ -51,7 +51,7 @@ visuals:
 
 Use fewer bins for the bounded review scale and enable `show_labels` when every bin count should be visible without hovering.
 
-{{< chart id="review_histogram" >}}
+{{< visual id="review_histogram" >}}
 
 ```yaml visual-example=review_histogram
 visuals:

@@ -146,7 +146,7 @@ func TestPackProjectRequiresExactManagedDataRevisionPins(t *testing.T) {
 func TestValidateCompiledWorkspaceArtifactRejectsConflictingManagedConnectionDefinitions(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	compiled := CompiledWorkspaceArtifact{
-		Version:   1,
+		Version:   compiledWorkspaceArtifactVersion,
 		ProjectID: "project-a",
 		Definition: &workspace.Definition{Models: map[string]*semanticmodel.Model{
 			"first":  {Connections: map[string]semanticmodel.Connection{"orders": {Kind: "managed"}}},
@@ -583,16 +583,16 @@ spec:
   semanticModel: sales
   visuals:
     total:
-      kind: kpi
+      type: kpi
       query:
         measures:
           order_count:
   pages:
-    - name: overview
+    - id: overview
       title: Overview
-      visuals:
+      components:
         - id: total
-          kind: kpi_card
+          kind: visual
           visual: total
           placement:
             col: 1
@@ -622,6 +622,27 @@ spec:
 		if strings.Contains(string(compiledBytes), secret) {
 			t.Fatalf("compiled artifact serialized resolved credential")
 		}
+	}
+}
+
+func TestReadCompiledWorkspaceArtifactRejectsStaleContractVersion(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, CompiledProjectFile)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stale := CompiledWorkspaceArtifact{Version: compiledWorkspaceArtifactVersion - 1}
+	data, err := json.Marshal(stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = readCompiledWorkspaceArtifact(root, Manifest{CompiledPath: CompiledProjectFile})
+	if err == nil || !strings.Contains(err.Error(), "redeploy the workspace") {
+		t.Fatalf("stale artifact error = %v, want explicit redeployment requirement", err)
 	}
 }
 

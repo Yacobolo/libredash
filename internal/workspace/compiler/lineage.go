@@ -360,7 +360,7 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.
 		}
 		for _, tableName := range sortedMapKeys(report.Tables) {
 			table := report.Tables[tableName]
-			tableID, err := add(workspace.AssetTypeTable, reportKey+"."+tableName, reportID, table.Title, table.Description, tableVisualPayload(table))
+			tableID, err := add(workspace.AssetTypeVisual, reportKey+"."+tableName, reportID, table.Title, table.Description, tableVisualPayload(table))
 			if err != nil {
 				return workspace.AssetGraph{}, err
 			}
@@ -410,11 +410,11 @@ func ExtractLineage(workspaceID workspace.WorkspaceID, servingStateID workspace.
 					edge(itemID, visualID, workspace.AssetEdgeUsesVisual)
 				}
 				if item.Table != "" {
-					tableID, err := assetID(workspace.AssetTypeTable, reportKey+"."+item.Table)
+					tableID, err := assetID(workspace.AssetTypeVisual, reportKey+"."+item.Table)
 					if err != nil {
 						return workspace.AssetGraph{}, err
 					}
-					edge(itemID, tableID, workspace.AssetEdgeUsesTable)
+					edge(itemID, tableID, workspace.AssetEdgeUsesVisual)
 				}
 				if item.Filter != "" {
 					filterID, err := assetID(workspace.AssetTypeFilter, reportKey+"."+item.Filter)

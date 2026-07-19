@@ -21,7 +21,7 @@ export function emptyBlocks(): Record<BlockID, TableBlock> {
 
 export const emptyTable: TableSignal = {
   version: 2,
-  kind: 'data_table',
+  type: 'table',
   title: 'Orders',
   style: defaultTableStyle,
   interaction: { kind: 'row_selection', toggle: true, mappings: [] },
@@ -59,7 +59,7 @@ export function normalizeTable(value: Partial<TableSignal>): TableSignal {
     ...emptyTable,
     ...value,
     version: 2,
-    kind: value.kind === 'matrix_table' || value.kind === 'pivot_table' ? value.kind : 'data_table',
+    type: value.type === 'matrix' || value.type === 'pivot' ? value.type : 'table',
     style: normalizeStyle(value.style),
     cardinality: normalizeCardinality(value.cardinality),
     availableRows: positiveNumber(value.availableRows, positiveNumber(value.cardinality?.value, 0)),

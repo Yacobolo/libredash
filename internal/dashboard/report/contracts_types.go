@@ -440,6 +440,9 @@ func (t TableVisual) KindOrDefault() string {
 }
 
 func (v Visual) KindOrDefault() string {
+	if v.Type == "kpi" {
+		return "kpi"
+	}
 	if v.Kind != "" {
 		return v.Kind
 	}

@@ -3,7 +3,7 @@ import { property, state } from 'lit/decorators.js'
 import { defineElementOnce } from './lazy-registry'
 
 class VisualArtifact extends LitElement {
-  @property() kind: string = ''
+  @property() type: string = ''
   @property({ attribute: 'artifact-id' }) artifactId = ''
   @property({ attribute: false }) payload: unknown = null
   @state() private rendererReady = false
@@ -55,14 +55,14 @@ class VisualArtifact extends LitElement {
   `
 
   protected updated(changed: Map<string, unknown>) {
-    if (changed.has('kind') || changed.has('payload')) {
+    if (changed.has('type') || changed.has('payload')) {
       void this.ensureRenderer()
     }
   }
 
   render() {
-    if (this.kind !== 'chart' && this.kind !== 'table') {
-      return this.renderState(`Unsupported artifact: ${this.kind || 'unknown'}`)
+    if (!this.type) {
+      return this.renderState('Unsupported artifact: unknown')
     }
     if (!this.payload) {
       return this.renderState('Artifact data is unavailable.')
@@ -73,10 +73,12 @@ class VisualArtifact extends LitElement {
     if (!this.rendererReady) {
       return this.renderState('Loading artifact...')
     }
-    if (this.kind === 'chart') {
+    if (!isTabularVisualType(this.type)) {
       return html`
         <div class="artifact chart">
-          <ld-echart visual-id=${this.artifactId} .chart=${this.payload}></ld-echart>
+          ${this.type === 'kpi'
+            ? html`<ld-kpi-card visual-id=${this.artifactId} .visual=${this.payload}></ld-kpi-card>`
+            : html`<ld-echart visual-id=${this.artifactId} .chart=${this.payload}></ld-echart>`}
         </div>
       `
     }
@@ -92,13 +94,15 @@ class VisualArtifact extends LitElement {
   }
 
   private async ensureRenderer() {
-    const kind = this.kind
+    const visualType = this.type
     const token = ++this.loadToken
     this.rendererReady = false
     this.rendererError = ''
-    if (!this.payload || (kind !== 'chart' && kind !== 'table')) return
+    if (!this.payload || !visualType) return
     try {
-      if (kind === 'chart') {
+      if (visualType === 'kpi') {
+        await defineElementOnce('ld-kpi-card', () => import('../dashboard/charts/echart'))
+      } else if (!isTabularVisualType(visualType)) {
         await defineElementOnce('ld-echart', () => import('../dashboard/charts/echart'))
       } else {
         await defineElementOnce('ld-report-table', () => import('../dashboard/table/report-table'))
@@ -110,6 +114,10 @@ class VisualArtifact extends LitElement {
       this.rendererError = error instanceof Error ? error.message : 'Artifact renderer failed to load.'
     }
   }
+}
+
+function isTabularVisualType(type: string): boolean {
+  return type === 'table' || type === 'matrix' || type === 'pivot'
 }
 
 if (!customElements.get('ld-visual-artifact')) customElements.define('ld-visual-artifact', VisualArtifact)

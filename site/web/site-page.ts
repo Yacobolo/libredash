@@ -8,6 +8,7 @@ import type { TableSignal } from '../../web/components/dashboard/table/types'
 import { visualExampleHighlightLines } from './visual-example-highlights'
 
 type ThemeMode = 'system' | 'light' | 'dark'
+type VisualPayload = ChartPayload | TableSignal
 
 const nextThemeMode: Record<ThemeMode, ThemeMode> = {
   system: 'light',
@@ -186,7 +187,7 @@ class SiteMobileMenu extends LitElement {
       <nav id="site-mobile-navigation" aria-label="Site navigation" ?hidden=${!this.open}>
         <a href="/docs" @click=${this.close}>Docs</a>
         <a href="/docs/search" @click=${this.close}>Search</a>
-        <a href="/charts" @click=${this.close}>Charts</a>
+        <a href="/visuals" @click=${this.close}>Visuals</a>
       </nav>`
   }
 
@@ -1383,27 +1384,39 @@ class SiteVisualExample extends DatastarLit(LitElement) {
     }
 
     ld-echart,
-    ld-kpi-card {
+    ld-kpi-card,
+    ld-report-table {
       display: block;
       height: 28rem;
     }
 
-    :host([kind='kpi']) {
-      min-height: 13rem;
+    :host([type='kpi']) {
+      min-height: 12rem;
     }
 
-    :host([kind='kpi']) ld-kpi-card {
-      height: 13rem;
+    :host([type='kpi']) ld-kpi-card {
+      height: 12rem;
     }
+
   `
 
   render() {
-    const charts = this.signal<ChartPayload[]>('charts', [])
-    const chart = charts.find((candidate) => candidate.id === this.exampleId) ?? null
-    if (chart?.type === 'kpi') {
-      return html`<ld-kpi-card .visual=${chart}></ld-kpi-card>`
+    const visuals = this.signal<VisualPayload[]>('visuals', [])
+    const visual = visuals.find((candidate) => candidate.id === this.exampleId) ?? null
+    const visualType = visual?.type ?? ''
+    if (this.getAttribute('type') !== visualType) {
+      queueMicrotask(() => {
+        if (visualType) this.setAttribute('type', visualType)
+        else this.removeAttribute('type')
+      })
     }
-    return html`<ld-echart .chart=${chart}></ld-echart>`
+    if (visual?.type === 'kpi') {
+      return html`<ld-kpi-card .visual=${visual}></ld-kpi-card>`
+    }
+    if (visual && isTabularVisualType(visual.type)) {
+      return html`<ld-report-table table-id=${this.exampleId} .table=${visual}></ld-report-table>`
+    }
+    return html`<ld-echart .chart=${visual}></ld-echart>`
   }
 }
 
@@ -1411,7 +1424,7 @@ if (!customElements.get('ld-site-visual-example')) {
   customElements.define('ld-site-visual-example', SiteVisualExample)
 }
 
-class SiteChartShowcase extends DatastarLit(LitElement) {
+class SiteVisualShowcase extends DatastarLit(LitElement) {
   static styles = css`
     :host {
       display: block;
@@ -1506,20 +1519,21 @@ class SiteChartShowcase extends DatastarLit(LitElement) {
   `
 
   render() {
-    const charts = this.signal<ChartPayload[]>('charts', [])
-    const tables = this.signal<TableSignal[]>('tables', [])
+    const visuals = this.signal<VisualPayload[]>('visuals', [])
+    const charts = visuals.filter((visual): visual is ChartPayload => !isTabularVisualType(visual.type))
+    const tables = visuals.filter((visual): visual is TableSignal => isTabularVisualType(visual.type))
     return html`
       <section class="showcase-section" aria-labelledby="chart-showcase-heading">
         <div class="section-heading">
-          <h2 id="chart-showcase-heading">Charts</h2>
-          <p>Renderer-neutral chart payloads, adapted by the product ECharts plugin.</p>
+          <h2 id="chart-showcase-heading">Charts and KPIs</h2>
+          <p>Renderer-neutral visual payloads adapted by the built-in ECharts and KPI renderers.</p>
         </div>
         <div class="chart-grid">${charts.map((chart) => html`<article class="chart">${chart.type === 'kpi' ? html`<ld-kpi-card .visual=${chart}></ld-kpi-card>` : html`<ld-echart .chart=${chart}></ld-echart>`}</article>`)}</div>
       </section>
       <section class="showcase-section" aria-labelledby="table-showcase-heading">
         <div class="section-heading">
           <h2 id="table-showcase-heading">Tables, matrices, and pivots</h2>
-          <p>Table variants from the Visual Showcase dashboard, including density, grid, and conditional-formatting treatments.</p>
+          <p>Virtualized table, matrix, and pivot payloads from the same generated visual catalog.</p>
         </div>
         <div class="table-grid">
           ${tables.map(
@@ -1534,16 +1548,20 @@ class SiteChartShowcase extends DatastarLit(LitElement) {
   }
 }
 
-if (!customElements.get('ld-site-chart-showcase')) {
-  customElements.define('ld-site-chart-showcase', SiteChartShowcase)
+if (!customElements.get('ld-site-visual-showcase')) {
+  customElements.define('ld-site-visual-showcase', SiteVisualShowcase)
+}
+
+function isTabularVisualType(type: string): boolean {
+  return type === 'table' || type === 'matrix' || type === 'pivot'
 }
 
 async function loadRouteComponents(): Promise<void> {
   const imports: Promise<unknown>[] = []
-  if (document.querySelector('ld-site-chart-showcase, ld-site-visual-example')) {
+  if (document.querySelector('ld-site-visual-showcase, ld-site-visual-example')) {
     imports.push(import('../../web/components/dashboard/charts/echart'))
   }
-  if (document.querySelector('ld-site-chart-showcase')) {
+  if (document.querySelector('ld-site-visual-showcase, ld-site-visual-example')) {
     imports.push(import('../../web/components/dashboard/table/report-table'))
   }
   if (document.querySelector('ld-site-flow-background')) {

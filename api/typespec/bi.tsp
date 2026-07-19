@@ -37,13 +37,12 @@ model ModelRef {
 model DashboardManifestCounts {
   pages: int32;
   visuals: int32;
-  tables: int32;
   filters: int32;
 }
 
 model DashboardManifestComponent {
   id: string;
-  kind: string;
+  kind: "visual" | "filter" | "header";
   ref: string;
   title?: string;
 }
@@ -58,7 +57,7 @@ model DashboardComponentPlacement {
 @discriminator("kind")
 model DashboardComponentResponse {
   id: string;
-  kind: string;
+  kind: "visual" | "filter" | "header";
   ref?: string;
   title?: string;
   description?: string;
@@ -74,14 +73,13 @@ model DashboardVisualComponentResponse extends DashboardComponentResponse {
   visualId: string;
 }
 
-model DashboardTableComponentResponse extends DashboardComponentResponse {
-  kind: "table";
-  tableId: string;
-}
-
 model DashboardFilterComponentResponse extends DashboardComponentResponse {
   kind: "filter";
   filterId: string;
+}
+
+model DashboardHeaderComponentResponse extends DashboardComponentResponse {
+  kind: "header";
 }
 
 model DashboardPageResponse {
@@ -160,30 +158,21 @@ model DashboardVisualSelectionEntry {
 model DashboardVisualDescribeResponse {
   id: string;
   componentId?: string;
-  kind?: string;
+  type: string;
   shape?: string;
   renderer?: string;
-  type?: string;
   title?: string;
   description?: string;
   query?: DashboardVisualQueryDefinition;
   extensions?: Record<Record<unknown>>;
   interaction?: DashboardVisualInteractionDefinition;
+  columns?: DashboardTableColumn[];
+  cardinality?: string;
   placement?: DashboardComponentPlacement;
   x?: float64;
   y?: float64;
   width?: float64;
   height?: float64;
-}
-
-model DashboardTableDescribeResponse {
-  id: string;
-  componentId?: string;
-  title?: string;
-  description?: string;
-  columns: DashboardTableColumn[];
-  query?: Record<unknown>;
-  placement?: DashboardComponentPlacement;
 }
 
 model DashboardFilterDescribeResponse {
@@ -436,7 +425,7 @@ model DashboardPageQueryRequest {
   filters?: DashboardFilters;
 }
 
-model DashboardTableQueryRequest {
+model DashboardVisualQueryRequest {
   limit?: QueryLimit;
   pageToken?: PageToken;
   filters?: DashboardFilters;
@@ -450,90 +439,6 @@ model DashboardPageQueryResponse {
 }
 
 alias DashboardVisualValue = unknown;
-
-model CategoryValueVisualDatum {
-  label: string;
-  value: DashboardVisualValue;
-  selected?: boolean;
-}
-
-model CategorySeriesValueVisualDatum {
-  label: string;
-  series: string;
-  value: DashboardVisualValue;
-  selected?: boolean;
-}
-
-model CategoryMultiMeasureVisualDatum {
-  label: string;
-  series: string;
-  value: DashboardVisualValue;
-  selected?: boolean;
-}
-
-model CategoryDeltaVisualDatum {
-  label: string;
-  value: DashboardVisualValue;
-  start: float64;
-  end: float64;
-  positive: boolean;
-  selected?: boolean;
-}
-
-model BinnedMeasureVisualDatum {
-  label: string;
-  binStart: float64;
-  binEnd: float64;
-  value: DashboardVisualValue;
-}
-
-model HierarchyVisualDatum {
-  path: string[];
-  value: DashboardVisualValue;
-}
-
-model SingleValueVisualDatum {
-  label: string;
-  value: DashboardVisualValue;
-  series?: string;
-  selected?: boolean;
-}
-
-model MatrixVisualDatum {
-  row: string;
-  column: string;
-  value: DashboardVisualValue;
-  selected?: boolean;
-}
-
-model GraphVisualDatum {
-  source: string;
-  target: string;
-  value: DashboardVisualValue;
-}
-
-model GeoVisualDatum {
-  name: string;
-  value: DashboardVisualValue;
-  selected?: boolean;
-}
-
-model OHLCVisualDatum {
-  label: string;
-  open: DashboardVisualValue;
-  close: DashboardVisualValue;
-  low: DashboardVisualValue;
-  high: DashboardVisualValue;
-}
-
-model DistributionVisualDatum {
-  label: string;
-  min: float64;
-  q1: float64;
-  median: float64;
-  q3: float64;
-  max: float64;
-}
 
 model DashboardVisualDatum {
   label?: string;
@@ -563,14 +468,12 @@ model DashboardVisualDatum {
   extensions?: Record<Record<unknown>>;
 }
 
-@discriminator("shape")
 model DashboardVisualDataResponse {
   version?: int32;
   id?: string;
-  kind?: string;
   shape: string;
   renderer?: string;
-  type?: string;
+  type: string;
   title?: string;
   unit?: string;
   format?: string;
@@ -585,66 +488,6 @@ model DashboardVisualDataResponse {
   data: DashboardVisualDatum[];
 }
 
-model CategoryValueVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "category_value";
-  data: CategoryValueVisualDatum[];
-}
-
-model CategorySeriesValueVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "category_series_value";
-  data: CategorySeriesValueVisualDatum[];
-}
-
-model CategoryMultiMeasureVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "category_multi_measure";
-  data: CategoryMultiMeasureVisualDatum[];
-}
-
-model CategoryDeltaVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "category_delta";
-  data: CategoryDeltaVisualDatum[];
-}
-
-model BinnedMeasureVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "binned_measure";
-  data: BinnedMeasureVisualDatum[];
-}
-
-model HierarchyVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "hierarchy";
-  data: HierarchyVisualDatum[];
-}
-
-model SingleValueVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "single_value";
-  data: SingleValueVisualDatum[];
-}
-
-model MatrixVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "matrix";
-  data: MatrixVisualDatum[];
-}
-
-model GraphVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "graph";
-  data: GraphVisualDatum[];
-}
-
-model GeoVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "geo";
-  data: GeoVisualDatum[];
-}
-
-model OHLCVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "ohlc";
-  data: OHLCVisualDatum[];
-}
-
-model DistributionVisualDataResponse extends DashboardVisualDataResponse {
-  shape: "distribution";
-  data: DistributionVisualDatum[];
-}
-
 model DashboardTableColumn {
   key: string;
   label: string;
@@ -653,6 +496,7 @@ model DashboardTableColumn {
 }
 
 model DashboardTableQueryResponse {
+  type: "table" | "matrix" | "pivot";
   queryId: string;
   servingSnapshot: string;
   title: string;
@@ -661,6 +505,61 @@ model DashboardTableQueryResponse {
   availableRows: int32;
   page: PageInfo;
 }
+
+@discriminator("type")
+model DashboardVisualQueryResponse {
+  type: string;
+  id?: string;
+  title?: string;
+}
+
+model DashboardChartVisualQueryResponseBase extends DashboardVisualQueryResponse {
+  shape: string;
+  renderer?: string;
+  unit?: string;
+  format?: string;
+  dimensions?: string[];
+  measure?: string;
+  measures?: string[];
+  series?: string[];
+  data: DashboardVisualDatum[];
+}
+
+model DashboardTabularVisualQueryResponseBase extends DashboardVisualQueryResponse {
+  queryId: string;
+  servingSnapshot: string;
+  columns: QueryColumn[];
+  rows: string[][];
+  availableRows: int32;
+  page: PageInfo;
+}
+
+model LineDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "line"; }
+model AreaDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "area"; }
+model BarDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "bar"; }
+model ColumnDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "column"; }
+model PieDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "pie"; }
+model DonutDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "donut"; }
+model ScatterDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "scatter"; }
+model FunnelDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "funnel"; }
+model TreemapDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "treemap"; }
+model GaugeDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "gauge"; }
+model HeatmapDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "heatmap"; }
+model SankeyDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "sankey"; }
+model GraphDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "graph"; }
+model MapDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "map"; }
+model CandlestickDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "candlestick"; }
+model BoxplotDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "boxplot"; }
+model ComboDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "combo"; }
+model WaterfallDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "waterfall"; }
+model HistogramDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "histogram"; }
+model RadarDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "radar"; }
+model TreeDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "tree"; }
+model SunburstDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "sunburst"; }
+model KPIDashboardVisualQueryResponse extends DashboardChartVisualQueryResponseBase { type: "kpi"; }
+model TableDashboardVisualQueryResponse extends DashboardTabularVisualQueryResponseBase { type: "table"; }
+model MatrixDashboardVisualQueryResponse extends DashboardTabularVisualQueryResponseBase { type: "matrix"; }
+model PivotDashboardVisualQueryResponse extends DashboardTabularVisualQueryResponseBase { type: "pivot"; }
 
 model DashboardFilterOptionResponse {
   value: string;
@@ -723,17 +622,9 @@ op getDashboardPage(@path workspace: string, @path dashboard: string, @path page
 @apigen.tool(#{
   name: "describe_dashboard_visual", effect: "read", tags: #["dashboard", "visual"],
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
-  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/description" }, #{ source: "/kind" }, #{ source: "/shape" }, #{ source: "/type" }, #{ source: "/query" }] },
+  output: #{ mode: "project", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/description" }, #{ source: "/shape" }, #{ source: "/type" }, #{ source: "/query" }, #{ source: "/columns" }] },
 })
 op getDashboardVisual(@path workspace: string, @path dashboard: string, @path page: string, @path visual: string): OkJson<DashboardVisualDescribeResponse> | CommonErrors;
-
-@tag("BI")
-@summary("Describe dashboard table")
-@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}")
-@get
-@apigen.authz(#{ mode: "privilege", privilege: "VIEW_ITEM" })
-@extension("x-libredash-object-scope", "dashboard")
-op getDashboardTable(@path workspace: string, @path dashboard: string, @path page: string, @path table: string): OkJson<DashboardTableDescribeResponse> | CommonErrors;
 
 @tag("BI")
 @summary("Describe dashboard filter")
@@ -908,7 +799,7 @@ op explainSemanticPreview(@path workspace: string, @path("model") modelName: str
 @apigen.tool(#{
   name: "query_dashboard_page", effect: "read", tags: #["dashboard", "query"],
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
-  output: #{ mode: "project", select: #[#{ source: "/visuals", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/kind" }, #{ source: "/shape" }, #{ source: "/type" }, #{ source: "/unit" }, #{ source: "/format" }, #{ source: "/dimensions" }, #{ source: "/measure" }, #{ source: "/measures" }, #{ source: "/series" }, #{ source: "/data", countAs: "count" }] }] },
+  output: #{ mode: "project", select: #[#{ source: "/visuals", select: #[#{ source: "/id" }, #{ source: "/title" }, #{ source: "/shape" }, #{ source: "/type" }, #{ source: "/unit" }, #{ source: "/format" }, #{ source: "/dimensions" }, #{ source: "/measure" }, #{ source: "/measures" }, #{ source: "/series" }, #{ source: "/data", countAs: "count" }] }] },
 })
 op queryDashboardPage(@path workspace: string, @path dashboard: string, @path page: string, @body body?: DashboardPageQueryRequest): OkJson<DashboardPageQueryResponse> | CommonErrors;
 
@@ -918,27 +809,13 @@ op queryDashboardPage(@path workspace: string, @path dashboard: string, @path pa
 @post
 @apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
 @extension("x-libredash-object-scope", "dashboard")
-@apigen.cli(#{ command: #["dashboards", "visual-data"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "visual", displayName: "visual" }], output: #{ mode: "collection" }, pagination: #{ itemsField: "data" } })
+@apigen.cli(#{ command: #["dashboards", "visual-data"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "visual", displayName: "visual" }], output: #{ mode: "raw" } })
 @apigen.tool(#{
-  name: "query_dashboard_visual_data", effect: "read", tags: #["dashboard", "visual", "query"],
+  name: "query_dashboard_visual", effect: "read", tags: #["dashboard", "visual", "query"],
   input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }] },
-  output: #{ mode: "project", select: #[#{ source: "/title" }, #{ source: "/type" }, #{ source: "/shape" }, #{ source: "/unit" }, #{ source: "/format" }, #{ source: "/dimensions" }, #{ source: "/measure" }, #{ source: "/measures" }, #{ source: "/series" }, #{ source: "/data", countAs: "count" }] },
+  output: #{ mode: "raw" },
 })
-op queryDashboardVisualData(@path workspace: string, @path dashboard: string, @path page: string, @path visual: string, @body body?: DashboardPageQueryRequest): OkJson<DashboardVisualDataResponse> | CommonErrors;
-
-@tag("BI")
-@summary("Query dashboard table")
-@route("/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}/query")
-@post
-@apigen.authz(#{ mode: "privilege", privilege: "QUERY_DATA" })
-@extension("x-libredash-object-scope", "dashboard")
-@apigen.cli(#{ command: #["dashboards", "table-data"], args: #[#{ source: "path", name: "workspace", displayName: "workspace" }, #{ source: "path", name: "dashboard", displayName: "dashboard" }, #{ source: "path", name: "page", displayName: "page" }, #{ source: "path", name: "table", displayName: "table" }], output: #{ mode: "raw" } })
-@apigen.tool(#{
-  name: "query_dashboard_table", effect: "read", tags: #["dashboard", "query", "table"],
-  input: #{ fields: #[#{ source: "path", name: "workspace", mode: "context", contextKey: "workspace" }, #{ source: "body", name: "limit", default: 25 }] },
-  output: #{ mode: "project", select: #[#{ source: "/title" }, #{ source: "/availableRows" }, #{ source: "/columns" }, #{ source: "/rows", countAs: "count" }], cursor: #{ source: "/page/nextCursor" } },
-})
-op queryDashboardTable(@path workspace: string, @path dashboard: string, @path page: string, @path table: string, @header accept?: string, @body body?: DashboardTableQueryRequest): RowsetResponse<DashboardTableQueryResponse> | CommonErrors;
+op queryDashboardVisualData(@path workspace: string, @path dashboard: string, @path page: string, @path visual: string, @header accept?: string, @body body?: DashboardVisualQueryRequest): RowsetResponse<DashboardVisualQueryResponse> | CommonErrors;
 
 @tag("BI")
 @summary("List dashboard filter values")

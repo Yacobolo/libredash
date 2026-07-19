@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Select multiple `query.measures` to render related values against the same category axis. The combo shape assigns each measure its own series.
 
-{{< chart id="revenue_orders_combo" >}}
+{{< visual id="revenue_orders_combo" >}}
 
 ```yaml visual-example=revenue_orders_combo
 visuals:
@@ -38,7 +38,7 @@ visuals:
 
 Use `options.series_types` to render review score as a line and delivery days as columns while retaining one shared status axis.
 
-{{< chart id="review_delivery_combo" >}}
+{{< visual id="review_delivery_combo" >}}
 
 ```yaml visual-example=review_delivery_combo
 visuals:
@@ -66,7 +66,7 @@ visuals:
 
 Enable `options.dual_axis` when the measures use different scales, then assign line and column renderers explicitly with `series_types`.
 
-{{< chart id="revenue_orders_dual_axis_combo" >}}
+{{< visual id="revenue_orders_dual_axis_combo" >}}
 
 ```yaml visual-example=revenue_orders_dual_axis_combo
 visuals:

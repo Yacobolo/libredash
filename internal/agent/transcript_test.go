@@ -43,7 +43,7 @@ func TestTranscriptFormatsJSONToolAndArtifactResults(t *testing.T) {
 			Role:        MessageRoleTool,
 			ToolCallID:  "call_artifact",
 			ToolName:    "query_visual",
-			ContentText: `{"kind":"chart","id":"agent_chart_123","signal":"visuals.agent_chart_123","summary":"Created chart."}`,
+			ContentText: `{"type":"bar","id":"agent_visual_123","signal":"visuals.agent_visual_123","summary":"Created chart."}`,
 		},
 	})
 

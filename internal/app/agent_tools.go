@@ -87,6 +87,20 @@ func (s *Server) agentVisualToolProvider() agenttools.VisualProvider {
 			}
 			return executePreviewRows(ctx, metrics, modelID, request)
 		},
+		Histogram: func(ctx context.Context, workspaceID, modelID string, request reportdef.RawValueQuery, binCount int) ([]reportdef.HistogramBin, error) {
+			metrics, ok := s.metricsForWorkspace(workspaceID)
+			if !ok || metrics == nil {
+				return nil, fmt.Errorf("unknown workspace %q", workspaceID)
+			}
+			return executeHistogram(ctx, metrics, modelID, request, binCount)
+		},
+		Distribution: func(ctx context.Context, workspaceID, modelID string, request reportdef.RawValueQuery, sort []reportdef.QuerySort, limit int) (reportdef.QueryRows, error) {
+			metrics, ok := s.metricsForWorkspace(workspaceID)
+			if !ok || metrics == nil {
+				return nil, fmt.Errorf("unknown workspace %q", workspaceID)
+			}
+			return executeDistribution(ctx, metrics, modelID, request, sort, limit)
+		},
 	}
 }
 

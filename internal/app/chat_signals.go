@@ -19,8 +19,7 @@ func chatSignalWithConversations(conversations []ui.ChatConversationSummary, act
 	}
 	artifacts = normalizeChatArtifacts(artifacts)
 	return ui.ChatViewState{
-		Visuals: typedChatVisualArtifacts(artifacts.Visuals),
-		Tables:  typedChatTableArtifacts(artifacts.Tables),
+		Visuals: typedChatArtifacts(artifacts),
 		Agent: ui.ChatSignal{
 			Conversations:        conversations,
 			ActiveConversationID: activeID,
@@ -59,8 +58,7 @@ func (s *Server) chatSignalWith(ctx context.Context, scope agent.Scope, activeID
 	}
 	artifacts = normalizeChatArtifacts(artifacts)
 	return ui.ChatViewState{
-		Visuals: typedChatVisualArtifacts(artifacts.Visuals),
-		Tables:  typedChatTableArtifacts(artifacts.Tables),
+		Visuals: typedChatArtifacts(artifacts),
 		Agent: ui.ChatSignal{
 			Conversations:        conversations,
 			ActiveConversationID: activeID,
@@ -83,49 +81,54 @@ func normalizeChatArtifacts(artifacts agent.ChatArtifactSignals) agent.ChatArtif
 	if artifacts.Visuals == nil {
 		artifacts.Visuals = map[string]any{}
 	}
-	if artifacts.Tables == nil {
-		artifacts.Tables = map[string]any{}
-	}
 	return artifacts
 }
 
-func typedChatVisualArtifacts(values map[string]any) map[string]uisignals.DashboardVisual {
+func typedChatArtifacts(artifacts agent.ChatArtifactSignals) map[string]uisignals.DashboardVisual {
 	visuals := map[string]uisignals.DashboardVisual{}
-	for key, value := range values {
+	for key, value := range artifacts.Visuals {
 		raw, err := json.Marshal(value)
 		if err != nil {
 			continue
 		}
-		visual := dashboard.Visual{}
-		if err := json.Unmarshal(raw, &visual); err != nil {
+		var discriminator struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(raw, &discriminator); err != nil {
 			continue
 		}
-		visuals[key] = uisignals.DashboardVisualFromDashboard(visual)
+		if !isChatVisualType(discriminator.Type) {
+			continue
+		}
+		if discriminator.Type == "table" || discriminator.Type == "matrix" || discriminator.Type == "pivot" {
+			var tabular dashboard.TabularVisual
+			if err := json.Unmarshal(raw, &tabular); err == nil {
+				tabular.Table.Kind = map[string]string{"table": "data_table", "matrix": "matrix_table", "pivot": "pivot_table"}[discriminator.Type]
+				visuals[key] = uisignals.DashboardTabularVisualFromDashboard(key, tabular.Table)
+			}
+			continue
+		}
+		var visual dashboard.Visual
+		if err := json.Unmarshal(raw, &visual); err == nil {
+			visuals[key] = uisignals.DashboardVisualFromDashboard(visual)
+		}
 	}
 	return visuals
 }
 
-func typedChatTableArtifacts(values map[string]any) map[string]uisignals.DashboardTable {
-	tables := map[string]uisignals.DashboardTable{}
-	for key, value := range values {
-		raw, err := json.Marshal(value)
-		if err != nil {
-			continue
-		}
-		table := dashboard.Table{}
-		if err := json.Unmarshal(raw, &table); err != nil {
-			continue
-		}
-		tables[key] = uisignals.DashboardTableFromDashboard(table)
+func isChatVisualType(value string) bool {
+	switch value {
+	case "line", "area", "bar", "column", "pie", "donut", "scatter", "funnel", "treemap", "gauge", "heatmap", "sankey", "graph", "map", "candlestick", "boxplot", "combo", "waterfall", "histogram", "radar", "tree", "sunburst", "kpi", "table", "matrix", "pivot":
+		return true
+	default:
+		return false
 	}
-	return tables
 }
 
 func chatSignalPatch(signal ui.ChatViewState) map[string]any {
 	return map[string]any{
 		"agent":   signal.Agent,
 		"visuals": signal.Visuals,
-		"tables":  signal.Tables,
 	}
 }
 

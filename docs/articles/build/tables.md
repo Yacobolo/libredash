@@ -1,6 +1,6 @@
 # Tables, matrices, and pivots
 
-Use tabular surfaces when exact values, comparison across several fields, or record-level inspection matters more than visual pattern recognition. LibreDash supports data tables, matrices, and pivots through one dashboard table contract with different query shapes.
+Use tabular visuals when exact values, comparison across several fields, or record-level inspection matters more than visual pattern recognition. Tables, matrices, and pivots use the same visual contract and namespace as charts and KPIs.
 
 ## Choose a table shape
 
@@ -9,9 +9,9 @@ Use tabular surfaces when exact values, comparison across several fields, or rec
 A data table selects fields from a model-table grain:
 
 ```yaml
-tables:
+visuals:
   orders_table:
-    kind: data_table
+    type: table
     title: Orders
     description: Recent order records.
     cardinality: bounded
@@ -41,9 +41,9 @@ Use `cardinality: bounded` unless the workflow explicitly requires exact global 
 Matrices group semantic measures by row and optional column dimensions:
 
 ```yaml
-tables:
+visuals:
   state_status_matrix:
-    kind: matrix_table
+    type: matrix
     title: Orders and revenue by state and status
     query:
       rows:
@@ -62,9 +62,9 @@ Use a matrix for a stable multidimensional comparison with known cardinality. Hi
 A pivot uses the same row, column, and measure concepts but emphasizes analytical rearrangement:
 
 ```yaml
-tables:
+visuals:
   category_status_pivot:
-    kind: pivot_table
+    type: pivot
     title: Orders by category and status
     query:
       rows:
@@ -95,8 +95,8 @@ Place any table definition with a page component:
 
 ```yaml
 - id: order-details
-  kind: table
-  table: orders_table
+  kind: visual
+  visual: orders_table
   placement: {col: 1, row: 12, col_span: 12, row_span: 8}
 ```
 

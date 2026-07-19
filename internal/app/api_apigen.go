@@ -418,10 +418,6 @@ func (a apiGenAdapter) GetDashboardPage(w http.ResponseWriter, r *http.Request, 
 	a.server.dashboardHTTP().GetDashboardPage(w, r)
 }
 
-func (a apiGenAdapter) GetDashboardTable(w http.ResponseWriter, r *http.Request, _, _, _, _ string) {
-	a.server.dashboardHTTP().GetDashboardTable(w, r)
-}
-
 func (a apiGenAdapter) GetDashboardFilter(w http.ResponseWriter, r *http.Request, _, _, _, _ string) {
 	a.server.dashboardHTTP().GetDashboardFilter(w, r)
 }
@@ -477,14 +473,9 @@ func (a apiGenAdapter) QueryDashboardPage(w http.ResponseWriter, r *http.Request
 	a.server.dashboardHTTP().QueryDashboardPage(w, r)
 }
 
-func (a apiGenAdapter) QueryDashboardVisualData(w http.ResponseWriter, r *http.Request, workspaceID, _, _, _ string) {
+func (a apiGenAdapter) QueryDashboardVisualData(w http.ResponseWriter, r *http.Request, workspaceID, _, _, _ string, _ apigenapi.GenQueryDashboardVisualDataHeaders) {
 	a.setServingSnapshot(r, workspaceID)
 	a.server.dashboardHTTP().QueryDashboardVisualData(w, r)
-}
-
-func (a apiGenAdapter) QueryDashboardTable(w http.ResponseWriter, r *http.Request, workspaceID, _, _, _ string, _ apigenapi.GenQueryDashboardTableHeaders) {
-	a.setServingSnapshot(r, workspaceID)
-	a.server.dashboardHTTP().QueryDashboardTableData(w, r)
 }
 
 func (a apiGenAdapter) setServingSnapshot(r *http.Request, workspaceID string) {

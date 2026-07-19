@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Order two dimensions from parent to child and provide one measure for sector size to show category composition by status.
 
-{{< chart id="category_status_sunburst" >}}
+{{< visual id="category_status_sunburst" >}}
 
 ```yaml visual-example=category_status_sunburst
 visuals:
@@ -34,7 +34,7 @@ visuals:
 
 Replace the parent dimension with state to reuse the hierarchy contract for a geographic breakdown.
 
-{{< chart id="state_status_sunburst" >}}
+{{< visual id="state_status_sunburst" >}}
 
 ```yaml visual-example=state_status_sunburst
 visuals:
@@ -59,7 +59,7 @@ visuals:
 
 Add a third ordered dimension for deeper nesting, set `initial_depth` to control the first visible level, and enable roaming for exploration.
 
-{{< chart id="category_state_status_sunburst" >}}
+{{< visual id="category_state_status_sunburst" >}}
 
 ```yaml visual-example=category_state_status_sunburst
 visuals:

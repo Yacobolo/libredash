@@ -76,7 +76,7 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 		Short: "Query dashboard visual data",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			body, err := filtersBody(opts.filtersJSON)
+			body, err := visualQueryBody(opts.count, opts.filtersJSON)
 			if err != nil {
 				return err
 			}
@@ -85,6 +85,7 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	}
 	addTargetTokenFlags(visualData, opts)
 	visualData.Flags().StringVar(&opts.filtersJSON, "filters-json", "", "dashboard filters JSON")
+	visualData.Flags().IntVar(&opts.count, "count", 0, "row count for table, matrix, or pivot visuals")
 
 	queryPage := &cobra.Command{
 		Use:   "query-page <dashboard> <page>",
@@ -100,22 +101,6 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	}
 	addTargetTokenFlags(queryPage, opts)
 	queryPage.Flags().StringVar(&opts.filtersJSON, "filters-json", "", "dashboard filters JSON")
-
-	tableData := &cobra.Command{
-		Use:   "table-data <dashboard> <page> <table>",
-		Short: "Query dashboard table data",
-		Args:  cobra.ExactArgs(3),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			body, err := tableQueryBody("", opts.count, opts.filtersJSON)
-			if err != nil {
-				return err
-			}
-			return runRawAPI(ctx, opts, "queryDashboardTable", map[string]string{"workspace": opts.workspaceID, "dashboard": args[0], "page": args[1], "table": args[2]}, nil, postBody(body))
-		},
-	}
-	addTargetTokenFlags(tableData, opts)
-	tableData.Flags().IntVar(&opts.count, "count", 0, "row count")
-	tableData.Flags().StringVar(&opts.filtersJSON, "filters-json", "", "dashboard filters JSON")
 
 	filterOptions := &cobra.Command{
 		Use:   "filter-options <dashboard> <page> <filter>",
@@ -133,7 +118,7 @@ func dashboardsCommand(ctx context.Context, opts *rootOptions) *cobra.Command {
 	addPaginationFlags(filterOptions, opts)
 	filterOptions.Flags().StringVar(&opts.filtersJSON, "filters-json", "", "dashboard filters JSON")
 
-	parent.AddCommand(list, describe, page, visual, visualData, queryPage, tableData, filterOptions)
+	parent.AddCommand(list, describe, page, visual, visualData, queryPage, filterOptions)
 	return parent
 }
 
@@ -293,13 +278,10 @@ func filtersBody(raw string) (map[string]any, error) {
 	return map[string]any{"filters": filters}, nil
 }
 
-func tableQueryBody(pageID string, count int, rawFilters string) (map[string]any, error) {
+func visualQueryBody(count int, rawFilters string) (map[string]any, error) {
 	body := map[string]any{}
-	if pageID != "" {
-		body["pageId"] = pageID
-	}
 	if count > 0 {
-		body["count"] = count
+		body["limit"] = count
 	}
 	if rawFilters != "" {
 		filters, err := decodeObjectJSON(rawFilters)

@@ -95,8 +95,26 @@ func postprocessGeneratedTypescript(path string) error {
 }
 
 func postprocessGeneratedModels(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read generated UI signal models: %w", err)
+	}
+	// APIGen v0.5 emits tag.Value for discriminated unions even when the
+	// configured discriminator is named type. Keep the workaround scoped to the
+	// generated DashboardVisual decoder until the upstream emitter is fixed.
+	const visualDecoder = "func (value *DashboardVisual) UnmarshalJSON"
+	if start := bytes.Index(data, []byte(visualDecoder)); start >= 0 {
+		endMarker := []byte("\n}\n\ntype DashboardVisualBase")
+		end := bytes.Index(data[start:], endMarker)
+		if end < 0 {
+			return fmt.Errorf("generated DashboardVisual decoder is unterminated")
+		}
+		end += start + len("\n}\n")
+		decoder := bytes.ReplaceAll(data[start:end], []byte("tag.Value"), []byte("tag.Type"))
+		data = append(append(append([]byte(nil), data[:start]...), decoder...), data[end:]...)
+	}
 	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, path, nil, parser.ParseComments)
+	file, err := parser.ParseFile(fset, path, data, parser.ParseComments)
 	if err != nil {
 		return fmt.Errorf("parse generated UI signal models: %w", err)
 	}

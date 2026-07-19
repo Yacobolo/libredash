@@ -99,10 +99,10 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 		}
 	}
 	commandSignalFilters := map[string][]string{
-		"data-on:ld-interaction-select":  {"runtime", "interactionCommand"},
-		"data-on:ld-table-window-change": {"runtime", "tableCommand"},
-		"data-on:ld-filters-change":      {"runtime", "filters[.]controls"},
-		"data-on:ld-selection-clear":     {"runtime"},
+		"data-on:ld-interaction-select":   {"runtime", "interactionCommand"},
+		"data-on:ld-visual-window-change": {"runtime", "visualWindowCommand"},
+		"data-on:ld-filters-change":       {"runtime", "filters[.]controls"},
+		"data-on:ld-selection-clear":      {"runtime"},
 	}
 	for attr, signalPaths := range commandSignalFilters {
 		segment := renderedAttrSegment(showcase, attr)
@@ -136,8 +136,8 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 		}
 	}
 	assertNoDashboardProductDOM(t, showcase)
-	if !strings.Contains(showcaseSignals, `"tables":{}`) {
-		t.Fatalf("showcase bootstrap should include no tables:\n%s", showcaseSignals)
+	if strings.Contains(showcaseSignals, `"tables":`) {
+		t.Fatalf("showcase bootstrap included legacy tables signal:\n%s", showcaseSignals)
 	}
 	if !strings.Contains(showcaseSignals, `"filterConfig":[{`) || !strings.Contains(showcaseSignals, `"id":"state"`) {
 		t.Fatalf("showcase bootstrap did not include active page filter config:\n%s", showcaseSignals)
@@ -151,9 +151,9 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 
 	tables := renderPageForTest(t, report, model, report.Pages[1])
 	tableSignals := html.UnescapeString(jsonString(BootstrapSignals("client", "stream-instance", dashboard.Catalog{}, report, model, report.Pages, report.Pages[1], dashboard.Filters{})))
-	for _, tableID := range []string{"orders", "matrix", "pivot"} {
-		if !strings.Contains(tableSignals, `"`+tableID+`":{`) || !strings.Contains(tableSignals, `"availableRows"`) {
-			t.Fatalf("tables bootstrap did not include table %q with row metadata:\n%s", tableID, tableSignals)
+	for tableID, visualType := range map[string]string{"orders": "table", "matrix": "matrix", "pivot": "pivot"} {
+		if !strings.Contains(tableSignals, `"`+tableID+`":{`) || !strings.Contains(tableSignals, `"type":"`+visualType+`"`) {
+			t.Fatalf("visual bootstrap did not include tabular visual %q with type %q:\n%s", tableID, visualType, tableSignals)
 		}
 	}
 	if !strings.Contains(tableSignals, `"style":{"density":"compact"`) || !strings.Contains(tableSignals, `"rowHeight":28`) || !strings.Contains(tableSignals, `"width":220`) {
@@ -168,9 +168,6 @@ func TestPageInitialSignalsArePageScoped(t *testing.T) {
 	}
 	if strings.Contains(tableSignals, `"off_page"`) {
 		t.Fatalf("tables bootstrap included off-page table:\n%s", tableSignals)
-	}
-	if !strings.Contains(tableSignals, `"visuals":{}`) {
-		t.Fatalf("tables bootstrap should include no visuals:\n%s", tableSignals)
 	}
 }
 

@@ -1,31 +1,46 @@
-# Chart types
+# Visual types
 
-LibreDash visuals are defined in dashboard YAML. Every chart has a `type`, a query, and optional renderer settings. Choose the chart that best fits the result shape, then use the live variations on each page to see how the same YAML contract changes the rendered component.
+LibreDash visuals are defined in dashboard YAML. Every visual has a required `type`, a query, and type-specific presentation settings. Choose the visual that best fits the analytical task; rendering is inferred from its type.
 
 Every preview is compiled and queried from the YAML printed beside it against a fixed documentation dataset. Invalid or stale examples fail documentation generation.
 
-## Available charts
+## Change over time
 
-- [Line chart](/docs/charts/line)
-- [Area chart](/docs/charts/area)
-- [Bar chart](/docs/charts/bar)
-- [Column chart](/docs/charts/column)
-- [Pie chart](/docs/charts/pie)
-- [Donut chart](/docs/charts/donut)
-- [Scatter chart](/docs/charts/scatter)
-- [Funnel chart](/docs/charts/funnel)
-- [Treemap](/docs/charts/treemap)
-- [Gauge](/docs/charts/gauge)
-- [Heatmap](/docs/charts/heatmap)
-- [Sankey](/docs/charts/sankey)
-- [Graph](/docs/charts/graph)
-- [Map](/docs/charts/map)
-- [Candlestick chart](/docs/charts/candlestick)
-- [Boxplot](/docs/charts/boxplot)
-- [Combo chart](/docs/charts/combo)
-- [Waterfall chart](/docs/charts/waterfall)
-- [Histogram](/docs/charts/histogram)
-- [Radar chart](/docs/charts/radar)
-- [Tree](/docs/charts/tree)
-- [Sunburst](/docs/charts/sunburst)
-- [KPI](/docs/charts/kpi)
+- [Line chart](/docs/visuals/line)
+- [Area chart](/docs/visuals/area)
+- [Column chart](/docs/visuals/column)
+- [Combo chart](/docs/visuals/combo)
+- [Candlestick chart](/docs/visuals/candlestick)
+
+## Compare and rank
+
+- [Bar chart](/docs/visuals/bar)
+- [Scatter chart](/docs/visuals/scatter)
+- [Funnel chart](/docs/visuals/funnel)
+- [Waterfall chart](/docs/visuals/waterfall)
+- [Histogram](/docs/visuals/histogram)
+- [Boxplot](/docs/visuals/boxplot)
+- [Radar chart](/docs/visuals/radar)
+
+## Part-to-whole and hierarchy
+
+- [Pie chart](/docs/visuals/pie)
+- [Donut chart](/docs/visuals/donut)
+- [Treemap](/docs/visuals/treemap)
+- [Tree](/docs/visuals/tree)
+- [Sunburst](/docs/visuals/sunburst)
+
+## Relationships and location
+
+- [Heatmap](/docs/visuals/heatmap)
+- [Sankey](/docs/visuals/sankey)
+- [Graph](/docs/visuals/graph)
+- [Map](/docs/visuals/map)
+
+## Summary and exact values
+
+- [Gauge](/docs/visuals/gauge)
+- [KPI](/docs/visuals/kpi)
+- [Table](/docs/visuals/table)
+- [Matrix](/docs/visuals/matrix)
+- [Pivot](/docs/visuals/pivot)

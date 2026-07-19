@@ -77,7 +77,7 @@ Open `dashboards/workspaces/sales/dashboards/executive-sales.yaml`. Find the `ao
 
 ```yaml
 aov_kpi:
-  kind: kpi
+  type: kpi
   shape: single_value
   query:
     measures:

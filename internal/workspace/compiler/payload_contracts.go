@@ -231,13 +231,11 @@ type filterOptionPayloadV1 struct {
 
 type filterTargetsPayloadV1 struct {
 	Visuals []string `json:"visuals,omitempty"`
-	Tables  []string `json:"tables,omitempty"`
 }
 
 type visualPayloadV1 struct {
 	Title           string               `json:"Title"`
 	Description     string               `json:"Description"`
-	Kind            string               `json:"Kind"`
 	Shape           string               `json:"Shape"`
 	Renderer        string               `json:"Renderer"`
 	Type            string               `json:"Type"`
@@ -287,7 +285,7 @@ type sortPayloadV1 struct {
 type tablePayloadV1 struct {
 	Title       string              `json:"Title"`
 	Description string              `json:"Description"`
-	Kind        string              `json:"Kind"`
+	Type        string              `json:"Type"`
 	Query       tableQueryPayloadV1 `json:"Query"`
 	Rows        []string            `json:"Rows"`
 	ColumnDims  []string            `json:"ColumnDims"`

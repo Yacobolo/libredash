@@ -508,7 +508,7 @@ test('documentation header keeps only search and theme actions', async () => {
     expect(await actions.locator('ld-site-mobile-menu').count()).toBe(0)
     expect(await actions.getByRole('link', { name: 'Docs', exact: true }).count()).toBe(0)
     expect(await actions.getByRole('link', { name: 'Demo', exact: true }).count()).toBe(0)
-    expect(await actions.getByRole('link', { name: 'Charts', exact: true }).count()).toBe(0)
+    expect(await actions.getByRole('link', { name: 'Visuals', exact: true }).count()).toBe(0)
 
     await page.setViewportSize({ width: 390, height: 844 })
     expect(await actions.getByRole('button', { name: 'Search documentation' }).isVisible()).toBe(true)
@@ -521,7 +521,7 @@ test('documentation header keeps only search and theme actions', async () => {
     const siteActions = page.locator('.site-header .site-nav-actions')
     expect(await siteActions.getByRole('link', { name: 'Docs', exact: true }).count()).toBe(1)
     expect(await siteActions.getByRole('link', { name: 'Demo', exact: true }).count()).toBe(0)
-    expect(await siteActions.getByRole('link', { name: 'Charts', exact: true }).count()).toBe(1)
+    expect(await siteActions.getByRole('link', { name: 'Visuals', exact: true }).count()).toBe(1)
   } finally {
     await page.close()
   }
@@ -667,8 +667,8 @@ test('getting started route gives users a code-native first path', async () => {
     const chartGroup = sidebar.locator('details[data-site-docs-group="reference-visuals"]')
     expect(await chartGroup.count()).toBe(1)
     expect(await chartGroup.getAttribute('open')).toBeNull()
-    expect(await chartGroup.locator('a[href="/docs/charts/overview"]').count()).toBe(1)
-    expect(await chartGroup.locator('a[href="/docs/charts/line"]').count()).toBe(1)
+    expect(await chartGroup.locator('a[href="/docs/visuals/overview"]').count()).toBe(1)
+    expect(await chartGroup.locator('a[href="/docs/visuals/line"]').count()).toBe(1)
     const apiGroup = sidebar.locator('details[data-site-docs-group="reference-api"]')
     expect(await apiGroup.count()).toBe(1)
     expect(await apiGroup.locator('a[href="/docs/api"]').getAttribute('href')).toBe('/docs/api')
@@ -729,7 +729,7 @@ test('documentation search finds authored and generated content', async () => {
 test('chart documentation renders every executable variation from its YAML', async () => {
   const page = await browser.newPage()
   try {
-    await page.goto(`${baseURL}/docs/charts/line`)
+    await page.goto(`${baseURL}/docs/visuals/line`)
     const sidebar = page.locator('.site-docs-sidebar')
     const startGroup = sidebar.locator('details[data-site-docs-group="start"]')
     const referenceGroup = sidebar.locator('details[data-site-docs-group="reference"]')
@@ -740,7 +740,7 @@ test('chart documentation renders every executable variation from its YAML', asy
     expect(await chartGroup.getAttribute('open')).not.toBeNull()
     expect(await apiGroup.getAttribute('open')).toBeNull()
     const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' })
-    expect(await breadcrumb.getByRole('link', { name: 'Charts' }).getAttribute('href')).toBe('/docs/charts/overview')
+    expect(await breadcrumb.getByRole('link', { name: 'Visuals' }).getAttribute('href')).toBe('/docs/visuals/overview')
     expect(await breadcrumb.getByRole('link', { name: 'Documentation' }).count()).toBe(0)
     expect(await page.getByRole('heading', { name: 'Line chart' }).isVisible()).toBe(true)
     expect(await page.getByRole('heading', { name: 'API reference' }).isVisible()).toBe(true)
@@ -826,9 +826,9 @@ test('chart documentation renders every executable variation from its YAML', asy
 test('KPI documentation uses compact example frames', async () => {
   const page = await browser.newPage()
   try {
-    await page.goto(`${baseURL}/docs/charts/kpi`)
-    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example[kind="kpi"]').length === 4)
-    const heights = await page.locator('ld-site-visual-example[kind="kpi"]').evaluateAll((examples) =>
+    await page.goto(`${baseURL}/docs/visuals/kpi`)
+    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example[type="kpi"]').length === 4)
+    const heights = await page.locator('ld-site-visual-example[type="kpi"]').evaluateAll((examples) =>
       examples.map((example) => Math.round(example.getBoundingClientRect().height)),
     )
     expect(heights.every((height) => height >= 180 && height <= 240)).toBe(true)
@@ -837,20 +837,21 @@ test('KPI documentation uses compact example frames', async () => {
   }
 })
 
-test('every chart documentation page mounts its generated production payloads', async () => {
+test('every visual documentation page mounts its generated production payloads', async () => {
   const page = await browser.newPage()
-  const chartTypes = ['line', 'area', 'bar', 'column', 'pie', 'donut', 'scatter', 'funnel', 'treemap', 'gauge', 'heatmap', 'sankey', 'graph', 'map', 'candlestick', 'boxplot', 'combo', 'waterfall', 'histogram', 'radar', 'tree', 'sunburst', 'kpi']
+  const visualTypes = ['line', 'area', 'bar', 'column', 'pie', 'donut', 'scatter', 'funnel', 'treemap', 'gauge', 'heatmap', 'sankey', 'graph', 'map', 'candlestick', 'boxplot', 'combo', 'waterfall', 'histogram', 'radar', 'tree', 'sunburst', 'kpi', 'table', 'matrix', 'pivot']
   try {
-    for (const chartType of chartTypes) {
-      await page.goto(`${baseURL}/docs/charts/${chartType}`)
-      const expected = chartType === 'candlestick' ? 2 : chartType === 'kpi' ? 4 : 3
+    for (const visualType of visualTypes) {
+      await page.goto(`${baseURL}/docs/visuals/${visualType}`)
+      const expected = visualType === 'candlestick' ? 2 : visualType === 'kpi' ? 4 : ['table', 'matrix', 'pivot'].includes(visualType) ? 1 : 3
       await page.waitForFunction(
         ({ count }) => {
           const examples = [...document.querySelectorAll('ld-site-visual-example')]
           return examples.length === count && examples.every((example) => {
             const visual = example.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { data?: unknown[] } } | null
             const kpi = example.shadowRoot?.querySelector('ld-kpi-card') as HTMLElement & { visual?: { data?: unknown[] } } | null
-            return Boolean(visual?.chart?.data?.length || kpi?.visual?.data?.length)
+            const table = example.shadowRoot?.querySelector('ld-report-table') as HTMLElement & { table?: { blocks?: Record<string, { rows?: unknown[] }> } } | null
+            return Boolean(visual?.chart?.data?.length || kpi?.visual?.data?.length || Object.values(table?.table?.blocks ?? {}).some((block) => block.rows?.length))
           })
         },
         { count: expected },
@@ -858,7 +859,7 @@ test('every chart documentation page mounts its generated production payloads', 
       expect(await page.locator('ld-site-visual-example').count()).toBe(expected)
     }
 
-    await page.goto(`${baseURL}/docs/charts/gauge`)
+    await page.goto(`${baseURL}/docs/visuals/gauge`)
     await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 3)
     const thresholds = await page.locator('ld-site-visual-example').nth(2).evaluate((element) => {
       const visual = element.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { options?: { thresholds?: unknown[] } } }
@@ -866,7 +867,7 @@ test('every chart documentation page mounts its generated production payloads', 
     })
     expect(thresholds).toBe(3)
 
-    await page.goto(`${baseURL}/docs/charts/map`)
+    await page.goto(`${baseURL}/docs/visuals/map`)
     await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 3)
     expect(await page.locator('ld-site-visual-example').first().evaluate((element) => {
       const visual = element.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { shape?: string; options?: { map?: string }; data?: Array<{ name?: string }> } }
@@ -882,7 +883,7 @@ test('every chart documentation page mounts its generated production payloads', 
       return chart?.shadowRoot?.querySelector('.canvas[aria-label], .canvas [aria-label]')?.getAttribute('aria-label')
     })).not.toContain('NaN')
 
-    await page.goto(`${baseURL}/docs/charts/combo`)
+    await page.goto(`${baseURL}/docs/visuals/combo`)
     await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 3)
     expect(await page.locator('ld-site-visual-example').first().evaluate((element) => {
       const visual = element.shadowRoot?.querySelector('ld-echart') as HTMLElement & { chart?: { shape?: string; data?: Array<{ series?: string }> } }
@@ -896,7 +897,7 @@ test('every chart documentation page mounts its generated production payloads', 
 test('documentation articles apply the shared Markdown treatment', async () => {
   const page = await browser.newPage()
   try {
-    await page.goto(`${baseURL}/docs/charts/line`)
+    await page.goto(`${baseURL}/docs/visuals/line`)
     await page.waitForFunction(() => Boolean(document.querySelector('.site-docs-article ld-code-block .shiki')))
     const codeBlock = await page
       .locator('.site-docs-article ld-code-block .code-block-shell')
@@ -1583,15 +1584,15 @@ test('documentation outlines match the compact DuckDB article navigation treatme
   }
 })
 
-test('chart showcase renders every supported visual type', async () => {
+test('visual showcase renders every supported visual type', async () => {
   const page = await browser.newPage()
   try {
-    await page.goto(`${baseURL}/charts`)
+    await page.goto(`${baseURL}/visuals`)
     await page.waitForFunction(() => {
-      const showcase = document.querySelector('ld-site-chart-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
-      return showcase?.shadowRoot?.querySelectorAll('.chart').length === 23
+      const showcase = document.querySelector('ld-site-visual-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
+      return showcase?.shadowRoot?.querySelectorAll('.chart').length === 23 && showcase?.shadowRoot?.querySelectorAll('ld-report-table').length === 3
     })
-    const visuals = await page.locator('ld-site-chart-showcase').evaluate((element) => {
+    const visuals = await page.locator('ld-site-visual-showcase').evaluate((element) => {
       const root = element.shadowRoot
       return {
         cards: root?.querySelectorAll('.chart').length,
@@ -1600,20 +1601,20 @@ test('chart showcase renders every supported visual type', async () => {
       }
     })
     expect(visuals).toEqual({ cards: 23, charts: 22, kpis: 1 })
-    expect(await page.getByRole('heading', { name: 'Category and status hierarchy' }).isVisible()).toBe(true)
+    await page.getByRole('heading', { name: 'Category and status hierarchy' }).waitFor({ state: 'visible' })
     await page.waitForFunction(() => {
-      const showcase = document.querySelector('ld-site-chart-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
-      return showcase?.shadowRoot?.querySelectorAll('ld-report-table').length === 9
+      const showcase = document.querySelector('ld-site-visual-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
+      return showcase?.shadowRoot?.querySelectorAll('ld-report-table').length === 3
     })
-    await page.waitForFunction(() => Array.from(document.querySelector('ld-site-chart-showcase')?.shadowRoot?.querySelectorAll('ld-report-table') ?? []).every((table) => Boolean(table.shadowRoot?.querySelector('h2'))))
-    const tables = await page.locator('ld-site-chart-showcase').evaluate((element) => ({
+    await page.waitForFunction(() => Array.from(document.querySelector('ld-site-visual-showcase')?.shadowRoot?.querySelectorAll('ld-report-table') ?? []).every((table) => Boolean(table.shadowRoot?.querySelector('h2'))))
+    const tables = await page.locator('ld-site-visual-showcase').evaluate((element) => ({
       cards: element.shadowRoot?.querySelectorAll('.table-card').length,
       tables: element.shadowRoot?.querySelectorAll('ld-report-table').length,
       titles: Array.from(element.shadowRoot?.querySelectorAll('ld-report-table') ?? []).map((table: any) => table.table?.title),
     }))
-    expect(tables.cards).toBe(9)
-    expect(tables.tables).toBe(9)
-    expect(tables.titles).toContain('Orders conditional formatting')
+    expect(tables.cards).toBe(3)
+    expect(tables.tables).toBe(3)
+    expect(tables.titles).toContain('Orders')
   } finally {
     await page.close()
   }

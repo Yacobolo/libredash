@@ -86,7 +86,7 @@ func ValidateDashboard(d *report.Dashboard, models map[string]*semanticmodel.Mod
 			}
 		}
 		if !table.Interaction.RowSelection.IsZero() {
-			if _, err := reportmodel.ResolveSelectionInteraction(d, model, "table", name); err != nil {
+			if _, err := reportmodel.ResolveSelectionInteraction(d, model, "visual", name); err != nil {
 				return err
 			}
 		}

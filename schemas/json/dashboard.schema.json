@@ -7,6 +7,80 @@
       "additionalProperties": true,
       "type": "object"
     },
+    "#ChartVisual": {
+      "$ref": "#/$defs/%23VisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "encode": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "options": {
+          "$ref": "#/$defs/%23AnyObject"
+        },
+        "query": {
+          "$ref": "#/$defs/%23VisualQuery"
+        },
+        "renderer": {
+          "enum": [
+            "echarts",
+            "html"
+          ]
+        },
+        "renderer_options": {
+          "$ref": "#/$defs/%23AnyObject"
+        },
+        "shape": {
+          "enum": [
+            "category_value",
+            "category_series_value",
+            "category_multi_measure",
+            "category_delta",
+            "single_value",
+            "matrix",
+            "graph",
+            "geo",
+            "ohlc",
+            "distribution",
+            "binned_measure",
+            "hierarchy"
+          ]
+        },
+        "type": {
+          "enum": [
+            "line",
+            "area",
+            "bar",
+            "column",
+            "pie",
+            "donut",
+            "scatter",
+            "funnel",
+            "treemap",
+            "gauge",
+            "heatmap",
+            "sankey",
+            "graph",
+            "map",
+            "candlestick",
+            "boxplot",
+            "combo",
+            "waterfall",
+            "histogram",
+            "radar",
+            "tree",
+            "sunburst"
+          ]
+        }
+      },
+      "required": [
+        "query",
+        "type"
+      ],
+      "type": "object"
+    },
     "#DashboardSpec": {
       "additionalProperties": false,
       "properties": {
@@ -29,15 +103,6 @@
         "semanticModel": {
           "$ref": "#/$defs/%23Identifier"
         },
-        "tables": {
-          "additionalProperties": false,
-          "patternProperties": {
-            "^[A-Za-z_][A-Za-z0-9_]*$": {
-              "$ref": "#/$defs/%23Table"
-            }
-          },
-          "type": "object"
-        },
         "visuals": {
           "additionalProperties": false,
           "minProperties": 1,
@@ -53,6 +118,23 @@
         "pages",
         "semanticModel",
         "visuals"
+      ],
+      "type": "object"
+    },
+    "#DataTableVisual": {
+      "$ref": "#/$defs/%23TabularVisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "$ref": "#/$defs/%23TableQuery"
+        },
+        "type": {
+          "const": "table"
+        }
+      },
+      "required": [
+        "query",
+        "type"
       ],
       "type": "object"
     },
@@ -219,12 +301,6 @@
         "targets": {
           "additionalProperties": false,
           "properties": {
-            "tables": {
-              "items": {
-                "$ref": "#/$defs/%23Identifier"
-              },
-              "type": "array"
-            },
             "visuals": {
               "items": {
                 "$ref": "#/$defs/%23Identifier"
@@ -264,6 +340,23 @@
         "field",
         "label",
         "type"
+      ],
+      "type": "object"
+    },
+    "#FilterComponent": {
+      "$ref": "#/$defs/%23PageComponentCommon",
+      "additionalProperties": false,
+      "properties": {
+        "filter": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "kind": {
+          "const": "filter"
+        }
+      },
+      "required": [
+        "filter",
+        "kind"
       ],
       "type": "object"
     },
@@ -319,6 +412,19 @@
       ],
       "type": "object"
     },
+    "#HeaderComponent": {
+      "$ref": "#/$defs/%23PageComponentCommon",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "header"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
     "#Identifier": {
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
       "type": "string"
@@ -333,6 +439,46 @@
           "$ref": "#/$defs/%23SelectionInteraction"
         }
       },
+      "type": "object"
+    },
+    "#KPIVisual": {
+      "$ref": "#/$defs/%23VisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "options": {
+          "$ref": "#/$defs/%23AnyObject"
+        },
+        "query": {
+          "$ref": "#/$defs/%23VisualQuery"
+        },
+        "shape": {
+          "const": "single_value"
+        },
+        "type": {
+          "const": "kpi"
+        }
+      },
+      "required": [
+        "query",
+        "type"
+      ],
+      "type": "object"
+    },
+    "#MatrixVisual": {
+      "$ref": "#/$defs/%23TabularVisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "$ref": "#/$defs/%23TableQuery"
+        },
+        "type": {
+          "const": "matrix"
+        }
+      },
+      "required": [
+        "query",
+        "type"
+      ],
       "type": "object"
     },
     "#MeasureRefs": {
@@ -419,6 +565,12 @@
           },
           "type": "object"
         },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/%23PageComponent"
+          },
+          "type": "array"
+        },
         "description": {
           "type": "string"
         },
@@ -440,27 +592,34 @@
           },
           "type": "object"
         },
-        "name": {
+        "id": {
           "$ref": "#/$defs/%23ObjectID"
         },
         "title": {
           "type": "string"
-        },
-        "visuals": {
-          "items": {
-            "$ref": "#/$defs/%23PageVisual"
-          },
-          "type": "array"
         }
       },
       "required": [
-        "name",
-        "title",
-        "visuals"
+        "components",
+        "id",
+        "title"
       ],
       "type": "object"
     },
-    "#PageVisual": {
+    "#PageComponent": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/%23VisualComponent"
+        },
+        {
+          "$ref": "#/$defs/%23FilterComponent"
+        },
+        {
+          "$ref": "#/$defs/%23HeaderComponent"
+        }
+      ]
+    },
+    "#PageComponentCommon": {
       "additionalProperties": false,
       "properties": {
         "badges": {
@@ -475,41 +634,8 @@
         "eyebrow": {
           "type": "string"
         },
-        "filter": {
-          "$ref": "#/$defs/%23Identifier"
-        },
         "id": {
           "$ref": "#/$defs/%23ObjectID"
-        },
-        "kind": {
-          "enum": [
-            "header",
-            "filter_card",
-            "kpi_card",
-            "line_chart",
-            "area_chart",
-            "bar_chart",
-            "column_chart",
-            "pie_chart",
-            "donut_chart",
-            "scatter_chart",
-            "funnel_chart",
-            "treemap_chart",
-            "gauge_chart",
-            "heatmap_chart",
-            "sankey_chart",
-            "graph_chart",
-            "map_chart",
-            "candlestick_chart",
-            "boxplot_chart",
-            "combo_chart",
-            "waterfall_chart",
-            "histogram_chart",
-            "radar_chart",
-            "tree_chart",
-            "sunburst_chart",
-            "table"
-          ]
         },
         "placement": {
           "additionalProperties": false,
@@ -538,20 +664,30 @@
         "subtitle": {
           "type": "string"
         },
-        "table": {
-          "$ref": "#/$defs/%23Identifier"
-        },
         "title": {
           "type": "string"
-        },
-        "visual": {
-          "$ref": "#/$defs/%23Identifier"
         }
       },
       "required": [
         "id",
-        "kind",
         "placement"
+      ],
+      "type": "object"
+    },
+    "#PivotVisual": {
+      "$ref": "#/$defs/%23TabularVisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "$ref": "#/$defs/%23TableQuery"
+        },
+        "type": {
+          "const": "pivot"
+        }
+      },
+      "required": [
+        "query",
+        "type"
       ],
       "type": "object"
     },
@@ -638,129 +774,6 @@
           "type": "string"
         }
       },
-      "type": "object"
-    },
-    "#Table": {
-      "additionalProperties": false,
-      "properties": {
-        "cardinality": {
-          "enum": [
-            "bounded",
-            "exact"
-          ]
-        },
-        "columns": {
-          "items": {
-            "$ref": "#/$defs/%23TableColumn"
-          },
-          "type": "array"
-        },
-        "default_sort": {
-          "additionalProperties": false,
-          "properties": {
-            "direction": {
-              "anyOf": [
-                {
-                  "const": "asc"
-                },
-                {
-                  "const": "desc"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "key": {
-              "type": "string"
-            }
-          },
-          "type": "object"
-        },
-        "description": {
-          "type": "string"
-        },
-        "interaction": {
-          "anyOf": [
-            {
-              "type": "null"
-            },
-            {
-              "$ref": "#/$defs/%23Interaction"
-            }
-          ]
-        },
-        "kind": {
-          "enum": [
-            "data_table",
-            "matrix_table",
-            "pivot_table"
-          ]
-        },
-        "measure_formatting": {
-          "additionalProperties": {
-            "items": {
-              "$ref": "#/$defs/%23TableFormattingRule"
-            },
-            "type": "array"
-          },
-          "type": "object"
-        },
-        "query": {
-          "$ref": "#/$defs/%23TableQuery"
-        },
-        "style": {
-          "additionalProperties": false,
-          "properties": {
-            "density": {
-              "anyOf": [
-                {
-                  "const": "compact"
-                },
-                {
-                  "const": "comfortable"
-                },
-                {
-                  "const": "spacious"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "grid": {
-              "anyOf": [
-                {
-                  "const": "none"
-                },
-                {
-                  "const": "rows"
-                },
-                {
-                  "const": "columns"
-                },
-                {
-                  "const": "full"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "zebra": {
-              "type": "boolean"
-            }
-          },
-          "type": "object"
-        },
-        "title": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "query",
-        "title"
-      ],
       "type": "object"
     },
     "#TableColumn": {
@@ -889,17 +902,130 @@
       },
       "type": "object"
     },
+    "#TabularVisualCommon": {
+      "$ref": "#/$defs/%23VisualCommon",
+      "additionalProperties": false,
+      "properties": {
+        "cardinality": {
+          "enum": [
+            "bounded",
+            "exact"
+          ]
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/%23TableColumn"
+          },
+          "type": "array"
+        },
+        "default_sort": {
+          "additionalProperties": false,
+          "properties": {
+            "direction": {
+              "anyOf": [
+                {
+                  "const": "asc"
+                },
+                {
+                  "const": "desc"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "key": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "measure_formatting": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/%23TableFormattingRule"
+            },
+            "type": "array"
+          },
+          "type": "object"
+        },
+        "style": {
+          "additionalProperties": false,
+          "properties": {
+            "density": {
+              "anyOf": [
+                {
+                  "const": "compact"
+                },
+                {
+                  "const": "comfortable"
+                },
+                {
+                  "const": "spacious"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "grid": {
+              "anyOf": [
+                {
+                  "const": "none"
+                },
+                {
+                  "const": "rows"
+                },
+                {
+                  "const": "columns"
+                },
+                {
+                  "const": "full"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "zebra": {
+              "type": "boolean"
+            }
+          },
+          "type": "object"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "type": "object"
+    },
     "#Visual": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/%23ChartVisual"
+        },
+        {
+          "$ref": "#/$defs/%23KPIVisual"
+        },
+        {
+          "$ref": "#/$defs/%23DataTableVisual"
+        },
+        {
+          "$ref": "#/$defs/%23MatrixVisual"
+        },
+        {
+          "$ref": "#/$defs/%23PivotVisual"
+        }
+      ]
+    },
+    "#VisualCommon": {
       "additionalProperties": false,
       "properties": {
         "description": {
           "type": "string"
-        },
-        "encode": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
         },
         "interaction": {
           "anyOf": [
@@ -911,76 +1037,26 @@
             }
           ]
         },
-        "kind": {
-          "enum": [
-            "chart",
-            "kpi"
-          ]
-        },
-        "options": {
-          "$ref": "#/$defs/%23AnyObject"
-        },
-        "query": {
-          "$ref": "#/$defs/%23VisualQuery"
-        },
-        "renderer": {
-          "enum": [
-            "echarts",
-            "html"
-          ]
-        },
-        "renderer_options": {
-          "$ref": "#/$defs/%23AnyObject"
-        },
-        "shape": {
-          "enum": [
-            "category_value",
-            "category_series_value",
-            "category_multi_measure",
-            "category_delta",
-            "single_value",
-            "matrix",
-            "graph",
-            "geo",
-            "ohlc",
-            "distribution",
-            "binned_measure",
-            "hierarchy"
-          ]
-        },
         "title": {
           "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "#VisualComponent": {
+      "$ref": "#/$defs/%23PageComponentCommon",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "visual"
         },
-        "type": {
-          "enum": [
-            "line",
-            "area",
-            "bar",
-            "column",
-            "pie",
-            "donut",
-            "scatter",
-            "funnel",
-            "treemap",
-            "gauge",
-            "heatmap",
-            "sankey",
-            "graph",
-            "map",
-            "candlestick",
-            "boxplot",
-            "combo",
-            "waterfall",
-            "histogram",
-            "radar",
-            "tree",
-            "sunburst",
-            "kpi"
-          ]
+        "visual": {
+          "$ref": "#/$defs/%23Identifier"
         }
       },
       "required": [
-        "query"
+        "kind",
+        "visual"
       ],
       "type": "object"
     },

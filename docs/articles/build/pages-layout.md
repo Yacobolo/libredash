@@ -1,6 +1,6 @@
 # Pages and layout
 
-Pages arrange dashboard components on a deterministic grid. Query definitions remain at dashboard scope; the page decides which reusable filters, visuals, and tables appear together and where they are placed.
+Pages arrange dashboard components on a deterministic grid. Query definitions remain at dashboard scope; the page decides which reusable filters and visuals appear together and where they are placed.
 
 ## Build the page structure
 
@@ -8,7 +8,7 @@ Pages arrange dashboard components on a deterministic grid. Query definitions re
 
 ```yaml
 pages:
-  - name: overview
+  - id: overview
     title: Overview
     description: Revenue and order performance at a glance.
     canvas:
@@ -19,7 +19,7 @@ pages:
       row_height: 48
       gap: 16
       padding: 16
-    visuals: []
+    components: []
 ```
 
 The canvas documents the design reference size. The grid creates predictable coordinates and spans. Use a consistent column count, gap, and row height across related pages so users do not experience a different visual rhythm on each route.
@@ -29,22 +29,22 @@ The canvas documents the design reference size. The grid creates predictable coo
 Each page component has a stable ID, a component kind, exactly the relevant reference, and placement:
 
 ```yaml
-visuals:
+components:
   - id: revenue
-    kind: kpi_card
+    kind: visual
     visual: revenue_kpi
     placement: {col: 1, row: 1, col_span: 3, row_span: 3}
   - id: revenue-trend
-    kind: area_chart
+    kind: visual
     visual: revenue_by_month
     placement: {col: 4, row: 1, col_span: 9, row_span: 8}
   - id: order-details
-    kind: table
-    table: orders_table
+    kind: visual
+    visual: orders_table
     placement: {col: 1, row: 10, col_span: 12, row_span: 8}
 ```
 
-Use `visual` for chart and KPI definitions, `table` for tabular definitions, and `filter` for filter cards. The page component `kind` must be compatible with the referenced definition.
+Use `kind: visual` for charts, KPIs, tables, matrices, and pivots; rendering is inferred from the referenced visual's `type`. Use `kind: filter` for filter controls and `kind: header` for headings.
 
 Coordinates are one-based. Keep `col + col_span - 1` within the configured column count. Avoid accidental overlaps unless a future component contract explicitly supports layering.
 
@@ -79,7 +79,7 @@ Do not solve overcrowding by shrinking every component. Split a page when users 
 
 Page component IDs participate in interaction targeting and client state. Renaming `revenue-trend` can break a filter or selection target even when the referenced visual remains unchanged. Treat IDs as local API names: change them intentionally and search the dashboard for references.
 
-Visual and table definition IDs should also remain stable. Moving a component only requires a placement edit; it should not require copying or renaming its query.
+Visual definition IDs should also remain stable. Moving a component only requires a placement edit; it should not require copying or renaming its query.
 
 ### Test layouts
 

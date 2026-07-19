@@ -67,7 +67,7 @@ func TestServiceAppliesWorkspaceAgentPolicyToTools(t *testing.T) {
 	service.SetToolProviders(func(Scope) []agentcore.ToolDefinition {
 		return []agentcore.ToolDefinition{
 			{Name: "query_visual"},
-			{Name: "query_table"},
+			{Name: "query_denied"},
 			{Name: "search_workspace"},
 		}
 	})
@@ -75,8 +75,8 @@ func TestServiceAppliesWorkspaceAgentPolicyToTools(t *testing.T) {
 		return workspace.AgentPolicy{
 			Enabled: true,
 			Tools: workspace.AgentPolicyTools{
-				Allow: []string{"query_table", "query_visual"},
-				Deny:  []string{"query_table"},
+				Allow: []string{"query_denied", "query_visual"},
+				Deny:  []string{"query_denied"},
 			},
 		}, true
 	})
@@ -430,11 +430,12 @@ func TestServicePromptPersistsDisplayContentButSendsCompactToolResult(t *testing
 			InputSchema: json.RawMessage(`{"type":"object"}`),
 			Handler: agentcore.ToolHandlerFunc(func(context.Context, agentcore.ToolCall) (agentcore.ToolResult, error) {
 				return agentcore.ToolResult{
-					Content: map[string]any{"ok": true, "kind": "table", "id": "agent_table_1", "summary": "Created table.", "signal": "tables.agent_table_1"},
+					Content: map[string]any{"ok": true, "type": "table", "id": "agent_visual_1", "summary": "Created table.", "signal": "visuals.agent_visual_1"},
 					DisplayContent: map[string]any{
 						"kind":    "table",
-						"id":      "agent_table_1",
-						"patch":   map[string]any{"tables": map[string]any{"agent_table_1": map[string]any{"blocks": map[string]any{"a": map[string]any{"rows": []any{map[string]any{"status": "delivered"}}}}}}},
+						"id":      "agent_visual_1",
+						"type":    "table",
+						"patch":   map[string]any{"visuals": map[string]any{"agent_visual_1": map[string]any{"type": "table", "blocks": map[string]any{"a": map[string]any{"rows": []any{map[string]any{"status": "delivered"}}}}}}},
 						"summary": "Created table.",
 					},
 				}, nil
@@ -453,7 +454,7 @@ func TestServicePromptPersistsDisplayContentButSendsCompactToolResult(t *testing
 		t.Fatal("missing second request messages")
 	}
 	toolMessage := requests[1].Messages[len(requests[1].Messages)-1]
-	if toolMessage.Role != agentcore.RoleTool || strings.Contains(toolMessage.Content, "delivered") || !strings.Contains(toolMessage.Content, "tables.agent_table_1") {
+	if toolMessage.Role != agentcore.RoleTool || strings.Contains(toolMessage.Content, "delivered") || !strings.Contains(toolMessage.Content, "visuals.agent_visual_1") {
 		t.Fatalf("model-visible tool message = %#v", toolMessage)
 	}
 	messages, err := store.ListMessages(ctx, "test", principal.ID, conversation.ID)
@@ -743,8 +744,8 @@ func TestServiceConversationTranscriptExtractsVisualArtifact(t *testing.T) {
 		PrincipalID:    principal.ID,
 		ConversationID: conversation.ID,
 		Role:           MessageRoleTool,
-		ContentText:    `{"ok":true,"kind":"chart","id":"agent_chart_123","summary":"Created chart.","signal":"visuals.agent_chart_123"}`,
-		ContentJSON:    `{"display_content":{"kind":"chart","id":"agent_chart_123","patch":{"visuals":{"agent_chart_123":{"title":"Orders","data":[{"label":"delivered","value":42}]}}},"summary":"Created chart."}}`,
+		ContentText:    `{"ok":true,"type":"bar","id":"agent_visual_123","summary":"Created chart.","signal":"visuals.agent_visual_123"}`,
+		ContentJSON:    `{"display_content":{"type":"bar","id":"agent_visual_123","patch":{"visuals":{"agent_visual_123":{"type":"bar","title":"Orders","data":[{"label":"delivered","value":42}]}}},"summary":"Created chart."}}`,
 		ToolCallID:     "call_1",
 		ToolName:       "query_visual",
 	}); err != nil {
@@ -758,28 +759,25 @@ func TestServiceConversationTranscriptExtractsVisualArtifact(t *testing.T) {
 	if len(transcript) != 1 || transcript[0].Artifact == nil {
 		t.Fatalf("transcript artifact missing: %#v", transcript)
 	}
-	if transcript[0].Artifact.Kind != "chart" || transcript[0].Artifact.ID != "agent_chart_123" {
+	if transcript[0].Artifact.Type != "bar" || transcript[0].Artifact.ID != "agent_visual_123" {
 		t.Fatalf("artifact = %#v", transcript[0].Artifact)
 	}
 	if strings.Contains(transcript[0].ResultJSON, "delivered") {
 		t.Fatalf("compact result preview leaked chart data: %s", transcript[0].ResultJSON)
 	}
-	if _, ok := state.Artifacts.Visuals["agent_chart_123"]; !ok {
+	if _, ok := state.Artifacts.Visuals["agent_visual_123"]; !ok {
 		t.Fatalf("artifact signal missing visual: %#v", state.Artifacts)
-	}
-	if len(state.Artifacts.Tables) != 0 {
-		t.Fatalf("unexpected table artifacts: %#v", state.Artifacts.Tables)
 	}
 }
 
-func TestServiceConversationTranscriptSupportsLegacyVerboseVisualArtifact(t *testing.T) {
+func TestServiceConversationTranscriptRejectsVerboseArtifactPayload(t *testing.T) {
 	ctx := context.Background()
 	store := openAgentAppStore(t, ctx)
 	defer store.Close()
 	principal := createAgentAppPrincipal(t, ctx, store, "viewer@example.com")
 	service := NewService(fakeAgentMetrics{}, store, Config{APIKey: "key", Model: "fake-model"})
 	scope := Scope{WorkspaceID: "test", PrincipalID: principal.ID}
-	conversation, err := service.CreateConversation(ctx, scope, "Legacy artifact")
+	conversation, err := service.CreateConversation(ctx, scope, "Invalid artifact")
 	if err != nil {
 		t.Fatalf("create conversation: %v", err)
 	}
@@ -788,7 +786,7 @@ func TestServiceConversationTranscriptSupportsLegacyVerboseVisualArtifact(t *tes
 		PrincipalID:    principal.ID,
 		ConversationID: conversation.ID,
 		Role:           MessageRoleTool,
-		ContentText:    `{"kind":"table","id":"agent_table_123","patch":{"tables":{"agent_table_123":{"title":"Orders","blocks":{"a":{"rows":[{"status":"delivered"}]}}}}},"summary":"Created table."}`,
+		ContentText:    `{"type":"table","id":"agent_visual_123","patch":{"visuals":{"agent_visual_123":{"type":"table","title":"Orders","blocks":{"a":{"rows":[{"status":"delivered"}]}}}}},"summary":"Created table."}`,
 		ToolCallID:     "call_1",
 		ToolName:       "query_visual",
 	}); err != nil {
@@ -798,14 +796,14 @@ func TestServiceConversationTranscriptSupportsLegacyVerboseVisualArtifact(t *tes
 	if err != nil {
 		t.Fatalf("conversation transcript: %v", err)
 	}
-	if len(state.Transcript) != 1 || state.Transcript[0].Artifact == nil || state.Transcript[0].Artifact.ID != "agent_table_123" {
-		t.Fatalf("legacy artifact missing: %#v", state.Transcript)
+	if len(state.Transcript) != 1 || state.Transcript[0].Artifact != nil {
+		t.Fatalf("verbose artifact payload should be rejected: %#v", state.Transcript)
 	}
-	if strings.Contains(state.Transcript[0].ResultJSON, "delivered") || strings.Contains(state.Transcript[0].ResultJSON, `"patch"`) || !strings.Contains(state.Transcript[0].ResultJSON, "tables.agent_table_123") {
-		t.Fatalf("legacy result preview should be compact: %s", state.Transcript[0].ResultJSON)
+	if !strings.Contains(state.Transcript[0].ResultJSON, "delivered") || !strings.Contains(state.Transcript[0].ResultJSON, `"patch"`) {
+		t.Fatalf("invalid result should remain inspectable: %s", state.Transcript[0].ResultJSON)
 	}
-	if _, ok := state.Artifacts.Tables["agent_table_123"]; !ok {
-		t.Fatalf("legacy table signal missing: %#v", state.Artifacts)
+	if len(state.Artifacts.Visuals) != 0 {
+		t.Fatalf("invalid artifact published visual signals: %#v", state.Artifacts)
 	}
 }
 

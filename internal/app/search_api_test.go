@@ -48,7 +48,7 @@ func TestWorkspaceSearchReturnsProgressiveDiscoveryResults(t *testing.T) {
 	for _, want := range []string{
 		"dashboard:executive-sales",
 		"visual:visual:executive-sales.overview.orders",
-		"table:table:executive-sales.overview.orders",
+		"visual:visual:executive-sales.overview.order_rows",
 		"semantic_table:test.orders",
 		"field:test.orders.order_id",
 		"measure:test.order_count",
@@ -100,7 +100,7 @@ func TestWorkspaceSearchDoesNotLeakDefaultWorkspaceRuntimeDocuments(t *testing.T
 		"operations": workspaceSearchMetrics{workspaceID: "operations", dashboardID: "fulfillment-operations", title: "Fulfillment Operations"},
 	}), Options{Store: testStore(t), DefaultWorkspaceID: "sales"})
 
-	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/operations/search?types=dashboard,visual,table&limit=20", nil)
+	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/operations/search?types=dashboard,visual&limit=20", nil)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -120,7 +120,7 @@ func TestWorkspaceSearchDoesNotLeakDefaultWorkspaceRuntimeDocuments(t *testing.T
 			t.Fatalf("operations search leaked sales runtime document: %#v", item)
 		}
 	}
-	for _, typ := range []string{"dashboard", "visual", "table"} {
+	for _, typ := range []string{"dashboard", "visual"} {
 		if !seenTypes[typ] {
 			t.Fatalf("missing %s search result in %#v", typ, response.Items)
 		}
@@ -133,7 +133,7 @@ func TestWorkspaceSearchDefaultWorkspaceStillReturnsRichRuntimeResults(t *testin
 		"operations": workspaceSearchMetrics{workspaceID: "operations", dashboardID: "fulfillment-operations", title: "Fulfillment Operations"},
 	}), Options{Store: testStore(t), DefaultWorkspaceID: "sales"})
 
-	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/sales/search?types=dashboard,visual,table&limit=20", nil)
+	req := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/sales/search?types=dashboard,visual&limit=20", nil)
 	req.Header.Set("Accept", "application/json")
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
@@ -150,7 +150,7 @@ func TestWorkspaceSearchDefaultWorkspaceStillReturnsRichRuntimeResults(t *testin
 	for _, item := range response.Items {
 		seen[item["type"].(string)+":"+item["dashboardId"].(string)] = true
 	}
-	for _, want := range []string{"dashboard:executive-sales", "visual:executive-sales", "table:executive-sales"} {
+	for _, want := range []string{"dashboard:executive-sales", "visual:executive-sales"} {
 		if !seen[want] {
 			t.Fatalf("missing %s in %#v", want, response.Items)
 		}
@@ -216,7 +216,7 @@ func TestWorkspaceSearchUsesAssetGraphFallbackWithoutRuntimeDocs(t *testing.T) {
 func TestWorkspaceSearchTypeFilteringPaginationAndErrors(t *testing.T) {
 	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
 
-	firstReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=visual,table&limit=1", nil)
+	firstReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=visual&limit=1", nil)
 	firstReq.Header.Set("Accept", "application/json")
 	firstRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(firstRec, firstReq)
@@ -235,11 +235,11 @@ func TestWorkspaceSearchTypeFilteringPaginationAndErrors(t *testing.T) {
 	if len(first.Items) != 1 || first.Page.NextCursor == "" {
 		t.Fatalf("first page = %#v", first)
 	}
-	if typ := first.Items[0]["type"]; typ != "visual" && typ != "table" {
+	if typ := first.Items[0]["type"]; typ != "visual" {
 		t.Fatalf("unexpected filtered type %#v in %#v", typ, first.Items[0])
 	}
 
-	nextReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=visual,table&limit=1&pageToken="+first.Page.NextCursor, nil)
+	nextReq := newPublicAPIRequest(http.MethodGet, "/api/v1/workspaces/test/search?types=visual&limit=1&pageToken="+first.Page.NextCursor, nil)
 	nextReq.Header.Set("Accept", "application/json")
 	nextRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(nextRec, nextReq)

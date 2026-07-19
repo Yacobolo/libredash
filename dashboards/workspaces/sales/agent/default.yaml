@@ -17,8 +17,7 @@ spec:
       - describe_dashboard_page
       - list_dashboard_filter_values
       - query_dashboard_page
-      - query_dashboard_visual_data
-      - query_dashboard_table
+      - query_dashboard_visual
       - list_semantic_models
       - describe_model
       - list_semantic_datasets

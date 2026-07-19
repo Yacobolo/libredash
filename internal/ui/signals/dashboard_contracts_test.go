@@ -49,10 +49,21 @@ func TestDashboardContractConversionsPreserveJSON(t *testing.T) {
 		},
 	}}
 
-	assertSameJSON(t, visual, DashboardVisualFromDashboard(visual))
-	assertSameJSON(t, table, DashboardTableFromDashboard(table))
+	chartSignal := DashboardVisualFromDashboard(visual)
+	chartVariant, ok := chartSignal.Value.(BarDashboardVisual)
+	if !ok || chartVariant.Type != "bar" || chartVariant.Data == nil || len(*chartVariant.Data) != 1 || chartVariant.Shape == nil || *chartVariant.Shape != "bar" {
+		t.Fatalf("chart signal = %#v", chartSignal)
+	}
+	tableSignal := DashboardTabularVisualFromDashboard("orders_table", table)
+	tableVariant, ok := tableSignal.Value.(TableDashboardVisual)
+	if !ok || tableVariant.ID != "orders_table" || tableVariant.Type != "table" || tableVariant.Blocks == nil || tableVariant.Columns == nil {
+		t.Fatalf("table visual signal = %#v", tableSignal)
+	}
 	assertSameJSON(t, filters, DashboardFiltersFromDashboard(filters))
-	assertSameJSON(t, filterConfig, ReportFilterConfigsFromReport(filterConfig))
+	convertedFilters := ReportFilterConfigsFromReport(filterConfig)
+	if convertedFilters[0].Targets == nil || convertedFilters[0].Targets.Visuals == nil || !reflect.DeepEqual(*convertedFilters[0].Targets.Visuals, []string{"orders", "orders_table"}) {
+		t.Fatalf("filter targets = %#v", convertedFilters[0].Targets)
+	}
 }
 
 func assertSameJSON(t *testing.T, left, right any) {

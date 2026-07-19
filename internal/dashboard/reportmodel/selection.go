@@ -115,17 +115,13 @@ func ResolveSelectionInteraction(d *report.Dashboard, model *semanticmodel.Model
 func sourceSelection(d *report.Dashboard, sourceKind, sourceID string) (report.SelectionInteraction, error) {
 	switch sourceKind {
 	case "visual":
-		visual, ok := d.Visuals[sourceID]
-		if !ok {
-			return report.SelectionInteraction{}, fmt.Errorf("unknown source visual %q", sourceID)
+		if visual, ok := d.Visuals[sourceID]; ok {
+			return visual.Interaction.PointSelection, nil
 		}
-		return visual.Interaction.PointSelection, nil
-	case "table":
-		table, ok := d.Tables[sourceID]
-		if !ok {
-			return report.SelectionInteraction{}, fmt.Errorf("unknown source table %q", sourceID)
+		if visual, ok := d.Tables[sourceID]; ok {
+			return visual.Interaction.RowSelection, nil
 		}
-		return table.Interaction.RowSelection, nil
+		return report.SelectionInteraction{}, fmt.Errorf("unknown source visual %q", sourceID)
 	default:
 		return report.SelectionInteraction{}, fmt.Errorf("unknown source kind %q", sourceKind)
 	}
@@ -134,17 +130,29 @@ func sourceSelection(d *report.Dashboard, sourceKind, sourceID string) (report.S
 func sourceSelectionFields(d *report.Dashboard, sourceKind, sourceID string) (map[string]bool, report.QueryTime) {
 	fields := map[string]bool{}
 	if sourceKind == "visual" {
-		visual := d.Visuals[sourceID]
-		for _, dimension := range visual.Query.Dimensions {
-			fields[dimension.Field] = true
+		if visual, ok := d.Visuals[sourceID]; ok {
+			for _, dimension := range visual.Query.Dimensions {
+				fields[dimension.Field] = true
+			}
+			if !visual.Query.Series.IsZero() {
+				fields[visual.Query.Series.Field] = true
+			}
+			if visual.Query.Time.Field != "" {
+				fields[visual.Query.Time.Field] = true
+			}
+			return fields, visual.Query.Time
 		}
-		if !visual.Query.Series.IsZero() {
-			fields[visual.Query.Series.Field] = true
+		if table, ok := d.Tables[sourceID]; ok {
+			for _, field := range table.Query.Fields {
+				fields[field] = true
+			}
+			for _, columns := range [][]report.FieldRef{table.Query.Columns, table.Query.Rows} {
+				for _, field := range columns {
+					fields[field.Field] = true
+				}
+			}
 		}
-		if visual.Query.Time.Field != "" {
-			fields[visual.Query.Time.Field] = true
-		}
-		return fields, visual.Query.Time
+		return fields, report.QueryTime{}
 	}
 	table := d.Tables[sourceID]
 	for _, field := range table.Query.Fields {

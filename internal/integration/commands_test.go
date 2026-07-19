@@ -27,8 +27,8 @@ func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {
 			name: "/commands/select",
 			path: "/commands/select",
 			signals: mergeSignals(runtimeSignals("cmd-select", "overview"), map[string]any{
-				"interactionCommand": ordersRowSelectionCommand("delivered"),
-				"tableCommand":       tableCommand("orders_table", "all", 0, 50, 3, 0),
+				"interactionCommand":  ordersRowSelectionCommand("delivered"),
+				"visualWindowCommand": visualWindowCommand("orders_table", "all", 0, 50, 3, 0),
 			}),
 			assert: func(t *testing.T, patches []map[string]any) {
 				t.Helper()
@@ -44,7 +44,7 @@ func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {
 				"filters": map[string]any{
 					"selections": []map[string]any{selectionSignal("orders_table", "orders.status", "delivered")},
 				},
-				"tableCommand": tableCommand("orders_table", "all", 0, 50, 4, 0),
+				"visualWindowCommand": visualWindowCommand("orders_table", "all", 0, 50, 4, 0),
 			}),
 			assert: func(t *testing.T, patches []map[string]any) {
 				t.Helper()
@@ -66,7 +66,7 @@ func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {
 						},
 					},
 				},
-				"tableCommand": tableCommand("orders_table", "all", 50, 50, 5, 2),
+				"visualWindowCommand": visualWindowCommand("orders_table", "all", 50, 50, 5, 2),
 			}),
 			assert: func(t *testing.T, patches []map[string]any) {
 				t.Helper()
@@ -100,13 +100,13 @@ func TestCommandsPublishReloadPatchesToOpenStream(t *testing.T) {
 	}
 }
 
-func TestTableWindowCommandPublishesOnlyRequestedTablePatch(t *testing.T) {
+func TestVisualWindowCommandPublishesOnlyRequestedVisualPatch(t *testing.T) {
 	h := newHarness(t)
 	stream := h.openUpdatesStream(t, "executive-sales", "overview", runtimeSignals("cmd-table", "overview"))
 	drainInitialSnapshot(t, stream)
 
-	status := h.postCommand(t, "/commands/table-window", mergeSignals(runtimeSignals("cmd-table", "overview"), map[string]any{
-		"tableCommand": tableCommand("orders_table", "a", 0, 1, 7, 0),
+	status := h.postCommand(t, "/commands/visual-window", mergeSignals(runtimeSignals("cmd-table", "overview"), map[string]any{
+		"visualWindowCommand": visualWindowCommand("orders_table", "a", 0, 1, 7, 0),
 	}))
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
@@ -115,22 +115,27 @@ func TestTableWindowCommandPublishesOnlyRequestedTablePatch(t *testing.T) {
 	patches := nextRefreshPatches(t, stream)
 	requireTableBlock(t, patches, "orders_table", "a", 0, 7)
 	for _, patch := range patches {
-		if hasKey(patch, "visuals") || hasKey(patch, "filterOptions") {
-			t.Fatalf("table-window command streamed non-target data: %#v", patch)
+		if hasKey(patch, "filterOptions") {
+			t.Fatalf("visual-window command streamed non-target data: %#v", patch)
+		}
+		for visualID := range mapAt(patch, "visuals") {
+			if visualID != "orders_table" {
+				t.Fatalf("visual-window command streamed non-target visual %q: %#v", visualID, patch)
+			}
 		}
 	}
 	stream.expectNoPatch(t, 150*time.Millisecond)
 }
 
-func TestTableWindowCommandDoesNotPublishCanceledTablePatch(t *testing.T) {
+func TestVisualWindowCommandDoesNotPublishCanceledVisualPatch(t *testing.T) {
 	h := newHarness(t, withMetricsWrapper(func(metrics *dashboardruntime.Service) integrationMetrics {
-		return canceledTableWindowMetrics{integrationMetrics: metrics}
+		return canceledVisualWindowMetrics{integrationMetrics: metrics}
 	}))
 	stream := h.openUpdatesStream(t, "executive-sales", "overview", runtimeSignals("cmd-table-canceled", "overview"))
 	drainInitialSnapshot(t, stream)
 
-	status := h.postCommand(t, "/commands/table-window", mergeSignals(runtimeSignals("cmd-table-canceled", "overview"), map[string]any{
-		"tableCommand": tableCommand("orders_table", "a", 0, 1, 8, 0),
+	status := h.postCommand(t, "/commands/visual-window", mergeSignals(runtimeSignals("cmd-table-canceled", "overview"), map[string]any{
+		"visualWindowCommand": visualWindowCommand("orders_table", "a", 0, 1, 8, 0),
 	}))
 	if status != http.StatusOK {
 		t.Fatalf("status = %d, want %d", status, http.StatusOK)
@@ -138,8 +143,8 @@ func TestTableWindowCommandDoesNotPublishCanceledTablePatch(t *testing.T) {
 
 	patches := nextRefreshPatches(t, stream)
 	for _, patch := range patches {
-		if hasKey(patch, "tables") {
-			t.Fatalf("canceled table-window command streamed table data: %#v", patch)
+		if hasKey(mapAt(patch, "visuals"), "orders_table") {
+			t.Fatalf("canceled visual-window command streamed visual data: %#v", patch)
 		}
 	}
 	requireStatusLoading(t, patches, false)
@@ -189,22 +194,25 @@ func TestCommandRejectsMalformedDatastarBody(t *testing.T) {
 	}
 }
 
-type canceledTableWindowMetrics struct {
+type canceledVisualWindowMetrics struct {
 	integrationMetrics
 }
 
-func (m canceledTableWindowMetrics) ExecuteConsumersPage(_ context.Context, request consumer.Request, publish consumer.Publisher) error {
+func (m canceledVisualWindowMetrics) ExecuteConsumersPage(ctx context.Context, request consumer.Request, publish consumer.Publisher) error {
+	if request.Command != "visual_window" {
+		return m.integrationMetrics.ExecuteConsumersPage(ctx, request, publish)
+	}
 	for _, target := range request.Targets {
 		publish(consumer.Result{Target: target, Err: context.Canceled})
 	}
 	return nil
 }
 
-func (m canceledTableWindowMetrics) QueryTable(_ context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (m canceledVisualWindowMetrics) QueryTable(_ context.Context, dashboardID string, filters dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	return m.QueryTablePage(context.Background(), dashboardID, "", filters, request)
 }
 
-func (m canceledTableWindowMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
+func (m canceledVisualWindowMetrics) QueryTablePage(_ context.Context, _ string, _ string, _ dashboard.Filters, request dashboard.TableRequest) (dashboard.Table, error) {
 	return dashboard.EmptyTable(request.WithDefaults(), context.Canceled), nil
 }
 
@@ -250,7 +258,7 @@ func drainInitialSnapshot(t *testing.T, stream *streamClient) []map[string]any {
 }
 
 func tableHasSnapshot(patch map[string]any, tableID string) bool {
-	table := mapAt(patch, "tables", tableID)
+	table := mapAt(patch, "visuals", tableID)
 	if _, ok := table["availableRows"]; !ok {
 		return false
 	}
@@ -301,7 +309,7 @@ func streamInstanceIDFromSignals(signals map[string]any) string {
 
 func ordersRowSelectionCommand(status string) map[string]any {
 	return map[string]any{
-		"sourceKind":      "table",
+		"sourceKind":      "visual",
 		"sourceId":        "orders_table",
 		"interactionKind": "row_selection",
 		"action":          "set",
@@ -331,8 +339,8 @@ func ordersRowSelectionCommand(status string) map[string]any {
 
 func selectionSignal(sourceID, field, value string) map[string]any {
 	return map[string]any{
-		"id":              "table:" + sourceID + ":row_selection",
-		"sourceKind":      "table",
+		"id":              "visual:" + sourceID + ":row_selection",
+		"sourceKind":      "visual",
 		"sourceId":        sourceID,
 		"interactionKind": "row_selection",
 		"entries": []map[string]any{{
@@ -346,9 +354,9 @@ func selectionSignal(sourceID, field, value string) map[string]any {
 	}
 }
 
-func tableCommand(table, block string, start, count, requestSeq, resetVersion int) map[string]any {
+func visualWindowCommand(visual, block string, start, count, requestSeq, resetVersion int) map[string]any {
 	return map[string]any{
-		"table":        table,
+		"visual":       visual,
 		"block":        block,
 		"start":        start,
 		"count":        count,

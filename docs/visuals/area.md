@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use an ordered dimension and one measure to fill the area between the series and its baseline. The ascending sort preserves the time sequence.
 
-{{< chart id="revenue" >}}
+{{< visual id="revenue" >}}
 
 ```yaml visual-example=revenue
 visuals:
@@ -31,7 +31,7 @@ visuals:
 
 Map `query.series` to status and enable `options.stacked` to show how each status contributes to the monthly total.
 
-{{< chart id="revenue_area_status" >}}
+{{< visual id="revenue_area_status" >}}
 
 ```yaml visual-example=revenue_area_status
 visuals:
@@ -60,7 +60,7 @@ visuals:
 
 Enable `options.smooth` to interpolate the boundary, hide symbols to reduce clutter, and add `data_zoom` when the ordered range grows.
 
-{{< chart id="revenue_area_smooth" >}}
+{{< visual id="revenue_area_smooth" >}}
 
 ```yaml visual-example=revenue_area_smooth
 visuals:

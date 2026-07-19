@@ -44,7 +44,6 @@ type DashboardManifestResponse struct {
 type DashboardManifestCounts struct {
 	Pages   int `json:"pages"`
 	Visuals int `json:"visuals"`
-	Tables  int `json:"tables"`
 	Filters int `json:"filters"`
 }
 
@@ -81,7 +80,6 @@ type DashboardComponentResponse struct {
 	Width       float64                      `json:"width,omitempty"`
 	Height      float64                      `json:"height,omitempty"`
 	VisualID    string                       `json:"visualId,omitempty"`
-	TableID     string                       `json:"tableId,omitempty"`
 	FilterID    string                       `json:"filterId,omitempty"`
 }
 
@@ -104,16 +102,6 @@ type DashboardTableColumn struct {
 	Format string `json:"format,omitempty"`
 }
 
-type DashboardTableDescribeResponse struct {
-	ID          string                       `json:"id"`
-	ComponentID string                       `json:"componentId,omitempty"`
-	Title       string                       `json:"title,omitempty"`
-	Description string                       `json:"description,omitempty"`
-	Columns     []DashboardTableColumn       `json:"columns"`
-	Query       map[string]any               `json:"query,omitempty"`
-	Placement   *DashboardComponentPlacement `json:"placement,omitempty"`
-}
-
 type DashboardFilterDescribeResponse struct {
 	ID          string                       `json:"id"`
 	ComponentID string                       `json:"componentId,omitempty"`
@@ -127,7 +115,6 @@ type DashboardFilterDescribeResponse struct {
 type DashboardVisualDescribeResponse struct {
 	ID          string                       `json:"id"`
 	ComponentID string                       `json:"componentId,omitempty"`
-	Kind        string                       `json:"kind,omitempty"`
 	Shape       string                       `json:"shape,omitempty"`
 	Renderer    string                       `json:"renderer,omitempty"`
 	Type        string                       `json:"type,omitempty"`
@@ -136,6 +123,8 @@ type DashboardVisualDescribeResponse struct {
 	Query       map[string]any               `json:"query,omitempty"`
 	Extensions  map[string]map[string]any    `json:"extensions,omitempty"`
 	Interaction map[string]any               `json:"interaction,omitempty"`
+	Columns     []DashboardTableColumn       `json:"columns,omitempty"`
+	Cardinality string                       `json:"cardinality,omitempty"`
 	Placement   *DashboardComponentPlacement `json:"placement,omitempty"`
 	X           float64                      `json:"x,omitempty"`
 	Y           float64                      `json:"y,omitempty"`
@@ -336,13 +325,15 @@ type DashboardTableQueryRequest struct {
 	Filters map[string]any `json:"filters"`
 }
 
-type DashboardTableDataRequest struct {
+type DashboardVisualQueryRequest struct {
 	Limit     int            `json:"limit"`
 	PageToken string         `json:"pageToken"`
 	Filters   map[string]any `json:"filters"`
 }
 
 type DashboardTableQueryResponse struct {
+	ID              string        `json:"id"`
+	Type            string        `json:"type"`
 	QueryID         string        `json:"queryId"`
 	ServingSnapshot string        `json:"servingSnapshot"`
 	Title           string        `json:"title"`

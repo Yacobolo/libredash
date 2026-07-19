@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Sort a categorical measure descending so the widest stage appears first and each following stage narrows with its value.
 
-{{< chart id="status_funnel" >}}
+{{< visual id="status_funnel" >}}
 
 ```yaml visual-example=status_funnel
 visuals:
@@ -29,7 +29,7 @@ visuals:
 
 Replace status with delivery buckets to reuse the funnel for an ordered operational distribution rather than a lifecycle stage.
 
-{{< chart id="delivery_funnel" >}}
+{{< visual id="delivery_funnel" >}}
 
 ```yaml visual-example=delivery_funnel
 visuals:
@@ -50,7 +50,7 @@ visuals:
 
 Set `funnel_align: left` to anchor the stages, keep labels visible, and use `options.sort` to control the visual stage order independently.
 
-{{< chart id="status_funnel_left" >}}
+{{< visual id="status_funnel_left" >}}
 
 ```yaml visual-example=status_funnel_left
 visuals:

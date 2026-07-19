@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Set `query.table` and select a numeric measure so LibreDash can derive the quartiles, median, whiskers, and outliers from raw delivery values.
 
-{{< chart id="delivery_distribution" >}}
+{{< visual id="delivery_distribution" >}}
 
 ```yaml visual-example=delivery_distribution
 visuals:
@@ -33,7 +33,7 @@ visuals:
 
 Swap the numeric measure to compare review-score spread with the same `distribution` shape and raw-table query path.
 
-{{< chart id="review_distribution" >}}
+{{< visual id="review_distribution" >}}
 
 ```yaml visual-example=review_distribution
 visuals:
@@ -57,7 +57,7 @@ visuals:
 
 Use revenue as the raw measure and enable `options.data_zoom` when the range contains values that benefit from closer inspection.
 
-{{< chart id="revenue_distribution" >}}
+{{< visual id="revenue_distribution" >}}
 
 ```yaml visual-example=revenue_distribution
 visuals:

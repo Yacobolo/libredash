@@ -65,11 +65,149 @@ spec:
         measures:
           revenue:
   pages:
-    - name: overview
+    - id: overview
       title: Overview
       visuals: []
 `))
 	assertDiagnostic(t, err, "schema.enum", "type")
+}
+
+func TestDashboardVisualContractUnifiesChartsAndTables(t *testing.T) {
+	err := ValidateBytes(KindDashboardResource, "dashboard.yaml", []byte(`
+apiVersion: libredash.dev/v1
+kind: Dashboard
+metadata:
+  name: sales
+spec:
+  semanticModel: sales
+  filters:
+    state:
+      type: multi_select
+      label: State
+      field: customers.state
+      targets:
+        visuals: [revenue, orders, state_status, category_status]
+  visuals:
+    revenue:
+      type: line
+      title: Revenue
+      query:
+        dimensions: [orders.purchase_month]
+        measures: [revenue]
+    total:
+      type: kpi
+      query:
+        measures: [revenue]
+    orders:
+      type: table
+      title: Orders
+      cardinality: bounded
+      query:
+        table: orders
+        fields: [orders.order_id, orders.revenue]
+    state_status:
+      type: matrix
+      title: State status
+      query:
+        rows: [customers.state]
+        columns: [orders.status]
+        measures: [order_count]
+    category_status:
+      type: pivot
+      title: Category status
+      query:
+        rows: [orders.category]
+        columns: [orders.status]
+        measures: [order_count]
+  pages:
+    - id: overview
+      title: Overview
+      components:
+        - id: revenue
+          kind: visual
+          visual: revenue
+          placement: {col: 1, row: 1, col_span: 6, row_span: 4}
+        - id: state
+          kind: filter
+          filter: state
+          placement: {col: 7, row: 1, col_span: 3, row_span: 2}
+        - id: heading
+          kind: header
+          title: Sales
+          placement: {col: 1, row: 5, col_span: 12, row_span: 1}
+`))
+	if err != nil {
+		t.Fatalf("ValidateBytes() error = %v", err)
+	}
+}
+
+func TestDashboardVisualContractRejectsLegacyChartTableSplit(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "dashboard tables",
+			body: `
+  tables:
+    orders:
+      kind: data_table
+      title: Orders
+      query: {table: orders, fields: [orders.order_id]}
+`,
+		},
+		{
+			name: "visual kind",
+			body: `
+  visuals:
+    total:
+      kind: kpi
+      query: {measures: [revenue]}
+`,
+		},
+		{
+			name: "page visuals",
+			body: `
+  pages:
+    - id: overview
+      title: Overview
+      visuals: []
+`,
+		},
+		{
+			name: "page name",
+			body: `
+  pages:
+    - name: overview
+      title: Overview
+      components: []
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content := `
+apiVersion: libredash.dev/v1
+kind: Dashboard
+metadata:
+  name: sales
+spec:
+  semanticModel: sales
+  visuals:
+    revenue:
+      type: line
+      title: Revenue
+      query: {dimensions: [orders.status], measures: [revenue]}
+  pages:
+    - id: overview
+      title: Overview
+      components: []
+` + tt.body
+			if err := ValidateBytes(KindDashboardResource, "dashboard.yaml", []byte(content)); err == nil {
+				t.Fatal("ValidateBytes() unexpectedly accepted legacy dashboard syntax")
+			}
+		})
+	}
 }
 
 func TestValidateBytesRejectsRemovedLocalConnectionKind(t *testing.T) {

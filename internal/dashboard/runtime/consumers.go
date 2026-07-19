@@ -255,13 +255,13 @@ func (s *QueryService) executeTableConsumer(ctx context.Context, request consume
 }
 
 func consumerTableNeedsExactCount(command string, request dashboard.TableRequest, exact bool) bool {
-	return exact && (request.Block == "all" || command != "table_window" && request.Block == "a" && request.Start == 0)
+	return exact && (request.Block == "all" || command != "visual_window" && request.Block == "a" && request.Start == 0)
 }
 
 func consumerTargetContext(ctx context.Context, job consumer.Job) context.Context {
 	consumers := make([]string, 0, len(job.Queries))
 	for _, query := range job.Queries {
-		consumers = append(consumers, string(query.Target.Kind)+":"+query.Target.ID)
+		consumers = append(consumers, query.Target.Key())
 	}
 	sort.Strings(consumers)
 	metadata := dataquery.MetadataFromContext(ctx)

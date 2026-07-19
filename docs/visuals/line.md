@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use one ordered `query.dimensions` field for the horizontal axis and one `query.measures` field for the plotted value. Sorting by month keeps the line chronological.
 
-{{< chart id="revenue_line" >}}
+{{< visual id="revenue_line" >}}
 
 ```yaml visual-example=revenue_line
 visuals:
@@ -30,7 +30,7 @@ visuals:
 
 Set `shape: category_series_value` and map `query.series` to split the measure into one line per order status.
 
-{{< chart id="revenue_line_status" >}}
+{{< visual id="revenue_line_status" >}}
 
 ```yaml visual-example=revenue_line_status
 visuals:
@@ -57,7 +57,7 @@ visuals:
 
 Set `options.step: middle` for discrete changes between periods, hide point symbols for a quieter trace, and enable `data_zoom` for long ranges.
 
-{{< chart id="revenue_line_step" >}}
+{{< visual id="revenue_line_step" >}}
 
 ```yaml visual-example=revenue_line_step
 visuals:

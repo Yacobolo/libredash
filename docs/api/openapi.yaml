@@ -21769,7 +21769,6 @@ paths:
                 counts:
                   filters: 1
                   pages: 1
-                  tables: 1
                   visuals: 1
                 description: example
                 detail_tools:
@@ -23008,7 +23007,73 @@ paths:
                 status:
                   key: example
                 visuals:
-                  key: {}
+                  key:
+                    data:
+                      - binEnd: !!float 1
+                        binStart: !!float 1
+                        close: example
+                        column: example
+                        end: !!float 1
+                        extensions:
+                          key:
+                            key: example
+                        high: example
+                        label: example
+                        low: example
+                        max: !!float 1
+                        median: !!float 1
+                        min: !!float 1
+                        name: example
+                        open: example
+                        path:
+                          - example
+                        positive: true
+                        q1: !!float 1
+                        q3: !!float 1
+                        row: example
+                        selected: true
+                        series: example
+                        source: example
+                        start: !!float 1
+                        target: example
+                        value: example
+                    dimensions:
+                      - example
+                    extensions:
+                      key:
+                        key: example
+                    format: example
+                    id: example
+                    interaction:
+                      kind: example
+                      mappings:
+                        - fact: example
+                          field: example
+                          grain: example
+                          label: example
+                          value: example
+                      targets:
+                        - example
+                      toggle: true
+                    measure: example
+                    measures:
+                      - example
+                    renderer: example
+                    selection:
+                      - label: example
+                        mappings:
+                          - fact: example
+                            field: example
+                            grain: example
+                            label: example
+                            value: example
+                    series:
+                      - example
+                    shape: example
+                    title: example
+                    type: example
+                    unit: example
+                    version: 1
         '400':
           description: The server could not understand the request due to invalid syntax.
           content:
@@ -23273,7 +23338,6 @@ paths:
             - select:
                 - source: /id
                 - source: /title
-                - source: /kind
                 - source: /shape
                 - source: /type
                 - source: /unit
@@ -23288,640 +23352,6 @@ paths:
         tags:
           - dashboard
           - query
-      x-authz:
-        mode: privilege
-        privilege: QUERY_DATA
-      x-libredash-object-scope: dashboard
-  /api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}:
-    get:
-      operationId: getDashboardTable
-      summary: Describe dashboard table
-      parameters:
-        - name: workspace
-          in: path
-          required: true
-          schema:
-            type: string
-          example: example
-        - name: dashboard
-          in: path
-          required: true
-          schema:
-            type: string
-          example: example
-        - name: page
-          in: path
-          required: true
-          schema:
-            type: string
-          example: example
-        - name: table
-          in: path
-          required: true
-          schema:
-            type: string
-          example: example
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DashboardTableDescribeResponse'
-              example:
-                columns:
-                  - format: example
-                    key: example
-                    label: example
-                    role: example
-                componentId: example
-                description: example
-                id: example
-                placement:
-                  col: 1
-                  colSpan: 1
-                  row: 1
-                  rowSpan: 1
-                query:
-                  key: example
-                title: example
-        '400':
-          description: The server could not understand the request due to invalid syntax.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '401':
-          description: Access is unauthorized.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '403':
-          description: Access is forbidden.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '404':
-          description: The server cannot find the requested resource.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '409':
-          description: The request conflicts with the current state of the server.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '412':
-          description: Precondition failed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '413':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '415':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '422':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '429':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '500':
-          description: Server error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '502':
-          description: Server error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '503':
-          description: Service unavailable.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-      tags:
-        - BI
-      x-authz:
-        mode: privilege
-        privilege: VIEW_ITEM
-      x-libredash-object-scope: dashboard
-  /api/v1/workspaces/{workspace}/dashboards/{dashboard}/pages/{page}/tables/{table}/query:
-    post:
-      operationId: queryDashboardTable
-      summary: Query dashboard table
-      parameters:
-        - name: workspace
-          in: path
-          required: true
-          schema:
-            type: string
-          example: example
-        - name: dashboard
-          in: path
-          required: true
-          schema:
-            type: string
-          example: example
-        - name: page
-          in: path
-          required: true
-          schema:
-            type: string
-          example: example
-        - name: table
-          in: path
-          required: true
-          schema:
-            type: string
-          example: example
-        - name: accept
-          in: header
-          required: false
-          schema:
-            type: string
-          example: example
-      responses:
-        '200':
-          description: The request has succeeded.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DashboardTableQueryResponse'
-              example:
-                availableRows: 1
-                columns:
-                  - name: example
-                    nullable: true
-                    type: boolean
-                page:
-                  nextCursor: example
-                queryId: example
-                rows:
-                  - - example
-                servingSnapshot: example
-                title: example
-            application/vnd.apache.arrow.stream:
-              schema:
-                type: string
-                format: binary
-              example: example
-        '400':
-          description: The server could not understand the request due to invalid syntax.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '401':
-          description: Access is unauthorized.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '403':
-          description: Access is forbidden.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '404':
-          description: The server cannot find the requested resource.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '409':
-          description: The request conflicts with the current state of the server.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '412':
-          description: Precondition failed.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '413':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '415':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '422':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '429':
-          description: Client error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '500':
-          description: Server error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '502':
-          description: Server error
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-        '503':
-          description: Service unavailable.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-              example:
-                code: example
-                detail: example
-                errors:
-                  - code: example
-                    detail: example
-                    field: example
-                instance: example
-                requestId: example
-                status: 1
-                title: example
-                type: example
-      tags:
-        - BI
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DashboardTableQueryRequest'
-            example:
-              filters:
-                controls:
-                  key: example
-                selections:
-                  - key: example
-              limit: 1
-              pageToken: example
-      x-apigen-tool:
-        confirmation: never
-        effect: read
-        input:
-          fields:
-            - context_key: workspace
-              mode: context
-              name: workspace
-              source: path
-            - default: !!float 25
-              name: limit
-              source: body
-        name: query_dashboard_table
-        output:
-          cursor:
-            source: /page/nextCursor
-          mode: project
-          select:
-            - source: /title
-            - source: /availableRows
-            - source: /columns
-            - count_as: count
-              source: /rows
-        tags:
-          - dashboard
-          - query
-          - table
       x-authz:
         mode: privilege
         privilege: QUERY_DATA
@@ -23963,6 +23393,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/DashboardVisualDescribeResponse'
               example:
+                cardinality: example
+                columns:
+                  - format: example
+                    key: example
+                    label: example
+                    role: example
                 componentId: example
                 description: example
                 extensions:
@@ -23991,7 +23427,6 @@ paths:
                     targets:
                       - example
                     toggle: true
-                kind: example
                 placement:
                   col: 1
                   colSpan: 1
@@ -24276,10 +23711,10 @@ paths:
             - source: /id
             - source: /title
             - source: /description
-            - source: /kind
             - source: /shape
             - source: /type
             - source: /query
+            - source: /columns
         tags:
           - dashboard
           - visual
@@ -24316,13 +23751,24 @@ paths:
           schema:
             type: string
           example: example
+        - name: accept
+          in: header
+          required: false
+          schema:
+            type: string
+          example: example
       responses:
         '200':
           description: The request has succeeded.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DashboardVisualDataResponse'
+                $ref: '#/components/schemas/DashboardVisualQueryResponse'
+            application/vnd.apache.arrow.stream:
+              schema:
+                type: string
+                format: binary
+              example: example
         '400':
           description: The server could not understand the request due to invalid syntax.
           content:
@@ -24564,13 +24010,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/DashboardPageQueryRequest'
+              $ref: '#/components/schemas/DashboardVisualQueryRequest'
             example:
               filters:
                 controls:
                   key: example
                 selections:
                   - key: example
+              limit: 1
+              pageToken: example
       x-apigen-tool:
         confirmation: never
         effect: read
@@ -24580,21 +24028,9 @@ paths:
               mode: context
               name: workspace
               source: path
-        name: query_dashboard_visual_data
+        name: query_dashboard_visual
         output:
-          mode: project
-          select:
-            - source: /title
-            - source: /type
-            - source: /shape
-            - source: /unit
-            - source: /format
-            - source: /dimensions
-            - source: /measure
-            - source: /measures
-            - source: /series
-            - count_as: count
-              source: /data
+          mode: raw
         tags:
           - dashboard
           - visual
@@ -38481,6 +37917,20 @@ components:
         status: example
         stopReason: example
         workspaceId: example
+    AreaDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - area
+          example: example
+      example:
+        type: example
     AssetEdgeListResponse:
       type: object
       required:
@@ -39203,61 +38653,48 @@ components:
         subjectId: example
         subjectType: example
         privilege: example
-    BinnedMeasureVisualDataResponse:
+    BarDashboardVisualQueryResponse:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
       required:
-        - shape
-        - data
+        - type
       properties:
-        shape:
+        type:
           type: string
           enum:
-            - binned_measure
+            - bar
           example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/BinnedMeasureVisualDatum'
-          example:
-            - binEnd: !!float 1
-              binStart: !!float 1
-              label: example
-              value: example
       example:
-        data:
-          - binEnd: !!float 1
-            binStart: !!float 1
-            label: example
-            value: example
-        shape: example
-    BinnedMeasureVisualDatum:
+        type: example
+    BoxplotDashboardVisualQueryResponse:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
       required:
-        - label
-        - binStart
-        - binEnd
-        - value
+        - type
       properties:
-        label:
+        type:
           type: string
-          example: example
-        binStart:
-          type: number
-          format: double
-          example: !!float 1
-        binEnd:
-          type: number
-          format: double
-          example: !!float 1
-        value:
+          enum:
+            - boxplot
           example: example
       example:
-        binEnd: !!float 1
-        binStart: !!float 1
-        label: example
-        value: example
+        type: example
+    CandlestickDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - candlestick
+          example: example
+      example:
+        type: example
     CapabilitiesResponse:
       type: object
       required:
@@ -39314,223 +38751,149 @@ components:
           - tus
         visualShapes:
           - category_value
-    CategoryDeltaVisualDataResponse:
+    ColumnDashboardVisualQueryResponse:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - column
+          example: example
+      example:
+        type: example
+    ComboDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - combo
+          example: example
+      example:
+        type: example
+    DashboardChartVisualQueryResponseBase:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardVisualQueryResponseBase'
       required:
         - shape
         - data
       properties:
         shape:
           type: string
-          enum:
-            - category_delta
           example: example
+        renderer:
+          type: string
+          example: example
+        unit:
+          type: string
+          example: example
+        format:
+          type: string
+          example: example
+        dimensions:
+          type: array
+          items:
+            type: string
+          example:
+            - example
+        measure:
+          type: string
+          example: example
+        measures:
+          type: array
+          items:
+            type: string
+          example:
+            - example
+        series:
+          type: array
+          items:
+            type: string
+          example:
+            - example
         data:
           type: array
           items:
-            $ref: '#/components/schemas/CategoryDeltaVisualDatum'
+            $ref: '#/components/schemas/DashboardVisualDatum'
           example:
-            - end: !!float 1
+            - binEnd: !!float 1
+              binStart: !!float 1
+              close: example
+              column: example
+              end: !!float 1
+              extensions:
+                key:
+                  key: example
+              high: example
               label: example
+              low: example
+              max: !!float 1
+              median: !!float 1
+              min: !!float 1
+              name: example
+              open: example
+              path:
+                - example
               positive: true
+              q1: !!float 1
+              q3: !!float 1
+              row: example
               selected: true
+              series: example
+              source: example
               start: !!float 1
+              target: example
               value: example
       example:
         data:
-          - end: !!float 1
+          - binEnd: !!float 1
+            binStart: !!float 1
+            close: example
+            column: example
+            end: !!float 1
+            extensions:
+              key:
+                key: example
+            high: example
             label: example
+            low: example
+            max: !!float 1
+            median: !!float 1
+            min: !!float 1
+            name: example
+            open: example
+            path:
+              - example
             positive: true
+            q1: !!float 1
+            q3: !!float 1
+            row: example
             selected: true
+            series: example
+            source: example
             start: !!float 1
+            target: example
             value: example
-        shape: example
-    CategoryDeltaVisualDatum:
-      type: object
-      required:
-        - label
-        - value
-        - start
-        - end
-        - positive
-      properties:
-        label:
-          type: string
-          example: example
-        value:
-          example: example
-        start:
-          type: number
-          format: double
-          example: !!float 1
-        end:
-          type: number
-          format: double
-          example: !!float 1
-        positive:
-          type: boolean
-          example: true
-        selected:
-          type: boolean
-          example: true
-      example:
-        end: !!float 1
-        label: example
-        positive: true
-        selected: true
-        start: !!float 1
-        value: example
-    CategoryMultiMeasureVisualDataResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
-      required:
-        - shape
-        - data
-      properties:
-        shape:
-          type: string
-          enum:
-            - category_multi_measure
-          example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/CategoryMultiMeasureVisualDatum'
-          example:
-            - label: example
-              selected: true
-              series: example
-              value: example
-      example:
-        data:
-          - label: example
-            selected: true
-            series: example
-            value: example
-        shape: example
-    CategoryMultiMeasureVisualDatum:
-      type: object
-      required:
-        - label
-        - series
-        - value
-      properties:
-        label:
-          type: string
-          example: example
+        dimensions:
+          - example
+        format: example
+        measure: example
+        measures:
+          - example
+        renderer: example
         series:
-          type: string
-          example: example
-        value:
-          example: example
-        selected:
-          type: boolean
-          example: true
-      example:
-        label: example
-        selected: true
-        series: example
-        value: example
-    CategorySeriesValueVisualDataResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
-      required:
-        - shape
-        - data
-      properties:
-        shape:
-          type: string
-          enum:
-            - category_series_value
-          example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/CategorySeriesValueVisualDatum'
-          example:
-            - label: example
-              selected: true
-              series: example
-              value: example
-      example:
-        data:
-          - label: example
-            selected: true
-            series: example
-            value: example
+          - example
         shape: example
-    CategorySeriesValueVisualDatum:
-      type: object
-      required:
-        - label
-        - series
-        - value
-      properties:
-        label:
-          type: string
-          example: example
-        series:
-          type: string
-          example: example
-        value:
-          example: example
-        selected:
-          type: boolean
-          example: true
-      example:
-        label: example
-        selected: true
-        series: example
-        value: example
-    CategoryValueVisualDataResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
-      required:
-        - shape
-        - data
-      properties:
-        shape:
-          type: string
-          enum:
-            - category_value
-          example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/CategoryValueVisualDatum'
-          example:
-            - label: example
-              selected: true
-              value: example
-      example:
-        data:
-          - label: example
-            selected: true
-            value: example
-        shape: example
-    CategoryValueVisualDatum:
-      type: object
-      required:
-        - label
-        - value
-      properties:
-        label:
-          type: string
-          example: example
-        value:
-          example: example
-        selected:
-          type: boolean
-          example: true
-      example:
-        label: example
-        selected: true
-        value: example
+        unit: example
     DashboardComponentPlacement:
       type: object
       properties:
@@ -39558,13 +38921,13 @@ components:
     DashboardComponentResponse:
       oneOf:
         - $ref: '#/components/schemas/DashboardVisualComponentResponse'
-        - $ref: '#/components/schemas/DashboardTableComponentResponse'
         - $ref: '#/components/schemas/DashboardFilterComponentResponse'
+        - $ref: '#/components/schemas/DashboardHeaderComponentResponse'
       discriminator:
         propertyName: kind
         mapping:
           filter: '#/components/schemas/DashboardFilterComponentResponse'
-          table: '#/components/schemas/DashboardTableComponentResponse'
+          header: '#/components/schemas/DashboardHeaderComponentResponse'
           visual: '#/components/schemas/DashboardVisualComponentResponse'
     DashboardComponentResponseBase:
       type: object
@@ -39577,6 +38940,10 @@ components:
           example: example
         kind:
           type: string
+          enum:
+            - visual
+            - filter
+            - header
           example: example
         ref:
           type: string
@@ -39732,6 +39099,20 @@ components:
           key: example
         selections:
           - key: example
+    DashboardHeaderComponentResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardComponentResponseBase'
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          enum:
+            - header
+          example: example
+      example:
+        kind: example
     DashboardListResponse:
       type: object
       required:
@@ -39775,6 +39156,10 @@ components:
           example: example
         kind:
           type: string
+          enum:
+            - visual
+            - filter
+            - header
           example: example
         ref:
           type: string
@@ -39792,7 +39177,6 @@ components:
       required:
         - pages
         - visuals
-        - tables
         - filters
       properties:
         pages:
@@ -39803,10 +39187,6 @@ components:
           type: integer
           format: int32
           example: 1
-        tables:
-          type: integer
-          format: int32
-          example: 1
         filters:
           type: integer
           format: int32
@@ -39814,7 +39194,6 @@ components:
       example:
         filters: 1
         pages: 1
-        tables: 1
         visuals: 1
     DashboardManifestPage:
       type: object
@@ -39898,7 +39277,6 @@ components:
         counts:
           filters: 1
           pages: 1
-          tables: 1
           visuals: 1
         description: example
         detail_tools:
@@ -39955,7 +39333,73 @@ components:
           additionalProperties:
             $ref: '#/components/schemas/DashboardVisualDataResponse'
           example:
-            key: {}
+            key:
+              data:
+                - binEnd: !!float 1
+                  binStart: !!float 1
+                  close: example
+                  column: example
+                  end: !!float 1
+                  extensions:
+                    key:
+                      key: example
+                  high: example
+                  label: example
+                  low: example
+                  max: !!float 1
+                  median: !!float 1
+                  min: !!float 1
+                  name: example
+                  open: example
+                  path:
+                    - example
+                  positive: true
+                  q1: !!float 1
+                  q3: !!float 1
+                  row: example
+                  selected: true
+                  series: example
+                  source: example
+                  start: !!float 1
+                  target: example
+                  value: example
+              dimensions:
+                - example
+              extensions:
+                key:
+                  key: example
+              format: example
+              id: example
+              interaction:
+                kind: example
+                mappings:
+                  - fact: example
+                    field: example
+                    grain: example
+                    label: example
+                    value: example
+                targets:
+                  - example
+                toggle: true
+              measure: example
+              measures:
+                - example
+              renderer: example
+              selection:
+                - label: example
+                  mappings:
+                    - fact: example
+                      field: example
+                      grain: example
+                      label: example
+                      value: example
+              series:
+                - example
+              shape: example
+              title: example
+              type: example
+              unit: example
+              version: 1
       example:
         filterOptions:
           key: example
@@ -39964,7 +39408,73 @@ components:
         status:
           key: example
         visuals:
-          key: {}
+          key:
+            data:
+              - binEnd: !!float 1
+                binStart: !!float 1
+                close: example
+                column: example
+                end: !!float 1
+                extensions:
+                  key:
+                    key: example
+                high: example
+                label: example
+                low: example
+                max: !!float 1
+                median: !!float 1
+                min: !!float 1
+                name: example
+                open: example
+                path:
+                  - example
+                positive: true
+                q1: !!float 1
+                q3: !!float 1
+                row: example
+                selected: true
+                series: example
+                source: example
+                start: !!float 1
+                target: example
+                value: example
+            dimensions:
+              - example
+            extensions:
+              key:
+                key: example
+            format: example
+            id: example
+            interaction:
+              kind: example
+              mappings:
+                - fact: example
+                  field: example
+                  grain: example
+                  label: example
+                  value: example
+              targets:
+                - example
+              toggle: true
+            measure: example
+            measures:
+              - example
+            renderer: example
+            selection:
+              - label: example
+                mappings:
+                  - fact: example
+                    field: example
+                    grain: example
+                    label: example
+                    value: example
+            series:
+              - example
+            shape: example
+            title: example
+            type: example
+            unit: example
+            version: 1
     DashboardPageResponse:
       type: object
       required:
@@ -40113,106 +39623,13 @@ components:
         key: example
         label: example
         role: example
-    DashboardTableComponentResponse:
+    DashboardTabularVisualQueryResponseBase:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardComponentResponseBase'
-      required:
-        - kind
-        - tableId
-      properties:
-        kind:
-          type: string
-          enum:
-            - table
-          example: example
-        tableId:
-          type: string
-          example: example
-      example:
-        kind: example
-        tableId: example
-    DashboardTableDescribeResponse:
-      type: object
-      required:
-        - id
-        - columns
-      properties:
-        id:
-          type: string
-          example: example
-        componentId:
-          type: string
-          example: example
-        title:
-          type: string
-          example: example
-        description:
-          type: string
-          example: example
-        columns:
-          type: array
-          items:
-            $ref: '#/components/schemas/DashboardTableColumn'
-          example:
-            - format: example
-              key: example
-              label: example
-              role: example
-        query:
-          type: object
-          additionalProperties: {}
-          example:
-            key: example
-        placement:
-          $ref: '#/components/schemas/DashboardComponentPlacement'
-      example:
-        columns:
-          - format: example
-            key: example
-            label: example
-            role: example
-        componentId: example
-        description: example
-        id: example
-        placement:
-          col: 1
-          colSpan: 1
-          row: 1
-          rowSpan: 1
-        query:
-          key: example
-        title: example
-    DashboardTableQueryRequest:
-      type: object
-      properties:
-        limit:
-          type: integer
-          format: int32
-          minimum: !!float 1
-          maximum: !!float 1000
-          example: 1
-        pageToken:
-          type: string
-          minLength: 1
-          maxLength: 2048
-          example: example
-        filters:
-          $ref: '#/components/schemas/DashboardFilters'
-      example:
-        filters:
-          controls:
-            key: example
-          selections:
-            - key: example
-        limit: 1
-        pageToken: example
-    DashboardTableQueryResponse:
-      type: object
+        - $ref: '#/components/schemas/DashboardVisualQueryResponseBase'
       required:
         - queryId
         - servingSnapshot
-        - title
         - columns
         - rows
         - availableRows
@@ -40222,9 +39639,6 @@ components:
           type: string
           example: example
         servingSnapshot:
-          type: string
-          example: example
-        title:
           type: string
           example: example
         columns:
@@ -40261,7 +39675,6 @@ components:
         rows:
           - - example
         servingSnapshot: example
-        title: example
     DashboardVisualComponentResponse:
       type: object
       allOf:
@@ -40282,38 +39695,10 @@ components:
         kind: example
         visualId: example
     DashboardVisualDataResponse:
-      oneOf:
-        - $ref: '#/components/schemas/CategoryValueVisualDataResponse'
-        - $ref: '#/components/schemas/CategorySeriesValueVisualDataResponse'
-        - $ref: '#/components/schemas/CategoryMultiMeasureVisualDataResponse'
-        - $ref: '#/components/schemas/CategoryDeltaVisualDataResponse'
-        - $ref: '#/components/schemas/BinnedMeasureVisualDataResponse'
-        - $ref: '#/components/schemas/HierarchyVisualDataResponse'
-        - $ref: '#/components/schemas/SingleValueVisualDataResponse'
-        - $ref: '#/components/schemas/MatrixVisualDataResponse'
-        - $ref: '#/components/schemas/GraphVisualDataResponse'
-        - $ref: '#/components/schemas/GeoVisualDataResponse'
-        - $ref: '#/components/schemas/OHLCVisualDataResponse'
-        - $ref: '#/components/schemas/DistributionVisualDataResponse'
-      discriminator:
-        propertyName: shape
-        mapping:
-          binned_measure: '#/components/schemas/BinnedMeasureVisualDataResponse'
-          category_delta: '#/components/schemas/CategoryDeltaVisualDataResponse'
-          category_multi_measure: '#/components/schemas/CategoryMultiMeasureVisualDataResponse'
-          category_series_value: '#/components/schemas/CategorySeriesValueVisualDataResponse'
-          category_value: '#/components/schemas/CategoryValueVisualDataResponse'
-          distribution: '#/components/schemas/DistributionVisualDataResponse'
-          geo: '#/components/schemas/GeoVisualDataResponse'
-          graph: '#/components/schemas/GraphVisualDataResponse'
-          hierarchy: '#/components/schemas/HierarchyVisualDataResponse'
-          matrix: '#/components/schemas/MatrixVisualDataResponse'
-          ohlc: '#/components/schemas/OHLCVisualDataResponse'
-          single_value: '#/components/schemas/SingleValueVisualDataResponse'
-    DashboardVisualDataResponseBase:
       type: object
       required:
         - shape
+        - type
         - data
       properties:
         version:
@@ -40321,9 +39706,6 @@ components:
           format: int32
           example: 1
         id:
-          type: string
-          example: example
-        kind:
           type: string
           example: example
         shape:
@@ -40468,7 +39850,6 @@ components:
           targets:
             - example
           toggle: true
-        kind: example
         measure: example
         measures:
           - example
@@ -40611,6 +39992,7 @@ components:
       type: object
       required:
         - id
+        - type
       properties:
         id:
           type: string
@@ -40618,16 +40000,13 @@ components:
         componentId:
           type: string
           example: example
-        kind:
+        type:
           type: string
           example: example
         shape:
           type: string
           example: example
         renderer:
-          type: string
-          example: example
-        type:
           type: string
           example: example
         title:
@@ -40648,6 +40027,18 @@ components:
               key: example
         interaction:
           $ref: '#/components/schemas/DashboardVisualInteractionDefinition'
+        columns:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardTableColumn'
+          example:
+            - format: example
+              key: example
+              label: example
+              role: example
+        cardinality:
+          type: string
+          example: example
         placement:
           $ref: '#/components/schemas/DashboardComponentPlacement'
         x:
@@ -40667,6 +40058,12 @@ components:
           format: double
           example: !!float 1
       example:
+        cardinality: example
+        columns:
+          - format: example
+            key: example
+            label: example
+            role: example
         componentId: example
         description: example
         extensions:
@@ -40695,7 +40092,6 @@ components:
             targets:
               - example
             toggle: true
-        kind: example
         placement:
           col: 1
           colSpan: 1
@@ -40868,6 +40264,105 @@ components:
           alias: example
           field: example
           grain: example
+    DashboardVisualQueryRequest:
+      type: object
+      properties:
+        limit:
+          type: integer
+          format: int32
+          minimum: !!float 1
+          maximum: !!float 1000
+          example: 1
+        pageToken:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          example: example
+        filters:
+          $ref: '#/components/schemas/DashboardFilters'
+      example:
+        filters:
+          controls:
+            key: example
+          selections:
+            - key: example
+        limit: 1
+        pageToken: example
+    DashboardVisualQueryResponse:
+      oneOf:
+        - $ref: '#/components/schemas/LineDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/AreaDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/BarDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/ColumnDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/PieDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/DonutDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/ScatterDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/FunnelDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/TreemapDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/GaugeDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/HeatmapDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/SankeyDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/GraphDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/MapDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/CandlestickDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/BoxplotDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/ComboDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/WaterfallDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/HistogramDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/RadarDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/TreeDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/SunburstDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/KPIDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/TableDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/MatrixDashboardVisualQueryResponse'
+        - $ref: '#/components/schemas/PivotDashboardVisualQueryResponse'
+      discriminator:
+        propertyName: type
+        mapping:
+          area: '#/components/schemas/AreaDashboardVisualQueryResponse'
+          bar: '#/components/schemas/BarDashboardVisualQueryResponse'
+          boxplot: '#/components/schemas/BoxplotDashboardVisualQueryResponse'
+          candlestick: '#/components/schemas/CandlestickDashboardVisualQueryResponse'
+          column: '#/components/schemas/ColumnDashboardVisualQueryResponse'
+          combo: '#/components/schemas/ComboDashboardVisualQueryResponse'
+          donut: '#/components/schemas/DonutDashboardVisualQueryResponse'
+          funnel: '#/components/schemas/FunnelDashboardVisualQueryResponse'
+          gauge: '#/components/schemas/GaugeDashboardVisualQueryResponse'
+          graph: '#/components/schemas/GraphDashboardVisualQueryResponse'
+          heatmap: '#/components/schemas/HeatmapDashboardVisualQueryResponse'
+          histogram: '#/components/schemas/HistogramDashboardVisualQueryResponse'
+          kpi: '#/components/schemas/KPIDashboardVisualQueryResponse'
+          line: '#/components/schemas/LineDashboardVisualQueryResponse'
+          map: '#/components/schemas/MapDashboardVisualQueryResponse'
+          matrix: '#/components/schemas/MatrixDashboardVisualQueryResponse'
+          pie: '#/components/schemas/PieDashboardVisualQueryResponse'
+          pivot: '#/components/schemas/PivotDashboardVisualQueryResponse'
+          radar: '#/components/schemas/RadarDashboardVisualQueryResponse'
+          sankey: '#/components/schemas/SankeyDashboardVisualQueryResponse'
+          scatter: '#/components/schemas/ScatterDashboardVisualQueryResponse'
+          sunburst: '#/components/schemas/SunburstDashboardVisualQueryResponse'
+          table: '#/components/schemas/TableDashboardVisualQueryResponse'
+          tree: '#/components/schemas/TreeDashboardVisualQueryResponse'
+          treemap: '#/components/schemas/TreemapDashboardVisualQueryResponse'
+          waterfall: '#/components/schemas/WaterfallDashboardVisualQueryResponse'
+    DashboardVisualQueryResponseBase:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          example: example
+        id:
+          type: string
+          example: example
+        title:
+          type: string
+          example: example
+      example:
+        id: example
+        title: example
+        type: example
     DashboardVisualQuerySort:
       type: object
       required:
@@ -41325,79 +40820,20 @@ components:
         servingStateId: example
         status: example
         workspaceId: example
-    DistributionVisualDataResponse:
+    DonutDashboardVisualQueryResponse:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
       required:
-        - shape
-        - data
+        - type
       properties:
-        shape:
+        type:
           type: string
           enum:
-            - distribution
+            - donut
           example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/DistributionVisualDatum'
-          example:
-            - label: example
-              max: !!float 1
-              median: !!float 1
-              min: !!float 1
-              q1: !!float 1
-              q3: !!float 1
       example:
-        data:
-          - label: example
-            max: !!float 1
-            median: !!float 1
-            min: !!float 1
-            q1: !!float 1
-            q3: !!float 1
-        shape: example
-    DistributionVisualDatum:
-      type: object
-      required:
-        - label
-        - min
-        - q1
-        - median
-        - q3
-        - max
-      properties:
-        label:
-          type: string
-          example: example
-        min:
-          type: number
-          format: double
-          example: !!float 1
-        q1:
-          type: number
-          format: double
-          example: !!float 1
-        median:
-          type: number
-          format: double
-          example: !!float 1
-        q3:
-          type: number
-          format: double
-          example: !!float 1
-        max:
-          type: number
-          format: double
-          example: !!float 1
-      example:
-        label: example
-        max: !!float 1
-        median: !!float 1
-        min: !!float 1
-        q1: !!float 1
-        q3: !!float 1
+        type: example
     EffectivePrivilegeListResponse:
       type: object
       required:
@@ -41476,51 +40912,34 @@ components:
         privileges:
           - example
         workspaceId: example
-    GeoVisualDataResponse:
+    FunnelDashboardVisualQueryResponse:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
       required:
-        - shape
-        - data
+        - type
       properties:
-        shape:
+        type:
           type: string
           enum:
-            - geo
+            - funnel
           example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/GeoVisualDatum'
-          example:
-            - name: example
-              selected: true
-              value: example
       example:
-        data:
-          - name: example
-            selected: true
-            value: example
-        shape: example
-    GeoVisualDatum:
+        type: example
+    GaugeDashboardVisualQueryResponse:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
       required:
-        - name
-        - value
+        - type
       properties:
-        name:
+        type:
           type: string
+          enum:
+            - gauge
           example: example
-        value:
-          example: example
-        selected:
-          type: boolean
-          example: true
       example:
-        name: example
-        selected: true
-        value: example
+        type: example
     GrantListResponse:
       type: object
       required:
@@ -41652,52 +41071,20 @@ components:
         subjectType: example
         workspaceId: example
         privilege: example
-    GraphVisualDataResponse:
+    GraphDashboardVisualQueryResponse:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
       required:
-        - shape
-        - data
+        - type
       properties:
-        shape:
+        type:
           type: string
           enum:
             - graph
           example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/GraphVisualDatum'
-          example:
-            - source: example
-              target: example
-              value: example
       example:
-        data:
-          - source: example
-            target: example
-            value: example
-        shape: example
-    GraphVisualDatum:
-      type: object
-      required:
-        - source
-        - target
-        - value
-      properties:
-        source:
-          type: string
-          example: example
-        target:
-          type: string
-          example: example
-        value:
-          example: example
-      example:
-        source: example
-        target: example
-        value: example
+        type: example
     GroupCreateRequest:
       type: object
       required:
@@ -41808,51 +41195,34 @@ components:
         id: example
         name: example
         updatedAt: "2026-01-02T15:04:05Z"
-    HierarchyVisualDataResponse:
+    HeatmapDashboardVisualQueryResponse:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
       required:
-        - shape
-        - data
+        - type
       properties:
-        shape:
+        type:
           type: string
           enum:
-            - hierarchy
+            - heatmap
           example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/HierarchyVisualDatum'
-          example:
-            - path:
-                - example
-              value: example
       example:
-        data:
-          - path:
-              - example
-            value: example
-        shape: example
-    HierarchyVisualDatum:
+        type: example
+    HistogramDashboardVisualQueryResponse:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
       required:
-        - path
-        - value
+        - type
       properties:
-        path:
-          type: array
-          items:
-            type: string
-          example:
-            - example
-        value:
+        type:
+          type: string
+          enum:
+            - histogram
           example: example
       example:
-        path:
-          - example
-        value: example
+        type: example
     InstanceResponse:
       type: object
       required:
@@ -41863,6 +41233,34 @@ components:
           example: example
       example:
         environment: example
+    KPIDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - kpi
+          example: example
+      example:
+        type: example
+    LineDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - line
+          example: example
+      example:
+        type: example
     LocalPasswordResetResponse:
       type: object
       required:
@@ -42683,58 +42081,34 @@ components:
         - failed
         - expired
       example: open
-    MatrixVisualDataResponse:
+    MapDashboardVisualQueryResponse:
       type: object
       allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
       required:
-        - shape
-        - data
+        - type
       properties:
-        shape:
+        type:
+          type: string
+          enum:
+            - map
+          example: example
+      example:
+        type: example
+    MatrixDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardTabularVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
           type: string
           enum:
             - matrix
           example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/MatrixVisualDatum'
-          example:
-            - column: example
-              row: example
-              selected: true
-              value: example
       example:
-        data:
-          - column: example
-            row: example
-            selected: true
-            value: example
-        shape: example
-    MatrixVisualDatum:
-      type: object
-      required:
-        - row
-        - column
-        - value
-      properties:
-        row:
-          type: string
-          example: example
-        column:
-          type: string
-          example: example
-        value:
-          example: example
-        selected:
-          type: boolean
-          example: true
-      example:
-        column: example
-        row: example
-        selected: true
-        value: example
+        type: example
     ModelDashboardUsage:
       type: object
       required:
@@ -42776,63 +42150,6 @@ components:
       example:
         id: example
         title: example
-    OHLCVisualDataResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
-      required:
-        - shape
-        - data
-      properties:
-        shape:
-          type: string
-          enum:
-            - ohlc
-          example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/OHLCVisualDatum'
-          example:
-            - close: example
-              high: example
-              label: example
-              low: example
-              open: example
-      example:
-        data:
-          - close: example
-            high: example
-            label: example
-            low: example
-            open: example
-        shape: example
-    OHLCVisualDatum:
-      type: object
-      required:
-        - label
-        - open
-        - close
-        - low
-        - high
-      properties:
-        label:
-          type: string
-          example: example
-        open:
-          example: example
-        close:
-          example: example
-        low:
-          example: example
-        high:
-          example: example
-      example:
-        close: example
-        high: example
-        label: example
-        low: example
-        open: example
     OwnershipTransferRequest:
       type: object
       required:
@@ -42859,6 +42176,34 @@ components:
           example: example
       example:
         nextCursor: example
+    PieDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - pie
+          example: example
+      example:
+        type: example
+    PivotDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardTabularVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - pivot
+          example: example
+      example:
+        type: example
     PrincipalCreateRequest:
       type: object
       required:
@@ -43350,6 +42695,20 @@ components:
         - application/json
         - application/vnd.apache.arrow.stream
       example: application/json
+    RadarDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - radar
+          example: example
+      example:
+        type: example
     RefreshRunCreateRequest:
       type: object
       required:
@@ -43830,6 +43189,34 @@ components:
         name: example
         privileges:
           - example
+    SankeyDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - sankey
+          example: example
+      example:
+        type: example
+    ScatterDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - scatter
+          example: example
+      example:
+        type: example
     SearchResponse:
       type: object
       required:
@@ -45106,57 +44493,6 @@ components:
         expiresAt: "2026-01-02T15:04:05Z"
         id: example
         lastSeenAt: "2026-01-02T15:04:05Z"
-    SingleValueVisualDataResponse:
-      type: object
-      allOf:
-        - $ref: '#/components/schemas/DashboardVisualDataResponseBase'
-      required:
-        - shape
-        - data
-      properties:
-        shape:
-          type: string
-          enum:
-            - single_value
-          example: example
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/SingleValueVisualDatum'
-          example:
-            - label: example
-              selected: true
-              series: example
-              value: example
-      example:
-        data:
-          - label: example
-            selected: true
-            series: example
-            value: example
-        shape: example
-    SingleValueVisualDatum:
-      type: object
-      required:
-        - label
-        - value
-      properties:
-        label:
-          type: string
-          example: example
-        value:
-          example: example
-        series:
-          type: string
-          example: example
-        selected:
-          type: boolean
-          example: true
-      example:
-        label: example
-        selected: true
-        series: example
-        value: example
     StatusResponse:
       type: object
       required:
@@ -45167,6 +44503,62 @@ components:
           example: example
       example:
         status: example
+    SunburstDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - sunburst
+          example: example
+      example:
+        type: example
+    TableDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardTabularVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - table
+          example: example
+      example:
+        type: example
+    TreeDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - tree
+          example: example
+      example:
+        type: example
+    TreemapDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - treemap
+          example: example
+      example:
+        type: example
     UploadProtocol:
       type: string
       enum:
@@ -45189,6 +44581,20 @@ components:
         - ohlc
         - distribution
       example: category_value
+    WaterfallDashboardVisualQueryResponse:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/DashboardChartVisualQueryResponseBase'
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum:
+            - waterfall
+          example: example
+      example:
+        type: example
     WorkspaceAssetGraphResponse:
       type: object
       required:

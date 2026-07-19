@@ -90,33 +90,6 @@ func (h Handler) GetDashboardPage(w nethttp.ResponseWriter, r *nethttp.Request) 
 	})
 }
 
-func (h Handler) GetDashboardTable(w nethttp.ResponseWriter, r *nethttp.Request) {
-	report, page, ok := h.dashboardReportPage(w, r)
-	if !ok {
-		return
-	}
-	tableID := chi.URLParam(r, "table")
-	table, exists := report.Tables[tableID]
-	if !exists {
-		writeJSONError(w, fmt.Errorf("table %q not found", tableID), nethttp.StatusNotFound)
-		return
-	}
-	component, exists := pageComponentForTable(page, tableID)
-	if !exists {
-		writeJSONError(w, fmt.Errorf("table %q not found on page %q", tableID, page.ID), nethttp.StatusNotFound)
-		return
-	}
-	columns := make([]api.DashboardTableColumn, 0, len(table.Columns))
-	for _, column := range table.Columns {
-		columns = append(columns, api.DashboardTableColumn{Key: column.Key, Label: column.Label})
-	}
-	writeJSON(w, nethttp.StatusOK, api.DashboardTableDescribeResponse{
-		ID: tableID, ComponentID: component.ID, Title: firstNonEmpty(component.Title, table.Title),
-		Description: firstNonEmpty(component.Description, table.Description), Columns: columns,
-		Query: jsonMap(table.Query), Placement: componentPlacement(component),
-	})
-}
-
 func (h Handler) GetDashboardFilter(w nethttp.ResponseWriter, r *nethttp.Request) {
 	report, page, ok := h.dashboardReportPage(w, r)
 	if !ok {
@@ -149,7 +122,17 @@ func (h Handler) GetDashboardVisual(w nethttp.ResponseWriter, r *nethttp.Request
 	visualID := chi.URLParam(r, "visual")
 	visual, exists := report.Visuals[visualID]
 	if !exists {
-		writeJSONError(w, fmt.Errorf("visual %q not found", visualID), nethttp.StatusNotFound)
+		table, tableExists := report.Tables[visualID]
+		if !tableExists {
+			writeJSONError(w, fmt.Errorf("visual %q not found", visualID), nethttp.StatusNotFound)
+			return
+		}
+		component, onPage := pageComponentForTable(page, visualID)
+		if !onPage {
+			writeJSONError(w, fmt.Errorf("visual %q not found on page %q", visualID, page.ID), nethttp.StatusNotFound)
+			return
+		}
+		writeJSON(w, nethttp.StatusOK, dashboardTabularVisualDTO(visualID, table, component))
 		return
 	}
 	component, ok := pageComponentForVisual(page, visualID)
@@ -190,7 +173,7 @@ func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.R
 	if !ok {
 		return
 	}
-	var input api.DashboardPageQueryRequest
+	var input api.DashboardVisualQueryRequest
 	if err := decodeOptionalJSONBody(r, &input); err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
@@ -200,12 +183,32 @@ func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.R
 		return
 	}
 	visualID := chi.URLParam(r, "visual")
-	if _, exists := report.Visuals[visualID]; !exists {
+	_, chartExists := report.Visuals[visualID]
+	_, tableExists := report.Tables[visualID]
+	if !chartExists && !tableExists {
 		writeJSONError(w, fmt.Errorf("visual %q not found", visualID), nethttp.StatusNotFound)
 		return
 	}
-	if _, ok := pageComponentForVisual(page, visualID); !ok {
+	onPage := false
+	if chartExists {
+		_, onPage = pageComponentForVisual(page, visualID)
+	} else {
+		_, onPage = pageComponentForTable(page, visualID)
+	}
+	if !onPage {
 		writeJSONError(w, fmt.Errorf("visual %q not found on page %q", visualID, page.ID), nethttp.StatusNotFound)
+		return
+	}
+	if tableExists {
+		h.queryDashboardTabularVisual(w, r, metrics, page, visualID, input)
+		return
+	}
+	if input.Limit != 0 || input.PageToken != "" {
+		writeJSONError(w, fmt.Errorf("pagination is only supported for table, matrix, and pivot visuals"), nethttp.StatusBadRequest)
+		return
+	}
+	if acceptsDashboardMediaType(r.Header.Get("Accept"), dashboardArrowMediaType) {
+		writeJSONError(w, fmt.Errorf("Arrow output is only supported for table, matrix, and pivot visuals"), nethttp.StatusNotAcceptable)
 		return
 	}
 	dashboardID := chi.URLParam(r, "dashboard")
@@ -227,29 +230,7 @@ func (h Handler) QueryDashboardVisualData(w nethttp.ResponseWriter, r *nethttp.R
 	writeJSON(w, nethttp.StatusOK, publicDashboardVisual(boundedVisual(visual)))
 }
 
-func (h Handler) QueryDashboardTableData(w nethttp.ResponseWriter, r *nethttp.Request) {
-	metrics, ok := h.biMetrics(w, r)
-	if !ok {
-		return
-	}
-	var input api.DashboardTableDataRequest
-	if err := decodeOptionalJSONBody(r, &input); err != nil {
-		writeJSONError(w, err, nethttp.StatusBadRequest)
-		return
-	}
-	report, page, ok := h.dashboardReportPage(w, r)
-	if !ok {
-		return
-	}
-	tableID := chi.URLParam(r, "table")
-	if _, exists := report.Tables[tableID]; !exists {
-		writeJSONError(w, fmt.Errorf("table %q not found", tableID), nethttp.StatusNotFound)
-		return
-	}
-	if _, ok := pageComponentForTable(page, tableID); !ok {
-		writeJSONError(w, fmt.Errorf("table %q not found on page %q", tableID, page.ID), nethttp.StatusNotFound)
-		return
-	}
+func (h Handler) queryDashboardTabularVisual(w nethttp.ResponseWriter, r *nethttp.Request, metrics Metrics, page dashboard.Page, visualID string, input api.DashboardVisualQueryRequest) {
 	limit := input.Limit
 	if limit <= 0 {
 		limit = 100
@@ -274,15 +255,15 @@ func (h Handler) QueryDashboardTableData(w nethttp.ResponseWriter, r *nethttp.Re
 	if filters.Controls == nil && filters.Selections == nil {
 		filters = metrics.DefaultFilters(dashboardID)
 	}
-	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: tableID, Block: "a", Start: start, Count: limit})
+	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_visual", dashboardID+":"+visualID))
+	request := metrics.NormalizeTableRequest(dashboardID, dashboard.TableRequest{Table: visualID, Block: "a", Start: start, Count: limit})
 	request.Start, request.Count = start, limit
-	ctx := dataquery.WithMetadata(r.Context(), h.requestQueryMetadata(r, dataquery.SurfaceAPI, dataquery.OperationAPIQuery, "dashboard_table", dashboardID+":"+tableID))
 	table, err := metrics.QueryTablePage(ctx, dashboardID, page.ID, filters, request)
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusBadRequest)
 		return
 	}
-	writeDashboardTableRowset(w, r, dashboardTableRowset(table, request.Block, start, limit, scope, snapshot))
+	writeDashboardTableRowset(w, r, dashboardTableRowset(visualID, table, request.Block, start, limit, scope, snapshot))
 }
 
 func (h Handler) ListDashboardFilterOptions(w nethttp.ResponseWriter, r *nethttp.Request) {
@@ -414,7 +395,7 @@ func requestQueryOperation(operation, objectType string) string {
 		return operation
 	}
 	switch objectType {
-	case "dashboard_page", "dashboard_table", "dashboard_visual", "dashboard_filter":
+	case "dashboard_page", "dashboard_visual", "dashboard_filter":
 		return ""
 	default:
 		return operation
@@ -487,7 +468,7 @@ func publicDashboardVisual(visual dashboard.Visual) map[string]any {
 		data = append(data, item)
 	}
 	out := map[string]any{
-		"version": visual.Version, "id": visual.ID, "kind": visual.Kind, "shape": visual.Shape, "renderer": visual.Renderer,
+		"version": visual.Version, "id": visual.ID, "shape": visual.Shape, "renderer": visual.Renderer,
 		"type": visual.Type, "title": visual.Title, "unit": visual.Unit, "format": visual.Format, "interaction": visual.Interaction,
 		"dimensions": visual.Dimensions, "measure": visual.Measure, "measures": visual.Measures, "series": visual.Series,
 		"selection": visual.Selection, "data": data,
@@ -533,8 +514,6 @@ func dashboardComponentDTO(component dashboard.PageVisual, report reportdef.Dash
 	switch out.Kind {
 	case "visual":
 		out.VisualID = out.Ref
-	case "table":
-		out.TableID = out.Ref
 	case "filter":
 		out.FilterID = out.Ref
 	}
@@ -555,7 +534,6 @@ func dashboardVisualDTO(visualID string, visual reportdef.Visual, component dash
 	out := api.DashboardVisualDescribeResponse{
 		ID:          visualID,
 		ComponentID: component.ID,
-		Kind:        firstNonEmpty(visual.Kind, component.Kind),
 		Shape:       visual.Shape,
 		Renderer:    visual.Renderer,
 		Type:        visual.Type,
@@ -588,6 +566,21 @@ func dashboardVisualDTO(visualID string, visual reportdef.Visual, component dash
 	return out
 }
 
+func dashboardTabularVisualDTO(visualID string, visual reportdef.TableVisual, component dashboard.PageVisual) api.DashboardVisualDescribeResponse {
+	columns := make([]api.DashboardTableColumn, 0, len(visual.Columns))
+	for _, column := range visual.Columns {
+		columns = append(columns, api.DashboardTableColumn{Key: column.Key, Label: column.Label, Role: column.Role, Format: column.Format})
+	}
+	return api.DashboardVisualDescribeResponse{
+		ID: visualID, ComponentID: component.ID,
+		Type:  dashboard.NewTabularVisual(visualID, dashboard.Table{Kind: visual.Kind}).Type,
+		Title: firstNonEmpty(component.Title, visual.Title), Description: firstNonEmpty(component.Description, visual.Description),
+		Query: jsonMap(visual.Query), Interaction: jsonMap(visual.Interaction), Columns: columns,
+		Cardinality: visual.Cardinality, Placement: componentPlacement(component),
+		X: component.X, Y: component.Y, Width: component.Width, Height: component.Height,
+	}
+}
+
 func modelSummary(model *semanticmodel.Model) *api.ModelRef {
 	if model == nil {
 		return nil
@@ -607,15 +600,14 @@ func dashboardManifest(report reportdef.Dashboard, model *semanticmodel.Model, p
 		Model:         modelSummary(model),
 		Counts: api.DashboardManifestCounts{
 			Pages:   len(pages),
-			Visuals: len(report.Visuals),
-			Tables:  len(report.Tables),
+			Visuals: len(report.Visuals) + len(report.Tables),
 			Filters: len(report.Filters),
 		},
 		Pages: make([]api.DashboardManifestPage, 0, len(pages)),
 		DetailTools: map[string]string{
-			"model":      "describe_model",
-			"page_data":  "query_dashboard_page",
-			"table_data": "query_table",
+			"model":       "describe_model",
+			"page_data":   "query_dashboard_page",
+			"visual_data": "query_dashboard_visual",
 		},
 	}
 	for _, page := range pages {
@@ -646,7 +638,7 @@ func dashboardComponentSummary(component dashboard.PageVisual, report reportdef.
 		if title == "" {
 			title = report.Tables[component.Table].Title
 		}
-		return api.DashboardManifestComponent{ID: component.ID, Kind: "table", Ref: component.Table, Title: title}
+		return api.DashboardManifestComponent{ID: component.ID, Kind: "visual", Ref: component.Table, Title: title}
 	case component.Filter != "":
 		title := component.Title
 		if title == "" {

@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Provide two dimensions for the row and column axes and one measure for cell intensity, creating a compact comparison across both categories.
 
-{{< chart id="state_status_heatmap" >}}
+{{< visual id="state_status_heatmap" >}}
 
 ```yaml visual-example=state_status_heatmap
 visuals:
@@ -36,7 +36,7 @@ visuals:
 
 Replace the row dimension with product category to reuse the same matrix contract for a different categorical relationship.
 
-{{< chart id="category_status_heatmap" >}}
+{{< visual id="category_status_heatmap" >}}
 
 ```yaml visual-example=category_status_heatmap
 visuals:
@@ -61,7 +61,7 @@ visuals:
 
 Enable `options.show_labels` when exact cell values matter in addition to color intensity and the matrix remains sparse enough to read.
 
-{{< chart id="category_status_heatmap_labels" >}}
+{{< visual id="category_status_heatmap_labels" >}}
 
 ```yaml visual-example=category_status_heatmap_labels
 visuals:

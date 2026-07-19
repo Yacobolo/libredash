@@ -32,7 +32,7 @@ Change labels freely when meaning is preserved. Rename identifiers only with a r
 
 ### Separate data logic from layout
 
-Visual and table definitions own queries. Page entries own composition and placement. This keeps a layout review focused on the canvas and a semantic review focused on business behavior.
+Visual definitions own queries. Page entries own composition and placement. This keeps a layout review focused on the canvas and a semantic review focused on business behavior.
 
 Avoid copying the same query under several page components. Reuse a dashboard definition where its query and presentation intent are the same; create a distinct definition when options or interactions genuinely differ.
 

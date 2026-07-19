@@ -8,7 +8,7 @@ Every preview on this page is generated from the YAML shown below it using a fix
 
 Use the `ohlc` shape with an ordered month dimension and a numeric measure to summarize each period as open, high, low, and close values.
 
-{{< chart id="delivery_candlestick" >}}
+{{< visual id="delivery_candlestick" >}}
 
 ```yaml visual-example=delivery_candlestick
 visuals:
@@ -35,7 +35,7 @@ visuals:
 
 Change the measure to revenue and enable `options.data_zoom` so dense monthly ranges remain explorable without changing the OHLC contract.
 
-{{< chart id="revenue_candlestick" >}}
+{{< visual id="revenue_candlestick" >}}
 
 ```yaml visual-example=revenue_candlestick
 visuals:

@@ -54,7 +54,7 @@ import {
   type ExpectedBlockRequest,
   type SortDirection,
   type TableBlock,
-  type TableBlockCommand,
+  type VisualWindowCommand,
   type TableColumn,
   type TableFormattingRule,
   type TableRow,
@@ -1725,11 +1725,11 @@ class ReportTable extends LitElement {
       this.expectedBlocks.set(block, { start, requestSeq, resetVersion, sort })
     }
     this.requestUpdate()
-    this.dispatchEvent(new CustomEvent<TableBlockCommand>('ld-table-window-change', {
+    this.dispatchEvent(new CustomEvent<VisualWindowCommand>('ld-visual-window-change', {
       bubbles: true,
       composed: true,
       detail: {
-        table: tableId,
+        visual: tableId,
         block,
         start,
         count,
@@ -1809,7 +1809,7 @@ class ReportTable extends LitElement {
             bubbles: true,
             composed: true,
             detail: {
-              sourceKind: 'table',
+              sourceKind: 'visual',
               sourceId: tableId,
               interactionKind: this.table?.interaction?.kind || 'row_selection',
               action: 'clear',

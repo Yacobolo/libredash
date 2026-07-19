@@ -653,7 +653,6 @@ func dependencyBreakingImpact(edgeType workspace.AssetEdgeType, fromID, toID wor
 		workspace.AssetEdgeFiltersField,
 		workspace.AssetEdgeUsesMeasure,
 		workspace.AssetEdgeUsesVisual,
-		workspace.AssetEdgeUsesTable,
 		workspace.AssetEdgeUsesFilter:
 		return true
 	case workspace.AssetEdgeReadsSource:

@@ -52,6 +52,5 @@ func ChatBootstrapSignals(catalog dashboard.Catalog, workspaceID, roleLabel, vie
 		"runtime": envelope.Runtime,
 		"agent":   envelope.Agent,
 		"visuals": envelope.Visuals,
-		"tables":  envelope.Tables,
 	}
 }

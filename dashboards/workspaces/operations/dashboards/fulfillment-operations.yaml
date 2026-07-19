@@ -38,7 +38,7 @@ spec:
       field: orders.delivery_bucket
   visuals:
     total_orders:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -47,7 +47,7 @@ spec:
         note: Filtered order count
         tone: ink
     delivery_days:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -56,7 +56,7 @@ spec:
         note: Average days
         tone: amber
     review_score:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -100,7 +100,7 @@ spec:
             direction: desc
         limit: 10
   pages:
-    - name: overview
+    - id: overview
       title: Overview
       canvas:
         width: 1366
@@ -110,40 +110,40 @@ spec:
         row_height: 48
         gap: 16
         padding: 16
-      visuals:
+      components:
         - id: state-filter
-          kind: filter_card
+          kind: filter
           filter: state
           placement: {col: 1, row: 1, col_span: 4, row_span: 2}
         - id: status-filter
-          kind: filter_card
+          kind: filter
           filter: status
           placement: {col: 5, row: 1, col_span: 4, row_span: 2}
         - id: delivery-filter
-          kind: filter_card
+          kind: filter
           filter: delivery_bucket
           placement: {col: 9, row: 1, col_span: 4, row_span: 2}
         - id: total-orders
-          kind: kpi_card
+          kind: visual
           visual: total_orders
           placement: {col: 1, row: 4, col_span: 4, row_span: 3}
         - id: delivery-days
-          kind: kpi_card
+          kind: visual
           visual: delivery_days
           placement: {col: 5, row: 4, col_span: 4, row_span: 3}
         - id: review-score
-          kind: kpi_card
+          kind: visual
           visual: review_score
           placement: {col: 9, row: 4, col_span: 4, row_span: 3}
         - id: status
-          kind: donut_chart
+          kind: visual
           visual: orders_by_status
           placement: {col: 1, row: 8, col_span: 4, row_span: 6}
         - id: delivery-speed
-          kind: bar_chart
+          kind: visual
           visual: delivery_speed
           placement: {col: 5, row: 8, col_span: 4, row_span: 6}
         - id: reviews
-          kind: bar_chart
+          kind: visual
           visual: review_by_status
           placement: {col: 9, row: 8, col_span: 4, row_span: 6}

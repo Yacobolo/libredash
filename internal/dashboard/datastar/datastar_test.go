@@ -14,7 +14,7 @@ func TestPatchKeys(t *testing.T) {
 		Filters:       dashboard.Filters{}.WithDefaults(),
 		FilterOptions: map[string][]dashboard.FilterOption{"state": {{Value: "SP", Label: "SP"}}},
 		Status:        dashboard.Status{Loading: false},
-		Visuals:       map[string]dashboard.Visual{"orders": {Title: "Orders"}},
+		Visuals:       map[string]dashboard.Visual{"orders": {ID: "orders", Type: "bar", Title: "Orders"}},
 	})
 
 	for _, key := range []string{"filters", "filterOptions", "status", "visuals"} {
@@ -30,8 +30,8 @@ func TestPatchKeys(t *testing.T) {
 	}
 
 	tablePatch := TablePatch("orders", dashboard.Table{Title: "Orders"})
-	tables, ok := tablePatch["tables"].(map[string]dashboard.Table)
-	if !ok || tables["orders"].Title != "Orders" {
+	visuals, ok := tablePatch["visuals"].(map[string]dashboard.TabularVisual)
+	if !ok || visuals["orders"].Title != "Orders" || visuals["orders"].Type != "table" {
 		t.Fatalf("table patch = %#v", tablePatch)
 	}
 
@@ -129,7 +129,7 @@ func TestRefreshEventEnvelopeCarriesExplicitDeliveryMetadata(t *testing.T) {
 		{
 			name: "visual result batch",
 			event: dashboardstream.RefreshEvent{
-				Type: dashboardstream.RefreshEventVisual, RefreshID: "refresh-9", Generation: 9, Target: "rating_count",
+				Type: dashboardstream.RefreshEventVisual, RefreshID: "refresh-9", Generation: 9, Target: "rating_count", Value: dashboard.Visual{ID: "rating_count", Type: "bar"},
 			},
 			wantGroup:     "dashboard-results",
 			wantMergeRoot: "visuals",
@@ -156,8 +156,8 @@ func TestTableMetadataUpdatesDataWithoutChangingComponentStatus(t *testing.T) {
 	patch := RefreshEventPatch(dashboardstream.RefreshEvent{
 		Type: dashboardstream.RefreshEventTableMetadata, Target: "orders", Value: table,
 	})
-	tables, ok := patch["tables"].(map[string]dashboard.Table)
-	total, exact := tables["orders"].Cardinality.ExactValue()
+	visuals, ok := patch["visuals"].(map[string]dashboard.TabularVisual)
+	total, exact := visuals["orders"].Cardinality.ExactValue()
 	if !ok || total != 42 || !exact {
 		t.Fatalf("metadata patch = %#v", patch)
 	}

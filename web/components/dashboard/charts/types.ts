@@ -56,7 +56,6 @@ export type InteractionConfig = {
 export type ChartPayload = {
   version?: number
   id?: string
-  kind?: string
   shape?: ChartShape | string
   renderer?: string
   type?: ChartType | string

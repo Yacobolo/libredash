@@ -44,7 +44,7 @@ spec:
       field: orders.category
   visuals:
     revenue_kpi:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -53,7 +53,7 @@ spec:
         note: Payment value
         tone: green
     aov_kpi:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -62,7 +62,7 @@ spec:
         note: Revenue per order
         tone: amber
     total_orders:
-      kind: kpi
+      type: kpi
       shape: single_value
       query:
         measures:
@@ -94,10 +94,9 @@ spec:
           - field: value
             direction: desc
         limit: 10
-  tables:
     orders_table:
       title: Orders
-      kind: data_table
+      type: table
       query:
         table: orders
         fields:
@@ -142,7 +141,7 @@ spec:
           label: Revenue
           align: right
   pages:
-    - name: overview
+    - id: overview
       title: Overview
       canvas:
         width: 1366
@@ -152,40 +151,40 @@ spec:
         row_height: 48
         gap: 16
         padding: 16
-      visuals:
+      components:
         - id: purchase-date-filter
-          kind: filter_card
+          kind: filter
           filter: purchase_date
           placement: {col: 1, row: 1, col_span: 4, row_span: 2}
         - id: state-filter
-          kind: filter_card
+          kind: filter
           filter: state
           placement: {col: 5, row: 1, col_span: 4, row_span: 2}
         - id: category-filter
-          kind: filter_card
+          kind: filter
           filter: category
           placement: {col: 9, row: 1, col_span: 4, row_span: 2}
         - id: total-orders
-          kind: kpi_card
+          kind: visual
           visual: total_orders
           placement: {col: 1, row: 4, col_span: 4, row_span: 3}
         - id: revenue
-          kind: kpi_card
+          kind: visual
           visual: revenue_kpi
           placement: {col: 5, row: 4, col_span: 4, row_span: 3}
         - id: aov
-          kind: kpi_card
+          kind: visual
           visual: aov_kpi
           placement: {col: 9, row: 4, col_span: 4, row_span: 3}
         - id: revenue-trend
-          kind: area_chart
+          kind: visual
           visual: revenue_by_month
           placement: {col: 1, row: 8, col_span: 12, row_span: 6}
         - id: categories
-          kind: bar_chart
+          kind: visual
           visual: category_revenue
           placement: {col: 1, row: 14, col_span: 12, row_span: 6}
         - id: orders_table
-          kind: table
-          table: orders_table
+          kind: visual
+          visual: orders_table
           placement: {col: 1, row: 21, col_span: 12, row_span: 8}

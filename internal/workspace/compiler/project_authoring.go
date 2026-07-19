@@ -73,9 +73,82 @@ type projectSemanticModelSpec struct {
 type dashboardSpec struct {
 	SemanticModel string                             `yaml:"semanticModel"`
 	Filters       map[string]report.FilterDefinition `yaml:"filters"`
-	Visuals       map[string]report.Visual           `yaml:"visuals"`
-	Tables        map[string]report.TableVisual      `yaml:"tables"`
+	Visuals       map[string]dashboardVisualSpec     `yaml:"visuals"`
 	Pages         []projectDashboardPage             `yaml:"pages"`
+}
+
+type dashboardVisualSpec struct {
+	Type    string
+	Chart   *report.Visual
+	Tabular *report.TableVisual
+}
+
+func (v *dashboardVisualSpec) UnmarshalYAML(value *yaml.Node) error {
+	var discriminator struct {
+		Type string `yaml:"type"`
+	}
+	if err := value.Decode(&discriminator); err != nil {
+		return err
+	}
+	v.Type = discriminator.Type
+	switch discriminator.Type {
+	case "table", "matrix", "pivot":
+		var definition report.TableVisual
+		if err := value.Decode(&definition); err != nil {
+			return err
+		}
+		switch discriminator.Type {
+		case "table":
+			definition.Kind = "data_table"
+		case "matrix":
+			definition.Kind = "matrix_table"
+		case "pivot":
+			definition.Kind = "pivot_table"
+		}
+		v.Tabular = &definition
+	default:
+		var definition report.Visual
+		if err := value.Decode(&definition); err != nil {
+			return err
+		}
+		definition.Type = discriminator.Type
+		v.Chart = &definition
+	}
+	return nil
+}
+
+func splitDashboardVisuals(in map[string]dashboardVisualSpec) (map[string]report.Visual, map[string]report.TableVisual) {
+	charts := make(map[string]report.Visual)
+	tables := make(map[string]report.TableVisual)
+	for id, visual := range in {
+		if visual.Chart != nil {
+			charts[id] = *visual.Chart
+		}
+		if visual.Tabular != nil {
+			tables[id] = *visual.Tabular
+		}
+	}
+	return charts, tables
+}
+
+// splitDashboardFilterTargets keeps the renderer-specific query services
+// internal while presenting a single visual target namespace to authors.
+func splitDashboardFilterTargets(filters map[string]report.FilterDefinition, tables map[string]report.TableVisual) map[string]report.FilterDefinition {
+	for id, filter := range filters {
+		visuals := make([]string, 0, len(filter.Targets.Visuals))
+		tabular := make([]string, 0, len(filter.Targets.Visuals))
+		for _, target := range filter.Targets.Visuals {
+			if _, ok := tables[target]; ok {
+				tabular = append(tabular, target)
+			} else {
+				visuals = append(visuals, target)
+			}
+		}
+		filter.Targets.Visuals = visuals
+		filter.Targets.Tables = tabular
+		filters[id] = filter
+	}
+	return filters
 }
 
 type projectModelTableSpec struct {
@@ -100,12 +173,12 @@ type projectModelField struct {
 }
 
 type projectDashboardPage struct {
-	Name        string                 `yaml:"name"`
+	ID          string                 `yaml:"id"`
 	Title       string                 `yaml:"title"`
 	Description string                 `yaml:"description"`
 	Canvas      dashboard.PageCanvas   `yaml:"canvas"`
 	Grid        dashboard.PageGrid     `yaml:"grid"`
-	Visuals     []dashboard.PageVisual `yaml:"visuals"`
+	Components  []dashboard.PageVisual `yaml:"components"`
 }
 
 type workspaceGroupSpec struct {

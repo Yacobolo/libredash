@@ -149,7 +149,7 @@ func (fakeMetrics) Report(dashboardID string) (reportdef.Dashboard, *semanticmod
 				"ops_pipeline": {Title: "Ops Pipeline", Type: "bar", Query: reportdef.VisualQuery{Dimensions: fieldRefs("orders.status"), Measures: fieldRefs("order_count")}, Interaction: pointInteraction("orders.status", "orders", "ops_pipeline")},
 			},
 			Tables: map[string]reportdef.TableVisual{
-				"orders": {Title: "Orders", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, DefaultSort: dashboard.TableSort{Key: "purchase_date", Direction: "desc"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
+				"order_rows": {Title: "Orders", Query: reportdef.TableQuery{Table: "orders", Fields: []string{"orders.order_id"}}, DefaultSort: dashboard.TableSort{Key: "purchase_date", Direction: "desc"}, Columns: []dashboard.TableColumn{{Key: "order_id", Label: "Order"}}},
 			},
 			Pages: fakeMetrics{}.Pages(dashboardID),
 		}, &semanticmodel.Model{
@@ -329,7 +329,7 @@ func (fakeMetrics) Pages(dashboardID string) []dashboard.Page {
 				{ID: "header", Kind: "header", X: 0, Y: 0, Width: 100, Height: 40, Title: "Test"},
 				{ID: "state-filter", Kind: "filter_card", Filter: "state", X: 0, Y: 42, Width: 100, Height: 32},
 				{ID: "orders-chart", Kind: "donut_chart", Visual: "orders", X: 0, Y: 48, Width: 100, Height: 100},
-				{ID: "orders-table", Kind: "table", Table: "orders", X: 0, Y: 160, Width: 100, Height: 100},
+				{ID: "orders-table", Kind: "table", Table: "order_rows", X: 0, Y: 160, Width: 100, Height: 100},
 			},
 		},
 		{
@@ -366,21 +366,29 @@ func (fakeMetrics) QueryDashboardPage(_ context.Context, _ string, pageID string
 			LastUpdated: "12:00:00",
 		},
 		Visuals: map[string]dashboard.Visual{
-			chartID: {Title: chartTitle, Unit: "orders", Data: []dashboard.Datum{{"label": "delivered", "value": 1}}},
+			chartID: {ID: chartID, Type: "bar", Shape: "category_value", Title: chartTitle, Unit: "orders", Data: []dashboard.Datum{{"label": "delivered", "value": 1}}},
 		},
 	}, nil
 }
 
 func (fakeMetrics) QueryVisualPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualID string) (dashboard.Visual, error) {
 	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
-	return patch.Visuals[visualID], err
+	visual, ok := patch.Visuals[visualID]
+	if !ok {
+		visual = dashboard.Visual{ID: visualID, Type: "bar", Shape: "category_value", Title: visualID}
+	}
+	return visual, err
 }
 
 func (fakeMetrics) QueryVisualsPage(ctx context.Context, dashboardID, pageID string, filters dashboard.Filters, visualIDs []string) (map[string]dashboard.Visual, error) {
 	patch, err := fakeMetrics{}.QueryDashboardPage(ctx, dashboardID, pageID, filters)
 	visuals := make(map[string]dashboard.Visual, len(visualIDs))
 	for _, id := range visualIDs {
-		visuals[id] = patch.Visuals[id]
+		visual, ok := patch.Visuals[id]
+		if !ok {
+			visual = dashboard.Visual{ID: id, Type: "bar", Shape: "category_value", Title: id}
+		}
+		visuals[id] = visual
 	}
 	return visuals, err
 }
@@ -456,8 +464,8 @@ func TestPageRouteRendersRequestedYamlPage(t *testing.T) {
 	if strings.Contains(decoded, `"orders":{"version":3`) {
 		t.Fatalf("operations page seeded off-page order chart:\n%s", decoded)
 	}
-	if !strings.Contains(decoded, `"tables":{}`) {
-		t.Fatalf("operations page should seed no table placeholders:\n%s", decoded)
+	if strings.Contains(decoded, `"order_rows"`) {
+		t.Fatalf("operations page should seed no off-page tabular visuals:\n%s", decoded)
 	}
 }
 
@@ -1026,8 +1034,8 @@ func TestUpdatesStreamsPageScopedChartSignals(t *testing.T) {
 	if strings.Contains(body, `"visuals":{"orders"`) {
 		t.Fatalf("updates streamed off-page chart:\n%s", body)
 	}
-	if !strings.Contains(body, `"tables":{}`) {
-		t.Fatalf("updates should stream empty tables for chart-only page:\n%s", body)
+	if strings.Contains(body, `"order_rows"`) {
+		t.Fatalf("updates should not stream off-page tabular visuals:\n%s", body)
 	}
 	if strings.Contains(body, `"kpis"`) {
 		t.Fatalf("updates streamed legacy KPI signal:\n%s", body)
@@ -1035,7 +1043,7 @@ func TestUpdatesStreamsPageScopedChartSignals(t *testing.T) {
 }
 
 func TestDashboardRefreshCommandRouteIsRemoved(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":0,"count":50}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1048,7 +1056,7 @@ func TestDashboardRefreshCommandRouteIsRemoved(t *testing.T) {
 }
 
 func TestSelectCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[]},"runtime":{"clientId":"test-client"},"interactionCommand":{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"tableCommand":{"table":"orders","block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[]},"runtime":{"clientId":"test-client"},"interactionCommand":{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"visual":"order_rows","block":"all","start":0,"count":50}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/select", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1081,24 +1089,24 @@ func TestPageCommandsQueryActivePage(t *testing.T) {
 		{
 			name:    "interaction select",
 			path:    "/workspaces/test-workspace/commands/select",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"tableCommand":{"block":"all","start":0,"count":50}}`,
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[]},"interactionCommand":{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","action":"set","toggle":true,"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]},"visualWindowCommand":{"block":"all","start":0,"count":50}}`,
 			queries: 1,
 		},
 		{
 			name: "clear selection",
 			path: "/workspaces/test-workspace/commands/clear-selection",
-			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"tableCommand":{"block":"all","start":0,"count":50}}`,
+			body: `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"selections":[{"sourceKind":"visual","sourceId":"ops_pipeline","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"visualWindowCommand":{"block":"all","start":0,"count":50}}`,
 		},
 		{
 			name:    "reload",
 			path:    "/workspaces/test-workspace/commands/reload",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":200,"count":50}}`,
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"block":"all","start":200,"count":50}}`,
 			queries: 2,
 		},
 		{
 			name:    "reset filters",
 			path:    "/workspaces/test-workspace/commands/reset-filters",
-			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"tableCommand":{"block":"all","start":200,"count":50}}`,
+			body:    `{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations"},"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"visualWindowCommand":{"block":"all","start":200,"count":50}}`,
 			queries: 2,
 		},
 	}
@@ -1134,7 +1142,7 @@ func TestDashboardRefreshCommandDoesNotPersistRefreshRun(t *testing.T) {
 	token := testAPIToken(t, ctx, store, principal.ID, "dashboard-refresh")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
-	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{},"tableCommand":{"block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"operations","modelId":"test"},"filters":{},"visualWindowCommand":{"block":"all","start":0,"count":50}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test/commands/refresh", body)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -1209,7 +1217,7 @@ func TestLegacySemanticModelRefreshRouteIsRemoved(t *testing.T) {
 }
 
 func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"all","start":0,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":0,"count":50}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/clear-selection", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1220,7 +1228,7 @@ func TestClearSelectionCommandAcceptsDatastarSignals(t *testing.T) {
 }
 
 func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"all","start":200,"count":50}}`)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}},"selections":[{"sourceKind":"visual","sourceId":"orders","interactionKind":"point_selection","entries":[{"mappings":[{"field":"orders.status","fact":"orders","value":"delivered","label":"delivered"}]}]}]},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":200,"count":50}}`)
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/reset-filters", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -1231,8 +1239,8 @@ func TestResetFiltersCommandAcceptsDatastarSignals(t *testing.T) {
 }
 
 func TestTableWindowCommandAcceptsDatastarSignals(t *testing.T) {
-	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"tableCommand":{"table":"orders","block":"a","start":400,"count":50,"requestSeq":42,"sort":{"key":"revenue","direction":"desc"}}}`)
-	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/table-window", body)
+	body := strings.NewReader(`{"filters":{"controls":{"state":{"type":"multi_select","operator":"in","values":["SP"]}}},"runtime":{"clientId":"test-client"},"visualWindowCommand":{"visual":"order_rows","block":"a","start":400,"count":50,"requestSeq":42,"sort":{"key":"revenue","direction":"desc"}}}`)
+	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/visual-window", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -1246,8 +1254,8 @@ func TestTableWindowCommandDoesNotPublishCanceledQueries(t *testing.T) {
 	updates, unsubscribe := server.broker.Subscribe("test-client:executive-sales:overview")
 	defer unsubscribe()
 
-	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"overview"},"tableCommand":{"table":"orders","block":"all","start":400,"count":50,"requestSeq":42}}`)
-	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/table-window", body)
+	body := strings.NewReader(`{"runtime":{"clientId":"test-client","dashboardId":"executive-sales","pageId":"overview"},"visualWindowCommand":{"visual":"order_rows","block":"all","start":400,"count":50,"requestSeq":42}}`)
+	req := httptest.NewRequest(http.MethodPost, "/workspaces/test-workspace/commands/visual-window", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -1262,7 +1270,7 @@ func TestTableWindowCommandDoesNotPublishCanceledQueries(t *testing.T) {
 				t.Fatalf("received canceled table payload: %#v", patch)
 			}
 			if statuses, ok := patch["componentStatus"].(map[string]any); ok {
-				if status, ok := statuses["table:orders"].(map[string]any); ok && status["error"] != "" {
+				if status, ok := statuses["visual:orders"].(map[string]any); ok && status["error"] != "" {
 					t.Fatalf("cancellation surfaced as target error: %#v", patch)
 				}
 			}
