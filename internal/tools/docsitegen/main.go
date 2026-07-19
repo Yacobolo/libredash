@@ -350,7 +350,8 @@ func loadMachineDocumentationLinks(root string) (map[string]struct{}, error) {
 	if contents, err := os.ReadFile(cliPath); err == nil {
 		var manifest struct {
 			Commands []struct {
-				ID string `json:"id"`
+				ID   string   `json:"id"`
+				Path []string `json:"path"`
 			} `json:"commands"`
 		}
 		if err := json.Unmarshal(contents, &manifest); err != nil {
@@ -360,6 +361,9 @@ func loadMachineDocumentationLinks(root string) (map[string]struct{}, error) {
 		for _, command := range manifest.Commands {
 			links["/docs/cli/commands/"+command.ID+".json"] = struct{}{}
 			links["/docs/cli/commands/"+command.ID+".md"] = struct{}{}
+			if len(command.Path) > 1 {
+				links["/docs/cli/"+command.ID] = struct{}{}
+			}
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err

@@ -86,3 +86,74 @@ func TestGenerateRejectsRunnableCommandWithoutSafetyMetadata(t *testing.T) {
 		t.Fatalf("generate error = %v", err)
 	}
 }
+
+func TestGenerateGroupsSubcommandsOnTopLevelCommandPage(t *testing.T) {
+	root := &cobra.Command{Use: "libredash"}
+	semanticModels := &cobra.Command{Use: "semantic-models", Short: "Inspect semantic models"}
+	list := &cobra.Command{
+		Use: "list", Short: "List semantic models", Run: func(*cobra.Command, []string) {},
+		Annotations: map[string]string{effectAnnotation: "read", confirmationAnnotation: "never"},
+	}
+	query := &cobra.Command{
+		Use: "query <model> <dataset>", Short: "Query a semantic model dataset", Run: func(*cobra.Command, []string) {},
+		Annotations: map[string]string{effectAnnotation: "read", confirmationAnnotation: "never"},
+	}
+	query.Flags().Int("limit", 100, "maximum rows")
+	semanticModels.AddCommand(list, query)
+	root.AddCommand(semanticModels)
+
+	out := t.TempDir()
+	if err := generate(root, out); err != nil {
+		t.Fatalf("generate CLI documentation: %v", err)
+	}
+
+	var generatedCatalog catalog
+	contents, err := os.ReadFile(filepath.Join(out, "catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(contents, &generatedCatalog); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(generatedCatalog.Documents), 1; got != want {
+		t.Fatalf("human documents = %d, want %d", got, want)
+	}
+	if got, want := generatedCatalog.Documents[0].Slug, "semantic-models"; got != want {
+		t.Fatalf("human document slug = %q, want %q", got, want)
+	}
+
+	article, err := os.ReadFile(filepath.Join(out, "semantic-models.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"# libredash semantic-models",
+		"## Subcommands",
+		"[`list`](#list)",
+		"[`query`](#query)",
+		"## list",
+		"## query",
+		"libredash semantic-models query <model> <dataset>",
+		"/docs/cli/commands/semantic-models-query.json",
+		"| `--limit` | int | `100` | maximum rows |",
+	} {
+		if !strings.Contains(string(article), want) {
+			t.Errorf("grouped article missing %q:\n%s", want, article)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(out, "semantic-models-query.md")); !os.IsNotExist(err) {
+		t.Fatalf("leaf human page exists: %v", err)
+	}
+
+	manifestContents, err := os.ReadFile(filepath.Join(out, "manifest.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest machineManifest
+	if err := json.Unmarshal(manifestContents, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(manifest.Commands), 3; got != want {
+		t.Fatalf("machine commands = %d, want %d", got, want)
+	}
+}

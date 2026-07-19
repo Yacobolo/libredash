@@ -14,11 +14,15 @@ import (
 	"github.com/Yacobolo/libredash/internal/visualdocs"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
+	"github.com/yuin/goldmark/parser"
 	g "maragu.dev/gomponents"
 	h "maragu.dev/gomponents/html"
 )
 
-var markdownRenderer = goldmark.New(goldmark.WithExtensions(extension.GFM))
+var markdownRenderer = goldmark.New(
+	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithParserOptions(parser.WithAttribute()),
+)
 
 type siteDocument struct {
 	slug               string

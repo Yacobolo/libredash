@@ -23,14 +23,29 @@ type machineDocumentation struct {
 }
 
 type machineCLICommand struct {
-	ID           string   `json:"id"`
-	Title        string   `json:"title"`
-	Summary      string   `json:"summary"`
-	Description  string   `json:"description"`
-	Usage        string   `json:"usage"`
-	Effect       string   `json:"effect"`
-	Confirmation string   `json:"confirmation"`
-	Arguments    []string `json:"arguments"`
+	ID               string             `json:"id"`
+	Path             []string           `json:"path"`
+	Title            string             `json:"title"`
+	Summary          string             `json:"summary"`
+	Description      string             `json:"description"`
+	Usage            string             `json:"usage"`
+	Runnable         bool               `json:"runnable"`
+	Effect           string             `json:"effect"`
+	Confirmation     string             `json:"confirmation"`
+	Arguments        []string           `json:"arguments"`
+	Options          []machineCLIOption `json:"options"`
+	InheritedOptions []machineCLIOption `json:"inheritedOptions"`
+	Examples         []string           `json:"examples"`
+	Subcommands      []string           `json:"subcommands"`
+}
+
+type machineCLIOption struct {
+	Name        string `json:"name"`
+	Shorthand   string `json:"shorthand"`
+	Type        string `json:"type"`
+	Default     string `json:"default"`
+	Description string `json:"description"`
+	Required    bool   `json:"required"`
 }
 
 type machineAPIOperation struct {
@@ -153,12 +168,68 @@ func docsCLICommand(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 		writeMachineArtifact(w, "application/json; charset=utf-8", prettyJSON(raw))
 		return
 	}
-	document, exists := siteDocumentBySlug("cli/" + id)
-	if !exists {
-		stdhttp.Error(w, "generated CLI article is missing", stdhttp.StatusInternalServerError)
+	var command machineCLICommand
+	if err := json.Unmarshal(raw, &command); err != nil {
+		stdhttp.Error(w, "decode generated CLI command", stdhttp.StatusInternalServerError)
 		return
 	}
-	writeMachineArtifact(w, "text/markdown; charset=utf-8", []byte(document.markdown))
+	writeMachineArtifact(w, "text/markdown; charset=utf-8", []byte(renderMachineCLICommand(command)))
+}
+
+func renderMachineCLICommand(command machineCLICommand) string {
+	var out strings.Builder
+	out.WriteString("# " + command.Title + "\n\n")
+	out.WriteString(strings.TrimSpace(command.Description) + "\n\n")
+	out.WriteString("## Usage\n\n```sh\n" + command.Usage + "\n```\n")
+	if command.Runnable {
+		out.WriteString("\n## Behavior\n\n| Side effect | Confirmation |\n| --- | --- |\n")
+		out.WriteString("| `" + command.Effect + "` | `" + command.Confirmation + "` |\n")
+	}
+	writeMachineCLIOptions(&out, "Options", command.Options)
+	writeMachineCLIOptions(&out, "Inherited options", command.InheritedOptions)
+	if len(command.Examples) > 0 {
+		out.WriteString("\n## Examples\n\n```sh\n" + strings.Join(command.Examples, "\n") + "\n```\n")
+	}
+	if len(command.Subcommands) > 0 {
+		out.WriteString("\n## Subcommands\n\n")
+		for _, id := range command.Subcommands {
+			out.WriteString("- `" + id + "`\n")
+		}
+	}
+	return strings.TrimRight(out.String(), "\n") + "\n"
+}
+
+func writeMachineCLIOptions(out *strings.Builder, heading string, options []machineCLIOption) {
+	if len(options) == 0 {
+		return
+	}
+	out.WriteString("\n## " + heading + "\n\n| Flag | Type | Default | Required | Description |\n| --- | --- | --- | --- | --- |\n")
+	for _, option := range options {
+		name := "`--" + option.Name + "`"
+		if option.Shorthand != "" {
+			name = "`-" + option.Shorthand + "`, " + name
+		}
+		out.WriteString("| " + name + " | " + option.Type + " | `" + strings.ReplaceAll(option.Default, "|", "\\|") + "` | " + strconv.FormatBool(option.Required) + " | " + strings.ReplaceAll(option.Description, "|", "\\|") + " |\n")
+	}
+}
+
+func legacyCLICommandLocation(slug string) (string, bool) {
+	if !strings.HasPrefix(slug, "cli/") {
+		return "", false
+	}
+	id := strings.TrimPrefix(slug, "cli/")
+	raw, exists := machineDocs.cliByID[id]
+	if !exists {
+		return "", false
+	}
+	var command machineCLICommand
+	if err := json.Unmarshal(raw, &command); err != nil {
+		panic(fmt.Sprintf("decode legacy CLI command %q: %v", id, err))
+	}
+	if len(command.Path) < 2 {
+		return "", false
+	}
+	return "/docs/cli/" + command.Path[0] + "#" + strings.Join(command.Path[1:], "-"), true
 }
 
 func focusedAPIOperationJSON(raw json.RawMessage) []byte {

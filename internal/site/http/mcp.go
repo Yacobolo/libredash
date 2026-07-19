@@ -163,11 +163,11 @@ func docsReadTool(_ context.Context, _ *mcp.CallToolRequest, input docsReadInput
 		if format == "json" {
 			return nil, docsReadOutput{ID: input.ID, ContentType: "application/json", Content: string(prettyJSON(raw))}, nil
 		}
-		document, ok := siteDocumentBySlug("cli/" + id)
-		if !ok {
-			return nil, docsReadOutput{}, fmt.Errorf("CLI article %q was not found", input.ID)
+		var command machineCLICommand
+		if err := json.Unmarshal(raw, &command); err != nil {
+			return nil, docsReadOutput{}, err
 		}
-		return nil, docsReadOutput{ID: input.ID, ContentType: "text/markdown", Content: document.markdown}, nil
+		return nil, docsReadOutput{ID: input.ID, ContentType: "text/markdown", Content: renderMachineCLICommand(command)}, nil
 	case "api":
 		raw, ok := machineDocs.apiByID[id]
 		if !ok {

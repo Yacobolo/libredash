@@ -208,6 +208,10 @@ func docsActiveSearch(w http.ResponseWriter, r *http.Request) {
 func (s *siteServer) docsArticle(w http.ResponseWriter, r *http.Request) {
 	document, ok := siteDocumentBySlug(r.PathValue("path"))
 	if !ok {
+		if location, legacy := legacyCLICommandLocation(r.PathValue("path")); legacy {
+			http.Redirect(w, r, location, http.StatusPermanentRedirect)
+			return
+		}
 		s.notFound(w, r)
 		return
 	}

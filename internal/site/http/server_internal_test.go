@@ -598,6 +598,7 @@ func TestSiteServesMachineDocumentationArtifacts(t *testing.T) {
 		{path: "/docs/api/operations/listWorkspaces.md", contentType: "text/markdown", contains: []string{"# List workspaces", "`GET /api/v1/workspaces`", "USE_WORKSPACE"}},
 		{path: "/docs/cli/commands/deploy.json", contentType: "application/json", contains: []string{`"id": "deploy"`, `"usage": "libredash deploy`}},
 		{path: "/docs/cli/commands/deploy.md", contentType: "text/markdown", contains: []string{"# libredash deploy", "## Usage"}},
+		{path: "/docs/cli/commands/semantic-models-query.md", contentType: "text/markdown", contains: []string{"# libredash semantic-models query", "## Usage", "## Behavior", "--body-json"}},
 	}
 	for _, test := range tests {
 		t.Run(test.path, func(t *testing.T) {
@@ -619,6 +620,46 @@ func TestSiteServesMachineDocumentationArtifacts(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSiteCLIReferenceGroupsSubcommandsAndRedirectsLeafPages(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	article, err := server.Client().Get(server.URL + "/docs/cli/semantic-models")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer article.Body.Close()
+	if article.StatusCode != http.StatusOK {
+		t.Fatalf("semantic models status = %d, want 200", article.StatusCode)
+	}
+	body := readBody(t, article)
+	for _, want := range []string{
+		`<h1>libredash semantic-models</h1>`,
+		`<h2 id="subcommands">Subcommands</h2>`,
+		`<h2 id="query">query</h2>`,
+		`libredash semantic-models query &lt;model&gt; &lt;dataset&gt;`,
+		`href="/docs/cli/commands/semantic-models-query.json"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("grouped CLI article missing %q:\n%s", want, body)
+		}
+	}
+
+	client := server.Client()
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	legacy, err := client.Get(server.URL + "/docs/cli/semantic-models-query")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Body.Close()
+	if legacy.StatusCode != http.StatusPermanentRedirect {
+		t.Fatalf("legacy leaf status = %d, want %d", legacy.StatusCode, http.StatusPermanentRedirect)
+	}
+	if got, want := legacy.Header.Get("Location"), "/docs/cli/semantic-models#query"; got != want {
+		t.Errorf("legacy leaf location = %q, want %q", got, want)
 	}
 }
 
