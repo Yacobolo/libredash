@@ -3,11 +3,43 @@ package app
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/gorilla/csrf"
 )
+
+func (s *Server) oauthToken(w http.ResponseWriter, r *http.Request) {
+	if requestTargetsMCPOAuth(r) {
+		s.mcpOAuthToken(w, r)
+		return
+	}
+	s.accessHTTPHandler().OAuthToken(w, r)
+}
+
+func requestTargetsMCPOAuth(r *http.Request) bool {
+	if r == nil || strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		return false
+	}
+	if err := r.ParseForm(); err != nil {
+		return false
+	}
+	if strings.TrimSpace(r.Form.Get("resource")) != "" {
+		return true
+	}
+	for _, scope := range strings.Fields(r.Form.Get("scope")) {
+		if scope == "mcp:use" {
+			return true
+		}
+	}
+	switch r.Form.Get("grant_type") {
+	case "authorization_code", "refresh_token":
+		return true
+	default:
+		return false
+	}
+}
 
 func (s *Server) mcpProtectedResourceMetadata(w http.ResponseWriter, r *http.Request) {
 	if s.mcpOAuthResource == nil {

@@ -379,7 +379,7 @@ func TestAuthSpecColumnGrantAllowsOnlyGrantedPreviewColumns(t *testing.T) {
 	}
 }
 
-func TestAuthSpecServicePrincipalMCPOAuthIsSeparatedFromRESTTokens(t *testing.T) {
+func TestAuthSpecServicePrincipalRESTAndMCPOAuthTokensAreSeparated(t *testing.T) {
 	h, repo := newAuthSpecHarness(t)
 	ctx := context.Background()
 
@@ -413,32 +413,48 @@ func TestAuthSpecServicePrincipalMCPOAuthIsSeparatedFromRESTTokens(t *testing.T)
 	form.Set("grant_type", "client_credentials")
 	form.Set("client_id", "sp_ci")
 	form.Set("client_secret", secretResponse.Secret)
+	form.Set("workspace_id", "sales")
 	status, body = h.authSpecForm(t, "/oauth/token", form)
 	if status != http.StatusBadRequest {
-		t.Fatalf("MCP OAuth token missing resource status=%d want=400 body=%s", status, body)
+		t.Fatalf("REST OAuth token empty scope status=%d want=400 body=%s", status, body)
 	}
 	form.Set("scope", string(access.PrivilegeQueryData))
-	form.Set("resource", "http://localhost:8080/mcp")
 	status, body = h.authSpecForm(t, "/oauth/token", form)
-	if status != http.StatusBadRequest {
-		t.Fatalf("MCP OAuth token REST privilege scope status=%d want=400 body=%s", status, body)
+	if status != http.StatusOK {
+		t.Fatalf("REST OAuth token status=%d body=%s", status, body)
 	}
-	form.Set("scope", "mcp:use")
-	status, body = h.authSpecForm(t, "/oauth/token", form)
+	var restTokenResponse struct {
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.Unmarshal([]byte(body), &restTokenResponse); err != nil || restTokenResponse.AccessToken == "" {
+		t.Fatalf("decode REST oauth token: %v body=%s", err, body)
+	}
+	status, body = h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/query", restTokenResponse.AccessToken, `{"measures":[{"field":"revenue"}],"limit":1}`)
+	if status != http.StatusOK {
+		t.Fatalf("service principal REST query status=%d body=%s", status, body)
+	}
+
+	mcpForm := url.Values{}
+	mcpForm.Set("grant_type", "client_credentials")
+	mcpForm.Set("client_id", "sp_ci")
+	mcpForm.Set("client_secret", secretResponse.Secret)
+	mcpForm.Set("scope", "mcp:use")
+	mcpForm.Set("resource", "http://localhost:8080/mcp")
+	status, body = h.authSpecForm(t, "/oauth/token", mcpForm)
 	if status != http.StatusOK {
 		t.Fatalf("MCP OAuth token status=%d body=%s", status, body)
 	}
-	var tokenResponse struct {
+	var mcpTokenResponse struct {
 		AccessToken string `json:"access_token"`
 	}
-	if err := json.Unmarshal([]byte(body), &tokenResponse); err != nil {
-		t.Fatalf("decode oauth token: %v body=%s", err, body)
+	if err := json.Unmarshal([]byte(body), &mcpTokenResponse); err != nil || mcpTokenResponse.AccessToken == "" {
+		t.Fatalf("decode MCP oauth token: %v body=%s", err, body)
 	}
-	status, body = h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/query", tokenResponse.AccessToken, `{"measures":[{"field":"revenue"}],"limit":1}`)
+	status, body = h.authSpecDo(t, http.MethodPost, "/api/v1/workspaces/sales/semantic-models/sales/query", mcpTokenResponse.AccessToken, `{"measures":[{"field":"revenue"}],"limit":1}`)
 	if status != http.StatusUnauthorized {
 		t.Fatalf("MCP OAuth token used as REST token status=%d want=401 body=%s", status, body)
 	}
-	status, body = h.authSpecDo(t, http.MethodPost, "/mcp", tokenResponse.AccessToken, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"integration-test","version":"1"}}}`)
+	status, body = h.authSpecDo(t, http.MethodPost, "/mcp", mcpTokenResponse.AccessToken, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"integration-test","version":"1"}}}`)
 	if status != http.StatusOK || !strings.Contains(body, `"protocolVersion":"2025-11-25"`) {
 		t.Fatalf("service principal MCP initialize status=%d body=%s", status, body)
 	}
@@ -447,7 +463,7 @@ func TestAuthSpecServicePrincipalMCPOAuthIsSeparatedFromRESTTokens(t *testing.T)
 	if status != http.StatusNoContent {
 		t.Fatalf("revoke service principal secret status=%d body=%s", status, body)
 	}
-	status, body = h.authSpecForm(t, "/oauth/token", form)
+	status, body = h.authSpecForm(t, "/oauth/token", mcpForm)
 	if status != http.StatusUnauthorized {
 		t.Fatalf("MCP OAuth token after service secret revoke status=%d want=401 body=%s", status, body)
 	}

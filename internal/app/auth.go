@@ -5,12 +5,14 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -27,8 +29,10 @@ type apiCredentialContextKey struct{}
 
 const csrfCookieName = "ld_csrf"
 const oidcStateCookieName = "ld_oidc_state"
+const authReturnCookieName = "ld_auth_return"
 const oidcStateMaxAge = 10 * time.Minute
 const oidcStateClockSkew = time.Minute
+const maxAuthReturnTargetBytes = 2500
 
 var (
 	errUnauthorized = errors.New("unauthorized")
@@ -260,7 +264,7 @@ func (a *Auth) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	recordAccessAudit(r, a.repo, "sign_in", principal.ID, "", "principal", principal.ID, "", "success", map[string]any{"provider": provider})
 	http.SetCookie(w, a.sessionCookie(token, time.Now().Add(8*time.Hour)))
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, a.authenticationRedirectTarget(w, r, "/"), http.StatusFound)
 }
 
 func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
@@ -321,7 +325,7 @@ func (a *Auth) LocalLogin(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login", http.StatusFound)
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, a.authenticationRedirectTarget(w, r, "/"), http.StatusFound)
 }
 
 func (a *Auth) LocalPassword(w http.ResponseWriter, r *http.Request) {
@@ -363,7 +367,7 @@ func (a *Auth) LocalPassword(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "changed"})
 		return
 	}
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, a.authenticationRedirectTarget(w, r, "/"), http.StatusFound)
 }
 
 func (a *Auth) Principal(r *http.Request) (Principal, bool) {
@@ -399,6 +403,9 @@ func (a *Auth) MiddlewareWithObjectResolver(privilege access.Privilege, objectRe
 			if wantsJSON(r) {
 				writeJSONError(w, errUnauthorized, http.StatusUnauthorized)
 				return
+			}
+			if target := oauthAuthorizationReturnTarget(r); target != "" {
+				http.SetCookie(w, a.authReturnCookie(target))
 			}
 			http.Redirect(w, r, a.defaultLoginRedirect(), http.StatusFound)
 			return
@@ -750,6 +757,87 @@ func (a *Auth) oidcStateCookie(state, nonce string) *http.Cookie {
 		Secure:   a.cookieSecure,
 		SameSite: http.SameSiteLaxMode,
 	}
+}
+
+func oauthAuthorizationReturnTarget(r *http.Request) string {
+	if r == nil || r.Method != http.MethodGet || r.URL == nil || r.URL.Path != "/oauth/authorize" {
+		return ""
+	}
+	target := r.URL.RequestURI()
+	if len(target) == 0 || len(target) > maxAuthReturnTargetBytes {
+		return ""
+	}
+	return target
+}
+
+func (a *Auth) authReturnCookie(target string) *http.Cookie {
+	return &http.Cookie{
+		Name:     authReturnCookieName,
+		Value:    a.encodeAuthReturn(target, authNow()),
+		Path:     "/",
+		MaxAge:   int(oidcStateMaxAge / time.Second),
+		HttpOnly: true,
+		Secure:   a.cookieSecure,
+		SameSite: http.SameSiteLaxMode,
+	}
+}
+
+func (a *Auth) authenticationRedirectTarget(w http.ResponseWriter, r *http.Request, fallback string) string {
+	cookie, err := r.Cookie(authReturnCookieName)
+	if err != nil {
+		return fallback
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name: authReturnCookieName, Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, Secure: a.cookieSecure, SameSite: http.SameSiteLaxMode,
+	})
+	target, err := a.decodeAuthReturn(cookie.Value, authNow())
+	if err != nil {
+		return fallback
+	}
+	return target
+}
+
+func (a *Auth) encodeAuthReturn(target string, issuedAt time.Time) string {
+	encoded := base64.RawURLEncoding.EncodeToString([]byte(target))
+	issuedUnix := strconv.FormatInt(issuedAt.UTC().Unix(), 10)
+	message := encoded + "|" + issuedUnix
+	mac := hmac.New(sha256.New, a.stateKey)
+	mac.Write([]byte(message))
+	return encoded + "." + issuedUnix + "." + hex.EncodeToString(mac.Sum(nil))
+}
+
+func (a *Auth) decodeAuthReturn(value string, now time.Time) (string, error) {
+	parts := strings.Split(value, ".")
+	if len(parts) != 3 {
+		return "", errors.New("invalid authentication return cookie")
+	}
+	issuedUnix, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return "", errors.New("invalid authentication return cookie timestamp")
+	}
+	issuedAt := time.Unix(issuedUnix, 0).UTC()
+	now = now.UTC()
+	if issuedAt.After(now.Add(oidcStateClockSkew)) || !issuedAt.Add(oidcStateMaxAge).After(now) {
+		return "", errors.New("authentication return cookie expired")
+	}
+	message := parts[0] + "|" + parts[1]
+	mac := hmac.New(sha256.New, a.stateKey)
+	mac.Write([]byte(message))
+	want := hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(parts[2]), []byte(want)) {
+		return "", errors.New("invalid authentication return cookie signature")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(parts[0])
+	if err != nil {
+		return "", errors.New("invalid authentication return cookie encoding")
+	}
+	target := string(raw)
+	parsed, err := url.Parse(target)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" || parsed.Path != "/oauth/authorize" || len(target) > maxAuthReturnTargetBytes {
+		return "", errors.New("invalid authentication return target")
+	}
+	return target, nil
 }
 
 func (a *Auth) consumeOIDCState(w http.ResponseWriter, r *http.Request) (string, string, error) {

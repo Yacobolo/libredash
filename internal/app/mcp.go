@@ -99,6 +99,12 @@ func mcpResult(result agentcore.ToolResult) (*mcp.CallToolResult, error) {
 	if err := json.Unmarshal(encoded, &structured); err != nil || structured == nil {
 		return mcpErrorResult("tool_result_invalid", "tool output must be a JSON object"), nil
 	}
+	if result.IsError {
+		return &mcp.CallToolResult{
+			Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}},
+			IsError: true,
+		}, nil
+	}
 	return &mcp.CallToolResult{
 		Content:           []mcp.Content{&mcp.TextContent{Text: string(encoded)}},
 		StructuredContent: structured,
@@ -110,9 +116,8 @@ func mcpErrorResult(code, message string) *mcp.CallToolResult {
 	structured := map[string]any{"error": map[string]any{"code": code, "message": message}}
 	encoded, _ := json.Marshal(structured)
 	return &mcp.CallToolResult{
-		Content:           []mcp.Content{&mcp.TextContent{Text: string(encoded)}},
-		StructuredContent: structured,
-		IsError:           true,
+		Content: []mcp.Content{&mcp.TextContent{Text: string(encoded)}},
+		IsError: true,
 	}
 }
 

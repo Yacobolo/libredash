@@ -100,7 +100,7 @@ func (s *Server) Routes() http.Handler {
 		r.Use(s.rateLimits.authMiddleware())
 		r.Get("/auth/{provider}", s.authBegin)
 		r.Get("/auth/{provider}/callback", s.authCallback)
-		r.Post("/oauth/token", s.mcpOAuthToken)
+		r.Post("/oauth/token", s.oauthToken)
 		r.Post("/oauth/register", s.mcpOAuthRegister)
 		r.Post("/oauth/revoke", s.mcpOAuthRevoke)
 	})

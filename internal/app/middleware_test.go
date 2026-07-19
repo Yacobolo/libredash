@@ -783,14 +783,19 @@ func TestAuthCallbackCreatesSessionAndAuditEvents(t *testing.T) {
 	})
 	auth.configured = true
 	auth.oidcOverride = map[string]oidcClient{"azureadv2": fakeOIDCClient{claims: oidcauth.Claims{Issuer: "https://issuer.example", Subject: "subject-1", Email: "user@example.com", Name: "User Example"}}}
+	target := "/oauth/authorize?client_id=claude&resource=https%3A%2F%2Flibredash.example%2Fmcp&response_type=code"
 	req := httptest.NewRequest(http.MethodGet, "/auth/azureadv2/callback?state=state&code=code", nil)
 	req.AddCookie(auth.oidcStateCookie("state", "nonce"))
+	req.AddCookie(auth.authReturnCookie(target))
 	rec := httptest.NewRecorder()
 
 	auth.Callback(rec, req)
 
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status = %d, want 302 body=%s", rec.Code, rec.Body.String())
+	}
+	if location := rec.Header().Get("Location"); location != target {
+		t.Fatalf("callback redirect = %q, want %q", location, target)
 	}
 	var sessionCookie *http.Cookie
 	for _, cookie := range rec.Result().Cookies() {
@@ -814,6 +819,25 @@ func TestAuthCallbackCreatesSessionAndAuditEvents(t *testing.T) {
 	}
 	if len(events) != 1 || events[0].PrincipalID != principal.ID {
 		t.Fatalf("sign_in events = %#v, principal %q", events, principal.ID)
+	}
+}
+
+func TestAuthenticationReturnCookieRejectsExternalAndTamperedTargets(t *testing.T) {
+	auth := testAuth(testStore(t), "test", AuthConfig{CSRFKey: "0123456789abcdef0123456789abcdef"})
+	for name, cookie := range map[string]*http.Cookie{
+		"external": auth.authReturnCookie("https://attacker.example/oauth/authorize"),
+		"tampered": {
+			Name: authReturnCookieName, Value: auth.authReturnCookie("/oauth/authorize?client_id=safe").Value + "tampered",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, "/auth/oidc/callback", nil)
+			request.AddCookie(cookie)
+			response := httptest.NewRecorder()
+			if target := auth.authenticationRedirectTarget(response, request, "/"); target != "/" {
+				t.Fatalf("authentication redirect = %q, want fallback", target)
+			}
+		})
 	}
 }
 
@@ -851,6 +875,51 @@ func TestLocalLoginCreatesSessionAndAuditEvents(t *testing.T) {
 	}
 	if len(events) != 1 || events[0].PrincipalID != created.Principal.ID || events[0].Status != "success" {
 		t.Fatalf("sign_in events = %#v", events)
+	}
+}
+
+func TestLocalLoginResumesProtectedOAuthAuthorizationRequest(t *testing.T) {
+	ctx := context.Background()
+	store := testStore(t)
+	repo := accesssqlite.NewRepository(store.SQLDB())
+	created, err := repo.CreateLocalUser(ctx, access.LocalUserInput{Email: "oauth@example.com", DisplayName: "OAuth User"})
+	if err != nil {
+		t.Fatalf("create local user: %v", err)
+	}
+	auth := testAuth(store, "test", AuthConfig{
+		LocalAuth: true,
+		CSRFKey:   "0123456789abcdef0123456789abcdef",
+	})
+	target := "/oauth/authorize?client_id=claude&code_challenge=challenge&resource=https%3A%2F%2Flibredash.example%2Fmcp&response_type=code"
+	request := httptest.NewRequest(http.MethodGet, target, nil)
+	redirect := httptest.NewRecorder()
+	auth.Middleware("", http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("unauthenticated authorization request reached the protected handler")
+	})).ServeHTTP(redirect, request)
+	if redirect.Code != http.StatusFound || redirect.Header().Get("Location") != "/login" {
+		t.Fatalf("authorization redirect = %d %q", redirect.Code, redirect.Header().Get("Location"))
+	}
+	var returnCookie *http.Cookie
+	for _, cookie := range redirect.Result().Cookies() {
+		if cookie.Name == "ld_auth_return" {
+			returnCookie = cookie
+			break
+		}
+	}
+	if returnCookie == nil || !returnCookie.HttpOnly {
+		t.Fatalf("authorization return cookie = %#v", returnCookie)
+	}
+
+	login := httptest.NewRequest(http.MethodPost, "/auth/local/login", strings.NewReader(url.Values{
+		"email":    {"oauth@example.com"},
+		"password": {created.Password},
+	}.Encode()))
+	login.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	login.AddCookie(returnCookie)
+	response := httptest.NewRecorder()
+	auth.LocalLogin(response, login)
+	if response.Code != http.StatusFound || response.Header().Get("Location") != target {
+		t.Fatalf("login redirect = %d %q, want %q", response.Code, response.Header().Get("Location"), target)
 	}
 }
 

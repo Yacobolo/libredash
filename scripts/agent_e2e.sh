@@ -76,7 +76,7 @@ REVISION="$(awk '$1 == "staged" { print $2 }' <<<"$SYNC_OUTPUT")"
 }
 "$BIN" deploy --target "$TARGET" --token "$TOKEN" --project dashboards/libredash.yaml --revision "olist=$REVISION" --auto-approve
 
-OUTPUT="$("$BIN" agent ask "List the dashboards I can use in this workspace and mention the Olist context." --target "$TARGET" --token "$TOKEN" --workspace sales --json)"
+OUTPUT="$("$BIN" agent ask "List the dashboards I can use in the sales workspace and mention the Olist context." --target "$TARGET" --token "$TOKEN" --json)"
 echo "$OUTPUT"
 
 if ! grep -Eiq 'executive|sales|olist' <<<"$OUTPUT"; then

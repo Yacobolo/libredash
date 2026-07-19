@@ -246,7 +246,7 @@ func TestMCPReturnsValidationFailuresAsToolErrorsAndRejectsOrigins(t *testing.T)
 	if err := json.Unmarshal(invalid.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode invalid call: %v", err)
 	}
-	if !response.Result.IsError || response.Result.StructuredContent["error"] == nil || len(response.Result.Content) != 1 || !json.Valid([]byte(response.Result.Content[0].Text)) {
+	if !response.Result.IsError || response.Result.StructuredContent != nil || len(response.Result.Content) != 1 || !json.Valid([]byte(response.Result.Content[0].Text)) {
 		t.Fatalf("validation result = %#v body=%s", response.Result, invalid.Body.String())
 	}
 

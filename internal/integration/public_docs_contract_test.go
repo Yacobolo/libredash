@@ -43,13 +43,16 @@ func TestPublicDocsAndScriptsDoNotAdvertiseRemovedCaCSurfaces(t *testing.T) {
 
 	script := readRepoFile(t, root, filepath.Join("scripts", "agent_e2e.sh"))
 	for _, want := range []string{
-		"--workspace sales",
+		"sales workspace",
 		"--project dashboards/libredash.yaml",
 		"--auto-approve",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("scripts/agent_e2e.sh missing current deploy/agent argument %q", want)
 		}
+	}
+	if regexp.MustCompile(`agent ask[^\n]*--workspace`).MatchString(script) {
+		t.Fatal("scripts/agent_e2e.sh still passes the removed agent --workspace flag")
 	}
 }
 

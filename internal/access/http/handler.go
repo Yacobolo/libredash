@@ -383,6 +383,75 @@ func (h Handler) UpdatePrincipal(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	writeJSON(w, stdhttp.StatusOK, principalDTO(principal))
 }
 
+// OAuthToken issues the existing REST API credential used by service-principal
+// automation. MCP tokens share the public token endpoint but are routed to the
+// MCP authorization server before this handler is called.
+func (h Handler) OAuthToken(w stdhttp.ResponseWriter, r *stdhttp.Request) {
+	repo, err := h.repository()
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusInternalServerError)
+		return
+	}
+	var input struct {
+		GrantType    string `json:"grant_type"`
+		ClientID     string `json:"client_id"`
+		ClientSecret string `json:"client_secret"`
+		Scope        string `json:"scope"`
+		WorkspaceID  string `json:"workspace_id"`
+	}
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "application/json") {
+		if err := decodeStrictJSON(r, &input); err != nil {
+			writeJSONError(w, err, stdhttp.StatusBadRequest)
+			return
+		}
+	} else {
+		if err := r.ParseForm(); err != nil {
+			writeJSONError(w, err, stdhttp.StatusBadRequest)
+			return
+		}
+		input.GrantType = r.Form.Get("grant_type")
+		input.ClientID = r.Form.Get("client_id")
+		input.ClientSecret = r.Form.Get("client_secret")
+		input.Scope = r.Form.Get("scope")
+		input.WorkspaceID = r.Form.Get("workspace_id")
+	}
+	if strings.TrimSpace(input.GrantType) != "client_credentials" {
+		writeJSONError(w, fmt.Errorf("unsupported grant_type %q", input.GrantType), stdhttp.StatusBadRequest)
+		return
+	}
+	principal, err := repo.PrincipalForServicePrincipalSecret(r.Context(), input.ClientID, input.ClientSecret)
+	if err != nil {
+		writeJSONError(w, errUnauthorized, stdhttp.StatusUnauthorized)
+		return
+	}
+	ttl := time.Hour
+	privileges, err := privilegesFromOAuthScope(input.Scope)
+	if err != nil {
+		writeJSONError(w, err, stdhttp.StatusBadRequest)
+		return
+	}
+	var token string
+	var row access.APIToken
+	err = runAuditedMutation(r, repo, func(txRepo access.Repository) (access.AuditEventInput, error) {
+		var mutationErr error
+		token, row, mutationErr = txRepo.CreateAPITokenWithMetadata(r.Context(), access.APITokenInput{
+			PrincipalID: principal.ID, WorkspaceID: input.WorkspaceID, Name: "oauth-client-credentials",
+			Privileges: privileges, ExpiresAt: time.Now().Add(ttl),
+		})
+		return accessAuditInput(r, "oauth.token.created", principal.ID, input.WorkspaceID, "api_token", row.ID, "", "success", map[string]any{"grantType": "client_credentials"}), mutationErr
+	})
+	if err != nil {
+		writeAuditedMutationError(w, err, stdhttp.StatusBadRequest)
+		return
+	}
+	writeSecretJSON(w, stdhttp.StatusOK, map[string]any{
+		"access_token": token,
+		"token_type":   "Bearer",
+		"expires_in":   int(ttl.Seconds()),
+		"scope":        input.Scope,
+	})
+}
+
 func (h Handler) ListServicePrincipals(w stdhttp.ResponseWriter, r *stdhttp.Request) {
 	repo, err := h.repository()
 	if err != nil {
@@ -1838,6 +1907,31 @@ func privilegesFromStrings(values []string) []access.Privilege {
 		privileges = append(privileges, access.Privilege(value))
 	}
 	return privileges
+}
+
+func privilegesFromOAuthScope(scope string) ([]access.Privilege, error) {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		return nil, fmt.Errorf("OAuth client credentials require at least one privilege scope")
+	}
+	values := strings.FieldsFunc(scope, func(r rune) bool {
+		return r == ' ' || r == ',' || r == '\n' || r == '\t'
+	})
+	privileges := make([]access.Privilege, 0, len(values))
+	for _, value := range values {
+		privilege := access.Privilege(strings.TrimSpace(value))
+		if privilege == "" {
+			continue
+		}
+		if !knownPrivilege(privilege) {
+			return nil, fmt.Errorf("unsupported OAuth scope privilege %q", value)
+		}
+		privileges = append(privileges, privilege)
+	}
+	if len(privileges) == 0 {
+		return nil, fmt.Errorf("OAuth client credentials require at least one privilege scope")
+	}
+	return privileges, nil
 }
 
 func knownPrivilege(value access.Privilege) bool {
