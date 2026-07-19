@@ -744,7 +744,7 @@ ld-site-search:not(:defined) > .site-search-active-input {
 .site-docs-article :not(pre) > code {
   border-radius: var(--site-docs-code-radius);
   background: var(--ld-bg-control);
-  color: var(--ld-fg-accent);
+  color: var(--ld-fg-default);
   padding: var(--site-docs-code-padding-block)
     var(--site-docs-code-padding-inline);
   font-size: var(--site-docs-code-size);
@@ -866,15 +866,20 @@ ld-site-search:not(:defined) > .site-search-active-input {
   outline-offset: var(--focus-outline-offset);
 }
 
-.site-visual-key-field code {
+.site-docs-article .site-visual-key-field > code {
   padding: 0;
   background: transparent;
+  color: inherit;
 }
 
 .site-docs-article a {
   color: var(--ld-fg-accent);
   text-decoration-thickness: var(--site-docs-link-underline-thickness);
   text-underline-offset: var(--site-docs-link-underline-offset);
+}
+
+.site-docs-article a code {
+  color: inherit;
 }
 
 .site-docs-article hr {

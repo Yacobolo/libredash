@@ -553,6 +553,24 @@ test('chart documentation renders every executable variation from its YAML', asy
     expect(await stepReference.count()).toBe(1)
     expect(await stepReference.textContent()).toContain('string | boolean')
     expect(await stepReference.textContent()).toContain('start')
+    const referenceColors = await page.locator('.site-docs-article').evaluate((article) => {
+      const summaryCode = article.querySelector('#site-visual-api-reference + p code')
+      const fieldCode = article.querySelector('table[aria-labelledby="site-visual-api-reference"] tbody th code')
+      const keyField = article.querySelector('.site-visual-key-field')
+      const keyFieldCode = keyField?.querySelector('code')
+      if (!summaryCode || !fieldCode || !keyField || !keyFieldCode) throw new Error('visual reference color targets are missing')
+      return {
+        article: getComputedStyle(article).color,
+        field: getComputedStyle(fieldCode).color,
+        interactive: getComputedStyle(keyField).color,
+        interactiveCode: getComputedStyle(keyFieldCode).color,
+        summary: getComputedStyle(summaryCode).color,
+      }
+    })
+    expect(referenceColors.summary).toBe(referenceColors.article)
+    expect(referenceColors.field).toBe(referenceColors.article)
+    expect(referenceColors.interactiveCode).toBe(referenceColors.interactive)
+    expect(referenceColors.interactive).not.toBe(referenceColors.article)
     expect(await page.getByRole('heading', { name: 'Basic' }).isVisible()).toBe(true)
     expect(await page.getByRole('heading', { name: 'Multiple series' }).isVisible()).toBe(true)
     expect(await page.getByRole('heading', { name: 'Stepped line' }).isVisible()).toBe(true)
