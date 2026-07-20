@@ -1,6 +1,7 @@
 package signals
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -11,6 +12,28 @@ import (
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
 	workspacecompiler "github.com/Yacobolo/libredash/internal/workspace/compiler"
 )
+
+func TestVisualizationSignalKeepsDataStateOpaque(t *testing.T) {
+	report := testDashboardReport()
+	model := testSemanticModel()
+	compiled, definitions := compiledTestDashboard(t, &report, model)
+	envelope := DashboardInitialEnvelope("client", "stream-instance", dashboard.Catalog{}, compiled, model, definitions, report.Pages, report.Pages[0], dashboard.Filters{})
+
+	encoded, err := json.Marshal(envelope.Visuals["active_chart"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var signal map[string]any
+	if err := json.Unmarshal(encoded, &signal); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := signal["dataStateJson"].(string); !ok {
+		t.Fatalf("visualization signal must encode data state as one opaque signal: %s", encoded)
+	}
+	if _, ok := signal["dataState"]; ok {
+		t.Fatalf("visualization signal recursively exposes dataState: %s", encoded)
+	}
+}
 
 func compiledTestVisualizations(t *testing.T, report *reportdef.Dashboard, model *semanticmodel.Model) map[string]visualizationdefinition.Definition {
 	t.Helper()

@@ -547,7 +547,7 @@ model DashboardEnvelope {
   @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "urlParams" })
   `urlParams`: Record<unknown>;
   @apigen.`metadata`(#{ `x-libredash-patch-mode`: "merge", `x-libredash-signal-key`: "visuals" })
-  `visuals`: Record<LibreDashVisualization.VisualizationEnvelope>;
+  `visuals`: Record<DashboardVisualizationSignal>;
 }
 
 model DashboardFilterControl {
@@ -577,6 +577,26 @@ model DashboardInteractionCommand {
   `sourceId`: string;
   `sourceKind`: "visual";
   `toggle`: boolean;
+}
+
+/**
+ * Dashboard visualization transport that keeps large renderer data outside
+ * Datastar's recursively reactive object graph. The browser reconstructs the
+ * canonical VisualizationEnvelope before passing it to the visualization host.
+ */
+@apigen.contract(#{ kind: "ui-signal", tags: #["dashboard", "signal"] })
+@apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "dashboard" })
+model DashboardVisualizationSignal {
+  `schemaVersion`: 2;
+  `visualID`: string;
+  `rendererID`: string;
+  `specRevision`: string;
+  `spec`: LibreDashVisualization.VisualizationSpec;
+  `dataRevision`: int64;
+  `dataStateJson`: string;
+  `selection`: LibreDashVisualization.VisualizationSelectionEntry[];
+  `status`: LibreDashVisualization.VisualizationStatus;
+  `diagnostics`: LibreDashVisualization.VisualizationDiagnostic[];
 }
 
 model DashboardInteractionCommandMapping {

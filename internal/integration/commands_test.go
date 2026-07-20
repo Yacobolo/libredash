@@ -143,7 +143,7 @@ func TestVisualWindowCommandDoesNotPublishCanceledVisualPatch(t *testing.T) {
 
 	patches := nextRefreshPatches(t, stream)
 	for _, patch := range patches {
-		if hasKey(mapAt(patch, "visuals", "orders_table"), "dataState") {
+		if hasKey(mapAt(patch, "visuals", "orders_table"), "dataStateJson") {
 			t.Fatalf("canceled visual-window command streamed visual data: %#v", patch)
 		}
 	}
@@ -258,7 +258,7 @@ func drainInitialSnapshot(t *testing.T, stream *streamClient) []map[string]any {
 }
 
 func tableHasSnapshot(patch map[string]any, tableID string) bool {
-	table := mapAt(patch, "visuals", tableID, "dataState")
+	table := visualizationDataState(patch, tableID)
 	if _, ok := table["availableRows"]; !ok {
 		return false
 	}

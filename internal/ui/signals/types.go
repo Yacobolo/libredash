@@ -395,9 +395,9 @@ func DefaultTableRequest(report dashboarddefinition.Definition, page dashboard.P
 	return request
 }
 
-func InitialVisualizationEnvelopes(definitions map[string]visualizationdefinition.Definition, page dashboard.Page, request dashboard.TableRequest) map[string]VisualizationEnvelope {
+func InitialVisualizationEnvelopes(definitions map[string]visualizationdefinition.Definition, page dashboard.Page, request dashboard.TableRequest) map[string]DashboardVisualizationSignal {
 	ids := append(pageVisualIDs(page), pageTableIDs(page)...)
-	out := make(map[string]VisualizationEnvelope, len(ids))
+	out := make(map[string]DashboardVisualizationSignal, len(ids))
 	for _, id := range ids {
 		definition, ok := definitions[id]
 		if !ok {
@@ -413,7 +413,7 @@ func InitialVisualizationEnvelopes(definitions map[string]visualizationdefinitio
 		if err != nil {
 			panic(fmt.Sprintf("compiled dashboard visualization %q has invalid initial envelope: %v", id, err))
 		}
-		out[id] = VisualizationEnvelopeFromIR(envelope)
+		out[id] = DashboardVisualizationSignalFromIR(envelope)
 	}
 	return out
 }

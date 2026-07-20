@@ -110,16 +110,16 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 	case dashboardstream.RefreshEventVisual:
 		envelope := visualizationEnvelopeSignal(event)
 		return pagestream.SignalPatch{
-			"visuals": map[string]uisignals.VisualizationEnvelope{event.Target: envelope},
+			"visuals": map[string]uisignals.DashboardVisualizationSignal{event.Target: envelope},
 		}
 	case dashboardstream.RefreshEventTable:
 		envelope := visualizationEnvelopeSignal(event)
 		return pagestream.SignalPatch{
-			"visuals": map[string]uisignals.VisualizationEnvelope{event.Target: envelope},
+			"visuals": map[string]uisignals.DashboardVisualizationSignal{event.Target: envelope},
 		}
 	case dashboardstream.RefreshEventTableMetadata:
 		envelope := visualizationEnvelopeSignal(event)
-		return pagestream.SignalPatch{"visuals": map[string]uisignals.VisualizationEnvelope{event.Target: envelope}}
+		return pagestream.SignalPatch{"visuals": map[string]uisignals.DashboardVisualizationSignal{event.Target: envelope}}
 	case dashboardstream.RefreshEventTargetError:
 		if event.Target == "refresh" {
 			return pagestream.SignalPatch{"status": status(false, event.Err)}
@@ -139,12 +139,12 @@ func RefreshEventPatch(event dashboardstream.RefreshEvent) pagestream.SignalPatc
 	}
 }
 
-func visualizationEnvelopeSignal(event dashboardstream.RefreshEvent) uisignals.VisualizationEnvelope {
+func visualizationEnvelopeSignal(event dashboardstream.RefreshEvent) uisignals.DashboardVisualizationSignal {
 	envelope, ok := event.Value.(visualizationir.VisualizationEnvelope)
 	if !ok {
 		panic(fmt.Sprintf("dashboard visualization %q has invalid envelope value %T", event.Target, event.Value))
 	}
-	return uisignals.VisualizationEnvelopeFromIR(envelope)
+	return uisignals.DashboardVisualizationSignalFromIR(envelope)
 }
 
 // RefreshEventEnvelope keeps refresh ordering and mailbox behavior outside the

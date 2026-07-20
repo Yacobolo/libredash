@@ -226,11 +226,12 @@ func TestAPIGenOwnsUISignalContracts(t *testing.T) {
 	if irDoc.SchemaVersion != "v4" {
 		t.Fatalf("UI signal IR schema_version = %q, want v4", irDoc.SchemaVersion)
 	}
-	if len(irDoc.Contracts) != 77 {
-		t.Fatalf("UI signal IR contracts = %d, want 77", len(irDoc.Contracts))
+	if len(irDoc.Contracts) != 78 {
+		t.Fatalf("UI signal IR contracts = %d, want 78", len(irDoc.Contracts))
 	}
 	foundEnvelopeMetadata := false
 	foundVisualizationEnvelope := false
+	foundDashboardVisualizationSignal := false
 	for _, contract := range irDoc.Contracts {
 		if contract.Name == "DashboardEnvelope" && contract.Kind == "ui-envelope" && contract.Extensions["x-libredash-contract-role"] == "envelope" {
 			foundEnvelopeMetadata = true
@@ -238,12 +239,18 @@ func TestAPIGenOwnsUISignalContracts(t *testing.T) {
 		if contract.Name == "VisualizationEnvelope" {
 			foundVisualizationEnvelope = true
 		}
+		if contract.Name == "DashboardVisualizationSignal" && contract.Kind == "ui-signal" {
+			foundDashboardVisualizationSignal = true
+		}
 	}
 	if !foundEnvelopeMetadata {
 		t.Fatal("DashboardEnvelope contract metadata was not preserved in IR")
 	}
 	if !foundVisualizationEnvelope {
 		t.Fatal("UI signals do not import the canonical visualization envelope")
+	}
+	if !foundDashboardVisualizationSignal {
+		t.Fatal("UI signals do not emit the dashboard visualization transport")
 	}
 }
 

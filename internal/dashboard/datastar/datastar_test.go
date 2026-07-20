@@ -1,6 +1,7 @@
 package datastar
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 	"testing"
@@ -186,8 +187,14 @@ func TestTableMetadataUpdatesDataWithoutChangingComponentStatus(t *testing.T) {
 	patch := RefreshEventPatch(dashboardstream.RefreshEvent{
 		Type: dashboardstream.RefreshEventTableMetadata, Target: "orders", Value: testTableEnvelope(t, "orders", table, 1, 1),
 	})
-	visuals, ok := patch["visuals"].(map[string]uisignals.VisualizationEnvelope)
-	state, stateOK := visuals["orders"].DataState.Value.(*uisignals.WindowedVisualizationDataState)
+	visuals, ok := patch["visuals"].(map[string]uisignals.DashboardVisualizationSignal)
+	var dataState uisignals.VisualizationDataState
+	if ok {
+		if err := json.Unmarshal([]byte(visuals["orders"].DataStateJSON), &dataState); err != nil {
+			t.Fatal(err)
+		}
+	}
+	state, stateOK := dataState.Value.(*uisignals.WindowedVisualizationDataState)
 	if !ok || !stateOK || state.Cardinality.Count == nil || *state.Cardinality.Count != 42 || state.Cardinality.Kind != uisignals.VisualizationCardinalityKindExact {
 		t.Fatalf("metadata patch = %#v", patch)
 	}
@@ -202,7 +209,7 @@ func TestVisualizationEnvelopeUsesStreamOwnedRevisionAndStatus(t *testing.T) {
 		Type: dashboardstream.RefreshEventVisual, Target: "orders", Generation: 7, DataRevision: 11,
 		Value: testVisualEnvelope(t, visual, 11, 7),
 	})
-	visuals, ok := patch["visuals"].(map[string]uisignals.VisualizationEnvelope)
+	visuals, ok := patch["visuals"].(map[string]uisignals.DashboardVisualizationSignal)
 	if !ok {
 		t.Fatalf("visual patch = %#v", patch)
 	}

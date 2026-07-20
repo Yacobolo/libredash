@@ -168,6 +168,26 @@ func VisualizationEnvelopeFromIR(value visualizationir.VisualizationEnvelope) Vi
 	return visualizationEnvelope(value)
 }
 
+func DashboardVisualizationSignalFromIR(value visualizationir.VisualizationEnvelope) DashboardVisualizationSignal {
+	envelope := visualizationEnvelope(value)
+	dataState, err := json.Marshal(envelope.DataState)
+	if err != nil {
+		panic(fmt.Sprintf("encode dashboard visualization data state: %v", err))
+	}
+	return DashboardVisualizationSignal{
+		SchemaVersion: envelope.SchemaVersion,
+		VisualID:      envelope.VisualID,
+		RendererID:    envelope.RendererID,
+		SpecRevision:  envelope.SpecRevision,
+		Spec:          envelope.Spec,
+		DataRevision:  envelope.DataRevision,
+		DataStateJSON: string(dataState),
+		Selection:     envelope.Selection,
+		Status:        envelope.Status,
+		Diagnostics:   envelope.Diagnostics,
+	}
+}
+
 func dashboardInteractionSelections(values []dashboard.InteractionSelection) []DashboardInteractionSelection {
 	out := make([]DashboardInteractionSelection, len(values))
 	for index, value := range values {

@@ -7,6 +7,7 @@ import type {
   DashboardPageNavSignal,
   DashboardPageSignal,
   DashboardStatus,
+  DashboardVisualizationSignal,
   ReportFilterConfig,
   VisualizationEnvelope,
 } from '../../generated/signals'
@@ -19,6 +20,7 @@ import './report-footer'
 import './visual-modal'
 import { loadDashboardComponent } from './registry'
 import './visualization/host'
+import { DashboardVisualizationSignalDecoder } from './visualization/signal-envelope'
 import {
   applyOptimisticInteraction,
   validateInteractionCommand,
@@ -61,6 +63,7 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
   private optimisticExpectedGeneration = 0
   private optimisticRollbackTimer?: ReturnType<typeof setTimeout>
   private renderSnapshot?: DashboardRenderSnapshot
+  private readonly visualizationDecoder = new DashboardVisualizationSignalDecoder()
 
   static styles = css`
     :host {
@@ -352,7 +355,9 @@ class LibreDashDashboardPage extends DatastarLit(LitElement) {
   }
 
   private get visuals(): Record<string, VisualizationEnvelope> {
-    return this.signal<Record<string, VisualizationEnvelope>>('visuals', {})
+    return this.visualizationDecoder.decodeAll(
+      this.signal<Record<string, DashboardVisualizationSignal>>('visuals', {}),
+    )
   }
 
   private get status(): DashboardStatus {
