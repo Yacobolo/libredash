@@ -52,6 +52,24 @@ func TestRankIgnoresNaturalLanguageGlueWords(t *testing.T) {
 	}
 }
 
+func TestRankLimitMatchesFullRankingPrefix(t *testing.T) {
+	documents := []Document{
+		{ID: "visual.c", Type: "visual", Name: "Orders C", Weight: 10},
+		{ID: "dashboard.a", Type: "dashboard", Name: "Orders A", Weight: 30},
+		{ID: "visual.a", Type: "visual", Name: "Orders A", Weight: 20},
+		{ID: "visual.b", Type: "visual", Name: "Orders B", Weight: 20},
+		{ID: "dataset.a", Type: "dataset", Name: "Orders A", Weight: 5},
+	}
+
+	full := Rank(documents, Query{Text: "orders"})
+	for limit := 1; limit <= len(full); limit++ {
+		limited := RankLimit(documents, Query{Text: "orders"}, limit)
+		if !reflect.DeepEqual(limited, full[:limit]) {
+			t.Fatalf("limit %d results = %#v, want %#v", limit, limited, full[:limit])
+		}
+	}
+}
+
 func TestParseTypesRejectsUnknownTypes(t *testing.T) {
 	if _, err := ParseTypes("dashboard,unknown"); err == nil {
 		t.Fatal("expected unknown type error")

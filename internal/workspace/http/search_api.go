@@ -14,6 +14,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const searchAuthorizationCandidateMultiplier = 4
+
 func (h Handler) SearchWorkspace(w nethttp.ResponseWriter, r *nethttp.Request) {
 	types, err := search.ParseTypes(r.URL.Query().Get("types"))
 	if err != nil {
@@ -26,7 +28,7 @@ func (h Handler) SearchWorkspace(w nethttp.ResponseWriter, r *nethttp.Request) {
 		writeJSONError(w, err, statusForNotFound(err))
 		return
 	}
-	results, err = h.filterReadableSearchResults(r, workspaceID, results)
+	results, err = h.filterReadableSearchResults(r, workspaceID, results, 0)
 	if err != nil {
 		writeJSONError(w, err, nethttp.StatusInternalServerError)
 		return
@@ -41,12 +43,36 @@ func (h Handler) SearchWorkspace(w nethttp.ResponseWriter, r *nethttp.Request) {
 // SearchResults returns the same ranked, object-authorized workspace results
 // used by the public search API. Product surfaces should call this instead of
 // maintaining their own search index or authorization path.
-func (h Handler) SearchResults(r *nethttp.Request, workspaceID, query string, types search.TypeSet) ([]api.SearchResult, error) {
-	results, err := h.workspaceSearchResults(r, workspaceID, query, types)
+func (h Handler) SearchResults(r *nethttp.Request, workspaceID, query string, types search.TypeSet, limit int) ([]api.SearchResult, error) {
+	candidateLimit := 0
+	if limit > 0 {
+		candidateLimit = limit * searchAuthorizationCandidateMultiplier
+	}
+	results, err := h.workspaceSearchResultsLimit(r, workspaceID, query, types, candidateLimit)
 	if err != nil {
 		return nil, err
 	}
-	return h.filterReadableSearchResults(r, workspaceID, results)
+	return h.filterReadableSearchResults(r, workspaceID, results, limit)
+}
+
+// SearchResultsByKeys resolves only explicitly requested type:id pairs through
+// the same object authorization path as search. It avoids authorizing the
+// entire workspace catalog when validating attached chat context.
+func (h Handler) SearchResultsByKeys(r *nethttp.Request, workspaceID string, keys map[string]struct{}) ([]api.SearchResult, error) {
+	if len(keys) == 0 {
+		return []api.SearchResult{}, nil
+	}
+	results, err := h.workspaceSearchResults(r, workspaceID, "", nil)
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]api.SearchResult, 0, len(keys))
+	for _, row := range results {
+		if _, ok := keys[searchResultKey(row.Type, row.ID)]; ok {
+			candidates = append(candidates, row)
+		}
+	}
+	return h.filterReadableSearchResults(r, workspaceID, candidates, len(keys))
 }
 
 func (h Handler) VisibleWorkspaceIDs(r *nethttp.Request) ([]string, error) {
@@ -63,9 +89,16 @@ func (h Handler) VisibleWorkspaceIDs(r *nethttp.Request) ([]string, error) {
 	return ids, nil
 }
 
-func (h Handler) filterReadableSearchResults(r *nethttp.Request, workspaceID string, rows []api.SearchResult) ([]api.SearchResult, error) {
-	out := make([]api.SearchResult, 0, len(rows))
+func (h Handler) filterReadableSearchResults(r *nethttp.Request, workspaceID string, rows []api.SearchResult, limit int) ([]api.SearchResult, error) {
+	capacity := len(rows)
+	if limit > 0 && capacity > limit {
+		capacity = limit
+	}
+	out := make([]api.SearchResult, 0, capacity)
 	for _, row := range rows {
+		if limit > 0 && len(out) >= limit {
+			break
+		}
 		object, ok := searchResultObject(workspaceID, row)
 		if !ok {
 			out = append(out, row)
@@ -80,6 +113,10 @@ func (h Handler) filterReadableSearchResults(r *nethttp.Request, workspaceID str
 		}
 	}
 	return out, nil
+}
+
+func searchResultKey(resultType, id string) string {
+	return strings.ToLower(strings.TrimSpace(resultType)) + ":" + strings.TrimSpace(id)
 }
 
 func searchResultObject(workspaceID string, row api.SearchResult) (access.ObjectRef, bool) {
@@ -105,6 +142,10 @@ func searchResultObject(workspaceID string, row api.SearchResult) (access.Object
 }
 
 func (h Handler) workspaceSearchResults(r *nethttp.Request, workspaceID, query string, types search.TypeSet) ([]api.SearchResult, error) {
+	return h.workspaceSearchResultsLimit(r, workspaceID, query, types, 0)
+}
+
+func (h Handler) workspaceSearchResultsLimit(r *nethttp.Request, workspaceID, query string, types search.TypeSet, limit int) ([]api.SearchResult, error) {
 	documents := make([]search.Document, 0)
 	if metrics, ok := h.metricsForWorkspace(workspaceID); ok && metrics != nil {
 		documents = append(documents, workspaceSearchDocuments(workspaceID, metrics)...)
@@ -127,7 +168,11 @@ func (h Handler) workspaceSearchResults(r *nethttp.Request, workspaceID, query s
 			Weight: -10,
 		})
 	}
-	return searchResultsFromWorkspaceResults(search.Rank(documents, search.Query{Text: query, Types: types})), nil
+	searchQuery := search.Query{Text: query, Types: types}
+	if limit > 0 {
+		return searchResultsFromWorkspaceResults(search.RankLimit(documents, searchQuery, limit)), nil
+	}
+	return searchResultsFromWorkspaceResults(search.Rank(documents, searchQuery)), nil
 }
 
 func workspaceSearchDocuments(workspaceID string, metrics Metrics) []search.Document {

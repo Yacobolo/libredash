@@ -1,6 +1,7 @@
 package search
 
 import (
+	"container/heap"
 	"fmt"
 	"sort"
 	"strings"
@@ -66,6 +67,7 @@ type Result struct {
 type rankedDocument struct {
 	document Document
 	score    int
+	order    int
 }
 
 func ParseTypes(raw string) (TypeSet, error) {
@@ -88,9 +90,27 @@ func ParseTypes(raw string) (TypeSet, error) {
 }
 
 func Rank(documents []Document, query Query) []Result {
+	return rank(documents, query, 0)
+}
+
+// RankLimit returns the same deterministic prefix as Rank without sorting or
+// allocating results for every matching document.
+func RankLimit(documents []Document, query Query, limit int) []Result {
+	if limit <= 0 {
+		return Rank(documents, query)
+	}
+	return rank(documents, query, limit)
+}
+
+func rank(documents []Document, query Query, limit int) []Result {
 	tokens := tokens(query.Text)
-	ranked := make([]rankedDocument, 0, len(documents))
-	for _, document := range documents {
+	capacity := len(documents)
+	if limit > 0 && capacity > limit {
+		capacity = limit
+	}
+	ranked := make([]rankedDocument, 0, capacity)
+	rankedHeap := (*rankedDocumentHeap)(&ranked)
+	for order, document := range documents {
 		if len(query.Types) > 0 {
 			if _, ok := query.Types[document.Type]; !ok {
 				continue
@@ -100,19 +120,22 @@ func Rank(documents []Document, query Query) []Result {
 		if !ok {
 			continue
 		}
-		ranked = append(ranked, rankedDocument{document: document, score: document.Weight + score})
+		candidate := rankedDocument{document: document, score: document.Weight + score, order: order}
+		if limit <= 0 {
+			ranked = append(ranked, candidate)
+			continue
+		}
+		if len(ranked) < limit {
+			heap.Push(rankedHeap, candidate)
+			continue
+		}
+		if rankedDocumentBetter(candidate, ranked[0]) {
+			ranked[0] = candidate
+			heap.Fix(rankedHeap, 0)
+		}
 	}
 	sort.SliceStable(ranked, func(i, j int) bool {
-		if ranked[i].score != ranked[j].score {
-			return ranked[i].score > ranked[j].score
-		}
-		if ranked[i].document.Type != ranked[j].document.Type {
-			return ranked[i].document.Type < ranked[j].document.Type
-		}
-		if ranked[i].document.Name != ranked[j].document.Name {
-			return ranked[i].document.Name < ranked[j].document.Name
-		}
-		return ranked[i].document.ID < ranked[j].document.ID
+		return rankedDocumentBetter(ranked[i], ranked[j])
 	})
 	out := make([]Result, 0, len(ranked))
 	for _, item := range ranked {
@@ -127,6 +150,40 @@ func Rank(documents []Document, query Query) []Result {
 		})
 	}
 	return out
+}
+
+func rankedDocumentBetter(left, right rankedDocument) bool {
+	if left.score != right.score {
+		return left.score > right.score
+	}
+	if left.document.Type != right.document.Type {
+		return left.document.Type < right.document.Type
+	}
+	if left.document.Name != right.document.Name {
+		return left.document.Name < right.document.Name
+	}
+	if left.document.ID != right.document.ID {
+		return left.document.ID < right.document.ID
+	}
+	return left.order < right.order
+}
+
+type rankedDocumentHeap []rankedDocument
+
+func (h rankedDocumentHeap) Len() int { return len(h) }
+func (h rankedDocumentHeap) Less(i, j int) bool {
+	return rankedDocumentBetter(h[j], h[i])
+}
+func (h rankedDocumentHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+func (h *rankedDocumentHeap) Push(value any) {
+	*h = append(*h, value.(rankedDocument))
+}
+func (h *rankedDocumentHeap) Pop() any {
+	old := *h
+	last := len(old) - 1
+	value := old[last]
+	*h = old[:last]
+	return value
 }
 
 func documentScore(document Document, queryTokens []string) (int, bool) {

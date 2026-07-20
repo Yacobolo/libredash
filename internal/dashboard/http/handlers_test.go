@@ -5,13 +5,17 @@ import (
 	"html"
 	nethttp "net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	"github.com/Yacobolo/libredash/internal/dashboard/consumer"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
+	"github.com/Yacobolo/libredash/internal/testutil/ssetest"
+	"github.com/Yacobolo/libredash/internal/ui"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -107,6 +111,38 @@ func TestPageSetsClientCookieAndRendersReport(t *testing.T) {
 	}
 	if strings.Contains(body, `<ld-report-canvas`) {
 		t.Fatalf("page rendered dashboard internals in Go shell:\n%s", body)
+	}
+}
+
+func TestUpdatesPreservesDrawerAgentStateOnReconnect(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	currentSignals := `{"agent":{"activeConversationId":"conversation-1"},"agentVisuals":{"chart":{"title":"Current result"}}}`
+	req := httptest.NewRequestWithContext(ctx, nethttp.MethodGet, "/updates?workspace=workspace&dashboard=dash&page=overview&datastar="+url.QueryEscape(currentSignals), nil)
+	rec := httptest.NewRecorder()
+	bootstrapCalls := 0
+	handler := Handler{
+		Metrics: fakeMetrics{},
+		AgentBootstrap: func(*nethttp.Request, string) ui.ChatViewState {
+			bootstrapCalls++
+			return ui.ChatViewState{}
+		},
+	}
+
+	handler.Updates(rec, req)
+
+	patches := ssetest.PatchSignals(t, rec.Body.String())
+	if len(patches) == 0 {
+		t.Fatal("updates did not emit a bootstrap patch")
+	}
+	if _, exists := patches[0]["agent"]; exists {
+		t.Fatalf("reconnect bootstrap replaced current agent signal: %#v", patches[0]["agent"])
+	}
+	if _, exists := patches[0]["agentVisuals"]; exists {
+		t.Fatalf("reconnect bootstrap replaced current agent visuals: %#v", patches[0]["agentVisuals"])
+	}
+	if bootstrapCalls != 0 {
+		t.Fatalf("AgentBootstrap calls = %d, want 0 on reconnect", bootstrapCalls)
 	}
 }
 

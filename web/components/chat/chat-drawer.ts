@@ -21,10 +21,13 @@ const emptyAgent: ChatSignal = {
   composer: { value: '', disabled: true, placeholder: 'Agent is not configured.' },
 }
 
+const defaultReferenceLimit = 12
+
 class ChatDrawer extends DatastarLit(LitElement) {
   @property({ type: Boolean, reflect: true }) open = false
   @property({ attribute: false }) suggestions: AgentReferenceSignal[] = []
   @state() private references: AgentReferenceSignal[] = []
+  @state() private referenceLimitMessage = ''
 
   static styles = css`
     :host {
@@ -150,6 +153,10 @@ class ChatDrawer extends DatastarLit(LitElement) {
       white-space: nowrap;
     }
 
+    .reference-limit-status {
+      color: var(--ld-fg-muted);
+    }
+
     ld-chat-thread {
       display: block;
       min-width: 0;
@@ -217,8 +224,16 @@ class ChatDrawer extends DatastarLit(LitElement) {
   }
 
   public openWithReference(reference: AgentReferenceSignal): void {
-    if (!this.references.some((current) => referenceKey(current) === referenceKey(reference))) {
+    const alreadyAttached = this.references.some((current) => referenceKey(current) === referenceKey(reference))
+    if (!alreadyAttached && this.references.length >= this.normalizedReferenceLimit()) {
+      const limit = this.normalizedReferenceLimit()
+      this.referenceLimitMessage = `Up to ${limit} ${limit === 1 ? 'item' : 'items'} can be attached`
+      this.openDrawer()
+      return
+    }
+    if (!alreadyAttached) {
       this.references = [...this.references, reference]
+      this.referenceLimitMessage = ''
       this.notifyReferences()
     }
     this.openDrawer()
@@ -262,6 +277,9 @@ class ChatDrawer extends DatastarLit(LitElement) {
               <span class="context-separator" aria-hidden="true">·</span>
               <span class="filter-context">${controls} ${controls === 1 ? 'filter' : 'filters'} · ${selections} ${selections === 1 ? 'selection' : 'selections'}</span>
             </div>
+            ${this.referenceLimitMessage ? html`
+              <div class="reference-limit-status" data-reference-limit-status role="status" aria-live="polite">${this.referenceLimitMessage}</div>
+            ` : null}
           </section>
         </header>
         <ld-chat-thread
@@ -288,6 +306,7 @@ class ChatDrawer extends DatastarLit(LitElement) {
 
   private newChat() {
     this.references = []
+    this.referenceLimitMessage = ''
     this.notifyReferences()
 		this.dispatchEvent(new CustomEvent('ld-chat-new', { bubbles: true, composed: true }))
   }
@@ -299,7 +318,13 @@ class ChatDrawer extends DatastarLit(LitElement) {
 
   private referencesChanged(event: CustomEvent<{ references: AgentReferenceSignal[] }>) {
     this.references = event.detail.references ?? []
+    this.referenceLimitMessage = ''
     this.notifyReferences()
+  }
+
+  private normalizedReferenceLimit(): number {
+    const limit = this.context?.referenceLimit ?? defaultReferenceLimit
+    return Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : defaultReferenceLimit
   }
 
   private notifyReferences() {
@@ -317,8 +342,10 @@ function referenceKey(reference: AgentReferenceSignal): string {
 
 function isOnPageReference(reference: AgentReferenceSignal, context: AgentContextSignal | null): boolean {
 	return Boolean(
-		context?.dashboardId
+		context?.workspaceId
+		&& context.dashboardId
 		&& context.pageId
+		&& reference.workspaceId === context.workspaceId
 		&& reference.dashboardId === context.dashboardId
 		&& reference.pageId === context.pageId,
 	)

@@ -1,12 +1,30 @@
 package http
 
 import (
+	nethttp "net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/workspace"
 )
+
+func TestFilterReadableSearchResultsStopsAtLimit(t *testing.T) {
+	rows := []api.SearchResult{
+		{ID: "one", Name: "One"},
+		{ID: "two", Name: "Two"},
+		{ID: "three", Name: "Three"},
+	}
+
+	got, err := (Handler{}).filterReadableSearchResults(httptest.NewRequest(nethttp.MethodGet, "/", nil), "workspace", rows, 2)
+	if err != nil {
+		t.Fatalf("filterReadableSearchResults: %v", err)
+	}
+	if len(got) != 2 || got[0].ID != "one" || got[1].ID != "two" {
+		t.Fatalf("results = %#v, want first two rows", got)
+	}
+}
 
 func TestSearchResultObjectUsesRegisteredSemanticFieldIdentity(t *testing.T) {
 	tests := []struct {

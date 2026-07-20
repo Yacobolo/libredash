@@ -3,6 +3,7 @@ package http
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"log/slog"
 	nethttp "net/http"
 	"strings"
@@ -61,7 +62,10 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 		broker.TraceStore(), streamID, "dashboard.bootstrap",
 	))
 	bootstrap := reportui.BootstrapSignals(clientID, streamInstanceID, metrics.Catalog(), reportDefinition, model, pages, activePage, initialFilters)
-	if h.AgentBootstrap != nil {
+	if hasClientAgentState(r) {
+		delete(bootstrap, "agent")
+		delete(bootstrap, "agentVisuals")
+	} else if h.AgentBootstrap != nil {
 		agentState := h.AgentBootstrap(r, metrics.Catalog().Workspace.ID)
 		bootstrap["agent"] = agentState.Agent
 		bootstrap["agentVisuals"] = agentState.Visuals
@@ -120,6 +124,13 @@ func (h Handler) Updates(w nethttp.ResponseWriter, r *nethttp.Request) {
 		return
 	}
 	_ = updates.ForwardUpdates(r.Context(), mailbox)
+}
+
+func hasClientAgentState(r *nethttp.Request) bool {
+	var signals struct {
+		Agent *json.RawMessage `json:"agent"`
+	}
+	return pagestream.ReadSignals(r, &signals) == nil && signals.Agent != nil
 }
 
 func streamActivePage(pages []dashboard.Page, pageID string) (dashboard.Page, bool) {

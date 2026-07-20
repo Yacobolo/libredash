@@ -637,6 +637,7 @@ test('dashboard agent drawer carries page context and explicit visual references
         query: 'orders', workspaceId: 'sales', dashboardId: 'executive-sales', pageId: 'overview',
         results: [
           { kind: 'visual', id: 'visual:executive-sales.overview.orders_chart', workspaceId: 'sales', dashboardId: 'executive-sales', pageId: 'overview', componentId: 'orders-chart', visualId: 'orders_chart', title: 'Orders by status' },
+          { kind: 'visual', id: 'visual:executive-sales.overview.foreign_orders', workspaceId: 'finance', dashboardId: 'executive-sales', pageId: 'overview', componentId: 'foreign-orders', visualId: 'foreign_orders', title: 'Finance orders', description: 'From another workspace' },
           { kind: 'measure', id: 'measure:orders.order_count', workspaceId: 'sales', modelId: 'olist', datasetId: 'orders', fieldId: 'order_count', title: 'Orders count', description: 'Across the sales workspace' },
         ],
       } })
@@ -652,11 +653,21 @@ test('dashboard agent drawer carries page context and explicit visual references
       return {
         labels: Array.from(composer.shadowRoot.querySelectorAll('.mention-section-label')).map((node: any) => node.textContent.trim()),
         options: Array.from(composer.shadowRoot.querySelectorAll('.mention-option')).map((node: any) => node.textContent.replace(/\s+/g, ' ').trim()),
+        onPage: Array.from(composer.shadowRoot.querySelector('[aria-label="On this page"]')?.querySelectorAll('.mention-option') ?? []).map((node: any) => node.textContent.replace(/\s+/g, ' ').trim()),
+        accessible: Array.from(composer.shadowRoot.querySelector('[aria-label="All accessible"]')?.querySelectorAll('.mention-option') ?? []).map((node: any) => node.textContent.replace(/\s+/g, ' ').trim()),
       }
     })
     expect(groupedSearch.labels).toEqual(['On this page', 'All accessible'])
     expect(groupedSearch.options[0]).toContain('Orders')
+    expect(groupedSearch.onPage).not.toContain('Finance orders From another workspace')
+    expect(groupedSearch.accessible).toContain('Finance orders From another workspace')
     expect(groupedSearch.options.at(-1)).toBe('Orders count Across the sales workspace')
+
+    await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev')
+      mergePatch({ agentContext: { referenceLimit: 1 } })
+      await element.updateComplete
+    })
 
     await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
       const frame = Array.from(element.shadowRoot.querySelectorAll('ld-dashboard-visual-frame'))
@@ -676,6 +687,21 @@ test('dashboard agent drawer carries page context and explicit visual references
       }
     })
     expect(referenced).toEqual({ chip: 'Orders by status', highlighted: true })
+
+    const limitReached = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+      const frame = Array.from(element.shadowRoot.querySelectorAll('ld-dashboard-visual-frame'))
+        .find((candidate: any) => candidate.getAttribute('data-component-status-key') === 'visual:orders_kpi') as any
+      frame.shadowRoot.querySelector('.ask-visual').click()
+      const drawer = element.shadowRoot.querySelector('ld-chat-drawer') as any
+      await drawer.updateComplete
+      const composer = drawer.shadowRoot.querySelector('ld-chat-composer') as any
+      await composer.updateComplete
+      return {
+        chips: Array.from(composer.shadowRoot.querySelectorAll('.reference-chip')).map((node: any) => node.textContent?.replace(/\s+/g, ' ').trim()),
+        status: drawer.shadowRoot.querySelector('[data-reference-limit-status]')?.textContent?.replace(/\s+/g, ' ').trim(),
+      }
+    })
+    expect(limitReached).toEqual({ chips: ['Orders by status'], status: 'Up to 1 item can be attached' })
 
     const submitted = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
       const received: any[] = []

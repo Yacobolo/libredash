@@ -99,12 +99,9 @@ func (s *Server) searchAgentReferences(r *http.Request, workspaceID, query strin
 	group.SetLimit(maxConcurrentAgentReferenceSearches)
 	for index, currentWorkspaceID := range workspaceIDs {
 		group.Go(func() error {
-			rows, err := handler.SearchResults(r.Clone(groupContext), currentWorkspaceID, query, nil)
+			rows, err := handler.SearchResults(r.Clone(groupContext), currentWorkspaceID, query, nil, limit)
 			if err != nil {
 				return err
-			}
-			if limit > 0 && len(rows) > limit {
-				rows = rows[:limit]
 			}
 			groups[index] = rows
 			return nil
@@ -187,7 +184,8 @@ func (s *Server) resolveAgentTurnContext(r *http.Request, scope agent.Scope, can
 		return s.resolveDashboardTurnContext(r.Context(), scope, candidate)
 	case "chat":
 		defaultWorkspaceID := firstNonEmpty(candidate.WorkspaceID, s.defaultWorkspaceID)
-		workspaceRows := map[string]map[string]api.SearchResult{}
+		workspaceKeys := map[string]map[string]struct{}{}
+		workspaceOrder := []string{}
 		for _, reference := range candidate.References {
 			workspaceID := firstNonEmpty(reference.WorkspaceID, defaultWorkspaceID)
 			if workspaceID == "" {
@@ -198,16 +196,21 @@ func (s *Server) resolveAgentTurnContext(r *http.Request, scope agent.Scope, can
 			if !agentCredentialAllowsPrivilege(workspaceScope, access.PrivilegeViewItem) {
 				return agent.TurnContext{}, errors.New("credential cannot view referenced context")
 			}
-			if _, loaded := workspaceRows[workspaceID]; loaded {
-				continue
+			if _, exists := workspaceKeys[workspaceID]; !exists {
+				workspaceKeys[workspaceID] = map[string]struct{}{}
+				workspaceOrder = append(workspaceOrder, workspaceID)
 			}
-			rows, err := s.workspaceHTTPHandler().SearchResults(r, workspaceID, "", nil)
+			workspaceKeys[workspaceID][agentReferenceLookupKey(reference.Kind, reference.ID)] = struct{}{}
+		}
+		workspaceRows := map[string]map[string]api.SearchResult{}
+		for _, workspaceID := range workspaceOrder {
+			rows, err := s.workspaceHTTPHandler().SearchResultsByKeys(r, workspaceID, workspaceKeys[workspaceID])
 			if err != nil {
 				return agent.TurnContext{}, err
 			}
 			byKey := make(map[string]api.SearchResult, len(rows))
 			for _, row := range rows {
-				byKey[strings.ToLower(row.Type)+":"+row.ID] = row
+				byKey[agentReferenceLookupKey(row.Type, row.ID)] = row
 			}
 			workspaceRows[workspaceID] = byKey
 		}
@@ -220,7 +223,7 @@ func (s *Server) resolveAgentTurnContext(r *http.Request, scope agent.Scope, can
 			}
 			workspaceID := firstNonEmpty(reference.WorkspaceID, defaultWorkspaceID)
 			key := workspaceID + ":" + strings.ToLower(strings.TrimSpace(reference.Kind)) + ":" + strings.TrimSpace(reference.ID)
-			row, ok := workspaceRows[workspaceID][strings.ToLower(strings.TrimSpace(reference.Kind))+":"+strings.TrimSpace(reference.ID)]
+			row, ok := workspaceRows[workspaceID][agentReferenceLookupKey(reference.Kind, reference.ID)]
 			if !ok {
 				continue
 			}
@@ -243,6 +246,10 @@ func (s *Server) resolveAgentTurnContext(r *http.Request, scope agent.Scope, can
 	default:
 		return agent.TurnContext{}, errors.New("unsupported agent context surface")
 	}
+}
+
+func agentReferenceLookupKey(kind, id string) string {
+	return strings.ToLower(strings.TrimSpace(kind)) + ":" + strings.TrimSpace(id)
 }
 
 func (s *Server) agentSystemPrompt(ctx context.Context) (string, error) {
