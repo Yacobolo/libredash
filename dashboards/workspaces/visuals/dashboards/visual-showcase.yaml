@@ -892,17 +892,24 @@ spec:
             join: state
             value: revenue
     customer_point_map:
-      title: Customer locations
-      description: Renders bounded synthetic customer coordinates as points.
+      title: Orders by ZIP area
+      description: Clusters real Olist ZIP-prefix centroids sized by order volume.
       type: map
       query:
         dimensions:
-          customer_id: customers.customer_id
+          zip_prefix: customers.zip_prefix
+          city: customers.city
+          state: customers.state
           latitude: customers.latitude
           longitude: customers.longitude
         measures:
           order_count: null
-        limit: 500
+        sort:
+          - field: order_count
+            direction: desc
+          - field: zip_prefix
+            direction: asc
+        limit: 20000
       geo:
         controls:
           zoom: true
@@ -914,8 +921,8 @@ spec:
             latitude: latitude
             longitude: longitude
             value: order_count
-            label: customer_id
-            tooltip: [customer_id, order_count]
+            label: city
+            tooltip: [zip_prefix, city, state, order_count]
             size:
               minimum_radius: 5
               maximum_radius: 28
@@ -929,25 +936,31 @@ spec:
         point_selection:
           toggle: true
           mappings:
-            - field: customers.customer_id
+            - field: customers.zip_prefix
               fact: orders
-              value: customer_id
-              label: customer_id
+              value: zip_prefix
+              label: city
           targets:
             - state_order_map
             - customer_revenue_heat_map
             - customer_density_map
     customer_revenue_heat_map:
       title: Revenue concentration
-      description: Renders revenue-weighted geographic heat.
+      description: Renders revenue-weighted heat across real Olist ZIP-prefix centroids.
       type: map
       query:
         dimensions:
+          zip_prefix: customers.zip_prefix
           latitude: customers.latitude
           longitude: customers.longitude
         measures:
           revenue: null
-        limit: 500
+        sort:
+          - field: revenue
+            direction: desc
+          - field: zip_prefix
+            direction: asc
+        limit: 20000
       geo:
         theme: dark
         controls:
@@ -960,20 +973,27 @@ spec:
             latitude: latitude
             longitude: longitude
             value: revenue
+            tooltip: [zip_prefix, revenue]
             heat:
               radius: 28
               intensity: 1.15
     customer_density_map:
       title: Customer density
-      description: Renders the density of bounded synthetic customer coordinates.
+      description: Renders order density across real Olist ZIP-prefix centroids.
       type: map
       query:
         dimensions:
+          zip_prefix: customers.zip_prefix
           latitude: customers.latitude
           longitude: customers.longitude
         measures:
           order_count: null
-        limit: 500
+        sort:
+          - field: order_count
+            direction: desc
+          - field: zip_prefix
+            direction: asc
+        limit: 20000
       geo:
         controls:
           zoom: true
@@ -984,6 +1004,8 @@ spec:
             kind: density
             latitude: latitude
             longitude: longitude
+            value: order_count
+            tooltip: [zip_prefix, order_count]
             heat:
               radius: 22
               intensity: 1.35
@@ -1009,32 +1031,41 @@ spec:
               opacity: 1
             opacity: 0.12
     customer_path_map:
-      title: Customer paths by state
-      description: Groups customer coordinates into deterministic state paths.
+      title: Highest-value delivery routes
+      description: Connects seller origins to customer destinations for the highest-value real Olist deliveries.
       type: map
       query:
         dimensions:
-          state: customers.state
-          customer_id: customers.customer_id
-          latitude: customers.latitude
-          longitude: customers.longitude
+          route_id: delivery_routes.route_id
+          point_order: delivery_routes.point_order
+          route_label: delivery_routes.route_label
+          latitude: delivery_routes.latitude
+          longitude: delivery_routes.longitude
         measures:
-          revenue: null
-        limit: 500
+          route_revenue: null
+        sort:
+          - field: route_revenue
+            direction: desc
+          - field: route_id
+            direction: asc
+          - field: point_order
+            direction: asc
+        limit: 200
       geo:
         controls:
           zoom: true
           reset: true
           compass: true
         layers:
-          - id: customer_paths
+          - id: delivery_routes
             kind: path
             latitude: latitude
             longitude: longitude
-            path: state
-            order: customer_id
-            value: revenue
-            tooltip: [state, revenue]
+            path: route_id
+            order: point_order
+            value: route_revenue
+            label: route_label
+            tooltip: [route_label, route_revenue]
             stroke:
               color: "#0969da"
               width: 3

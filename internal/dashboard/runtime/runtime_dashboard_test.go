@@ -243,9 +243,9 @@ o2,c2,shipped,2018-01-05 10:00:00,2018-01-15 10:00:00
 o1,5
 o2,3
 `)
-	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_state
-c1,SP
-c2,RJ
+	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_zip_code_prefix,customer_city,customer_state
+c1,01001,Sao Paulo,SP
+c2,20040,Rio de Janeiro,RJ
 `)
 
 	metrics, err := newOperationsRuntime(t, dir)
@@ -280,9 +280,9 @@ o2,c2,shipped,2018-01-05 10:00:00,2018-01-15 10:00:00
 o1,5
 o2,3
 `)
-	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_state
-c1,SP
-c2,RJ
+	writeFixture(t, dir, "olist_customers_dataset.csv", `customer_id,customer_zip_code_prefix,customer_city,customer_state
+c1,01001,Sao Paulo,SP
+c2,20040,Rio de Janeiro,RJ
 `)
 
 	metrics, err := newOperationsRuntime(t, dir)

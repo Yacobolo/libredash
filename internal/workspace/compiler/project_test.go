@@ -1259,6 +1259,16 @@ func assertVisualShowcaseCoverage(t *testing.T, report *dashboarddefinition.Defi
 			t.Fatalf("visual-showcase missing geographic layer kind %q", kind)
 		}
 	}
+	assertAggregateDimensions(t, report, "customer_point_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
+	assertAggregateDimensions(t, report, "customer_revenue_heat_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
+	assertAggregateDimensions(t, report, "customer_density_map", "customers.zip_prefix", "customers.latitude", "customers.longitude")
+	assertAggregateDimensions(t, report, "customer_path_map", "delivery_routes.route_id", "delivery_routes.point_order", "delivery_routes.latitude", "delivery_routes.longitude")
+	for _, id := range []string{"customer_point_map", "customer_revenue_heat_map", "customer_density_map", "customer_path_map"} {
+		visual := report.Visualizations[id]
+		if visual.Query.Aggregate == nil || len(visual.Query.Aggregate.Sort) == 0 {
+			t.Errorf("visual-showcase geographic visual %q requires deterministic sorting before its row budget", id)
+		}
+	}
 	tableKinds := map[string]struct{}{}
 	conditionalFormatting := map[string]struct{}{}
 	for _, table := range report.Visualizations {
@@ -1294,6 +1304,24 @@ func assertVisualShowcaseCoverage(t *testing.T, report *dashboarddefinition.Defi
 	for _, kind := range []string{"badge", "data_bar", "text_color", "background_scale"} {
 		if _, ok := conditionalFormatting[kind]; !ok {
 			t.Fatalf("visual-showcase missing conditional formatting kind %q", kind)
+		}
+	}
+}
+
+func assertAggregateDimensions(t *testing.T, report *dashboarddefinition.Definition, visualID string, want ...string) {
+	t.Helper()
+	visual, ok := report.Visualizations[visualID]
+	if !ok || visual.Query.Aggregate == nil {
+		t.Errorf("visual-showcase missing aggregate visual %q", visualID)
+		return
+	}
+	present := make(map[string]bool, len(visual.Query.Aggregate.Dimensions))
+	for _, dimension := range visual.Query.Aggregate.Dimensions {
+		present[dimension.FieldID] = true
+	}
+	for _, field := range want {
+		if !present[field] {
+			t.Errorf("visual-showcase visual %q missing semantic dimension %q", visualID, field)
 		}
 	}
 }

@@ -8,6 +8,20 @@ import (
 	"testing"
 )
 
+func TestVerifyArchiveDigest(t *testing.T) {
+	archivePath := filepath.Join(t.TempDir(), "archive.zip")
+	if err := os.WriteFile(archivePath, []byte("pinned dataset"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := verifyArchiveDigest(archivePath, "efb61cc996a59d8620addb6690351af1e3b9ae3bb138cd248f67220708c81825"); err != nil {
+		t.Fatalf("verifyArchiveDigest valid archive: %v", err)
+	}
+	if err := verifyArchiveDigest(archivePath, strings.Repeat("0", 64)); err == nil || !strings.Contains(err.Error(), "digest mismatch") {
+		t.Fatalf("verifyArchiveDigest mismatch error = %v, want digest mismatch", err)
+	}
+}
+
 func TestTargetDirRequiresExplicitOutput(t *testing.T) {
 	if _, err := targetDir(""); err == nil || !strings.Contains(err.Error(), "out is required") {
 		t.Fatalf("targetDir empty output error = %v, want required error", err)
@@ -38,6 +52,23 @@ func TestMissingCSVs(t *testing.T) {
 	for _, got := range missing {
 		if got == expectedCSVs[0] {
 			t.Fatalf("missingCSVs included existing file %s", got)
+		}
+	}
+}
+
+func TestExpectedCSVsIncludeRealGeographicInputs(t *testing.T) {
+	want := map[string]bool{
+		"olist_geolocation_dataset.csv": false,
+		"olist_sellers_dataset.csv":     false,
+	}
+	for _, filename := range expectedCSVs {
+		if _, ok := want[filename]; ok {
+			want[filename] = true
+		}
+	}
+	for filename, present := range want {
+		if !present {
+			t.Errorf("expectedCSVs missing %s", filename)
 		}
 	}
 }

@@ -1,0 +1,14 @@
+apiVersion: libredash.dev/v1
+kind: Source
+metadata:
+  name: olist.geolocation
+  title: Brazilian ZIP Geolocation
+spec:
+  connection: olist
+  path: olist_geolocation_dataset.csv
+  fields:
+    geolocation_zip_code_prefix: {type: string, description: Five-digit Brazilian ZIP-code prefix.}
+    geolocation_lat: {type: decimal, description: Latitude supplied by the Olist geolocation dataset.}
+    geolocation_lng: {type: decimal, description: Longitude supplied by the Olist geolocation dataset.}
+    geolocation_city: {type: string, description: City associated with the coordinate observation.}
+    geolocation_state: {type: string, description: Brazilian state abbreviation associated with the coordinate observation.}

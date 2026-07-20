@@ -20,6 +20,18 @@ const (
 	basemapAssetsSHA = "028c18f713baecad011301ff7a69acc39bcc2ae7"
 )
 
+var glyphRanges = []string{
+	"0-255",
+	"256-511",
+	"512-767",
+	"768-1023",
+	"1024-1279",
+	"1280-1535",
+	"1536-1791",
+	"4096-4351",
+	"11520-11775",
+}
+
 func main() {
 	out := flag.String("out", ".data/map-assets/libredash-streets", "map asset output directory")
 	flag.Parse()
@@ -42,7 +54,7 @@ func install(ctx context.Context, out string) error {
 	}
 	client := &http.Client{Timeout: 45 * time.Second}
 	for _, font := range []string{"Noto Sans Regular", "Noto Sans Medium", "Noto Sans Italic"} {
-		for _, glyphRange := range []string{"0-255", "256-511"} {
+		for _, glyphRange := range glyphRanges {
 			rel := filepath.Join("glyphs", font, glyphRange+".pbf")
 			remote := fmt.Sprintf("https://raw.githubusercontent.com/protomaps/basemaps-assets/%s/fonts/%s/%s.pbf", basemapAssetsSHA, url.PathEscape(font), glyphRange)
 			if err := downloadIfMissing(ctx, client, remote, filepath.Join(out, rel)); err != nil {
