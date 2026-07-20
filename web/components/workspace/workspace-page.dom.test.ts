@@ -90,6 +90,8 @@ for (const viewport of [
           workspaceHasAsset: Boolean(workspaceRecordTable && workspace.shadowRoot.querySelector('.record-entity-label')),
           workspaceTableVariant: workspaceRecordTable.getAttribute('variant'),
           workspaceTableHeaders: Array.from(workspaceRecordTable.querySelectorAll('thead th button span:first-child')).map((header) => header.textContent?.trim()),
+          workspaceTableMinWidth: getComputedStyle(workspaceRecordTable.querySelector('table') as HTMLElement).minWidth,
+          workspaceRowActionCounts: Array.from(workspaceRecordTable.querySelectorAll('tbody tr')).map((row) => row.querySelectorAll('.record-icon-action').length),
           workspaceTableHeaderBackground: getComputedStyle(workspaceRecordTable.querySelector('thead th') as HTMLElement).backgroundColor,
           workspaceHasAccess: Boolean(workspace.shadowRoot.querySelector('ld-workspace-access-control')),
           workspaceIsStyled: getComputedStyle(workspacePage).paddingTop !== '0px',
@@ -118,7 +120,9 @@ for (const viewport of [
         workspaceTitle: 'LibreDash Workspace',
         workspaceHasAsset: true,
         workspaceTableVariant: 'primary',
-        workspaceTableHeaders: ['Name', 'Type', 'Key', 'Actions'],
+        workspaceTableHeaders: ['Name', 'Type', 'Actions'],
+        workspaceTableMinWidth: '640px',
+        workspaceRowActionCounts: [1, 2],
         workspaceTableHeaderBackground: 'rgb(246, 248, 250)',
         workspaceHasAccess: true,
         workspaceIsStyled: true,
@@ -294,9 +298,14 @@ test('workspace asset search filters the current asset rows', async () => {
       input.focus()
       const focusedStyle = getComputedStyle(input)
       const after = Array.from(root.querySelectorAll('.record-entity-label')).map((link) => link.textContent?.trim())
+      input.value = 'olist'
+      input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
+      await workspace.updateComplete
+      const afterKeySearch = Array.from(root.querySelectorAll('.record-entity-label')).map((link) => link.textContent?.trim())
       return {
         before,
         after,
+        afterKeySearch,
         focusedBorderColor: focusedStyle.borderTopColor,
         focusedOutlineStyle: focusedStyle.outlineStyle,
         hasSubmitButton: Boolean(root.querySelector('.toolbar .search button[type="submit"]')),
@@ -307,6 +316,7 @@ test('workspace asset search filters the current asset rows', async () => {
 
     expect(state.before).toEqual(['Executive Sales Dashboard', 'Customer Segments'])
     expect(state.after).toEqual(['Customer Segments'])
+    expect(state.afterKeySearch).toEqual(['Executive Sales Dashboard'])
     expect(state.focusedBorderColor).toBe('rgb(9, 105, 218)')
     expect(state.focusedOutlineStyle).toBe('solid')
     expect(state.hasSubmitButton).toBe(false)

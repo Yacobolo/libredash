@@ -355,27 +355,28 @@ function renderAssetTable(assets: WorkspaceAssetSummarySignal[], empty: string) 
   if (!assets.length) return html`<div class="panel"><div class="empty">${empty}</div></div>`
   const table: RecordTableSignal = {
     columns: [
-      { id: 'name', header: 'Name', kind: 'entity', width: '42%' },
+      { id: 'name', header: 'Name', kind: 'entity' },
       { id: 'type', header: 'Type', width: '150px' },
-      { id: 'key', header: 'Key', kind: 'code', width: '180px' },
       { id: 'actions', header: 'Actions', kind: 'actions', align: 'right', width: '104px', sortable: false } as any,
     ],
-    rows: assets.map((asset) => ({
-      name: {
-        label: asset.title,
-        description: asset.description,
-        href: asset.detailHref,
-        icon: asset.type,
-      },
-      type: asset.typeLabel,
-      key: asset.key,
-      actions: [
-        { label: 'View details', href: asset.detailHref, icon: 'details' },
-        { label: 'Open asset', href: asset.openHref, icon: 'open' },
-      ],
-    })),
+    rows: assets.map((asset) => {
+      const actions = [{ label: 'View details', href: asset.detailHref, icon: 'details' }]
+      if (asset.openHref && asset.openHref !== asset.detailHref) {
+        actions.push({ label: 'Open asset', href: asset.openHref, icon: 'open' })
+      }
+      return {
+        name: {
+          label: asset.title,
+          description: asset.description,
+          href: asset.detailHref,
+          icon: asset.type,
+        },
+        type: asset.typeLabel,
+        actions,
+      }
+    }),
     empty,
-    minWidth: '840px',
+    minWidth: '640px',
   }
   return html`
     <div class="panel">
