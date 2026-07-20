@@ -334,7 +334,7 @@ test('workspace asset search filters the current asset rows', async () => {
   }
 })
 
-test('workspace access modal normalizes Go-shaped access signals', async () => {
+test('workspace access drawer normalizes Go-shaped access signals', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
@@ -346,14 +346,17 @@ test('workspace access modal normalizes Go-shaped access signals', async () => {
       const accessControl = workspace.shadowRoot.querySelector('ld-workspace-access-control') as any
       accessControl.shadowRoot.querySelector('.trigger').click()
       await accessControl.updateComplete
-      const dialog = accessControl.shadowRoot.querySelector('[role="dialog"]')
+      const drawer = accessControl.shadowRoot.querySelector('ld-drawer') as any
+      const dialog = drawer?.shadowRoot?.querySelector('[role="dialog"]')
       const roleOptions = Array.from(accessControl.shadowRoot.querySelectorAll('.composer-role option')).map((option) => ({
         value: (option as HTMLOptionElement).value,
         label: option.textContent?.trim(),
       }))
       const rowRole = accessControl.shadowRoot.querySelector('.row select') as HTMLSelectElement | null
       return {
+        hasDrawer: Boolean(drawer),
         hasDialog: Boolean(dialog),
+        modal: dialog?.getAttribute('aria-modal'),
         title: accessControl.shadowRoot.querySelector('.subtitle')?.textContent?.trim(),
         roleOptions,
         rowRoleValue: rowRole?.value,
@@ -361,16 +364,18 @@ test('workspace access modal normalizes Go-shaped access signals', async () => {
       }
     })
 
-	expect(state).toEqual({
-		hasDialog: false,
-		title: 'LibreDash Workspace roles apply to every published asset in this workspace.',
-		roleOptions: [
-			{ value: 'principal', label: 'User' },
-			{ value: 'group', label: 'Group' },
-			{ value: 'service_principal', label: 'Service principal' },
-			{ value: 'viewer', label: 'Viewer' },
-			{ value: 'workspace_admin', label: 'Workspace Admin' },
-		],
+    expect(state).toEqual({
+      hasDrawer: true,
+      hasDialog: true,
+      modal: 'true',
+      title: 'LibreDash Workspace roles apply to every published asset in this workspace.',
+      roleOptions: [
+        { value: 'principal', label: 'User' },
+        { value: 'group', label: 'Group' },
+        { value: 'service_principal', label: 'Service principal' },
+        { value: 'viewer', label: 'Viewer' },
+        { value: 'workspace_admin', label: 'Workspace Admin' },
+      ],
       rowRoleValue: 'viewer',
       principal: 'analyst@example.com',
     })
