@@ -44,16 +44,20 @@ func newVisualPlan(definition visualizationdefinition.Definition) (visualPlan, e
 		if query == nil {
 			return visualPlan{}, fmt.Errorf("visualization %q has no custom binding", definition.ID)
 		}
-		plan.Table, plan.Dimensions, plan.Sort, plan.Limit = query.TableID, query.Fields, query.Sort, int(query.Limit)
+		plan.Table, plan.Sort, plan.Limit = query.TableID, query.Sort, int(query.Limit)
 		base, err := visualizationir.SpecificationBase(definition.Spec)
 		if err != nil {
 			return visualPlan{}, err
 		}
+		roles := make(map[string]visualizationir.VisualizationFieldRole, len(base.Datasets[0].Fields))
 		for _, field := range base.Datasets[0].Fields {
-			for _, binding := range query.Fields {
-				if binding.Alias == field.ID && field.Role == visualizationir.VisualizationFieldRoleMeasure {
-					plan.Measures = append(plan.Measures, binding)
-				}
+			roles[field.ID] = field.Role
+		}
+		for _, binding := range query.Fields {
+			if roles[binding.Alias] == visualizationir.VisualizationFieldRoleMeasure {
+				plan.Measures = append(plan.Measures, binding)
+			} else {
+				plan.Dimensions = append(plan.Dimensions, binding)
 			}
 		}
 	default:
@@ -92,6 +96,8 @@ func (visual visualPlan) Shape() string {
 		}
 	case *visualizationir.GeographicVisualizationSpec:
 		return "geo"
+	case *visualizationir.CustomVisualizationSpec:
+		return "custom"
 	}
 	if len(visual.Measures) > 1 {
 		return "category_multi_measure"

@@ -472,6 +472,77 @@
       ],
       "type": "object"
     },
+    "#GeographicLayer": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/%23GeographicLayerCommon",
+          "additionalProperties": false,
+          "properties": {
+            "geometry_asset": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "join": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "kind": {
+              "const": "choropleth"
+            }
+          },
+          "required": [
+            "geometry_asset",
+            "join",
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "$ref": "#/$defs/%23GeographicLayerCommon",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "anyOf": [
+                {
+                  "const": "point"
+                },
+                {
+                  "const": "heat"
+                },
+                {
+                  "const": "density"
+                }
+              ]
+            },
+            "latitude": {
+              "$ref": "#/$defs/%23Identifier"
+            },
+            "longitude": {
+              "$ref": "#/$defs/%23Identifier"
+            }
+          },
+          "required": [
+            "kind",
+            "latitude",
+            "longitude"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "#GeographicLayerCommon": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/%23Identifier"
+        },
+        "value": {
+          "$ref": "#/$defs/%23Identifier"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
     "#GeographicVisual": {
       "$ref": "#/$defs/%23VisualCommon",
       "additionalProperties": false,
@@ -479,12 +550,21 @@
         "geo": {
           "additionalProperties": false,
           "properties": {
-            "geometry_asset": {
-              "$ref": "#/$defs/%23Identifier"
+            "layers": {
+              "items": {
+                "$ref": "#/$defs/%23GeographicLayer"
+              },
+              "minItems": 1,
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/%23GeographicLayer"
+                }
+              ],
+              "type": "array"
             }
           },
           "required": [
-            "geometry_asset"
+            "layers"
           ],
           "type": "object"
         },

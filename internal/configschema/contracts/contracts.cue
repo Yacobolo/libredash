@@ -483,7 +483,26 @@ package contracts
 		#PresentationCommon
 		roam?: bool
 	})
-	geo!: close({geometry_asset!: #Identifier})
+	geo!: close({
+		layers!: [#GeographicLayer, ...#GeographicLayer]
+	})
+})
+
+#GeographicLayerCommon: {
+	id!:    #Identifier
+	value?: #Identifier
+}
+
+#GeographicLayer: close({
+	#GeographicLayerCommon
+	kind!:           "choropleth"
+	geometry_asset!: #Identifier
+	join!:           #Identifier
+}) | close({
+	#GeographicLayerCommon
+	kind!:      "point" | "heat" | "density"
+	latitude!:  #Identifier
+	longitude!: #Identifier
 })
 
 #CustomVisual: close({

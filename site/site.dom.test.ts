@@ -838,11 +838,11 @@ test('KPI documentation uses compact example frames', async () => {
 
 test('every visual documentation page mounts its generated production payloads', async () => {
   const page = await browser.newPage()
-  const visualTypes = ['line', 'area', 'bar', 'column', 'pie', 'donut', 'scatter', 'funnel', 'treemap', 'gauge', 'heatmap', 'sankey', 'graph', 'map', 'candlestick', 'boxplot', 'combo', 'waterfall', 'histogram', 'radar', 'tree', 'sunburst', 'kpi', 'table', 'matrix', 'pivot']
+  const visualTypes = ['line', 'area', 'bar', 'column', 'pie', 'donut', 'scatter', 'funnel', 'treemap', 'gauge', 'heatmap', 'sankey', 'graph', 'map', 'custom', 'candlestick', 'boxplot', 'combo', 'waterfall', 'histogram', 'radar', 'tree', 'sunburst', 'kpi', 'table', 'matrix', 'pivot']
   try {
     for (const visualType of visualTypes) {
       await page.goto(`${baseURL}/docs/visuals/${visualType}`)
-      const expected = visualType === 'candlestick' ? 2 : visualType === 'kpi' ? 4 : ['table', 'matrix', 'pivot'].includes(visualType) ? 1 : 3
+      const expected = visualType === 'map' ? 4 : visualType === 'candlestick' ? 2 : visualType === 'kpi' ? 4 : ['custom', 'table', 'matrix', 'pivot'].includes(visualType) ? 1 : 3
       await page.waitForFunction(
         ({ count }) => {
           const examples = [...document.querySelectorAll('ld-site-visual-example')]
@@ -866,13 +866,17 @@ test('every visual documentation page mounts its generated production payloads',
     expect(thresholds).toBe(3)
 
     await page.goto(`${baseURL}/docs/visuals/map`)
-    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 3)
+    await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 4)
     expect(await page.locator('ld-site-visual-example').first().evaluate((element) => {
       const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: any }
       const envelope = host.envelope
       const rows = envelope?.dataState?.datasets?.[0]?.rows ?? []
       return [envelope?.spec?.kind, envelope?.spec?.layers?.[0]?.geometry?.id, rows.length, new Set(rows.map((row: unknown[]) => row[0])).size]
     })).toEqual(['geographic', 'br-states-ibge', 27, 27])
+    expect(await page.locator('ld-site-visual-example').evaluateAll((elements) => elements.map((element) => {
+      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: any }
+      return host.envelope?.spec?.layers?.[0]?.kind
+    }))).toEqual(['choropleth', 'point', 'heat', 'density'])
     await page.waitForFunction(() => {
       const example = document.querySelector('ld-site-visual-example') as HTMLElement & { shadowRoot: ShadowRoot }
       const host = example?.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
@@ -882,6 +886,17 @@ test('every visual documentation page mounts its generated production payloads',
       const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
       return host?.shadowRoot?.querySelector('.renderer[aria-label]')?.getAttribute('aria-label')
     })).not.toContain('NaN')
+
+    await page.goto(`${baseURL}/docs/visuals/custom`)
+    await page.waitForFunction(() => {
+      const example = document.querySelector('ld-site-visual-example') as HTMLElement & { shadowRoot: ShadowRoot }
+      const host = example?.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { envelope?: any; shadowRoot: ShadowRoot }
+      return host?.envelope?.rendererID === 'vega-lite-sandbox' && Boolean(host.shadowRoot?.querySelector('iframe[title="Monthly revenue"]'))
+    })
+    expect(await page.locator('ld-site-visual-example').evaluate((element) => {
+      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { shadowRoot: ShadowRoot }
+      return Boolean(host.shadowRoot?.querySelector('[role="alert"]'))
+    })).toBe(false)
 
     await page.goto(`${baseURL}/docs/visuals/combo`)
     await page.waitForFunction(() => document.querySelectorAll('ld-site-visual-example').length === 3)
@@ -1590,7 +1605,7 @@ test('visual showcase renders every supported visual type', async () => {
     await page.goto(`${baseURL}/visuals`)
     await page.waitForFunction(() => {
       const showcase = document.querySelector('ld-site-visual-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
-      return showcase?.shadowRoot?.querySelectorAll('.chart').length === 23 && showcase?.shadowRoot?.querySelectorAll('.table-card ld-visualization-host').length === 3
+      return showcase?.shadowRoot?.querySelectorAll('.chart').length === 24 && showcase?.shadowRoot?.querySelectorAll('.table-card ld-visualization-host').length === 3
     })
     const visuals = await page.locator('ld-site-visual-showcase').evaluate((element) => {
       const root = element.shadowRoot
@@ -1600,7 +1615,7 @@ test('visual showcase renders every supported visual type', async () => {
         kpis: Array.from(root?.querySelectorAll('.chart ld-visualization-host') ?? []).filter((host: any) => host.envelope?.spec?.kind === 'kpi').length,
       }
     })
-    expect(visuals).toEqual({ cards: 23, hosts: 23, kpis: 1 })
+    expect(visuals).toEqual({ cards: 24, hosts: 24, kpis: 1 })
     await page.waitForFunction(() => {
       const showcase = document.querySelector('ld-site-visual-showcase') as HTMLElement & { shadowRoot: ShadowRoot }
       return showcase?.shadowRoot?.querySelectorAll('.table-card ld-visualization-host').length === 3

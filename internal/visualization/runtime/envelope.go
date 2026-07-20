@@ -8,13 +8,11 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
+	visualizationgeometry "github.com/Yacobolo/libredash/internal/visualization/geometry"
 	"github.com/Yacobolo/libredash/internal/visualization/ir"
 )
 
-const (
-	primaryDataset     = "primary"
-	ibgeGeometryDigest = "sha256:439a3603cf12f49707a34821c68a170f04de75dbe3e8dfcd1a8af7f85df86964"
-)
+const primaryDataset = "primary"
 
 func VisualEnvelope(visual dashboard.Visual, dataRevision, generation int64) (ir.VisualizationEnvelope, error) {
 	shape := runtimeShape(visual)
@@ -530,7 +528,10 @@ func visualSpec(visual dashboard.Visual, base ir.VisualizationSpecBase, columns 
 		return ir.VisualizationSpec{Value: &ir.PolarVisualizationSpec{VisualizationSpecBase: base, Kind: "polar", Mark: ir.VisualizationPolarMark(visual.Type), Category: optionalRef(columns, "label"), Value: field("value"), Series: optionalRef(columns, "series"), Presentation: ir.PolarVisualizationPresentation{VisualizationPresentation: common, Minimum: floatOption(visual.Options, "min"), Maximum: floatOption(visual.Options, "max"), ShowPointer: !falseOption(visual.Options, "show_pointer"), Area: boolPointerOption(visual.Options, "area"), ProgressWidth: floatOption(visual.Options, "progress_width"), Thresholds: thresholdOptions(visual.Options)}}}, "echarts", nil
 	case "map":
 		base.Kind = "geographic"
-		geometry := ir.VisualizationGeometryAsset{ID: "br-states-ibge", Digest: ibgeGeometryDigest, Source: "IBGE API de Malhas", License: "IBGE data reuse terms", Attribution: "Instituto Brasileiro de Geografia e Estatística (IBGE)", IdentifierSystem: "br-uf", URL: "/static/geometry/br-states-ibge.geojson"}
+		geometry, err := visualizationgeometry.Resolve("brazil_states")
+		if err != nil {
+			return ir.VisualizationSpec{}, "", err
+		}
 		join := field("name")
 		layer := ir.VisualizationGeographicLayer{ID: "states", Kind: ir.VisualizationGeographicLayerKindChoropleth, Geometry: &geometry, Join: &join, Value: optionalField(columns, "value")}
 		return ir.VisualizationSpec{Value: &ir.GeographicVisualizationSpec{VisualizationSpecBase: base, Kind: "geographic", Layers: []ir.VisualizationGeographicLayer{layer}, Presentation: ir.GeographicVisualizationPresentation{VisualizationPresentation: common, Roam: boolOption(visual.Options, "roam")}}}, "maplibre", nil

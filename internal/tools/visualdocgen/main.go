@@ -252,22 +252,26 @@ func validateVisualPayload(example visualExample, payload dashboard.Visual) erro
 	if example.Chart.ShapeOrDefault() != "geo" {
 		return nil
 	}
-	mapID := example.Chart.Geo.GeometryAsset
-	regions, ok := visualDocMapRegions[mapID]
-	if !ok {
-		return fmt.Errorf("visual example %q uses unsupported documentation map %q", example.ID, mapID)
-	}
-	seenRegions := make(map[string]struct{}, len(payload.Data))
-	for index, datum := range payload.Data {
-		region, _ := datum["name"].(string)
-		if _, ok := regions[region]; !ok {
-			return fmt.Errorf("visual example %q region %q is not defined by map %q at data[%d].name", example.ID, region, mapID, index)
+	for _, layer := range example.Chart.Geo.Layers {
+		if layer.Kind != "choropleth" {
+			continue
 		}
-		seenRegions[region] = struct{}{}
-	}
-	for _, region := range sortedSet(regions) {
-		if _, ok := seenRegions[region]; !ok {
-			return fmt.Errorf("visual example %q does not provide data for map region %q in %q", example.ID, region, mapID)
+		regions, ok := visualDocMapRegions[layer.GeometryAsset]
+		if !ok {
+			return fmt.Errorf("visual example %q uses unsupported documentation map %q", example.ID, layer.GeometryAsset)
+		}
+		seenRegions := make(map[string]struct{}, len(payload.Data))
+		for index, datum := range payload.Data {
+			region, _ := datum[layer.Join].(string)
+			if _, ok := regions[region]; !ok {
+				return fmt.Errorf("visual example %q region %q is not defined by map %q at data[%d].%s", example.ID, region, layer.GeometryAsset, index, layer.Join)
+			}
+			seenRegions[region] = struct{}{}
+		}
+		for _, region := range sortedSet(regions) {
+			if _, ok := seenRegions[region]; !ok {
+				return fmt.Errorf("visual example %q does not provide data for map region %q in %q", example.ID, region, layer.GeometryAsset)
+			}
 		}
 	}
 	return nil
@@ -433,8 +437,14 @@ func visualKeyFields(previous *reportdef.Visual, visual reportdef.Visual) []stri
 			fields = append(fields, "presentation."+key)
 		}
 	}
-	if visual.Geo.GeometryAsset != "" && (previous == nil || previous.Geo.GeometryAsset != visual.Geo.GeometryAsset) {
-		fields = append(fields, "geo.geometry_asset")
+	if len(visual.Geo.Layers) > 0 && (previous == nil || !reflect.DeepEqual(previous.Geo.Layers, visual.Geo.Layers)) {
+		fields = append(fields, "geo.layers")
+	}
+	if visual.Custom.Engine != "" && (previous == nil || previous.Custom.Engine != visual.Custom.Engine) {
+		fields = append(fields, "custom.engine")
+	}
+	if len(visual.Custom.Program) > 0 && (previous == nil || !reflect.DeepEqual(previous.Custom.Program, visual.Custom.Program)) {
+		fields = append(fields, "custom.program")
 	}
 	return fields
 }
@@ -486,7 +496,7 @@ func visualAccessibilityGuidance(visual reportdef.Visual) string {
 	}
 	switch visual.Type {
 	case "map":
-		return "Region values must match the selected map identifiers. Add labels when boundaries or color differences may be difficult to distinguish."
+		return "Use a descriptive summary for the geographic pattern, verify region joins or coordinate fields, and do not rely on color alone to communicate intensity."
 	case "graph", "sankey", "tree", "sunburst", "treemap":
 		return "Use meaningful node labels and keep the hierarchy or flow small enough to follow without relying on color alone."
 	default:
@@ -537,7 +547,7 @@ func payloadSortValue(visual reportdef.Visual, datum dashboard.Datum, field stri
 			}
 			return datum["target"]
 		case "geo":
-			return datum["name"]
+			return datum[dimension.Alias]
 		default:
 			return datum["label"]
 		}

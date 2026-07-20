@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -88,13 +89,13 @@ func TestGenerateVisualExamplesExecutesEveryDocumentedQuery(t *testing.T) {
 	if fields["presentation.step"].Description == "" {
 		t.Fatal("presentation.step description is empty")
 	}
-	if got := artifact.References["visuals/map"].Accessibility; !strings.Contains(got, "map identifiers") {
+	if got := artifact.References["visuals/map"].Accessibility; !strings.Contains(got, "coordinate fields") {
 		t.Fatalf("map accessibility guidance = %q", got)
 	}
 	if got := artifact.References["visuals/kpi"].Accessibility; !strings.Contains(got, "tone as the only") {
 		t.Fatalf("KPI accessibility guidance = %q", got)
 	}
-	if got, want := len(artifact.Documents), 26; got != want {
+	if got, want := len(artifact.Documents), 27; got != want {
 		t.Fatalf("documents = %d, want %d", got, want)
 	}
 	count := 0
@@ -109,10 +110,10 @@ func TestGenerateVisualExamplesExecutesEveryDocumentedQuery(t *testing.T) {
 			}
 		}
 	}
-	if got, want := count, 72; got != want {
+	if got, want := count, 74; got != want {
 		t.Fatalf("examples = %d, want %d", got, want)
 	}
-	if got, want := len(artifact.Showcase), 26; got != want {
+	if got, want := len(artifact.Showcase), 27; got != want {
 		t.Fatalf("showcase examples = %d, want %d", got, want)
 	}
 	line := artifact.Documents["visuals/line"]
@@ -139,6 +140,112 @@ func TestGenerateVisualExamplesExecutesEveryDocumentedQuery(t *testing.T) {
 	if string(first) != string(second) {
 		t.Fatal("artifact JSON is not deterministic")
 	}
+}
+
+func TestVisualDocumentationCoversEveryPublicTypeAndGeographicLayer(t *testing.T) {
+	docsDir := filepath.Join("..", "..", "..", "docs", "visuals")
+	schemaPath := filepath.Join("..", "..", "..", "schemas", "json", "dashboard.schema.json")
+	publicTypes, publicGeographicLayers := publicVisualizationDiscriminators(t, schemaPath)
+	catalogContents, err := os.ReadFile(filepath.Join(docsDir, "catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var catalog visualCatalog
+	if err := json.Unmarshal(catalogContents, &catalog); err != nil {
+		t.Fatal(err)
+	}
+	documentedTypes := map[string]bool{}
+	documentedGeographicLayers := map[string]bool{}
+	for _, document := range catalog.Documents {
+		contents, err := os.ReadFile(filepath.Join(docsDir, document.Source+".md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		examples, err := parseVisualExamples(document.Source+".md", contents)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, example := range examples {
+			if example.Tabular != nil {
+				switch example.Tabular.Kind {
+				case "data_table":
+					documentedTypes["table"] = true
+				case "matrix_table":
+					documentedTypes["matrix"] = true
+				case "pivot_table":
+					documentedTypes["pivot"] = true
+				}
+				continue
+			}
+			if example.Chart == nil {
+				continue
+			}
+			documentedTypes[example.Chart.Type] = true
+			for _, layer := range example.Chart.Geo.Layers {
+				documentedGeographicLayers[layer.Kind] = true
+			}
+		}
+	}
+	if got, want := strings.Join(publicTypes, ","), strings.Join(reportdef.SupportedVisualizationTypes(), ","); got != want {
+		t.Fatalf("runtime visualization types = %q, public schema = %q", want, got)
+	}
+	if got, want := strings.Join(publicGeographicLayers, ","), strings.Join(reportdef.SupportedGeographicLayerKinds(), ","); got != want {
+		t.Fatalf("runtime geographic layer kinds = %q, public schema = %q", want, got)
+	}
+	for _, visualType := range publicTypes {
+		if !documentedTypes[visualType] {
+			t.Errorf("public visualization type %q has no executable documentation example", visualType)
+		}
+	}
+	for _, kind := range publicGeographicLayers {
+		if !documentedGeographicLayers[kind] {
+			t.Errorf("public geographic layer kind %q has no executable documentation example", kind)
+		}
+	}
+}
+
+func publicVisualizationDiscriminators(t *testing.T, schemaPath string) ([]string, []string) {
+	t.Helper()
+	type schemaNode struct {
+		Ref        string                `json:"$ref"`
+		Const      string                `json:"const"`
+		Enum       []string              `json:"enum"`
+		AnyOf      []schemaNode          `json:"anyOf"`
+		Properties map[string]schemaNode `json:"properties"`
+	}
+	var schema struct {
+		Definitions map[string]schemaNode `json:"$defs"`
+	}
+	contents, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(contents, &schema); err != nil {
+		t.Fatal(err)
+	}
+	values := func(node schemaNode) []string {
+		out := append([]string{}, node.Enum...)
+		if node.Const != "" {
+			out = append(out, node.Const)
+		}
+		for _, candidate := range node.AnyOf {
+			out = append(out, candidate.Const)
+		}
+		return out
+	}
+	types := []string{}
+	for _, variant := range schema.Definitions["#Visual"].AnyOf {
+		name := strings.TrimPrefix(variant.Ref, "#/$defs/")
+		name = strings.ReplaceAll(name, "%23", "#")
+		types = append(types, values(schema.Definitions[name].Properties["type"])...)
+	}
+	layers := []string{}
+	for _, variant := range schema.Definitions["#GeographicLayer"].AnyOf {
+		layers = append(layers, values(variant.Properties["kind"])...)
+	}
+	slices.Sort(types)
+	slices.Sort(layers)
+	return types, layers
 }
 
 func visualizationEnvelopeRowCount(envelope visualizationir.VisualizationEnvelope) int {
@@ -208,7 +315,7 @@ func TestValidateVisualPayloadRejectsInvalidGeneratedData(t *testing.T) {
 func reportVisual(shape, visualType string, options map[string]any) reportdef.Visual {
 	value := reportdef.Visual{Shape: shape, Type: visualType}
 	if mapID, ok := options["map"].(string); ok {
-		value.Geo.GeometryAsset = mapID
+		value.Geo.Layers = []reportdef.VisualGeoLayer{{ID: "regions", Kind: "choropleth", GeometryAsset: mapID, Join: "name", Value: "value"}}
 	}
 	return value
 }

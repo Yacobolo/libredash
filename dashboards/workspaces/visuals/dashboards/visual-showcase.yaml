@@ -283,11 +283,16 @@ spec:
         measures:
           order_count: null
         sort:
-          - field: value
+          - field: order_count
             direction: desc
         limit: 27
       geo:
-        geometry_asset: brazil_states
+        layers:
+          - id: states
+            kind: choropleth
+            geometry_asset: brazil_states
+            join: state
+            value: order_count
     status_delivery_graph:
       title: Status and delivery network
       description: Shows status and delivery-speed relationships as a network.
@@ -828,11 +833,16 @@ spec:
         measures:
           revenue: null
         sort:
-          - field: value
+          - field: revenue
             direction: desc
         limit: 27
       geo:
-        geometry_asset: brazil_states
+        layers:
+          - id: states
+            kind: choropleth
+            geometry_asset: brazil_states
+            join: state
+            value: revenue
     state_revenue_map_labeled:
       title: Labeled revenue map
       type: map
@@ -845,11 +855,97 @@ spec:
         measures:
           revenue: null
         sort:
-          - field: value
+          - field: revenue
             direction: desc
         limit: 27
       geo:
-        geometry_asset: brazil_states
+        layers:
+          - id: states
+            kind: choropleth
+            geometry_asset: brazil_states
+            join: state
+            value: revenue
+    customer_point_map:
+      title: Customer locations
+      description: Renders bounded synthetic customer coordinates as points.
+      type: map
+      presentation:
+        roam: true
+      query:
+        dimensions:
+          latitude: customers.latitude
+          longitude: customers.longitude
+        measures:
+          order_count: null
+        limit: 500
+      geo:
+        layers:
+          - id: customers
+            kind: point
+            latitude: latitude
+            longitude: longitude
+            value: order_count
+    customer_revenue_heat_map:
+      title: Revenue concentration
+      description: Renders revenue-weighted geographic heat.
+      type: map
+      query:
+        dimensions:
+          latitude: customers.latitude
+          longitude: customers.longitude
+        measures:
+          revenue: null
+        limit: 500
+      geo:
+        layers:
+          - id: revenue
+            kind: heat
+            latitude: latitude
+            longitude: longitude
+            value: revenue
+    customer_density_map:
+      title: Customer density
+      description: Renders the density of bounded synthetic customer coordinates.
+      type: map
+      query:
+        dimensions:
+          latitude: customers.latitude
+          longitude: customers.longitude
+        measures:
+          order_count: null
+        limit: 500
+      geo:
+        layers:
+          - id: customers
+            kind: density
+            latitude: latitude
+            longitude: longitude
+    custom_monthly_revenue:
+      title: Custom monthly revenue
+      description: Exercises the sandboxed Vega-Lite adapter with governed data.
+      type: custom
+      query:
+        dimensions:
+          purchase_month: orders.purchase_month
+        measures:
+          revenue: null
+        sort:
+          - field: purchase_month
+            direction: asc
+        limit: 30
+      custom:
+        engine: vega_lite
+        program:
+          data:
+            name: primary
+          mark: bar
+          encoding:
+            x:
+              field: purchase_month
+              type: ordinal
+            y:
+              field: revenue
+              type: quantitative
     delivery_candlestick:
       title: Delivery day candlestick by month
       type: candlestick
@@ -2269,10 +2365,10 @@ spec:
             row_span: 8
       id: chart-graph
     - title: Map
-      description: Geo map variations
+      description: Choropleth, point, heat, and density layer variations
       canvas:
         width: 1366
-        height: 672
+        height: 1200
       grid:
         columns: 12
         row_height: 48
@@ -2301,25 +2397,53 @@ spec:
           placement:
             col: 1
             row: 2
-            col_span: 4
+            col_span: 6
             row_span: 8
-        - id: state-revenue-map
+        - id: customer-point-map
           kind: visual
-          visual: state_revenue_map
+          visual: customer_point_map
           placement:
-            col: 5
+            col: 7
             row: 2
-            col_span: 4
+            col_span: 6
             row_span: 8
-        - id: state-revenue-map-labeled
+        - id: customer-revenue-heat-map
           kind: visual
-          visual: state_revenue_map_labeled
+          visual: customer_revenue_heat_map
           placement:
-            col: 9
-            row: 2
-            col_span: 4
+            col: 1
+            row: 10
+            col_span: 6
+            row_span: 8
+        - id: customer-density-map
+          kind: visual
+          visual: customer_density_map
+          placement:
+            col: 7
+            row: 10
+            col_span: 6
             row_span: 8
       id: chart-map
+    - title: Custom Vega-Lite
+      description: Sandboxed custom declarative visualization
+      canvas:
+        width: 1366
+        height: 672
+      grid:
+        columns: 12
+        row_height: 48
+        gap: 16
+        padding: 16
+      components:
+        - id: custom-monthly-revenue
+          kind: visual
+          visual: custom_monthly_revenue
+          placement:
+            col: 1
+            row: 1
+            col_span: 12
+            row_span: 10
+      id: chart-custom
     - title: Candlestick
       description: OHLC chart examples
       canvas:

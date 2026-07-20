@@ -838,7 +838,7 @@ func TestSiteChartDocumentationArticleRendersConfiguration(t *testing.T) {
 }
 
 func TestSiteEveryVisualTypeHasDocumentation(t *testing.T) {
-	if got, want := len(visualDocuments), 26; got != want {
+	if got, want := len(visualDocuments), 27; got != want {
 		t.Fatalf("documented visual types = %d, want %d", got, want)
 	}
 

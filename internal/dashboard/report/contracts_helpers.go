@@ -11,6 +11,24 @@ var supportedVisualShapes = map[string]struct{}{
 	"binned_measure": {}, "hierarchy": {},
 }
 
+var supportedVisualizationTypes = []string{
+	"area", "bar", "boxplot", "candlestick", "column", "combo", "custom", "donut", "funnel", "gauge", "graph", "heatmap", "histogram", "kpi", "line", "map", "matrix", "pie", "pivot", "radar", "sankey", "scatter", "sunburst", "table", "tree", "treemap", "waterfall",
+}
+
+var supportedGeographicLayerKinds = []string{"choropleth", "density", "heat", "point"}
+
+// SupportedVisualizationTypes is the canonical public authoring catalog. It is
+// consumed by documentation coverage tests so a new type cannot ship without
+// an executable example.
+func SupportedVisualizationTypes() []string {
+	return slices.Clone(supportedVisualizationTypes)
+}
+
+// SupportedGeographicLayerKinds returns the closed geographic authoring union.
+func SupportedGeographicLayerKinds() []string {
+	return slices.Clone(supportedGeographicLayerKinds)
+}
+
 func SupportedVisualShapes() []string {
 	shapes := make([]string, 0, len(supportedVisualShapes))
 	for shape := range supportedVisualShapes {
@@ -48,6 +66,12 @@ func rendererSupportsType(renderer, chartType string) bool {
 	if renderer == "html" {
 		return chartType == "kpi" || chartType == ""
 	}
+	if renderer == "maplibre" {
+		return chartType == "map"
+	}
+	if renderer == "vega-lite-sandbox" {
+		return chartType == "custom"
+	}
 	if renderer != "echarts" {
 		return false
 	}
@@ -66,6 +90,12 @@ func supportsSeries(shape string) bool {
 func rendererSupportsShapeType(renderer, shape, chartType string) bool {
 	if renderer == "html" {
 		return shape == "single_value" && (chartType == "kpi" || chartType == "")
+	}
+	if renderer == "maplibre" {
+		return shape == "geo" && chartType == "map"
+	}
+	if renderer == "vega-lite-sandbox" {
+		return chartType == "custom"
 	}
 	if renderer != "echarts" {
 		return false

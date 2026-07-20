@@ -17,9 +17,17 @@ spec:
     state:
       label: State
       description: Brazilian state for the customer.
+    latitude:
+      label: Latitude
+      description: Deterministic synthetic latitude used by renderer showcase maps.
+    longitude:
+      label: Longitude
+      description: Deterministic synthetic longitude used by renderer showcase maps.
   transform:
     sql: |
       SELECT
         customer_id,
-        customer_state AS state
+        customer_state AS state,
+        CAST(-33 + (hash(customer_id) % 3800) / 100.0 AS DOUBLE) AS latitude,
+        CAST(-74 + (hash(customer_id || '-longitude') % 4000) / 100.0 AS DOUBLE) AS longitude
       FROM source."olist.customers"

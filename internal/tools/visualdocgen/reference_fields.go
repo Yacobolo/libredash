@@ -94,6 +94,15 @@ func visualFieldReferences(queryFields, optionFields []string, chartType string)
 		reference.Default = visualOptionDefault(name, chartType, reference.Default)
 		result = append(result, reference)
 	}
+	if chartType == "map" {
+		result = append(result, visualdocs.FieldReference{Path: "geo.layers", Type: "geographic layer list", AllowedValues: []string{"choropleth", "point", "heat", "density"}, Description: "Declares typed geographic layers and binds their geometry or coordinates to query aliases."})
+	}
+	if chartType == "custom" {
+		result = append(result,
+			visualdocs.FieldReference{Path: "custom.engine", Type: "string", AllowedValues: []string{"vega_lite"}, Description: "Selects the constrained custom visualization engine."},
+			visualdocs.FieldReference{Path: "custom.program", Type: "Vega-Lite object", Description: "Defines a validated declarative program over the in-memory primary dataset; network data, transforms, expressions, and inline values are prohibited."},
+		)
+	}
 	return result, nil
 }
 

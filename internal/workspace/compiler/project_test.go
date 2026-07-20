@@ -1226,6 +1226,7 @@ func writeProjectFixture(t *testing.T, files map[string]string) string {
 func assertVisualShowcaseCoverage(t *testing.T, report *dashboarddefinition.Definition) {
 	t.Helper()
 	visualTypes := map[string]struct{}{}
+	geographicLayers := map[string]struct{}{}
 	for _, visual := range report.Visualizations {
 		switch spec := visual.Spec.Value.(type) {
 		case *visualizationir.CartesianVisualizationSpec:
@@ -1238,14 +1239,24 @@ func assertVisualShowcaseCoverage(t *testing.T, report *dashboarddefinition.Defi
 			visualTypes[string(spec.Mark)] = struct{}{}
 		case *visualizationir.GeographicVisualizationSpec:
 			visualTypes["map"] = struct{}{}
+			for _, layer := range spec.Layers {
+				geographicLayers[string(layer.Kind)] = struct{}{}
+			}
+		case *visualizationir.CustomVisualizationSpec:
+			visualTypes["custom"] = struct{}{}
 		}
 	}
 	for _, typ := range []string{
 		"line", "area", "bar", "column", "pie", "donut", "scatter", "funnel", "treemap", "gauge", "heatmap",
-		"sankey", "graph", "map", "candlestick", "boxplot", "combo", "waterfall", "histogram", "radar", "tree", "sunburst",
+		"sankey", "graph", "map", "candlestick", "boxplot", "combo", "waterfall", "histogram", "radar", "tree", "sunburst", "custom",
 	} {
 		if _, ok := visualTypes[typ]; !ok {
 			t.Fatalf("visual-showcase missing visual type %q", typ)
+		}
+	}
+	for _, kind := range []string{"choropleth", "point", "heat", "density"} {
+		if _, ok := geographicLayers[kind]; !ok {
+			t.Fatalf("visual-showcase missing geographic layer kind %q", kind)
 		}
 	}
 	tableKinds := map[string]struct{}{}

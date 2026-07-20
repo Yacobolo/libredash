@@ -107,8 +107,8 @@ func validateVisualQueryShape(name string, visual Visual) error {
 			return fmt.Errorf("visual %q shape graph does not support series", name)
 		}
 	case "geo":
-		if len(visual.Query.Dimensions) != 1 {
-			return fmt.Errorf("visual %q shape geo requires exactly one query dimension", name)
+		if len(visual.Query.Dimensions) == 0 {
+			return fmt.Errorf("visual %q shape geo requires query dimensions", name)
 		}
 		if !visual.Query.Series.IsZero() {
 			return fmt.Errorf("visual %q shape geo does not support series", name)

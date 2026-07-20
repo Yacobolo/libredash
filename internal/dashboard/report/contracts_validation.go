@@ -101,13 +101,14 @@ func (d *Dashboard) validateContract() error {
 			return fmt.Errorf("visual %q has unsupported kind %q", name, kind)
 		}
 		shape := visual.ShapeOrDefault()
+		renderer := visual.RendererOrDefault()
 		if !supportsVisualShape(shape) {
 			return fmt.Errorf("visual %q has unsupported shape %q", name, shape)
 		}
-		if kind != "kpi" && !rendererSupportsType("echarts", visual.Type) && visual.Type != "custom" {
+		if !rendererSupportsType(renderer, visual.Type) {
 			return fmt.Errorf("visual %q has unsupported type %q", name, visual.Type)
 		}
-		if kind != "kpi" && visual.Type != "custom" && !rendererSupportsShapeType("echarts", shape, visual.Type) {
+		if !rendererSupportsShapeType(renderer, shape, visual.Type) {
 			return fmt.Errorf("visual %q type %q does not support data shape %q", name, visual.Type, shape)
 		}
 		if err := validateVisualQueryShape(name, visual); err != nil {
@@ -120,13 +121,13 @@ func (d *Dashboard) validateContract() error {
 			if !supportsSeries(shape) {
 				return fmt.Errorf("visual %q shape %q does not support series", name, shape)
 			}
-			if !rendererTypeSupportsSeries("echarts", visual.Type) {
+			if !rendererTypeSupportsSeries(renderer, visual.Type) {
 				return fmt.Errorf("visual %q type %q does not support series", name, visual.Type)
 			}
 		}
 		if shape == "geo" {
-			if strings.TrimSpace(visual.Geo.GeometryAsset) == "" {
-				return fmt.Errorf("visual %q geographic visualization requires geo.geometry_asset", name)
+			if err := validateGeographicVisual(name, visual); err != nil {
+				return err
 			}
 		}
 		if visual.Type == "custom" && (visual.Custom.Engine != "vega_lite" || len(visual.Custom.Program) == 0) {
@@ -216,6 +217,71 @@ func (d *Dashboard) validateContract() error {
 		return err
 	}
 	return d.validatePages()
+}
+
+func validateGeographicVisual(name string, visual Visual) error {
+	if len(visual.Geo.Layers) == 0 {
+		return fmt.Errorf("visual %q geographic visualization requires geo.layers", name)
+	}
+	aliases := map[string]struct{}{}
+	for _, field := range visual.Query.Dimensions {
+		aliases[defaultString(field.Alias, fieldRefAlias(field.Field))] = struct{}{}
+	}
+	if visual.Query.Time.Field != "" {
+		aliases[defaultString(visual.Query.Time.Alias, fieldRefAlias(visual.Query.Time.Field))] = struct{}{}
+	}
+	for _, field := range visual.Query.Measures {
+		aliases[defaultString(field.Alias, fieldRefAlias(field.Field))] = struct{}{}
+	}
+	requireAlias := func(layerID, property, alias string) error {
+		if strings.TrimSpace(alias) == "" {
+			return fmt.Errorf("visual %q geographic layer %q requires %s", name, layerID, property)
+		}
+		if _, ok := aliases[alias]; !ok {
+			return fmt.Errorf("visual %q geographic layer %q %s references unknown query alias %q", name, layerID, property, alias)
+		}
+		return nil
+	}
+	seen := map[string]struct{}{}
+	for _, layer := range visual.Geo.Layers {
+		if strings.TrimSpace(layer.ID) == "" {
+			return fmt.Errorf("visual %q geographic layer requires id", name)
+		}
+		if _, exists := seen[layer.ID]; exists {
+			return fmt.Errorf("visual %q has duplicate geographic layer %q", name, layer.ID)
+		}
+		seen[layer.ID] = struct{}{}
+		if layer.Value != "" {
+			if err := requireAlias(layer.ID, "value", layer.Value); err != nil {
+				return err
+			}
+		}
+		switch layer.Kind {
+		case "choropleth":
+			if strings.TrimSpace(layer.GeometryAsset) == "" {
+				return fmt.Errorf("visual %q choropleth layer %q requires geometry_asset", name, layer.ID)
+			}
+			if err := requireAlias(layer.ID, "join", layer.Join); err != nil {
+				return err
+			}
+			if layer.Latitude != "" || layer.Longitude != "" {
+				return fmt.Errorf("visual %q choropleth layer %q does not accept latitude or longitude", name, layer.ID)
+			}
+		case "point", "heat", "density":
+			if layer.GeometryAsset != "" || layer.Join != "" {
+				return fmt.Errorf("visual %q geographic layer %q kind %q does not accept geometry_asset or join", name, layer.ID, layer.Kind)
+			}
+			if err := requireAlias(layer.ID, "latitude", layer.Latitude); err != nil {
+				return err
+			}
+			if err := requireAlias(layer.ID, "longitude", layer.Longitude); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("visual %q geographic layer %q has unsupported kind %q", name, layer.ID, layer.Kind)
+		}
+	}
+	return nil
 }
 
 func validateVisualPresentation(name string, visual Visual) error {
@@ -370,7 +436,7 @@ func (d *Dashboard) validatePages() error {
 				if target.KindOrDefault() != "kpi" {
 					return fmt.Errorf("page %q visual %q requires a kpi visual", page.ID, visual.ID)
 				}
-			case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart", "heatmap_chart", "sankey_chart", "graph_chart", "map_chart", "candlestick_chart", "boxplot_chart", "combo_chart", "waterfall_chart", "histogram_chart", "radar_chart", "tree_chart", "sunburst_chart":
+			case "line_chart", "area_chart", "bar_chart", "column_chart", "pie_chart", "donut_chart", "scatter_chart", "funnel_chart", "treemap_chart", "gauge_chart", "heatmap_chart", "sankey_chart", "graph_chart", "map_chart", "candlestick_chart", "boxplot_chart", "combo_chart", "waterfall_chart", "histogram_chart", "radar_chart", "tree_chart", "sunburst_chart", "custom_chart":
 				if visual.Visual == "" {
 					return fmt.Errorf("page %q visual %q requires visual", page.ID, visual.ID)
 				}

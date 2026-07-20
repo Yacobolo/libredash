@@ -12,6 +12,7 @@ import (
 	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
+	visualizationgeometry "github.com/Yacobolo/libredash/internal/visualization/geometry"
 	visualizationir "github.com/Yacobolo/libredash/internal/visualization/ir"
 	visualizationruntime "github.com/Yacobolo/libredash/internal/visualization/runtime"
 )
@@ -58,6 +59,12 @@ func compileVisualizationDefinitions(report *reportdef.Dashboard, models ...*sem
 		if authored.Type == "custom" {
 			var err error
 			spec, err = compileCustomVisualizationSpec(authored)
+			if err != nil {
+				return nil, fmt.Errorf("visual %q: %w", id, err)
+			}
+		} else if authored.Type == "map" {
+			var err error
+			spec, err = compileGeographicVisualizationSpec(authored)
 			if err != nil {
 				return nil, fmt.Errorf("visual %q: %w", id, err)
 			}
@@ -332,6 +339,123 @@ func compileCustomVisualizationSpec(authored reportdef.Visual) (visualizationir.
 		VisualizationSpecBase: base, Kind: "custom", Engine: visualizationir.VisualizationCustomEngineVegaLite,
 		Program: string(program), ProgramDigest: "sha256:" + hex.EncodeToString(digest[:]),
 	}}, nil
+}
+
+func compileGeographicVisualizationSpec(authored reportdef.Visual) (visualizationir.VisualizationSpec, error) {
+	fields := geographicVisualizationFields(authored)
+	known := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		known[field.ID] = struct{}{}
+	}
+	fieldRef := func(layerID, property, alias string) (*visualizationir.VisualizationFieldRef, error) {
+		if alias == "" {
+			return nil, nil
+		}
+		if _, ok := known[alias]; !ok {
+			return nil, fmt.Errorf("geographic layer %q %s references unknown query alias %q", layerID, property, alias)
+		}
+		ref := visualizationir.VisualizationFieldRef{Dataset: "primary", Field: alias}
+		return &ref, nil
+	}
+	layers := make([]visualizationir.VisualizationGeographicLayer, len(authored.Geo.Layers))
+	for index, authoredLayer := range authored.Geo.Layers {
+		layer := visualizationir.VisualizationGeographicLayer{ID: authoredLayer.ID, Kind: visualizationir.VisualizationGeographicLayerKind(authoredLayer.Kind)}
+		var err error
+		if layer.Join, err = fieldRef(layer.ID, "join", authoredLayer.Join); err != nil {
+			return visualizationir.VisualizationSpec{}, err
+		}
+		if layer.Value, err = fieldRef(layer.ID, "value", authoredLayer.Value); err != nil {
+			return visualizationir.VisualizationSpec{}, err
+		}
+		if layer.Latitude, err = fieldRef(layer.ID, "latitude", authoredLayer.Latitude); err != nil {
+			return visualizationir.VisualizationSpec{}, err
+		}
+		if layer.Longitude, err = fieldRef(layer.ID, "longitude", authoredLayer.Longitude); err != nil {
+			return visualizationir.VisualizationSpec{}, err
+		}
+		if authoredLayer.GeometryAsset != "" {
+			geometry, err := visualizationgeometry.Resolve(authoredLayer.GeometryAsset)
+			if err != nil {
+				return visualizationir.VisualizationSpec{}, fmt.Errorf("geographic layer %q: %w", layer.ID, err)
+			}
+			layer.Geometry = &geometry
+		}
+		layers[index] = layer
+	}
+	title := authored.Title
+	if title == "" {
+		title = "Map"
+	}
+	accessibilityTitle := authored.Accessibility.Title
+	if accessibilityTitle == "" {
+		accessibilityTitle = title
+	}
+	accessibilityDescription := authored.Accessibility.Description
+	if accessibilityDescription == "" {
+		accessibilityDescription = title
+	}
+	base := visualizationir.VisualizationSpecBase{
+		Kind: "geographic", Title: title, Datasets: []visualizationir.VisualizationDatasetSchema{{ID: "primary", Fields: fields}},
+		DataBudget:    visualizationir.VisualizationDataBudget{MaxRows: compiledVisualLimit(authored), RequiredCompleteness: visualizationir.VisualizationCompletenessComplete},
+		Accessibility: visualizationir.VisualizationAccessibility{Title: accessibilityTitle, Description: accessibilityDescription},
+		Interactions:  customVisualizationInteractions(authored.Interaction.PointSelection),
+	}
+	return visualizationir.VisualizationSpec{Value: &visualizationir.GeographicVisualizationSpec{
+		VisualizationSpecBase: base, Kind: "geographic", Layers: layers,
+		Presentation: visualizationir.GeographicVisualizationPresentation{
+			VisualizationPresentation: visualizationir.VisualizationPresentation{Legend: visualizationir.VisualizationLegendPosition(authored.Presentation.Legend), ShowLabels: authored.Presentation.ShowLabels},
+			Roam:                      authored.Presentation.Roam,
+		},
+	}}, nil
+}
+
+func geographicVisualizationFields(authored reportdef.Visual) []visualizationir.VisualizationField {
+	coordinateAliases := map[string]struct{}{}
+	for _, layer := range authored.Geo.Layers {
+		if layer.Latitude != "" {
+			coordinateAliases[layer.Latitude] = struct{}{}
+		}
+		if layer.Longitude != "" {
+			coordinateAliases[layer.Longitude] = struct{}{}
+		}
+	}
+	identity := map[string]bool{}
+	for _, mapping := range authored.Interaction.PointSelection.Mappings {
+		identity[mapping.Value] = true
+	}
+	fields := make([]visualizationir.VisualizationField, 0, len(authored.Query.Dimensions)+len(authored.Query.Measures)+1)
+	appendField := func(field reportdef.FieldRef, role visualizationir.VisualizationFieldRole, dataType visualizationir.VisualizationDataType) {
+		if field.Field == "" {
+			return
+		}
+		alias := field.Alias
+		if alias == "" {
+			alias = fieldAlias(field.Field)
+		}
+		if identity[alias] {
+			role = visualizationir.VisualizationFieldRoleIdentity
+		}
+		source := field.Field
+		fields = append(fields, visualizationir.VisualizationField{ID: alias, SourceRef: &source, Role: role, DataType: dataType, Nullable: true, Label: alias})
+	}
+	for _, field := range authored.Query.Dimensions {
+		dataType := visualizationir.VisualizationDataTypeString
+		alias := field.Alias
+		if alias == "" {
+			alias = fieldAlias(field.Field)
+		}
+		if _, ok := coordinateAliases[alias]; ok {
+			dataType = visualizationir.VisualizationDataTypeDecimal
+		}
+		appendField(field, visualizationir.VisualizationFieldRoleDimension, dataType)
+	}
+	if authored.Query.Time.Field != "" {
+		appendField(reportdef.FieldRef{Field: authored.Query.Time.Field, Alias: authored.Query.Time.Alias}, visualizationir.VisualizationFieldRoleDimension, visualizationir.VisualizationDataTypeTemporal)
+	}
+	for _, field := range authored.Query.Measures {
+		appendField(field, visualizationir.VisualizationFieldRoleMeasure, visualizationir.VisualizationDataTypeDecimal)
+	}
+	return fields
 }
 
 func customVisualizationFields(query reportdef.VisualQuery, selection reportdef.SelectionInteraction) []visualizationir.VisualizationField {

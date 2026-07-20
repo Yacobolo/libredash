@@ -145,7 +145,17 @@ type VisualDataBudget struct {
 }
 
 type VisualGeo struct {
-	GeometryAsset string `yaml:"geometry_asset"`
+	Layers []VisualGeoLayer `yaml:"layers" json:"layers"`
+}
+
+type VisualGeoLayer struct {
+	ID            string `yaml:"id" json:"id"`
+	Kind          string `yaml:"kind" json:"kind"`
+	GeometryAsset string `yaml:"geometry_asset" json:"geometryAsset,omitempty"`
+	Join          string `yaml:"join" json:"join,omitempty"`
+	Value         string `yaml:"value" json:"value,omitempty"`
+	Latitude      string `yaml:"latitude" json:"latitude,omitempty"`
+	Longitude     string `yaml:"longitude" json:"longitude,omitempty"`
 }
 
 type VisualCustom struct {
@@ -560,6 +570,12 @@ func (v Visual) RendererOrDefault() string {
 	}
 	if v.KindOrDefault() == "kpi" {
 		return "html"
+	}
+	if v.Type == "map" {
+		return "maplibre"
+	}
+	if v.Type == "custom" {
+		return "vega-lite-sandbox"
 	}
 	return "echarts"
 }

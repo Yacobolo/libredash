@@ -11,6 +11,7 @@ import (
 	dashboarddefinition "github.com/Yacobolo/libredash/internal/dashboard/definition"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/dataquery"
+	visualizationdefinition "github.com/Yacobolo/libredash/internal/visualization/definition"
 )
 
 type VisualizationDataService struct {
@@ -309,6 +310,8 @@ func (s *VisualizationDataService) visualData(ctx context.Context, runtime *mode
 		return s.graphData(ctx, runtime, report, visualID, visual, filters)
 	case "geo":
 		return s.geoData(ctx, runtime, report, visualID, visual, filters)
+	case "custom":
+		return s.customData(ctx, runtime, report, visualID, visual, filters)
 	case "ohlc":
 		return s.ohlcData(ctx, runtime, report, visualID, visual, filters)
 	case "distribution":
@@ -573,17 +576,54 @@ func (s *VisualizationDataService) geoData(ctx context.Context, runtime *modelRu
 		return nil, err
 	}
 	data, err := s.querySemanticDatums(ctx, runtime, reportdef.AggregateQuery{
-		Table:      visual.Table,
-		Dimensions: []reportdef.QueryField{fieldRef(visual.Dimensions[0].FieldID, "name")},
-		Measures:   []reportdef.QueryField{queryFieldRef(visual.Measures[0], "value")},
-		Filters:    queryFilters,
-		Sort:       visualSorts(visual),
-		Limit:      visual.Limit,
+		Table: visual.Table, Dimensions: aliasedQueryFields(visual.Dimensions), Measures: aliasedQueryFields(visual.Measures),
+		Filters: queryFilters, Sort: aliasedVisualSorts(visual), Limit: visual.Limit,
 	})
 	if err != nil {
 		return nil, err
 	}
 	return data, nil
+}
+
+func (s *VisualizationDataService) customData(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, visualID string, visual visualPlan, filters dashboard.Filters) ([]dashboard.Datum, error) {
+	queryFilters, err := s.filters.semanticFilters(ctx, runtime, report, filters, "visual", visualID)
+	if err != nil {
+		return nil, err
+	}
+	return s.querySemanticDatums(ctx, runtime, reportdef.AggregateQuery{
+		Table: visual.Table, Dimensions: aliasedQueryFields(visual.Dimensions), Measures: aliasedQueryFields(visual.Measures),
+		Filters: queryFilters, Sort: aliasedVisualSorts(visual), Limit: visual.Limit,
+	})
+}
+
+func aliasedQueryFields(bindings []visualizationdefinition.FieldBinding) []reportdef.QueryField {
+	fields := make([]reportdef.QueryField, len(bindings))
+	for index, binding := range bindings {
+		fields[index] = queryFieldRef(binding, binding.Alias)
+	}
+	return fields
+}
+
+func aliasedVisualSorts(visual visualPlan) []reportdef.QuerySort {
+	if len(visual.Sort) == 0 {
+		if len(visual.Dimensions) > 0 {
+			return []reportdef.QuerySort{{Field: visual.Dimensions[0].Alias, Direction: "asc"}}
+		}
+		return nil
+	}
+	bindings := append(append([]visualizationdefinition.FieldBinding{}, visual.Dimensions...), visual.Measures...)
+	sorts := make([]reportdef.QuerySort, len(visual.Sort))
+	for index, sort := range visual.Sort {
+		field := sort.FieldID
+		for _, binding := range bindings {
+			if field == binding.FieldID || field == binding.Alias || field == displayField(binding.FieldID) {
+				field = binding.Alias
+				break
+			}
+		}
+		sorts[index] = reportdef.QuerySort{Field: field, Direction: sort.Direction}
+	}
+	return sorts
 }
 
 func (s *VisualizationDataService) ohlcData(ctx context.Context, runtime *modelRuntime, report *dashboarddefinition.Definition, visualID string, visual visualPlan, filters dashboard.Filters) ([]dashboard.Datum, error) {

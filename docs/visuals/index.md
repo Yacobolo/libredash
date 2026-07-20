@@ -37,6 +37,10 @@ Every preview is compiled and queried from the YAML printed beside it against a 
 - [Graph](/docs/visuals/graph)
 - [Map](/docs/visuals/map)
 
+## Custom
+
+- [Custom Vega-Lite](/docs/visuals/custom)
+
 ## Summary and exact values
 
 - [Gauge](/docs/visuals/gauge)
