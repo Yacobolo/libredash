@@ -465,11 +465,11 @@ class SiteSearch extends DatastarLit(LitElement) {
   }
 
   private renderResults(query: string, results: SiteSearchResult[], total: number, loading: boolean) {
-    if (!query) return html`<p class="status">Start typing to search the documentation.</p>`
-    if (loading) return html`<p class="status">Searching…</p>`
-    if (results.length === 0) return html`<p class="status">No results for “${query}”.</p>`
+    if (!query) return html`<p class="status" role="status">Start typing to search the documentation.</p>`
+    if (loading) return html`<p class="status" role="status">Searching…</p>`
+    if (results.length === 0) return html`<p class="status" role="status">No results for “${query}”.</p>`
     const label = `${total} ${total === 1 ? 'result' : 'results'}`
-    return html`<p class="status">${label}</p>
+    return html`<p class="status" role="status">${label}</p>
       <ul>
         ${results.map(
           (result) =>
@@ -591,10 +591,32 @@ if (!customElements.get('lv-site-docs-drawer-toggle')) {
   customElements.define('lv-site-docs-drawer-toggle', SiteDocsDrawerToggle)
 }
 
+const docsDrawerFocusableSelector = 'a[href], button:not([disabled]), summary, input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function docsDrawerFocusableElements(sidebar: HTMLElement): HTMLElement[] {
+  const focusable: HTMLElement[] = []
+  const collect = (root: ParentNode): void => {
+    for (const element of root.querySelectorAll<HTMLElement>('*')) {
+      if (element.matches(docsDrawerFocusableSelector) && element.getClientRects().length > 0 && !element.closest('[inert]')) focusable.push(element)
+      if (element.shadowRoot) collect(element.shadowRoot)
+    }
+  }
+  collect(sidebar)
+  return focusable
+}
+
+function deepestActiveElement(): Element | null {
+  let active: Element | null = document.activeElement
+  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement
+  return active
+}
+
 function syncDocsDrawer(open = false): void {
   const layout = document.querySelector<HTMLElement>('.site-docs-layout')
   const sidebar = document.querySelector<HTMLElement>('.site-docs-sidebar')
   if (!layout || !sidebar) return
+  const header = document.querySelector<HTMLElement>('.site-header')
+  const content = layout.querySelector<HTMLElement>('.site-docs-content')
 
   const compact = window.matchMedia('(max-width: 56.25rem)').matches
   const nextOpen = compact && open
@@ -602,13 +624,20 @@ function syncDocsDrawer(open = false): void {
   layout.classList.toggle('site-docs-drawer-open', nextOpen)
   sidebar.inert = compact && !nextOpen
   sidebar.setAttribute('aria-hidden', String(compact && !nextOpen))
+  if (header) header.inert = nextOpen
+  if (content) content.inert = nextOpen
   document.body.classList.toggle('site-docs-drawer-open', nextOpen)
   document.dispatchEvent(
     new CustomEvent('leapview-docs-drawer-state', {
       detail: { open: nextOpen },
     }),
   )
-  if (nextOpen && !wasOpen) requestAnimationFrame(revealCurrentDocsLink)
+  if (nextOpen && !wasOpen) {
+    requestAnimationFrame(() => {
+      revealCurrentDocsLink()
+      docsDrawerFocusableElements(sidebar)[0]?.focus()
+    })
+  }
   if (compact && wasOpen && !nextOpen) {
     document.querySelector<HTMLElement>('lv-site-docs-drawer-toggle:not([placement])')?.shadowRoot?.querySelector<HTMLButtonElement>('button')?.focus()
   }
@@ -625,7 +654,28 @@ document.addEventListener('click', (event) => {
 })
 
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') syncDocsDrawer(false)
+  const layout = document.querySelector<HTMLElement>('.site-docs-layout')
+  if (!layout?.classList.contains('site-docs-drawer-open')) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    syncDocsDrawer(false)
+    return
+  }
+  if (event.key !== 'Tab') return
+  const sidebar = document.querySelector<HTMLElement>('.site-docs-sidebar')
+  if (!sidebar) return
+  const focusable = docsDrawerFocusableElements(sidebar)
+  if (focusable.length === 0) return
+  const active = deepestActiveElement()
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (event.shiftKey && (active === first || !active || !sidebar.contains(active))) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && (active === last || !active || !sidebar.contains(active))) {
+    event.preventDefault()
+    first.focus()
+  }
 })
 
 window.addEventListener('resize', () => syncDocsDrawer(document.querySelector('.site-docs-layout')?.classList.contains('site-docs-drawer-open')))
@@ -1266,6 +1316,7 @@ type ArticleSectionNode = ArticleSection & { children: ArticleSectionNode[] }
 class SiteArticleToc extends LitElement {
   private sections: ArticleSection[] = []
   private activeId = ''
+  private visibleSectionIDs = new Map<string, string>()
   private observer?: IntersectionObserver
 
   static styles = css`
@@ -1379,19 +1430,47 @@ class SiteArticleToc extends LitElement {
         level: Number(heading.tagName.slice(1)),
       }
     })
-    this.activeId = this.sections[0]?.id ?? ''
+    this.visibleSectionIDs = new Map<string, string>()
+    const indexVisibleSections = (nodes: ArticleSectionNode[], depth = 0, visibleAncestor = ''): void => {
+      for (const node of nodes) {
+        const visibleID = depth <= 1 ? node.id : visibleAncestor
+        this.visibleSectionIDs.set(node.id, visibleID)
+        indexVisibleSections(node.children, depth + 1, visibleID)
+      }
+    }
+    indexVisibleSections(this.sectionTree())
+    this.activeId = this.visibleSectionIDs.get(this.sections[0]?.id ?? '') ?? ''
     this.observer = new IntersectionObserver(
       (entries) => {
         const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0]
-        if (visible?.target.id && this.activeId !== visible.target.id) {
-          this.activeId = visible.target.id
-          this.requestUpdate()
+        const visibleID = visible?.target.id ? this.visibleSectionIDs.get(visible.target.id) : undefined
+        if (visibleID && this.activeId !== visibleID) {
+          this.setActiveSection(visibleID)
         }
       },
       { rootMargin: '-18% 0px -70% 0px', threshold: 0 },
     )
     headings.forEach((heading) => this.observer?.observe(heading))
     this.requestUpdate()
+  }
+
+  private setActiveSection(id: string): void {
+    this.activeId = id
+    this.requestUpdate()
+    void this.updateComplete.then(() => this.revealActiveSection())
+  }
+
+  private revealActiveSection(): void {
+    const active = this.renderRoot.querySelector<HTMLElement>('a.active')
+    if (!active || active.getClientRects().length === 0) return
+    const hostBounds = this.getBoundingClientRect()
+    const activeBounds = active.getBoundingClientRect()
+    const revealMargin = 8
+    if (activeBounds.top < hostBounds.top + revealMargin) {
+      this.scrollTop -= hostBounds.top + revealMargin - activeBounds.top
+    } else if (activeBounds.bottom > hostBounds.bottom - revealMargin) {
+      this.scrollTop += activeBounds.bottom - hostBounds.bottom + revealMargin
+    }
   }
 
   private sectionTree(): ArticleSectionNode[] {

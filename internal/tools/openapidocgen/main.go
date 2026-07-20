@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"unicode"
@@ -392,12 +393,16 @@ func renderIndexDocument(catalog generatedCatalog) string {
 
 func renderTagDocument(tag openAPITag, operations []taggedOperation) string {
 	var markdown strings.Builder
+	commonErrors := commonErrorResponses(operations)
 	markdown.WriteString(generatedMarkdownMarker + "\n\n")
 	markdown.WriteString("# " + tag.Name + "\n\n")
 	if tag.Description != "" {
 		markdown.WriteString(strings.TrimSpace(tag.Description) + "\n\n")
 	}
 	markdown.WriteString("## Operations\n\n")
+	if len(commonErrors) > 0 {
+		markdown.WriteString("Each operation lists its specific responses. See [Common error responses](#common-error-responses) for errors shared by every operation on this page.\n\n")
+	}
 	for _, operation := range operations {
 		title := operation.Value.Summary
 		if title == "" {
@@ -411,9 +416,42 @@ func renderTagDocument(tag openAPITag, operations []taggedOperation) string {
 		writeOperationMetadata(&markdown, operation)
 		writeParameters(&markdown, operation.Value.Parameters)
 		writeRequestBody(&markdown, operation.Value.RequestBody)
-		writeResponses(&markdown, operation.Value.Responses)
+		writeResponses(&markdown, operation.Value.Responses, commonErrors)
+	}
+	if len(commonErrors) > 0 {
+		markdown.WriteString("## Common error responses\n\n")
+		markdown.WriteString("These error responses apply to every operation on this page.\n\n")
+		writeResponseTable(&markdown, commonErrors)
 	}
 	return strings.TrimRight(markdown.String(), "\n") + "\n"
+}
+
+func commonErrorResponses(operations []taggedOperation) map[string]response {
+	if len(operations) < 2 {
+		return nil
+	}
+	common := make(map[string]response)
+	for status, candidate := range operations[0].Value.Responses {
+		if !isErrorResponseStatus(status) {
+			continue
+		}
+		shared := true
+		for _, operation := range operations[1:] {
+			other, exists := operation.Value.Responses[status]
+			if !exists || !reflect.DeepEqual(candidate, other) {
+				shared = false
+				break
+			}
+		}
+		if shared {
+			common[status] = candidate
+		}
+	}
+	return common
+}
+
+func isErrorResponseStatus(status string) bool {
+	return status == "default" || (len(status) == 3 && (status[0] == '4' || status[0] == '5'))
 }
 
 func writeOperationMetadata(markdown *strings.Builder, tagged taggedOperation) {
@@ -466,16 +504,28 @@ func writeRequestBody(markdown *strings.Builder, body requestBody) {
 	markdown.WriteString("Content types: `" + strings.Join(contentTypes, "`, `") + "`.\n\n")
 }
 
-func writeResponses(markdown *strings.Builder, responses map[string]response) {
+func writeResponses(markdown *strings.Builder, responses, commonErrors map[string]response) {
 	if len(responses) == 0 {
 		return
 	}
+	operationResponses := make(map[string]response, len(responses))
+	for status, value := range responses {
+		if _, common := commonErrors[status]; !common {
+			operationResponses[status] = value
+		}
+	}
+	markdown.WriteString("#### Responses\n\n")
+	if len(operationResponses) > 0 {
+		writeResponseTable(markdown, operationResponses)
+	}
+}
+
+func writeResponseTable(markdown *strings.Builder, responses map[string]response) {
 	statuses := make([]string, 0, len(responses))
 	for status := range responses {
 		statuses = append(statuses, status)
 	}
 	sort.Strings(statuses)
-	markdown.WriteString("#### Responses\n\n")
 	markdown.WriteString("| Status | Description |\n| --- | --- |\n")
 	for _, status := range statuses {
 		markdown.WriteString(fmt.Sprintf("| `%s` | %s |\n", status, tableText(responses[status].Description)))

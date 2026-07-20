@@ -684,6 +684,21 @@ func TestSiteDocumentationActiveSearchStreamsRankedResults(t *testing.T) {
 	}
 }
 
+func TestDocumentationMarkdownTablesExposeRowHeaders(t *testing.T) {
+	server := httptest.NewServer(NewHandler())
+	defer server.Close()
+
+	response, err := server.Client().Get(server.URL + "/docs/configuration")
+	if err != nil {
+		t.Fatalf("get configuration documentation: %v", err)
+	}
+	defer response.Body.Close()
+	body := readBody(t, response)
+	if !strings.Contains(body, `<th scope="row">`) {
+		t.Fatalf("configuration table does not expose body row headers")
+	}
+}
+
 func TestEveryCatalogDocumentHasAReachableRoute(t *testing.T) {
 	server := httptest.NewServer(NewHandler())
 	defer server.Close()

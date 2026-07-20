@@ -1090,6 +1090,11 @@ test('documentation articles provide a readable, navigable reference experience'
     expect(page.url()).toBe(`${baseURL}/docs/guides/build`)
     const resultCount = await search.locator('.status').innerText()
     expect(resultCount).toMatch(/^[1-9]\d* results$/)
+    await searchInput.fill('no-document-can-match-this-query-9f83c1')
+    const emptyStatus = search.locator('.status')
+    await page.waitForFunction(() => document.querySelector('lv-site-search')?.shadowRoot?.querySelector('.status')?.textContent?.startsWith('No results'))
+    expect(await emptyStatus.innerText()).toBe('No results for “no-document-can-match-this-query-9f83c1”.')
+    expect(await emptyStatus.getAttribute('role')).toBe('status')
     await search.getByRole('button', { name: 'Close search' }).click()
     await page.keyboard.press('/')
     expect(await search.getByRole('dialog', { name: 'Search documentation' }).isVisible()).toBe(true)
@@ -1505,6 +1510,14 @@ test('compact documentation navigation opens in a drawer', async () => {
     await page.waitForFunction((previousCount) => (window as unknown as { siteDocsRevealCalls: unknown[] }).siteDocsRevealCalls.length > previousCount, revealCount)
     expect(await headerDrawerToggle.evaluate((element) => element.shadowRoot?.querySelector('button')?.getAttribute('aria-expanded'))).toBe('true')
     expect(await sidebar.getAttribute('aria-hidden')).toBe('false')
+    expect(await page.locator('.site-header').evaluate((element) => (element as HTMLElement).inert)).toBe(true)
+    expect(await page.locator('.site-docs-content').evaluate((element) => (element as HTMLElement).inert)).toBe(true)
+    const drawerToggle = page.locator('lv-site-docs-drawer-toggle[placement="drawer"]')
+    await page.waitForFunction(() =>
+      document.querySelector<HTMLElement>('lv-site-docs-drawer-toggle[placement="drawer"]')?.shadowRoot?.activeElement?.matches('button'),
+    )
+    await page.keyboard.press('Shift+Tab')
+    expect(await page.evaluate(() => document.querySelector('.site-docs-sidebar')?.contains(document.activeElement))).toBe(true)
     expect(
       await sidebar
         .locator('.site-docs-link')
@@ -1530,7 +1543,7 @@ test('compact documentation navigation opens in a drawer', async () => {
     })
     expect(await sidebar.evaluate((element) => getComputedStyle(element).transitionDuration)).not.toBe('0s')
 
-    await page.locator('lv-site-docs-drawer-toggle[placement="drawer"]').getByRole('button', { name: 'Close documentation menu' }).click()
+    await drawerToggle.getByRole('button', { name: 'Close documentation menu' }).click()
     await page.waitForFunction(() => !document.querySelector('.site-docs-layout')?.classList.contains('site-docs-drawer-open'))
     expect(await headerDrawerToggle.evaluate((element) => element.shadowRoot?.querySelector('button')?.getAttribute('aria-expanded'))).toBe('false')
   } finally {
@@ -1741,10 +1754,36 @@ test('generated API outlines keep operations and omit repeated operation details
     expect(visibleOutlineLabels).not.toContain('Parameters')
     expect(visibleOutlineLabels).not.toContain('Request body')
     expect(visibleOutlineLabels).not.toContain('Responses')
+
+    const listWorkspaceRoles = article.locator('h3#list-workspace-roles')
+    const listWorkspaceRolesDetail = listWorkspaceRoles.locator('xpath=following-sibling::h4[1]')
+    await listWorkspaceRolesDetail.evaluate((heading) => {
+      document.documentElement.style.scrollBehavior = 'auto'
+      window.scrollTo({ top: heading.getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.2 })
+    })
+    await page.waitForFunction(() => {
+      const toc = document.querySelector<HTMLElement>('lv-site-article-toc')
+      const active = toc?.shadowRoot?.querySelector<HTMLAnchorElement>('a.active')
+      return active?.textContent?.trim() === 'List workspace roles' && active.getClientRects().length > 0 && toc.scrollTop > 0
+    })
+    const activeOutline = await toc.evaluate((element) => {
+      const active = element.shadowRoot?.querySelector<HTMLAnchorElement>('a.active')
+      if (!active) throw new Error('active article outline link is missing')
+      const hostRect = element.getBoundingClientRect()
+      const activeRect = active.getBoundingClientRect()
+      return {
+        label: active.textContent?.trim(),
+        scrollTop: element.scrollTop,
+        visible: activeRect.top >= hostRect.top && activeRect.bottom <= hostRect.bottom,
+      }
+    })
+    expect(activeOutline.label).toBe('List workspace roles')
+    expect(activeOutline.scrollTop).toBeGreaterThan(0)
+    expect(activeOutline.visible).toBe(true)
   } finally {
     await page.close()
   }
-})
+}, 10_000)
 
 test('visual showcase renders every supported visual type', async () => {
   const page = await browser.newPage()

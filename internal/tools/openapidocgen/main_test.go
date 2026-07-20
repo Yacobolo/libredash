@@ -115,6 +115,61 @@ components:
 	}
 }
 
+func TestRenderTagDocumentWritesSharedErrorsOnce(t *testing.T) {
+	commonErrors := map[string]response{
+		"401": {Description: "Authentication is required."},
+		"403": {Description: "The caller is not authorized."},
+	}
+	operations := []taggedOperation{
+		{
+			Method: "GET",
+			Path:   "/v1/things",
+			Value: operation{
+				OperationID: "listThings",
+				Summary:     "List things",
+				Responses: map[string]response{
+					"200": {Description: "Things returned."},
+					"401": commonErrors["401"],
+					"403": commonErrors["403"],
+				},
+			},
+		},
+		{
+			Method: "POST",
+			Path:   "/v1/things",
+			Value: operation{
+				OperationID: "createThing",
+				Summary:     "Create a thing",
+				Responses: map[string]response{
+					"201": {Description: "Thing created."},
+					"401": commonErrors["401"],
+					"403": commonErrors["403"],
+				},
+			},
+		},
+	}
+
+	article := renderTagDocument(openAPITag{Name: "Things"}, operations)
+	for _, want := range []string{
+		"## Common error responses",
+		"[Common error responses](#common-error-responses)",
+		"| `200` | Things returned. |",
+		"| `201` | Thing created. |",
+	} {
+		if !strings.Contains(article, want) {
+			t.Errorf("article missing %q:\n%s", want, article)
+		}
+	}
+	for status, wantCount := range map[string]int{"401": 1, "403": 1} {
+		if got := strings.Count(article, "| `"+status+"` |"); got != wantCount {
+			t.Errorf("status %s appears %d times, want %d:\n%s", status, got, wantCount, article)
+		}
+	}
+	if got := strings.Count(article, "[Common error responses](#common-error-responses)"); got != 1 {
+		t.Errorf("common error reference appears %d times, want 1:\n%s", got, article)
+	}
+}
+
 func TestGenerateRejectsOperationWithoutOperationID(t *testing.T) {
 	tempDir := t.TempDir()
 	specPath := filepath.Join(tempDir, "openapi.yaml")
