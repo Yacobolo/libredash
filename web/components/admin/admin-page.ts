@@ -268,6 +268,10 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
       padding: 0 var(--base-size-12);
     }
 
+    .section {
+      min-width: 0;
+    }
+
     .local-user-action:hover,
     .local-user-action:focus-visible {
       background: var(--lv-bg-control-hover);
@@ -585,6 +589,14 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
 
       .main {
         padding: var(--base-size-12);
+      }
+
+      .local-user-form {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .local-user-action {
+        width: 100%;
       }
 
       .query-detail-drawer {

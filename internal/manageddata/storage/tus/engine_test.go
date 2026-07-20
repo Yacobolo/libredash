@@ -147,6 +147,13 @@ func TestHTTPHandlerCompletesTusUploadIntoBlobStore(t *testing.T) {
 	if _, err := blobs.Stat(t.Context(), expected.SHA256); err != nil {
 		t.Fatalf("completed tus upload was not finalized: %v", err)
 	}
+	uploadID := filepath.Base(location.Path)
+	if err := engine.Abort(t.Context(), uploadID); err != nil {
+		t.Fatalf("Abort() after HTTP completion = %v", err)
+	}
+	if err := engine.Abort(t.Context(), uploadID); err != nil {
+		t.Fatalf("idempotent Abort() after HTTP completion = %v", err)
+	}
 }
 
 func TestHTTPHandlerRejectsMissingOrInvalidDigestMetadata(t *testing.T) {

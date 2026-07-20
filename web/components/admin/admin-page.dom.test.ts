@@ -82,6 +82,10 @@ for (const viewport of [
           mainConstrained: isMobile || Math.round(mainRect.width) < Math.round(availableRight - availableLeft),
           hasRecordTable: Boolean(root.querySelector('lv-record-table')),
           recordTableVariant: root.querySelector('lv-record-table')?.getAttribute('variant'),
+          documentOverflow: document.documentElement.scrollWidth - window.innerWidth,
+          mainRight: Math.round(mainRect.right),
+          sidebarRight: Math.round(sidebarRect.right),
+          formRight: Math.round((root.querySelector('.local-user-form') as HTMLElement).getBoundingClientRect().right),
           text: root.textContent,
         }
       })
@@ -97,6 +101,12 @@ for (const viewport of [
       expect(state.hasRecordTable).toBe(true)
       expect(state.recordTableVariant).toBe('compact')
       expect(state.text ?? '').toMatch(/analyst@example\.com/)
+      if (viewport.width <= 640) {
+        expect(state.documentOverflow).toBe(0)
+        expect(state.mainRight).toBeLessThanOrEqual(viewport.width)
+        expect(state.sidebarRight).toBeLessThanOrEqual(viewport.width)
+        expect(state.formRight).toBeLessThanOrEqual(viewport.width)
+      }
     } finally {
       await page.close()
     }
@@ -1665,6 +1675,9 @@ function testDocument(): string {
         { id: 'general', title: 'General', href: '/admin', active: false },
         { id: 'principals', title: 'Principals', href: '/admin/principals', active: true },
         { id: 'groups', title: 'Groups', href: '/admin/groups', active: false },
+        { id: 'agent', title: 'Agent', href: '/admin/agent', active: false },
+        { id: 'storage', title: 'Storage', href: '/admin/storage', active: false },
+        { id: 'queries', title: 'Queries', href: '/admin/queries', active: false },
       ],
     },
     headerTitle: 'Principals',
@@ -1676,8 +1689,11 @@ function testDocument(): string {
           { id: 'name', header: 'Name', kind: 'link', hrefKey: 'name_href' },
           { id: 'email', header: 'Email' },
           { id: 'roles', header: 'Direct roles', kind: 'tags' },
+          { id: 'kind', header: 'Kind' },
+          { id: 'status', header: 'Status' },
+          { id: 'created', header: 'Created' },
         ],
-        rows: [{ name: 'Analyst', name_href: '/admin/principals/p1', email: 'analyst@example.com', roles: ['viewer'] }],
+        rows: [{ name: 'Analyst', name_href: '/admin/principals/p1', email: 'analyst@example.com', roles: ['viewer'], kind: 'local user', status: 'active', created: '2026-07-20' }],
         empty: 'No principals found.',
       },
     }],

@@ -64,7 +64,7 @@ class ChatThread extends LitElement {
       min-height: 0;
       grid-template-rows: minmax(0, 1fr);
       overflow: hidden;
-      background: var(--lv-bg-page);
+	      background: var(--lv-bg-app);
     }
 
     .scroll {

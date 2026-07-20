@@ -52,6 +52,65 @@ func TestAPIGenResponseBufferNormalizesLegacyErrorsAsProblemDetails(t *testing.T
 	}
 }
 
+func TestAPIGenResponseBufferCompletesProblemDetailsIdentifiers(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/workspaces?limit=bad", nil)
+	req.Header.Set("X-Request-ID", "req_existing_problem")
+	recorder := httptest.NewRecorder()
+	buffer := newAPIGenResponseBuffer(recorder, req)
+	buffer.Header().Set("Content-Type", "application/problem+json")
+	buffer.WriteHeader(http.StatusBadRequest)
+	_, _ = buffer.Write([]byte(`{"type":"https://leapview.dev/problems/invalid","title":"Bad Request","status":400,"detail":"invalid limit","instance":"","code":"INVALID_LIMIT","requestId":"","errors":null}`))
+	buffer.flush()
+
+	var problem apigenapi.ProblemDetails
+	if err := json.Unmarshal(recorder.Body.Bytes(), &problem); err != nil {
+		t.Fatalf("decode problem: %v", err)
+	}
+	if problem.Instance != "/api/v1/workspaces" || problem.RequestId != "req_existing_problem" || problem.Errors == nil {
+		t.Fatalf("problem identifiers were not completed: %#v", problem)
+	}
+}
+
+func TestPublicAPIRouterErrorsUseAuthenticatedProblemDetails(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t)})
+	handler := server.Routes()
+
+	for _, tc := range []struct {
+		name          string
+		method        string
+		path          string
+		authorization string
+		wantStatus    int
+		wantCode      string
+		wantAllow     string
+	}{
+		{name: "unknown route", method: http.MethodGet, path: "/api/v1/not-a-route", authorization: "Bearer dev", wantStatus: http.StatusNotFound, wantCode: "API_ROUTE_NOT_FOUND"},
+		{name: "unsupported method", method: http.MethodPost, path: "/api/v1/workspaces", authorization: "Bearer dev", wantStatus: http.StatusMethodNotAllowed, wantCode: "METHOD_NOT_ALLOWED", wantAllow: http.MethodGet},
+		{name: "unknown route does not disclose authentication", method: http.MethodGet, path: "/api/v1/not-a-route", wantStatus: http.StatusNotFound, wantCode: "API_ROUTE_NOT_FOUND"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest(tc.method, tc.path, nil)
+			request.Header.Set("Authorization", tc.authorization)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+
+			if response.Code != tc.wantStatus || response.Header().Get("Content-Type") != "application/problem+json" {
+				t.Fatalf("response = %d %q body=%s", response.Code, response.Header().Get("Content-Type"), response.Body.String())
+			}
+			if got := response.Header().Get("Allow"); got != tc.wantAllow {
+				t.Errorf("Allow = %q, want %q", got, tc.wantAllow)
+			}
+			var problem apigenapi.ProblemDetails
+			if err := json.Unmarshal(response.Body.Bytes(), &problem); err != nil {
+				t.Fatalf("decode problem: %v", err)
+			}
+			if problem.Code != tc.wantCode || problem.Instance != tc.path || problem.RequestId == "" || problem.RequestId != response.Header().Get("X-Request-ID") || problem.Errors == nil {
+				t.Fatalf("problem = %#v headers=%#v", problem, response.Header())
+			}
+		})
+	}
+}
+
 func TestAPIGenTransportErrorsUseProblemDetailsWithoutLeakingCause(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/projects?limit=bad", nil)
 	req.Header.Set("X-Request-ID", "req_transport")

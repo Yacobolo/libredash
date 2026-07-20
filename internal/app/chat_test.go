@@ -668,16 +668,17 @@ func TestChatDraftTurnRedirectsAndStreamsThroughUpdates(t *testing.T) {
 	close(release)
 	waitForConversationMessage(t, service, principal.ID, conversationID, "Background complete.")
 	waitForRecorderBodyContains(t, updatesRec, `"running":false`)
+	waitForAgentConversationTitle(t, store, "test", principal.ID, conversationID, "Background complete")
+	waitForRecorderBodyContains(t, updatesRec, `"pending":false`)
 	cancelUpdates()
 	<-done
 
 	updatesBody := updatesRec.BodyString()
-	for _, want := range []string{`"running":true`, "Background complete.", `"running":false`} {
+	for _, want := range []string{`"running":true`, "Background complete.", `"running":false`, `"pending":true`, `"pending":false`} {
 		if !strings.Contains(updatesBody, want) {
 			t.Fatalf("updates stream missing %q:\n%s", want, updatesBody)
 		}
 	}
-	waitForAgentConversationTitle(t, store, "test", principal.ID, conversationID, "Background complete")
 }
 
 func TestChatTurnWithActiveConversationDoesNotReplaceURL(t *testing.T) {

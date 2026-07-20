@@ -125,13 +125,6 @@ func isChatVisualType(value string) bool {
 	}
 }
 
-func chatSignalPatch(signal ui.ChatViewState) map[string]any {
-	return map[string]any{
-		"agent":   signal.Agent,
-		"visuals": signal.Visuals,
-	}
-}
-
 func (s *Server) chatConversations(ctx context.Context, scope agent.Scope) []ui.ChatConversationSummary {
 	conversations := []ui.ChatConversationSummary{}
 	if s.agent == nil || scope.PrincipalID == "" {
@@ -143,7 +136,7 @@ func (s *Server) chatConversations(ctx context.Context, scope agent.Scope) []ui.
 	}
 	for _, row := range rows {
 		out := chatConversationSummary(row)
-		out.TitlePending = uisignals.Optional(s.isChatTitlePending(row.ID))
+		out.TitlePending = uisignals.Pointer(s.isChatTitlePending(row.ID))
 		conversations = append(conversations, out)
 	}
 	return conversations

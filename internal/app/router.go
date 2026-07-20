@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -135,8 +136,55 @@ func (s *Server) Routes() http.Handler {
 		})
 	}
 	mux.Handle("/static/*", staticAssetCache(http.StripPrefix("/static/", http.FileServer(http.Dir("static")))))
+	mux.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		if isPublicAPIPath(r.URL.Path) {
+			preparePublicAPIRequest(w, r)
+			writeAPIProblem(w, r, http.StatusNotFound, "API_ROUTE_NOT_FOUND", "The requested API route does not exist", nil)
+			return
+		}
+		http.NotFound(w, r)
+	})
+	registeredMethods := registeredRouteMethods(mux)
+	mux.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
+		setAllowedMethods(w.Header(), mux, registeredMethods, r.URL.Path)
+		if isPublicAPIPath(r.URL.Path) {
+			if s.authenticatePublicAPIRequest(w, r) {
+				writeAPIProblem(w, r, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "The requested method is not supported for this API route", nil)
+			}
+			return
+		}
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+	})
 
 	return mux
+}
+
+func registeredRouteMethods(routes chi.Routes) []string {
+	registered := make(map[string]struct{})
+	_ = chi.Walk(routes, func(method, _ string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
+		if method != "*" {
+			registered[method] = struct{}{}
+		}
+		return nil
+	})
+	methods := make([]string, 0, len(registered))
+	for method := range registered {
+		methods = append(methods, method)
+	}
+	sort.Strings(methods)
+	return methods
+}
+
+func setAllowedMethods(header http.Header, routes chi.Routes, methods []string, path string) {
+	for _, method := range methods {
+		if routes.Match(chi.NewRouteContext(), method, path) {
+			header.Add("Allow", method)
+		}
+	}
+}
+
+func isPublicAPIPath(path string) bool {
+	return path == "/api/v1" || strings.HasPrefix(path, "/api/v1/") || path == "/upload-protocols" || strings.HasPrefix(path, "/upload-protocols/")
 }
 
 func redirectLegacyChat(w http.ResponseWriter, r *http.Request) {

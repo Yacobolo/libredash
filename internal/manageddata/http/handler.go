@@ -698,10 +698,18 @@ func uploadResponse(result control.UploadResult, project, connection, expectedID
 		fileStatus := apigenapi.ManagedDataFileUploadStatusPending
 		if file.Status == control.FileStatusVerified {
 			fileStatus = apigenapi.ManagedDataFileUploadStatusVerified
+		} else if result.Status == manageddata.UploadStatusFailed {
+			fileStatus = apigenapi.ManagedDataFileUploadStatusFailed
+		} else if result.Status == manageddata.UploadStatusAborted || result.Status == manageddata.UploadStatusExpired {
+			fileStatus = apigenapi.ManagedDataFileUploadStatusSkipped
 		}
-		negotiation, err := negotiationToWire(file.Transport)
-		if err != nil {
-			return apigenapi.ManagedDataUploadSessionResponse{}, err
+		var negotiation *apigenapi.ManagedDataUploadNegotiation
+		if file.Transport.Protocol != "" {
+			value, negotiationErr := negotiationToWire(file.Transport)
+			if negotiationErr != nil {
+				return apigenapi.ManagedDataUploadSessionResponse{}, negotiationErr
+			}
+			negotiation = &value
 		}
 		files[i] = apigenapi.ManagedDataFileUploadResponse{File: metadata, Status: fileStatus, Negotiation: negotiation}
 	}
@@ -846,7 +854,7 @@ func pageSlice[T any](items []T, limitValue *int32, tokenValue *string, scope st
 	if end < len(items) {
 		next = stringPointer(encodePageToken(scope, key(items[end-1])))
 	}
-	return append([]T(nil), items[start:end]...), next, nil
+	return append(make([]T, 0, end-start), items[start:end]...), next, nil
 }
 
 type pageToken struct {

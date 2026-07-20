@@ -43,7 +43,7 @@ func keysetPage[T any](items []T, limitValue *int32, tokenValue *string, key fun
 	if end > len(items) {
 		end = len(items)
 	}
-	page := append([]T(nil), items[start:end]...)
+	page := append(make([]T, 0, end-start), items[start:end]...)
 	var next *string
 	if end < len(items) && len(page) > 0 {
 		value := encodeKeysetCursor(key(page[len(page)-1]))

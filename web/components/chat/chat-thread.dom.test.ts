@@ -41,6 +41,7 @@ beforeAll(async () => {
               --lv-border-default: 2px solid rgb(4, 5, 6);
               --fontStack-system: system-ui;
               --fontStack-monospace: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	              --lv-bg-app: rgb(11, 12, 13);
               --lv-bg-page: #fff;
               --lv-bg-panel: #fff;
               --lv-bg-panel-muted: #f6f8fa;
@@ -108,6 +109,20 @@ afterAll(async () => {
 	await browser?.close()
 	await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
 }, 15_000)
+
+test('chat thread uses the surrounding app surface background', async () => {
+  const page = await browser.newPage()
+  await page.goto(baseURL)
+  await page.waitForFunction(() => customElements.get('lv-chat-thread'))
+
+  const background = await page.locator('lv-chat-thread').evaluate((element: any) => {
+    const thread = element.shadowRoot.querySelector('.thread') as HTMLElement
+    return getComputedStyle(thread).backgroundColor
+  })
+
+  expect(background).toBe('rgb(11, 12, 13)')
+  await page.close()
+})
 
 test('chat thread preserves plain user message text without template whitespace', async () => {
   const page = await browser.newPage()

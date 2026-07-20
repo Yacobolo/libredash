@@ -138,6 +138,30 @@ func TestUploadSessionsAreListedFromCollectionMetadata(t *testing.T) {
 	}
 }
 
+func TestCancelledUploadSessionResponseDoesNotRequireActiveNegotiation(t *testing.T) {
+	repo := metadataFixture()
+	repo.uploadSessions = []manageddata.UploadSession{{ID: "upload-a", CollectionID: "collection-a", CreatedAt: "2026-01-01T00:00:00Z"}}
+	result := uploadFixture()
+	result.Status = manageddata.UploadStatusAborted
+	result.Files[0].Transport = control.TransportDescription{}
+	handler := newHandler(repo, &fakeUploads{result: result}, nil)
+
+	recorder := call(t, ``, func(w http.ResponseWriter, r *http.Request) {
+		handler.ListManagedDataUploadSessions(w, r, "project-a", "orders", apigenapi.GenListManagedDataUploadSessionsParams{})
+	})
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+	var response map[string]any
+	decodeResponse(t, recorder, &response)
+	items := response["items"].([]any)
+	files := items[0].(map[string]any)["files"].([]any)
+	file := files[0].(map[string]any)
+	if _, present := file["negotiation"]; present {
+		t.Fatalf("terminal file retained upload negotiation: %#v", file)
+	}
+}
+
 func TestMultipartOperationsAreSDKFreeAndScopedToUpload(t *testing.T) {
 	uploadResult := uploadFixture()
 	uploadResult.Files[0].Transport = control.TransportDescription{Protocol: control.ProtocolS3Multipart, S3Multipart: &control.S3MultipartDescription{CreateEndpoint: "/multipart", MinimumPartSize: 1, MaximumPartSize: 1024, MaximumParts: 100}}

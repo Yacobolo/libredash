@@ -78,6 +78,28 @@ test('catalog page composes dashboard cards', async () => {
   }
 })
 
+test('catalog page explains an empty dashboard collection', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('lv-catalog-page'))
+    const state = await page.locator('lv-catalog-page').evaluate(async (element: any) => {
+      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
+      mergePatch({ page: { ...element.page, dashboards: [] } })
+      await element.updateComplete
+      return {
+        empty: element.shadowRoot.querySelector('[role="status"]')?.textContent?.trim(),
+        cards: element.shadowRoot.querySelectorAll('article').length,
+      }
+    })
+
+    expect(state.empty).toContain('No dashboards')
+    expect(state.cards).toBe(0)
+  } finally {
+    await page.close()
+  }
+})
+
 function testDocument(): string {
   const page = {
     kind: 'catalog',

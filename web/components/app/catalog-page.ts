@@ -64,6 +64,24 @@ class LeapViewCatalogPage extends DatastarLit(LitElement) {
       justify-content: start;
     }
 
+    .empty {
+      display: grid;
+      min-height: 10rem;
+      place-content: center;
+      gap: var(--base-size-4);
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-muted);
+      padding: var(--base-size-20);
+      text-align: center;
+    }
+
+    .empty strong {
+      color: var(--lv-fg-default);
+      font-size: var(--lv-font-size-body-md);
+    }
+
     article {
       display: grid;
       min-height: 10rem;
@@ -162,7 +180,7 @@ class LeapViewCatalogPage extends DatastarLit(LitElement) {
           <h1>${page.title}</h1>
           <p class="detail">${page.description}</p>
         </header>
-        <div class="grid">
+        ${page.dashboards.length ? html`<div class="grid">
           ${page.dashboards.map((dashboard) => html`
             <article>
               <div>
@@ -179,7 +197,12 @@ class LeapViewCatalogPage extends DatastarLit(LitElement) {
               </footer>
             </article>
           `)}
-        </div>
+        </div>` : html`
+          <div class="empty" role="status">
+            <strong>No dashboards are available.</strong>
+            <span>Deploy a project with a dashboard to see it here.</span>
+          </div>
+        `}
       </section>
     `
   }

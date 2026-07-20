@@ -622,6 +622,7 @@ func TestDevelopmentServerTracksCompiledFallbackProcess(t *testing.T) {
 	for _, want := range []string{
 		`go build -o "$TMP_DIR/leapview-dev" ./cmd/leapview`,
 		`"$TMP_DIR/leapview-dev" >> "$LOG_FILE" 2>&1 &`,
+		`LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES="${LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES:-67108864}"`,
 	} {
 		if !strings.Contains(serverText, want) {
 			t.Fatalf("development server script missing tracked binary fragment %q", want)

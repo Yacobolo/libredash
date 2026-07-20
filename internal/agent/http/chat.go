@@ -160,7 +160,7 @@ func (h *Handler) completeDraftChatTurn(service *agent.Service, scope agent.Scop
 		ClientID:           clientID,
 		Emit: func(signal ui.ChatViewState) error {
 			if h.options.Broker != nil {
-				h.options.Broker.Publish(chatStreamID(scope, clientID), chatSignalPatch(signal))
+				h.options.Broker.Publish(chatStreamID(scope, clientID), ui.ChatSignalPatch(signal))
 			}
 			return nil
 		},
@@ -188,7 +188,7 @@ func (h *Handler) runChatTurn(w nethttp.ResponseWriter, r *nethttp.Request, serv
 		Input:          input,
 	})
 	if err != nil {
-		_ = updates.Patch(chatSignalPatch(h.chatSignalWith(r.Context(), scope, conversationID, transcript, streamArtifacts, chatTurnStatusError(err), false)))
+		_ = updates.Patch(ui.ChatSignalPatch(h.chatSignalWith(r.Context(), scope, conversationID, transcript, streamArtifacts, chatTurnStatusError(err), false)))
 		return
 	}
 	if h.options.ExecuteStartedChatTurn == nil {
@@ -198,7 +198,7 @@ func (h *Handler) runChatTurn(w nethttp.ResponseWriter, r *nethttp.Request, serv
 	_, _ = h.options.ExecuteStartedChatTurn(r.Context(), service, scope, started, ChatTurnExecution{
 		LiveConversations: h.chatConversations(r.Context(), scope),
 		Emit: func(signal ui.ChatViewState) error {
-			return updates.Patch(chatSignalPatch(signal))
+			return updates.Patch(ui.ChatSignalPatch(signal))
 		},
 	})
 }
@@ -291,13 +291,6 @@ func chatTurnStatusError(err error) string {
 		return "A turn is already running for this conversation."
 	}
 	return err.Error()
-}
-
-func chatSignalPatch(signal ui.ChatViewState) pagestream.SignalPatch {
-	return pagestream.SignalPatch{
-		"agent":   signal.Agent,
-		"visuals": signal.Visuals,
-	}
 }
 
 func chatRoutePath(parts ...string) string {

@@ -44,21 +44,10 @@ const apiCursorSnapshotHeader = "X-LeapView-Cursor-Snapshot"
 
 func (s *Server) publicProtocolMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
-		if requestID == "" {
-			requestID = newAPIRequestID()
-			r.Header.Set("X-Request-ID", requestID)
+		if !s.authenticatePublicAPIRequest(w, r) {
+			return
 		}
-		w.Header().Set("X-Request-ID", requestID)
 		r.Header.Set(apiCursorSnapshotHeader, s.cursorSnapshot(r))
-		if bearerToken(r) == "" {
-			writeAPIProblem(w, r, http.StatusUnauthorized, "BEARER_REQUIRED", "The public API accepts bearer credentials only", nil)
-			return
-		}
-		if s.auth != nil && !s.auth.acceptsPublicBearer(r) {
-			writeAPIProblem(w, r, http.StatusUnauthorized, "INVALID_BEARER", "The bearer credential is invalid", nil)
-			return
-		}
 		if !unwrapAPIPageCursor(w, r) {
 			return
 		}
@@ -68,6 +57,28 @@ func (s *Server) publicProtocolMiddleware(next http.Handler) http.Handler {
 		}
 		s.serveIdempotent(w, r, next)
 	})
+}
+
+func (s *Server) authenticatePublicAPIRequest(w http.ResponseWriter, r *http.Request) bool {
+	preparePublicAPIRequest(w, r)
+	if bearerToken(r) == "" {
+		writeAPIProblem(w, r, http.StatusUnauthorized, "BEARER_REQUIRED", "The public API accepts bearer credentials only", nil)
+		return false
+	}
+	if s.auth != nil && !s.auth.acceptsPublicBearer(r) {
+		writeAPIProblem(w, r, http.StatusUnauthorized, "INVALID_BEARER", "The bearer credential is invalid", nil)
+		return false
+	}
+	return true
+}
+
+func preparePublicAPIRequest(w http.ResponseWriter, r *http.Request) {
+	requestID := strings.TrimSpace(r.Header.Get("X-Request-ID"))
+	if requestID == "" {
+		requestID = newAPIRequestID()
+		r.Header.Set("X-Request-ID", requestID)
+	}
+	w.Header().Set("X-Request-ID", requestID)
 }
 
 func unwrapAPIPageCursor(w http.ResponseWriter, r *http.Request) bool {

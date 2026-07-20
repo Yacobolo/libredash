@@ -1338,7 +1338,7 @@ func pageSliceForRequest[T any](w nethttp.ResponseWriter, r *nethttp.Request, it
 	if end < len(items) {
 		nextCursor = encodeKeysetCursor(workspacePageItemKey(items[end-1]))
 	}
-	return append([]T(nil), items[start:end]...), nextCursor, true
+	return append(make([]T, 0, end-start), items[start:end]...), nextCursor, true
 }
 
 const (

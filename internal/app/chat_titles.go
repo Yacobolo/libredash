@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/Yacobolo/leapview/internal/agent"
-	"github.com/Yacobolo/leapview/pkg/pagestream"
+	"github.com/Yacobolo/leapview/internal/ui"
 )
 
 func (s *Server) generateConversationTitleAsync(scope agent.Scope, conversationID, clientID string) {
@@ -21,11 +21,9 @@ func (s *Server) generateConversationTitleAsync(scope agent.Scope, conversationI
 			s.logger.DebugContext(ctx, "agent title generation failed", "conversation_id", conversationID, "error", err)
 		}
 		s.clearChatTitlePending(conversationID)
-		s.broker.Publish(chatStreamID(scope, clientID), pagestream.SignalPatch{
-			"agent": map[string]any{
-				"conversations": s.chatConversations(ctx, scope),
-			},
-		})
+		s.broker.Publish(chatStreamID(scope, clientID), ui.ChatConversationsPatch(
+			s.chatConversations(ctx, scope), conversationID,
+		))
 	}()
 }
 

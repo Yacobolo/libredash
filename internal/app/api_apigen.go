@@ -274,6 +274,22 @@ func (w *apiGenResponseBuffer) normalizedBody(status int) []byte {
 	if err := json.Unmarshal(w.body.Bytes(), &value); err != nil {
 		return w.body.Bytes()
 	}
+	if strings.HasPrefix(w.header.Get("Content-Type"), "application/problem+json") {
+		if instance, _ := value["instance"].(string); strings.TrimSpace(instance) == "" {
+			value["instance"] = w.request.URL.Path
+		}
+		if requestID, _ := value["requestId"].(string); strings.TrimSpace(requestID) == "" {
+			value["requestId"] = w.request.Header.Get("X-Request-ID")
+		}
+		if errorsValue, present := value["errors"]; !present || errorsValue == nil {
+			value["errors"] = []apigenapi.ProblemFieldError{}
+		}
+		out, err := json.Marshal(value)
+		if err != nil {
+			return w.body.Bytes()
+		}
+		return append(out, '\n')
+	}
 	if _, ok := value["code"]; !ok {
 		return w.body.Bytes()
 	}

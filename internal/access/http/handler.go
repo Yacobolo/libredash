@@ -2219,7 +2219,7 @@ func pageSliceForRequest[T any](w stdhttp.ResponseWriter, r *stdhttp.Request, it
 	if end < len(items) {
 		nextCursor = encodeKeyCursor(apiItemPageKey(items[end-1]))
 	}
-	return append([]T(nil), items[start:end]...), nextCursor, true
+	return append(make([]T, 0, end-start), items[start:end]...), nextCursor, true
 }
 
 const (

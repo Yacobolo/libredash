@@ -219,7 +219,8 @@ model ManagedDataUploadNegotiation {
 model ManagedDataFileUploadResponse {
   file: ManagedDataFileMetadata;
   status: ManagedDataFileUploadStatus;
-  negotiation: ManagedDataUploadNegotiation;
+  @doc("Upload instructions, present only while the file can still be uploaded.")
+  negotiation?: ManagedDataUploadNegotiation;
   error?: ManagedDataErrorMessage;
 }
 

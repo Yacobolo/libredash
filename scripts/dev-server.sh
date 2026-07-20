@@ -330,6 +330,7 @@ start() {
   export PORT="$port"
   export LEAPVIEW_ADDR=":$port"
   export LEAPVIEW_DEV_WORKTREE="$ROOT"
+  export LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES="${LEAPVIEW_MANAGED_DATA_MIN_FREE_BYTES:-67108864}"
 
   : > "$LOG_FILE"
   if [[ "$runner" == "air" ]]; then

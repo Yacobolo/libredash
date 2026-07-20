@@ -41293,7 +41293,6 @@ components:
       required:
         - file
         - status
-        - negotiation
       properties:
         file:
           $ref: '#/components/schemas/ManagedDataFileMetadata'
@@ -41301,6 +41300,7 @@ components:
           $ref: '#/components/schemas/ManagedDataFileUploadStatus'
         negotiation:
           $ref: '#/components/schemas/ManagedDataUploadNegotiation'
+          description: Upload instructions, present only while the file can still be uploaded.
         error:
           type: string
           minLength: 1
