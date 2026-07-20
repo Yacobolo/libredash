@@ -3,6 +3,7 @@ package compiler
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -102,6 +103,14 @@ func TestGeographicVisualCompilesEveryLayerKind(t *testing.T) {
 			{ID: "demand", Kind: "heat", Latitude: "latitude", Longitude: "longitude", Value: "revenue"},
 			{ID: "density", Kind: "density", Latitude: "latitude", Longitude: "longitude"},
 		}},
+		Interaction: report.Interaction{PointSelection: report.SelectionInteraction{
+			Toggle: true,
+			Mappings: []report.SelectionMapping{
+				{Field: "orders.state", Fact: "orders", Value: "state", Label: "state"},
+				{Field: "orders.latitude", Fact: "orders", Value: "latitude", Label: "revenue"},
+			},
+			Targets: []string{"detail", "summary"},
+		}},
 	}}}
 
 	definitions, err := compileVisualizationDefinitions(dashboardDefinition)
@@ -140,6 +149,23 @@ func TestGeographicVisualCompilesEveryLayerKind(t *testing.T) {
 	}
 	if spec.Layers[1].Latitude == nil || spec.Layers[1].Latitude.Field != "latitude" || spec.Layers[1].Longitude == nil || spec.Layers[1].Longitude.Field != "longitude" {
 		t.Fatalf("point layer = %#v", spec.Layers[1])
+	}
+	if got, want := len(spec.Interactions), 1; got != want {
+		t.Fatalf("geographic interactions = %d, want %d", got, want)
+	}
+	interaction := spec.Interactions[0]
+	if interaction.Mode != visualizationir.VisualizationSelectionModeMultiple || !interaction.RequiresStableIdentity || len(interaction.Mappings) != 2 {
+		t.Fatalf("geographic interaction = %#v", interaction)
+	}
+	if got, want := interaction.Targets, []string{"detail", "summary"}; !slices.Equal(got, want) {
+		t.Fatalf("geographic targets = %#v, want %#v", got, want)
+	}
+	roles := map[string]visualizationir.VisualizationFieldRole{}
+	for _, field := range spec.Datasets[0].Fields {
+		roles[field.ID] = field.Role
+	}
+	if roles["state"] != visualizationir.VisualizationFieldRoleIdentity || roles["latitude"] != visualizationir.VisualizationFieldRoleIdentity || roles["revenue"] != visualizationir.VisualizationFieldRoleMeasure {
+		t.Fatalf("geographic roles = %#v", roles)
 	}
 }
 

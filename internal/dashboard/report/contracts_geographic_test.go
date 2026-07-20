@@ -43,3 +43,54 @@ func TestValidateGeographicVisualUsesClosedAliasBoundLayers(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateGeographicPointSelectionUsesStableQueryAliases(t *testing.T) {
+	base := Visual{
+		Type: "map",
+		Query: VisualQuery{
+			Dimensions: []FieldRef{
+				{Field: "orders.customer_id", Alias: "customer_id"},
+				{Field: "orders.latitude", Alias: "latitude"},
+				{Field: "orders.longitude", Alias: "longitude"},
+			},
+			Time:     QueryTime{Field: "orders.created_at", Grain: "day", Alias: "created_day"},
+			Measures: []FieldRef{{Field: "revenue", Alias: "revenue"}},
+		},
+		Geo: VisualGeo{Layers: []VisualGeoLayer{{ID: "customers", Kind: "point", Latitude: "latitude", Longitude: "longitude", Value: "revenue"}}},
+		Interaction: Interaction{PointSelection: SelectionInteraction{Mappings: []SelectionMapping{
+			{Field: "orders.customer_id", Fact: "orders", Value: "customer_id", Label: "revenue"},
+			{Field: "orders.created_at", Fact: "orders", Grain: "day", Value: "created_day"},
+		}, Targets: []string{"detail"}}},
+	}
+	if err := ValidateVisualPointSelectionMappingKeys("map", base); err != nil {
+		t.Fatalf("valid geographic interaction: %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*Visual)
+		want   string
+	}{
+		{name: "unknown value alias", mutate: func(visual *Visual) { visual.Interaction.PointSelection.Mappings[0].Value = "missing" }, want: `references unknown value query alias "missing"`},
+		{name: "measure identity", mutate: func(visual *Visual) { visual.Interaction.PointSelection.Mappings[0].Value = "revenue" }, want: `value query alias "revenue" must reference a dimension or time field`},
+		{name: "unknown label alias", mutate: func(visual *Visual) { visual.Interaction.PointSelection.Mappings[0].Label = "missing" }, want: `references unknown label query alias "missing"`},
+		{name: "heat only", mutate: func(visual *Visual) {
+			visual.Geo.Layers = []VisualGeoLayer{{ID: "heat", Kind: "heat", Latitude: "latitude", Longitude: "longitude", Value: "revenue"}}
+		}, want: "requires at least one point or choropleth layer"},
+		{name: "density only", mutate: func(visual *Visual) {
+			visual.Geo.Layers = []VisualGeoLayer{{ID: "density", Kind: "density", Latitude: "latitude", Longitude: "longitude"}}
+		}, want: "requires at least one point or choropleth layer"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			visual := base
+			visual.Geo.Layers = append([]VisualGeoLayer(nil), base.Geo.Layers...)
+			visual.Interaction.PointSelection.Mappings = append([]SelectionMapping(nil), base.Interaction.PointSelection.Mappings...)
+			tt.mutate(&visual)
+			err := ValidateVisualPointSelectionMappingKeys("map", visual)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("error = %v, want containing %q", err, tt.want)
+			}
+		})
+	}
+}

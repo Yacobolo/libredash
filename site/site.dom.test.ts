@@ -962,6 +962,96 @@ test('map documentation renders fitted, attributed canvases without adapter erro
     ])
     expect(states.every(({ width, height }) => width > 500 && height >= 400)).toBe(true)
     expect(await page.evaluate(() => performance.getEntriesByName(`${location.origin}/static/geometry/world-countries-natural-earth-110m.geojson`).length)).toBe(1)
+
+    const examples = page.locator('ld-site-visual-example')
+    expect(await examples.nth(0).getByRole('button', { name: 'Select map data' }).count()).toBe(1)
+    expect(await examples.nth(1).getByRole('button', { name: 'Select map data' }).count()).toBe(1)
+    expect(await examples.nth(2).getByRole('button', { name: 'Select map data' }).count()).toBe(0)
+    expect(await examples.nth(3).getByRole('button', { name: 'Select map data' }).count()).toBe(0)
+
+    await page.evaluate(() => {
+      ;(window as any).__mapInteractionCommands = []
+      document.addEventListener('ld-interaction-select', (event) => {
+        ;(window as any).__mapInteractionCommands.push((event as CustomEvent).detail)
+      })
+    })
+    const regionCanvas = examples.nth(0).locator('canvas.maplibregl-canvas')
+    const regionPoint = await examples.nth(0).evaluate(async (element) => {
+      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { snapshot(): Promise<Blob>; shadowRoot: ShadowRoot }
+      const canvas = host.shadowRoot.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement
+      const bitmap = await createImageBitmap(await host.snapshot())
+      const copy = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const context = copy.getContext('2d')!
+      context.drawImage(bitmap, 0, 0)
+      const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data
+      for (let y = Math.floor(bitmap.height * 0.2); y < bitmap.height * 0.9; y++) {
+        for (let x = Math.floor(bitmap.width * 0.1); x < bitmap.width * 0.9; x++) {
+          const index = (y * bitmap.width + x) * 4
+          const red = pixels[index]!, green = pixels[index + 1]!, blue = pixels[index + 2]!, alpha = pixels[index + 3]!
+          if (alpha > 220 && blue > red + 25 && blue > green + 5) {
+            return { x: x * canvas.clientWidth / bitmap.width, y: y * canvas.clientHeight / bitmap.height }
+          }
+        }
+      }
+      return null
+    })
+    expect(regionPoint).not.toBeNull()
+    await regionCanvas.click({ position: regionPoint!, force: true })
+    await page.waitForFunction(() => (window as any).__mapInteractionCommands.length > 0)
+    expect(await page.evaluate(() => (window as any).__mapInteractionCommands[0])).toMatchObject({
+      sourceId: 'state_order_map', action: 'set', toggle: true,
+      mappings: [{ field: 'orders.state', fact: 'orders' }],
+    })
+    await page.evaluate(() => { (window as any).__mapInteractionCommands = [] })
+
+    const selectButton = examples.nth(0).getByRole('button', { name: 'Select map data' })
+    await selectButton.click()
+    const search = examples.nth(0).getByRole('searchbox', { name: 'Search map data' })
+    await search.fill('SP')
+    expect(await examples.nth(0).getByRole('option').count()).toBe(1)
+    await search.press('ArrowDown')
+    await page.keyboard.press('Enter')
+    expect(await page.evaluate(() => (window as any).__mapInteractionCommands.at(-1))).toMatchObject({
+      sourceKind: 'visual', sourceId: 'state_order_map', interactionKind: 'point_selection', action: 'set', toggle: true,
+      mappings: [{ field: 'orders.state', fact: 'orders', value: 'SP', label: 'SP' }],
+    })
+    await page.keyboard.press('Escape')
+    expect(await selectButton.getAttribute('aria-expanded')).toBe('false')
+    expect(await selectButton.evaluate((element) => (element.getRootNode() as ShadowRoot).activeElement === element)).toBe(true)
+
+    await examples.nth(1).getByRole('button', { name: 'Select map data' }).click()
+    expect(await examples.nth(1).getByRole('listbox').getAttribute('aria-multiselectable')).toBe('true')
+    await page.keyboard.press('Escape')
+
+    await page.evaluate(() => { (window as any).__mapInteractionCommands = [] })
+    const pointCanvas = examples.nth(1).locator('canvas.maplibregl-canvas')
+    const point = await examples.nth(1).evaluate(async (element) => {
+      const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { snapshot(): Promise<Blob>; shadowRoot: ShadowRoot }
+      const canvas = host.shadowRoot.querySelector('canvas.maplibregl-canvas') as HTMLCanvasElement
+      const bitmap = await createImageBitmap(await host.snapshot())
+      const copy = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const context = copy.getContext('2d')!
+      context.drawImage(bitmap, 0, 0)
+      const pixels = context.getImageData(0, 0, bitmap.width, bitmap.height).data
+      for (let y = Math.floor(bitmap.height * 0.15); y < bitmap.height * 0.95; y++) {
+        for (let x = Math.floor(bitmap.width * 0.05); x < bitmap.width * 0.95; x++) {
+          const index = (y * bitmap.width + x) * 4
+          const red = pixels[index]!, green = pixels[index + 1]!, blue = pixels[index + 2]!, alpha = pixels[index + 3]!
+          if (alpha > 220 && red < 30 && green > 70 && green < 140 && blue > 170) {
+            return { x: x * canvas.clientWidth / bitmap.width, y: y * canvas.clientHeight / bitmap.height }
+          }
+        }
+      }
+      return null
+    })
+    expect(point).not.toBeNull()
+    await pointCanvas.click({ position: point!, force: true })
+    await page.waitForFunction(() => (window as any).__mapInteractionCommands.length > 0)
+    expect(await page.evaluate(() => (window as any).__mapInteractionCommands[0])).toMatchObject({
+      sourceId: 'order_point_map', action: 'set', toggle: true,
+      mappings: [{ field: 'orders.order_id', fact: 'orders' }],
+    })
+
     const mapSnapshot = () => page.locator('ld-site-visual-example').first().evaluate(async (element) => {
       const host = element.shadowRoot?.querySelector('ld-visualization-host') as HTMLElement & { snapshot(): Promise<Blob> }
       const blob = await host.snapshot()

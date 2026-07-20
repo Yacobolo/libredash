@@ -293,6 +293,18 @@ spec:
             geometry_asset: brazil_states
             join: state
             value: order_count
+      interaction:
+        point_selection:
+          toggle: true
+          mappings:
+            - field: customers.state
+              fact: orders
+              value: state
+              label: state
+          targets:
+            - customer_point_map
+            - customer_revenue_heat_map
+            - customer_density_map
     status_delivery_graph:
       title: Status and delivery network
       description: Shows status and delivery-speed relationships as a network.
@@ -873,6 +885,7 @@ spec:
         roam: true
       query:
         dimensions:
+          customer_id: customers.customer_id
           latitude: customers.latitude
           longitude: customers.longitude
         measures:
@@ -885,6 +898,18 @@ spec:
             latitude: latitude
             longitude: longitude
             value: order_count
+      interaction:
+        point_selection:
+          toggle: true
+          mappings:
+            - field: customers.customer_id
+              fact: orders
+              value: customer_id
+              label: customer_id
+          targets:
+            - state_order_map
+            - customer_revenue_heat_map
+            - customer_density_map
     customer_revenue_heat_map:
       title: Revenue concentration
       description: Renders revenue-weighted geographic heat.

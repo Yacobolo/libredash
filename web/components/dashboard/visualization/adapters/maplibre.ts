@@ -1,7 +1,10 @@
 import type { VisualizationEnvelope, VisualizationGeographicLayer, VisualizationGeometryAsset } from '../../../../generated/visualization'
-import { Map as MapLibre, type Map as MapLibreMap } from 'maplibre-gl'
+import { Map as MapLibre, type GeoJSONSource, type Map as MapLibreMap, type MapMouseEvent, type MapOptions } from 'maplibre-gl'
 import type { Feature, FeatureCollection, Geometry, Position } from 'geojson'
-import type { RendererAdapter, RendererHandle } from '../host-controller'
+import type { OptimisticInteractionCommand } from '../../interaction-selection'
+import { Change, type RendererAdapter, type RendererHandle } from '../host-controller'
+import { clearInteractionCommand, interactionCommandForRowIndex } from '../interaction-command'
+import { MapSelectionControl } from './map-selection-control'
 
 export const adapter: RendererAdapter = {
   async mount(container, envelope) {
@@ -10,14 +13,14 @@ export const adapter: RendererAdapter = {
     const attribution = document.createElement('div'); attribution.dataset.mapAttribution = ''; attribution.setAttribute('role', 'note'); attribution.setAttribute('aria-label', 'Map attribution')
     attribution.style.cssText = 'position:absolute;right:6px;bottom:6px;z-index:1;max-width:calc(100% - 12px);padding:2px 5px;border-radius:4px;background:color-mix(in srgb,var(--ld-bg-panel,#fff) 88%,transparent);color:var(--ld-fg-muted,#57606a);font:10px/1.3 var(--ld-font-family-ui,system-ui);pointer-events:none;text-align:right'
     frame.append(surface, attribution); container.replaceChildren(frame)
-    const interactive = envelope.spec.kind === 'geographic' && envelope.spec.presentation.roam
+    const pointerOptions = mapPointerOptions(envelope)
     const backgroundColor = getComputedStyle(frame).backgroundColor || '#f6f8fa'
     const map = new MapLibre({
       container: surface,
       style: { version: 8, sources: {}, layers: [{ id: '__ld-background', type: 'background', paint: { 'background-color': backgroundColor } }] },
       attributionControl: false,
       canvasContextAttributes: { preserveDrawingBuffer: true },
-      interactive,
+      ...pointerOptions,
     })
     await new Promise<void>((resolve, reject) => { map.once('load', () => resolve()); map.once('error', (event) => reject(event.error)) })
     const handle = new MapLibreHandle(container, frame, map, attribution)
@@ -31,30 +34,72 @@ export const adapter: RendererAdapter = {
   },
 }
 
+export function mapPointerOptions(envelope: VisualizationEnvelope): Pick<MapOptions, 'interactive' | 'scrollZoom' | 'boxZoom' | 'dragRotate' | 'dragPan' | 'keyboard' | 'doubleClickZoom' | 'touchZoomRotate' | 'touchPitch'> {
+  const geographic = envelope.spec.kind === 'geographic'
+  const roam = envelope.spec.kind === 'geographic' ? envelope.spec.presentation.roam : false
+  const selectable = geographic && envelope.spec.interactions.some((candidate) => candidate.kind === 'select')
+  return {
+    interactive: roam || selectable,
+    scrollZoom: roam,
+    boxZoom: roam,
+    dragRotate: roam,
+    dragPan: roam,
+    keyboard: roam,
+    doubleClickZoom: roam,
+    touchZoomRotate: roam,
+    touchPitch: roam,
+  }
+}
+
 class MapLibreHandle implements RendererHandle {
   private sourceIDs: string[] = []
+  private layerIDs: string[] = []
+  private dynamicLayers: Array<{ spec: VisualizationGeographicLayer; sourceID: string; geometry?: FeatureCollection }> = []
+  private selectableLayerIDs: string[] = []
   private basemapID?: string
+  private envelope?: VisualizationEnvelope
+  private selectionControl?: MapSelectionControl
+  private updateQueue: Promise<void> = Promise.resolve()
+  private disposed = false
   private readonly handleThemeApplied = () => this.applyTheme()
   constructor(private readonly container: HTMLElement, private readonly frame: HTMLElement, private readonly map: MapLibreMap, private readonly attribution: HTMLElement) {
     document.addEventListener('libredash-theme-applied', this.handleThemeApplied)
+    this.map.on('click', this.handleClick)
+    this.map.on('mousemove', this.handlePointerMove)
+    this.map.on('mouseout', this.handlePointerLeave)
   }
-  async update(envelope: VisualizationEnvelope): Promise<void> {
+  update(envelope: VisualizationEnvelope, change: Change = Change.All): Promise<void> {
+    if (this.disposed) return Promise.resolve()
+    const pending = this.updateQueue.then(() => this.applyUpdate(envelope, change))
+    this.updateQueue = pending.catch(() => {})
+    return pending
+  }
+  private async applyUpdate(envelope: VisualizationEnvelope, change: Change): Promise<void> {
+    if (this.disposed) return
     if (envelope.spec.kind !== 'geographic') throw new Error(`MapLibre cannot render ${envelope.spec.kind}`)
-    for (const id of this.sourceIDs.reverse()) {
-      if (this.map.getLayer(id)) this.map.removeLayer(id)
-      if (this.map.getSource(id)) this.map.removeSource(id)
+    this.envelope = envelope
+    this.updateSelectionControl(envelope)
+    if ((change & (Change.Spec | Change.Data)) === 0) {
+      if ((change & Change.Selection) !== 0) this.updateSelectionData(envelope)
+      return
     }
+    this.removeOwnedMapData()
     this.sourceIDs = []
+    this.layerIDs = []
+    this.dynamicLayers = []
+    this.selectableLayerIDs = []
     this.basemapID = undefined
     const collections: FeatureCollection[] = []
     const coordinateCollections: FeatureCollection[] = []
     const attributions = new Set<string>()
     if (envelope.spec.presentation.basemap) {
       await this.addBasemap(envelope.spec.presentation.basemap)
+      if (this.disposed) return
       attributions.add(envelope.spec.presentation.basemap.attribution)
     }
     for (const layer of envelope.spec.layers) {
       const collection = await this.addLayer(envelope, layer)
+      if (this.disposed) return
       collections.push(collection)
       if (layer.kind !== 'choropleth') coordinateCollections.push(collection)
       if (layer.geometry?.attribution) attributions.add(layer.geometry.attribution)
@@ -63,6 +108,7 @@ class MapLibreHandle implements RendererHandle {
     this.attribution.textContent = [...attributions].join(' · ')
     this.attribution.hidden = attributions.size === 0
     fitMapToGeographicData(this.map, collections)
+    if (this.disposed) return
     await waitForMapIdle(this.map)
   }
   resize(): void { this.map.resize() }
@@ -71,15 +117,27 @@ class MapLibreHandle implements RendererHandle {
     const canvas = this.map.getCanvas()
     return new Promise((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('MapLibre snapshot failed')), 'image/png'))
   }
-  dispose(): void { document.removeEventListener('libredash-theme-applied', this.handleThemeApplied); this.map.remove(); this.container.replaceChildren() }
+  dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    document.removeEventListener('libredash-theme-applied', this.handleThemeApplied)
+    this.map.off('click', this.handleClick)
+    this.map.off('mousemove', this.handlePointerMove)
+    this.map.off('mouseout', this.handlePointerLeave)
+    this.selectionControl?.dispose()
+    this.map.remove()
+    this.container.replaceChildren()
+  }
 
   private async addBasemap(asset: VisualizationGeometryAsset): Promise<void> {
     const data = await this.loadGeometry(asset)
+    if (this.disposed) return
     let id = '__ld-basemap'
     while (this.map.getSource(id) || this.map.getLayer(id)) id += '-'
     this.map.addSource(id, { type: 'geojson', data })
     this.map.addLayer(basemapLayer(id, this.currentBasemapColors()))
     this.sourceIDs.push(id)
+    this.layerIDs.push(id)
     this.basemapID = id
   }
 
@@ -96,13 +154,16 @@ class MapLibreHandle implements RendererHandle {
       paint: { 'line-color': '#8c959f', 'line-opacity': 0.22, 'line-width': 1, 'line-dasharray': [2, 3] },
     }, this.sourceIDs[0])
     this.sourceIDs.push(id)
+    this.layerIDs.push(id)
   }
 
   private async addLayer(envelope: VisualizationEnvelope, layer: VisualizationGeographicLayer): Promise<FeatureCollection> {
     let data: FeatureCollection
+    let geometry: FeatureCollection | undefined
     if (layer.kind === 'choropleth') {
       if (!layer.geometry || !layer.join) throw new Error(`choropleth layer ${JSON.stringify(layer.id)} requires geometry and join`)
-      const geometry = await this.loadGeometry(layer.geometry)
+      geometry = await this.loadGeometry(layer.geometry)
+      if (this.disposed) return { type: 'FeatureCollection', features: [] }
       data = joinGeometry(envelope, layer, geometry)
     } else {
       data = coordinateGeometry(envelope, layer)
@@ -112,8 +173,57 @@ class MapLibreHandle implements RendererHandle {
     this.map.addSource(id, { type: 'geojson', data })
     this.map.addLayer(mapLayer(id, layer.kind))
     this.sourceIDs.push(id)
+    this.layerIDs.push(id)
+    if (layer.kind === 'choropleth') {
+      const outlineID = `${id}-selected-outline`
+      this.map.addLayer(mapOutlineLayer(outlineID, id))
+      this.layerIDs.push(outlineID)
+    }
+    if (layer.kind === 'point' || layer.kind === 'choropleth') this.selectableLayerIDs.push(id)
+    this.dynamicLayers.push({ spec: layer, sourceID: id, geometry })
     return data
   }
+
+  private updateSelectionData(envelope: VisualizationEnvelope): void {
+    updateSelectionSources(envelope, this.dynamicLayers, (sourceID) => this.map.getSource(sourceID) as GeoJSONSource | undefined)
+    this.map.triggerRepaint()
+  }
+
+  private removeOwnedMapData(): void {
+    for (const id of [...this.layerIDs].reverse()) if (this.map.getLayer(id)) this.map.removeLayer(id)
+    for (const id of [...this.sourceIDs].reverse()) if (this.map.getSource(id)) this.map.removeSource(id)
+  }
+
+  private updateSelectionControl(envelope: VisualizationEnvelope): void {
+    const selectable = envelope.spec.interactions.some((candidate) => candidate.kind === 'select')
+    if (!selectable) {
+      this.selectionControl?.dispose()
+      this.selectionControl = undefined
+      return
+    }
+    this.selectionControl ??= new MapSelectionControl((command) => this.dispatchInteraction(command))
+    if (!this.selectionControl.element.isConnected) this.frame.append(this.selectionControl.element)
+    this.selectionControl.update(envelope)
+  }
+
+  private dispatchInteraction(command: OptimisticInteractionCommand): void {
+    this.container.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: command }))
+  }
+
+  private readonly handleClick = (event: MapMouseEvent) => {
+    if (!this.envelope || this.selectableLayerIDs.length === 0) return
+    const features = this.map.queryRenderedFeatures(event.point, { layers: this.selectableLayerIDs })
+    const command = mapInteractionCommand(this.envelope, features, this.selectableLayerIDs)
+    if (command) this.dispatchInteraction(command)
+  }
+
+  private readonly handlePointerMove = (event: MapMouseEvent) => {
+    if (!this.envelope || this.selectableLayerIDs.length === 0) return
+    const features = this.map.queryRenderedFeatures(event.point, { layers: this.selectableLayerIDs })
+    this.map.getCanvas().style.cursor = interactionCommandForRenderedFeatures(this.envelope, features, this.selectableLayerIDs) ? 'pointer' : ''
+  }
+
+  private readonly handlePointerLeave = () => { this.map.getCanvas().style.cursor = '' }
 
   private async loadGeometry(asset: VisualizationGeometryAsset): Promise<FeatureCollection> {
     return loadGeometryAsset(asset, location.href)
@@ -131,8 +241,8 @@ class MapLibreHandle implements RendererHandle {
 
   private currentBasemapColors(): BasemapColors {
     return {
-      boundary: resolveCSSColor(this.frame, 'var(--ld-line-default,#afb8c1)'),
-      land: resolveCSSColor(this.frame, 'var(--ld-bg-panel-muted,#eaeef2)'),
+      boundary: resolveCSSColor(this.frame, 'var(--ld-line-default,#afb8c1)', '#afb8c1'),
+      land: resolveCSSColor(this.frame, 'var(--ld-bg-panel-muted,#eaeef2)', '#eaeef2'),
     }
   }
 }
@@ -165,14 +275,18 @@ export function basemapLayer(id: string, colors: BasemapColors): any {
   return { id, source: id, type: 'fill', paint: { 'fill-color': colors.land, 'fill-opacity': 1, 'fill-outline-color': colors.boundary } }
 }
 
-function resolveCSSColor(container: HTMLElement, value: string): string {
+function resolveCSSColor(container: HTMLElement, value: string, fallback: string): string {
   const probe = document.createElement('span')
   probe.style.color = value
   probe.hidden = true
   container.append(probe)
   const color = getComputedStyle(probe).color
   probe.remove()
-  return color
+  return concreteCSSColor(color, fallback)
+}
+
+export function concreteCSSColor(resolved: string, fallback: string): string {
+  return resolved.trim() || fallback
 }
 
 function waitForMapIdle(map: MapLibreMap): Promise<void> {
@@ -182,20 +296,27 @@ function waitForMapIdle(map: MapLibreMap): Promise<void> {
   })
 }
 
-function joinGeometry(envelope: VisualizationEnvelope, layer: VisualizationGeographicLayer, geometry: FeatureCollection): FeatureCollection {
+export function joinGeometry(envelope: VisualizationEnvelope, layer: VisualizationGeographicLayer, geometry: FeatureCollection): FeatureCollection {
   if (envelope.dataState.kind !== 'inline' || !layer.join) return geometry
   const join = layer.join
   const dataset = envelope.dataState.datasets.find((candidate) => candidate.id === join.dataset)
   if (!dataset) return geometry
   const joinIndex = dataset.columns.indexOf(join.field)
   const valueIndex = layer.value ? dataset.columns.indexOf(layer.value.field) : -1
-  const values = new Map(dataset.rows.map((row) => [String(row[joinIndex]), {
+  const values = new Map(dataset.rows.map((row, rowIndex) => [String(row[joinIndex]), {
     value: valueIndex >= 0 ? row[valueIndex] : 1,
     selected: rowIsSelected(envelope, dataset.id, dataset.columns, row),
+    rowIndex,
   }]))
   const features: Feature<Geometry>[] = geometry.features.map((feature) => {
     const matched = values.get(String(feature.id ?? feature.properties?.id))
-    return { ...feature, properties: { ...feature.properties, __ld_value: matched?.value ?? null, __ld_selected: matched?.selected ?? false } }
+    return { ...feature, properties: {
+      ...feature.properties,
+      __ld_value: matched?.value ?? null,
+      __ld_selected: matched?.selected ?? false,
+      __ld_has_selection: envelope.selection.length > 0,
+      ...(matched ? rowLocator(dataset.id, matched.rowIndex, layer.id) : {}),
+    } }
   })
   return { ...geometry, features }
 }
@@ -215,14 +336,16 @@ export function coordinateGeometry(envelope: VisualizationEnvelope, layer: Visua
     features.push({ type: 'Feature', id: index, geometry: { type: 'Point', coordinates: [longitude, latitude] }, properties: {
       __ld_value: valueIndex >= 0 ? row[valueIndex] : 1,
       __ld_selected: rowIsSelected(envelope, dataset.id, dataset.columns, row),
+      __ld_has_selection: envelope.selection.length > 0,
+      ...(layer.kind === 'point' ? rowLocator(dataset.id, index, layer.id) : {}),
     } })
   }
   return { type: 'FeatureCollection', features }
 }
 
 export function mapLayer(id: string, kind: VisualizationGeographicLayer['kind']): any {
-  if (kind === 'choropleth') return { id, source: id, type: 'fill', paint: { 'fill-color': ['case', ['==', ['get', '__ld_value'], null], '#d8dee4', ['interpolate', ['linear'], ['get', '__ld_weight'], 0, '#ddf4ff', 0.5, '#54aeff', 1, '#0550ae']], 'fill-opacity': ['case', ['get', '__ld_selected'], 1, 0.82], 'fill-outline-color': '#ffffff' } }
-  if (kind === 'point') return { id, source: id, type: 'circle', paint: { 'circle-radius': ['case', ['get', '__ld_selected'], 12, ['interpolate', ['linear'], ['get', '__ld_weight'], 0, 5, 1, 10]], 'circle-color': '#0969da', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 1.5, 'circle-opacity': ['case', ['get', '__ld_selected'], 1, 0.78] } }
+  if (kind === 'choropleth') return { id, source: id, type: 'fill', paint: { 'fill-color': ['case', ['==', ['get', '__ld_value'], null], '#d8dee4', ['interpolate', ['linear'], ['get', '__ld_weight'], 0, '#ddf4ff', 0.5, '#54aeff', 1, '#0550ae']], 'fill-opacity': ['case', ['get', '__ld_selected'], 1, ['get', '__ld_has_selection'], 0.4, 0.82], 'fill-outline-color': '#ffffff' } }
+  if (kind === 'point') return { id, source: id, type: 'circle', paint: { 'circle-radius': ['case', ['get', '__ld_selected'], 13, ['interpolate', ['linear'], ['get', '__ld_weight'], 0, 5, 1, 10]], 'circle-color': '#0969da', 'circle-stroke-color': '#ffffff', 'circle-stroke-width': ['case', ['get', '__ld_selected'], 2.5, 1.5], 'circle-opacity': ['case', ['get', '__ld_selected'], 1, ['get', '__ld_has_selection'], 0.3, 0.78] } }
   return { id, source: id, type: 'heatmap', paint: {
     'heatmap-weight': ['*', ['get', '__ld_weight'], ['case', ['get', '__ld_selected'], 1, 0.75]],
     'heatmap-intensity': kind === 'density' ? 1.35 : 1,
@@ -230,6 +353,66 @@ export function mapLayer(id: string, kind: VisualizationGeographicLayer['kind'])
     'heatmap-opacity': 0.86,
     'heatmap-color': ['interpolate', ['linear'], ['heatmap-density'], 0, 'rgba(9,105,218,0)', 0.15, 'rgba(84,174,255,0.28)', 0.35, 'rgba(84,174,255,0.62)', 0.6, '#0969da', 0.85, '#0550ae', 1, '#033d8b'],
   } }
+}
+
+export function mapOutlineLayer(id: string, source: string): any {
+  return {
+    id, source, type: 'line',
+    filter: ['==', ['get', '__ld_selected'], true],
+    paint: { 'line-color': '#bf3989', 'line-opacity': 1, 'line-width': 3 },
+  }
+}
+
+function rowLocator(datasetID: string, rowIndex: number, layerID: string): Record<string, string | number> {
+  return { __ld_dataset: datasetID, __ld_row_index: rowIndex, __ld_layer_id: layerID }
+}
+
+type RenderedFeatureLocator = Readonly<{ layer?: { id?: string }; properties?: Record<string, unknown> | null }>
+
+export function interactionCommandForRenderedFeatures(
+  envelope: VisualizationEnvelope,
+  features: readonly RenderedFeatureLocator[],
+  selectableLayerIDs: readonly string[],
+) {
+  const selectable = new Set(selectableLayerIDs)
+  for (const feature of features) {
+    const renderedLayerID = feature.layer?.id
+    const datasetID = feature.properties?.__ld_dataset
+    const rowIndex = feature.properties?.__ld_row_index
+    const authoredLayerID = feature.properties?.__ld_layer_id
+    if (typeof renderedLayerID !== 'string' || !selectable.has(renderedLayerID)) continue
+    if (renderedLayerID !== `ld-${authoredLayerID}` || typeof datasetID !== 'string' || typeof rowIndex !== 'number') continue
+    const command = interactionCommandForRowIndex(envelope, datasetID, rowIndex)
+    if (command) return command
+  }
+  return undefined
+}
+
+export function mapInteractionCommand(
+  envelope: VisualizationEnvelope,
+  features: readonly RenderedFeatureLocator[],
+  selectableLayerIDs: readonly string[],
+): OptimisticInteractionCommand | undefined {
+  return interactionCommandForRenderedFeatures(envelope, features, selectableLayerIDs)
+    ?? (envelope.selection.length > 0 ? clearInteractionCommand(envelope) : undefined)
+}
+
+export function updateSelectionSources(
+  envelope: VisualizationEnvelope,
+  layers: readonly { spec: VisualizationGeographicLayer; sourceID: string; geometry?: FeatureCollection }[],
+  getSource: (sourceID: string) => Pick<GeoJSONSource, 'setData'> | undefined,
+): number {
+  let updated = 0
+  for (const layer of layers) {
+    const data = layer.spec.kind === 'choropleth' && layer.geometry
+      ? joinGeometry(envelope, layer.spec, layer.geometry)
+      : coordinateGeometry(envelope, layer.spec)
+    const source = getSource(layer.sourceID)
+    if (!source) continue
+    source.setData(normalizeFeatureWeights(data))
+    updated++
+  }
+  return updated
 }
 
 export function normalizeFeatureWeights(data: FeatureCollection): FeatureCollection {

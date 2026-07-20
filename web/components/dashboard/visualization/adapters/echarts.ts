@@ -1,7 +1,9 @@
 import type { VisualizationEnvelope, VisualizationFieldRef } from '../../../../generated/visualization'
 import type { ECharts, EChartsOption } from 'echarts'
-import { interactionSelectionLabel, interactionSelectionValue, type OptimisticInteractionCommand } from '../../interaction-selection'
 import type { RendererAdapter, RendererHandle } from '../host-controller'
+import { interactionCommandForRow } from '../interaction-command'
+
+export { interactionCommandForRow } from '../interaction-command'
 
 export function echartsOption(envelope: VisualizationEnvelope): EChartsOption {
   const dataset = inlineDataset(envelope)
@@ -199,39 +201,6 @@ class EChartsHandle implements RendererHandle {
     const command = interactionCommandForRow(this.envelope, datasetID, row)
     if (!command) return
     this.container.dispatchEvent(new CustomEvent('ld-interaction-select', { bubbles: true, composed: true, detail: command }))
-  }
-}
-
-export function interactionCommandForRow(envelope: VisualizationEnvelope, datasetID: string, row: readonly unknown[]): OptimisticInteractionCommand | undefined {
-  const interaction = envelope.spec.interactions.find((candidate) => candidate.kind === 'select')
-  if (!interaction || interaction.mappings.length === 0) return undefined
-  const dataset = envelope.spec.datasets.find((candidate) => candidate.id === datasetID)
-  if (!dataset) return undefined
-  const fieldOrder = envelope.dataState.kind === 'inline'
-    ? envelope.dataState.datasets.find((candidate) => candidate.id === datasetID)?.columns
-    : envelope.dataState.schema.id === datasetID ? envelope.dataState.schema.fields.map((field) => field.id) : undefined
-  if (!fieldOrder) return undefined
-  const mappings = interaction.mappings.map((mapping) => {
-    if (mapping.source.dataset !== datasetID || (mapping.label && mapping.label.dataset !== datasetID)) return undefined
-    const valueIndex = fieldOrder.indexOf(mapping.source.field)
-    const value = valueIndex >= 0 ? interactionSelectionValue(row[valueIndex]) : undefined
-    if (value === undefined) return undefined
-    const labelIndex = mapping.label ? fieldOrder.indexOf(mapping.label.field) : valueIndex
-    const labelValue = labelIndex >= 0 ? interactionSelectionValue(row[labelIndex]) : undefined
-    if (labelValue === undefined) return undefined
-    return {
-      field: mapping.targetFieldID,
-      ...(mapping.targetFactID ? { fact: mapping.targetFactID } : {}),
-      ...(mapping.grain ? { grain: mapping.grain } : {}),
-      value,
-      label: interactionSelectionLabel(labelValue),
-    }
-  })
-  if (mappings.some((mapping) => mapping === undefined)) return undefined
-  return {
-    sourceKind: 'visual', sourceId: envelope.visualID, interactionKind: interaction.id,
-    action: 'set', toggle: interaction.mode === 'multiple',
-    mappings: mappings as OptimisticInteractionCommand['mappings'],
   }
 }
 

@@ -135,6 +135,9 @@ func ValidateVisualPointSelectionMappingKeys(name string, visual Visual) error {
 	if !supportsPointSelection(visual) {
 		return fmt.Errorf("visual %q type %q shape %q does not support point_selection", name, visual.Type, visual.ShapeOrDefault())
 	}
+	if visual.ShapeOrDefault() == "geo" {
+		return validateGeographicPointSelectionMappingKeys(name, visual)
+	}
 	keys := visualPayloadKeys(visual)
 	for index, mapping := range visual.Interaction.PointSelection.Mappings {
 		if !keys.Contains(mapping.Value) {
@@ -142,6 +145,48 @@ func ValidateVisualPointSelectionMappingKeys(name string, visual Visual) error {
 		}
 		if mapping.Label != "" && !keys.Contains(mapping.Label) {
 			return fmt.Errorf("visual %q interaction mapping %d references unknown label key %q for shape %q", name, index, mapping.Label, visual.ShapeOrDefault())
+		}
+	}
+	return nil
+}
+
+func validateGeographicPointSelectionMappingKeys(name string, visual Visual) error {
+	selectable := false
+	for _, layer := range visual.Geo.Layers {
+		if layer.Kind == "point" || layer.Kind == "choropleth" {
+			selectable = true
+			break
+		}
+	}
+	if !selectable {
+		return fmt.Errorf("visual %q geographic point_selection requires at least one point or choropleth layer", name)
+	}
+
+	stableAliases := payloadKeySet{}
+	allAliases := payloadKeySet{}
+	add := func(keys payloadKeySet, field, alias string) {
+		if field != "" {
+			keys[defaultString(alias, fieldRefAlias(field))] = struct{}{}
+		}
+	}
+	for _, field := range visual.Query.Dimensions {
+		add(stableAliases, field.Field, field.Alias)
+		add(allAliases, field.Field, field.Alias)
+	}
+	add(stableAliases, visual.Query.Time.Field, visual.Query.Time.Alias)
+	add(allAliases, visual.Query.Time.Field, visual.Query.Time.Alias)
+	for _, field := range visual.Query.Measures {
+		add(allAliases, field.Field, field.Alias)
+	}
+	for index, mapping := range visual.Interaction.PointSelection.Mappings {
+		if !allAliases.Contains(mapping.Value) {
+			return fmt.Errorf("visual %q interaction mapping %d references unknown value query alias %q for shape %q", name, index, mapping.Value, visual.ShapeOrDefault())
+		}
+		if !stableAliases.Contains(mapping.Value) {
+			return fmt.Errorf("visual %q interaction mapping %d value query alias %q must reference a dimension or time field", name, index, mapping.Value)
+		}
+		if mapping.Label != "" && !allAliases.Contains(mapping.Label) {
+			return fmt.Errorf("visual %q interaction mapping %d references unknown label query alias %q for shape %q", name, index, mapping.Label, visual.ShapeOrDefault())
 		}
 	}
 	return nil
