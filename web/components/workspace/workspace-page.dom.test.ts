@@ -197,50 +197,67 @@ for (const viewport of [
   })
 }
 
-test('workspace catalog cards keep Open links visible with long descriptions', async () => {
-  const page = await browser.newPage({ viewport: { width: 1420, height: 1155 } })
-  try {
-    await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('ld-workspace-page'))
-    await page.evaluate(async () => {
-      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
-      mergePatch({ page: {
-        kind: 'workspace',
-        title: 'Workspaces',
-        description: 'View published BI workspaces.',
-        cards: [
-          { id: 'operations', title: 'Operations Workspace', description: 'Fulfillment and delivery analysis.', href: '/workspaces/operations', deploymentLabel: 'Serving' },
-          { id: 'sales', title: 'Sales Workspace', description: 'Revenue, orders, and product category analysis.', href: '/workspaces/sales', deploymentLabel: 'Serving' },
-          { id: 'visuals', title: 'Visuals Workspace', description: 'Developer QA workspace for exhaustive dashboard visual and table renderer coverage.', href: '/workspaces/visuals', deploymentLabel: 'Serving' },
-        ],
-      } })
-    })
-    await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
+for (const viewport of [
+  { name: 'compact desktop', width: 706, height: 793 },
+  { name: 'mobile', width: 390, height: 820 },
+]) {
+  test(`workspace catalog renders compact full-width rows on ${viewport.name}`, async () => {
+    const page = await browser.newPage({ viewport })
+    try {
+      await page.goto(baseURL)
+      await page.waitForFunction(() => customElements.get('ld-workspace-page'))
+      await page.evaluate(async () => {
+        const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
+        mergePatch({ page: {
+          kind: 'workspace',
+          title: 'Workspaces',
+          description: 'View published BI workspaces.',
+          cards: [
+            { id: 'operations', title: 'Operations Workspace', description: 'Fulfillment and delivery analysis.', href: '/workspaces/operations', servingLabel: 'Serving' },
+            { id: 'sales', title: 'Sales Workspace', description: 'Revenue, orders, and product category analysis.', href: '/workspaces/sales', servingLabel: 'Serving' },
+            { id: 'visuals', title: 'Visuals Workspace', description: 'Developer QA workspace for exhaustive dashboard visual and table renderer coverage.', href: '/workspaces/visuals', servingLabel: 'Serving' },
+          ],
+        } })
+      })
+      await page.locator('ld-workspace-page').evaluate((element: any) => element.updateComplete)
 
-    const state = await page.locator('ld-workspace-page').evaluate((element: any) => {
-      const cards = Array.from(element.shadowRoot.querySelectorAll('article.card')) as HTMLElement[]
-      const visualCard = cards[2]
-      const open = visualCard.querySelector('a.primary-link') as HTMLAnchorElement
-      const cardRect = visualCard.getBoundingClientRect()
-      const openRect = open.getBoundingClientRect()
-      return {
-        href: open.getAttribute('href'),
-        text: open.textContent?.trim(),
-        display: getComputedStyle(open).display,
-        visibleWithinCard: openRect.bottom <= cardRect.bottom && openRect.top >= cardRect.top,
-      }
-    })
+      const state = await page.locator('ld-workspace-page').evaluate((element: any) => {
+        const list = element.shadowRoot.querySelector('.workspace-list') as HTMLElement
+        const rows = Array.from(element.shadowRoot.querySelectorAll('a.workspace-row')) as HTMLAnchorElement[]
+        const listRect = list.getBoundingClientRect()
+        return {
+          rowCount: rows.length,
+          hrefs: rows.map((row) => row.getAttribute('href')),
+          titles: rows.map((row) => row.querySelector('.workspace-title')?.textContent?.trim()),
+          statuses: rows.map((row) => row.querySelector('.workspace-status')?.textContent?.trim()),
+          hasIcons: rows.every((row) => Boolean(row.querySelector('.workspace-icon svg'))),
+          hasChevrons: rows.every((row) => Boolean(row.querySelector('.workspace-chevron svg'))),
+          fullWidth: rows.every((row) => Math.abs(row.getBoundingClientRect().width - listRect.width) <= 1),
+          maxRowHeight: Math.max(...rows.map((row) => Math.round(row.getBoundingClientRect().height))),
+          totalListHeight: Math.round(listRect.height),
+          hasCardGrid: Boolean(element.shadowRoot.querySelector('.cards, article.card')),
+          hasOpenButton: Boolean(element.shadowRoot.querySelector('.primary-link')),
+        }
+      })
 
-    expect(state).toEqual({
-      href: '/workspaces/visuals',
-      text: 'Open',
-      display: 'grid',
-      visibleWithinCard: true,
-    })
-  } finally {
-    await page.close()
-  }
-})
+      expect(state).toEqual({
+        rowCount: 3,
+        hrefs: ['/workspaces/operations', '/workspaces/sales', '/workspaces/visuals'],
+        titles: ['Operations Workspace', 'Sales Workspace', 'Visuals Workspace'],
+        statuses: ['Serving', 'Serving', 'Serving'],
+        hasIcons: true,
+        hasChevrons: true,
+        fullWidth: true,
+        maxRowHeight: 72,
+        totalListHeight: 216,
+        hasCardGrid: false,
+        hasOpenButton: false,
+      })
+    } finally {
+      await page.close()
+    }
+  })
+}
 
 test('workspace asset search filters the current asset rows', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
