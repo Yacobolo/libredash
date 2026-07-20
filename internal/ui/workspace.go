@@ -155,7 +155,7 @@ func workspaceCatalogPageSignal(workspaces []workspaceview.WorkspaceView) uisign
 		Kind:        uisignals.RouteWorkspace,
 		Title:       "Workspaces",
 		Description: uisignals.Pointer("View published BI workspaces. Authoring lives in Git."),
-		Cards:       uisignals.OptionalSlice(workspaceCardSignals(workspaces)),
+		Workspaces:  uisignals.OptionalSlice(workspaceCatalogItemSignals(workspaces)),
 	}
 }
 
@@ -199,22 +199,21 @@ func connectionsPageSignal(workspaceID string, assets []workspaceview.AssetView,
 	}
 }
 
-func workspaceCardSignals(workspaces []workspaceview.WorkspaceView) []uisignals.WorkspaceCardSignal {
-	cards := make([]uisignals.WorkspaceCardSignal, 0, len(workspaces))
+func workspaceCatalogItemSignals(workspaces []workspaceview.WorkspaceView) []uisignals.WorkspaceCatalogItemSignal {
+	items := make([]uisignals.WorkspaceCatalogItemSignal, 0, len(workspaces))
 	for _, workspace := range workspaces {
 		description := workspace.Description
 		if strings.TrimSpace(description) == "" {
 			description = "Published workspace assets."
 		}
-		cards = append(cards, uisignals.WorkspaceCardSignal{
-			ID:           workspace.ID,
-			Title:        workspace.Title,
-			Description:  description,
-			Href:         "/workspaces/" + workspace.ID,
-			ServingLabel: workspaceServingLabel(workspace),
+		items = append(items, uisignals.WorkspaceCatalogItemSignal{
+			ID:          workspace.ID,
+			Title:       workspace.Title,
+			Description: description,
+			Href:        "/workspaces/" + workspace.ID,
 		})
 	}
-	return cards
+	return items
 }
 
 func workspaceAssetListSignal(workspaceID string, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeType, query string, tabs []uisignals.WorkspaceTabSignal, empty, searchHref string) uisignals.WorkspaceAssetListSignal {
@@ -760,13 +759,6 @@ func workspaceRouteUpdatesURL(routeKind uisignals.RouteKind, catalog dashboard.C
 	default:
 		return updatesURL(routeKind)
 	}
-}
-
-func workspaceServingLabel(workspace workspaceview.WorkspaceView) string {
-	if workspace.ActiveServingStateID == "" {
-		return "Not serving"
-	}
-	return "Serving"
 }
 
 func connectionAssetListHref(typ, query string) string {

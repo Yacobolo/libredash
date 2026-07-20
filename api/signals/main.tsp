@@ -1412,11 +1412,10 @@ model WorkspaceBreadcrumbSignal {
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
 @apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
-model WorkspaceCardSignal {
+model WorkspaceCatalogItemSignal {
   `description`: string;
   `href`: string;
   `id`: string;
-  `servingLabel`: string;
   `title`: string;
 }
 
@@ -1449,12 +1448,12 @@ model WorkspacePageEnvelope {
 @apigen.`metadata`(#{ `x-libredash-contract-role`: "signal", `x-libredash-surface`: "workspace" })
 model WorkspacePageSignal {
   `assetList`?: WorkspaceAssetListSignal;
-  `cards`?: WorkspaceCardSignal[];
   `description`?: string;
   `environment`?: string;
   `kind`: RouteKind;
   `title`: string;
   `workspaceId`?: string;
+  `workspaces`?: WorkspaceCatalogItemSignal[];
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })

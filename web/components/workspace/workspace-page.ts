@@ -88,7 +88,7 @@ class LibreDashWorkspacePage extends DatastarLit(LitElement) {
   render() {
     const page = this.page
     if (!page) return html`<slot></slot>`
-    if (page.cards?.length) return this.renderCatalog(page)
+    if (page.workspaces?.length) return this.renderCatalog(page)
     if (!page.assetList?.searchHref && this.workspaceAccess?.canManage) return this.renderAccessPage(page)
     return this.renderAssetList(page, 'Workspace', 'Workspace assets')
   }
@@ -98,13 +98,13 @@ class LibreDashWorkspacePage extends DatastarLit(LitElement) {
       <section class="page catalog" aria-label="LibreDash workspaces">
         ${this.renderHeader('', page.title, page.description)}
         <ul class="catalog-list workspace-list" aria-label="Published workspaces">
-          ${page.cards?.map((card) => html`
+          ${page.workspaces?.map((workspace) => html`
             <li>
-              <a class="catalog-row workspace-row" href=${card.href}>
+              <a class="catalog-row workspace-row" href=${workspace.href}>
                 <span class="catalog-icon workspace-icon">${lucideIcon(Boxes)}</span>
                 <span class="catalog-copy workspace-copy">
-                  <span class="catalog-title workspace-title">${card.title}</span>
-                  <span class="catalog-description workspace-description">${card.description}</span>
+                  <span class="catalog-title workspace-title">${workspace.title}</span>
+                  <span class="catalog-description workspace-description">${workspace.description}</span>
                 </span>
                 <span class="catalog-trailing">
                   <span class="catalog-chevron workspace-chevron">${lucideIcon(ChevronRight)}</span>

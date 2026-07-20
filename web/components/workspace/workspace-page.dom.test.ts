@@ -212,10 +212,10 @@ for (const viewport of [
           kind: 'workspace',
           title: 'Workspaces',
           description: 'View published BI workspaces.',
-          cards: [
-            { id: 'operations', title: 'Operations Workspace', description: 'Fulfillment and delivery analysis.', href: '/workspaces/operations', servingLabel: 'Serving' },
-            { id: 'sales', title: 'Sales Workspace', description: 'Revenue, orders, and product category analysis.', href: '/workspaces/sales', servingLabel: 'Serving' },
-            { id: 'visuals', title: 'Visuals Workspace', description: 'Developer QA workspace for exhaustive dashboard visual and table renderer coverage.', href: '/workspaces/visuals', servingLabel: 'Serving' },
+          workspaces: [
+            { id: 'operations', title: 'Operations Workspace', description: 'Fulfillment and delivery analysis.', href: '/workspaces/operations' },
+            { id: 'sales', title: 'Sales Workspace', description: 'Revenue, orders, and product category analysis.', href: '/workspaces/sales' },
+            { id: 'visuals', title: 'Visuals Workspace', description: 'Developer QA workspace for exhaustive dashboard visual and table renderer coverage.', href: '/workspaces/visuals' },
           ],
         } })
       })
@@ -235,7 +235,6 @@ for (const viewport of [
           fullWidth: rows.every((row) => Math.abs(row.getBoundingClientRect().width - listRect.width) <= 1),
           maxRowHeight: Math.max(...rows.map((row) => Math.round(row.getBoundingClientRect().height))),
           totalListHeight: Math.round(listRect.height),
-          hasCardGrid: Boolean(element.shadowRoot.querySelector('.cards, article.card')),
           hasOpenButton: Boolean(element.shadowRoot.querySelector('.primary-link')),
         }
       })
@@ -250,7 +249,6 @@ for (const viewport of [
         fullWidth: true,
         maxRowHeight: 72,
         totalListHeight: 216,
-        hasCardGrid: false,
         hasOpenButton: false,
       })
     } finally {
