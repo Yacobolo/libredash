@@ -56,7 +56,7 @@ class MapLibreHandle implements RendererHandle {
   private layerIDs: string[] = []
   private dynamicLayers: Array<{ spec: VisualizationGeographicLayer; sourceID: string; geometry?: FeatureCollection }> = []
   private selectableLayerIDs: string[] = []
-  private basemapID?: string
+  private basemapIDs?: Readonly<{ fill: string; boundary: string }>
   private envelope?: VisualizationEnvelope
   private selectionControl?: MapSelectionControl
   private updateQueue: Promise<void> = Promise.resolve()
@@ -88,7 +88,7 @@ class MapLibreHandle implements RendererHandle {
     this.layerIDs = []
     this.dynamicLayers = []
     this.selectableLayerIDs = []
-    this.basemapID = undefined
+    this.basemapIDs = undefined
     const collections: FeatureCollection[] = []
     const coordinateCollections: FeatureCollection[] = []
     const attributions = new Set<string>()
@@ -126,7 +126,7 @@ class MapLibreHandle implements RendererHandle {
     this.map.off('mouseout', this.handlePointerLeave)
     this.selectionControl?.dispose()
     this.map.remove()
-    this.container.replaceChildren()
+    removeRendererFrame(this.container, this.frame)
   }
 
   private async addBasemap(asset: VisualizationGeometryAsset): Promise<void> {
@@ -134,11 +134,14 @@ class MapLibreHandle implements RendererHandle {
     if (this.disposed) return
     let id = '__ld-basemap'
     while (this.map.getSource(id) || this.map.getLayer(id)) id += '-'
+    const boundaryID = `${id}-boundaries`
+    const colors = this.currentBasemapColors()
     this.map.addSource(id, { type: 'geojson', data })
-    this.map.addLayer(basemapLayer(id, this.currentBasemapColors()))
+    this.map.addLayer(basemapLayer(id, colors))
+    this.map.addLayer(basemapBoundaryLayer(boundaryID, id, colors.boundary))
     this.sourceIDs.push(id)
-    this.layerIDs.push(id)
-    this.basemapID = id
+    this.layerIDs.push(id, boundaryID)
+    this.basemapIDs = { fill: id, boundary: boundaryID }
   }
 
   private addCoordinateReferenceGrid(collections: FeatureCollection[]): void {
@@ -231,18 +234,18 @@ class MapLibreHandle implements RendererHandle {
 
   private applyTheme(): void {
     this.map.setPaintProperty('__ld-background', 'background-color', getComputedStyle(this.frame).backgroundColor || '#ffffff')
-    if (this.basemapID && this.map.getLayer(this.basemapID)) {
+    if (this.basemapIDs && this.map.getLayer(this.basemapIDs.fill) && this.map.getLayer(this.basemapIDs.boundary)) {
       const colors = this.currentBasemapColors()
-      this.map.setPaintProperty(this.basemapID, 'fill-color', colors.land)
-      this.map.setPaintProperty(this.basemapID, 'fill-outline-color', colors.boundary)
+      this.map.setPaintProperty(this.basemapIDs.fill, 'fill-color', colors.land)
+      this.map.setPaintProperty(this.basemapIDs.boundary, 'line-color', colors.boundary)
     }
     this.map.triggerRepaint()
   }
 
   private currentBasemapColors(): BasemapColors {
     return {
-      boundary: resolveCSSColor(this.frame, 'var(--ld-line-default,#afb8c1)', '#afb8c1'),
-      land: resolveCSSColor(this.frame, 'var(--ld-bg-panel-muted,#eaeef2)', '#eaeef2'),
+      boundary: resolveCSSColor(this.frame, 'var(--ld-line-emphasis,#8c959f)', '#8c959f'),
+      land: resolveCSSColor(this.frame, 'var(--ld-bg-control-hover,#eaeef2)', '#eaeef2'),
     }
   }
 }
@@ -272,7 +275,15 @@ async function loadGeometryAsset(asset: VisualizationGeometryAsset, baseURL: str
 type BasemapColors = Readonly<{ boundary: string; land: string }>
 
 export function basemapLayer(id: string, colors: BasemapColors): any {
-  return { id, source: id, type: 'fill', paint: { 'fill-color': colors.land, 'fill-opacity': 1, 'fill-outline-color': colors.boundary } }
+  return { id, source: id, type: 'fill', paint: { 'fill-color': colors.land, 'fill-opacity': 1 } }
+}
+
+export function basemapBoundaryLayer(id: string, source: string, boundary: string): any {
+  return { id, source, type: 'line', paint: { 'line-color': boundary, 'line-opacity': 0.92, 'line-width': 1.5 } }
+}
+
+export function removeRendererFrame(container: ParentNode, frame: HTMLElement): void {
+  if (frame.parentNode === container) frame.remove()
 }
 
 function resolveCSSColor(container: HTMLElement, value: string, fallback: string): string {

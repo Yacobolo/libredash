@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test'
 
 import type { VisualizationEnvelope, VisualizationGeographicLayer } from '../../../../generated/visualization'
 import type { FeatureCollection } from 'geojson'
-import { basemapLayer, concreteCSSColor, coordinateGeometry, coordinateReferenceGrid, fitMapToGeographicData, interactionCommandForRenderedFeatures, joinGeometry, mapInteractionCommand, mapLayer, mapOutlineLayer, mapPointerOptions, normalizeFeatureWeights, sameOriginGeometryURL, updateSelectionSources, verifyGeometryDigest } from './maplibre'
+import { basemapBoundaryLayer, basemapLayer, concreteCSSColor, coordinateGeometry, coordinateReferenceGrid, fitMapToGeographicData, interactionCommandForRenderedFeatures, joinGeometry, mapInteractionCommand, mapLayer, mapOutlineLayer, mapPointerOptions, normalizeFeatureWeights, removeRendererFrame, sameOriginGeometryURL, updateSelectionSources, verifyGeometryDigest } from './maplibre'
 
 test('MapLibre geometry assets are same-origin and content addressed', async () => {
   expect(sameOriginGeometryURL('/static/geometry/states.geojson', 'https://dash.example/workspaces/sales').href).toBe('https://dash.example/static/geometry/states.geojson')
@@ -88,6 +88,22 @@ test('MapLibre selection-only refreshes update existing sources without rebuildi
   expect(updated).toBe(1)
   expect(updates).toHaveLength(1)
   expect(updates[0]?.features[0]?.properties).toMatchObject({ __ld_dataset: 'primary', __ld_row_index: 0, __ld_layer_id: 'states' })
+})
+
+test('a superseded MapLibre mount cannot remove the winning renderer frame', () => {
+  const container = {} as ParentNode
+  let staleRemoved = false
+  const staleFrame = {
+    parentNode: null,
+    remove: () => { staleRemoved = true },
+  }
+  removeRendererFrame(container, staleFrame as unknown as HTMLElement)
+  expect(staleRemoved).toBe(false)
+
+  let ownedRemoved = false
+  const ownedFrame = { parentNode: container, remove: () => { ownedRemoved = true } }
+  removeRendererFrame(container, ownedFrame as unknown as HTMLElement)
+  expect(ownedRemoved).toBe(true)
 })
 
 test('MapLibre normalizes finite measure values without losing raw tooltip values', () => {
@@ -177,7 +193,16 @@ test('MapLibre renders the typed basemap below data with theme-derived land and 
     paint: {
       'fill-color': 'rgb(234, 238, 242)',
       'fill-opacity': 1,
-      'fill-outline-color': 'rgb(175, 184, 193)',
+    },
+  })
+  expect(basemapBoundaryLayer('world-boundaries', 'world', 'rgb(175, 184, 193)')).toEqual({
+    id: 'world-boundaries',
+    source: 'world',
+    type: 'line',
+    paint: {
+      'line-color': 'rgb(175, 184, 193)',
+      'line-opacity': 0.92,
+      'line-width': 1.5,
     },
   })
 })
