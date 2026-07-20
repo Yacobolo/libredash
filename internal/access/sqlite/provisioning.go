@@ -308,6 +308,29 @@ func (r *Repository) ListGroups(ctx context.Context, workspaceID string) ([]acce
 	return groups, nil
 }
 
+func (r *Repository) SearchGroups(ctx context.Context, workspaceID, query string, limit int) ([]access.Group, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []access.Group{}, nil
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+	rows, err := r.q.SearchGroups(ctx, platformdb.SearchGroupsParams{
+		WorkspaceID: workspaceID,
+		Search:      query,
+		ResultLimit: int64(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	groups := make([]access.Group, 0, len(rows))
+	for _, row := range rows {
+		groups = append(groups, mapGroup(row))
+	}
+	return groups, nil
+}
+
 func (r *Repository) ListAllGroups(ctx context.Context) ([]access.Group, error) {
 	rows, err := r.q.ListAllGroups(ctx)
 	if err != nil {

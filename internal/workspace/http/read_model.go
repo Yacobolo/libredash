@@ -4,6 +4,7 @@ import (
 	"context"
 	nethttp "net/http"
 	"sort"
+	"strings"
 
 	"github.com/Yacobolo/leapview/internal/access"
 	"github.com/Yacobolo/leapview/internal/dashboard"
@@ -234,6 +235,112 @@ func (m ReadModel) WorkspaceAccess(r *nethttp.Request, workspaceView workspace.W
 		Bindings:  bindings,
 		CanManage: canManage,
 		Status:    status,
+	}
+}
+
+func (m ReadModel) WorkspaceAccessCandidates(r *nethttp.Request, workspaceID, query string, limit int) ([]ui.WorkspaceAccessCandidate, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []ui.WorkspaceAccessCandidate{}, nil
+	}
+	if limit < 1 {
+		limit = 8
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	repo, err := m.accessRepository()
+	if err != nil {
+		return nil, err
+	}
+	if repo == nil {
+		return []ui.WorkspaceAccessCandidate{}, nil
+	}
+	bindings, err := repo.ListRoleBindings(r.Context(), workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	bound := make(map[string]struct{}, len(bindings))
+	for _, binding := range bindings {
+		subjectType := binding.SubjectType
+		subjectID := binding.SubjectID
+		if subjectType == "" {
+			subjectType = access.SubjectPrincipal
+			subjectID = binding.PrincipalID
+		}
+		bound[string(subjectType)+":"+subjectID] = struct{}{}
+	}
+	principals, err := repo.SearchPrincipals(r.Context(), query, limit)
+	if err != nil {
+		return nil, err
+	}
+	groups, err := repo.SearchGroups(r.Context(), workspaceID, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]ui.WorkspaceAccessCandidate, 0, len(principals)+len(groups))
+	for _, principal := range principals {
+		if _, exists := bound[string(access.SubjectPrincipal)+":"+principal.ID]; exists {
+			continue
+		}
+		label := firstNonEmpty(principal.DisplayName, principal.Email, principal.ID)
+		candidates = append(candidates, ui.WorkspaceAccessCandidate{
+			SubjectType: string(access.SubjectPrincipal),
+			SubjectID:   principal.ID,
+			Label:       label,
+			Detail:      principal.Email,
+		})
+	}
+	normalizedQuery := strings.ToLower(query)
+	for _, group := range groups {
+		label := firstNonEmpty(group.Name, group.ID)
+		if !strings.Contains(strings.ToLower(label+" "+group.ID), normalizedQuery) {
+			continue
+		}
+		if _, exists := bound[string(access.SubjectGroup)+":"+group.ID]; exists {
+			continue
+		}
+		candidates = append(candidates, ui.WorkspaceAccessCandidate{
+			SubjectType: string(access.SubjectGroup),
+			SubjectID:   group.ID,
+			Label:       label,
+			Detail:      "Group",
+		})
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		leftRank := workspaceAccessCandidateRank(candidates[i], normalizedQuery)
+		rightRank := workspaceAccessCandidateRank(candidates[j], normalizedQuery)
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		leftLabel := strings.ToLower(candidates[i].Label)
+		rightLabel := strings.ToLower(candidates[j].Label)
+		if leftLabel != rightLabel {
+			return leftLabel < rightLabel
+		}
+		if candidates[i].SubjectType != candidates[j].SubjectType {
+			return candidates[i].SubjectType < candidates[j].SubjectType
+		}
+		return candidates[i].SubjectID < candidates[j].SubjectID
+	})
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+	return candidates, nil
+}
+
+func workspaceAccessCandidateRank(candidate ui.WorkspaceAccessCandidate, query string) int {
+	label := strings.ToLower(candidate.Label)
+	detail := strings.ToLower(candidate.Detail)
+	switch {
+	case strings.HasPrefix(label, query):
+		return 0
+	case strings.HasPrefix(detail, query):
+		return 1
+	case strings.Contains(label, query):
+		return 2
+	default:
+		return 3
 	}
 }
 

@@ -151,15 +151,18 @@ type AdminStorageServingState struct {
 }
 
 type WorkspaceAccessResponse struct {
-	Workspace   workspaceview.WorkspaceView     `json:"workspace"`
-	ObjectType  string                          `json:"objectType,omitempty"`
-	ObjectID    string                          `json:"objectId,omitempty"`
-	ObjectTitle string                          `json:"objectTitle,omitempty"`
-	Mode        string                          `json:"mode,omitempty"`
-	Roles       []workspaceview.RoleView        `json:"roles"`
-	Bindings    []workspaceview.RoleBindingView `json:"bindings"`
-	CanManage   bool                            `json:"canManage"`
-	Status      WorkspaceAccessStatus           `json:"status"`
+	Workspace    workspaceview.WorkspaceView     `json:"workspace"`
+	ObjectType   string                          `json:"objectType,omitempty"`
+	ObjectID     string                          `json:"objectId,omitempty"`
+	ObjectTitle  string                          `json:"objectTitle,omitempty"`
+	Mode         string                          `json:"mode,omitempty"`
+	Roles        []workspaceview.RoleView        `json:"roles"`
+	Bindings     []workspaceview.RoleBindingView `json:"bindings"`
+	Candidates   []WorkspaceAccessCandidate      `json:"candidates"`
+	CanManage    bool                            `json:"canManage"`
+	Search       string                          `json:"search"`
+	SearchStatus WorkspaceAccessSearchStatus     `json:"searchStatus"`
+	Status       WorkspaceAccessStatus           `json:"status"`
 }
 
 type ChatViewState struct {
@@ -326,18 +329,24 @@ func WorkspaceAccessSignals(access WorkspaceAccessResponse) WorkspaceAccessSigna
 	for index := range access.Bindings {
 		bindings[index] = access.Bindings[index]
 	}
+	candidates := access.Candidates
+	if candidates == nil {
+		candidates = []WorkspaceAccessCandidate{}
+	}
 	return WorkspaceAccessSignal{
-		Workspace:   access.Workspace,
-		ObjectType:  optionalValue(access.ObjectType),
-		ObjectID:    optionalValue(access.ObjectID),
-		ObjectTitle: optionalValue(access.ObjectTitle),
-		Mode:        optionalValue(access.Mode),
-		Roles:       roles,
-		Bindings:    bindings,
-		CanManage:   access.CanManage,
-		Status:      access.Status,
-		Command:     WorkspaceAccessCommand{},
-		Search:      "",
+		Workspace:    access.Workspace,
+		ObjectType:   optionalValue(access.ObjectType),
+		ObjectID:     optionalValue(access.ObjectID),
+		ObjectTitle:  optionalValue(access.ObjectTitle),
+		Mode:         optionalValue(access.Mode),
+		Roles:        roles,
+		Bindings:     bindings,
+		Candidates:   candidates,
+		CanManage:    access.CanManage,
+		Status:       access.Status,
+		Command:      WorkspaceAccessCommand{},
+		Search:       access.Search,
+		SearchStatus: access.SearchStatus,
 	}
 }
 

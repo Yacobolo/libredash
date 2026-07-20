@@ -71,14 +71,18 @@ for (const viewport of [
         const workspacePage = workspace.shadowRoot.querySelector('.page') as HTMLElement
         const workspaceToolbar = workspace.shadowRoot.querySelector('.toolbar') as HTMLElement
         const workspaceRecordTable = workspace.shadowRoot.querySelector('lv-record-table') as HTMLElement
-        const workspaceGlyph = workspace.shadowRoot.querySelector('.record-entity-icon') as HTMLElement
-        const workspaceDashboardGlyph = workspace.shadowRoot.querySelector('.record-icon-dashboard') as HTMLElement
+        const workspaceGlyph = workspace.shadowRoot.querySelector('.record-entity-icon') as HTMLElement | null
+        const workspaceDashboardGlyph = workspace.shadowRoot.querySelector('.record-icon-dashboard') as HTMLElement | null
         const workspaceRowActionIcon = workspace.shadowRoot.querySelector('.record-actions svg') as SVGElement
         const workspaceRowActionLink = workspace.shadowRoot.querySelector('.record-actions .record-icon-action') as HTMLElement
         const workspaceNameCell = workspace.shadowRoot.querySelector('tbody tr:first-child td:first-child') as HTMLElement
         const workspaceTypeCell = workspace.shadowRoot.querySelector('tbody tr:first-child td:nth-child(2)') as HTMLElement
+        const workspaceHeaderCell = workspace.shadowRoot.querySelector('thead th') as HTMLElement
+        const workspaceFirstRow = workspace.shadowRoot.querySelector('tbody tr:first-child') as HTMLElement
+        const workspaceSearch = workspace.shadowRoot.querySelector('.search input[type="search"]') as HTMLInputElement
+        const workspaceSearchForm = workspace.shadowRoot.querySelector('.search') as HTMLElement
         const workspaceAssetTitle = workspace.shadowRoot.querySelector('tbody tr:first-child .record-entity-label') as HTMLElement
-        const workspaceAssetDescription = workspace.shadowRoot.querySelector('tbody tr:first-child .record-entity-description') as HTMLElement
+        const workspaceAssetEntity = workspace.shadowRoot.querySelector('tbody tr:first-child .record-entity') as HTMLElement
         const nameCellRight = workspaceNameCell.getBoundingClientRect().right
         const workspacePageRect = workspacePage.getBoundingClientRect()
         const isMobile = window.innerWidth <= 720
@@ -87,20 +91,32 @@ for (const viewport of [
           workspaceHasAsset: Boolean(workspaceRecordTable && workspace.shadowRoot.querySelector('.record-entity-label')),
           workspaceTableVariant: workspaceRecordTable.getAttribute('variant'),
           workspaceTableHeaders: Array.from(workspaceRecordTable.querySelectorAll('thead th button span:first-child')).map((header) => header.textContent?.trim()),
+          workspaceTableMinWidth: getComputedStyle(workspaceRecordTable.querySelector('table') as HTMLElement).minWidth,
+          workspaceRowActionCounts: Array.from(workspaceRecordTable.querySelectorAll('tbody tr')).map((row) => row.querySelectorAll('.record-icon-action').length),
           workspaceTableHeaderBackground: getComputedStyle(workspaceRecordTable.querySelector('thead th') as HTMLElement).backgroundColor,
           workspaceHasAccess: Boolean(workspace.shadowRoot.querySelector('lv-workspace-access-control')),
           workspaceIsStyled: getComputedStyle(workspacePage).paddingTop !== '0px',
           workspacePageCentered: isMobile || Math.abs((workspacePageRect.left + workspacePageRect.width / 2) - window.innerWidth / 2) <= 1,
           workspacePageConstrained: isMobile || Math.round(workspacePageRect.width) < window.innerWidth,
           workspaceToolbarDisplay: getComputedStyle(workspaceToolbar).display,
-          workspaceGlyphText: workspaceGlyph.textContent?.trim(),
-          workspaceGlyphBackground: getComputedStyle(workspaceGlyph).backgroundColor,
-          workspaceGlyphHasIcon: Boolean(workspaceGlyph.querySelector('svg')),
-          workspaceDashboardGlyphBorderColor: getComputedStyle(workspaceDashboardGlyph).borderTopColor,
+          workspaceHasGlyphs: Boolean(workspace.shadowRoot.querySelector('.record-entity-icon')),
+          workspaceHasDescriptions: Boolean(workspace.shadowRoot.querySelector('.record-entity-description')),
+          workspaceNamesUseIconTrack: Array.from(workspace.shadowRoot.querySelectorAll('.record-entity')).every((entity) => !entity.classList.contains('record-entity-no-icon')),
+          workspaceGlyphHasIcon: Boolean(workspaceGlyph?.querySelector('svg')),
+          workspaceGlyphBackground: workspaceGlyph ? getComputedStyle(workspaceGlyph).backgroundColor : '',
+          workspaceDashboardGlyphBorderColor: workspaceDashboardGlyph ? getComputedStyle(workspaceDashboardGlyph).borderTopColor : '',
           workspaceRowActionIconWidth: getComputedStyle(workspaceRowActionIcon).width,
           workspaceRowActionBorderColor: getComputedStyle(workspaceRowActionLink).borderTopColor,
+          workspaceSearchFontSize: getComputedStyle(workspaceSearch).fontSize,
+          workspaceSearchHeight: Math.round(workspaceSearch.getBoundingClientRect().height),
+          workspaceSearchSpansToolbar: Math.abs(workspaceSearchForm.getBoundingClientRect().width - workspaceToolbar.getBoundingClientRect().width) <= 1,
+          workspaceHeaderFontSize: getComputedStyle(workspaceHeaderCell).fontSize,
+          workspaceCellFontSize: getComputedStyle(workspaceTypeCell).fontSize,
+          workspaceTitleFontSize: getComputedStyle(workspaceAssetTitle).fontSize,
+          workspaceTitleFontWeight: getComputedStyle(workspaceAssetTitle).fontWeight,
+          workspaceAssetVerticalAlignment: getComputedStyle(workspaceAssetEntity).alignItems,
+          workspaceRowHeight: Math.round(workspaceFirstRow.getBoundingClientRect().height),
           workspaceTitleFitsNameColumn: workspaceAssetTitle.getBoundingClientRect().right <= nameCellRight,
-          workspaceDescriptionFitsNameColumn: workspaceAssetDescription.getBoundingClientRect().right <= nameCellRight,
         }
       })
 
@@ -108,21 +124,33 @@ for (const viewport of [
         workspaceTitle: 'LeapView Workspace',
         workspaceHasAsset: true,
         workspaceTableVariant: 'primary',
-        workspaceTableHeaders: ['Name', 'Type', 'Key', 'Actions'],
+        workspaceTableHeaders: ['Name', 'Type', 'Actions'],
+        workspaceTableMinWidth: '640px',
+        workspaceRowActionCounts: [1, 2],
         workspaceTableHeaderBackground: 'rgb(246, 248, 250)',
         workspaceHasAccess: true,
         workspaceIsStyled: true,
         workspacePageCentered: true,
         workspacePageConstrained: true,
         workspaceToolbarDisplay: 'grid',
-        workspaceGlyphText: '',
-        workspaceGlyphBackground: 'rgb(221, 244, 255)',
+        workspaceHasGlyphs: true,
+        workspaceHasDescriptions: false,
+        workspaceNamesUseIconTrack: true,
         workspaceGlyphHasIcon: true,
+        workspaceGlyphBackground: 'rgb(221, 244, 255)',
         workspaceDashboardGlyphBorderColor: 'rgb(210, 191, 255)',
         workspaceRowActionIconWidth: '16px',
         workspaceRowActionBorderColor: 'rgba(0, 0, 0, 0)',
+        workspaceSearchFontSize: '14px',
+        workspaceSearchHeight: 32,
+        workspaceSearchSpansToolbar: true,
+        workspaceHeaderFontSize: '12px',
+        workspaceCellFontSize: '12px',
+        workspaceTitleFontSize: '12px',
+        workspaceTitleFontWeight: '600',
+        workspaceAssetVerticalAlignment: 'center',
+        workspaceRowHeight: 47,
         workspaceTitleFitsNameColumn: true,
-        workspaceDescriptionFitsNameColumn: true,
       })
 
       await page.goto(`${baseURL}/connections`)
@@ -197,50 +225,65 @@ for (const viewport of [
   })
 }
 
-test('workspace catalog cards keep Open links visible with long descriptions', async () => {
-  const page = await browser.newPage({ viewport: { width: 1420, height: 1155 } })
-  try {
-    await page.goto(baseURL)
-    await page.waitForFunction(() => customElements.get('lv-workspace-page'))
-    await page.evaluate(async () => {
-      const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
-      mergePatch({ page: {
-        kind: 'workspace',
-        title: 'Workspaces',
-        description: 'View published BI workspaces.',
-        cards: [
-          { id: 'operations', title: 'Operations Workspace', description: 'Fulfillment and delivery analysis.', href: '/workspaces/operations', deploymentLabel: 'Serving' },
-          { id: 'sales', title: 'Sales Workspace', description: 'Revenue, orders, and product category analysis.', href: '/workspaces/sales', deploymentLabel: 'Serving' },
-          { id: 'visuals', title: 'Visuals Workspace', description: 'Developer QA workspace for exhaustive dashboard visual and table renderer coverage.', href: '/workspaces/visuals', deploymentLabel: 'Serving' },
-        ],
-      } })
-    })
-    await page.locator('lv-workspace-page').evaluate((element: any) => element.updateComplete)
+for (const viewport of [
+  { name: 'compact desktop', width: 706, height: 793 },
+  { name: 'mobile', width: 390, height: 820 },
+]) {
+  test(`workspace catalog renders compact full-width rows on ${viewport.name}`, async () => {
+    const page = await browser.newPage({ viewport })
+    try {
+      await page.goto(baseURL)
+      await page.waitForFunction(() => customElements.get('lv-workspace-page'))
+      await page.evaluate(async () => {
+        const { mergePatch } = await import('/static/vendor/datastar-1.0.2.js?v=dev') as any
+        mergePatch({ page: {
+          kind: 'workspace',
+          title: 'Workspaces',
+          description: 'View published BI workspaces.',
+          workspaces: [
+            { id: 'operations', title: 'Operations Workspace', description: 'Fulfillment and delivery analysis.', href: '/workspaces/operations' },
+            { id: 'sales', title: 'Sales Workspace', description: 'Revenue, orders, and product category analysis.', href: '/workspaces/sales' },
+            { id: 'visuals', title: 'Visuals Workspace', description: 'Developer QA workspace for exhaustive dashboard visual and table renderer coverage.', href: '/workspaces/visuals' },
+          ],
+        } })
+      })
+      await page.locator('lv-workspace-page').evaluate((element: any) => element.updateComplete)
 
-    const state = await page.locator('lv-workspace-page').evaluate((element: any) => {
-      const cards = Array.from(element.shadowRoot.querySelectorAll('article.card')) as HTMLElement[]
-      const visualCard = cards[2]
-      const open = visualCard.querySelector('a.primary-link') as HTMLAnchorElement
-      const cardRect = visualCard.getBoundingClientRect()
-      const openRect = open.getBoundingClientRect()
-      return {
-        href: open.getAttribute('href'),
-        text: open.textContent?.trim(),
-        display: getComputedStyle(open).display,
-        visibleWithinCard: openRect.bottom <= cardRect.bottom && openRect.top >= cardRect.top,
-      }
-    })
+      const state = await page.locator('lv-workspace-page').evaluate((element: any) => {
+        const list = element.shadowRoot.querySelector('.workspace-list') as HTMLElement
+        const rows = Array.from(element.shadowRoot.querySelectorAll('a.workspace-row')) as HTMLAnchorElement[]
+        const listRect = list.getBoundingClientRect()
+        return {
+          rowCount: rows.length,
+          hrefs: rows.map((row) => row.getAttribute('href')),
+          titles: rows.map((row) => row.querySelector('.workspace-title')?.textContent?.trim()),
+          hasStatuses: rows.some((row) => Boolean(row.querySelector('.workspace-status'))),
+          hasIcons: rows.every((row) => Boolean(row.querySelector('.workspace-icon svg'))),
+          hasChevrons: rows.every((row) => Boolean(row.querySelector('.workspace-chevron svg'))),
+          fullWidth: rows.every((row) => Math.abs(row.getBoundingClientRect().width - listRect.width) <= 1),
+          maxRowHeight: Math.max(...rows.map((row) => Math.round(row.getBoundingClientRect().height))),
+          totalListHeight: Math.round(listRect.height),
+          hasOpenButton: Boolean(element.shadowRoot.querySelector('.primary-link')),
+        }
+      })
 
-    expect(state).toEqual({
-      href: '/workspaces/visuals',
-      text: 'Open',
-      display: 'grid',
-      visibleWithinCard: true,
-    })
-  } finally {
-    await page.close()
-  }
-})
+      expect(state).toEqual({
+        rowCount: 3,
+        hrefs: ['/workspaces/operations', '/workspaces/sales', '/workspaces/visuals'],
+        titles: ['Operations Workspace', 'Sales Workspace', 'Visuals Workspace'],
+        hasStatuses: false,
+        hasIcons: true,
+        hasChevrons: true,
+        fullWidth: true,
+        maxRowHeight: 72,
+        totalListHeight: 216,
+        hasOpenButton: false,
+      })
+    } finally {
+      await page.close()
+    }
+  })
+}
 
 test('workspace asset search filters the current asset rows', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
@@ -262,9 +305,14 @@ test('workspace asset search filters the current asset rows', async () => {
       input.focus()
       const focusedStyle = getComputedStyle(input)
       const after = Array.from(root.querySelectorAll('.record-entity-label')).map((link) => link.textContent?.trim())
+      input.value = 'olist'
+      input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
+      await workspace.updateComplete
+      const afterKeySearch = Array.from(root.querySelectorAll('.record-entity-label')).map((link) => link.textContent?.trim())
       return {
         before,
         after,
+        afterKeySearch,
         focusedBorderColor: focusedStyle.borderTopColor,
         focusedOutlineStyle: focusedStyle.outlineStyle,
         hasSubmitButton: Boolean(root.querySelector('.toolbar .search button[type="submit"]')),
@@ -275,6 +323,7 @@ test('workspace asset search filters the current asset rows', async () => {
 
     expect(state.before).toEqual(['Executive Sales Dashboard', 'Customer Segments'])
     expect(state.after).toEqual(['Customer Segments'])
+    expect(state.afterKeySearch).toEqual(['Executive Sales Dashboard'])
     expect(state.focusedBorderColor).toBe('rgb(9, 105, 218)')
     expect(state.focusedOutlineStyle).toBe('solid')
     expect(state.hasSubmitButton).toBe(false)
@@ -285,7 +334,7 @@ test('workspace asset search filters the current asset rows', async () => {
   }
 })
 
-test('workspace access modal normalizes Go-shaped access signals', async () => {
+test('workspace access drawer selects a role before searching and adds each result directly', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 820 } })
   try {
     await page.goto(baseURL)
@@ -295,33 +344,93 @@ test('workspace access modal normalizes Go-shaped access signals', async () => {
     const state = await page.evaluate(async () => {
       const workspace = document.querySelector('lv-workspace-page') as any
       const accessControl = workspace.shadowRoot.querySelector('lv-workspace-access-control') as any
+      const searchEvents: unknown[] = []
+      const upsertEvents: unknown[] = []
+      const removeEvents: unknown[] = []
+      accessControl.addEventListener('lv-workspace-access-search', (event: CustomEvent) => searchEvents.push(event.detail))
+      accessControl.addEventListener('lv-workspace-access-upsert', (event: CustomEvent) => upsertEvents.push(event.detail))
+      accessControl.addEventListener('lv-workspace-access-remove', (event: CustomEvent) => removeEvents.push(event.detail))
       accessControl.shadowRoot.querySelector('.trigger').click()
       await accessControl.updateComplete
-      const dialog = accessControl.shadowRoot.querySelector('[role="dialog"]')
-      const roleOptions = Array.from(accessControl.shadowRoot.querySelectorAll('.composer-role option')).map((option) => ({
+      const drawer = accessControl.shadowRoot.querySelector('lv-drawer') as any
+      const dialog = drawer?.shadowRoot?.querySelector('[role="dialog"]')
+      const rolePicker = accessControl.shadowRoot.querySelector('.assignment-role') as HTMLSelectElement
+      const search = accessControl.shadowRoot.querySelector('.access-search input') as HTMLInputElement
+      const rolePrecedesSearch = Boolean(rolePicker.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING)
+      const searchDisabledBeforeRole = search.disabled
+      const roleOptions = Array.from(rolePicker.options).map((option) => ({
         value: (option as HTMLOptionElement).value,
         label: option.textContent?.trim(),
       }))
+      rolePicker.value = 'data_deployer'
+      rolePicker.dispatchEvent(new Event('change', { bubbles: true, composed: true }))
+      await accessControl.updateComplete
+      search.value = 'finance'
+      search.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      const candidates = Array.from(accessControl.shadowRoot.querySelectorAll<HTMLElement>('.candidate'))
+      const candidateTypes = candidates.map((candidate) => candidate.dataset.subjectType)
+      const addButtons = Array.from(accessControl.shadowRoot.querySelectorAll<HTMLButtonElement>('.candidate-add'))
+      addButtons[0]?.click()
+      accessControl.shadowRoot.querySelector<HTMLButtonElement>('button[aria-label="Remove Operations Group"]')?.click()
       const rowRole = accessControl.shadowRoot.querySelector('.row select') as HTMLSelectElement | null
       return {
+        hasDrawer: Boolean(drawer),
         hasDialog: Boolean(dialog),
+        modal: dialog?.getAttribute('aria-modal'),
         title: accessControl.shadowRoot.querySelector('.subtitle')?.textContent?.trim(),
+        hasSubjectTypePicker: Boolean(accessControl.shadowRoot.querySelector('.composer-subject-type')),
+        rolePrecedesSearch,
+        searchDisabledBeforeRole,
+        searchDisabledAfterRole: search.disabled,
+        searchPlaceholder: search.placeholder,
+        searchEvents,
+        candidateTypes,
+        candidateLabels: candidates.map((candidate) => candidate.textContent?.replace(/\s+/g, ' ').trim()),
+        addButtonLabels: addButtons.map((button) => button.getAttribute('aria-label')),
+        hasSelectedSubject: Boolean(accessControl.shadowRoot.querySelector('.selected-subject')),
         roleOptions,
+        upsertEvents,
+        removeEvents,
         rowRoleValue: rowRole?.value,
         principal: accessControl.shadowRoot.querySelector('.name')?.textContent?.trim(),
       }
     })
 
-	expect(state).toEqual({
-		hasDialog: false,
-		title: 'LeapView Workspace roles apply to every published asset in this workspace.',
-		roleOptions: [
-			{ value: 'principal', label: 'User' },
-			{ value: 'group', label: 'Group' },
-			{ value: 'service_principal', label: 'Service principal' },
-			{ value: 'viewer', label: 'Viewer' },
-			{ value: 'workspace_admin', label: 'Workspace Admin' },
-		],
+    expect(state).toEqual({
+      hasDrawer: true,
+      hasDialog: true,
+      modal: 'true',
+      title: 'LeapView Workspace roles apply to every published asset in this workspace.',
+      hasSubjectTypePicker: false,
+      rolePrecedesSearch: true,
+      searchDisabledBeforeRole: true,
+      searchDisabledAfterRole: false,
+      searchPlaceholder: 'Search people and groups...',
+      searchEvents: [{ search: 'finance' }],
+      candidateTypes: ['principal', 'group'],
+      candidateLabels: ['Ana Analyst ana@example.com', 'Analytics Group'],
+      addButtonLabels: ['Add Ana Analyst as Data Deployer', 'Add Analytics as Data Deployer'],
+      hasSelectedSubject: false,
+      roleOptions: [
+        { value: '', label: 'Select a role' },
+        { value: 'viewer', label: 'Viewer' },
+        { value: 'workspace_admin', label: 'Workspace Admin' },
+        { value: 'data_deployer', label: 'Data Deployer' },
+      ],
+      upsertEvents: [{
+        email: '',
+        role: 'data_deployer',
+        privilege: '',
+        subjectType: 'principal',
+        subjectId: 'principal_ana',
+      }],
+      removeEvents: [{
+        principalId: '',
+        bindingId: 'rolebinding_operations',
+        subjectType: 'group',
+        subjectId: 'group_operations',
+      }],
       rowRoleValue: 'viewer',
       principal: 'analyst@example.com',
     })
@@ -591,17 +700,34 @@ function testDocument(root: 'workspace' | 'connections' | 'asset'): string {
   }
   const access = {
     workspace: { ID: 'leapview', Title: 'LeapView Workspace' },
-    roles: [{ Name: 'viewer' }, { Name: 'workspace_admin' }],
+    roles: [{ Name: 'viewer' }, { Name: 'workspace_admin' }, { Name: 'data_deployer' }],
     bindings: [{
+      ID: 'rolebinding_analyst',
+      SubjectType: 'principal',
+      SubjectID: 'principal:analyst@example.com',
       PrincipalID: 'principal:analyst@example.com',
       Email: 'analyst@example.com',
       DisplayName: '',
       Role: 'viewer',
+    }, {
+      ID: 'rolebinding_operations',
+      SubjectType: 'group',
+      SubjectID: 'group_operations',
+      PrincipalID: '',
+      GroupID: 'group_operations',
+      Email: '',
+      GroupName: 'Operations Group',
+      Role: 'viewer',
     }],
+    candidates: [
+      { subjectType: 'principal', subjectId: 'principal_ana', label: 'Ana Analyst', detail: 'ana@example.com' },
+      { subjectType: 'group', subjectId: 'group_analytics', label: 'Analytics', detail: 'Group' },
+    ],
     canManage: true,
     status: { loading: false, error: '', message: '' },
     command: { email: '', role: '', principalId: '' },
-    search: '',
+    search: 'ana',
+    searchStatus: { loading: false, error: '' },
   }
   const route = root === 'connections'
     ? { signals: { page: connectionsPage }, element: '<lv-connections-page></lv-connections-page>' }
@@ -614,7 +740,7 @@ function testDocument(root: 'workspace' | 'connections' | 'asset'): string {
       <head>
         <style>
           html, body { margin: 0; min-height: 100%; }
-          body { --fontStack-system: system-ui; --lv-bg-app: #f6f8fa; --lv-bg-panel: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-control: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-link: #0969da; --lv-accent: #0969da; --lv-accent-fg: #fff; --lv-line-muted: #d8dee4; --lv-line-accent: #0969da; --lv-border-default: 1px solid #d0d7de; --lv-border-muted: 1px solid #d8dee4; --lv-border-transparent: 1px solid transparent; --lv-radius-default: 6px; --lv-radius-tight: 4px; --lv-radius-full: 999px; --lv-page-content-max-width: 72rem; --lv-workspace-detail-max-width: 72rem; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --lv-space-control: 10px; --control-medium-size: 32px; --control-xlarge-size: 40px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 14px; --lv-font-size-title-sm: 16px; --lv-font-weight-medium: 500; --lv-font-weight-strong: 600; --lv-line-height-tight: 1.2; --lv-line-height-compact: 1.3; --lv-spinner-size-md: 16px; --lv-spinner-duration: 1800ms; --lv-asset-dashboard-bg: #fbefff; --lv-asset-dashboard-accent: #8250df; --lv-asset-dashboard-border: #d2bfff; --lv-asset-semantic-model-bg: #ddf4ff; --lv-asset-semantic-model-accent: #0969da; --lv-asset-semantic-model-border: #b6e3ff; --z-index-inspector: 1000; --lv-modal-backdrop: rgb(0 0 0 / .28); }
+          body { --fontStack-system: system-ui; --lv-bg-app: #f6f8fa; --lv-bg-panel: #fff; --lv-bg-panel-muted: #f6f8fa; --lv-bg-control: #f6f8fa; --lv-bg-control-hover: #f3f4f6; --lv-fg-default: #24292f; --lv-fg-muted: #57606a; --lv-fg-link: #0969da; --lv-accent: #0969da; --lv-accent-fg: #fff; --lv-line-muted: #d8dee4; --lv-line-accent: #0969da; --lv-border-default: 1px solid #d0d7de; --lv-border-muted: 1px solid #d8dee4; --lv-border-transparent: 1px solid transparent; --lv-radius-default: 6px; --lv-radius-tight: 4px; --lv-radius-full: 999px; --lv-page-content-max-width: 72rem; --lv-workspace-detail-max-width: 72rem; --base-size-4: 4px; --base-size-6: 6px; --base-size-8: 8px; --base-size-10: 10px; --base-size-12: 12px; --base-size-16: 16px; --base-size-20: 20px; --base-size-24: 24px; --lv-space-control: 10px; --control-medium-size: 32px; --control-xlarge-size: 40px; --lv-font-size-caption: 12px; --lv-font-size-body-sm: 12px; --lv-font-size-body-md: 14px; --lv-font-size-title-sm: 16px; --lv-font-weight-regular: 400; --lv-font-weight-medium: 500; --lv-font-weight-strong: 600; --lv-line-height-tight: 1.2; --lv-line-height-compact: 1.3; --lv-line-height-normal: 1.5; --lv-spinner-size-md: 16px; --lv-spinner-duration: 1800ms; --lv-asset-dashboard-bg: #fbefff; --lv-asset-dashboard-accent: #8250df; --lv-asset-dashboard-border: #d2bfff; --lv-asset-semantic-model-bg: #ddf4ff; --lv-asset-semantic-model-accent: #0969da; --lv-asset-semantic-model-border: #b6e3ff; --z-index-inspector: 1000; --lv-modal-backdrop: rgb(0 0 0 / .28); }
           lv-workspace-page, lv-connections-page, lv-workspace-asset-page { display: block; min-height: 720px; }
         </style>
       </head>

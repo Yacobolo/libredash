@@ -14,7 +14,9 @@ const focusableSelector = [
 
 class LeapViewDrawer extends LitElement {
   @property({ type: Boolean, reflect: true }) open = false
+  @property({ type: Boolean, reflect: true }) modal = true
   @property() label = 'Drawer'
+  @property({ reflect: true }) size: 'default' | 'wide' = 'default'
 
   static styles = css`
     :host {
@@ -35,6 +37,15 @@ class LeapViewDrawer extends LitElement {
       background: var(--lv-modal-backdrop);
     }
 
+    .overlay-nonmodal {
+      background: transparent;
+      pointer-events: none;
+    }
+
+    .overlay-nonmodal .drawer {
+      pointer-events: auto;
+    }
+
     .drawer {
       display: grid;
       width: min(30rem, 100vw);
@@ -45,7 +56,11 @@ class LeapViewDrawer extends LitElement {
       border-left: var(--lv-border-default);
       background: var(--lv-bg-panel);
       box-shadow: var(--lv-shadow-floating-lg);
-      animation: drawer-slide-in var(--lv-transition-fast) ease;
+      animation: drawer-slide-in var(--lv-transition-fast);
+    }
+
+    :host([size='wide']) .drawer {
+      width: min(34rem, 100vw);
     }
 
     .header {
@@ -110,6 +125,12 @@ class LeapViewDrawer extends LitElement {
       }
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      .drawer {
+        animation-duration: 1ms;
+      }
+    }
+
     @keyframes drawer-slide-in {
       from {
         transform: translateX(var(--base-size-16));
@@ -122,14 +143,24 @@ class LeapViewDrawer extends LitElement {
     }
   `
 
+  connectedCallback(): void {
+    super.connectedCallback()
+    window.addEventListener('keydown', this.handleWindowKeyDown)
+  }
+
+  disconnectedCallback(): void {
+    window.removeEventListener('keydown', this.handleWindowKeyDown)
+    super.disconnectedCallback()
+  }
+
   render() {
     if (!this.open) return nothing
     return html`
-      <div class="overlay" @click=${this.handleOverlayClick}>
+      <div class=${this.modal ? 'overlay' : 'overlay overlay-nonmodal'} @click=${this.handleOverlayClick}>
         <aside
           class="drawer"
           role="dialog"
-          aria-modal="true"
+          aria-modal=${this.modal ? 'true' : nothing}
           aria-label=${this.label}
           @keydown=${this.handleKeyDown}
         >
@@ -161,7 +192,13 @@ class LeapViewDrawer extends LitElement {
   }
 
   private readonly handleOverlayClick = (event: Event): void => {
-    if (event.target === event.currentTarget) this.close()
+    if (this.modal && event.target === event.currentTarget) this.close()
+  }
+
+  private readonly handleWindowKeyDown = (event: KeyboardEvent): void => {
+    if (!this.open || event.defaultPrevented || event.key !== 'Escape') return
+    event.preventDefault()
+    this.close()
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
@@ -170,7 +207,7 @@ class LeapViewDrawer extends LitElement {
       this.close()
       return
     }
-    if (event.key !== 'Tab') return
+    if (event.key !== 'Tab' || !this.modal) return
     const focusable = this.focusableElements()
     if (focusable.length === 0) return
     const first = focusable[0]

@@ -1,12 +1,13 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { state } from 'lit/decorators.js'
-import { CheckCircle2, Clock3, Copy, X, XCircle } from 'lucide'
+import { CheckCircle2, Clock3, Copy, XCircle } from 'lucide'
 import type { AdminPageSignal, AdminContentSectionSignal, AdminQueryDetailSignal, AdminQueryHistoryFilters, AdminQueryHistorySignal, AdminStorageSignal, FilterMenuCommand, FilterMenuSignal, RecordTableSignal } from '../../generated/signals'
 import { DatastarLit } from '../shared/datastar-lit'
 import { lucideIcon } from '../shared/lucide-icons'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../navigation/sub-sidebar'
 import '../shared/code-block'
+import '../shared/drawer'
 import '../shared/filter-menu'
 import '../shared/record-table'
 import './agent-tools'
@@ -374,35 +375,11 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
       opacity: 0.64;
     }
 
-    .query-detail-drawer {
-      position: fixed;
-      z-index: 31;
-      inset: 0 0 0 auto;
-      display: grid;
-      width: min(34rem, 100vw);
-      grid-template-rows: auto minmax(0, 1fr);
-      border-left: var(--lv-border-muted);
-      background: var(--lv-bg-panel);
-      box-shadow: var(--lv-shadow-floating-lg);
-      color: var(--lv-fg-default);
-      animation: query-detail-slide-in 180ms cubic-bezier(0.2, 0, 0, 1) both;
-    }
-
-    .query-detail-header {
-      border-bottom: var(--lv-border-muted);
-      padding: var(--base-size-16);
-    }
-
-    .query-detail-header-row,
     .query-detail-copy-row {
       display: flex;
       min-width: 0;
       align-items: center;
       gap: var(--base-size-8);
-    }
-
-    .query-detail-header-row {
-      justify-content: space-between;
     }
 
     .query-detail-status {
@@ -436,7 +413,6 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
       color: var(--lv-fg-muted);
     }
 
-    .query-detail-close,
     .query-detail-copy {
       display: inline-flex;
       align-items: center;
@@ -449,11 +425,6 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
       font: inherit;
     }
 
-    .query-detail-close {
-      width: var(--lv-control-medium);
-      height: var(--lv-control-medium);
-    }
-
     .query-detail-copy {
       width: var(--base-size-20);
       height: var(--base-size-20);
@@ -461,8 +432,6 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
       padding: 0;
     }
 
-    .query-detail-close:hover,
-    .query-detail-close:focus-visible,
     .query-detail-copy:hover,
     .query-detail-copy:focus-visible {
       border-color: var(--lv-line-muted);
@@ -476,8 +445,6 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
       align-content: start;
       gap: var(--base-size-16);
       min-width: 0;
-      overflow: auto;
-      padding: var(--base-size-16);
     }
 
     .query-detail-section {
@@ -552,30 +519,6 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
       cursor: pointer;
     }
 
-    @keyframes query-detail-slide-in {
-      from {
-        transform: translateX(100%);
-      }
-      to {
-        transform: translateX(0);
-      }
-    }
-
-    @keyframes query-detail-mobile-slide-in {
-      from {
-        transform: translateY(100%);
-      }
-      to {
-        transform: translateY(0);
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      .query-detail-drawer {
-        animation-duration: 1ms;
-      }
-    }
-
     @media (max-width: 640px) {
       .route {
         grid-template-columns: 1fr;
@@ -598,26 +541,10 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
       .local-user-action {
         width: 100%;
       }
-
-      .query-detail-drawer {
-        inset: auto 0 0 0;
-        width: 100vw;
-        height: min(88svh, 44rem);
-        border-top: var(--lv-border-muted);
-        border-left: 0;
-        box-shadow: var(--lv-shadow-floating-lg);
-        animation-name: query-detail-mobile-slide-in;
-      }
     }
   `
 
-  connectedCallback(): void {
-    super.connectedCallback()
-    window.addEventListener('keydown', this.handleWindowKeydown)
-  }
-
   disconnectedCallback(): void {
-    window.removeEventListener('keydown', this.handleWindowKeydown)
     if (this.queryFilterTimer) clearTimeout(this.queryFilterTimer)
     super.disconnectedCallback()
   }
@@ -864,27 +791,20 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
     this.emitQueryHistoryCommand('close_detail', this.currentQueryHistory().filters, '')
   }
 
-  private handleWindowKeydown = (event: KeyboardEvent) => {
-    const detail = this.queryDetail ?? emptyQueryDetail
-    if (event.key !== 'Escape' || (!detail.eventId && !detail.loading && !detail.error)) return
-    this.closeQueryDetail()
-  }
-
   private renderQueryDetail(event: AdminQueryDetailSignal) {
     const statusTone = queryEventStatusTone(event.status ?? '')
     return html`
-      <aside class="query-detail-drawer" role="dialog" aria-modal="true" aria-label="Query event detail">
-        <header class="query-detail-header">
-          <div class="query-detail-header-row">
-            <div class=${`query-detail-status query-detail-status-${statusTone}`}>
-              ${lucideIcon(queryEventStatusIconComponent(event.status ?? ''), { size: 16, strokeWidth: 2 })}
-              <span>${event.loading ? 'Loading' : event.statusLabel || queryEventStatusLabel(event.status ?? '')}</span>
-            </div>
-            <button class="query-detail-close" type="button" aria-label="Close query details" @click=${this.closeQueryDetail}>
-              ${lucideIcon(X, { size: 18, strokeWidth: 2 })}
-            </button>
-          </div>
-        </header>
+      <lv-drawer
+        open
+        size="wide"
+        label="Query event detail"
+        .modal=${false}
+        @lv-drawer-close=${this.closeQueryDetail}
+      >
+        <div slot="title" class=${`query-detail-status query-detail-status-${statusTone}`}>
+          ${lucideIcon(queryEventStatusIconComponent(event.status ?? ''), { size: 16, strokeWidth: 2 })}
+          <span>${event.loading ? 'Loading' : event.statusLabel || queryEventStatusLabel(event.status ?? '')}</span>
+        </div>
         <div class="query-detail-body">
           ${event.loading ? html`<section class="query-detail-section"><p class="detail">Loading query details...</p></section>` : nothing}
           ${event.error && !event.status ? html`<section class="query-detail-section"><pre class="query-detail-code query-detail-error"><code>${event.error}</code></pre></section>` : nothing}
@@ -939,7 +859,7 @@ class LeapViewAdminPage extends DatastarLit(LitElement) {
             </details>
           ` : nothing}
         </div>
-      </aside>
+      </lv-drawer>
     `
   }
 

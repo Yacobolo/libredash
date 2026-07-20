@@ -1384,11 +1384,12 @@ func TestWorkspaceAccessCommandUpsertsAndPatchesSignals(t *testing.T) {
 	store := testStore(t)
 	ctx := context.Background()
 	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", "owner")
+	analyst := testPrincipal(t, ctx, store, "analyst@example.com", "Analyst", "")
 	token := testAPIToken(t, ctx, store, owner.ID, "test")
 	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
 	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
 
-	signals := `{"workspaceAccess":{"command":{"email":"analyst@example.com","role":"viewer"}}}`
+	signals := `{"workspaceAccess":{"command":{"email":"","role":"data_deployer","subjectType":"principal","subjectId":"` + analyst.ID + `"}}}`
 	req := httptest.NewRequest(http.MethodPost, "/workspaces/test/access/upsert", bytes.NewBufferString(signals))
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -1411,11 +1412,25 @@ func TestWorkspaceAccessCommandUpsertsAndPatchesSignals(t *testing.T) {
 	if listRec.Code != http.StatusOK {
 		t.Fatalf("list status = %d body=%s", listRec.Code, listRec.Body.String())
 	}
-	if !strings.Contains(listRec.Body.String(), `"email":"analyst@example.com"`) {
+	if !strings.Contains(listRec.Body.String(), `"email":"analyst@example.com"`) || !strings.Contains(listRec.Body.String(), `"role":"data_deployer"`) {
 		t.Fatalf("role binding missing after command:\n%s", listRec.Body.String())
 	}
 
-	removeSignals := `{"workspaceAccess":{"command":{"principalId":"` + access.PrincipalIDForEmail("analyst@example.com") + `"}}}`
+	bindings, err := testAccessRepository(store).ListRoleBindings(ctx, "test")
+	if err != nil {
+		t.Fatalf("list role bindings: %v", err)
+	}
+	bindingID := ""
+	for _, binding := range bindings {
+		if binding.SubjectType == access.SubjectPrincipal && binding.SubjectID == analyst.ID {
+			bindingID = binding.ID
+			break
+		}
+	}
+	if bindingID == "" {
+		t.Fatalf("analyst role binding missing: %#v", bindings)
+	}
+	removeSignals := `{"workspaceAccess":{"command":{"bindingId":"` + bindingID + `"}}}`
 	removeReq := httptest.NewRequest(http.MethodPost, "/workspaces/test/access/remove", bytes.NewBufferString(removeSignals))
 	removeReq.Header.Set("Authorization", "Bearer "+token)
 	removeRec := httptest.NewRecorder()
@@ -1434,6 +1449,53 @@ func TestWorkspaceAccessCommandUpsertsAndPatchesSignals(t *testing.T) {
 	server.Routes().ServeHTTP(removedListRec, removedListReq)
 	if strings.Contains(removedListRec.Body.String(), `"email":"analyst@example.com"`) {
 		t.Fatalf("role binding remained after remove command:\n%s", removedListRec.Body.String())
+	}
+}
+
+func TestWorkspaceAccessSearchReturnsPrincipalsAndGroups(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	owner := testPrincipal(t, ctx, store, "owner@example.com", "Owner", "owner")
+	financePrincipal := testPrincipal(t, ctx, store, "finance@example.com", "Finance Analyst", "")
+	repo := testAccessRepository(store)
+	if _, err := repo.UpsertGroup(ctx, access.GroupInput{ID: "group_finance", WorkspaceID: "test", Name: "Finance Team"}); err != nil {
+		t.Fatalf("seed group: %v", err)
+	}
+	if _, err := repo.CreateServicePrincipal(ctx, access.ServicePrincipalInput{ID: "sp_finance", DisplayName: "Finance Bot"}); err != nil {
+		t.Fatalf("seed service principal: %v", err)
+	}
+	token := testAPIToken(t, ctx, store, owner.ID, "test")
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(fakeMetrics{}, Options{Store: store, Auth: auth, ArtifactDir: t.TempDir(), DefaultWorkspaceID: "test"})
+
+	signals := `{"workspaceAccess":{"search":"finance"}}`
+	req := httptest.NewRequest(http.MethodGet, "/workspaces/test/access/search", nil)
+	query := req.URL.Query()
+	query.Set("datastar", signals)
+	req.URL.RawQuery = query.Encode()
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("search status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"event: datastar-patch-signals",
+		`"search":"finance"`,
+		`"subjectType":"principal"`,
+		`"subjectId":"` + financePrincipal.ID + `"`,
+		`"label":"Finance Analyst"`,
+		`"subjectType":"group"`,
+		`"subjectId":"group_finance"`,
+		`"label":"Finance Team"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("workspace access search did not patch %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "Finance Bot") || strings.Contains(body, `"subjectType":"service_principal"`) {
+		t.Fatalf("workspace access search included a service principal:\n%s", body)
 	}
 }
 

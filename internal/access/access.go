@@ -608,6 +608,7 @@ type AuditEvent struct {
 type Repository interface {
 	PrincipalByID(ctx context.Context, id string) (Principal, error)
 	ListPrincipals(ctx context.Context, filter PrincipalFilter) ([]Principal, error)
+	SearchPrincipals(ctx context.Context, query string, limit int) ([]Principal, error)
 	UpsertPrincipal(ctx context.Context, input PrincipalInput) (Principal, error)
 	CreateLocalUser(ctx context.Context, input LocalUserInput) (LocalPasswordReset, error)
 	VerifyLocalPassword(ctx context.Context, email, password string) (Principal, LocalCredential, error)
@@ -655,6 +656,7 @@ type Repository interface {
 	DisableSCIMUser(ctx context.Context, principalID string) (SCIMUser, error)
 	UpsertGroup(ctx context.Context, input GroupInput) (Group, error)
 	ListGroups(ctx context.Context, workspaceID string) ([]Group, error)
+	SearchGroups(ctx context.Context, workspaceID, query string, limit int) ([]Group, error)
 	ListAllGroups(ctx context.Context) ([]Group, error)
 	DeleteGroup(ctx context.Context, workspaceID, groupID string) error
 	AddGroupMember(ctx context.Context, workspaceID, groupID, principalID string) error

@@ -1270,14 +1270,29 @@ model WorkspaceAccessCommand {
   `subjectType`: string;
 }
 
+model WorkspaceAccessCandidate {
+  `detail`: string;
+  `label`: string;
+  `subjectId`: string;
+  `subjectType`: string;
+}
+
+model WorkspaceAccessSearchStatus {
+  `error`: string;
+  `loading`: boolean;
+}
+
 model WorkspaceAccessResponse {
   `bindings`: unknown[];
+  `candidates`: WorkspaceAccessCandidate[];
   `canManage`: boolean;
   `mode`?: string;
   `objectId`?: string;
   `objectTitle`?: string;
   `objectType`?: string;
   `roles`: unknown[];
+  `search`: string;
+  `searchStatus`: WorkspaceAccessSearchStatus;
   `status`: WorkspaceAccessStatus;
   `workspace`: unknown;
 }
@@ -1286,6 +1301,7 @@ model WorkspaceAccessResponse {
 @apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspaceAccessSignal {
   `bindings`: unknown[];
+  `candidates`: WorkspaceAccessCandidate[];
   `canManage`: boolean;
   `command`: WorkspaceAccessCommand;
   `mode`?: string;
@@ -1294,6 +1310,7 @@ model WorkspaceAccessSignal {
   `objectType`?: string;
   `roles`: unknown[];
   `search`: string;
+  `searchStatus`: WorkspaceAccessSearchStatus;
   `status`: WorkspaceAccessStatus;
   `workspace`: unknown;
 }
@@ -1412,11 +1429,10 @@ model WorkspaceBreadcrumbSignal {
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })
 @apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
-model WorkspaceCardSignal {
+model WorkspaceCatalogItemSignal {
   `description`: string;
   `href`: string;
   `id`: string;
-  `servingLabel`: string;
   `title`: string;
 }
 
@@ -1449,12 +1465,12 @@ model WorkspacePageEnvelope {
 @apigen.`metadata`(#{ `x-leapview-contract-role`: "signal", `x-leapview-surface`: "workspace" })
 model WorkspacePageSignal {
   `assetList`?: WorkspaceAssetListSignal;
-  `cards`?: WorkspaceCardSignal[];
   `description`?: string;
   `environment`?: string;
   `kind`: RouteKind;
   `title`: string;
   `workspaceId`?: string;
+  `workspaces`?: WorkspaceCatalogItemSignal[];
 }
 
 @apigen.contract(#{ kind: "ui-signal", tags: #["workspace", "signal"] })

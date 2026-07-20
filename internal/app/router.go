@@ -72,6 +72,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/admin/queries", s.protected(access.PrivilegeViewAudit, adminHTTP.Queries))
 		r.Post("/admin/queries/command", s.protected(access.PrivilegeViewAudit, adminHTTP.QueryCommand))
 		r.Post("/workspaces/{workspace}/access/upsert", s.protected(access.PrivilegeManageGrants, workspaceHTTP.AccessUpsert))
+		r.Get("/workspaces/{workspace}/access/search", s.protected(access.PrivilegeManageGrants, workspaceHTTP.AccessSearch))
 		r.Post("/workspaces/{workspace}/access/remove", s.protected(access.PrivilegeManageGrants, workspaceHTTP.AccessRemove))
 		r.Post("/workspaces/{workspace}/assets/{asset}/access/upsert", s.protectedWithObjects(access.PrivilegeManageGrants, workspacehttp.AssetObjectRefs, workspaceHTTP.AccessUpsert))
 		r.Post("/workspaces/{workspace}/assets/{asset}/access/remove", s.protectedWithObjects(access.PrivilegeManageGrants, workspacehttp.AssetObjectRefs, workspaceHTTP.AccessRemove))

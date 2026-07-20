@@ -35,6 +35,25 @@ func (r *Repository) ListPrincipals(ctx context.Context, filter access.Principal
 	return out, nil
 }
 
+func (r *Repository) SearchPrincipals(ctx context.Context, query string, limit int) ([]access.Principal, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return []access.Principal{}, nil
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+	rows, err := r.q.SearchPrincipals(ctx, platformdb.SearchPrincipalsParams{Search: query, ResultLimit: int64(limit)})
+	if err != nil {
+		return nil, err
+	}
+	principals := make([]access.Principal, 0, len(rows))
+	for _, row := range rows {
+		principals = append(principals, mapPrincipal(row))
+	}
+	return principals, nil
+}
+
 func (r *Repository) principalDisabled(ctx context.Context, principalID string) (bool, error) {
 	row, err := r.q.GetPrincipal(ctx, principalID)
 	if err != nil {

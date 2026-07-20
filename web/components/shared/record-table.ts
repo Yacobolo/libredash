@@ -506,9 +506,10 @@ class RecordTable extends LitElement {
     const href = cellHref(column, value, row)
     const label = cellLabel(value)
     const description = cellDescription(value)
+    const icon = cellIcon(value)
     const content = html`
-      <span class="record-entity">
-        ${this.renderIcon(cellIcon(value), `record-entity-icon record-icon-${iconToken(cellIcon(value))}`)}
+      <span class=${icon ? 'record-entity' : 'record-entity record-entity-no-icon'}>
+        ${icon ? this.renderIcon(icon, `record-entity-icon record-icon-${iconToken(icon)}`) : nothing}
         <span class="record-entity-copy">
           <span class="record-entity-label">${label}</span>
           ${description ? html`<span class="record-entity-description">${description}</span>` : nothing}
@@ -903,7 +904,7 @@ const recordTableStyles = `
 
   lv-record-table .variant-primary .record-table th,
   lv-record-table .variant-compact .record-table th {
-    padding: var(--base-size-12) var(--base-size-16);
+    padding: var(--base-size-8) var(--base-size-12);
     background: var(--lv-bg-panel-muted);
     font-size: var(--lv-font-size-body-sm);
     font-weight: var(--lv-font-weight-strong);
@@ -922,9 +923,9 @@ const recordTableStyles = `
   }
 
   lv-record-table .variant-primary .record-table td {
-    padding: var(--base-size-12) var(--base-size-16);
-    font-size: var(--lv-font-size-body-md);
-    vertical-align: top;
+    padding: var(--base-size-6) var(--base-size-12);
+    font-size: var(--lv-font-size-body-sm);
+    vertical-align: middle;
   }
 
   lv-record-table .variant-compact .record-table td {
@@ -942,7 +943,7 @@ const recordTableStyles = `
   }
 
   lv-record-table .variant-primary .record-table tbody tr {
-    min-height: 4rem;
+    min-height: 3rem;
   }
 
   lv-record-table .record-table th.is-right,
@@ -1324,6 +1325,15 @@ const recordTableStyles = `
     gap: var(--base-size-8);
   }
 
+  lv-record-table .record-entity-no-icon {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  lv-record-table .variant-primary .record-entity {
+    align-items: center;
+  }
+
   lv-record-table .record-entity-icon,
   lv-record-table .record-button-icon {
     display: inline-flex;
@@ -1382,8 +1392,21 @@ const recordTableStyles = `
   }
 
   lv-record-table .variant-primary .record-entity-label {
-    font-size: var(--lv-font-size-title-sm);
-    line-height: var(--lv-line-height-compact);
+    overflow: hidden;
+    overflow-wrap: normal;
+    font-size: var(--lv-font-size-body-sm);
+    font-weight: var(--lv-font-weight-strong);
+    line-height: var(--lv-line-height-normal);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  lv-record-table .variant-primary .record-entity-description {
+    overflow: hidden;
+    overflow-wrap: normal;
+    line-height: var(--lv-line-height-tight);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   lv-record-table .record-entity-description {

@@ -7,6 +7,7 @@ import {
   Boxes,
   Cable,
   ChartColumn,
+  ChevronRight,
   Component,
   ExternalLink,
   FileText,
@@ -37,6 +38,7 @@ import type {
   WorkspaceTabSignal,
 } from '../../generated/signals'
 import { DatastarLit } from '../shared/datastar-lit'
+import { catalogListStyles } from '../shared/catalog-list-styles'
 import { checkSignalContract } from '../shared/signal-contract'
 import { lucideIcon } from '../shared/lucide-icons'
 import '../shared/loading-spinner'
@@ -48,10 +50,12 @@ const emptyWorkspaceAccess: WorkspaceAccessSignal = {
   workspace: {},
   roles: [],
   bindings: [],
+  candidates: [],
   canManage: false,
   status: { loading: false, error: '', message: '' },
   command: { bindingId: '', email: '', principalId: '', privilege: '', role: '', subjectId: '', subjectType: '' },
   search: '',
+  searchStatus: { loading: false, error: '' },
 }
 
 class LeapViewWorkspacePage extends DatastarLit(LitElement) {
@@ -59,7 +63,7 @@ class LeapViewWorkspacePage extends DatastarLit(LitElement) {
   private lastPageKey = ''
 
   static get styles() {
-    return workspaceStyles
+    return [catalogListStyles, workspaceStyles]
   }
 
   updated(): void {
@@ -87,7 +91,7 @@ class LeapViewWorkspacePage extends DatastarLit(LitElement) {
   render() {
     const page = this.page
     if (!page) return html`<slot></slot>`
-    if (page.cards?.length) return this.renderCatalog(page)
+    if (page.workspaces?.length) return this.renderCatalog(page)
     if (!page.assetList?.searchHref && this.workspaceAccess?.canManage) return this.renderAccessPage(page)
     return this.renderAssetList(page, 'Workspace', 'Workspace assets')
   }
@@ -96,21 +100,22 @@ class LeapViewWorkspacePage extends DatastarLit(LitElement) {
     return html`
       <section class="page catalog" aria-label="LeapView workspaces">
         ${this.renderHeader('', page.title, page.description)}
-        <div class="cards">
-          ${page.cards?.map((card) => html`
-            <article class="card">
-              <div>
-                <p class="eyebrow">Workspace</p>
-                <h2>${card.title}</h2>
-                <p class="muted">${card.description}</p>
-              </div>
-              <footer>
-                ${card.servingLabel ? html`<span>${card.servingLabel}</span>` : html`<span></span>`}
-                <a class="primary-link" href=${card.href}>${lucideIcon(ExternalLink)}<span>Open</span></a>
-              </footer>
-            </article>
+        <ul class="catalog-list workspace-list" aria-label="Published workspaces">
+          ${page.workspaces?.map((workspace) => html`
+            <li>
+              <a class="catalog-row workspace-row" href=${workspace.href}>
+                <span class="catalog-icon workspace-icon">${lucideIcon(Boxes)}</span>
+                <span class="catalog-copy workspace-copy">
+                  <span class="catalog-title workspace-title">${workspace.title}</span>
+                  <span class="catalog-description workspace-description">${workspace.description}</span>
+                </span>
+                <span class="catalog-trailing">
+                  <span class="catalog-chevron workspace-chevron">${lucideIcon(ChevronRight)}</span>
+                </span>
+              </a>
+            </li>
           `)}
-        </div>
+        </ul>
       </section>
     `
   }
@@ -353,27 +358,27 @@ function renderAssetTable(assets: WorkspaceAssetSummarySignal[], empty: string) 
   if (!assets.length) return html`<div class="panel"><div class="empty">${empty}</div></div>`
   const table: RecordTableSignal = {
     columns: [
-      { id: 'name', header: 'Name', kind: 'entity', width: '42%' },
+      { id: 'name', header: 'Name', kind: 'entity' },
       { id: 'type', header: 'Type', width: '150px' },
-      { id: 'key', header: 'Key', kind: 'code', width: '180px' },
       { id: 'actions', header: 'Actions', kind: 'actions', align: 'right', width: '104px', sortable: false } as any,
     ],
-    rows: assets.map((asset) => ({
-      name: {
-        label: asset.title,
-        description: asset.description,
-        href: asset.detailHref,
-        icon: asset.type,
-      },
-      type: asset.typeLabel,
-      key: asset.key,
-      actions: [
-        { label: 'View details', href: asset.detailHref, icon: 'details' },
-        { label: 'Open asset', href: asset.openHref, icon: 'open' },
-      ],
-    })),
+    rows: assets.map((asset) => {
+      const actions = [{ label: 'View details', href: asset.detailHref, icon: 'details' }]
+      if (asset.openHref && asset.openHref !== asset.detailHref) {
+        actions.push({ label: 'Open asset', href: asset.openHref, icon: 'open' })
+      }
+      return {
+        name: {
+          label: asset.title,
+          href: asset.detailHref,
+          icon: asset.type,
+        },
+        type: asset.typeLabel,
+        actions,
+      }
+    }),
     empty,
-    minWidth: '840px',
+    minWidth: '640px',
   }
   return html`
     <div class="panel">
@@ -641,47 +646,12 @@ const workspaceStyles = css`
     gap: var(--base-size-8);
   }
 
-  .cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 22rem));
-    gap: var(--base-size-16);
-    align-items: start;
-    justify-content: start;
-  }
-
-  .card,
   .panel {
     min-width: 0;
     overflow: hidden;
     border: var(--lv-border-muted);
     border-radius: var(--lv-radius-default);
     background: var(--lv-bg-panel);
-  }
-
-  .card {
-    display: grid;
-    min-height: 10rem;
-    grid-template-rows: 1fr auto;
-    padding: var(--base-size-16);
-  }
-
-  .card > div {
-    min-width: 0;
-  }
-
-  .card footer {
-    display: flex;
-    min-width: 0;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--base-size-12);
-    margin-top: var(--base-size-16);
-    border-top: var(--lv-border-muted);
-    padding-top: var(--base-size-12);
-    color: var(--lv-fg-muted);
-    font-size: var(--lv-font-size-caption);
-    font-weight: var(--lv-font-weight-medium);
   }
 
   .primary-link,
@@ -754,8 +724,8 @@ const workspaceStyles = css`
   .search {
     position: relative;
     display: block;
-    max-width: 34rem;
     min-width: 0;
+    width: 100%;
   }
 
   input[type='search'] {
@@ -767,6 +737,8 @@ const workspaceStyles = css`
     background: var(--lv-bg-control);
     color: var(--lv-fg-default);
     padding: 0 calc(var(--base-size-24) + var(--base-size-12)) 0 var(--base-size-12);
+    font-size: var(--lv-font-size-body-md);
+    line-height: var(--lv-line-height-compact);
   }
 
   input[type='search']:focus {

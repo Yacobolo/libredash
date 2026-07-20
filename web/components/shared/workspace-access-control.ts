@@ -1,6 +1,6 @@
 import { LitElement, css, html, nothing } from 'lit'
 import { property, state } from 'lit/decorators.js'
-import { Mail, Search, Trash2, Users } from 'lucide'
+import { Plus, Search, Trash2, UserRound, Users } from 'lucide'
 import { lucideIcon } from './lucide-icons'
 import './drawer'
 
@@ -24,10 +24,22 @@ type Binding = {
   role: string
 }
 
+type AccessCandidate = {
+  subjectType: 'principal' | 'group'
+  subjectId: string
+  label: string
+  detail: string
+}
+
 type AccessStatus = {
   loading?: boolean
   error?: string
   message?: string
+}
+
+type SearchStatus = {
+  loading?: boolean
+  error?: string
 }
 
 type WorkspaceAccess = {
@@ -38,7 +50,10 @@ type WorkspaceAccess = {
   mode?: string
   roles?: Role[]
   bindings?: Binding[]
+  candidates?: AccessCandidate[]
   canManage?: boolean
+  search?: string
+  searchStatus?: SearchStatus
   status?: AccessStatus
 }
 
@@ -46,7 +61,10 @@ type WorkspaceAccessInput = {
   workspace?: unknown
   roles?: unknown
   bindings?: unknown
+  candidates?: unknown
   canManage?: unknown
+  search?: unknown
+  searchStatus?: unknown
   status?: unknown
 }
 
@@ -63,7 +81,10 @@ type AccessCommand = {
 const emptyAccess: WorkspaceAccess = {
   roles: [],
   bindings: [],
+  candidates: [],
   canManage: false,
+  search: '',
+  searchStatus: {},
   status: {},
 }
 
@@ -73,13 +94,10 @@ class WorkspaceAccessControl extends LitElement {
   @property({ attribute: 'search' }) searchAttribute = ''
 
   @state() private open = false
-  @state() private email = ''
-  @state() private subjectType = 'principal'
-  @state() private selectedRole = 'viewer'
+  @state() private selectedRole = ''
   @state() private query = ''
 
   private previousFocus: HTMLElement | null = null
-  private searchTimer: number | null = null
 
   static styles = css`
     :host {
@@ -150,33 +168,6 @@ class WorkspaceAccessControl extends LitElement {
       line-height: var(--lv-line-height-snug);
     }
 
-    .row-action {
-      display: inline-flex;
-      width: var(--lv-control-medium);
-      height: var(--lv-control-medium);
-      flex: 0 0 auto;
-      align-items: center;
-      justify-content: center;
-      border: var(--lv-border-transparent);
-      border-radius: var(--lv-radius-default);
-      background: transparent;
-      color: var(--lv-fg-muted);
-      cursor: pointer;
-      padding: 0;
-      transition:
-        color var(--lv-transition-fast),
-        background-color var(--lv-transition-fast),
-        border-color var(--lv-transition-fast);
-    }
-
-    .row-action:hover,
-    .row-action:focus-visible {
-      border-color: var(--lv-line-muted);
-      background: var(--lv-bg-control-hover);
-      color: var(--lv-fg-default);
-      outline: 0;
-    }
-
     .drawer-body {
       display: grid;
       gap: var(--base-size-24);
@@ -225,39 +216,6 @@ class WorkspaceAccessControl extends LitElement {
       background: var(--lv-bg-control-hover);
     }
 
-    .composer {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      gap: var(--base-size-8);
-      align-items: center;
-    }
-
-    .composer-shell {
-      min-height: var(--lv-control-medium);
-      border-radius: var(--lv-radius-tight);
-      padding: var(--base-size-4) var(--base-size-6) var(--base-size-4) var(--base-size-12);
-    }
-
-    .composer-shell input {
-      flex: 1 1 12rem;
-    }
-
-    .composer-role {
-      width: auto;
-      min-width: 7rem;
-      flex: 0 0 auto;
-      border: 0;
-      border-left: var(--lv-border-muted);
-      border-radius: 0;
-      background: transparent;
-      color: var(--lv-fg-default);
-      padding-left: var(--base-size-12);
-    }
-
-    .composer-role:focus {
-      outline-offset: var(--base-size-2);
-    }
-
     input,
     select {
       min-height: var(--lv-control-medium);
@@ -272,18 +230,14 @@ class WorkspaceAccessControl extends LitElement {
       padding: 0 var(--base-size-8);
     }
 
-    .field-shell input,
-    .field-shell select {
+    .field-shell input {
       min-height: auto;
+      flex: 1 1 auto;
       border: 0;
       border-radius: 0;
       background: transparent;
       padding: 0;
       outline: 0;
-    }
-
-    .field-shell input {
-      flex: 1 1 auto;
     }
 
     input::placeholder {
@@ -293,40 +247,147 @@ class WorkspaceAccessControl extends LitElement {
     input:focus,
     select:focus {
       border-color: var(--lv-line-accent);
-      outline: 2px solid var(--lv-line-accent-muted);
+      outline: var(--lv-border-width-focus) solid var(--lv-line-accent-muted);
       outline-offset: 0;
     }
 
-    .submit {
-      min-height: var(--lv-button-height);
-      min-width: var(--base-size-80);
-      border: var(--borderWidth-default) solid var(--lv-button-accent-border-rest);
-      border-radius: var(--lv-button-radius);
-      background: var(--lv-button-accent-bg-rest);
-      color: var(--lv-button-accent-fg-rest);
-      cursor: pointer;
+    .access-search {
+      min-height: var(--lv-control-large);
+    }
+
+    .access-search input:disabled {
+      cursor: not-allowed;
+      opacity: var(--opacity-disabled);
+    }
+
+    .role-field {
+      display: grid;
+      gap: var(--base-size-6);
+    }
+
+    .assignment-role {
+      width: 100%;
+    }
+
+    .candidate-list {
+      display: grid;
+      overflow: hidden;
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
+    }
+
+    .candidate {
+      display: grid;
+      min-width: 0;
+      grid-template-columns: var(--base-size-32) minmax(0, 1fr) auto;
+      align-items: center;
+      gap: var(--lv-space-control);
+      border-bottom: var(--lv-border-muted);
+      background: transparent;
+      color: var(--lv-fg-default);
+      padding: var(--lv-space-control) var(--base-size-12);
+    }
+
+    .candidate:last-child {
+      border-bottom: 0;
+    }
+
+    .candidate:hover {
+      background: var(--lv-bg-control-hover);
+    }
+
+    .subject-icon {
+      display: inline-flex;
+      width: var(--base-size-32);
+      height: var(--base-size-32);
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--lv-radius-full);
+      background: var(--lv-bg-control);
+      color: var(--lv-fg-muted);
+    }
+
+    .subject-icon-group {
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-accent-muted);
+      color: var(--lv-fg-accent);
+    }
+
+    .subject-copy {
+      display: grid;
+      min-width: 0;
+    }
+
+    .subject-label,
+    .subject-detail {
+      overflow: hidden;
+      margin: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .subject-label {
+      color: var(--lv-fg-default);
       font-size: var(--lv-font-size-body-sm);
       font-weight: var(--lv-font-weight-strong);
+      line-height: var(--lv-line-height-snug);
+    }
+
+    .subject-detail {
+      margin-top: var(--base-size-2);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-caption);
+      font-weight: var(--lv-font-weight-normal);
       line-height: var(--lv-line-height-tight);
-      padding: 0 var(--lv-button-padding-inline-spacious);
     }
 
-    .submit:hover,
-    .submit:focus-visible {
-      border-color: var(--lv-button-accent-border-hover);
-      background: var(--lv-button-accent-bg-hover);
-      outline: var(--focus-outline, var(--lv-border-default));
-      outline-color: var(--borderColor-accent-emphasis, var(--lv-line-accent));
-      outline-offset: var(--focus-outline-offset, var(--base-size-2));
+    .search-state {
+      border: var(--lv-border-muted);
+      border-radius: var(--lv-radius-default);
+      background: var(--lv-bg-panel);
+      color: var(--lv-fg-muted);
+      font-size: var(--lv-font-size-body-sm);
+      font-weight: var(--lv-font-weight-medium);
+      padding: var(--base-size-16);
+      text-align: center;
     }
 
-    .submit:disabled {
-      border-color: var(--lv-button-accent-border-disabled);
-      background: var(--lv-button-accent-bg-disabled);
-      color: var(--lv-button-accent-fg-disabled);
+    .search-state-error {
+      color: var(--lv-fg-danger);
     }
 
-    .submit:disabled,
+    .row-action {
+      display: inline-flex;
+      width: var(--lv-control-medium);
+      height: var(--lv-control-medium);
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      border: var(--lv-border-transparent);
+      border-radius: var(--lv-radius-default);
+      background: transparent;
+      color: var(--lv-fg-muted);
+      cursor: pointer;
+      padding: 0;
+      transition:
+        color var(--lv-transition-fast),
+        background-color var(--lv-transition-fast),
+        border-color var(--lv-transition-fast);
+    }
+
+    .row-action:hover,
+    .row-action:focus-visible {
+      border-color: var(--lv-line-muted);
+      background: var(--lv-bg-control-hover);
+      color: var(--lv-fg-default);
+      outline: 0;
+    }
+
+    .candidate-add {
+      color: var(--lv-fg-accent);
+    }
+
     .row-action:disabled {
       cursor: not-allowed;
       opacity: var(--opacity-disabled);
@@ -347,20 +408,9 @@ class WorkspaceAccessControl extends LitElement {
     }
 
     .status-message {
-      border: 1px solid var(--lv-line-success-muted);
+      border: var(--borderWidth-default) solid var(--lv-line-success-muted);
       background: var(--lv-bg-success-muted);
       color: var(--lv-fg-success);
-    }
-
-    .toolbar {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(12rem, 18rem);
-      align-items: center;
-      gap: var(--base-size-12);
-    }
-
-    .search {
-      width: 100%;
     }
 
     .list {
@@ -380,54 +430,16 @@ class WorkspaceAccessControl extends LitElement {
       padding: var(--lv-space-control) var(--base-size-12);
     }
 
+    .row:last-child {
+      border-bottom: 0;
+    }
+
     .person {
       display: grid;
+      min-width: 0;
       grid-template-columns: var(--base-size-32) minmax(0, 1fr);
       align-items: center;
       gap: var(--base-size-8);
-      min-width: 0;
-    }
-
-    .principal-copy {
-      min-width: 0;
-    }
-
-    .avatar {
-      display: inline-flex;
-      width: var(--base-size-28);
-      height: var(--base-size-28);
-      align-items: center;
-      justify-content: center;
-      border: var(--lv-border-muted);
-      border-radius: 999px;
-      background: var(--lv-bg-control);
-      color: var(--lv-fg-muted);
-      font-size: var(--lv-font-size-caption);
-      font-weight: var(--lv-font-weight-strong);
-      line-height: 1;
-      text-transform: uppercase;
-    }
-
-    .name {
-      overflow: hidden;
-      margin: 0;
-      color: var(--lv-fg-default);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: var(--lv-font-size-body-sm);
-      font-weight: var(--lv-font-weight-strong);
-      line-height: var(--lv-line-height-snug);
-    }
-
-    .email {
-      overflow: hidden;
-      margin: var(--base-size-2) 0 0;
-      color: var(--lv-fg-muted);
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      font-size: var(--lv-font-size-caption);
-      font-weight: var(--lv-font-weight-normal);
-      line-height: var(--lv-line-height-tight);
     }
 
     .empty {
@@ -442,27 +454,8 @@ class WorkspaceAccessControl extends LitElement {
     }
 
     @media (max-width: 44rem) {
-      .composer,
-      .row,
-      .toolbar {
+      .row {
         grid-template-columns: minmax(0, 1fr);
-      }
-
-      .composer-shell {
-        align-items: stretch;
-        flex-wrap: wrap;
-        padding: var(--base-size-8);
-      }
-
-      .composer-role {
-        min-width: 100%;
-        border-top: var(--lv-border-muted);
-        border-left: 0;
-        padding-left: var(--base-size-8);
-      }
-
-      .submit {
-        justify-self: stretch;
       }
     }
   `
@@ -470,10 +463,6 @@ class WorkspaceAccessControl extends LitElement {
   updated(changed: Map<string, unknown>): void {
     if (changed.has('access') || changed.has('accessAttribute')) {
       this.ensureRole()
-      const status = this.resolvedAccess.status
-      if (status?.message && !status.error && !status.loading) {
-        this.email = ''
-      }
     }
     if (changed.has('searchAttribute') && this.searchAttribute !== this.query) {
       this.query = this.searchAttribute
@@ -500,103 +489,132 @@ class WorkspaceAccessControl extends LitElement {
         <h2 class="title" slot="title" id="workspace-access-title">Manage access</h2>
         <p class="subtitle" slot="subtitle">${this.drawerSubtitle(access)}</p>
         <div class="drawer-body">
-            <section class="card" aria-label="Add workspace access">
-              <div class="label">Add people by email</div>
-              ${status.error ? html`<div class="status status-error" role="alert">${status.error}</div>` : nothing}
-              ${status.message && !status.error ? html`<div class="status status-message" role="status">${status.message}</div>` : nothing}
-              <form class="composer" @submit=${this.handleSubmit}>
-                <span class="field-shell composer-shell">
-                    ${mailIcon()}
-                    <select
-                      class="composer-role composer-subject-type"
-                      aria-label="Subject type"
-                      .value=${this.subjectType}
-                      ?disabled=${status.loading}
-                      @change=${(event: Event) => { this.subjectType = (event.currentTarget as HTMLSelectElement).value }}
-                    >
-                      <option value="principal">User</option>
-                      <option value="group">Group</option>
-                      <option value="service_principal">Service principal</option>
-                    </select>
-                    <input
-                      type=${this.subjectType === 'principal' ? 'email' : 'text'}
-                      autocomplete=${this.subjectType === 'principal' ? 'email' : 'off'}
-                      placeholder=${this.subjectType === 'principal' ? 'Search by email...' : 'Subject ID...'}
-                    aria-label=${this.subjectType === 'principal' ? 'Email principal' : 'Subject ID'}
-                    .value=${this.email}
-                    ?disabled=${status.loading}
-                      @input=${(event: Event) => { this.email = (event.currentTarget as HTMLInputElement).value }}
-                    >
-                    <select
-                      class="composer-role composer-grant-role"
-                      aria-label=${this.modeIsObject(access) ? 'Privilege to grant' : 'Role to assign'}
-                      .value=${this.selectedRole}
-                      ?disabled=${status.loading}
-                      @change=${(event: Event) => { this.selectedRole = (event.currentTarget as HTMLSelectElement).value }}
-                  >
-                    ${this.roles.map((role) => html`<option value=${role.name}>${roleLabel(role.name)}</option>`)}
-                  </select>
-                </span>
-                <button class="submit" type="submit" ?disabled=${status.loading || !this.email.trim() || !this.selectedRole}>
-                  ${status.loading ? 'Saving' : this.modeIsObject(access) ? 'Grant' : 'Assign'}
-                </button>
-              </form>
-            </section>
-            <section class="card" aria-label="Current workspace access">
-              <div class="toolbar">
-                <h3 class="section-title">${this.modeIsObject(access) ? 'Direct grants' : 'People with access'}</h3>
-                <span class="field-shell search">
-                  ${searchIcon()}
-                  <input
-                    type="search"
-                    placeholder="Search principals..."
-                    .value=${this.query}
-                    @input=${this.handleSearchInput}
-                  >
-                </span>
-              </div>
-              ${this.renderBindings(access)}
-            </section>
-          </div>
+          <section class="card" aria-label="Add workspace access">
+            <div class="label">Add people or groups</div>
+            ${status.error ? html`<div class="status status-error" role="alert">${status.error}</div>` : nothing}
+            ${status.message && !status.error ? html`<div class="status status-message" role="status">${status.message}</div>` : nothing}
+            <label class="role-field">
+              <span class="label">${this.modeIsObject(access) ? 'Privilege' : 'Role'}</span>
+              <select
+                class="assignment-role"
+                aria-label=${this.modeIsObject(access) ? 'Privilege to grant' : 'Role to assign'}
+                .value=${this.selectedRole}
+                ?disabled=${status.loading}
+                @change=${(event: Event) => { this.selectedRole = (event.currentTarget as HTMLSelectElement).value }}
+              >
+                <option value="">${this.modeIsObject(access) ? 'Select a privilege' : 'Select a role'}</option>
+                ${this.roles.map((role) => html`<option value=${role.name}>${roleLabel(role.name)}</option>`)}
+              </select>
+            </label>
+            <label class="field-shell access-search">
+              ${searchIcon()}
+              <input
+                type="search"
+                autocomplete="off"
+                aria-label="Search people and groups"
+                aria-controls="workspace-access-candidates"
+                placeholder="Search people and groups..."
+                .value=${this.query}
+                ?disabled=${!this.selectedRole || status.loading}
+                @input=${this.handleSearchInput}
+              >
+            </label>
+            ${this.renderCandidates(access, status)}
+          </section>
+          <section class="card" aria-label="Current workspace access">
+            <h3 class="section-title">${this.modeIsObject(access) ? 'Direct grants' : 'People with access'}</h3>
+            ${this.renderBindings(access)}
+          </section>
+        </div>
       </lv-drawer>
     `
   }
 
+  private renderCandidates(access: WorkspaceAccess, status: AccessStatus) {
+    if (!this.selectedRole) {
+      return html`<div class="search-state">Select a ${this.modeIsObject(access) ? 'privilege' : 'role'} to search people and groups.</div>`
+    }
+    const searchStatus = access.searchStatus ?? {}
+    if (!this.query.trim()) {
+      return html`<div class="search-state">Search by name or email.</div>`
+    }
+    if (searchStatus.loading) {
+      return html`<div class="search-state" role="status">Searching...</div>`
+    }
+    if (searchStatus.error) {
+      return html`<div class="search-state search-state-error" role="alert">${searchStatus.error}</div>`
+    }
+    const candidates = access.candidates ?? []
+    if (candidates.length === 0) {
+      return html`<div class="search-state">No people or groups found.</div>`
+    }
+    return html`
+      <div id="workspace-access-candidates" class="candidate-list" role="list" aria-label="People and groups">
+        ${candidates.map((candidate) => {
+          return html`
+            <div
+              class="candidate"
+              role="listitem"
+              data-subject-type=${candidate.subjectType}
+            >
+              ${subjectIcon(candidate.subjectType)}
+              ${subjectCopy(candidate.label, candidate.detail)}
+              <button
+                class="row-action candidate-add"
+                type="button"
+                aria-label=${`Add ${candidate.label} as ${roleLabel(this.selectedRole)}`}
+                title=${`Add as ${roleLabel(this.selectedRole)}`}
+                ?disabled=${status.loading}
+                @click=${() => this.addCandidate(candidate)}
+              >
+                ${plusIcon()}
+              </button>
+            </div>
+          `
+        })}
+      </div>
+    `
+  }
+
   private renderBindings(access: WorkspaceAccess) {
-    const rows = this.filteredBindings(access.bindings ?? [])
+    const rows = access.bindings ?? []
     if (rows.length === 0) {
-      return html`<div class="empty">${this.query ? 'No access entries match this search.' : 'No role bindings yet.'}</div>`
+      return html`<div class="empty">No role bindings yet.</div>`
     }
     return html`
       <div class="list">
-        ${rows.map((binding) => html`
-          <div class="row">
-            <div class="person">
-              <span class="avatar" aria-hidden="true">${principalInitial(binding)}</span>
-              <span class="principal-copy">
-                <p class="name">${displayLabel(binding)}</p>
-                <p class="email">${binding.email}</p>
-              </span>
+        ${rows.map((binding) => {
+          const subjectType = binding.subjectType === 'group' ? 'group' : 'principal'
+          const detail = subjectType === 'group' ? 'Group' : binding.email
+          return html`
+            <div class="row">
+              <div class="person">
+                ${subjectIcon(subjectType)}
+                <span class="subject-copy">
+                  <p class="name subject-label">${displayLabel(binding)}</p>
+                  <p class="email subject-detail">${detail}</p>
+                </span>
+              </div>
+              <select
+                aria-label=${`${this.modeIsObject(access) ? 'Privilege' : 'Role'} for ${displayLabel(binding)}`}
+                .value=${binding.role}
+                ?disabled=${access.status?.loading}
+                @change=${(event: Event) => this.updateBindingRole(binding, (event.currentTarget as HTMLSelectElement).value)}
+              >
+                ${this.roles.map((role) => html`<option value=${role.name}>${roleLabel(role.name)}</option>`)}
+              </select>
+              <button
+                class="row-action"
+                type="button"
+                aria-label=${`Remove ${displayLabel(binding)}`}
+                ?disabled=${access.status?.loading}
+                @click=${() => this.removeBinding(binding)}
+              >
+                ${trashIcon()}
+              </button>
             </div>
-            <select
-              aria-label=${`${this.modeIsObject(access) ? 'Privilege' : 'Role'} for ${displayLabel(binding)}`}
-              .value=${binding.role}
-              ?disabled=${access.status?.loading}
-              @change=${(event: Event) => this.updateBindingRole(binding, (event.currentTarget as HTMLSelectElement).value)}
-            >
-              ${this.roles.map((role) => html`<option value=${role.name}>${roleLabel(role.name)}</option>`)}
-            </select>
-            <button
-              class="row-action"
-              type="button"
-              aria-label=${`Remove ${displayLabel(binding)}`}
-              ?disabled=${access.status?.loading}
-              @click=${() => this.removeBinding(binding)}
-            >
-              ${trashIcon()}
-            </button>
-          </div>
-        `)}
+          `
+        })}
       </div>
     `
   }
@@ -620,7 +638,7 @@ class WorkspaceAccessControl extends LitElement {
   private ensureRole(): void {
     const roles = this.roles
     if (roles.some((role) => role.name === this.selectedRole)) return
-    this.selectedRole = roles.find((role) => role.name === 'viewer')?.name ?? roles[0]?.name ?? ''
+    this.selectedRole = ''
   }
 
   private modeIsObject(access = this.resolvedAccess): boolean {
@@ -635,24 +653,13 @@ class WorkspaceAccessControl extends LitElement {
     return `${access.workspace?.title ?? 'Workspace'} roles apply to every published asset in this workspace.`
   }
 
-  private filteredBindings(bindings: Binding[]): Binding[] {
-    const query = this.query.trim().toLowerCase()
-    if (!query) return bindings
-    return bindings.filter((binding) => {
-      return `${displayLabel(binding)} ${binding.email} ${binding.groupName ?? ''} ${binding.subjectId ?? ''} ${binding.subjectType ?? ''} ${binding.role}`.toLowerCase().includes(query)
-    })
-  }
-
   private readonly handleSearchInput = (event: Event): void => {
     this.query = (event.currentTarget as HTMLInputElement).value
-    if (this.searchTimer !== null) window.clearTimeout(this.searchTimer)
-    this.searchTimer = window.setTimeout(() => {
-      this.dispatchEvent(new CustomEvent('lv-workspace-access-search', {
-        bubbles: true,
-        composed: true,
-        detail: { search: this.query },
-      }))
-    }, 200)
+    this.dispatchEvent(new CustomEvent('lv-workspace-access-search', {
+      bubbles: true,
+      composed: true,
+      detail: { search: this.query },
+    }))
   }
 
   private readonly openDialog = (): void => {
@@ -665,27 +672,22 @@ class WorkspaceAccessControl extends LitElement {
 
   private readonly closeDialog = (): void => {
     this.open = false
-    if (this.searchTimer !== null) {
-      window.clearTimeout(this.searchTimer)
-      this.searchTimer = null
-    }
     window.setTimeout(() => {
       if (this.previousFocus?.isConnected) this.previousFocus.focus()
       this.previousFocus = null
     }, 0)
   }
 
-  private readonly handleSubmit = (event: Event): void => {
-    event.preventDefault()
-    const subjectID = this.email.trim()
+  private addCandidate(candidate: AccessCandidate): void {
+    const role = (this.renderRoot.querySelector('.assignment-role') as HTMLSelectElement | null)?.value.trim() ?? ''
+    if (!role) return
     const command: AccessCommand = {
-      email: this.subjectType === 'principal' ? subjectID : '',
-      role: this.modeIsObject() ? '' : this.selectedRole,
-      privilege: this.modeIsObject() ? this.selectedRole : '',
-      subjectType: this.subjectType,
-      subjectId: this.subjectType === 'principal' ? '' : subjectID,
+      email: '',
+      role: this.modeIsObject() ? '' : role,
+      privilege: this.modeIsObject() ? role : '',
+      subjectType: candidate.subjectType,
+      subjectId: candidate.subjectId,
     }
-    if (!subjectID || (!command.role && !command.privilege)) return
     this.dispatchEvent(new CustomEvent('lv-workspace-access-upsert', {
       bubbles: true,
       composed: true,
@@ -704,7 +706,7 @@ class WorkspaceAccessControl extends LitElement {
         privilege: this.modeIsObject() ? role : '',
         bindingId: binding.id,
         subjectType: binding.subjectType || 'principal',
-        subjectId: binding.subjectId,
+        subjectId: binding.subjectId || binding.principalId,
       },
     }))
   }
@@ -734,7 +736,10 @@ function normalizeAccess(access: WorkspaceAccessInput): WorkspaceAccess {
     mode: stringValue(raw.mode ?? raw.Mode),
     roles: Array.isArray(access.roles) ? access.roles.map(normalizeRole).filter(isRole) : [],
     bindings: Array.isArray(access.bindings) ? access.bindings.map(normalizeBinding).filter(isBinding) : [],
+    candidates: Array.isArray(access.candidates) ? access.candidates.map(normalizeCandidate).filter(isCandidate) : [],
     canManage: Boolean(access.canManage ?? raw.CanManage),
+    search: stringValue(access.search ?? raw.Search),
+    searchStatus: normalizeSearchStatus(access.searchStatus ?? raw.SearchStatus),
     status: normalizeStatus(access.status ?? raw.Status),
   }
 }
@@ -776,6 +781,20 @@ function normalizeBinding(binding: unknown): Binding | null {
   }
 }
 
+function normalizeCandidate(candidate: unknown): AccessCandidate | null {
+  const raw = recordValue(candidate)
+  const subjectType = stringValue(raw.subjectType ?? raw.SubjectType)
+  const subjectId = stringValue(raw.subjectId ?? raw.SubjectID)
+  const label = stringValue(raw.label ?? raw.Label)
+  if ((subjectType !== 'principal' && subjectType !== 'group') || !subjectId || !label) return null
+  return {
+    subjectType,
+    subjectId,
+    label,
+    detail: stringValue(raw.detail ?? raw.Detail),
+  }
+}
+
 function normalizeStatus(status: unknown): AccessStatus {
   const raw = recordValue(status)
   return {
@@ -785,12 +804,24 @@ function normalizeStatus(status: unknown): AccessStatus {
   }
 }
 
+function normalizeSearchStatus(status: unknown): SearchStatus {
+  const raw = recordValue(status)
+  return {
+    loading: Boolean(raw.loading ?? raw.Loading),
+    error: stringValue(raw.error ?? raw.Error),
+  }
+}
+
 function isRole(role: Role | null): role is Role {
   return role !== null
 }
 
 function isBinding(binding: Binding | null): binding is Binding {
   return binding !== null
+}
+
+function isCandidate(candidate: AccessCandidate | null): candidate is AccessCandidate {
+  return candidate !== null
 }
 
 function recordValue(value: unknown): Record<string, unknown> {
@@ -805,32 +836,42 @@ function displayLabel(binding: Binding): string {
   return binding.displayName || binding.groupName || binding.email || binding.subjectId || 'Principal'
 }
 
-function principalInitial(binding: Binding): string {
-  const label = displayLabel(binding).trim()
-  return label ? label[0] : '?'
-}
-
 function roleLabel(role: string): string {
   return role.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
-function usersIcon() {
-  return html`<span class="icon" aria-hidden="true">${lucideIcon(Users, { size: 16 })}</span>`
+function subjectCopy(label: string, detail: string) {
+  return html`
+    <span class="subject-copy">
+      <span class="subject-label">${label}</span>
+      <span class="subject-detail">${detail}</span>
+    </span>
+  `
+}
+
+function subjectIcon(subjectType: 'principal' | 'group', extraClass = '') {
+  const className = `${extraClass} subject-icon subject-icon-${subjectType}`.trim()
+  const icon = subjectType === 'group' ? Users : UserRound
+  return html`<span class=${className} aria-hidden="true">${lucideIcon(icon, { size: 16 })}</span>`
 }
 
 function trashIcon() {
   return html`<span class="icon" aria-hidden="true">${lucideIcon(Trash2, { size: 16 })}</span>`
 }
 
+function plusIcon() {
+  return html`<span class="icon" aria-hidden="true">${lucideIcon(Plus, { size: 16 })}</span>`
+}
+
 function searchIcon() {
   return html`<span class="icon" aria-hidden="true">${lucideIcon(Search, { size: 16 })}</span>`
 }
 
-function mailIcon() {
-  return html`<span class="icon" aria-hidden="true">${lucideIcon(Mail, { size: 16 })}</span>`
+function usersIcon() {
+  return html`<span class="icon" aria-hidden="true">${lucideIcon(Users, { size: 16 })}</span>`
 }
 
-customElements.define('lv-workspace-access-control', WorkspaceAccessControl)
+if (!customElements.get('lv-workspace-access-control')) customElements.define('lv-workspace-access-control', WorkspaceAccessControl)
 
 declare global {
   interface HTMLElementTagNameMap {

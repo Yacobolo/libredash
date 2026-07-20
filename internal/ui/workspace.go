@@ -117,14 +117,12 @@ func catalogWithoutWorkspaceContext(catalog dashboard.Catalog) dashboard.Catalog
 type workspaceAccessSignalState struct {
 	WorkspaceAccessResponse
 	Command WorkspaceAccessCommand `json:"command"`
-	Search  string                 `json:"search"`
 }
 
 func WorkspaceAccessSignals(access WorkspaceAccessResponse) workspaceAccessSignalState {
 	return workspaceAccessSignalState{
 		WorkspaceAccessResponse: access,
 		Command:                 WorkspaceAccessCommand{},
-		Search:                  "",
 	}
 }
 
@@ -139,10 +137,11 @@ func workspaceAccessRouteBridge(workspaceID string, access WorkspaceAccessRespon
 		return nil, workspaceDocumentExtras{}
 	}
 	accessSignal := WorkspaceAccessSignals(access)
+	search := "$workspaceAccess.search = evt.detail.search; $workspaceAccess.searchStatus = {loading: true, error: ''}; $workspaceAccess.status = {loading: false, error: '', message: ''}; " + uiactions.Get("/workspaces/"+workspaceID+"/access/search")
 	upsert := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + uiactions.Post("/workspaces/"+workspaceID+"/access/upsert")
 	remove := "$workspaceAccess.status = {loading: true, error: '', message: ''}; $workspaceAccess.command = evt.detail; " + uiactions.Post("/workspaces/"+workspaceID+"/access/remove")
 	return []g.Node{
-			g.Attr("data-on:lv-workspace-access-search__debounce.200ms", "$workspaceAccess.search = evt.detail.search"),
+			g.Attr("data-on:lv-workspace-access-search__debounce.200ms", search),
 			g.Attr("data-on:lv-workspace-access-upsert", upsert),
 			g.Attr("data-on:lv-workspace-access-remove", remove),
 		}, workspaceDocumentExtras{
@@ -156,7 +155,7 @@ func workspaceCatalogPageSignal(workspaces []workspaceview.WorkspaceView) uisign
 		Kind:        uisignals.RouteWorkspace,
 		Title:       "Workspaces",
 		Description: uisignals.Pointer("View published BI workspaces. Authoring lives in Git."),
-		Cards:       uisignals.OptionalSlice(workspaceCardSignals(workspaces)),
+		Workspaces:  uisignals.OptionalSlice(workspaceCatalogItemSignals(workspaces)),
 	}
 }
 
@@ -200,22 +199,21 @@ func connectionsPageSignal(workspaceID string, assets []workspaceview.AssetView,
 	}
 }
 
-func workspaceCardSignals(workspaces []workspaceview.WorkspaceView) []uisignals.WorkspaceCardSignal {
-	cards := make([]uisignals.WorkspaceCardSignal, 0, len(workspaces))
+func workspaceCatalogItemSignals(workspaces []workspaceview.WorkspaceView) []uisignals.WorkspaceCatalogItemSignal {
+	items := make([]uisignals.WorkspaceCatalogItemSignal, 0, len(workspaces))
 	for _, workspace := range workspaces {
 		description := workspace.Description
 		if strings.TrimSpace(description) == "" {
 			description = "Published workspace assets."
 		}
-		cards = append(cards, uisignals.WorkspaceCardSignal{
-			ID:           workspace.ID,
-			Title:        workspace.Title,
-			Description:  description,
-			Href:         "/workspaces/" + workspace.ID,
-			ServingLabel: workspaceServingLabel(workspace),
+		items = append(items, uisignals.WorkspaceCatalogItemSignal{
+			ID:          workspace.ID,
+			Title:       workspace.Title,
+			Description: description,
+			Href:        "/workspaces/" + workspace.ID,
 		})
 	}
-	return cards
+	return items
 }
 
 func workspaceAssetListSignal(workspaceID string, assets []workspaceview.AssetView, edges []workspaceview.AssetEdgeView, activeType, query string, tabs []uisignals.WorkspaceTabSignal, empty, searchHref string) uisignals.WorkspaceAssetListSignal {
@@ -761,13 +759,6 @@ func workspaceRouteUpdatesURL(routeKind uisignals.RouteKind, catalog dashboard.C
 	default:
 		return updatesURL(routeKind)
 	}
-}
-
-func workspaceServingLabel(workspace workspaceview.WorkspaceView) string {
-	if workspace.ActiveServingStateID == "" {
-		return "Not serving"
-	}
-	return "Serving"
 }
 
 func connectionAssetListHref(typ, query string) string {

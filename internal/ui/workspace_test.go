@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
 	"strings"
@@ -10,6 +11,29 @@ import (
 	uisignals "github.com/Yacobolo/leapview/internal/ui/signals"
 	workspaceview "github.com/Yacobolo/leapview/internal/workspace"
 )
+
+func TestWorkspaceCatalogSignalUsesWorkspaceItems(t *testing.T) {
+	page := workspaceCatalogPageSignal([]workspaceview.WorkspaceView{{
+		ID:                   "operations",
+		Title:                "Operations Workspace",
+		Description:          "Fulfillment and delivery analysis.",
+		ActiveServingStateID: "serving-state",
+	}})
+
+	items := uisignals.ValueOrZero(page.Workspaces)
+	if len(items) != 1 || items[0].ID != "operations" {
+		t.Fatalf("workspace catalog items = %#v, want operations workspace", items)
+	}
+	payload, err := json.Marshal(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stale := range []string{`"cards"`, `"servingLabel"`} {
+		if strings.Contains(string(payload), stale) {
+			t.Fatalf("workspace catalog payload contains stale field %s: %s", stale, payload)
+		}
+	}
+}
 
 func TestWorkspaceAssetDetailsRenderSharedShapeForSemanticModel(t *testing.T) {
 	workspace, catalog, assets, edges := testWorkspaceAssetFixtures()
@@ -925,6 +949,7 @@ func TestWorkspaceAccessControlRendersForManagers(t *testing.T) {
 	for _, want := range []string{
 		`<lv-workspace-page`,
 		`data-on:lv-workspace-access-search__debounce.200ms=`,
+		`/workspaces/leapview/access/search`,
 		`data-on:lv-workspace-access-upsert=`,
 		`data-on:lv-workspace-access-remove=`,
 		`workspaceAccess`,

@@ -371,6 +371,17 @@ WHERE (params.email = '' OR lower(principals.email) = lower(params.email))
        OR lower(display_name) LIKE '%' || lower(params.search) || '%')
 ORDER BY principals.email, principals.id;
 
+-- name: SearchPrincipals :many
+SELECT principals.id, principals.email, principals.display_name,
+       principals.created_at, principals.updated_at, principals.kind, principals.disabled_at
+FROM principals
+WHERE principals.kind = 'user'
+  AND (principals.disabled_at IS NULL OR principals.disabled_at = '')
+  AND (lower(principals.email) LIKE '%' || lower(sqlc.arg(search)) || '%'
+       OR lower(principals.display_name) LIKE '%' || lower(sqlc.arg(search)) || '%')
+ORDER BY lower(principals.display_name), principals.email, principals.id
+LIMIT sqlc.arg(result_limit);
+
 -- name: ChangeLocalCredentialPassword :exec
 UPDATE local_user_credentials
 SET password_verifier = sqlc.arg(password_verifier), must_change_password = 0,
@@ -420,6 +431,16 @@ UPDATE principals SET disabled_at = NULL, updated_at = CURRENT_TIMESTAMP WHERE i
 -- name: ListAllGroups :many
 SELECT id, workspace_id, provider, external_id, name, created_at
 FROM groups ORDER BY workspace_id, name, id;
+
+-- name: SearchGroups :many
+SELECT id, workspace_id, provider, external_id, name, created_at
+FROM groups
+WHERE (workspace_id = sqlc.arg(workspace_id) OR (workspace_id = '' AND provider = 'scim'))
+  AND (lower(name) LIKE '%' || lower(sqlc.arg(search)) || '%'
+       OR lower(id) LIKE '%' || lower(sqlc.arg(search)) || '%'
+       OR lower(external_id) LIKE '%' || lower(sqlc.arg(search)) || '%')
+ORDER BY lower(name), id
+LIMIT sqlc.arg(result_limit);
 
 -- name: ListGroupMembersByGroup :many
 SELECT gm.group_id, g.workspace_id, gm.principal_id, p.email, p.display_name, gm.created_at
