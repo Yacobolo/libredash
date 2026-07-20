@@ -81,6 +81,7 @@ for (const viewport of [
         const workspaceFirstRow = workspace.shadowRoot.querySelector('tbody tr:first-child') as HTMLElement
         const workspaceSearch = workspace.shadowRoot.querySelector('.search input[type="search"]') as HTMLInputElement
         const workspaceAssetTitle = workspace.shadowRoot.querySelector('tbody tr:first-child .record-entity-label') as HTMLElement
+        const workspaceAssetEntity = workspace.shadowRoot.querySelector('tbody tr:first-child .record-entity') as HTMLElement
         const nameCellRight = workspaceNameCell.getBoundingClientRect().right
         const workspacePageRect = workspacePage.getBoundingClientRect()
         const isMobile = window.innerWidth <= 720
@@ -110,6 +111,8 @@ for (const viewport of [
           workspaceHeaderFontSize: getComputedStyle(workspaceHeaderCell).fontSize,
           workspaceCellFontSize: getComputedStyle(workspaceTypeCell).fontSize,
           workspaceTitleFontSize: getComputedStyle(workspaceAssetTitle).fontSize,
+          workspaceTitleFontWeight: getComputedStyle(workspaceAssetTitle).fontWeight,
+          workspaceAssetVerticalAlignment: getComputedStyle(workspaceAssetEntity).alignItems,
           workspaceRowHeight: Math.round(workspaceFirstRow.getBoundingClientRect().height),
           workspaceTitleFitsNameColumn: workspaceAssetTitle.getBoundingClientRect().right <= nameCellRight,
         }
@@ -140,7 +143,9 @@ for (const viewport of [
         workspaceSearchHeight: 32,
         workspaceHeaderFontSize: '12px',
         workspaceCellFontSize: '12px',
-        workspaceTitleFontSize: '14px',
+        workspaceTitleFontSize: '12px',
+        workspaceTitleFontWeight: '400',
+        workspaceAssetVerticalAlignment: 'center',
         workspaceRowHeight: 47,
         workspaceTitleFitsNameColumn: true,
       })

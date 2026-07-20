@@ -1330,6 +1330,10 @@ const recordTableStyles = `
     gap: 0;
   }
 
+  ld-record-table .variant-primary .record-entity {
+    align-items: center;
+  }
+
   ld-record-table .record-entity-icon,
   ld-record-table .record-button-icon {
     display: inline-flex;
@@ -1390,8 +1394,9 @@ const recordTableStyles = `
   ld-record-table .variant-primary .record-entity-label {
     overflow: hidden;
     overflow-wrap: normal;
-    font-size: var(--ld-font-size-body-md);
-    line-height: var(--ld-line-height-tight);
+    font-size: var(--ld-font-size-body-sm);
+    font-weight: var(--ld-font-weight-regular);
+    line-height: var(--ld-line-height-normal);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
