@@ -835,20 +835,32 @@ class DashboardVisualFrame extends LitElement {
 			background: var(--ld-bg-panel);
 			color: var(--ld-fg-default);
 			cursor: pointer;
-			opacity: 0.78;
+			opacity: 0;
+			pointer-events: none;
 			padding: 0 var(--base-size-8);
 			box-shadow: var(--shadow-resting-small);
 			font: inherit;
 			font-size: var(--ld-font-size-caption);
 			font-weight: var(--ld-font-weight-medium);
-			transform: translateY(0);
+			transform: translateY(calc(-1 * var(--base-size-4)));
 			transition: opacity var(--ld-transition-fast), transform var(--ld-transition-fast);
 		}
 
+		.ask-visual.with-native-actions {
+			right: calc(
+				var(--base-size-8)
+				+ var(--control-xsmall-size)
+				+ var(--control-xsmall-size)
+				+ var(--base-size-4)
+			);
+		}
+
 		.frame:hover .ask-visual,
+		.frame:focus-within .ask-visual,
 		.ask-visual:focus-visible,
 		:host([data-agent-referenced]) .ask-visual {
 			opacity: 1;
+			pointer-events: auto;
 			transform: translateY(0);
 		}
 
@@ -930,16 +942,31 @@ class DashboardVisualFrame extends LitElement {
 
     @media (prefers-reduced-motion: reduce) {
       .spinner { animation: none; }
+			.ask-visual { transition: none; }
+		}
+
+		@media (hover: none), (pointer: coarse) {
+			.ask-visual {
+				opacity: 1;
+				pointer-events: auto;
+				transform: translateY(0);
+			}
     }
   `
 
   render() {
     const refreshStatus = this.refreshStatus
+		const hasNativeActions = this.askReference?.visualType !== 'kpi'
     return html`
       <article class="frame" aria-busy=${refreshStatus?.loading ? 'true' : 'false'}>
         <slot></slot>
 				${this.askReference ? html`
-					<button class="ask-visual" type="button" title="Ask about ${this.askReference.title}" @click=${this.askVisual}>
+					<button
+						class=${`ask-visual${hasNativeActions ? ' with-native-actions' : ''}`}
+						type="button"
+						title="Ask about ${this.askReference.title}"
+						@click=${this.askVisual}
+					>
 						${lucideIcon(MessageSquareText)}<span>Ask</span>
 					</button>
 				` : nothing}

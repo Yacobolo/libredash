@@ -529,6 +529,56 @@ test('dashboard agent drawer carries page context and explicit visual references
     })
     expect(initial).toEqual({ hasToggle: true, open: false, drawerWidth: 0 })
 
+    const visualActionsAtRest = await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
+      const root = element.shadowRoot
+      const frame = root.querySelector('[data-component-status-key="visual:orders_chart"]') as any
+      const chart = frame?.querySelector('ld-echart') as any
+      const table = root.querySelector('ld-report-table') as any
+      await Promise.all([frame?.updateComplete, chart?.updateComplete, table?.updateComplete])
+      const ask = frame.shadowRoot.querySelector('.ask-visual') as HTMLElement
+      const askStyle = getComputedStyle(ask)
+      const expand = chart.shadowRoot.querySelector('[aria-label="Expand visual"]') as HTMLElement
+      const options = chart.shadowRoot.querySelector('[aria-label="Visual options"]') as HTMLElement
+      return {
+        askOpacity: askStyle.opacity,
+        askPointerEvents: askStyle.pointerEvents,
+        askRight: ask.getBoundingClientRect().right,
+        expandLeft: expand.getBoundingClientRect().left,
+        chartActions: [expand, options].map((control) => control.getAttribute('aria-label')),
+        chartHasExport: Array.from(chart.shadowRoot.querySelectorAll('[role="menuitem"]'))
+          .some((item: any) => item.textContent?.trim() === 'Export CSV'),
+        tableHasExpand: Boolean(table.shadowRoot.querySelector('[aria-label="Expand table"]')),
+        tableHasExport: Array.from(table.shadowRoot.querySelectorAll('[role="menuitem"]'))
+          .some((item: any) => item.textContent?.trim() === 'Export CSV'),
+      }
+    })
+    expect(visualActionsAtRest).toMatchObject({
+      askOpacity: '0',
+      askPointerEvents: 'none',
+      chartActions: ['Expand visual', 'Visual options'],
+      chartHasExport: true,
+      tableHasExpand: true,
+      tableHasExport: true,
+    })
+
+    await page.locator('ld-dashboard-visual-frame[data-component-status-key="visual:orders_chart"]').hover()
+    const visualActionsOnHover = await page.locator('ld-dashboard-page').evaluate((element: any) => {
+      const frame = element.shadowRoot.querySelector('[data-component-status-key="visual:orders_chart"]') as any
+      const chart = frame.querySelector('ld-echart') as any
+      const ask = frame.shadowRoot.querySelector('.ask-visual') as HTMLElement
+      const expand = chart.shadowRoot.querySelector('[aria-label="Expand visual"]') as HTMLElement
+      const askStyle = getComputedStyle(ask)
+      return {
+        askOpacity: askStyle.opacity,
+        askPointerEvents: askStyle.pointerEvents,
+        askRight: ask.getBoundingClientRect().right,
+        expandLeft: expand.getBoundingClientRect().left,
+      }
+    })
+    expect(visualActionsOnHover.askOpacity).toBe('1')
+    expect(visualActionsOnHover.askPointerEvents).toBe('auto')
+    expect(visualActionsOnHover.askRight).toBeLessThanOrEqual(visualActionsOnHover.expandLeft)
+
     await page.locator('ld-dashboard-page').evaluate(async (element: any) => {
       element.shadowRoot.querySelector('.agent-toggle').click()
       await element.updateComplete
