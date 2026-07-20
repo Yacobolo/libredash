@@ -1,6 +1,6 @@
 import { LitElement, css, html } from 'lit'
 import { state } from 'lit/decorators.js'
-import type { AgentReferenceSearchSignal, AgentReferenceSignal, ChatConversationSummary, ChatPageSignal, ChatSignal, DashboardVisual } from '../../generated/signals'
+import type { AgentContextSignal, AgentReferenceSearchSignal, AgentReferenceSignal, ChatConversationSummary, ChatPageSignal, ChatSignal, DashboardVisual } from '../../generated/signals'
 import { DatastarLit } from '../shared/datastar-lit'
 import { checkSignalContract } from '../shared/signal-contract'
 import '../dashboard/visual-modal'
@@ -220,6 +220,10 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
     return this.pending || Boolean(agent.status?.running) || Boolean(agent.composer?.disabled)
   }
 
+  get context(): AgentContextSignal | null {
+    return this.signal<AgentContextSignal | null>('agentContext', null)
+  }
+
   render() {
     const page = this.page
     const agent = this.agent ?? emptyAgent
@@ -289,9 +293,10 @@ class LibreDashChatPage extends DatastarLit(LitElement) {
         .disabled=${this.composerDisabled || status.running || composer.disabled}
         .pending=${this.pending || status.running}
         .placeholder=${composer.placeholder ?? emptyAgent.composer.placeholder}
-				.references=${this.references}
-				.suggestions=${this.referenceSearch.results ?? []}
-				@ld-chat-references-change=${this.referencesChanged}
+        .references=${this.references}
+        .referenceLimit=${this.context?.referenceLimit ?? 12}
+        .suggestions=${this.referenceSearch.results ?? []}
+        @ld-chat-references-change=${this.referencesChanged}
       ></ld-chat-composer>
     `
   }

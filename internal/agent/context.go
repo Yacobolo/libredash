@@ -7,6 +7,8 @@ import (
 
 const dashboardTurnContextSurface = "dashboard"
 
+const MaxTurnReferences = 12
+
 // TurnContext is server-resolved product context for one user turn. It is
 // deliberately separate from Scope: Scope controls authorization, while this
 // value describes the dashboard state the user is asking about.

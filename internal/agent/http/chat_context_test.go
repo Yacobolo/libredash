@@ -20,9 +20,11 @@ func TestChatReferenceSearchUsesGlobalScopeWhilePreservingDashboardContext(t *te
 		}
 	}
 	searchedWorkspaceID := "not called"
+	searchedLimit := 0
 	handler := NewHandler(Options{
-		SearchReferences: func(_ *http.Request, workspaceID, _ string) ([]uisignals.AgentReferenceSignal, error) {
+		SearchReferences: func(_ *http.Request, workspaceID, _ string, limit int) ([]uisignals.AgentReferenceSignal, error) {
 			searchedWorkspaceID = workspaceID
+			searchedLimit = limit
 			return results, nil
 		},
 	})
@@ -45,6 +47,9 @@ func TestChatReferenceSearchUsesGlobalScopeWhilePreservingDashboardContext(t *te
 	}
 	if searchedWorkspaceID != "" {
 		t.Fatalf("searched workspace = %q, want global scope", searchedWorkspaceID)
+	}
+	if searchedLimit != maxChatReferenceSearchResults {
+		t.Fatalf("searched limit = %d, want %d", searchedLimit, maxChatReferenceSearchResults)
 	}
 	if got := strings.Count(response.Body.String(), `"kind":"field"`); got != 24 {
 		t.Fatalf("result count = %d, want 24:\n%s", got, response.Body.String())

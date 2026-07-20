@@ -238,6 +238,7 @@ func DashboardInitialEnvelope(clientID, streamInstanceID string, catalog dashboa
 			PageTitle:      activePage.Title,
 			ModelID:        modelID,
 			Filters:        DashboardFiltersFromDashboard(initialFilters),
+			ReferenceLimit: agent.MaxTurnReferences,
 			References:     []AgentReferenceSignal{},
 		},
 		AgentReferenceSearch: AgentReferenceSearchSignal{
@@ -302,10 +303,11 @@ func ChatInitialEnvelope(catalog dashboard.Catalog, workspaceID, roleLabel, view
 		Runtime: RouteRuntimeSignal{Kind: RouteChat, WorkspaceID: optionalValue(workspaceID)},
 		Agent:   state.Agent,
 		AgentContext: AgentContextSignal{
-			Surface:     "chat",
-			WorkspaceID: workspaceID,
-			Filters:     DashboardFilters{Controls: map[string]DashboardFilterControl{}, Selections: []DashboardInteractionSelection{}},
-			References:  []AgentReferenceSignal{},
+			Surface:        "chat",
+			WorkspaceID:    workspaceID,
+			Filters:        DashboardFilters{Controls: map[string]DashboardFilterControl{}, Selections: []DashboardInteractionSelection{}},
+			ReferenceLimit: agent.MaxTurnReferences,
+			References:     []AgentReferenceSignal{},
 		},
 		AgentReferenceSearch: AgentReferenceSearchSignal{WorkspaceID: workspaceID, Results: []AgentReferenceSignal{}},
 		Visuals:              state.Visuals,

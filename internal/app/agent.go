@@ -3,7 +3,9 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/Yacobolo/libredash/internal/access"
@@ -11,7 +13,10 @@ import (
 	agenthttp "github.com/Yacobolo/libredash/internal/agent/http"
 	"github.com/Yacobolo/libredash/internal/api"
 	uisignals "github.com/Yacobolo/libredash/internal/ui/signals"
+	"golang.org/x/sync/errgroup"
 )
+
+const maxConcurrentAgentReferenceSearches = 8
 
 func (s *Server) agentHTTPHandler() *agenthttp.Handler {
 	var settings agenthttp.Settings
@@ -65,7 +70,7 @@ func (s *Server) agentHTTPHandler() *agenthttp.Handler {
 	})
 }
 
-func (s *Server) searchAgentReferences(r *http.Request, workspaceID, query string) ([]uisignals.AgentReferenceSignal, error) {
+func (s *Server) searchAgentReferences(r *http.Request, workspaceID, query string, limit int) ([]uisignals.AgentReferenceSignal, error) {
 	handler := s.workspaceHTTPHandler()
 	workspaceIDs := []string{strings.TrimSpace(workspaceID)}
 	global := workspaceIDs[0] == ""
@@ -85,38 +90,70 @@ func (s *Server) searchAgentReferences(r *http.Request, workspaceID, query strin
 		}
 		workspaceIDs = allowedWorkspaceIDs
 	}
-	groups := make([][]uisignals.AgentReferenceSignal, 0, len(workspaceIDs))
-	for _, currentWorkspaceID := range workspaceIDs {
-		rows, err := handler.SearchResults(r, currentWorkspaceID, query, nil)
-		if err != nil {
-			return nil, err
-		}
-		group := make([]uisignals.AgentReferenceSignal, 0, len(rows))
-		for _, row := range rows {
-			reference := agentReferenceSignal(currentWorkspaceID, row)
-			if global {
-				description := currentWorkspaceID
-				if strings.TrimSpace(row.Description) != "" {
-					description += " · " + row.Description
-				}
-				reference.Description = uisignals.Optional(description)
-			}
-			group = append(group, reference)
-		}
-		groups = append(groups, group)
+	type rankedReference struct {
+		workspaceID string
+		row         api.SearchResult
 	}
-	out := make([]uisignals.AgentReferenceSignal, 0)
-	for index := 0; ; index++ {
-		added := false
-		for _, group := range groups {
-			if index < len(group) {
-				out = append(out, group[index])
-				added = true
+	groups := make([][]api.SearchResult, len(workspaceIDs))
+	group, groupContext := errgroup.WithContext(r.Context())
+	group.SetLimit(maxConcurrentAgentReferenceSearches)
+	for index, currentWorkspaceID := range workspaceIDs {
+		group.Go(func() error {
+			rows, err := handler.SearchResults(r.Clone(groupContext), currentWorkspaceID, query, nil)
+			if err != nil {
+				return err
 			}
+			if limit > 0 && len(rows) > limit {
+				rows = rows[:limit]
+			}
+			groups[index] = rows
+			return nil
+		})
+	}
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+	capacity := 0
+	if limit > 0 {
+		capacity = limit
+	}
+	ranked := make([]rankedReference, 0, capacity)
+	for index, rows := range groups {
+		currentWorkspaceID := workspaceIDs[index]
+		for _, row := range rows {
+			ranked = append(ranked, rankedReference{workspaceID: currentWorkspaceID, row: row})
 		}
-		if !added {
-			break
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		left, right := ranked[i], ranked[j]
+		if left.row.Score != right.row.Score {
+			return left.row.Score > right.row.Score
 		}
+		if left.row.Type != right.row.Type {
+			return left.row.Type < right.row.Type
+		}
+		if left.row.Name != right.row.Name {
+			return left.row.Name < right.row.Name
+		}
+		if left.row.ID != right.row.ID {
+			return left.row.ID < right.row.ID
+		}
+		return left.workspaceID < right.workspaceID
+	})
+	if limit > 0 && len(ranked) > limit {
+		ranked = ranked[:limit]
+	}
+	out := make([]uisignals.AgentReferenceSignal, 0, len(ranked))
+	for _, item := range ranked {
+		reference := agentReferenceSignal(item.workspaceID, item.row)
+		if global {
+			description := item.workspaceID
+			if strings.TrimSpace(item.row.Description) != "" {
+				description += " · " + item.row.Description
+			}
+			reference.Description = uisignals.Optional(description)
+		}
+		out = append(out, reference)
 	}
 	return out, nil
 }
@@ -142,19 +179,24 @@ func agentReferenceSignal(workspaceID string, row api.SearchResult) uisignals.Ag
 }
 
 func (s *Server) resolveAgentTurnContext(r *http.Request, scope agent.Scope, candidate agent.TurnContext) (agent.TurnContext, error) {
+	if len(candidate.References) > agent.MaxTurnReferences {
+		return agent.TurnContext{}, fmt.Errorf("at most %d references can be attached", agent.MaxTurnReferences)
+	}
 	switch strings.ToLower(strings.TrimSpace(candidate.Surface)) {
 	case "dashboard":
 		return s.resolveDashboardTurnContext(r.Context(), scope, candidate)
 	case "chat":
-		if !agentCredentialAllowsPrivilege(scope, access.PrivilegeViewItem) {
-			return agent.TurnContext{}, errors.New("credential cannot view referenced context")
-		}
 		defaultWorkspaceID := firstNonEmpty(candidate.WorkspaceID, s.defaultWorkspaceID)
 		workspaceRows := map[string]map[string]api.SearchResult{}
 		for _, reference := range candidate.References {
 			workspaceID := firstNonEmpty(reference.WorkspaceID, defaultWorkspaceID)
 			if workspaceID == "" {
 				continue
+			}
+			workspaceScope := scope
+			workspaceScope.WorkspaceID = workspaceID
+			if !agentCredentialAllowsPrivilege(workspaceScope, access.PrivilegeViewItem) {
+				return agent.TurnContext{}, errors.New("credential cannot view referenced context")
 			}
 			if _, loaded := workspaceRows[workspaceID]; loaded {
 				continue
@@ -169,11 +211,11 @@ func (s *Server) resolveAgentTurnContext(r *http.Request, scope agent.Scope, can
 			}
 			workspaceRows[workspaceID] = byKey
 		}
-		resolved := make([]agent.TurnReference, 0, min(len(candidate.References), maxDashboardTurnReferences))
+		resolved := make([]agent.TurnReference, 0, min(len(candidate.References), agent.MaxTurnReferences))
 		seen := map[string]struct{}{}
 		resolvedWorkspaceID := ""
 		for _, reference := range candidate.References {
-			if len(resolved) == maxDashboardTurnReferences {
+			if len(resolved) == agent.MaxTurnReferences {
 				break
 			}
 			workspaceID := firstNonEmpty(reference.WorkspaceID, defaultWorkspaceID)

@@ -13,8 +13,6 @@ import (
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 )
 
-const maxDashboardTurnReferences = 12
-
 func (s *Server) resolveDashboardTurnContext(ctx context.Context, scope agent.Scope, candidate agent.TurnContext) (agent.TurnContext, error) {
 	workspaceID := strings.TrimSpace(candidate.WorkspaceID)
 	dashboardID := strings.TrimSpace(candidate.DashboardID)
@@ -123,10 +121,10 @@ func turnContextFilters(filters dashboard.Filters) (map[string]any, error) {
 }
 
 func resolveDashboardTurnReferences(candidates []agent.TurnReference, page dashboard.Page, visuals map[string]reportdef.Visual, tables map[string]reportdef.TableVisual) []agent.TurnReference {
-	resolved := make([]agent.TurnReference, 0, min(len(candidates), maxDashboardTurnReferences))
+	resolved := make([]agent.TurnReference, 0, min(len(candidates), agent.MaxTurnReferences))
 	seen := map[string]struct{}{}
 	for _, candidate := range candidates {
-		if len(resolved) == maxDashboardTurnReferences {
+		if len(resolved) == agent.MaxTurnReferences {
 			break
 		}
 		if strings.ToLower(strings.TrimSpace(candidate.Kind)) != "visual" {

@@ -365,6 +365,54 @@ test('mention picker pins on-page results above deduplicated accessible results'
   }
 })
 
+test('composer enforces the server-provided reference limit', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-chat-composer'))
+    const result = await page.locator('ld-chat-composer').evaluate(async (element: any) => {
+      element.referenceLimit = 2
+      const searches: string[] = []
+      element.addEventListener('ld-chat-reference-search', (event: CustomEvent) => searches.push(event.detail.query))
+      const textarea = element.shadowRoot.querySelector('textarea') as HTMLTextAreaElement
+      for (const id of ['one', 'two', 'three']) {
+        element.suggestions = [{ kind: 'measure', id, workspaceId: 'sales', title: id }]
+        textarea.value = `@${id}`
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+        textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+        await element.updateComplete
+        element.shadowRoot.querySelector('.mention-option')?.click()
+        await element.updateComplete
+      }
+      textarea.value = '@three'
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+      await element.updateComplete
+      const limited = {
+        references: element.references.map((reference: any) => reference.id),
+        status: element.shadowRoot.querySelector('.mention-status')?.textContent?.replace(/\s+/g, ' ').trim(),
+        optionCount: element.shadowRoot.querySelectorAll('.mention-option').length,
+      }
+      element.shadowRoot.querySelector('.reference-chip')?.click()
+      await element.updateComplete
+      return {
+        limited,
+        searches,
+      }
+    })
+    expect(result).toEqual({
+      limited: {
+        references: ['one', 'two'],
+        status: 'Up to 2 items can be attached',
+        optionCount: 0,
+      },
+      searches: ['one', 'two', 'three'],
+    })
+  } finally {
+    await page.close()
+  }
+})
+
 function testDocument(): string {
   return `
     <!doctype html>

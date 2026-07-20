@@ -59,6 +59,7 @@ type Result struct {
 	Type        string
 	Name        string
 	Description string
+	Score       int
 	Refs
 }
 
@@ -121,6 +122,7 @@ func Rank(documents []Document, query Query) []Result {
 			Type:        document.Type,
 			Name:        document.Name,
 			Description: document.Description,
+			Score:       item.score,
 			Refs:        document.Refs,
 		})
 	}

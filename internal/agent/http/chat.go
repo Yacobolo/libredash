@@ -132,7 +132,7 @@ func (h *Handler) ChatReferenceSearch(w nethttp.ResponseWriter, r *nethttp.Reque
 	// applies the request principal or API credential to both workspace discovery
 	// and object-level results; the dashboard context below is retained only so
 	// the client can pin matches from the current page.
-	results, err := h.options.SearchReferences(r, "", strings.TrimSpace(search.Query))
+	results, err := h.options.SearchReferences(r, "", strings.TrimSpace(search.Query), maxChatReferenceSearchResults)
 	if err != nil {
 		nethttp.Error(w, err.Error(), nethttp.StatusInternalServerError)
 		return

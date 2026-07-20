@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/agent"
 	"github.com/Yacobolo/libredash/internal/dashboard"
 	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
@@ -27,6 +28,62 @@ func TestResolveChatTurnReferencesUsesAuthorizedSearchMetadata(t *testing.T) {
 	ref := resolved.References[0]
 	if ref.Kind != "measure" || ref.ID != "test.order_count" || ref.Title == "Untrusted browser title" || ref.ModelID != "test" {
 		t.Fatalf("resolved reference trusted browser metadata: %#v", ref)
+	}
+}
+
+func TestResolveChatTurnReferencesAppliesCredentialToReferenceWorkspace(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
+	resolved, err := server.resolveAgentTurnContext(httptest.NewRequest("GET", "/chats/new", nil), agent.Scope{
+		DevAuthBypass: true,
+		Credential: agent.CredentialScope{
+			WorkspaceID: "test",
+			Privileges:  []string{string(access.PrivilegeViewItem)},
+			Restricted:  true,
+		},
+	}, agent.TurnContext{
+		Surface: "chat",
+		References: []agent.TurnReference{{
+			Kind: "measure", ID: "test.order_count", WorkspaceID: "test",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolved.References) != 1 || resolved.WorkspaceID != "test" {
+		t.Fatalf("resolved context = %#v", resolved)
+	}
+
+	_, err = server.resolveAgentTurnContext(httptest.NewRequest("GET", "/chats/new", nil), agent.Scope{
+		DevAuthBypass: true,
+		Credential: agent.CredentialScope{
+			WorkspaceID: "other",
+			Privileges:  []string{string(access.PrivilegeViewItem)},
+			Restricted:  true,
+		},
+	}, agent.TurnContext{
+		Surface: "chat",
+		References: []agent.TurnReference{{
+			Kind: "measure", ID: "test.order_count", WorkspaceID: "test",
+		}},
+	})
+	if err == nil {
+		t.Fatal("foreign workspace credential resolved referenced context")
+	}
+}
+
+func TestResolveAgentTurnContextRejectsExcessReferences(t *testing.T) {
+	server := NewWithOptions(fakeMetrics{}, Options{Store: testStore(t), DefaultWorkspaceID: "test"})
+	references := make([]agent.TurnReference, agent.MaxTurnReferences+1)
+	for index := range references {
+		references[index] = agent.TurnReference{
+			Kind: "measure", ID: "test.order_count", WorkspaceID: "test",
+		}
+	}
+	_, err := server.resolveAgentTurnContext(httptest.NewRequest("GET", "/chats/new", nil), agent.Scope{DevAuthBypass: true}, agent.TurnContext{
+		Surface: "chat", References: references,
+	})
+	if err == nil {
+		t.Fatal("excess references were silently truncated")
 	}
 }
 

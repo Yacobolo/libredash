@@ -44,7 +44,7 @@ type Options struct {
 	CurrentRoleLabel       func(*stdhttp.Request) string
 	ChatSignal             func(context.Context, agent.Scope, string, string, bool) ui.ChatViewState
 	ChatSignalWith         func(context.Context, agent.Scope, string, []agent.ChatTranscriptItem, agent.ChatArtifactSignals, string, bool) ui.ChatViewState
-	SearchReferences       func(*stdhttp.Request, string, string) ([]ui.AgentReferenceSignal, error)
+	SearchReferences       func(*stdhttp.Request, string, string, int) ([]ui.AgentReferenceSignal, error)
 	ResolveTurnContext     func(*stdhttp.Request, agent.Scope, agent.TurnContext) (agent.TurnContext, error)
 	QueueMissingTitle      func(context.Context, agent.Scope, string, string)
 	ExecuteStartedChatTurn func(context.Context, *agent.Service, agent.Scope, *agent.StartedPrompt, ChatTurnExecution) (agent.PromptResult, error)

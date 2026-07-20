@@ -91,6 +91,7 @@ type Server struct {
 	refreshPipelineRepo             refreshpipeline.Repository
 	refreshPipelineClock            refreshpipeline.Clock
 	workspaceRepo                   workspace.Repository
+	assetCatalogMu                  sync.Mutex
 	assetCatalog                    workspace.AssetCatalogReader
 	accessRepo                      access.Repository
 	asyncJobs                       asyncjob.Repository

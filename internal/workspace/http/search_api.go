@@ -101,7 +101,7 @@ func searchResultObject(workspaceID string, row api.SearchResult) (access.Object
 	if row.FieldID == "" {
 		return dataset, true
 	}
-	return access.ItemObjectWithParent(access.SecurableColumn, workspaceID, row.ModelID+"/"+row.DatasetID+"/"+row.FieldID, dataset), true
+	return access.ItemObjectWithParent(access.SecurableSemanticField, workspaceID, row.ModelID+"/"+row.FieldID, model), true
 }
 
 func (h Handler) workspaceSearchResults(r *nethttp.Request, workspaceID, query string, types search.TypeSet) ([]api.SearchResult, error) {
@@ -476,6 +476,7 @@ func searchResultsFromWorkspaceResults(results []search.Result) []api.SearchResu
 			Type:        result.Type,
 			Name:        result.Name,
 			Description: result.Description,
+			Score:       result.Score,
 			ComponentID: result.ComponentID,
 			DashboardID: result.DashboardID,
 			PageID:      result.PageID,

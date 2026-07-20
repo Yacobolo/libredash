@@ -277,8 +277,9 @@ class ChatDrawer extends DatastarLit(LitElement) {
           .pending=${this.pending}
           .placeholder=${agent.composer.placeholder || 'Ask about this dashboard…'}
           .references=${this.references}
-					.pinnedSuggestions=${pinnedSuggestions}
-					.suggestions=${workspaceSuggestions}
+          .referenceLimit=${context?.referenceLimit ?? 12}
+          .pinnedSuggestions=${pinnedSuggestions}
+          .suggestions=${workspaceSuggestions}
           @ld-chat-references-change=${this.referencesChanged}
         ></ld-chat-composer>
       </aside>

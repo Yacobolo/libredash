@@ -8,6 +8,7 @@ export type ChatContextReference = AgentReferenceSignal
 
 const maxPinnedMentionSuggestions = 8
 const maxGlobalMentionSuggestions = 8
+const defaultReferenceLimit = 12
 
 class ChatComposer extends LitElement {
   @property({ type: String }) value = ''
@@ -17,6 +18,7 @@ class ChatComposer extends LitElement {
 	@property({ attribute: false }) references: ChatContextReference[] = []
 	@property({ attribute: false }) pinnedSuggestions: ChatContextReference[] = []
 	@property({ attribute: false }) suggestions: ChatContextReference[] = []
+  @property({ type: Number, attribute: 'reference-limit' }) referenceLimit = defaultReferenceLimit
   @state() private draft = ''
 	@state() private mentionIndex = 0
 	@state() private mentionSearchPending = false
@@ -366,6 +368,7 @@ class ChatComposer extends LitElement {
 		const activeMention = this.activeMention()
 		const mentionGroups = this.mentionSuggestionGroups()
 		const mentions = [...mentionGroups.pinned, ...mentionGroups.global]
+		const referenceLimitReached = this.referenceLimitReached()
     return html`
       <form @submit=${this.submit}>
 			${activeMention ? html`
@@ -384,7 +387,9 @@ class ChatComposer extends LitElement {
 					` : null}
 					${mentions.length === 0 ? html`
 						<div class="mention-status" role="status">
-							${lucideIcon(Search)}<span>${this.mentionSearchPending ? 'Searching…' : 'No matching context'}</span>
+							${lucideIcon(Search)}<span>${referenceLimitReached
+								? `Up to ${this.normalizedReferenceLimit()} items can be attached`
+								: this.mentionSearchPending ? 'Searching…' : 'No matching context'}</span>
 						</div>
 					` : null}
 				</div>
@@ -428,18 +433,7 @@ class ChatComposer extends LitElement {
     this.draft = textarea.value
 		this.mentionIndex = 0
 		const mention = this.activeMention(textarea)
-		const query = mention?.query ?? null
-		if (query !== this.lastSearchQuery) {
-			this.lastSearchQuery = query
-			this.mentionSearchPending = query !== null
-			if (query !== null) {
-				this.dispatchEvent(new CustomEvent('ld-chat-reference-search', {
-					bubbles: true,
-					composed: true,
-					detail: { query },
-				}))
-			}
-		}
+		this.requestMentionSearch(mention?.query ?? null)
     this.resizeTextarea(textarea)
   }
 
@@ -493,7 +487,7 @@ class ChatComposer extends LitElement {
 
 	private mentionSuggestionGroups(): { pinned: ChatContextReference[]; global: ChatContextReference[] } {
 		const mention = this.activeMention()
-		if (!mention) return { pinned: [], global: [] }
+		if (!mention || this.referenceLimitReached()) return { pinned: [], global: [] }
 		const query = mention.query.toLocaleLowerCase()
 		const selected = new Set(this.references.map(referenceIdentity))
 		const pinnedCandidates = uniqueReferences(this.pinnedSuggestions)
@@ -530,7 +524,7 @@ class ChatComposer extends LitElement {
 	}
 
 	private selectMention(reference: ChatContextReference | undefined) {
-		if (!reference) return
+		if (!reference || this.referenceLimitReached()) return
 		this.removeActiveMention()
 		if (!this.references.some((current) => referenceIdentity(current) === referenceIdentity(reference))) {
 			this.references = [...this.references, reference]
@@ -548,6 +542,23 @@ class ChatComposer extends LitElement {
 	private removeReference(reference: ChatContextReference) {
 		this.references = this.references.filter((current) => referenceIdentity(current) !== referenceIdentity(reference))
 		this.notifyReferences()
+		this.requestMentionSearch(this.activeMention()?.query ?? null)
+	}
+
+	private requestMentionSearch(query: string | null) {
+		if (query === null || this.referenceLimitReached()) {
+			this.lastSearchQuery = null
+			this.mentionSearchPending = false
+			return
+		}
+		if (query === this.lastSearchQuery) return
+		this.lastSearchQuery = query
+		this.mentionSearchPending = true
+		this.dispatchEvent(new CustomEvent('ld-chat-reference-search', {
+			bubbles: true,
+			composed: true,
+			detail: { query },
+		}))
 	}
 
 	private notifyReferences() {
@@ -587,6 +598,16 @@ class ChatComposer extends LitElement {
 	private scrollActiveMentionIntoView() {
 		const active = this.shadowRoot?.querySelector<HTMLElement>('.mention-option[data-active="true"]')
 		active?.scrollIntoView({ block: 'nearest' })
+	}
+
+	private normalizedReferenceLimit(): number {
+		return Number.isFinite(this.referenceLimit) && this.referenceLimit > 0
+			? Math.floor(this.referenceLimit)
+			: defaultReferenceLimit
+	}
+
+	private referenceLimitReached(): boolean {
+		return this.references.length >= this.normalizedReferenceLimit()
 	}
 
   private resizeTextarea(textarea = this.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null) {

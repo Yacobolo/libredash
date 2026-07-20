@@ -16,8 +16,10 @@ import (
 
 	"github.com/Yacobolo/libredash/internal/access"
 	"github.com/Yacobolo/libredash/internal/agent"
+	semanticmodel "github.com/Yacobolo/libredash/internal/analytics/model"
 	"github.com/Yacobolo/libredash/internal/api"
 	"github.com/Yacobolo/libredash/internal/dashboard"
+	reportdef "github.com/Yacobolo/libredash/internal/dashboard/report"
 	"github.com/Yacobolo/libredash/internal/platform"
 	"github.com/Yacobolo/libredash/internal/workspace"
 	"github.com/Yacobolo/libredash/pkg/pagestream"
@@ -210,7 +212,7 @@ func TestGlobalChatReferenceSearchHonorsAPICredentialWorkspaceAndPrivileges(t *t
 		request := httptest.NewRequest(http.MethodGet, "/chats/references/search", nil)
 		credential := access.APICredential{Token: token}
 		request = request.WithContext(context.WithValue(request.Context(), apiCredentialContextKey{}, credential))
-		results, err := server.searchAgentReferences(request, "", "orders")
+		results, err := server.searchAgentReferences(request, "", "orders", 24)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -232,6 +234,117 @@ func TestGlobalChatReferenceSearchHonorsAPICredentialWorkspaceAndPrivileges(t *t
 	}
 	if denied := search(access.APIToken{WorkspaceID: "sales", Privileges: []access.Privilege{access.PrivilegeUseAgent}}); len(denied) != 0 {
 		t.Fatalf("credential without view privilege received workspaces %v", denied)
+	}
+}
+
+func TestGlobalChatReferenceSearchRanksAcrossWorkspaces(t *testing.T) {
+	store := testStore(t)
+	server := NewWithOptions(NewMultiWorkspaceMetrics("archive", map[string]QueryMetrics{
+		"archive": globalRankSearchMetrics{workspaceSearchMetrics: workspaceSearchMetrics{workspaceID: "archive", dashboardID: "revenue-archive", title: "Revenue archive"}, visualTitle: "Revenue archive"},
+		"sales":   globalRankSearchMetrics{workspaceSearchMetrics: workspaceSearchMetrics{workspaceID: "sales", dashboardID: "revenue", title: "Revenue"}, visualTitle: "Revenue"},
+	}), Options{Store: store})
+	repo, err := server.workspaceRepository()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, workspaceID := range []string{"archive", "sales"} {
+		if err := repo.Ensure(context.Background(), workspace.EnsureInput{ID: workspace.WorkspaceID(workspaceID), Title: workspaceID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	results, err := server.searchAgentReferences(httptest.NewRequest(http.MethodGet, "/chats/references/search", nil), "", "revenue", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 5 || results[0].WorkspaceID != "sales" || results[0].DashboardID == nil || *results[0].DashboardID != "revenue" {
+		t.Fatalf("globally ranked results = %#v", results)
+	}
+}
+
+type globalRankSearchMetrics struct {
+	workspaceSearchMetrics
+	visualTitle string
+}
+
+func (m globalRankSearchMetrics) Report(dashboardID string) (reportdef.Dashboard, *semanticmodel.Model, bool) {
+	report, model, ok := m.workspaceSearchMetrics.Report(dashboardID)
+	if !ok {
+		return report, model, false
+	}
+	for id, visual := range report.Visuals {
+		visual.Title = m.visualTitle
+		report.Visuals[id] = visual
+	}
+	for id, table := range report.Tables {
+		table.Title = m.visualTitle
+		report.Tables[id] = table
+	}
+	return report, model, true
+}
+
+func (m globalRankSearchMetrics) Pages(dashboardID string) []dashboard.Page {
+	pages := m.workspaceSearchMetrics.Pages(dashboardID)
+	for pageIndex := range pages {
+		for componentIndex := range pages[pageIndex].Visuals {
+			component := &pages[pageIndex].Visuals[componentIndex]
+			if component.Visual != "" || component.Table != "" {
+				component.Title = m.visualTitle
+			}
+		}
+	}
+	return pages
+}
+
+func TestChatReferenceSearchRouteAuthorizesAcrossAccessibleWorkspaces(t *testing.T) {
+	store := testStore(t)
+	ctx := context.Background()
+	workspaceRepo, err := NewWithOptions(fakeMetrics{}, Options{Store: store}).workspaceRepository()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := workspaceRepo.Ensure(ctx, workspace.EnsureInput{ID: "sales", Title: "Sales"}); err != nil {
+		t.Fatal(err)
+	}
+	accessRepo := testAccessRepository(store)
+	principal, err := accessRepo.SetPrincipalRole(ctx, access.PrincipalRoleInput{
+		WorkspaceID: "sales", Email: "sales-search@example.com", DisplayName: "Sales Search", Role: access.RoleViewer,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _ := testScopedAPIToken(t, ctx, store, access.APITokenInput{
+		PrincipalID: principal.ID,
+		WorkspaceID: "sales",
+		Name:        "sales-search",
+		Privileges:  []access.Privilege{access.PrivilegeViewItem},
+	})
+	auth := testAuth(store, "test", AuthConfig{APITokenOnly: true})
+	server := NewWithOptions(NewMultiWorkspaceMetrics("test", map[string]QueryMetrics{
+		"test": fakeMetrics{}, "sales": fakeMetrics{},
+	}), Options{Store: store, Auth: auth, DefaultWorkspaceID: "test"})
+	if _, err := accessRepo.UpsertSecurableObject(ctx, access.ItemObjectWithParent(
+		access.SecurableDashboard, "sales", "executive-sales", access.WorkspaceObject("sales"),
+	), ""); err != nil {
+		t.Fatal(err)
+	}
+
+	signals, _ := json.Marshal(map[string]any{
+		"agentReferenceSearch": map[string]any{"query": "orders"},
+		"agentContext":         map[string]any{"surface": "chat"},
+	})
+	request := httptest.NewRequest(http.MethodGet, "/chats/references/search?datastar="+url.QueryEscape(string(signals)), nil)
+	request.Header.Set("Authorization", "Bearer "+token)
+	request.Header.Set("Accept", "text/event-stream")
+	response := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d body=%s", response.Code, response.Body.String())
+	}
+	if !strings.Contains(response.Body.String(), `"workspaceId":"sales"`) || strings.Contains(response.Body.String(), `"workspaceId":"test"`) {
+		t.Fatalf("credential-scoped search response = %s", response.Body.String())
 	}
 }
 

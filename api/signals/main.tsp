@@ -428,6 +428,7 @@ model AgentContextSignal {
   `modelId`: string;
   `generation`: int64;
   `filters`: DashboardFilters;
+  `referenceLimit`: int32;
   `references`: AgentReferenceSignal[];
 }
 
