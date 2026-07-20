@@ -210,7 +210,7 @@ test('composer searches for and attaches typed @ references with spaces', async 
 
     expect(result).toEqual({
       searches: ['orders by'],
-      optionText: 'Orders Overview · Executive Sales visual',
+      optionText: 'Orders Overview · Executive Sales',
       draftAfterReference: 'Compare',
       submitted: {
         input: 'Compare this with last month',
@@ -266,6 +266,70 @@ test('composer distinguishes matching reference IDs from different workspaces', 
   }
 })
 
+test('mention picker opens immediately, renders compact rows, and scrolls with keyboard navigation', async () => {
+  const page = await browser.newPage({ viewport: { width: 800, height: 600 } })
+  try {
+    await page.goto(baseURL)
+    await page.waitForFunction(() => customElements.get('ld-chat-composer'))
+    const result = await page.locator('ld-chat-composer').evaluate(async (element: any) => {
+      const root = element.shadowRoot
+      const textarea = root.querySelector('textarea') as HTMLTextAreaElement
+      textarea.value = '@'
+      textarea.setSelectionRange(1, 1)
+      textarea.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }))
+      await element.updateComplete
+
+      const immediatePicker = root.querySelector('.mention-picker') as HTMLElement
+      const immediate = {
+        visible: Boolean(immediatePicker),
+        busy: immediatePicker?.getAttribute('aria-busy'),
+        status: root.querySelector('.mention-status')?.textContent?.trim(),
+      }
+
+      element.suggestions = Array.from({ length: 8 }, (_, index) => ({
+        kind: index % 2 === 0 ? 'visual' : 'measure',
+        id: `result-${index}`,
+        workspaceId: 'sales',
+        title: `Result ${index + 1}`,
+        description: `Compact description ${index + 1}`,
+      }))
+      await element.updateComplete
+      await element.updateComplete
+
+      const picker = root.querySelector('.mention-picker') as HTMLElement
+      const firstOption = root.querySelector('.mention-option') as HTMLElement
+      const copy = root.querySelector('.mention-copy') as HTMLElement
+      const initialScrollTop = picker.scrollTop
+      for (let index = 0; index < 7; index += 1) {
+        textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, composed: true }))
+        await element.updateComplete
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)))
+      }
+      const active = root.querySelector('.mention-option[data-active="true"]') as HTMLElement
+      const pickerBox = picker.getBoundingClientRect()
+      const activeBox = active.getBoundingClientRect()
+
+      return {
+        immediate,
+        optionHeight: Math.round(firstOption.getBoundingClientRect().height),
+        copyDisplay: getComputedStyle(copy).display,
+        scrolled: picker.scrollTop > initialScrollTop,
+        activeText: active.textContent?.replace(/\s+/g, ' ').trim(),
+        activeVisible: activeBox.top >= pickerBox.top && activeBox.bottom <= pickerBox.bottom,
+      }
+    })
+
+    expect(result.immediate).toEqual({ visible: true, busy: 'true', status: 'Searching…' })
+    expect(result.optionHeight).toBeLessThanOrEqual(32)
+    expect(result.copyDisplay).toBe('flex')
+    expect(result.scrolled).toBe(true)
+    expect(result.activeText).toContain('Result 8')
+    expect(result.activeVisible).toBe(true)
+  } finally {
+    await page.close()
+  }
+})
+
 function testDocument(): string {
   return `
     <!doctype html>
@@ -300,6 +364,7 @@ function testDocument(): string {
             --ld-space-lg: 12px;
             --ld-space-xl: 16px;
             --ld-control-medium: 32px;
+            --ld-control-small: 28px;
             --ld-chat-stack-width: 760px;
             --ld-font-size-body-sm: 14px;
             --ld-font-weight-strong: 600;

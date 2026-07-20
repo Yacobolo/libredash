@@ -15,6 +15,7 @@ class ChatComposer extends LitElement {
 	@property({ attribute: false }) suggestions: ChatContextReference[] = []
   @state() private draft = ''
 	@state() private mentionIndex = 0
+	@state() private mentionSearchPending = false
   private lastSearchQuery: string | null = null
   private resizeObserver?: ResizeObserver
   private observedWidth = -1
@@ -122,35 +123,37 @@ class ChatComposer extends LitElement {
 			display: grid;
 			width: 100%;
 			height: auto;
-			min-height: var(--ld-control-medium);
-			grid-template-columns: 20px minmax(0, 1fr) auto;
-			gap: var(--ld-space-sm);
+			min-height: var(--ld-control-small);
+			grid-template-columns: 16px minmax(0, 1fr);
+			align-items: center;
+			gap: var(--ld-space-xs);
 			border: 0;
 			border-radius: var(--ld-radius-default);
 			background: transparent;
 			color: var(--ld-fg-default);
-			padding: var(--ld-space-sm);
+			padding: var(--ld-space-2xs) var(--ld-space-sm);
 			box-shadow: none;
 			text-align: left;
 		}
 
 		.mention-icon {
 			display: grid;
-			width: 20px;
-			height: 20px;
+			width: 16px;
+			height: 16px;
 			place-items: center;
 			color: var(--ld-fg-muted);
 		}
 
 		.mention-icon svg {
-			width: 16px;
-			height: 16px;
+			width: 14px;
+			height: 14px;
 		}
 
 		.mention-copy {
-			display: grid;
+			display: flex;
 			min-width: 0;
-			gap: var(--ld-space-2xs);
+			align-items: baseline;
+			gap: var(--ld-space-sm);
 		}
 
 		.mention-title,
@@ -161,8 +164,29 @@ class ChatComposer extends LitElement {
 		}
 
 		.mention-description {
+			min-width: 0;
+			flex: 1 1 auto;
 			color: var(--ld-fg-muted);
 			font-size: var(--ld-font-size-caption);
+		}
+
+		.mention-title {
+			flex: 0 1 auto;
+		}
+
+		.mention-status {
+			display: flex;
+			min-height: var(--ld-control-small);
+			align-items: center;
+			gap: var(--ld-space-sm);
+			padding: var(--ld-space-2xs) var(--ld-space-sm);
+			color: var(--ld-fg-muted);
+			font-size: var(--ld-font-size-caption);
+		}
+
+		.mention-status svg {
+			width: 14px;
+			height: 14px;
 		}
 
 		.selected-references {
@@ -205,13 +229,6 @@ class ChatComposer extends LitElement {
 		.mention-option:hover {
 			background: var(--ld-bg-control-hover);
 			transform: none;
-		}
-
-		.mention-kind {
-			color: var(--ld-fg-muted);
-			font-size: var(--ld-font-size-caption);
-			font-weight: var(--ld-font-weight-medium);
-			text-transform: capitalize;
 		}
 
     .send-button {
@@ -297,6 +314,9 @@ class ChatComposer extends LitElement {
       this.draft = this.value || ''
       void this.updateComplete.then(() => this.resizeTextarea())
     }
+		if (changed.has('suggestions') && this.mentionSearchPending) {
+			this.mentionSearchPending = false
+		}
   }
 
   connectedCallback() {
@@ -327,16 +347,18 @@ class ChatComposer extends LitElement {
 
   render() {
     const blocked = this.disabled || this.pending
+		const activeMention = this.activeMention()
 		const mentions = this.mentionSuggestions()
     return html`
       <form @submit=${this.submit}>
-			${mentions.length > 0 ? html`
-				<div class="mention-picker" role="listbox" aria-label="Add LibreDash context">
+			${activeMention ? html`
+				<div class="mention-picker" role="listbox" aria-label="Add LibreDash context" aria-busy=${String(this.mentionSearchPending)}>
 					${mentions.map((reference, index) => html`
 						<button
 							type="button"
 							class="mention-option"
 							role="option"
+							aria-label=${`${reference.title}, ${reference.kind}${reference.description ? `, ${reference.description}` : ''}`}
 							aria-selected=${String(index === this.mentionIndex)}
 							data-active=${String(index === this.mentionIndex)}
 							@mousedown=${(event: MouseEvent) => event.preventDefault()}
@@ -347,9 +369,13 @@ class ChatComposer extends LitElement {
 								<span class="mention-title">${reference.title}</span>
 								${reference.description ? html`<span class="mention-description">${reference.description}</span>` : null}
 							</span>
-							<span class="mention-kind">${reference.kind}</span>
 						</button>
 					`)}
+					${mentions.length === 0 ? html`
+						<div class="mention-status" role="status">
+							${lucideIcon(Search)}<span>${this.mentionSearchPending ? 'Searching…' : 'No matching context'}</span>
+						</div>
+					` : null}
 				</div>
 			` : null}
         <div class=${['composer-surface', blocked ? 'is-disabled' : ''].filter(Boolean).join(' ')}>
@@ -394,6 +420,7 @@ class ChatComposer extends LitElement {
 		const query = mention?.query ?? null
 		if (query !== this.lastSearchQuery) {
 			this.lastSearchQuery = query
+			this.mentionSearchPending = query !== null
 			if (query !== null) {
 				this.dispatchEvent(new CustomEvent('ld-chat-reference-search', {
 					bubbles: true,
@@ -405,16 +432,19 @@ class ChatComposer extends LitElement {
     this.resizeTextarea(textarea)
   }
 
-  private keydown(event: KeyboardEvent) {
+	private keydown(event: KeyboardEvent) {
+		const mention = this.activeMention()
 		const mentions = this.mentionSuggestions()
-		if (mentions.length > 0) {
+		if (mention) {
 			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+				if (mentions.length === 0) return
 				event.preventDefault()
 				const direction = event.key === 'ArrowDown' ? 1 : -1
 				this.mentionIndex = (this.mentionIndex + direction + mentions.length) % mentions.length
+				void this.updateComplete.then(() => this.scrollActiveMentionIntoView())
 				return
 			}
-			if (event.key === 'Enter' && !event.shiftKey) {
+			if (event.key === 'Enter' && !event.shiftKey && mentions.length > 0) {
 				event.preventDefault()
 				this.selectMention(mentions[this.mentionIndex] ?? mentions[0])
 				return
@@ -501,12 +531,19 @@ class ChatComposer extends LitElement {
 		const before = this.draft.slice(0, mention.start).replace(/\s+$/, '')
 		const after = this.draft.slice(mention.end)
 		this.draft = before + after
+		this.mentionSearchPending = false
+		this.lastSearchQuery = null
 		void this.updateComplete.then(() => {
 			const next = this.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null
 			if (!next) return
 			next.setSelectionRange(before.length, before.length)
 			next.focus()
 		})
+	}
+
+	private scrollActiveMentionIntoView() {
+		const active = this.shadowRoot?.querySelector<HTMLElement>('.mention-option[data-active="true"]')
+		active?.scrollIntoView({ block: 'nearest' })
 	}
 
   private resizeTextarea(textarea = this.shadowRoot?.querySelector('textarea') as HTMLTextAreaElement | null) {
